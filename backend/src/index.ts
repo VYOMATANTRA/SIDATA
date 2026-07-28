@@ -11,7 +11,7 @@ app.get('/', (req: Request, res: Response) => {
   res.json({
     status: 'success',
     message: 'Express Is Running',
-  })
+  });
 });
 
 app.listen(PORT, () => {
@@ -23,7 +23,3 @@ const pesan = 'Halo Dunia';
 console.log(pesan);
 
 const variabelNganggur = 'Aku tidak pernah dipakai';
-
-
-
-
