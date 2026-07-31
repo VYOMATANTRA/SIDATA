@@ -40,6 +40,9 @@ services:
       NODE_ENV: ${NODE_ENV}
       PORT: ${BACKEND_PORT}
       DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      CORS_ORIGIN: ${CORS_ORIGIN}
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
     volumes:
