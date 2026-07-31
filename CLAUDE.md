@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Always use `npm ci` instead of `npm install`** — this ensures lockfile-locked versions.
 
 Work from the appropriate directory:
+
 - Frontend: `frontend/`
 - Backend: `backend/`
 
@@ -22,31 +23,38 @@ Deploy target: Docker on a self-managed VPS (may change pending stakeholder inpu
 
 ### Frontend (Vue 3 + Vite + Tailwind)
 
-| Task | Command | Location |
-|------|---------|----------|
-| Start dev server | `npm run dev` | `frontend/` |
-| Build for production | `npm run build` | `frontend/` |
-| Type-check | `npm run type-check` | `frontend/` |
-| Run unit tests | `npm run test:unit` | `frontend/` |
-| Lint & fix | `npm run lint` | `frontend/` |
-| Format code | `npm run format` | `frontend/` |
+| Task                 | Command              | Location    |
+| -------------------- | -------------------- | ----------- |
+| Start dev server     | `npm run dev`        | `frontend/` |
+| Build for production | `npm run build`      | `frontend/` |
+| Type-check           | `npm run type-check` | `frontend/` |
+| Run unit tests       | `npm run test:unit`  | `frontend/` |
+| Lint & fix           | `npm run lint`       | `frontend/` |
+| Format code          | `npm run format`     | `frontend/` |
 
 Dev server runs on `http://localhost:5173` by default (Vite).
 
 ### Backend (Express + Prisma)
 
-| Task | Command | Location |
-|------|---------|----------|
-| Lint | `npm run lint` | `backend/` |
-| Format | `npm run format` | `backend/` |
-| Run server | `npx tsx src/index.ts` or similar | `backend/` |
-| Run via Docker | `docker compose up --build` | repo root |
+| Task           | Command                           | Location   |
+| -------------- | --------------------------------- | ---------- |
+| Lint           | `npm run lint`                    | `backend/` |
+| Format         | `npm run format`                  | `backend/` |
+| Run server     | `npx tsx src/index.ts` or similar | `backend/` |
+| Run via Docker | `docker compose up --build`       | repo root  |
 
 Backend runs on port from `PORT` env var (default 3000). Prisma client is generated to `generated/prisma/`.
+
+## Git Conventions
+
+**Commit atomically** — each commit should represent one logical, self-contained change (a single fix, feature, or refactor) that leaves the repo in a working state. Avoid bundling unrelated changes into one commit; split them into separate commits instead.
+
+**Never develop directly on `main`** — always create a feature/fix/docs/chore branch and open a PR. `main` should only receive changes via merged PRs.
 
 ## Architecture
 
 ### Frontend Structure
+
 - `src/App.vue`: Root component
 - `src/main.ts`: Entry point (Vue app initialization)
 - `src/router/`: Vue Router routes
@@ -56,12 +64,14 @@ Backend runs on port from `PORT` env var (default 3000). Prisma client is genera
 - Styling: Tailwind CSS via Vite plugin
 
 Key details:
+
 - Single-File Components (`.vue` files) with `<script setup>` pattern (Vue 3)
 - Import alias `@` → `src/` configured in Vite
 - Vue DevTools plugin enabled
 - Uses Oxlint + ESLint + Prettier for code quality
 
 ### Backend Structure
+
 - `src/index.ts`: Entry point — starts the HTTP listener
 - `src/app.ts`: Express app setup (middleware, CORS, route mounting)
 - `src/configs/index.ts`: Typed env var access; validated at boot
@@ -74,6 +84,7 @@ Key details:
 - `generated/prisma/`: Auto-generated Prisma client (do not edit)
 
 Key details:
+
 - Express app with JSON middleware, cookie parsing, CORS, and route mounting under `/api/*`
 - Prisma client output to custom location `../generated/prisma`
 - JWT access + refresh tokens; refresh tokens persisted in DB with `/api/auth/refresh` and `/api/auth/logout` endpoints
@@ -82,14 +93,14 @@ Key details:
 
 ## Tech Stack Summary
 
-| Layer | Tech |
-|-------|------|
+| Layer    | Tech                                         |
+| -------- | -------------------------------------------- |
 | Frontend | Vue 3, Vue Router, Pinia, Tailwind CSS, Vite |
-| Backend | Express.js, Prisma ORM |
-| Database | MySQL (configured in Prisma) |
-| Language | TypeScript (both frontend and backend) |
-| Node | ^22.18.0 or >=24.12.0 (frontend) |
-| Linting | ESLint + Prettier (both) |
+| Backend  | Express.js, Prisma ORM                       |
+| Database | MySQL (configured in Prisma)                 |
+| Language | TypeScript (both frontend and backend)       |
+| Node     | ^22.18.0 or >=24.12.0 (frontend)             |
+| Linting  | ESLint + Prettier (both)                     |
 
 ## Key Files
 
