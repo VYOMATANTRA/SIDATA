@@ -7,7 +7,6 @@ import authRoutes from './routes/auth.routes.js';
 
 const app = express();
 
-// Middleware
 app.use(express.json());
 app.use(cookieParser());
 app.use(
