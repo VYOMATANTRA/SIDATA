@@ -12,6 +12,12 @@ Work from the appropriate directory:
 
 Backend requires a `.env` file with `PORT=3000` (or your target port). See `backend/.env.example`.
 
+## Database
+
+**MySQL** — resolved 2026-07-31. Do not suggest, scaffold, or migrate toward Postgres or MariaDB-specific code or adapters.
+
+Deploy target: Docker on a self-managed VPS (may change pending stakeholder input — this affects hosting, not the DB engine choice, which is settled independently).
+
 ## Development
 
 ### Frontend (Vue 3 + Vite + Tailwind)
@@ -56,7 +62,7 @@ Key details:
 
 ### Backend Structure
 - `src/index.ts`: Express server entry point
-- `prisma/schema.prisma`: ORM schema (PostgreSQL)
+- `prisma/schema.prisma`: ORM schema (MySQL)
 - `generated/prisma/`: Auto-generated Prisma client (do not edit)
 
 Key details:
@@ -71,7 +77,7 @@ Key details:
 |-------|------|
 | Frontend | Vue 3, Vue Router, Pinia, Tailwind CSS, Vite |
 | Backend | Express.js, Prisma ORM |
-| Database | PostgreSQL (configured in Prisma) |
+| Database | MySQL (configured in Prisma) |
 | Language | TypeScript (both frontend and backend) |
 | Node | ^22.18.0 or >=24.12.0 (frontend) |
 | Linting | ESLint + Prettier (both) |
