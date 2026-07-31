@@ -26,6 +26,7 @@ export const verifyToken = (req: AuthRequest, res: Response, next: NextFunction)
 
     next();
   } catch (error) {
+    console.error('Error saat verifikasi token:', error);
     return res.status(403).json({ error: 'Token tidak valid atau sudah kedaluwarsa.' });
   }
 };
