@@ -14,12 +14,10 @@ applied to `main`; there is currently no maintained older branch.
 **Please do not report security vulnerabilities through public GitHub issues, discussions, or
 pull requests.**
 
-Instead, use GitHub's private vulnerability reporting for this repository:
+Instead, report it by email to **andinaufalnurfadhil120@gmail.com**.
 
-1. Go to the repository's **Security** tab.
-2. Click **Report a vulnerability** to open a private advisory.
-3. Include as much detail as possible: affected component (frontend/backend), reproduction
-   steps, potential impact, and any suggested remediation.
+Include as much detail as possible: affected component (frontend/backend), reproduction steps,
+potential impact, and any suggested remediation.
 
 We aim to acknowledge new reports within a few business days and will work with you to confirm
 the issue, assess impact, and coordinate a fix and disclosure timeline before any public
