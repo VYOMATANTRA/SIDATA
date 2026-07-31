@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Report a security vulnerability
-    url: https://github.com/VYOMATANTRA/SIDATA/security/advisories/new
-    about: Please do not report security vulnerabilities through public issues. Use GitHub's private vulnerability reporting instead — see SECURITY.md.
+    url: mailto:andinaufalnurfadhil120@gmail.com
+    about: Please do not report security vulnerabilities through public issues. Email us instead — see SECURITY.md.
