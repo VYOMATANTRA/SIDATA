@@ -126,7 +126,8 @@ See `CLAUDE.md` for a detailed architecture breakdown of both apps.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and guidelines. Use the
+[issue templates](.github/ISSUE_TEMPLATE/) to report bugs or request features.
 
 ## Security
 
