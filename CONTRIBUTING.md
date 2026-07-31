@@ -68,5 +68,7 @@ and regenerate the Prisma client.
 
 ## Reporting bugs / security issues
 
-For regular bugs, open a GitHub issue with reproduction steps. For security vulnerabilities,
-do **not** open a public issue — see [SECURITY.md](SECURITY.md) instead.
+For regular bugs, open a GitHub issue using the **Bug Report** template; for new ideas, use the
+**Feature Request** template (both under [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/)).
+For security vulnerabilities, do **not** open a public issue — see [SECURITY.md](SECURITY.md)
+instead.
