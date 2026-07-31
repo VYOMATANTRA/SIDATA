@@ -28,6 +28,7 @@ services:
       start_period: 20s
 
   backend:
+    command: sh -c "npm ci && npx prisma generate && npx tsx watch src/index.ts"
     build:
       context: ./backend
       dockerfile: Dockerfile
