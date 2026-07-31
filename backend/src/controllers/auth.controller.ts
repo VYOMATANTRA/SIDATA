@@ -1,10 +1,11 @@
 import type { Request, Response } from 'express';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import prisma from '../utils/prisma.js';
 import { generateAccessToken, generateRefreshToken } from '../utils/jwt.js';
 import jwt from 'jsonwebtoken';
 import type { AuthRequest } from '../middlewares/auth.middleware.js';
 import zxcvbn from 'zxcvbn';
+import { JWT_REFRESH_SECRET } from '../configs/index.js';
 
 export const register = async (req: Request, res: Response): Promise<Response | void> => {
   try {
@@ -166,7 +167,7 @@ export const refreshToken = async (req: Request, res: Response): Promise<Respons
         .json({ error: 'Refresh token sudah kedaluwarsa, silakan login ulang' });
     }
 
-    const payload = jwt.verify(token, process.env.JWT_REFRESH_SECRET as string) as { id: string };
+    const payload = jwt.verify(token, JWT_REFRESH_SECRET) as { id: string };
 
     if (!payload || payload.id !== existingToken.userId) {
       return res.status(403).json({ error: 'Token tidak cocok' });
