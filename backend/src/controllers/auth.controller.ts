@@ -2,17 +2,17 @@ import type { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import prisma from '../utils/prisma.js';
 import { generateAccessToken, generateRefreshToken } from '../utils/jwt.js';
+import jwt from 'jsonwebtoken';
+import type { AuthRequest } from '../middlewares/auth.middleware.js';
 
 export const register = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const { email, password } = req.body;
 
-    // 1. Validasi input dasar
     if (!email || !password) {
       return res.status(400).json({ error: 'Email dan password wajib diisi' });
     }
 
-    // 2. Cek apakah email sudah pernah terdaftar
     const existingUser = await prisma.user.findUnique({
       where: { email },
     });
@@ -21,11 +21,9 @@ export const register = async (req: Request, res: Response): Promise<Response | 
       return res.status(409).json({ error: 'Email sudah terdaftar' });
     }
 
-    // 3. Enkripsi (hash) password menggunakan bcrypt
     const saltRounds = 10;
     const passwordHash = await bcrypt.hash(password, saltRounds);
 
-    // 4. Cari UUID untuk role default ('user')
     const userRole = await prisma.role.findUnique({
       where: { name: 'user' },
     });
@@ -34,7 +32,6 @@ export const register = async (req: Request, res: Response): Promise<Response | 
       return res.status(500).json({ error: 'Role default tidak ditemukan di server' });
     }
 
-    // 5. Simpan user baru ke database
     const newUser = await prisma.user.create({
       data: {
         email,
@@ -42,7 +39,6 @@ export const register = async (req: Request, res: Response): Promise<Response | 
         auth_provider: 'local',
         roleId: userRole.id,
       },
-      // Pilih data yang ingin dikembalikan (jangan kembalikan password_hash)
       select: {
         id: true,
         email: true,
@@ -126,5 +122,89 @@ export const login = async (req: Request, res: Response): Promise<Response | voi
   } catch (error) {
     console.error('Error saat login:', error);
     return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
+  }
+};
+
+export const refreshToken = async (req: Request, res: Response): Promise<Response | void> => {
+  try {
+    const token = req.cookies?.refreshToken;
+
+    if (!token) {
+      return res.status(401).json({ error: 'Refresh token tidak ditemukan' });
+    }
+
+    const existingToken = await prisma.refreshToken.findUnique({
+      where: { token },
+      include: { user: { include: { role: true } } },
+    });
+
+    if (!existingToken) {
+      return res.status(403).json({ error: 'Refresh token tidak valid' });
+    }
+
+    if (new Date() > existingToken.expiresAt) {
+      await prisma.refreshToken.delete({ where: { id: existingToken.id } });
+      return res
+        .status(403)
+        .json({ error: 'Refresh token sudah kedaluwarsa, silakan login ulang' });
+    }
+
+    const payload = jwt.verify(token, process.env.JWT_REFRESH_SECRET as string) as { id: string };
+
+    if (!payload || payload.id !== existingToken.userId) {
+      return res.status(403).json({ error: 'Token tidak cocok' });
+    }
+
+    const newAccessToken = generateAccessToken({
+      id: existingToken.user.id,
+      email: existingToken.user.email,
+      role: existingToken.user.role.name,
+    });
+
+    return res.status(200).json({
+      message: 'Token berhasil diperbarui',
+      accessToken: newAccessToken,
+    });
+  } catch (error) {
+    console.error('Error saat memperbarui token:', error);
+    return res.status(403).json({ error: 'Refresh token tidak valid atau kedaluwarsa' });
+  }
+};
+
+export const logout = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const token = req.cookies?.refreshToken;
+
+    if (!token) {
+      return res.status(204).send(); // 204 No Content
+    }
+
+    await prisma.refreshToken.deleteMany({
+      where: { token },
+    });
+
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+    });
+
+    return res.status(200).json({ message: 'Logout berhasil' });
+  } catch (error) {
+    console.error('Error saat logout:', error);
+    return res.status(500).json({ error: 'Terjadi kesalahan pada server saat logout' });
+  }
+};
+
+//Dummy endpoint, for testing purposes
+export const getMe = async (req: AuthRequest, res: Response): Promise<any> => {
+  try {
+    return res.status(200).json({
+      message: 'Berhasil mengakses profil',
+      user: req.user,
+    });
+  } catch (error) {
+    console.error('Error saat mengambil profil:', error);
+    return res.status(500).json({ error: 'Terjadi kesalahan pada server' });
   }
 };
