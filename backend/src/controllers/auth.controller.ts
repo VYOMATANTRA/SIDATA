@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import prisma from '../utils/prisma.js';
 import { generateAccessToken, generateRefreshToken } from '../utils/jwt.js';
 import jwt from 'jsonwebtoken';
