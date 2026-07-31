@@ -10,7 +10,7 @@ Work from the appropriate directory:
 - Frontend: `frontend/`
 - Backend: `backend/`
 
-Backend requires a `.env` file with `PORT=3000` (or your target port). See `backend/.env.example`.
+Backend requires a `.env` file — `DATABASE_URL` (MySQL), `JWT_SECRET`, `JWT_REFRESH_SECRET`, `CORS_ORIGIN` at minimum (`PORT` defaults to 3000). See `backend/.env.example`. The server validates these at boot and fails fast if any are missing.
 
 ## Database
 
@@ -40,8 +40,9 @@ Dev server runs on `http://localhost:5173` by default (Vite).
 | Lint | `npm run lint` | `backend/` |
 | Format | `npm run format` | `backend/` |
 | Run server | `npx tsx src/index.ts` or similar | `backend/` |
+| Run via Docker | `docker compose up --build` | repo root |
 
-Backend runs on port from `PORT` env var (default 3000 from `.env.example`). Prisma client is generated to `generated/prisma/`.
+Backend runs on port from `PORT` env var (default 3000). Prisma client is generated to `generated/prisma/`.
 
 ## Architecture
 
@@ -51,7 +52,7 @@ Backend runs on port from `PORT` env var (default 3000 from `.env.example`). Pri
 - `src/router/`: Vue Router routes
 - `src/stores/`: Pinia state management
 - `src/__tests__/`: Unit tests with Vitest
-- `src/asstes/`: Static assets (note: typo in folder name)
+- `src/assets/`: Static assets, including `main.css` (Tailwind entry, imported in `main.ts`)
 - Styling: Tailwind CSS via Vite plugin
 
 Key details:
@@ -61,13 +62,21 @@ Key details:
 - Uses Oxlint + ESLint + Prettier for code quality
 
 ### Backend Structure
-- `src/index.ts`: Express server entry point
+- `src/index.ts`: Entry point — starts the HTTP listener
+- `src/app.ts`: Express app setup (middleware, CORS, route mounting)
+- `src/configs/index.ts`: Typed env var access; validated at boot
+- `src/routes/`: Route definitions (`auth.routes.ts`, `health.routes.ts`)
+- `src/controllers/`: Route handlers (`auth.controller.ts` — register/login)
+- `src/middlewares/`: Express middleware (`auth.middleware.ts` — JWT verification)
+- `src/utils/`: `jwt.ts` (token signing), `prisma.ts` (Prisma client instance)
 - `prisma/schema.prisma`: ORM schema (MySQL)
+- `prisma/seed.ts`: Seeds default roles (`user`, `admin`)
 - `generated/prisma/`: Auto-generated Prisma client (do not edit)
 
 Key details:
-- Minimal Express app with JSON middleware and basic routing
+- Express app with JSON middleware, cookie parsing, CORS, and route mounting under `/api/*`
 - Prisma client output to custom location `../generated/prisma`
+- JWT access + refresh tokens; refresh tokens persisted in DB with `/api/auth/refresh` and `/api/auth/logout` endpoints
 - Uses `dotenv` for environment configuration
 - No test setup currently (placeholder in package.json)
 
@@ -103,4 +112,4 @@ Key details:
 
 **Add a store**: Create a new file in `frontend/src/stores/` following Pinia conventions (defineStore), then import and use in components via `useStore()`.
 
-**Backend endpoint**: Add a route to `backend/src/index.ts` using `app.get()`, `app.post()`, etc. Middleware is already configured (`express.json()`).
+**Backend endpoint**: Add a handler in `backend/src/controllers/`, wire it in the matching file under `backend/src/routes/`, then mount that router in `backend/src/app.ts` if it's a new resource. Middleware (JSON parsing, cookies, CORS) is already configured in `app.ts`.
