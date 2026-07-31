@@ -15,7 +15,6 @@ Written on TypeScript
 - Prisma ORM
 
 ---
-
 # !!! YOU ARE WARNED !!!
 
 ## RUN WITH `npm ci` NOT `npm install`

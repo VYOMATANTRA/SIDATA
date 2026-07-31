@@ -1,25 +1,6 @@
-import express from 'express';
-import type { Request, Response } from 'express';
-import 'dotenv/config';
-
-const app = express();
-const PORT = process.env.PORT;
-
-app.use(express.json());
-
-app.get('/', (req: Request, res: Response) => {
-  res.json({
-    status: 'success',
-    message: 'Express Is Running',
-  });
-});
+import app from './app.js';
+import { PORT } from './configs/index.js';
 
 app.listen(PORT, () => {
-  console.log('Hello World');
+  console.log(`Server is running on http://localhost:${PORT}`);
 });
-
-const pesan = 'Halo Dunia';
-
-console.log(pesan);
-
-const variabelNganggur = 'Aku tidak pernah dipakai';
