@@ -51,6 +51,8 @@ Backend runs on port from `PORT` env var (default 3000). Prisma client is genera
 
 **Never develop directly on `main`** — always create a feature/fix/docs/chore branch and open a PR. `main` should only receive changes via merged PRs.
 
+**Keep documentation in sync** — whenever a change affects setup, commands, architecture, env vars, or workflows, update the relevant docs (README.md, CONTRIBUTING.md, SECURITY.md, this file) in the same PR rather than leaving them stale.
+
 ## Architecture
 
 ### Frontend Structure
