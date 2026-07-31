@@ -4,13 +4,30 @@ import prisma from '../utils/prisma.js';
 import { generateAccessToken, generateRefreshToken } from '../utils/jwt.js';
 import jwt from 'jsonwebtoken';
 import type { AuthRequest } from '../middlewares/auth.middleware.js';
+import zxcvbn from 'zxcvbn';
 
 export const register = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email dan password wajib diisi' });
+      return res.status(400).json({ error: 'Email dan password dan nama wajib diisi' });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password minimal harus 8 karakter (Standar NIST).' });
+    }
+    if (password.length > 128) {
+      return res.status(400).json({ error: 'Password terlalu panjang (maksimal 128 karakter).' });
+    }
+
+    const passwordEvaluation = zxcvbn(password, [email]);
+
+    if (passwordEvaluation.score < 2) {
+      return res.status(400).json({
+        error: 'Password terlalu lemah atau umum digunakan.',
+        suggestions: passwordEvaluation.feedback.suggestions,
+      });
     }
 
     const existingUser = await prisma.user.findUnique({
