@@ -1,8 +1,11 @@
-import 'dotenv/config';
 import { PrismaClient } from '../../generated/prisma/client.js';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
+import { DATABASE_URL } from '../configs/index.js';
 
-const databaseUrl = new URL(process.env.DATABASE_URL as string);
+// Prisma 7 has no dedicated MySQL adapter; `@prisma/adapter-mariadb` (the `mariadb` driver)
+// is the officially documented adapter for both MySQL and MariaDB — this is the correct
+// choice for our MySQL database, not a MariaDB-specific shortcut.
+const databaseUrl = new URL(DATABASE_URL);
 
 const prisma = new PrismaClient({
   adapter: new PrismaMariaDb({
