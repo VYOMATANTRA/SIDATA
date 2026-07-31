@@ -3,3 +3,10 @@ node_modules
 .env
 
 /generated/prisma
+
+# AI-tooling skill docs (fetched via skills-lock.json) — not app code, keep out of version control.
+# The .claude/ and .windsurf/ copies are git symlinks into .agents/, which also don't belong here.
+.agents/
+.claude/
+.windsurf/
+skills-lock.json
