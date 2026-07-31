@@ -3,11 +3,13 @@ import tsParser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import prettierConfig from 'eslint-config-prettier';
 import prettierPlugin from 'eslint-plugin-prettier';
-import globals from 'globals'; 
+import globals from 'globals';
 
 export default [
+  { ignores: ['generated/**'] },
+
   js.configs.recommended,
-  
+
   {
     files: ['**/*.ts'],
     languageOptions: {
@@ -26,13 +28,14 @@ export default [
     },
     rules: {
       ...tsPlugin.configs.recommended.rules,
-      
-      '@typescript-eslint/no-unused-vars': 'warn',
+
+      '@typescript-eslint/no-unused-vars': 'error',
+      // TODO(PM): flip to 'error' once existing `any` usages (e.g. auth.middleware.ts) are typed.
       '@typescript-eslint/no-explicit-any': 'warn',
-      
+
       'prettier/prettier': 'error',
     },
   },
-  
+
   prettierConfig,
 ];
