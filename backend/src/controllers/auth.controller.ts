@@ -179,8 +179,15 @@ export const refreshToken = async (req: Request, res: Response): Promise<Respons
       return res.status(403).json({ error: 'Refresh token tidak valid' });
     }
 
+    if (existingToken.isRevoked) {
+      return res.status(403).json({ error: 'Refresh token sudah dicabut' });
+    }
+
     if (new Date() > existingToken.expiresAt) {
-      await prisma.refreshToken.delete({ where: { id: existingToken.id } });
+      await prisma.refreshToken.update({
+        where: { id: existingToken.id },
+        data: { isRevoked: true },
+      });
       return res
         .status(403)
         .json({ error: 'Refresh token sudah kedaluwarsa, silakan login ulang' });
@@ -216,8 +223,9 @@ export const logout = async (req: Request, res: Response): Promise<any> => {
       return res.status(204).send(); // 204 No Content
     }
 
-    await prisma.refreshToken.deleteMany({
+    await prisma.refreshToken.updateMany({
       where: { token },
+      data: { isRevoked: true },
     });
 
     res.clearCookie('refreshToken', {
