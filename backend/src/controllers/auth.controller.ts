@@ -107,7 +107,7 @@ export const login = async (req: Request, res: Response): Promise<Response | voi
 
     try {
       normalizedEmail = normalizeEmail(email);
-    } catch (error) {
+    } catch {
       return res.status(400).json({ error: 'Format email tidak valid' });
     }
 
@@ -219,7 +219,7 @@ export const refreshToken = async (req: Request, res: Response): Promise<Respons
   }
 };
 
-export const logout = async (req: Request, res: Response): Promise<any> => {
+export const logout = async (req: Request, res: Response): Promise<Response> => {
   try {
     const token = req.cookies?.refreshToken;
 
@@ -246,7 +246,7 @@ export const logout = async (req: Request, res: Response): Promise<any> => {
 };
 
 //Dummy endpoint, for testing purposes
-export const getMe = async (req: AuthRequest, res: Response): Promise<any> => {
+export const getMe = async (req: AuthRequest, res: Response): Promise<Response> => {
   try {
     return res.status(200).json({
       message: 'Berhasil mengakses profil',
