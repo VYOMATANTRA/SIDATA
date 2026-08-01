@@ -1,4 +1,9 @@
 # Default code owners for the whole repository.
 # See https://docs.github.com/articles/about-codeowners for syntax.
 
-* @VYOMATANTRA/craftsman
+* @andinaufal120
+
+/.github/ @andinaufal120
+/frontend/ @andinaufal120
+/backend/ @andinaufal120 @perhanjay
+/.env.example @andinaufal120 @perhanjay
