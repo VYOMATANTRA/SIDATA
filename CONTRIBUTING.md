@@ -41,21 +41,31 @@ Run `npm run type-check` before `npm run build` to catch TypeScript issues early
 | Task | Command |
 |------|---------|
 | Lint | `npm run lint` |
+| Unit tests | `npm test` |
 | Format | `npm run format` |
 | Run server | `npx tsx src/index.ts` |
 
 After editing `backend/prisma/schema.prisma`, run `npx prisma migrate dev` to apply the change
 and regenerate the Prisma client.
 
+## CI
+
+Every push and PR runs `.github/workflows/ci.yml`, which lints, type-checks (frontend),
+builds (frontend), and runs tests for both `frontend/` and `backend/` on Node 22.18.0 and
+24.12.0. `main` is protected by a repository ruleset: direct pushes are blocked, and merging
+requires 1 approving review plus passing CI checks — so run the commands below locally before
+opening a PR to catch issues early.
+
 ## Before opening a PR
 
 1. Run lint and format in the directory(ies) you touched: `npm run lint`, `npm run format`.
 2. For frontend changes, run `npm run type-check` and `npm run test:unit`.
-3. Keep commits focused; write commit messages that explain *why*, not just *what*.
-4. Branch names should describe the change area, e.g. `feature/<short-name>` or
+3. For backend changes, run `npm test`.
+4. Keep commits focused; write commit messages that explain *why*, not just *what*.
+5. Branch names should describe the change area, e.g. `feature/<short-name>` or
    `fix/<short-name>`.
-5. Open the PR against `main` with a clear description of the change and any manual testing
-   performed.
+6. Open the PR against `main` with a clear description of the change and any manual testing
+   performed. CI must pass before it can be merged.
 
 ## Code style
 
