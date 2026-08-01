@@ -30,8 +30,7 @@ export default [
       ...tsPlugin.configs.recommended.rules,
 
       '@typescript-eslint/no-unused-vars': 'error',
-      // TODO(PM): flip to 'error' once existing `any` usages (e.g. auth.middleware.ts) are typed.
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
 
       'prettier/prettier': 'error',
     },
