@@ -1,5 +1,6 @@
 # SIDATA
 
+[![CI](https://github.com/VYOMATANTRA/SIDATA/actions/workflows/ci.yml/badge.svg)](https://github.com/VYOMATANTRA/SIDATA/actions/workflows/ci.yml)
 [![Vue](https://img.shields.io/badge/Vue-3.5-42b883?logo=vuedotjs&logoColor=white)](https://vuejs.org)
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vite.dev)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
