@@ -86,6 +86,10 @@ export const register = async (req: Request, res: Response): Promise<Response | 
       user: newUser,
     });
   } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'P2002') {
+      return res.status(409).json({ error: 'Email sudah terdaftar' });
+    }
+
     console.error('Error saat registrasi:', error);
     return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
   }
