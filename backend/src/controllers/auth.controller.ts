@@ -6,13 +6,24 @@ import jwt from 'jsonwebtoken';
 import type { AuthRequest } from '../middlewares/auth.middleware.js';
 import zxcvbn from 'zxcvbn';
 import { JWT_REFRESH_SECRET } from '../configs/index.js';
+import { normalizeEmail } from '../utils/validation.js';
 
 export const register = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email dan password dan nama wajib diisi' });
+    if (!password) {
+      return res.status(400).json({ error: 'Password wajib diisi' });
+    }
+
+    let normalizedEmail: string;
+
+    try {
+      normalizedEmail = normalizeEmail(email);
+    } catch (error) {
+      return res
+        .status(400)
+        .json({ error: error instanceof Error ? error.message : 'Format email tidak valid' });
     }
 
     if (password.length < 8) {
@@ -22,7 +33,7 @@ export const register = async (req: Request, res: Response): Promise<Response | 
       return res.status(400).json({ error: 'Password terlalu panjang (maksimal 128 karakter).' });
     }
 
-    const passwordEvaluation = zxcvbn(password, [email]);
+    const passwordEvaluation = zxcvbn(password, [normalizedEmail]);
 
     if (passwordEvaluation.score < 2) {
       return res.status(400).json({
@@ -32,7 +43,7 @@ export const register = async (req: Request, res: Response): Promise<Response | 
     }
 
     const existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
     });
 
     if (existingUser) {
@@ -52,7 +63,7 @@ export const register = async (req: Request, res: Response): Promise<Response | 
 
     const newUser = await prisma.user.create({
       data: {
-        email,
+        email: normalizedEmail,
         password_hash: passwordHash,
         auth_provider: 'local',
         roleId: userRole.id,
@@ -84,12 +95,20 @@ export const login = async (req: Request, res: Response): Promise<Response | voi
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email dan password wajib diisi' });
+    if (!password) {
+      return res.status(400).json({ error: 'Password wajib diisi' });
+    }
+
+    let normalizedEmail: string;
+
+    try {
+      normalizedEmail = normalizeEmail(email);
+    } catch (error) {
+      return res.status(400).json({ error: 'Format email tidak valid' });
     }
 
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
       include: { role: true },
     });
 
