@@ -4,6 +4,7 @@ import prisma from '../utils/prisma.js';
 import { generateAccessToken, generateRefreshToken } from '../utils/jwt.js';
 import jwt from 'jsonwebtoken';
 import type { AuthRequest } from '../middlewares/auth.middleware.js';
+import { generateCsrfToken } from '../middlewares/csrf.middleware.js';
 import zxcvbn from 'zxcvbn';
 import { JWT_REFRESH_SECRET } from '../configs/index.js';
 import { normalizeEmail } from '../utils/validation.js';
@@ -108,7 +109,9 @@ export const login = async (req: Request, res: Response): Promise<Response | voi
     try {
       normalizedEmail = normalizeEmail(email);
     } catch (error) {
-      return res.status(400).json({ error: 'Format email tidak valid' });
+      return res
+        .status(400)
+        .json({ error: error instanceof Error ? error.message : 'Format email tidak valid' });
     }
 
     const user = await prisma.user.findUnique({
@@ -166,6 +169,12 @@ export const login = async (req: Request, res: Response): Promise<Response | voi
   }
 };
 
+export const getCsrfToken = async (req: Request, res: Response): Promise<Response> => {
+  const csrfToken = generateCsrfToken(req, res);
+
+  return res.status(200).json({ csrfToken });
+};
+
 export const refreshToken = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const token = req.cookies?.refreshToken;
@@ -219,7 +228,7 @@ export const refreshToken = async (req: Request, res: Response): Promise<Respons
   }
 };
 
-export const logout = async (req: Request, res: Response): Promise<any> => {
+export const logout = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const token = req.cookies?.refreshToken;
 
@@ -246,7 +255,7 @@ export const logout = async (req: Request, res: Response): Promise<any> => {
 };
 
 //Dummy endpoint, for testing purposes
-export const getMe = async (req: AuthRequest, res: Response): Promise<any> => {
+export const getMe = async (req: AuthRequest, res: Response): Promise<Response | void> => {
   try {
     return res.status(200).json({
       message: 'Berhasil mengakses profil',

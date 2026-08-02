@@ -16,13 +16,13 @@ Full-stack TypeScript web application with a Vue 3 frontend and an Express + Pri
 
 ## Tech Stack
 
-| Layer | Tech | Version |
-|-------|------|---------|
+| Layer    | Tech                                         | Version                                                                              |
+| -------- | -------------------------------------------- | ------------------------------------------------------------------------------------ |
 | Frontend | Vue 3, Vue Router, Pinia, Tailwind CSS, Vite | Vue `^3.5.40`, Vue Router `^5.2.0`, Pinia `^4.0.2`, Tailwind `^4.3.3`, Vite `^8.1.5` |
-| Backend | Express.js, Prisma ORM | Express `^5.2.1`, Prisma `^7.9.0` |
-| Database | MySQL | `8.4` (see `docker-compose.yml`) |
-| Language | TypeScript | Frontend `~6.0.0`, Backend `^5.7.3` |
-| Node | — | `^22.18.0` or `>=24.12.0` |
+| Backend  | Express.js, Prisma ORM                       | Express `^5.2.1`, Prisma `^7.9.0`                                                    |
+| Database | MySQL                                        | `8.4` (see `docker-compose.yml`)                                                     |
+| Language | TypeScript                                   | Frontend `~6.0.0`, Backend `^5.7.3`                                                  |
+| Node     | —                                            | `^22.18.0` or `>=24.12.0`                                                            |
 
 ## Prerequisites
 
@@ -51,15 +51,18 @@ cp .env.example .env
 
 Fill in `.env` with at least:
 
-| Variable | Description |
-|----------|-------------|
-| `DATABASE_URL` | MySQL connection string, e.g. `mysql://root:password@localhost:3306/sidata` |
-| `JWT_SECRET` | Secret used to sign access tokens |
-| `JWT_REFRESH_SECRET` | Secret used to sign refresh tokens |
-| `CORS_ORIGIN` | Frontend origin allowed to make credentialed requests, e.g. `http://localhost:5173` |
-| `PORT` | *(optional)* Backend port, defaults to `3000` |
+| Variable             | Description                                                                         |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| `DATABASE_URL`       | MySQL connection string, e.g. `mysql://root:password@localhost:3306/sidata`         |
+| `JWT_SECRET`         | Secret used to sign access tokens                                                   |
+| `JWT_REFRESH_SECRET` | Secret used to sign refresh tokens                                                  |
+| `CSRF_SECRET`        | Secret used to sign CSRF tokens and cookies                                         |
+| `CORS_ORIGIN`        | Frontend origin allowed to make credentialed requests, e.g. `http://localhost:5173` |
+| `PORT`               | _(optional)_ Backend port, defaults to `3000`                                       |
 
 The server validates these at boot and fails fast if any are missing.
+
+The auth API issues CSRF tokens from `GET /api/auth/csrf-token`. Include the returned token in the `x-csrf-token` header on mutating auth requests.
 
 Apply the Prisma schema and seed default roles:
 
@@ -96,22 +99,22 @@ docker compose up --build
 
 ### Frontend (`frontend/`)
 
-| Task | Command |
-|------|---------|
-| Start dev server | `npm run dev` |
-| Build for production | `npm run build` |
-| Type-check | `npm run type-check` |
-| Run unit tests | `npm run test:unit` |
-| Lint & fix | `npm run lint` |
-| Format code | `npm run format` |
+| Task                 | Command              |
+| -------------------- | -------------------- |
+| Start dev server     | `npm run dev`        |
+| Build for production | `npm run build`      |
+| Type-check           | `npm run type-check` |
+| Run unit tests       | `npm run test:unit`  |
+| Lint & fix           | `npm run lint`       |
+| Format code          | `npm run format`     |
 
 ### Backend (`backend/`)
 
-| Task | Command |
-|------|---------|
-| Lint | `npm run lint` |
-| Format | `npm run format` |
-| Run server | `npx tsx src/index.ts` |
+| Task           | Command                                 |
+| -------------- | --------------------------------------- |
+| Lint           | `npm run lint`                          |
+| Format         | `npm run format`                        |
+| Run server     | `npx tsx src/index.ts`                  |
 | Run via Docker | `docker compose up --build` (repo root) |
 
 ## Project Structure

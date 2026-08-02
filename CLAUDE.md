@@ -11,7 +11,7 @@ Work from the appropriate directory:
 - Frontend: `frontend/`
 - Backend: `backend/`
 
-Backend requires a `.env` file — `DATABASE_URL` (MySQL), `JWT_SECRET`, `JWT_REFRESH_SECRET`, `CORS_ORIGIN` at minimum (`PORT` defaults to 3000). See `backend/.env.example`. The server validates these at boot and fails fast if any are missing.
+Backend requires a `.env` file — `DATABASE_URL` (MySQL), `JWT_SECRET`, `JWT_REFRESH_SECRET`, `CSRF_SECRET`, `CORS_ORIGIN` at minimum (`PORT` defaults to 3000). See `backend/.env.example`. The server validates these at boot and fails fast if any are missing.
 
 ## Database
 
@@ -89,6 +89,7 @@ Key details:
 Key details:
 
 - Express app with JSON middleware, cookie parsing, CORS, and route mounting under `/api/*`
+- CSRF protection is applied globally after `cookie-parser`/`cors`; fetch a token from `/api/auth/csrf-token` and send it in `x-csrf-token` for mutating auth requests
 - Prisma client output to custom location `../generated/prisma`
 - JWT access + refresh tokens; refresh tokens persisted in DB with `/api/auth/refresh` and `/api/auth/logout` endpoints
 - Uses `dotenv` for environment configuration
