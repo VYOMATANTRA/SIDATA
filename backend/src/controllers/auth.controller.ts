@@ -108,8 +108,10 @@ export const login = async (req: Request, res: Response): Promise<Response | voi
 
     try {
       normalizedEmail = normalizeEmail(email);
-    } catch {
-      return res.status(400).json({ error: 'Format email tidak valid' });
+    } catch (error) {
+      return res
+        .status(400)
+        .json({ error: error instanceof Error ? error.message : 'Format email tidak valid' });
     }
 
     const user = await prisma.user.findUnique({
