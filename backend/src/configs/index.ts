@@ -32,7 +32,9 @@ export const GOOGLE_OAUTH_FAILURE_REDIRECT =
   process.env.GOOGLE_OAUTH_FAILURE_REDIRECT || 'http://localhost:5173/login?error=oauth_failed';
 
 // Cloudflare Turnstile Configuration
-export const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '';
+export const TURNSTILE_SECRET =
+  process.env.TURNSTILE_SECRET || process.env.TURNSTILE_SECRET_KEY || '';
+export const TURNSTILE_SECRET_KEY = TURNSTILE_SECRET;
 
 // Resend & SMTP Mailer Configuration
 export const RESEND_API_KEY = process.env.RESEND_API_KEY || '';

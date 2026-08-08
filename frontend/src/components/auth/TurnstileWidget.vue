@@ -11,13 +11,14 @@ const containerRef = ref<HTMLDivElement | null>(null)
 let widgetId: string | null = null
 
 const siteKey =
-  import.meta.env.VITE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'
+  import.meta.env.VITE_TURNSTILE_SITE_KEY || '0x4AAAAAAEKBPJ2wwSx2IYbW'
 
 function renderWidget() {
   if (!containerRef.value || !window.turnstile) return
 
   widgetId = window.turnstile.render(containerRef.value, {
     sitekey: siteKey,
+    action: 'turnstile-spin-v2',
     callback: (token: string) => {
       emit('verify', token)
     },
@@ -67,7 +68,12 @@ onUnmounted(() => {
 
 <template>
   <div class="turnstile-container flex justify-center my-3">
-    <div ref="containerRef"></div>
+    <div
+      ref="containerRef"
+      class="cf-turnstile"
+      data-action="turnstile-spin-v2"
+      :data-sitekey="siteKey"
+    ></div>
   </div>
 </template>
 

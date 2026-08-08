@@ -1,15 +1,16 @@
-import { TURNSTILE_SECRET_KEY } from '../configs/index.js';
+import { TURNSTILE_SECRET } from '../configs/index.js';
 
 export interface TurnstileVerifyResponse {
   success: boolean;
   'error-codes'?: string[];
   challenge_ts?: string;
   hostname?: string;
+  action?: string;
 }
 
 export async function verifyTurnstileToken(token?: string, remoteIp?: string): Promise<boolean> {
-  // If Turnstile secret key is not set, pass verification (dev fallback)
-  if (!TURNSTILE_SECRET_KEY) {
+  // If Turnstile secret is not set, pass verification (dev fallback)
+  if (!TURNSTILE_SECRET) {
     return true;
   }
 
@@ -18,16 +19,18 @@ export async function verifyTurnstileToken(token?: string, remoteIp?: string): P
   }
 
   try {
-    const formData = new URLSearchParams();
-    formData.append('secret', TURNSTILE_SECRET_KEY);
-    formData.append('response', token);
+    const params = new URLSearchParams({
+      secret: TURNSTILE_SECRET,
+      response: token,
+    });
     if (remoteIp) {
-      formData.append('remoteip', remoteIp);
+      params.append('remoteip', remoteIp);
     }
 
     const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
       method: 'POST',
-      body: formData,
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params,
     });
 
     if (!res.ok) {
