@@ -15,7 +15,16 @@ onMounted(async () => {
   }
 
   try {
-    const res = await fetch('/api/auth/refresh', { method: 'POST' })
+    const csrfRes = await fetch('/api/auth/csrf-token')
+    const csrfData = await csrfRes.json()
+    const csrfToken = csrfData.csrfToken || ''
+
+    const res = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      headers: {
+        'x-csrf-token': csrfToken,
+      },
+    })
     const data = await res.json()
 
     if (!res.ok) {
