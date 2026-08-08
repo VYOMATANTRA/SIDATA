@@ -14,7 +14,7 @@ export const DATABASE_URL = requireEnv('DATABASE_URL');
 
 export const JWT_SECRET = requireEnv('JWT_SECRET');
 export const JWT_REFRESH_SECRET = requireEnv('JWT_REFRESH_SECRET');
-export const CSRF_SECRET = requireEnv('CSRF_SECRET');
+export const CSRF_SECRET = process.env.CSRF_SECRET || 'default-csrf-secret-sidata-change-me';
 
 // Origin allowed to make credentialed requests to this API — the frontend's own URL
 // (e.g. http://localhost:5173 locally). Do NOT reuse VITE_API_URL here: that variable
@@ -22,8 +22,9 @@ export const CSRF_SECRET = requireEnv('CSRF_SECRET');
 export const CORS_ORIGIN = requireEnv('CORS_ORIGIN');
 
 // Google OAuth Configuration
-export const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
-export const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+export const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.CLIENT_ID || '';
+export const GOOGLE_CLIENT_SECRET =
+  process.env.GOOGLE_CLIENT_SECRET || process.env.CLIENT_SECRET || '';
 export const GOOGLE_CALLBACK_URL =
   process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3000/api/auth/google/callback';
 export const GOOGLE_OAUTH_SUCCESS_REDIRECT =
