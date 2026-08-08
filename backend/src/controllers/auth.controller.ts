@@ -8,6 +8,8 @@ import { generateCsrfToken } from '../middlewares/csrf.middleware.js';
 import zxcvbn from 'zxcvbn';
 import { JWT_REFRESH_SECRET } from '../configs/index.js';
 import { normalizeEmail } from '../utils/validation.js';
+import { generate6DigitOtp, hashOtp, getOtpExpiration } from '../utils/otp.js';
+import { sendOtpEmail } from '../utils/mailer.js';
 
 export const register = async (req: Request, res: Response): Promise<Response | void> => {
   try {
@@ -67,12 +69,14 @@ export const register = async (req: Request, res: Response): Promise<Response | 
         email: normalizedEmail,
         password_hash: passwordHash,
         auth_provider: 'local',
+        email_verified: false,
         roleId: userRole.id,
       },
       select: {
         id: true,
         email: true,
         auth_provider: true,
+        email_verified: true,
         role: {
           select: {
             name: true,
@@ -82,9 +86,24 @@ export const register = async (req: Request, res: Response): Promise<Response | 
       },
     });
 
+    const otp = generate6DigitOtp();
+    const hashedOtp = hashOtp(otp);
+    const expiresAt = getOtpExpiration(15);
+
+    await prisma.emailOtp.create({
+      data: {
+        userId: newUser.id,
+        otpHash: hashedOtp,
+        expiresAt,
+      },
+    });
+
+    await sendOtpEmail({ to: normalizedEmail, otp });
+
     return res.status(201).json({
-      message: 'Registrasi berhasil',
-      user: newUser,
+      message: 'Registrasi berhasil. Kode OTP verifikasi telah dikirim ke email Anda.',
+      email: normalizedEmail,
+      requiresOtp: true,
     });
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'P2002') {
@@ -126,6 +145,15 @@ export const login = async (req: Request, res: Response): Promise<Response | voi
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
     if (!isPasswordValid) {
       return res.status(401).json({ error: 'Kredensial tidak valid' });
+    }
+
+    if (!user.email_verified) {
+      return res.status(403).json({
+        error:
+          'Email Anda belum diverifikasi. Silakan masukkan kode OTP yang dikirim ke email Anda.',
+        requiresOtp: true,
+        email: user.email,
+      });
     }
 
     const accessToken = generateAccessToken({
