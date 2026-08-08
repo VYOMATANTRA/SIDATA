@@ -71,7 +71,7 @@ services:
       - backend
     environment:
       NODE_ENV: ${NODE_ENV}
-      VITE_API_URL: ${VITE_API_URL}
+      VITE_API_URL: http://backend:3000
       VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY}
     ports:
       - "${FRONTEND_PORT}:${FRONTEND_PORT}"
