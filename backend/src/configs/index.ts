@@ -34,10 +34,18 @@ export const GOOGLE_OAUTH_FAILURE_REDIRECT =
 // Cloudflare Turnstile Configuration
 export const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '';
 
-// SMTP Mailer Configuration
-export const SMTP_HOST = process.env.SMTP_HOST || '';
-export const SMTP_PORT = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
-export const SMTP_USER = process.env.SMTP_USER || '';
-export const SMTP_PASS = process.env.SMTP_PASS || '';
+// Resend & SMTP Mailer Configuration
+export const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+export const SMTP_HOST = process.env.SMTP_HOST || (RESEND_API_KEY ? 'smtp.resend.com' : '');
+export const SMTP_PORT = process.env.SMTP_PORT
+  ? Number(process.env.SMTP_PORT)
+  : RESEND_API_KEY
+    ? 465
+    : 587;
+export const SMTP_USER = process.env.SMTP_USER || (RESEND_API_KEY ? 'resend' : '');
+export const SMTP_PASS = process.env.SMTP_PASS || RESEND_API_KEY;
 export const SMTP_FROM =
-  process.env.SMTP_FROM || 'SIDATA Kelurahan Manggar <noreply@sidata.manggar.id>';
+  process.env.SMTP_FROM ||
+  (RESEND_API_KEY
+    ? 'SIDATA Kelurahan Manggar <onboarding@resend.dev>'
+    : 'SIDATA Kelurahan Manggar <noreply@sidata.manggar.id>');
