@@ -51,11 +51,6 @@ services:
       GOOGLE_OAUTH_FAILURE_REDIRECT: ${GOOGLE_OAUTH_FAILURE_REDIRECT}
       TURNSTILE_SECRET: ${TURNSTILE_SECRET}
       RESEND_API_KEY: ${RESEND_API_KEY}
-      # SMTP_HOST: ${SMTP_HOST}
-      # SMTP_PORT: ${SMTP_PORT}
-      # SMTP_USER: ${SMTP_USER}
-      # SMTP_PASS: ${SMTP_PASS}
-      # SMTP_FROM: ${SMTP_FROM}
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
     volumes:
@@ -71,7 +66,7 @@ services:
       - backend
     environment:
       NODE_ENV: ${NODE_ENV}
-      VITE_API_URL: http://backend:3000
+      VITE_API_URL: ${VITE_API_URL_DOCKER:-http://backend:3000}
       VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY}
     ports:
       - "${FRONTEND_PORT}:${FRONTEND_PORT}"
