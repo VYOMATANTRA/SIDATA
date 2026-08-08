@@ -11,7 +11,7 @@ const containerRef = ref<HTMLDivElement | null>(null)
 let widgetId: string | null = null
 
 const siteKey =
-  import.meta.env.VITE_TURNSTILE_SITE_KEY || '0x4AAAAAAEKBPJ2wwSx2IYbW'
+  import.meta.env.VITE_TURNSTILE_SITE_KEY
 
 function renderWidget() {
   if (!containerRef.value || !window.turnstile) return
