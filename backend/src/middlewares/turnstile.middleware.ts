@@ -7,8 +7,8 @@ export const requireTurnstile = async (
   res: Response,
   next: NextFunction,
 ): Promise<Response | void> => {
-  // Skip if TURNSTILE_SECRET is empty in development
-  if (!TURNSTILE_SECRET) {
+  // Skip anti-bot check only when TURNSTILE_SECRET is empty in non-production environments
+  if (!TURNSTILE_SECRET && process.env.NODE_ENV !== 'production') {
     return next();
   }
 

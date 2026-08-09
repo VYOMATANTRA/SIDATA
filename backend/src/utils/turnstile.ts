@@ -9,8 +9,12 @@ export interface TurnstileVerifyResponse {
 }
 
 export async function verifyTurnstileToken(token?: string, remoteIp?: string): Promise<boolean> {
-  // If Turnstile secret is not set, pass verification (dev fallback)
+  // If Turnstile secret is not set, pass verification only in dev/test
   if (!TURNSTILE_SECRET) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('TURNSTILE_SECRET tidak dikonfigurasi pada lingkungan produksi!');
+      return false;
+    }
     return true;
   }
 
