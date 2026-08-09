@@ -1,7 +1,8 @@
 import type { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../utils/prisma.js';
-import { generateAccessToken, generateRefreshToken } from '../utils/jwt.js';
+import { generateAccessToken } from '../utils/jwt.js';
+import { issueSession } from '../utils/session.js';
 import jwt from 'jsonwebtoken';
 import type { AuthRequest } from '../middlewares/auth.middleware.js';
 import { generateCsrfToken } from '../middlewares/csrf.middleware.js';
@@ -156,30 +157,10 @@ export const login = async (req: Request, res: Response): Promise<Response | voi
       });
     }
 
-    const accessToken = generateAccessToken({
+    const { accessToken } = await issueSession(res, {
       id: user.id,
       email: user.email,
       role: user.role.name,
-    });
-
-    const refreshToken = generateRefreshToken(user.id);
-
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 1);
-
-    await prisma.refreshToken.create({
-      data: {
-        userId: user.id,
-        token: refreshToken,
-        expiresAt: expiresAt,
-      },
-    });
-
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // Hanya HTTPS di production
-      sameSite: 'lax',
-      maxAge: 24 * 60 * 60 * 1000,
     });
 
     return res.status(200).json({

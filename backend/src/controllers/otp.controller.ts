@@ -3,7 +3,7 @@ import prisma from '../utils/prisma.js';
 import { normalizeEmail } from '../utils/validation.js';
 import { generate6DigitOtp, hashOtp, verifyOtpHash, getOtpExpiration } from '../utils/otp.js';
 import { sendOtpEmail } from '../utils/mailer.js';
-import { generateAccessToken, generateRefreshToken } from '../utils/jwt.js';
+import { issueSession } from '../utils/session.js';
 
 export const verifyOtp = async (req: Request, res: Response): Promise<Response | void> => {
   try {
@@ -32,7 +32,20 @@ export const verifyOtp = async (req: Request, res: Response): Promise<Response |
     }
 
     if (user.email_verified) {
-      return res.status(200).json({ message: 'Email Anda sudah terverifikasi' });
+      const { accessToken: existingAccessToken } = await issueSession(res, {
+        id: user.id,
+        email: user.email,
+        role: user.role.name,
+      });
+      return res.status(200).json({
+        message: 'Email Anda sudah terverifikasi',
+        accessToken: existingAccessToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role.name,
+        },
+      });
     }
 
     const otpRecord = await prisma.emailOtp.findFirst({
@@ -83,29 +96,10 @@ export const verifyOtp = async (req: Request, res: Response): Promise<Response |
     });
 
     // Auto-Login: Issue JWT Access Token and Refresh Token Cookie
-    const accessToken = generateAccessToken({
+    const { accessToken } = await issueSession(res, {
       id: user.id,
       email: user.email,
       role: user.role.name,
-    });
-
-    const refreshToken = generateRefreshToken(user.id);
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 1);
-
-    await prisma.refreshToken.create({
-      data: {
-        userId: user.id,
-        token: refreshToken,
-        expiresAt,
-      },
-    });
-
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 24 * 60 * 60 * 1000,
     });
 
     return res.status(200).json({
