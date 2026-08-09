@@ -124,6 +124,17 @@ function onOtpVerified(data?: unknown) {
         {{ successMessage }}
       </div>
 
+      <!-- Google OAuth Button -->
+      <div class="mb-6 max-w-[598px] mx-auto">
+        <GoogleLoginButton />
+      </div>
+
+      <div class="relative flex items-center justify-center mb-6 max-w-[598px] mx-auto">
+        <div class="border-t border-slate-200 w-full"></div>
+        <span class="bg-white px-3 text-xs text-slate-500 uppercase font-semibold tracking-wider">atau dengan email</span>
+        <div class="border-t border-slate-200 w-full"></div>
+      </div>
+
       <form class="space-y-6 max-w-[598px] mx-auto" @submit.prevent="handleLogin">
         <div>
           <label class="block text-sm font-semibold text-[#0A2353] mb-2">Email</label>
@@ -159,11 +170,6 @@ function onOtpVerified(data?: unknown) {
           <span v-else>Masuk ke Aplikasi</span>
         </button>
       </form>
-
-      <!-- Google OAuth Button -->
-      <div class="mt-6 max-w-[598px] mx-auto">
-        <GoogleLoginButton />
-      </div>
 
       <div class="mt-8 text-center text-sm text-slate-600 font-medium">
         Belum memiliki akun?
