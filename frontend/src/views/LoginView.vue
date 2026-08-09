@@ -6,6 +6,8 @@ import TurnstileWidget from '../components/auth/TurnstileWidget.vue'
 import OtpVerificationModal from '../components/auth/OtpVerificationModal.vue'
 import { getCsrfToken } from '../utils/csrf'
 import { useAuthStore } from '../stores/auth'
+import bgImage from '../assets/img/background_laman_depan_kelurahan.png'
+import logoBalikpapan from '../assets/img/logo_balikpapan.png'
 
 const router = useRouter()
 const route = useRoute()
@@ -100,17 +102,23 @@ function onOtpVerified(data?: unknown) {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-slate-900/90 px-4 py-12">
+  <div
+    class="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat relative px-4 py-12"
+    :style="{ backgroundImage: `url(${bgImage})` }"
+  >
+    <!-- Background overlay for high contrast readability -->
+    <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-xs"></div>
+
     <div
-      class="w-full max-w-[720px] bg-white border-2 border-[#0A2353] rounded-[10px] p-10 md:p-14 shadow-2xl text-slate-800"
+      class="relative z-10 w-full max-w-[720px] bg-white border-2 border-[#0A2353] rounded-[10px] p-10 md:p-14 shadow-2xl text-slate-800"
     >
       <div class="text-center mb-8">
-        <!-- Logo / Icon Badge -->
-        <div class="w-20 h-20 bg-[#0A2353]/5 rounded-2xl mx-auto mb-4 flex items-center justify-center border border-[#0A2353]/10">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-[#0A2353]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-          </svg>
-        </div>
+        <!-- Logo Kota Balikpapan -->
+        <img
+          :src="logoBalikpapan"
+          alt="Logo Kota Balikpapan"
+          class="w-20 h-24 object-contain mx-auto mb-4"
+        />
 
         <h2 class="text-3xl font-extrabold text-[#0A2353] tracking-tight">Login</h2>
         <p class="text-sm text-slate-600 mt-2 font-medium">Silahkan masuk ke akun anda terlebih dahulu</p>
@@ -122,17 +130,6 @@ function onOtpVerified(data?: unknown) {
 
       <div v-if="successMessage" class="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm text-center font-medium">
         {{ successMessage }}
-      </div>
-
-      <!-- Google OAuth Button -->
-      <div class="mb-6 max-w-[598px] mx-auto">
-        <GoogleLoginButton />
-      </div>
-
-      <div class="relative flex items-center justify-center mb-6 max-w-[598px] mx-auto">
-        <div class="border-t border-slate-200 w-full"></div>
-        <span class="bg-white px-3 text-xs text-slate-500 uppercase font-semibold tracking-wider">atau dengan email</span>
-        <div class="border-t border-slate-200 w-full"></div>
       </div>
 
       <form class="space-y-6 max-w-[598px] mx-auto" @submit.prevent="handleLogin">
@@ -170,6 +167,18 @@ function onOtpVerified(data?: unknown) {
           <span v-else>Masuk ke Aplikasi</span>
         </button>
       </form>
+
+      <!-- Divider with 'Atau' text -->
+      <div class="relative flex items-center justify-center my-6 max-w-[598px] mx-auto">
+        <div class="border-t border-slate-200 w-full"></div>
+        <span class="bg-white px-4 text-xs text-slate-500 uppercase font-bold tracking-wider">Atau</span>
+        <div class="border-t border-slate-200 w-full"></div>
+      </div>
+
+      <!-- Google OAuth Button -->
+      <div class="mb-6 max-w-[598px] mx-auto">
+        <GoogleLoginButton />
+      </div>
 
       <div class="mt-8 text-center text-sm text-slate-600 font-medium">
         Belum memiliki akun?
