@@ -20,8 +20,8 @@ router.use(authLimiter);
 router.get('/csrf-token', getCsrfToken);
 router.post('/register', requireTurnstile, register);
 router.post('/login', loginLimiter, requireTurnstile, login);
-router.post('/verify-otp', verifyOtp);
-router.post('/resend-otp', resendOtp);
+router.post('/verify-otp', requireTurnstile, verifyOtp);
+router.post('/resend-otp', requireTurnstile, resendOtp);
 router.post('/refresh', refreshToken);
 router.post('/logout', logout);
 
