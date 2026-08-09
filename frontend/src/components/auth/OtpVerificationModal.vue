@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onUnmounted } from 'vue'
+import { getCsrfToken } from '../../utils/csrf'
 
 const props = defineProps<{
   isOpen: boolean
@@ -88,16 +89,6 @@ function handlePaste(event: ClipboardEvent) {
 
   if (digits.value.every((d) => d !== '')) {
     submitOtp()
-  }
-}
-
-async function getCsrfToken(): Promise<string> {
-  try {
-    const res = await fetch('/api/auth/csrf-token')
-    const data = await res.json()
-    return data.csrfToken || ''
-  } catch {
-    return ''
   }
 }
 

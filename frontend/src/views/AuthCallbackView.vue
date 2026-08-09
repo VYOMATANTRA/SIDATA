@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { getCsrfToken } from '../utils/csrf'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
 const route = useRoute()
+const authStore = useAuthStore()
+
 const statusMessage = ref('Memproses autentikasi Google...')
 const errorMessage = ref('')
 
@@ -15,9 +19,7 @@ onMounted(async () => {
   }
 
   try {
-    const csrfRes = await fetch('/api/auth/csrf-token')
-    const csrfData = await csrfRes.json()
-    const csrfToken = csrfData.csrfToken || ''
+    const csrfToken = await getCsrfToken()
 
     const res = await fetch('/api/auth/refresh', {
       method: 'POST',
@@ -30,6 +32,10 @@ onMounted(async () => {
     if (!res.ok) {
       errorMessage.value = data.error || 'Sesi Google tidak ditemukan atau kedaluwarsa.'
       return
+    }
+
+    if (data.accessToken) {
+      authStore.setAuth(data.user || { id: '', email: '', role: '' }, data.accessToken)
     }
 
     statusMessage.value = 'Login berhasil! Mengalihkan...'

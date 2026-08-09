@@ -13,6 +13,10 @@ interface TurnstileObject {
   reset: (widgetId?: string) => void
 }
 
-interface Window {
-  turnstile?: TurnstileObject
+declare global {
+  interface Window {
+    turnstile?: TurnstileObject
+  }
 }
+
+export {}

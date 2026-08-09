@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
+import { getCsrfToken } from '../utils/csrf'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 async function handleLogout() {
   try {
-    const csrfRes = await fetch('/api/auth/csrf-token')
-    const csrfData = await csrfRes.json()
-    const csrfToken = csrfData.csrfToken || ''
+    const csrfToken = await getCsrfToken()
 
     await fetch('/api/auth/logout', {
       method: 'POST',
@@ -18,6 +19,7 @@ async function handleLogout() {
   } catch {
     // Ignore error on logout
   } finally {
+    authStore.clearAuth()
     router.push('/login')
   }
 }

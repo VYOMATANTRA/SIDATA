@@ -4,8 +4,11 @@ import { useRouter } from 'vue-router'
 import GoogleLoginButton from '../components/auth/GoogleLoginButton.vue'
 import TurnstileWidget from '../components/auth/TurnstileWidget.vue'
 import OtpVerificationModal from '../components/auth/OtpVerificationModal.vue'
+import { getCsrfToken } from '../utils/csrf'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 const email = ref('')
 const password = ref('')
@@ -17,16 +20,6 @@ const successMessage = ref('')
 
 const isOtpModalOpen = ref(false)
 const registeredEmail = ref('')
-
-async function getCsrfToken(): Promise<string> {
-  try {
-    const res = await fetch('/api/auth/csrf-token')
-    const data = await res.json()
-    return data.csrfToken || ''
-  } catch {
-    return ''
-  }
-}
 
 async function handleRegister() {
   if (!email.value || !password.value) {
@@ -87,8 +80,14 @@ async function handleRegister() {
   }
 }
 
-function onOtpVerified() {
+function onOtpVerified(data?: unknown) {
   isOtpModalOpen.value = false
+  if (data && typeof data === 'object') {
+    const payload = data as { user?: { id: string; email: string; role: string }; accessToken?: string }
+    if (payload.user && payload.accessToken) {
+      authStore.setAuth(payload.user, payload.accessToken)
+    }
+  }
   successMessage.value = 'Email berhasil diverifikasi! Mengalihkan ke aplikasi...'
   setTimeout(() => {
     router.push('/')
