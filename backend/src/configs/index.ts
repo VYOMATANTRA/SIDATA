@@ -1,4 +1,7 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'node:path';
+
+dotenv.config({ path: path.resolve(process.cwd(), '../../../.env') });
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -32,5 +35,5 @@ export const GOOGLE_OAUTH_FAILURE_REDIRECT = requireEnv('GOOGLE_OAUTH_FAILURE_RE
 export const TURNSTILE_SECRET = requireEnv('TURNSTILE_SECRET');
 
 // Resend API Mailer Configuration
-export const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
-export const EMAIL_FROM = process.env.EMAIL_FROM || process.env.SMTP_FROM || 'SIDATA Kelurahan Manggar <onboarding@resend.dev>';
+export const RESEND_API_KEY = requireEnv('RESEND_API_KEY');
+export const EMAIL_FROM = requireEnv('EMAIL_FROM');
