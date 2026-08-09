@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import GoogleLoginButton from '../components/auth/GoogleLoginButton.vue'
 import TurnstileWidget from '../components/auth/TurnstileWidget.vue'
@@ -20,22 +20,95 @@ const isLoading = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
 
+const serverEmailError = ref('')
+const serverPasswordError = ref('')
+
+const isEmailTouched = ref(false)
+const isPasswordTouched = ref(false)
+const isConfirmPasswordTouched = ref(false)
+
 const isOtpModalOpen = ref(false)
 const registeredEmail = ref('')
 
+const COMMON_WEAK_PASSWORDS = [
+  '12345678',
+  '123456789',
+  '1234567890',
+  'password',
+  'password123',
+  'qwertyui',
+  'qwerty123',
+  'indonesia',
+  'admin1234',
+]
+
+function isWeakPassword(pwd: string, mail: string): boolean {
+  const lower = pwd.toLowerCase()
+  if (COMMON_WEAK_PASSWORDS.includes(lower)) return true
+  if (mail) {
+    const parts = mail.split('@')
+    const prefix = (parts[0] || '').toLowerCase()
+    if (prefix && prefix.length >= 3 && lower.includes(prefix)) return true
+  }
+  return false
+}
+
+const emailError = computed(() => {
+  if (serverEmailError.value) return serverEmailError.value
+  if (!isEmailTouched.value) return ''
+  if (!email.value.trim()) return 'Email wajib diisi'
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(email.value.trim())) return 'Format email tidak valid (contoh: nama@email.com)'
+  return ''
+})
+
+const passwordError = computed(() => {
+  if (serverPasswordError.value) return serverPasswordError.value
+  if (!isPasswordTouched.value) return ''
+  if (!password.value) return 'Password wajib diisi'
+  if (password.value.length < 8) return 'Password minimal harus 8 karakter (Standar NIST).'
+  if (password.value.length > 128) return 'Password terlalu panjang (maksimal 128 karakter).'
+  if (isWeakPassword(password.value, email.value.trim()))
+    return 'Password terlalu lemah atau umum digunakan.'
+  return ''
+})
+
+const confirmPasswordError = computed(() => {
+  if (!isConfirmPasswordTouched.value) return ''
+  if (!confirmPassword.value) return 'Konfirmasi password wajib diisi'
+  if (confirmPassword.value !== password.value) return 'Konfirmasi password tidak cocok'
+  return ''
+})
+
+const isFormValid = computed(() => {
+  return (
+    email.value.trim() &&
+    password.value &&
+    confirmPassword.value &&
+    !emailError.value &&
+    !passwordError.value &&
+    !confirmPasswordError.value
+  )
+})
+
+function onEmailInput() {
+  isEmailTouched.value = true
+  serverEmailError.value = ''
+}
+
+function onPasswordInput() {
+  isPasswordTouched.value = true
+  serverPasswordError.value = ''
+}
+
 async function handleRegister() {
-  if (!email.value || !password.value) {
-    errorMessage.value = 'Email dan password wajib diisi'
-    return
-  }
+  isEmailTouched.value = true
+  isPasswordTouched.value = true
+  isConfirmPasswordTouched.value = true
+  serverEmailError.value = ''
+  serverPasswordError.value = ''
 
-  if (password.value !== confirmPassword.value) {
-    errorMessage.value = 'Konfirmasi password tidak cocok'
-    return
-  }
-
-  if (password.value.length < 8) {
-    errorMessage.value = 'Password minimal 8 karakter'
+  if (!isFormValid.value) {
     return
   }
 
@@ -52,7 +125,7 @@ async function handleRegister() {
         'x-csrf-token': csrfToken,
       },
       body: JSON.stringify({
-        email: email.value,
+        email: email.value.trim(),
         password: password.value,
         turnstileToken: turnstileToken.value,
       }),
@@ -61,12 +134,19 @@ async function handleRegister() {
     const data = await response.json()
 
     if (!response.ok) {
-      errorMessage.value = data.error || 'Registrasi gagal. Silakan coba lagi.'
+      const errText = data.error || 'Registrasi gagal. Silakan coba lagi.'
+      if (response.status === 409 || errText.toLowerCase().includes('email')) {
+        serverEmailError.value = errText
+      } else if (errText.toLowerCase().includes('password')) {
+        serverPasswordError.value = errText
+      } else {
+        errorMessage.value = errText
+      }
       return
     }
 
     if (data.requiresOtp) {
-      registeredEmail.value = data.email || email.value
+      registeredEmail.value = data.email || email.value.trim()
       isOtpModalOpen.value = true
       successMessage.value = 'Kode OTP verifikasi telah dikirim ke email Anda!'
     } else {
@@ -130,36 +210,84 @@ function onOtpVerified(data?: unknown) {
 
       <form class="space-y-5 max-w-[598px] mx-auto" @submit.prevent="handleRegister">
         <div>
-          <label class="block text-sm font-semibold text-[#0A2353] mb-2">Email</label>
+          <label
+            class="block text-sm font-semibold mb-2 transition-colors"
+            :class="emailError ? 'text-rose-600' : 'text-[#0A2353]'"
+          >Email</label>
           <input
             v-model="email"
             type="email"
             required
             placeholder="nama@email.com"
-            class="w-full h-[46px] px-4 bg-white border-2 border-slate-900 rounded-[9px] text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#0A2353] focus:ring-2 focus:ring-[#0A2353]/20 transition-all text-sm font-medium"
+            @blur="isEmailTouched = true"
+            @input="onEmailInput"
+            class="w-full h-[46px] px-4 bg-white border-2 rounded-[9px] text-slate-900 placeholder-slate-400 focus:outline-none transition-all text-sm font-medium"
+            :class="
+              emailError
+                ? 'border-rose-500 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20'
+                : 'border-slate-900 focus:border-[#0A2353] focus:ring-2 focus:ring-[#0A2353]/20'
+            "
           />
+          <div v-if="emailError" class="flex items-center gap-1.5 mt-1.5 text-xs text-rose-600 font-medium">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-rose-600 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+            <span>{{ emailError }}</span>
+          </div>
         </div>
 
         <div>
-          <label class="block text-sm font-semibold text-[#0A2353] mb-2">Password</label>
+          <label
+            class="block text-sm font-semibold mb-2 transition-colors"
+            :class="passwordError ? 'text-rose-600' : 'text-[#0A2353]'"
+          >Password</label>
           <input
             v-model="password"
             type="password"
             required
             placeholder="Minimal 8 karakter"
-            class="w-full h-[46px] px-4 bg-white border-2 border-slate-900 rounded-[9px] text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#0A2353] focus:ring-2 focus:ring-[#0A2353]/20 transition-all text-sm font-medium"
+            @blur="isPasswordTouched = true"
+            @input="onPasswordInput"
+            class="w-full h-[46px] px-4 bg-white border-2 rounded-[9px] text-slate-900 placeholder-slate-400 focus:outline-none transition-all text-sm font-medium"
+            :class="
+              passwordError
+                ? 'border-rose-500 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20'
+                : 'border-slate-900 focus:border-[#0A2353] focus:ring-2 focus:ring-[#0A2353]/20'
+            "
           />
+          <div v-if="passwordError" class="flex items-center gap-1.5 mt-1.5 text-xs text-rose-600 font-medium">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-rose-600 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+            <span>{{ passwordError }}</span>
+          </div>
         </div>
 
         <div>
-          <label class="block text-sm font-semibold text-[#0A2353] mb-2">Konfirmasi Password</label>
+          <label
+            class="block text-sm font-semibold mb-2 transition-colors"
+            :class="confirmPasswordError ? 'text-rose-600' : 'text-[#0A2353]'"
+          >Konfirmasi Password</label>
           <input
             v-model="confirmPassword"
             type="password"
             required
             placeholder="Ketik ulang password"
-            class="w-full h-[46px] px-4 bg-white border-2 border-slate-900 rounded-[9px] text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#0A2353] focus:ring-2 focus:ring-[#0A2353]/20 transition-all text-sm font-medium"
+            @blur="isConfirmPasswordTouched = true"
+            @input="isConfirmPasswordTouched = true"
+            class="w-full h-[46px] px-4 bg-white border-2 rounded-[9px] text-slate-900 placeholder-slate-400 focus:outline-none transition-all text-sm font-medium"
+            :class="
+              confirmPasswordError
+                ? 'border-rose-500 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20'
+                : 'border-slate-900 focus:border-[#0A2353] focus:ring-2 focus:ring-[#0A2353]/20'
+            "
           />
+          <div v-if="confirmPasswordError" class="flex items-center gap-1.5 mt-1.5 text-xs text-rose-600 font-medium">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-rose-600 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+            <span>{{ confirmPasswordError }}</span>
+          </div>
         </div>
 
         <!-- Cloudflare Turnstile Anti-Bot Widget -->
