@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import GoogleLoginButton from '../components/auth/GoogleLoginButton.vue'
 import TurnstileWidget from '../components/auth/TurnstileWidget.vue'
 import OtpVerificationModal from '../components/auth/OtpVerificationModal.vue'
+import { getCsrfToken } from '../utils/csrf'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
+const route = useRoute()
+const authStore = useAuthStore()
 
 const email = ref('')
 const password = ref('')
@@ -17,15 +21,14 @@ const successMessage = ref('')
 const isOtpModalOpen = ref(false)
 const unverifiedEmail = ref('')
 
-async function getCsrfToken(): Promise<string> {
-  try {
-    const res = await fetch('/api/auth/csrf-token')
-    const data = await res.json()
-    return data.csrfToken || ''
-  } catch {
-    return ''
+onMounted(() => {
+  if (route.query.error === 'oauth_failed' || route.query.reason) {
+    const reason = route.query.reason ? String(route.query.reason) : ''
+    errorMessage.value = reason
+      ? `Gagal masuk dengan Google (${reason}). Silakan coba lagi.`
+      : 'Gagal masuk dengan Google. Silakan coba lagi.'
   }
-}
+})
 
 async function handleLogin() {
   if (!email.value || !password.value) {
@@ -66,6 +69,10 @@ async function handleLogin() {
       return
     }
 
+    if (data.user && data.accessToken) {
+      authStore.setAuth(data.user, data.accessToken)
+    }
+
     successMessage.value = 'Login berhasil! Mengalihkan ke aplikasi...'
     setTimeout(() => {
       router.push('/')
@@ -77,8 +84,14 @@ async function handleLogin() {
   }
 }
 
-function onOtpVerified() {
+function onOtpVerified(data?: unknown) {
   isOtpModalOpen.value = false
+  if (data && typeof data === 'object') {
+    const payload = data as { user?: { id: string; email: string; role: string }; accessToken?: string }
+    if (payload.user && payload.accessToken) {
+      authStore.setAuth(payload.user, payload.accessToken)
+    }
+  }
   successMessage.value = 'Email terverifikasi & login berhasil! Mengalihkan...'
   setTimeout(() => {
     router.push('/')
