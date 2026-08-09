@@ -55,8 +55,8 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
     const rawStateCookie = req.cookies?.oauth_state;
     const rawVerifierCookie = req.cookies?.oauth_verifier;
 
-    const savedState = decryptCookieValue(rawStateCookie) || rawStateCookie;
-    const savedVerifier = decryptCookieValue(rawVerifierCookie) || rawVerifierCookie;
+    const savedState = decryptCookieValue(rawStateCookie);
+    const savedVerifier = decryptCookieValue(rawVerifierCookie);
 
     if (!savedState || !state || savedState !== state) {
       clearOAuthCookies(res);
