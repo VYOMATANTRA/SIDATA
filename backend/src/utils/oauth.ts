@@ -2,6 +2,7 @@ import { OAuth2Client } from 'google-auth-library';
 import crypto from 'node:crypto';
 import type { Response } from 'express';
 import { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_CALLBACK_URL } from '../configs/index.js';
+import { encryptCookieValue } from './cookieSecurity.js';
 
 export interface GoogleUserProfile {
   sub: string;
@@ -34,8 +35,8 @@ export function setOAuthCookies(res: Response, options: { state: string; verifie
     maxAge: 5 * 60 * 1000, // 5 minutes
   };
 
-  res.cookie('oauth_state', options.state, cookieOptions);
-  res.cookie('oauth_verifier', options.verifier, cookieOptions);
+  res.cookie('oauth_state', encryptCookieValue(options.state), cookieOptions);
+  res.cookie('oauth_verifier', encryptCookieValue(options.verifier), cookieOptions);
 }
 
 export function clearOAuthCookies(res: Response): void {

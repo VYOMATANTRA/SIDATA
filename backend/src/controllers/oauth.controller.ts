@@ -10,6 +10,7 @@ import {
   clearOAuthCookies,
   verifyGoogleIdToken,
 } from '../utils/oauth.js';
+import { decryptCookieValue } from '../utils/cookieSecurity.js';
 import {
   GOOGLE_CALLBACK_URL,
   GOOGLE_OAUTH_SUCCESS_REDIRECT,
@@ -51,8 +52,11 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
       );
     }
 
-    const savedState = req.cookies?.oauth_state;
-    const savedVerifier = req.cookies?.oauth_verifier;
+    const rawStateCookie = req.cookies?.oauth_state;
+    const rawVerifierCookie = req.cookies?.oauth_verifier;
+
+    const savedState = decryptCookieValue(rawStateCookie) || rawStateCookie;
+    const savedVerifier = decryptCookieValue(rawVerifierCookie) || rawVerifierCookie;
 
     if (!savedState || !state || savedState !== state) {
       clearOAuthCookies(res);

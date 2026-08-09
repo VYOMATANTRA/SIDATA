@@ -7,6 +7,7 @@ import {
   setOAuthCookies,
   clearOAuthCookies,
 } from '../utils/oauth.js';
+import { decryptCookieValue } from '../utils/cookieSecurity.js';
 
 describe('oauth utility module', () => {
   it('generateOAuthState returns a secure 64-char hex string', () => {
@@ -44,10 +45,10 @@ describe('oauth utility module', () => {
     const firstCall = cookieCalls[0]!;
     const secondCall = cookieCalls[1]!;
     assert.equal(firstCall.name, 'oauth_state');
-    assert.equal(firstCall.val, 'state123');
+    assert.equal(decryptCookieValue(firstCall.val), 'state123');
     assert.equal(firstCall.options.httpOnly, true);
     assert.equal(secondCall.name, 'oauth_verifier');
-    assert.equal(secondCall.val, 'verifier123');
+    assert.equal(decryptCookieValue(secondCall.val), 'verifier123');
   });
 
   it('clearOAuthCookies clears temporary oauth cookies', () => {
