@@ -31,10 +31,6 @@ export const GOOGLE_OAUTH_FAILURE_REDIRECT = requireEnv('GOOGLE_OAUTH_FAILURE_RE
 // Cloudflare Turnstile Configuration
 export const TURNSTILE_SECRET = requireEnv('TURNSTILE_SECRET');
 
-// Resend & SMTP Mailer Configuration
-export const RESEND_API_KEY = requireEnv('RESEND_API_KEY');
-export const SMTP_HOST = requireEnv('SMTP_HOST');
-export const SMTP_PORT = Number(requireEnv('SMTP_PORT'));
-export const SMTP_USER = requireEnv('SMTP_USER');
-export const SMTP_PASS = requireEnv('SMTP_PASS');
-export const SMTP_FROM = requireEnv('SMTP_FROM');
+// Resend API Mailer Configuration
+export const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+export const EMAIL_FROM = process.env.EMAIL_FROM || process.env.SMTP_FROM || 'SIDATA Kelurahan Manggar <onboarding@resend.dev>';

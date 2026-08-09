@@ -1,5 +1,4 @@
-import nodemailer from 'nodemailer';
-import { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM } from '../configs/index.js';
+import { RESEND_API_KEY, EMAIL_FROM } from '../configs/index.js';
 
 export interface SendOtpEmailParams {
   to: string;
@@ -7,22 +6,12 @@ export interface SendOtpEmailParams {
 }
 
 export async function sendOtpEmail({ to, otp }: SendOtpEmailParams): Promise<boolean> {
-  if (!SMTP_HOST || !SMTP_USER) {
+  if (!RESEND_API_KEY) {
     console.log(`[DEV MAILER] Kode OTP untuk ${to}: ${otp} (Berlaku 15 menit)`);
     return true;
   }
 
   try {
-    const transporter = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      secure: SMTP_PORT === 465,
-      auth: {
-        user: SMTP_USER,
-        pass: SMTP_PASS,
-      },
-    });
-
     const htmlContent = `
       <div style="font-family: 'Inter', system-ui, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
         <h2 style="color: #0f172a; margin-top: 0;">Verifikasi Akun SIDATA</h2>
@@ -39,17 +28,30 @@ export async function sendOtpEmail({ to, otp }: SendOtpEmailParams): Promise<boo
       </div>
     `;
 
-    await transporter.sendMail({
-      from: SMTP_FROM,
-      to,
-      subject: `[SIDATA] Kode Verifikasi OTP Anda: ${otp}`,
-      html: htmlContent,
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: EMAIL_FROM,
+        to: [to],
+        subject: `[SIDATA] Kode Verifikasi OTP Anda: ${otp}`,
+        html: htmlContent,
+      }),
     });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      console.error(`Gagal mengirim email OTP ke ${to} via Resend API:`, errData);
+      console.log(`[DEV MAILER FALLBACK] Kode OTP untuk ${to}: ${otp}`);
+      return false;
+    }
 
     return true;
   } catch (error) {
     console.error(`Gagal mengirim email OTP ke ${to}:`, error);
-    // Fallback log in dev
     console.log(`[DEV MAILER FALLBACK] Kode OTP untuk ${to}: ${otp}`);
     return false;
   }

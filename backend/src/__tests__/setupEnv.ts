@@ -18,8 +18,4 @@ process.env.GOOGLE_OAUTH_FAILURE_REDIRECT =
 process.env.TURNSTILE_SECRET =
   process.env.TURNSTILE_SECRET || '1x0000000000000000000000000000000AA';
 process.env.RESEND_API_KEY = process.env.RESEND_API_KEY || 're_test_key';
-process.env.SMTP_HOST = process.env.SMTP_HOST || 'smtp.resend.com';
-process.env.SMTP_PORT = process.env.SMTP_PORT || '465';
-process.env.SMTP_USER = process.env.SMTP_USER || 'resend';
-process.env.SMTP_PASS = process.env.SMTP_PASS || 're_test_key';
-process.env.SMTP_FROM = process.env.SMTP_FROM || 'SIDATA Test <onboarding@resend.dev>';
+process.env.EMAIL_FROM = process.env.EMAIL_FROM || 'SIDATA Test <onboarding@resend.dev>';
