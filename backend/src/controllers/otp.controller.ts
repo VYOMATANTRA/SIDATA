@@ -181,7 +181,12 @@ export const resendOtp = async (req: Request, res: Response): Promise<Response |
       },
     });
 
-    await sendOtpEmail({ to: user.email, otp: newOtp });
+    const emailSent = await sendOtpEmail({ to: user.email, otp: newOtp });
+    if (!emailSent) {
+      return res.status(500).json({
+        error: 'Gagal mengirim email OTP. Silakan coba beberapa saat lagi.',
+      });
+    }
 
     return res.status(200).json({
       message: 'Kode OTP baru berhasil dikirim ke email Anda',

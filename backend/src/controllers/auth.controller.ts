@@ -99,10 +99,12 @@ export const register = async (req: Request, res: Response): Promise<Response | 
       },
     });
 
-    await sendOtpEmail({ to: normalizedEmail, otp });
+    const emailSent = await sendOtpEmail({ to: normalizedEmail, otp });
 
     return res.status(201).json({
-      message: 'Registrasi berhasil. Kode OTP verifikasi telah dikirim ke email Anda.',
+      message: emailSent
+        ? 'Registrasi berhasil. Kode OTP verifikasi telah dikirim ke email Anda.'
+        : 'Registrasi berhasil, tetapi gagal mengirim email OTP. Silakan tekan tombol kirim ulang OTP.',
       email: normalizedEmail,
       requiresOtp: true,
     });
