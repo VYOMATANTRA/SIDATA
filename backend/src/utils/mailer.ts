@@ -6,11 +6,6 @@ export interface SendOtpEmailParams {
 }
 
 export async function sendOtpEmail({ to, otp }: SendOtpEmailParams): Promise<boolean> {
-  if (!RESEND_API_KEY) {
-    console.log(`[DEV MAILER] Kode OTP untuk ${to}: ${otp} (Berlaku 15 menit)`);
-    return true;
-  }
-
   try {
     const htmlContent = `
       <div style="font-family: 'Inter', system-ui, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
