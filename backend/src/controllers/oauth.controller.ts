@@ -105,6 +105,7 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
             auth_provider: 'google',
             provider_id: googleProfile.sub,
             email_verified: true,
+            password_hash: null,
           },
           include: { role: true },
         });
