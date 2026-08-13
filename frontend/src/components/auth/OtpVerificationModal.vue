@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onUnmounted } from 'vue'
 import { getCsrfToken } from '../../utils/csrf'
+import TurnstileWidget from './TurnstileWidget.vue'
 
 const props = defineProps<{
   isOpen: boolean
@@ -19,6 +20,7 @@ const isResending = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
 const countdown = ref(60)
+const turnstileToken = ref('')
 let timer: ReturnType<typeof setInterval> | null = null
 
 function startTimer() {
@@ -41,6 +43,7 @@ watch(
       digits.value = ['', '', '', '', '', '']
       errorMessage.value = ''
       successMessage.value = ''
+      turnstileToken.value = ''
       startTimer()
       setTimeout(() => {
         inputRefs.value[0]?.focus()
@@ -99,6 +102,11 @@ async function submitOtp() {
     return
   }
 
+  if (!turnstileToken.value) {
+    errorMessage.value = 'Mohon selesaikan verifikasi anti-bot terlebih dahulu'
+    return
+  }
+
   isLoading.value = true
   errorMessage.value = ''
   successMessage.value = ''
@@ -114,6 +122,7 @@ async function submitOtp() {
       body: JSON.stringify({
         email: props.email,
         otp: otpCode,
+        turnstileToken: turnstileToken.value,
       }),
     })
 
@@ -132,11 +141,17 @@ async function submitOtp() {
     errorMessage.value = 'Terjadi kesalahan jaringan saat verifikasi OTP'
   } finally {
     isLoading.value = false
+    turnstileToken.value = ''
   }
 }
 
 async function resendOtp() {
   if (countdown.value > 0 || isResending.value) return
+
+  if (!turnstileToken.value) {
+    errorMessage.value = 'Mohon selesaikan verifikasi anti-bot terlebih dahulu'
+    return
+  }
 
   isResending.value = true
   errorMessage.value = ''
@@ -150,7 +165,7 @@ async function resendOtp() {
         'Content-Type': 'application/json',
         'x-csrf-token': csrfToken,
       },
-      body: JSON.stringify({ email: props.email }),
+      body: JSON.stringify({ email: props.email, turnstileToken: turnstileToken.value }),
     })
 
     const data = await response.json()
@@ -166,6 +181,7 @@ async function resendOtp() {
     errorMessage.value = 'Terjadi kesalahan jaringan saat mengirim ulang OTP'
   } finally {
     isResending.value = false
+    turnstileToken.value = ''
   }
 }
 </script>
@@ -234,8 +250,15 @@ async function resendOtp() {
         />
       </div>
 
+      <!-- Cloudflare Turnstile Anti-Bot Widget -->
+      <TurnstileWidget
+        @verify="(token) => (turnstileToken = token)"
+        @expire="turnstileToken = ''"
+        @error="turnstileToken = ''"
+      />
+
       <button
-        :disabled="isLoading || digits.some((d) => d === '')"
+        :disabled="isLoading || digits.some((d) => d === '') || !turnstileToken"
         class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         @click="submitOtp"
       >
@@ -249,7 +272,7 @@ async function resendOtp() {
         </p>
         <button
           v-else
-          :disabled="isResending"
+          :disabled="isResending || !turnstileToken"
           class="text-blue-600 font-semibold hover:underline disabled:opacity-50"
           @click="resendOtp"
         >
