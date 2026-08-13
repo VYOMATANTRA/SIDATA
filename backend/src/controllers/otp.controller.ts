@@ -32,20 +32,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<Response |
     }
 
     if (user.email_verified) {
-      const { accessToken: existingAccessToken } = await issueSession(res, {
-        id: user.id,
-        email: user.email,
-        role: user.role.name,
-      });
-      return res.status(200).json({
-        message: 'Email Anda sudah terverifikasi',
-        accessToken: existingAccessToken,
-        user: {
-          id: user.id,
-          email: user.email,
-          role: user.role.name,
-        },
-      });
+      return res.status(400).json({ error: 'Email Anda sudah terverifikasi' });
     }
 
     const otpRecord = await prisma.emailOtp.findFirst({
