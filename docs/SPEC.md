@@ -52,6 +52,7 @@ Notes:
 - Budget/finance content is dropped entirely — see §9.
 - Ketua RT is presented as a single table (100 rows, one per RT), not one page per RT — see
   `rt_leaders` in §7 for the schema and §8 for where it lives.
+- Widget Cuaca is not editorial content (no CRUD, not passed through editor/admin, directly from BMKG's public API).
 
 ## 3. Roles
 
@@ -133,6 +134,11 @@ No indicator-citation-tracking table exists. Cerita-page data citations (e.g. th
 page citing Ekonomi & Ketertiban figures) stay informal/manual in prose text, not structurally
 linked.
 
+Weather widget data (§8) has no table here, and isn't merely uncovered by this pass — it's
+out of scope for this schema entirely. It's fetched live from BMKG's public API and cached
+in-memory by the backend process, not persisted to MySQL. There's no editorial value being
+authored or versioned, so nothing needs storing.
+
 ## 8. Site Structure
 
 **Landing page**, top to bottom:
@@ -143,6 +149,7 @@ linked.
 3. Cerita preview — cards for the stat pages, each showing a few representative figures + link.
    Data-caveat/provenance handling is deferred to the full stat pages, not shown on the cards.
 4. Publikasi / Peta highlights — includes the interactive map.
+5. Widget Cuaca — Weather conditions in Manggar: description, temperature Celsius, humidity percent, wind speed (kmh), wind direction
 
 SOTK and "who is the lurah" content is **not** on the landing page — it lives on the existing
 "Tentang Kelurahan Manggar" page instead.
