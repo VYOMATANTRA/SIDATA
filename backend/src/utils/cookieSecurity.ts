@@ -1,8 +1,8 @@
 import crypto from 'node:crypto';
-import { JWT_SECRET } from '../configs/index.js';
+import { COOKIE_ENCRYPTION_KEY } from '../configs/index.js';
 
-// Derive a 32-byte encryption key from JWT_SECRET using SHA-256
-const ENCRYPTION_KEY = crypto.createHash('sha256').update(JWT_SECRET).digest();
+// Derive a 32-byte encryption key from COOKIE_ENCRYPTION_KEY using SHA-256
+const ENCRYPTION_KEY = crypto.createHash('sha256').update(COOKIE_ENCRYPTION_KEY).digest();
 
 /**
  * Encrypts a string value using AES-256-GCM before storing in a cookie.

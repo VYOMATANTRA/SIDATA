@@ -6,6 +6,8 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-key-12345';
 process.env.JWT_REFRESH_SECRET =
   process.env.JWT_REFRESH_SECRET || 'test-jwt-refresh-secret-key-12345';
 process.env.CSRF_SECRET = process.env.CSRF_SECRET || 'test-csrf-secret-key-12345';
+process.env.COOKIE_ENCRYPTION_KEY =
+  process.env.COOKIE_ENCRYPTION_KEY || 'test-cookie-encryption-secret-key-12345';
 process.env.CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
 process.env.GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'test-google-client-id';
 process.env.GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'test-google-client-secret';

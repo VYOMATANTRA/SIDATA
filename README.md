@@ -57,6 +57,7 @@ Fill in `.env` with at least:
 | `JWT_SECRET`                     | Secret used to sign access tokens                                                                    |
 | `JWT_REFRESH_SECRET`             | Secret used to sign refresh tokens                                                                   |
 | `CSRF_SECRET`                    | Secret used to sign CSRF tokens and cookies                                                          |
+| `COOKIE_ENCRYPTION_KEY`         | Secret used to encrypt temporary OAuth state and verifier cookies                                    |
 | `CORS_ORIGIN`                    | Frontend origin allowed to make credentialed requests, e.g. `http://localhost:5173`                  |
 | `GOOGLE_CLIENT_ID`               | Google OAuth2 Client ID                                                                              |
 | `GOOGLE_CLIENT_SECRET`           | Google OAuth2 Client Secret                                                                          |
