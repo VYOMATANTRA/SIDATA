@@ -64,6 +64,8 @@ Fill in `.env` with at least:
 | `GOOGLE_CALLBACK_URL`           | Google OAuth2 Callback URL, e.g. `http://localhost:3000/api/auth/google/callback`                    |
 | `GOOGLE_OAUTH_SUCCESS_REDIRECT` | Frontend URL for successful OAuth redirect, e.g. `http://localhost:5173/auth/callback`              |
 | `GOOGLE_OAUTH_FAILURE_REDIRECT` | Frontend URL for failed OAuth redirect, e.g. `http://localhost:5173/login?error=oauth_failed`       |
+| `OAUTH_STATE_TTL_SECONDS`       | _(optional)_ TTL for the temporary oauth_state cookie, defaults to `300`                             |
+| `OAUTH_PKCE_TTL_SECONDS`         | _(optional)_ TTL for the temporary oauth_verifier cookie, defaults to `300`                          |
 | `TURNSTILE_SECRET`               | Cloudflare Turnstile anti-bot secret key (`1x0000000000000000000000000000000AA` for local testing)   |
 | `RESEND_API_KEY`                 | Resend API key for transactional emails                                                              |
 | `EMAIL_FROM`                     | Sender identity for transactional emails, e.g. `"SIDATA Kelurahan Manggar <onboarding@resend.dev>"`  |

@@ -1,7 +1,13 @@
 import { OAuth2Client } from 'google-auth-library';
 import crypto from 'node:crypto';
 import type { Response } from 'express';
-import { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_CALLBACK_URL } from '../configs/index.js';
+import {
+  GOOGLE_CLIENT_ID,
+  GOOGLE_CLIENT_SECRET,
+  GOOGLE_CALLBACK_URL,
+  OAUTH_STATE_TTL_SECONDS,
+  OAUTH_PKCE_TTL_SECONDS,
+} from '../configs/index.js';
 import { encryptCookieValue } from './cookieSecurity.js';
 
 export interface GoogleUserProfile {
@@ -37,15 +43,20 @@ export function createPkcePair(): { verifier: string; challenge: string } {
  */
 export function setOAuthCookies(res: Response, options: { state: string; verifier: string }): void {
   const isProd = process.env.NODE_ENV === 'production';
-  const cookieOptions = {
+  const baseCookieOptions = {
     httpOnly: true,
     secure: isProd,
     sameSite: 'lax' as const,
-    maxAge: 5 * 60 * 1000, // 5 minutes
   };
 
-  res.cookie('oauth_state', encryptCookieValue(options.state), cookieOptions);
-  res.cookie('oauth_verifier', encryptCookieValue(options.verifier), cookieOptions);
+  res.cookie('oauth_state', encryptCookieValue(options.state), {
+    ...baseCookieOptions,
+    maxAge: OAUTH_STATE_TTL_SECONDS * 1000,
+  });
+  res.cookie('oauth_verifier', encryptCookieValue(options.verifier), {
+    ...baseCookieOptions,
+    maxAge: OAUTH_PKCE_TTL_SECONDS * 1000,
+  });
 }
 
 export function clearOAuthCookies(res: Response): void {

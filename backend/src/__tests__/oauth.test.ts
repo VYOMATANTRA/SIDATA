@@ -10,7 +10,11 @@ import {
 } from '../utils/oauth.js';
 import { decryptCookieValue, encryptCookieValue } from '../utils/cookieSecurity.js';
 import prisma from '../utils/prisma.js';
-import { GOOGLE_OAUTH_SUCCESS_REDIRECT } from '../configs/index.js';
+import {
+  GOOGLE_OAUTH_SUCCESS_REDIRECT,
+  OAUTH_STATE_TTL_SECONDS,
+  OAUTH_PKCE_TTL_SECONDS,
+} from '../configs/index.js';
 import { googleLogin, googleCallback } from '../controllers/oauth.controller.js';
 
 interface MockRedirectRes {
@@ -85,8 +89,10 @@ describe('oauth utility module', () => {
     assert.equal(firstCall.name, 'oauth_state');
     assert.equal(decryptCookieValue(firstCall.val), 'state123');
     assert.equal(firstCall.options.httpOnly, true);
+    assert.equal(firstCall.options.maxAge, OAUTH_STATE_TTL_SECONDS * 1000);
     assert.equal(secondCall.name, 'oauth_verifier');
     assert.equal(decryptCookieValue(secondCall.val), 'verifier123');
+    assert.equal(secondCall.options.maxAge, OAUTH_PKCE_TTL_SECONDS * 1000);
   });
 
   it('setOAuthCookies never sets a Domain option, keeping the cookies host-only', () => {

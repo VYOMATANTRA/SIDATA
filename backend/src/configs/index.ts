@@ -32,6 +32,15 @@ export const GOOGLE_CALLBACK_URL = requireEnv('GOOGLE_CALLBACK_URL');
 export const GOOGLE_OAUTH_SUCCESS_REDIRECT = requireEnv('GOOGLE_OAUTH_SUCCESS_REDIRECT');
 export const GOOGLE_OAUTH_FAILURE_REDIRECT = requireEnv('GOOGLE_OAUTH_FAILURE_REDIRECT');
 
+// TTL for the temporary oauth_state/oauth_verifier cookies (the OAuth handshake window).
+// Optional — defaults to 300 seconds.
+export const OAUTH_STATE_TTL_SECONDS = process.env.OAUTH_STATE_TTL_SECONDS
+  ? Number(process.env.OAUTH_STATE_TTL_SECONDS)
+  : 300;
+export const OAUTH_PKCE_TTL_SECONDS = process.env.OAUTH_PKCE_TTL_SECONDS
+  ? Number(process.env.OAUTH_PKCE_TTL_SECONDS)
+  : 300;
+
 // Cloudflare Turnstile Configuration
 export const TURNSTILE_SECRET = requireEnv('TURNSTILE_SECRET');
 
