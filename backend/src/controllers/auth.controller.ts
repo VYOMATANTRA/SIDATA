@@ -2,7 +2,11 @@ import type { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../utils/prisma.js';
 import { generateAccessToken } from '../utils/jwt.js';
-import { issueSession } from '../utils/session.js';
+import {
+  issueSession,
+  REFRESH_TOKEN_COOKIE_NAME,
+  REFRESH_TOKEN_COOKIE_OPTIONS,
+} from '../utils/session.js';
 import jwt from 'jsonwebtoken';
 import type { AuthRequest } from '../middlewares/auth.middleware.js';
 import { generateCsrfToken } from '../middlewares/csrf.middleware.js';
@@ -191,7 +195,7 @@ export const getCsrfToken = async (req: Request, res: Response): Promise<Respons
 
 export const refreshToken = async (req: Request, res: Response): Promise<Response | void> => {
   try {
-    const token = req.cookies?.refreshToken;
+    const token = req.cookies?.[REFRESH_TOKEN_COOKIE_NAME];
 
     if (!token) {
       return res.status(401).json({ error: 'Refresh token tidak ditemukan' });
@@ -249,7 +253,7 @@ export const refreshToken = async (req: Request, res: Response): Promise<Respons
 
 export const logout = async (req: Request, res: Response): Promise<Response | void> => {
   try {
-    const token = req.cookies?.refreshToken;
+    const token = req.cookies?.[REFRESH_TOKEN_COOKIE_NAME];
 
     if (!token) {
       return res.status(204).send(); // 204 No Content
@@ -260,11 +264,7 @@ export const logout = async (req: Request, res: Response): Promise<Response | vo
       data: { isRevoked: true },
     });
 
-    res.clearCookie('refreshToken', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-    });
+    res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, REFRESH_TOKEN_COOKIE_OPTIONS);
 
     return res.status(200).json({ message: 'Logout berhasil' });
   } catch (error) {

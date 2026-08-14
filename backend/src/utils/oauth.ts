@@ -47,6 +47,11 @@ export function setOAuthCookies(res: Response, options: { state: string; verifie
     httpOnly: true,
     secure: isProd,
     sameSite: 'lax' as const,
+    // Without an explicit path, the browser scopes this cookie to the request directory
+    // (RFC 6265) — here /api/auth/google, set by googleLogin(). clearOAuthCookies() is
+    // called from googleCallback() at /api/auth/google/callback, a *different* directory,
+    // so the clear would silently miss without a shared, explicit path.
+    path: '/',
   };
 
   res.cookie('oauth_state', encryptCookieValue(options.state), {
@@ -65,6 +70,7 @@ export function clearOAuthCookies(res: Response): void {
     httpOnly: true,
     secure: isProd,
     sameSite: 'lax' as const,
+    path: '/',
   };
 
   res.clearCookie('oauth_state', clearOptions);

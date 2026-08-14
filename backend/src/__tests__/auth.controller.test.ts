@@ -501,9 +501,14 @@ describe('auth.controller logout', () => {
         where: { token: 'some-token' },
         data: { isRevoked: true },
       });
-      assert.ok(
-        res.clearedCookies.some((c) => c.name === 'refreshToken'),
-        'the refreshToken cookie should be cleared',
+      const clearedRefreshCookie = res.clearedCookies.find((c) => c.name === 'refreshToken');
+      assert.ok(clearedRefreshCookie, 'the refreshToken cookie should be cleared');
+      assert.equal(
+        clearedRefreshCookie?.options?.path,
+        '/',
+        // Must match the path issueSession() set the cookie with (session.ts), or the
+        // browser won't recognize this as clearing the same cookie (RFC 6265).
+        'clearCookie must use the same path the cookie was originally set with',
       );
     } finally {
       prisma.refreshToken.updateMany = originalUpdateMany;
