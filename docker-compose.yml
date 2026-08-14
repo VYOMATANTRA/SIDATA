@@ -28,7 +28,7 @@ services:
       start_period: 20s
 
   backend:
-    command: sh -c "npm ci && npx prisma generate && npx tsx watch src/index.ts"
+    command: sh -c "npm ci && npx prisma generate && npx prisma migrate deploy && npx tsx watch src/index.ts"
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -43,7 +43,18 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       CSRF_SECRET: ${CSRF_SECRET}
+      COOKIE_ENCRYPTION_KEY: ${COOKIE_ENCRYPTION_KEY}
       CORS_ORIGIN: ${CORS_ORIGIN}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL}
+      GOOGLE_OAUTH_SUCCESS_REDIRECT: ${GOOGLE_OAUTH_SUCCESS_REDIRECT}
+      GOOGLE_OAUTH_FAILURE_REDIRECT: ${GOOGLE_OAUTH_FAILURE_REDIRECT}
+      OAUTH_STATE_TTL_SECONDS: ${OAUTH_STATE_TTL_SECONDS}
+      OAUTH_PKCE_TTL_SECONDS: ${OAUTH_PKCE_TTL_SECONDS}
+      TURNSTILE_SECRET: ${TURNSTILE_SECRET}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      EMAIL_FROM: ${EMAIL_FROM}
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
     volumes:
@@ -59,7 +70,8 @@ services:
       - backend
     environment:
       NODE_ENV: ${NODE_ENV}
-      VITE_API_URL: ${VITE_API_URL}
+      VITE_API_URL: ${VITE_API_URL_DOCKER}
+      VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY}
     ports:
       - "${FRONTEND_PORT}:${FRONTEND_PORT}"
     volumes:

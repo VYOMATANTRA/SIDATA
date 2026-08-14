@@ -1,13 +1,20 @@
 import type { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../utils/prisma.js';
-import { generateAccessToken, generateRefreshToken } from '../utils/jwt.js';
+import { generateAccessToken } from '../utils/jwt.js';
+import {
+  issueSession,
+  REFRESH_TOKEN_COOKIE_NAME,
+  REFRESH_TOKEN_COOKIE_OPTIONS,
+} from '../utils/session.js';
 import jwt from 'jsonwebtoken';
 import type { AuthRequest } from '../middlewares/auth.middleware.js';
 import { generateCsrfToken } from '../middlewares/csrf.middleware.js';
 import zxcvbn from 'zxcvbn';
 import { JWT_REFRESH_SECRET } from '../configs/index.js';
 import { normalizeEmail } from '../utils/validation.js';
+import { generate6DigitOtp, hashOtp, getOtpExpiration } from '../utils/otp.js';
+import { sendOtpEmail } from '../utils/mailer.js';
 
 export const register = async (req: Request, res: Response): Promise<Response | void> => {
   try {
@@ -67,12 +74,14 @@ export const register = async (req: Request, res: Response): Promise<Response | 
         email: normalizedEmail,
         password_hash: passwordHash,
         auth_provider: 'local',
+        email_verified: false,
         roleId: userRole.id,
       },
       select: {
         id: true,
         email: true,
         auth_provider: true,
+        email_verified: true,
         role: {
           select: {
             name: true,
@@ -82,9 +91,29 @@ export const register = async (req: Request, res: Response): Promise<Response | 
       },
     });
 
+    const otp = generate6DigitOtp();
+    const hashedOtp = hashOtp(otp);
+    const expiresAt = getOtpExpiration(15);
+
+    const emailSent = await sendOtpEmail({ to: normalizedEmail, otp });
+
+    if (emailSent) {
+      await prisma.emailOtp.create({
+        data: {
+          userId: newUser.id,
+          otpHash: hashedOtp,
+          expiresAt,
+        },
+      });
+    }
+
     return res.status(201).json({
-      message: 'Registrasi berhasil',
-      user: newUser,
+      message: emailSent
+        ? 'Registrasi berhasil. Kode OTP verifikasi telah dikirim ke email Anda.'
+        : 'Registrasi berhasil, tetapi gagal mengirim email OTP. Silakan tekan tombol kirim ulang OTP.',
+      email: normalizedEmail,
+      requiresOtp: true,
+      otpSent: emailSent,
     });
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'P2002') {
@@ -128,30 +157,19 @@ export const login = async (req: Request, res: Response): Promise<Response | voi
       return res.status(401).json({ error: 'Kredensial tidak valid' });
     }
 
-    const accessToken = generateAccessToken({
+    if (!user.email_verified) {
+      return res.status(403).json({
+        error:
+          'Email Anda belum diverifikasi. Silakan masukkan kode OTP yang dikirim ke email Anda.',
+        requiresOtp: true,
+        email: user.email,
+      });
+    }
+
+    const { accessToken } = await issueSession(res, {
       id: user.id,
       email: user.email,
       role: user.role.name,
-    });
-
-    const refreshToken = generateRefreshToken(user.id);
-
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 1);
-
-    await prisma.refreshToken.create({
-      data: {
-        userId: user.id,
-        token: refreshToken,
-        expiresAt: expiresAt,
-      },
-    });
-
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // Hanya HTTPS di production
-      sameSite: 'lax',
-      maxAge: 24 * 60 * 60 * 1000,
     });
 
     return res.status(200).json({
@@ -177,7 +195,7 @@ export const getCsrfToken = async (req: Request, res: Response): Promise<Respons
 
 export const refreshToken = async (req: Request, res: Response): Promise<Response | void> => {
   try {
-    const token = req.cookies?.refreshToken;
+    const token = req.cookies?.[REFRESH_TOKEN_COOKIE_NAME];
 
     if (!token) {
       return res.status(401).json({ error: 'Refresh token tidak ditemukan' });
@@ -221,6 +239,11 @@ export const refreshToken = async (req: Request, res: Response): Promise<Respons
     return res.status(200).json({
       message: 'Token berhasil diperbarui',
       accessToken: newAccessToken,
+      user: {
+        id: existingToken.user.id,
+        email: existingToken.user.email,
+        role: existingToken.user.role.name,
+      },
     });
   } catch (error) {
     console.error('Error saat memperbarui token:', error);
@@ -230,7 +253,7 @@ export const refreshToken = async (req: Request, res: Response): Promise<Respons
 
 export const logout = async (req: Request, res: Response): Promise<Response | void> => {
   try {
-    const token = req.cookies?.refreshToken;
+    const token = req.cookies?.[REFRESH_TOKEN_COOKIE_NAME];
 
     if (!token) {
       return res.status(204).send(); // 204 No Content
@@ -241,11 +264,7 @@ export const logout = async (req: Request, res: Response): Promise<Response | vo
       data: { isRevoked: true },
     });
 
-    res.clearCookie('refreshToken', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-    });
+    res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, REFRESH_TOKEN_COOKIE_OPTIONS);
 
     return res.status(200).json({ message: 'Logout berhasil' });
   } catch (error) {
