@@ -27,12 +27,8 @@ export const verifyOtp = async (req: Request, res: Response): Promise<Response |
       include: { role: true },
     });
 
-    if (!user) {
-      return res.status(404).json({ error: 'Pengguna tidak ditemukan' });
-    }
-
-    if (user.email_verified) {
-      return res.status(400).json({ error: 'Email Anda sudah terverifikasi' });
+    if (!user || user.email_verified) {
+      return res.status(400).json({ error: 'Kode OTP tidak valid atau kedaluwarsa' });
     }
 
     const otpRecord = await prisma.emailOtp.findFirst({
@@ -125,12 +121,10 @@ export const resendOtp = async (req: Request, res: Response): Promise<Response |
       where: { email: normalizedEmail },
     });
 
-    if (!user) {
-      return res.status(404).json({ error: 'Pengguna tidak ditemukan' });
-    }
-
-    if (user.email_verified) {
-      return res.status(400).json({ error: 'Email Anda sudah terverifikasi' });
+    if (!user || user.email_verified) {
+      return res.status(200).json({
+        message: 'Kode OTP telah dikirim.',
+      });
     }
 
     // Cooldown check (60 seconds)
@@ -176,7 +170,7 @@ export const resendOtp = async (req: Request, res: Response): Promise<Response |
     }
 
     return res.status(200).json({
-      message: 'Kode OTP baru berhasil dikirim ke email Anda',
+      message: 'Kode OTP telah dikirim.',
     });
   } catch (error) {
     console.error('Error saat kirim ulang OTP:', error);

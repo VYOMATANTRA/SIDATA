@@ -87,20 +87,20 @@ describe('verifyOtp', () => {
   });
 
   it('normalizes the email (trim + lowercase) before looking up the user', async (t) => {
-    const db = withDb(t); // no user in state -> 404, but we only care about the lookup args
+    const db = withDb(t); // no user in state -> 400, but we only care about the lookup args
     const res = fakeRes();
     await verifyOtp(req({ email: '  User@Example.COM  ', otp: '123456' }), res);
-    assert.equal(res.status, 404);
+    assert.equal(res.status, 400);
     const findArgs = db.calls.user!.findUnique![0]![0];
     assert.equal((findArgs as { where: { email: string } }).where.email, 'user@example.com');
   });
 
-  it('returns 404 when no user matches the email', async (t) => {
+  it('returns 400 when no user matches the email', async (t) => {
     withDb(t);
     const res = fakeRes();
     await verifyOtp(req({ email: 'nobody@example.com', otp: '123456' }), res);
-    assert.equal(res.status, 404);
-    assert.deepEqual(res.body, { error: 'Pengguna tidak ditemukan' });
+    assert.equal(res.status, 400);
+    assert.deepEqual(res.body, { error: 'Kode OTP tidak valid atau kedaluwarsa' });
   });
 
   it(
@@ -114,7 +114,7 @@ describe('verifyOtp', () => {
       await verifyOtp(req({ email: 'user@example.com', otp: '000000' }), res);
 
       assert.equal(res.status, 400);
-      assert.deepEqual(res.body, { error: 'Email Anda sudah terverifikasi' });
+      assert.deepEqual(res.body, { error: 'Kode OTP tidak valid atau kedaluwarsa' });
       assert.equal((res.body as { accessToken?: string }).accessToken, undefined);
       assert.equal(res.cookies.refreshToken, undefined);
       assert.equal(db.calls.refreshToken, undefined, 'no refresh token should ever be persisted');
@@ -306,20 +306,20 @@ describe('resendOtp', () => {
     assert.equal(res.status, 400);
   });
 
-  it('returns 404 when no user matches the email', async (t) => {
+  it('returns 200 with generic message when no user matches the email', async (t) => {
     withDb(t);
     const res = fakeRes();
     await resendOtp(req({ email: 'nobody@example.com' }), res);
-    assert.equal(res.status, 404);
-    assert.deepEqual(res.body, { error: 'Pengguna tidak ditemukan' });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, { message: 'Kode OTP telah dikirim.' });
   });
 
-  it('rejects when the account is already verified', async (t) => {
+  it('returns 200 with generic message when the account is already verified', async (t) => {
     withDb(t, { user: verifiedUser() });
     const res = fakeRes();
     await resendOtp(req({ email: 'user@example.com' }), res);
-    assert.equal(res.status, 400);
-    assert.deepEqual(res.body, { error: 'Email Anda sudah terverifikasi' });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, { message: 'Kode OTP telah dikirim.' });
   });
 
   it('enforces the 60s cooldown between resends', async (t) => {
@@ -365,7 +365,7 @@ describe('resendOtp', () => {
     await resendOtp(req({ email: 'user@example.com' }), res);
 
     assert.equal(res.status, 200);
-    assert.deepEqual(res.body, { message: 'Kode OTP baru berhasil dikirim ke email Anda' });
+    assert.deepEqual(res.body, { message: 'Kode OTP telah dikirim.' });
     assert.equal(db.calls.emailOtp!.deleteMany!.length, 1, 'prior codes should be cleared first');
     assert.equal(db.calls.emailOtp!.create!.length, 1);
     assert.ok(mail.lastOtp, 'an OTP should have been emailed');
