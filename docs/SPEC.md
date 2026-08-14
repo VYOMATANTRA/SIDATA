@@ -64,9 +64,9 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
 
 ### Authentication & Account Verification Rules
 
-- **Local Registration & Email OTP**: Registration with email/password sets `email_verified = false` initially. A 6-digit numeric OTP (15-minute TTL, maximum 5 failed attempts) is dispatched to the user's email. Account requires OTP verification before local login access is granted. Successful OTP verification sets `email_verified = true` and auto-logs in the user.
+- **Local Registration & Email OTP**: Registration with email/password sets `email_verified = false` initially. A 6-digit numeric OTP (15-minute TTL, maximum 5 failed attempts) is dispatched to the user's email. Account requires OTP verification before local login access is granted. Successful OTP verification sets `email_verified = true` and auto-logs in the user. Local accounts that already existed before OTP verification was introduced are grandfathered in as verified (backfilled at the migration that added the column) rather than retroactively locked out — they never had OTP verification to go through.
 - **Google OAuth2**: Authentication via Google uses the OAuth 2.0 Authorization Code + PKCE (S256) flow. Users created via Google OAuth have `email_verified = true` automatically. If a verified Google account matches an existing local user's email, the account is automatically linked (`auth_provider = 'google'`, `provider_id = sub`). Session tokens are issued via `httpOnly` refresh cookies without passing tokens in URL query strings.
-- **Anti-Bot Protection**: Mutating authentication endpoints (registration & login) enforce Cloudflare Turnstile verification.
+- **Anti-Bot Protection**: Mutating authentication endpoints (registration, login, OTP verification, OTP resend) enforce Cloudflare Turnstile verification.
 
 ## 4. Data Entry
 
