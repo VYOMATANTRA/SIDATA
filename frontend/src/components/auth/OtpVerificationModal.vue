@@ -83,9 +83,9 @@ function handlePaste(event: ClipboardEvent) {
   if (!pasted) return
 
   const chars = pasted.slice(0, 6).split('')
-  chars.forEach((char, i) => {
-    digits.value[i] = char
-  })
+  digits.value = Array(6)
+    .fill('')
+    .map((_, i) => chars[i] || '')
 
   const nextFocus = Math.min(chars.length, 5)
   inputRefs.value[nextFocus]?.focus()
