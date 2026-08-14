@@ -173,7 +173,7 @@ describe('auth.controller register — OTP issuance', () => {
     'REGRESSION (PR #41, fixed in 33efd4c): still returns 201 with a fallback message ' +
       '(not a swallowed failure) when the OTP email fails to send',
     async (t) => {
-      withDb(t, { user: null, role: { id: 'role-1', name: 'user' } });
+      const db = withDb(t, { user: null, role: { id: 'role-1', name: 'user' } });
       withMailer(t, { ok: false });
       const res = fakeRes();
 
@@ -185,6 +185,11 @@ describe('auth.controller register — OTP issuance', () => {
         'Registrasi berhasil, tetapi gagal mengirim email OTP. Silakan tekan tombol kirim ulang OTP.',
       );
       assert.equal((res.body as { requiresOtp: boolean }).requiresOtp, true);
+      assert.equal(
+        db.state.otp,
+        null,
+        'no OTP row should be committed when the send failed, so an immediate resend is not cooldown-locked',
+      );
     },
   );
 });

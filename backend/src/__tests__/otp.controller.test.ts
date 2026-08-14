@@ -2,9 +2,7 @@
 // No live database or network: prisma.* is stubbed via fakePrisma, outbound email via
 // fakeMailer (globalThis.fetch), and the Express response via fakeRes.
 //
-// The "regression" tests lock down bugs found in PR #41 review and fixed this session;
-// the "KNOWN DEFECT" test characterizes one that's still open, so it fails loudly instead
-// of silently once someone fixes it.
+// The "regression" tests lock down bugs found in PR #41 review and fixed this session.
 
 import assert from 'node:assert/strict';
 import { describe, it, type TestContext } from 'node:test';
@@ -392,10 +390,8 @@ describe('resendOtp', () => {
   });
 
   it(
-    'KNOWN DEFECT (PR #41 open finding, otp.controller.ts:176): the OTP row — and its ' +
-      'cooldown-triggering createdAt — is committed BEFORE the send is attempted, so a ' +
-      "failed send still starts the 60s lockout. Pins today's behavior; update this test " +
-      'when the ordering is fixed to create-after-send.',
+    'does not commit an OTP row (and its cooldown-triggering createdAt) when the send fails, ' +
+      'so a failed send does not start the 60s lockout',
     async (t) => {
       const db = withDb(t, { user: unverifiedUser() });
       withMailer(t, { ok: false });
@@ -405,9 +401,9 @@ describe('resendOtp', () => {
 
       assert.equal(res.status, 500);
       assert.equal(
-        db.calls.emailOtp!.create!.length,
-        1,
-        'the OTP row was committed despite the send failing',
+        db.calls.emailOtp!.create?.length ?? 0,
+        0,
+        'the OTP row should not be committed when the send failed',
       );
     },
   );
