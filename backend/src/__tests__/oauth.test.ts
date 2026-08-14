@@ -414,6 +414,7 @@ describe('googleCallback auto-link by email', () => {
     const originalUserFindUnique = prisma.user.findUnique;
     const originalUserUpdate = prisma.user.update;
     const originalRefreshTokenCreate = prisma.refreshToken.create;
+    const originalRefreshTokenUpdateMany = prisma.refreshToken.updateMany;
 
     const existingLocalUser = {
       id: 'local-user-1',
@@ -463,6 +464,12 @@ describe('googleCallback auto-link by email', () => {
       createdAt: new Date(),
     })) as unknown as typeof prisma.refreshToken.create;
 
+    let revokeArgs: unknown;
+    prisma.refreshToken.updateMany = (async (args: unknown) => {
+      revokeArgs = args;
+      return { count: 1 };
+    }) as unknown as typeof prisma.refreshToken.updateMany;
+
     try {
       const { res, redirectedUrl } = mockRedirectRes();
       const reqMock = {
@@ -487,6 +494,15 @@ describe('googleCallback auto-link by email', () => {
         },
         'auto-link must set auth_provider/provider_id/email_verified and clear the local password hash',
       );
+      assert.deepEqual(
+        revokeArgs,
+        {
+          where: { userId: 'local-user-1', isRevoked: false },
+          data: { isRevoked: true },
+        },
+        "auto-link must revoke the linked account's pre-existing refresh tokens, so a " +
+          'session obtained under the old local password stops working',
+      );
     } finally {
       OAuth2Client.prototype.getToken = originalGetToken;
       OAuth2Client.prototype.verifyIdToken = originalVerifyIdToken;
@@ -494,6 +510,7 @@ describe('googleCallback auto-link by email', () => {
       prisma.user.findUnique = originalUserFindUnique;
       prisma.user.update = originalUserUpdate;
       prisma.refreshToken.create = originalRefreshTokenCreate;
+      prisma.refreshToken.updateMany = originalRefreshTokenUpdateMany;
     }
   });
 });
