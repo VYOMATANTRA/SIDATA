@@ -3,7 +3,14 @@ import { describe, it, type TestContext } from 'node:test';
 import type { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { register, login, refreshToken } from '../controllers/auth.controller.js';
+import {
+  register,
+  login,
+  refreshToken,
+  logout,
+  getMe,
+  getCsrfToken,
+} from '../controllers/auth.controller.js';
 import prisma from '../utils/prisma.js';
 import { fakePrisma, type FakePrismaState } from './helpers/fakePrisma.js';
 import { fakeRes } from './helpers/fakeRes.js';
@@ -194,6 +201,56 @@ describe('auth.controller register — OTP issuance', () => {
   );
 });
 
+describe('auth.controller register — input validation', () => {
+  it('rejects a password shorter than 8 characters', async (t) => {
+    withDb(t, { user: null });
+    const res = fakeRes();
+
+    await register(req({ email: 'new@example.com', password: 'Short1!' }), res);
+
+    assert.equal(res.status, 400);
+    assert.deepEqual(res.body, {
+      error: 'Password minimal harus 8 karakter (Standar NIST).',
+    });
+  });
+
+  it('rejects a password longer than 128 characters', async (t) => {
+    withDb(t, { user: null });
+    const res = fakeRes();
+
+    await register(req({ email: 'new@example.com', password: 'Aa1!'.repeat(40) }), res);
+
+    assert.equal(res.status, 400);
+    assert.deepEqual(res.body, {
+      error: 'Password terlalu panjang (maksimal 128 karakter).',
+    });
+  });
+
+  it('rejects a weak/common password (zxcvbn score < 2) and surfaces suggestions', async (t) => {
+    withDb(t, { user: null });
+    const res = fakeRes();
+
+    await register(req({ email: 'new@example.com', password: 'password123' }), res);
+
+    assert.equal(res.status, 400);
+    const body = res.body as { error: string; suggestions: string[] };
+    assert.equal(body.error, 'Password terlalu lemah atau umum digunakan.');
+    assert.ok(Array.isArray(body.suggestions));
+  });
+
+  it('returns 500 when the default "user" role is missing from the database', async (t) => {
+    // fakePrisma's `role` state falls back to a default via `??`, which treats an explicit
+    // `null` as "not provided" — so the null-role case has to go through `overrides` instead.
+    withDb(t, { user: null, overrides: { role: { findUnique: async () => null } } });
+    const res = fakeRes();
+
+    await register(req({ email: 'new@example.com', password: STRONG_PASSWORD }), res);
+
+    assert.equal(res.status, 500);
+    assert.deepEqual(res.body, { error: 'Role default tidak ditemukan di server' });
+  });
+});
+
 describe('auth.controller login — email_verified gate', () => {
   async function seededUser(overrides: Record<string, unknown> = {}) {
     return {
@@ -292,5 +349,185 @@ describe('auth.controller refreshToken', () => {
     } finally {
       prisma.refreshToken.findUnique = originalFindUnique;
     }
+  });
+
+  it('returns 401 when no refresh token cookie is present', async () => {
+    const res = fakeRes();
+
+    await refreshToken({ cookies: {} } as unknown as Request, res);
+
+    assert.equal(res.status, 401);
+    assert.deepEqual(res.body, { error: 'Refresh token tidak ditemukan' });
+  });
+
+  it('returns 403 when the refresh token does not match any stored record', async () => {
+    const originalFindUnique = prisma.refreshToken.findUnique;
+    prisma.refreshToken.findUnique = (async () =>
+      null) as unknown as typeof prisma.refreshToken.findUnique;
+
+    try {
+      const res = fakeRes();
+      await refreshToken({ cookies: { refreshToken: 'unknown-token' } } as unknown as Request, res);
+
+      assert.equal(res.status, 403);
+      assert.deepEqual(res.body, { error: 'Refresh token tidak valid' });
+    } finally {
+      prisma.refreshToken.findUnique = originalFindUnique;
+    }
+  });
+
+  it('returns 403 when the stored refresh token has already been revoked', async () => {
+    const validToken = jwt.sign({ id: 'user-1' }, JWT_REFRESH_SECRET);
+    const originalFindUnique = prisma.refreshToken.findUnique;
+    prisma.refreshToken.findUnique = (async () => ({
+      id: 'token-1',
+      token: validToken,
+      userId: 'user-1',
+      isRevoked: true,
+      expiresAt: new Date(Date.now() + 3600000),
+      user: { id: 'user-1', email: 'user@example.com', role: { name: 'user' } },
+    })) as unknown as typeof prisma.refreshToken.findUnique;
+
+    try {
+      const res = fakeRes();
+      await refreshToken({ cookies: { refreshToken: validToken } } as unknown as Request, res);
+
+      assert.equal(res.status, 403);
+      assert.deepEqual(res.body, { error: 'Refresh token sudah dicabut' });
+    } finally {
+      prisma.refreshToken.findUnique = originalFindUnique;
+    }
+  });
+
+  it('rejects an expired refresh token with 403 and revokes it as a side effect', async () => {
+    const expiredToken = jwt.sign({ id: 'user-1' }, JWT_REFRESH_SECRET);
+    const originalFindUnique = prisma.refreshToken.findUnique;
+    const originalUpdate = prisma.refreshToken.update;
+
+    let updateArgs: unknown;
+    prisma.refreshToken.findUnique = (async () => ({
+      id: 'token-1',
+      token: expiredToken,
+      userId: 'user-1',
+      isRevoked: false,
+      expiresAt: new Date(Date.now() - 1000),
+      user: { id: 'user-1', email: 'user@example.com', role: { name: 'user' } },
+    })) as unknown as typeof prisma.refreshToken.findUnique;
+    prisma.refreshToken.update = (async (args: unknown) => {
+      updateArgs = args;
+      return {};
+    }) as unknown as typeof prisma.refreshToken.update;
+
+    try {
+      const res = fakeRes();
+      await refreshToken({ cookies: { refreshToken: expiredToken } } as unknown as Request, res);
+
+      assert.equal(res.status, 403);
+      assert.deepEqual(res.body, { error: 'Refresh token sudah kedaluwarsa, silakan login ulang' });
+      assert.deepEqual(updateArgs, { where: { id: 'token-1' }, data: { isRevoked: true } });
+    } finally {
+      prisma.refreshToken.findUnique = originalFindUnique;
+      prisma.refreshToken.update = originalUpdate;
+    }
+  });
+
+  it('returns 403 when the JWT payload id does not match the stored token’s userId', async () => {
+    // A token signed for a different user id than the DB record it happens to match on
+    // string equality — this is the "token tidak cocok" integrity check.
+    const mismatchedToken = jwt.sign({ id: 'attacker-id' }, JWT_REFRESH_SECRET);
+    const originalFindUnique = prisma.refreshToken.findUnique;
+    prisma.refreshToken.findUnique = (async () => ({
+      id: 'token-1',
+      token: mismatchedToken,
+      userId: 'user-1',
+      isRevoked: false,
+      expiresAt: new Date(Date.now() + 3600000),
+      user: { id: 'user-1', email: 'user@example.com', role: { name: 'user' } },
+    })) as unknown as typeof prisma.refreshToken.findUnique;
+
+    try {
+      const res = fakeRes();
+      await refreshToken({ cookies: { refreshToken: mismatchedToken } } as unknown as Request, res);
+
+      assert.equal(res.status, 403);
+      assert.deepEqual(res.body, { error: 'Token tidak cocok' });
+    } finally {
+      prisma.refreshToken.findUnique = originalFindUnique;
+    }
+  });
+});
+
+describe('auth.controller logout', () => {
+  it('returns 204 and makes no DB write when there is no refresh token cookie', async () => {
+    const originalUpdateMany = prisma.refreshToken.updateMany;
+    let called = false;
+    prisma.refreshToken.updateMany = (async () => {
+      called = true;
+      return { count: 0 };
+    }) as unknown as typeof prisma.refreshToken.updateMany;
+
+    try {
+      const res = fakeRes();
+      await logout({ cookies: {} } as unknown as Request, res);
+
+      assert.equal(res.status, 204);
+      assert.equal(called, false, 'logout with no cookie must not touch the DB');
+    } finally {
+      prisma.refreshToken.updateMany = originalUpdateMany;
+    }
+  });
+
+  it('revokes the stored token and clears the cookie when a refresh token cookie is present', async () => {
+    const originalUpdateMany = prisma.refreshToken.updateMany;
+    let updateArgs: unknown;
+    prisma.refreshToken.updateMany = (async (args: unknown) => {
+      updateArgs = args;
+      return { count: 1 };
+    }) as unknown as typeof prisma.refreshToken.updateMany;
+
+    try {
+      const res = fakeRes();
+      await logout({ cookies: { refreshToken: 'some-token' } } as unknown as Request, res);
+
+      assert.equal(res.status, 200);
+      assert.deepEqual(res.body, { message: 'Logout berhasil' });
+      assert.deepEqual(updateArgs, {
+        where: { token: 'some-token' },
+        data: { isRevoked: true },
+      });
+      assert.ok(
+        res.clearedCookies.some((c) => c.name === 'refreshToken'),
+        'the refreshToken cookie should be cleared',
+      );
+    } finally {
+      prisma.refreshToken.updateMany = originalUpdateMany;
+    }
+  });
+});
+
+describe('auth.controller getMe', () => {
+  it('echoes back req.user at 200 (dummy profile endpoint)', async () => {
+    const res = fakeRes();
+    const decodedUser = { id: 'user-1', email: 'user@example.com', role: 'user' };
+
+    await getMe({ user: decodedUser } as unknown as Request & { user: unknown }, res);
+
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, {
+      message: 'Berhasil mengakses profil',
+      user: decodedUser,
+    });
+  });
+});
+
+describe('auth.controller getCsrfToken', () => {
+  it('returns 200 with a csrfToken string', async () => {
+    const res = fakeRes();
+
+    await getCsrfToken({ ip: '127.0.0.1', cookies: {} } as unknown as Request, res);
+
+    assert.equal(res.status, 200);
+    assert.equal(typeof (res.body as { csrfToken: string }).csrfToken, 'string');
+    assert.ok((res.body as { csrfToken: string }).csrfToken.length > 0);
   });
 });

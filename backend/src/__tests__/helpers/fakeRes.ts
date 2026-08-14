@@ -29,6 +29,10 @@ export function fakeRes(): FakeRes & Response {
       res.body = data;
       return res;
     },
+    send(data?: unknown) {
+      res.body = data;
+      return res;
+    },
     cookie(name: string, value: string, options?: Record<string, unknown>) {
       res.cookies[name] = { value, options };
       return res;
