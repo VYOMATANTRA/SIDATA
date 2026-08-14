@@ -21,7 +21,13 @@ const errorMessage = ref('')
 const successMessage = ref('')
 const countdown = ref(60)
 const turnstileToken = ref('')
+const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
 let timer: ReturnType<typeof setInterval> | null = null
+
+function resetTurnstile() {
+  turnstileRef.value?.reset()
+  turnstileToken.value = ''
+}
 
 function startTimer() {
   countdown.value = 60
@@ -142,7 +148,7 @@ async function submitOtp() {
     errorMessage.value = 'Terjadi kesalahan jaringan saat verifikasi OTP'
   } finally {
     isLoading.value = false
-    turnstileToken.value = ''
+    resetTurnstile()
   }
 }
 
@@ -183,7 +189,7 @@ async function resendOtp() {
     errorMessage.value = 'Terjadi kesalahan jaringan saat mengirim ulang OTP'
   } finally {
     isResending.value = false
-    turnstileToken.value = ''
+    resetTurnstile()
   }
 }
 </script>
@@ -254,6 +260,7 @@ async function resendOtp() {
 
       <!-- Cloudflare Turnstile Anti-Bot Widget -->
       <TurnstileWidget
+        ref="turnstileRef"
         @verify="(token) => (turnstileToken = token)"
         @expire="turnstileToken = ''"
         @error="turnstileToken = ''"

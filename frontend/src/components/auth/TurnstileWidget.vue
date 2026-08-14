@@ -64,6 +64,14 @@ onUnmounted(() => {
     window.turnstile.remove(widgetId)
   }
 })
+
+function reset() {
+  if (widgetId && window.turnstile) {
+    window.turnstile.reset(widgetId)
+  }
+}
+
+defineExpose({ reset })
 </script>
 
 <template>

@@ -12,6 +12,8 @@ import logoBalikpapan from '../assets/img/logo_balikpapan.png'
 const router = useRouter()
 const authStore = useAuthStore()
 
+const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
+
 const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
@@ -101,6 +103,11 @@ function onPasswordInput() {
   serverPasswordError.value = ''
 }
 
+function resetTurnstile() {
+  turnstileRef.value?.reset()
+  turnstileToken.value = ''
+}
+
 async function handleRegister() {
   isEmailTouched.value = true
   isPasswordTouched.value = true
@@ -143,6 +150,7 @@ async function handleRegister() {
       } else {
         errorMessage.value = errText
       }
+      resetTurnstile()
       return
     }
 
@@ -158,6 +166,7 @@ async function handleRegister() {
     }
   } catch {
     errorMessage.value = 'Terjadi kesalahan jaringan. Silakan coba lagi.'
+    resetTurnstile()
   } finally {
     isLoading.value = false
   }
@@ -292,7 +301,7 @@ function onOtpVerified(data?: unknown) {
         </div>
 
         <!-- Cloudflare Turnstile Anti-Bot Widget -->
-        <TurnstileWidget @verify="(token) => (turnstileToken = token)" />
+        <TurnstileWidget ref="turnstileRef" @verify="(token) => (turnstileToken = token)" />
 
         <button
           type="submit"

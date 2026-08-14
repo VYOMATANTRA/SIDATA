@@ -13,6 +13,8 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 
+const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
+
 const email = ref('')
 const password = ref('')
 const turnstileToken = ref('')
@@ -57,6 +59,11 @@ function onEmailInput() {
 function onPasswordInput() {
   isPasswordTouched.value = true
   serverPasswordError.value = ''
+}
+
+function resetTurnstile() {
+  turnstileRef.value?.reset()
+  turnstileToken.value = ''
 }
 
 onMounted(() => {
@@ -104,6 +111,7 @@ async function handleLogin() {
       unverifiedEmail.value = data.email || email.value.trim()
       isOtpModalOpen.value = true
       errorMessage.value = data.error || 'Email Anda belum diverifikasi. Silakan masukkan kode OTP.'
+      resetTurnstile()
       return
     }
 
@@ -116,6 +124,7 @@ async function handleLogin() {
       } else {
         errorMessage.value = errText
       }
+      resetTurnstile()
       return
     }
 
@@ -129,6 +138,7 @@ async function handleLogin() {
     }, 800)
   } catch {
     errorMessage.value = 'Terjadi kesalahan jaringan. Silakan coba lagi.'
+    resetTurnstile()
   } finally {
     isLoading.value = false
   }
@@ -236,7 +246,7 @@ function onOtpVerified(data?: unknown) {
         </div>
 
         <!-- Cloudflare Turnstile Anti-Bot Widget -->
-        <TurnstileWidget @verify="(token) => (turnstileToken = token)" />
+        <TurnstileWidget ref="turnstileRef" @verify="(token) => (turnstileToken = token)" />
 
         <button
           type="submit"
