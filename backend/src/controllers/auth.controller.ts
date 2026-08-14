@@ -91,15 +91,17 @@ export const register = async (req: Request, res: Response): Promise<Response | 
     const hashedOtp = hashOtp(otp);
     const expiresAt = getOtpExpiration(15);
 
-    await prisma.emailOtp.create({
-      data: {
-        userId: newUser.id,
-        otpHash: hashedOtp,
-        expiresAt,
-      },
-    });
-
     const emailSent = await sendOtpEmail({ to: normalizedEmail, otp });
+
+    if (emailSent) {
+      await prisma.emailOtp.create({
+        data: {
+          userId: newUser.id,
+          otpHash: hashedOtp,
+          expiresAt,
+        },
+      });
+    }
 
     return res.status(201).json({
       message: emailSent
