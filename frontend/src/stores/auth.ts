@@ -40,6 +40,7 @@ export const useAuthStore = defineStore('auth', () => {
       const csrfToken = await getCsrfToken()
       const res = await fetch('/api/auth/refresh', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'x-csrf-token': csrfToken,
         },

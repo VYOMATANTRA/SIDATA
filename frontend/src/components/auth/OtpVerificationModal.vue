@@ -115,6 +115,7 @@ async function submitOtp() {
     const csrfToken = await getCsrfToken()
     const response = await fetch('/api/auth/verify-otp', {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         'x-csrf-token': csrfToken,
@@ -161,6 +162,7 @@ async function resendOtp() {
     const csrfToken = await getCsrfToken()
     const response = await fetch('/api/auth/resend-otp', {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         'x-csrf-token': csrfToken,

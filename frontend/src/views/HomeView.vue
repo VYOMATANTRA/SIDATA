@@ -12,6 +12,7 @@ async function handleLogout() {
 
     await fetch('/api/auth/logout', {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'x-csrf-token': csrfToken,
       },

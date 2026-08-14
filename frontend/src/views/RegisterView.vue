@@ -120,6 +120,7 @@ async function handleRegister() {
     const csrfToken = await getCsrfToken()
     const response = await fetch('/api/auth/register', {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         'x-csrf-token': csrfToken,
