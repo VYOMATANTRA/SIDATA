@@ -232,6 +232,11 @@ export const refreshToken = async (req: Request, res: Response): Promise<Respons
     return res.status(200).json({
       message: 'Token berhasil diperbarui',
       accessToken: newAccessToken,
+      user: {
+        id: existingToken.user.id,
+        email: existingToken.user.email,
+        role: existingToken.user.role.name,
+      },
     });
   } catch (error) {
     console.error('Error saat memperbarui token:', error);

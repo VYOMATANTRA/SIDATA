@@ -2,12 +2,14 @@ import assert from 'node:assert/strict';
 import { describe, it, type TestContext } from 'node:test';
 import type { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import { register, login } from '../controllers/auth.controller.js';
+import jwt from 'jsonwebtoken';
+import { register, login, refreshToken } from '../controllers/auth.controller.js';
 import prisma from '../utils/prisma.js';
 import { fakePrisma, type FakePrismaState } from './helpers/fakePrisma.js';
 import { fakeRes } from './helpers/fakeRes.js';
 import { fakeMailer, type FakeMailerOptions } from './helpers/fakeMailer.js';
 import { hashOtp } from '../utils/otp.js';
+import { JWT_REFRESH_SECRET } from '../configs/index.js';
 
 const STRONG_PASSWORD = 'Xk9$mQp2vNz7Lw4!'; // zxcvbn score 4 — clears the register() >=2 gate
 
@@ -239,4 +241,51 @@ describe('auth.controller login — email_verified gate', () => {
       assert.deepEqual(res.body, { error: 'Kredensial tidak valid' });
     },
   );
+});
+
+describe('auth.controller refreshToken', () => {
+  it('returns 200 with new accessToken and user profile object when refresh token is valid', async () => {
+    const validToken = jwt.sign({ id: 'user-1' }, JWT_REFRESH_SECRET);
+    const originalFindUnique = prisma.refreshToken.findUnique;
+
+    prisma.refreshToken.findUnique = (async () => ({
+      id: 'token-1',
+      token: validToken,
+      userId: 'user-1',
+      isRevoked: false,
+      expiresAt: new Date(Date.now() + 3600000),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      user: {
+        id: 'user-1',
+        email: 'user@example.com',
+        role: { id: 'role-1', name: 'user', createdAt: new Date(), updatedAt: new Date() },
+      },
+    })) as unknown as typeof prisma.refreshToken.findUnique;
+
+    try {
+      const reqMock = {
+        cookies: { refreshToken: validToken },
+      } as unknown as Request;
+      const res = fakeRes();
+
+      await refreshToken(reqMock, res);
+
+      assert.equal(res.status, 200);
+      const body = res.body as {
+        message: string;
+        accessToken: string;
+        user: { id: string; email: string; role: string };
+      };
+      assert.equal(body.message, 'Token berhasil diperbarui');
+      assert.ok(body.accessToken);
+      assert.deepEqual(body.user, {
+        id: 'user-1',
+        email: 'user@example.com',
+        role: 'user',
+      });
+    } finally {
+      prisma.refreshToken.findUnique = originalFindUnique;
+    }
+  });
 });
