@@ -1,51 +1,30 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { getCsrfToken } from '../utils/csrf'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
-const route = useRoute()
 const authStore = useAuthStore()
 
 const statusMessage = ref('Memproses autentikasi Google...')
 const errorMessage = ref('')
 
+// OAuth failures never reach this view: GOOGLE_OAUTH_FAILURE_REDIRECT points at /login (see
+// backend/.env.example), which is where LoginView.vue handles the ?error=/?reason= query
+// params. This view is only ever reached via the success redirect, so it just needs to
+// finish the same silent-refresh flow the app already runs on every boot.
 onMounted(async () => {
-  const errorReason = route.query.reason || route.query.error
-  if (errorReason) {
-    errorMessage.value = `Gagal login dengan Google: ${errorReason}`
+  const success = await authStore.initAuth()
+
+  if (!success) {
+    errorMessage.value = 'Sesi Google tidak ditemukan atau kedaluwarsa.'
     return
   }
 
-  try {
-    const csrfToken = await getCsrfToken()
-
-    const res = await fetch('/api/auth/refresh', {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'x-csrf-token': csrfToken,
-      },
-    })
-    const data = await res.json()
-
-    if (!res.ok) {
-      errorMessage.value = data.error || 'Sesi Google tidak ditemukan atau kedaluwarsa.'
-      return
-    }
-
-    if (data.accessToken) {
-      authStore.setAuth(data.user || { id: '', email: '', role: '' }, data.accessToken)
-    }
-
-    statusMessage.value = 'Login berhasil! Mengalihkan...'
-    setTimeout(() => {
-      router.push('/')
-    }, 600)
-  } catch {
-    errorMessage.value = 'Terjadi kesalahan jaringan saat menghubungkan akun.'
-  }
+  statusMessage.value = 'Login berhasil! Mengalihkan...'
+  setTimeout(() => {
+    router.push('/')
+  }, 600)
 })
 </script>
 
