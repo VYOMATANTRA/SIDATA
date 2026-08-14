@@ -13,6 +13,17 @@ export const useAuthStore = defineStore('auth', () => {
   const accessToken = ref<string | null>(null)
   const isInitialized = ref(false)
 
+  // Set once a refresh attempt gets a definitive 401/403 back — the server saying "this
+  // session is not valid," as opposed to "something went wrong." Retrying a definitive
+  // denial can't change the answer, so this suppresses further initAuth() attempts for the
+  // rest of the tab's life. Network errors and 5xx must NOT set this — those are transient,
+  // and silent refresh must keep retrying on the next navigation (see router/index.ts).
+  const refreshDenied = ref(false)
+
+  // Shares one in-flight request across concurrent initAuth() callers (e.g. router guards
+  // firing on rapid navigations) instead of each firing its own csrf-token + refresh pair.
+  let inFlight: Promise<boolean> | null = null
+
   const isAuthenticated = computed(() => !!accessToken.value)
 
   function setAuth(newUser: UserProfile, token: string) {
@@ -25,17 +36,10 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     accessToken.value = null
     isInitialized.value = true
+    refreshDenied.value = false
   }
 
-  /**
-   * Performs silent refresh on app boot using the HTTP-only refresh token cookie.
-   * Keeps access token strictly in JavaScript memory without disk persistence.
-   */
-  async function initAuth(): Promise<boolean> {
-    if (isInitialized.value && accessToken.value) {
-      return true
-    }
-
+  async function performInitAuth(): Promise<boolean> {
     try {
       const csrfToken = await getCsrfToken()
       const res = await fetch('/api/auth/refresh', {
@@ -48,6 +52,9 @@ export const useAuthStore = defineStore('auth', () => {
 
       if (!res.ok) {
         clearAuth()
+        if (res.status === 401 || res.status === 403) {
+          refreshDenied.value = true
+        }
         return false
       }
 
@@ -65,6 +72,28 @@ export const useAuthStore = defineStore('auth', () => {
     } finally {
       isInitialized.value = true
     }
+  }
+
+  /**
+   * Performs silent refresh on app boot using the HTTP-only refresh token cookie.
+   * Keeps access token strictly in JavaScript memory without disk persistence.
+   */
+  async function initAuth(): Promise<boolean> {
+    if (isInitialized.value && accessToken.value) {
+      return true
+    }
+
+    if (refreshDenied.value) {
+      return false
+    }
+
+    if (!inFlight) {
+      inFlight = performInitAuth().finally(() => {
+        inFlight = null
+      })
+    }
+
+    return inFlight
   }
 
   return {

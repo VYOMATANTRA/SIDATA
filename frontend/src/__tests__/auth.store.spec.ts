@@ -61,7 +61,7 @@ describe('auth store', () => {
       if (url.includes('csrf-token')) {
         return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
       }
-      return { ok: false, json: async () => ({}) } as Response
+      return { ok: false, status: 500, json: async () => ({}) } as Response
     })
 
     const store = useAuthStore()
@@ -70,5 +70,86 @@ describe('auth store', () => {
     expect(result).toBe(false)
     expect(store.isAuthenticated).toBe(false)
     expect(store.isInitialized).toBe(true)
+  })
+
+  it('de-dupes concurrent initAuth calls into a single refresh request', async () => {
+    let refreshCalls = 0
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+      }
+      refreshCalls++
+      return {
+        ok: true,
+        json: async () => ({
+          accessToken: 'new-access-token',
+          user: { id: '1', email: 'user@example.com', role: 'user' },
+        }),
+      } as Response
+    })
+    globalThis.fetch = fetchMock
+
+    const store = useAuthStore()
+    const [a, b] = await Promise.all([store.initAuth(), store.initAuth()])
+
+    expect(a).toBe(true)
+    expect(b).toBe(true)
+    expect(refreshCalls).toBe(1)
+  })
+
+  it('does not retry initAuth after a definitive 401 (refresh denied)', async () => {
+    let refreshCalls = 0
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+      }
+      refreshCalls++
+      return { ok: false, status: 401, json: async () => ({}) } as Response
+    })
+
+    const store = useAuthStore()
+    await store.initAuth()
+    await store.initAuth()
+
+    expect(refreshCalls).toBe(1)
+  })
+
+  it('does retry initAuth after a transient 500 (not latched)', async () => {
+    let refreshCalls = 0
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+      }
+      refreshCalls++
+      return { ok: false, status: 500, json: async () => ({}) } as Response
+    })
+
+    const store = useAuthStore()
+    await store.initAuth()
+    await store.initAuth()
+
+    expect(refreshCalls).toBe(2)
+  })
+
+  it('clearAuth resets the refresh-denied latch so initAuth can retry again', async () => {
+    let refreshCalls = 0
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+      }
+      refreshCalls++
+      return { ok: false, status: 403, json: async () => ({}) } as Response
+    })
+
+    const store = useAuthStore()
+    await store.initAuth()
+    store.clearAuth()
+    await store.initAuth()
+
+    expect(refreshCalls).toBe(2)
   })
 })

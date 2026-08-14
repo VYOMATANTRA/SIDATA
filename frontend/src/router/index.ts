@@ -40,7 +40,10 @@ router.beforeEach(async (to) => {
   // transient /api/auth/refresh failure (cold start, dropped connection) permanently disables
   // silent refresh for the rest of the tab's life even though the session cookie may still be
   // valid. initAuth() itself already short-circuits once a token is actually held, so this
-  // only re-attempts while genuinely unauthenticated.
+  // only re-attempts while genuinely unauthenticated. initAuth() also de-dupes concurrent
+  // calls and stops retrying after a definitive 401/403 (but not after a network/5xx
+  // failure) — see the refreshDenied/inFlight comments in stores/auth.ts. Known caveat: a
+  // login performed in another tab is not picked up by this tab's guard on navigation.
   if (!authStore.isAuthenticated) {
     await authStore.initAuth()
   }
