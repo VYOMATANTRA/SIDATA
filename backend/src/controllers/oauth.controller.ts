@@ -123,17 +123,39 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
         return res.redirect(`${GOOGLE_OAUTH_FAILURE_REDIRECT}&reason=default_role_not_found`);
       }
 
-      user = await prisma.user.create({
-        data: {
-          email: googleProfile.email,
-          auth_provider: 'google',
-          provider_id: googleProfile.sub,
-          password_hash: null,
-          email_verified: true,
-          roleId: userRole.id,
-        },
-        include: { role: true },
-      });
+      try {
+        user = await prisma.user.create({
+          data: {
+            email: googleProfile.email,
+            auth_provider: 'google',
+            provider_id: googleProfile.sub,
+            password_hash: null,
+            email_verified: true,
+            roleId: userRole.id,
+          },
+          include: { role: true },
+        });
+      } catch (error) {
+        if (error instanceof Error && 'code' in error && error.code === 'P2002') {
+          const createdUser = await prisma.user.findFirst({
+            where: {
+              OR: [
+                { email: googleProfile.email },
+                { auth_provider: 'google', provider_id: googleProfile.sub },
+              ],
+            },
+            include: { role: true },
+          });
+
+          if (createdUser) {
+            user = createdUser;
+          } else {
+            throw error;
+          }
+        } else {
+          throw error;
+        }
+      }
     }
 
     await issueSession(res, {
