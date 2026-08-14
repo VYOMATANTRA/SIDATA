@@ -35,7 +35,13 @@ router.beforeEach(async (to) => {
 
   const authStore = useAuthStore(pinia)
 
-  if (!authStore.isInitialized) {
+  // Gate on isAuthenticated rather than isInitialized: the latter is set permanently once
+  // the first attempt completes, success or failure, so gating on it would mean a single
+  // transient /api/auth/refresh failure (cold start, dropped connection) permanently disables
+  // silent refresh for the rest of the tab's life even though the session cookie may still be
+  // valid. initAuth() itself already short-circuits once a token is actually held, so this
+  // only re-attempts while genuinely unauthenticated.
+  if (!authStore.isAuthenticated) {
     await authStore.initAuth()
   }
 
