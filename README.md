@@ -98,9 +98,12 @@ The dev server runs on `http://localhost:5173` by default.
 
 ### Docker (alternative)
 
-From the repo root, with a `.env` providing `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`:
+From the repo root, with a `.env` copied from `.env.example` and filled in (Compose passes the
+MySQL credentials, backend env vars, and `VITE_API_URL_DOCKER`/`VITE_TURNSTILE_SITE_KEY` through
+to the containers — see `docker-compose.yml`):
 
 ```bash
+cp .env.example .env
 docker compose up --build
 ```
 
