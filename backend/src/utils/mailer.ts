@@ -40,14 +40,18 @@ export async function sendOtpEmail({ to, otp }: SendOtpEmailParams): Promise<boo
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
       console.error(`Gagal mengirim email OTP ke ${to} via Resend API:`, errData);
-      console.log(`[DEV MAILER FALLBACK] Kode OTP untuk ${to}: ${otp}`);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[DEV MAILER FALLBACK] Kode OTP untuk ${to}: ${otp}`);
+      }
       return false;
     }
 
     return true;
   } catch (error) {
     console.error(`Gagal mengirim email OTP ke ${to}:`, error);
-    console.log(`[DEV MAILER FALLBACK] Kode OTP untuk ${to}: ${otp}`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[DEV MAILER FALLBACK] Kode OTP untuk ${to}: ${otp}`);
+    }
     return false;
   }
 }
