@@ -17,6 +17,12 @@ import {
   GOOGLE_OAUTH_FAILURE_REDIRECT,
 } from '../configs/index.js';
 
+function buildFailureRedirect(reason: string): string {
+  const url = new URL(GOOGLE_OAUTH_FAILURE_REDIRECT);
+  url.searchParams.set('reason', reason);
+  return url.toString();
+}
+
 export const googleLogin = async (req: Request, res: Response): Promise<void> => {
   try {
     const state = generateOAuthState();
@@ -37,7 +43,7 @@ export const googleLogin = async (req: Request, res: Response): Promise<void> =>
     res.redirect(authorizeUrl);
   } catch (error) {
     console.error('Error saat inisiasi Google OAuth:', error);
-    res.redirect(`${GOOGLE_OAUTH_FAILURE_REDIRECT}&reason=init_error`);
+    res.redirect(buildFailureRedirect('init_error'));
   }
 };
 
@@ -47,9 +53,7 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
 
     if (queryError) {
       clearOAuthCookies(res);
-      return res.redirect(
-        `${GOOGLE_OAUTH_FAILURE_REDIRECT}&reason=${encodeURIComponent(String(queryError))}`,
-      );
+      return res.redirect(buildFailureRedirect(String(queryError)));
     }
 
     const rawStateCookie = req.cookies?.oauth_state;
@@ -60,12 +64,12 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
 
     if (!savedState || !state || savedState !== state) {
       clearOAuthCookies(res);
-      return res.redirect(`${GOOGLE_OAUTH_FAILURE_REDIRECT}&reason=invalid_state`);
+      return res.redirect(buildFailureRedirect('invalid_state'));
     }
 
     if (!savedVerifier || !code) {
       clearOAuthCookies(res);
-      return res.redirect(`${GOOGLE_OAUTH_FAILURE_REDIRECT}&reason=missing_code_or_verifier`);
+      return res.redirect(buildFailureRedirect('missing_code_or_verifier'));
     }
 
     const client = getOAuth2Client();
@@ -77,7 +81,7 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
 
     if (!tokens.id_token) {
       clearOAuthCookies(res);
-      return res.redirect(`${GOOGLE_OAUTH_FAILURE_REDIRECT}&reason=missing_id_token`);
+      return res.redirect(buildFailureRedirect('missing_id_token'));
     }
 
     const googleProfile = await verifyGoogleIdToken(tokens.id_token);
@@ -120,7 +124,7 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
 
       if (!userRole) {
         clearOAuthCookies(res);
-        return res.redirect(`${GOOGLE_OAUTH_FAILURE_REDIRECT}&reason=default_role_not_found`);
+        return res.redirect(buildFailureRedirect('default_role_not_found'));
       }
 
       try {
@@ -169,6 +173,6 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
   } catch (error) {
     console.error('Error saat callback Google OAuth:', error);
     clearOAuthCookies(res);
-    res.redirect(`${GOOGLE_OAUTH_FAILURE_REDIRECT}&reason=callback_error`);
+    res.redirect(buildFailureRedirect('callback_error'));
   }
 };
