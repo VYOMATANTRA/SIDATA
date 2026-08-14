@@ -16,3 +16,4 @@ const createLimiter = (limit: number) =>
 
 export const authLimiter = createLimiter(100);
 export const loginLimiter = createLimiter(10);
+export const weatherLimiter = createLimiter(60);
