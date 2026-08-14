@@ -408,6 +408,31 @@ describe('resendOtp', () => {
     },
   );
 
+  it(
+    'REGRESSION (otp.controller.ts resendOtp delete-before-send): a still-valid prior OTP ' +
+      'survives a failed send instead of being deleted before the new code is confirmed sent',
+    async (t) => {
+      const existingOtp = otpRecord({ createdAt: new Date(Date.now() - 61_000) });
+      const db = withDb(t, { user: unverifiedUser(), otp: existingOtp });
+      withMailer(t, { ok: false });
+      const res = fakeRes();
+
+      await resendOtp(req({ email: 'user@example.com' }), res);
+
+      assert.equal(res.status, 500);
+      assert.equal(
+        db.calls.emailOtp?.deleteMany?.length ?? 0,
+        0,
+        'the prior OTP must not be deleted until a replacement is confirmed sent',
+      );
+      assert.equal(
+        db.state.otp,
+        existingOtp,
+        'the still-valid prior OTP record must remain intact',
+      );
+    },
+  );
+
   it('returns 500 when an unexpected Prisma error occurs', async (t) => {
     withDb(t, {
       user: unverifiedUser(),

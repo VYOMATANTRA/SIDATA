@@ -146,20 +146,23 @@ export const resendOtp = async (req: Request, res: Response): Promise<Response |
       }
     }
 
-    await prisma.emailOtp.deleteMany({
-      where: { userId: user.id },
-    });
-
     const newOtp = generate6DigitOtp();
     const hashedOtp = hashOtp(newOtp);
     const expiresAt = getOtpExpiration(15);
 
+    // Only replace the existing OTP once the new one is confirmed sent — deleting first would
+    // leave the user with zero valid codes (destroying a still-usable prior code) if the send
+    // then fails.
     const emailSent = await sendOtpEmail({ to: user.email, otp: newOtp });
     if (!emailSent) {
       return res.status(500).json({
         error: 'Gagal mengirim email OTP. Silakan coba beberapa saat lagi.',
       });
     }
+
+    await prisma.emailOtp.deleteMany({
+      where: { userId: user.id },
+    });
 
     await prisma.emailOtp.create({
       data: {
