@@ -6,6 +6,9 @@ import TurnstileWidget from './TurnstileWidget.vue'
 const props = defineProps<{
   isOpen: boolean
   email: string
+  /** Skip the initial 60s resend cooldown — e.g. when opened because the first OTP send
+   *  already failed, so no code (and no server-side cooldown window) actually exists yet. */
+  skipInitialCooldown?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -29,9 +32,11 @@ function resetTurnstile() {
   turnstileToken.value = ''
 }
 
-function startTimer() {
-  countdown.value = 60
+function startTimer(initialSeconds = 60) {
+  countdown.value = initialSeconds
   if (timer) clearInterval(timer)
+  timer = null
+  if (initialSeconds <= 0) return
   timer = setInterval(() => {
     if (countdown.value > 0) {
       countdown.value--
@@ -50,7 +55,7 @@ watch(
       errorMessage.value = ''
       successMessage.value = ''
       turnstileToken.value = ''
-      startTimer()
+      startTimer(props.skipInitialCooldown ? 0 : 60)
       setTimeout(() => {
         inputRefs.value[0]?.focus()
       }, 100)

@@ -51,6 +51,53 @@ describe('OtpVerificationModal paste handling', () => {
   })
 })
 
+describe('OtpVerificationModal skipInitialCooldown', () => {
+  it('lets the user resend immediately when opened after a failed initial OTP send', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({ csrfToken: 'test-csrf-token' }),
+    } as Response)
+
+    const wrapper = mount(OtpVerificationModal, {
+      props: { isOpen: false, email: 'user@example.com', skipInitialCooldown: true },
+      global: { plugins: [pinia] },
+    })
+    // Real usage always transitions isOpen false -> true (the modal opens after register/login
+    // responds), which is what the isOpen watcher reacts to — mounting already-open would never
+    // trigger it, so mirror the real transition here.
+    await wrapper.setProps({ isOpen: true })
+
+    expect(wrapper.text()).not.toContain('Kirim ulang kode dalam')
+    const resendButton = wrapper
+      .findAll('button')
+      .find((btn) => btn.text().includes('Kirim Ulang Kode OTP'))
+    expect(resendButton).toBeDefined()
+  })
+
+  it('defaults to the normal 60s cooldown when not opened after a failed send', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({ csrfToken: 'test-csrf-token' }),
+    } as Response)
+
+    const wrapper = mount(OtpVerificationModal, {
+      props: { isOpen: false, email: 'user@example.com' },
+      global: { plugins: [pinia] },
+    })
+    await wrapper.setProps({ isOpen: true })
+
+    const resendButton = wrapper
+      .findAll('button')
+      .find((btn) => btn.text().includes('Kirim Ulang Kode OTP'))
+    expect(resendButton).toBeUndefined()
+    expect(wrapper.text()).toContain('Kirim ulang kode dalam')
+  })
+})
+
 describe('OtpVerificationModal network requests', () => {
   it('sends credentials on verify-otp and resend-otp so auth cookies are attached cross-origin', async () => {
     const pinia = createPinia()

@@ -109,6 +109,7 @@ export const register = async (req: Request, res: Response): Promise<Response | 
         : 'Registrasi berhasil, tetapi gagal mengirim email OTP. Silakan tekan tombol kirim ulang OTP.',
       email: normalizedEmail,
       requiresOtp: true,
+      otpSent: emailSent,
     });
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'P2002') {

@@ -174,6 +174,7 @@ describe('auth.controller register — OTP issuance', () => {
       (res.body as { message: string }).message,
       'Registrasi berhasil. Kode OTP verifikasi telah dikirim ke email Anda.',
     );
+    assert.equal((res.body as { otpSent: boolean }).otpSent, true);
   });
 
   it(
@@ -192,6 +193,11 @@ describe('auth.controller register — OTP issuance', () => {
         'Registrasi berhasil, tetapi gagal mengirim email OTP. Silakan tekan tombol kirim ulang OTP.',
       );
       assert.equal((res.body as { requiresOtp: boolean }).requiresOtp, true);
+      assert.equal(
+        (res.body as { otpSent: boolean }).otpSent,
+        false,
+        'the frontend needs this to avoid claiming an OTP was sent when it was not',
+      );
       assert.equal(
         db.state.otp,
         null,

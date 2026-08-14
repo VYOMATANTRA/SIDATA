@@ -31,6 +31,7 @@ const isConfirmPasswordTouched = ref(false)
 
 const isOtpModalOpen = ref(false)
 const registeredEmail = ref('')
+const otpSendFailed = ref(false)
 
 const COMMON_WEAK_PASSWORDS = [
   '12345678',
@@ -156,8 +157,9 @@ async function handleRegister() {
 
     if (data.requiresOtp) {
       registeredEmail.value = data.email || email.value.trim()
+      otpSendFailed.value = data.otpSent === false
       isOtpModalOpen.value = true
-      successMessage.value = 'Kode OTP verifikasi telah dikirim ke email Anda!'
+      successMessage.value = data.message || 'Kode OTP verifikasi telah dikirim ke email Anda!'
     } else {
       successMessage.value = 'Registrasi berhasil!'
       setTimeout(() => {
@@ -335,6 +337,7 @@ function onOtpVerified(data?: unknown) {
     <OtpVerificationModal
       :is-open="isOtpModalOpen"
       :email="registeredEmail"
+      :skip-initial-cooldown="otpSendFailed"
       @verified="onOtpVerified"
       @close="isOtpModalOpen = false"
     />
