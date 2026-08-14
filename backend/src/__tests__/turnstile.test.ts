@@ -5,14 +5,6 @@ import { verifyTurnstileToken } from '../utils/turnstile.js';
 import { requireTurnstile } from '../middlewares/turnstile.middleware.js';
 import { fakeRes } from './helpers/fakeRes.js';
 
-// Note on scope: utils/turnstile.ts and turnstile.middleware.ts both branch on
-// `if (!TURNSTILE_SECRET)`, but TURNSTILE_SECRET is read via configs/index.ts's
-// requireEnv(), which throws at process boot if the var is empty/missing — so the app
-// can never actually be running with a falsy TURNSTILE_SECRET. That branch is dead code
-// under the current config-validation design, not a reachable prod scenario, so it's not
-// covered here. Everything below exercises the branches that are actually reachable with
-// TURNSTILE_SECRET always set, as it is in every real environment (see setupEnv.ts).
-
 function withFetch(t: TestContext, impl: typeof fetch) {
   const original = globalThis.fetch;
   globalThis.fetch = impl;
