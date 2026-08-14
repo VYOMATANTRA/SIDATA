@@ -26,6 +26,15 @@ export function createPkcePair(): { verifier: string; challenge: string } {
   return { verifier, challenge };
 }
 
+/**
+ * Intentionally omits `domain`: an unset Domain makes these host-only cookies, which
+ * browsers match by hostname alone (ports are not part of cookie scoping). That's what lets
+ * the state/verifier cookie set on the frontend's dev-proxy origin (e.g. localhost:5173) still
+ * reach the callback hit directly on the backend's raw origin (e.g. localhost:3000) per
+ * GOOGLE_CALLBACK_URL. It only works because both share the same hostname — a production
+ * topology that splits frontend/backend across different hostnames (not just ports) needs a
+ * shared reverse proxy in front of both, or this state cookie won't round-trip.
+ */
 export function setOAuthCookies(res: Response, options: { state: string; verifier: string }): void {
   const isProd = process.env.NODE_ENV === 'production';
   const cookieOptions = {

@@ -89,6 +89,27 @@ describe('oauth utility module', () => {
     assert.equal(decryptCookieValue(secondCall.val), 'verifier123');
   });
 
+  it('setOAuthCookies never sets a Domain option, keeping the cookies host-only', () => {
+    // REGRESSION GUARD: an explicit `domain` here would narrow these cookies away from their
+    // current host-only scope, which is what lets the state cookie set via the frontend's dev
+    // proxy (localhost:5173) still reach the callback hit directly on the backend's raw origin
+    // (localhost:3000) — cookie scoping ignores port, but a `domain` option can still break
+    // cross-hostname deployments if set incorrectly. See the comment above setOAuthCookies.
+    const cookieCalls: Array<{ options: Record<string, unknown> }> = [];
+    const res = {
+      cookie(_name: string, _val: string, options: Record<string, unknown>) {
+        cookieCalls.push({ options });
+        return this;
+      },
+    } as unknown as Response;
+
+    setOAuthCookies(res, { state: 'state123', verifier: 'verifier123' });
+
+    for (const call of cookieCalls) {
+      assert.equal('domain' in call.options, false);
+    }
+  });
+
   it('clearOAuthCookies clears temporary oauth cookies', () => {
     const clearCalls: Array<{ name: string; options: Record<string, unknown> }> = [];
 
