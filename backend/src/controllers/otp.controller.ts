@@ -5,6 +5,8 @@ import { generate6DigitOtp, hashOtp, verifyOtpHash, getOtpExpiration } from '../
 import { sendOtpEmail } from '../utils/mailer.js';
 import { issueSession } from '../utils/session.js';
 
+const MAX_OTP_ATTEMPTS = 5;
+
 export const verifyOtp = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const { email, otp } = req.body;
@@ -47,8 +49,18 @@ export const verifyOtp = async (req: Request, res: Response): Promise<Response |
         .json({ error: 'Kode OTP sudah kedaluwarsa. Silakan minta kode baru.' });
     }
 
-    if (otpRecord.attempts >= 5) {
-      await prisma.emailOtp.delete({ where: { id: otpRecord.id } });
+    // Atomically reserve one attempt against the 5-guess cap before checking the code, so
+    // concurrent verify requests can't all read the same stale `attempts` count and slip
+    // past the cap (a plain read-then-update would race). The row is deliberately NOT
+    // deleted on lockout — resendOtp's 60s cooldown (below) reads this same row, so deleting
+    // it here would let a locked-out attacker immediately resend and keep guessing
+    // unthrottled.
+    const { count: reserved } = await prisma.emailOtp.updateMany({
+      where: { id: otpRecord.id, attempts: { lt: MAX_OTP_ATTEMPTS } },
+      data: { attempts: { increment: 1 } },
+    });
+
+    if (reserved === 0) {
       return res.status(429).json({
         error: 'Batas percobaan salah telah tercapai. Silakan minta kode OTP baru.',
       });
@@ -57,12 +69,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<Response |
     const isMatch = verifyOtpHash(String(otp), otpRecord.otpHash);
 
     if (!isMatch) {
-      const updated = await prisma.emailOtp.update({
-        where: { id: otpRecord.id },
-        data: { attempts: { increment: 1 } },
-      });
-
-      const remaining = Math.max(0, 5 - updated.attempts);
+      const remaining = Math.max(0, MAX_OTP_ATTEMPTS - (otpRecord.attempts + 1));
       return res.status(400).json({
         error: `Kode OTP salah. Sisa percobaan: ${remaining}`,
       });
@@ -160,9 +167,25 @@ export const resendOtp = async (req: Request, res: Response): Promise<Response |
       });
     }
 
-    await prisma.emailOtp.deleteMany({
-      where: { userId: user.id },
-    });
+    // Claim the cooldown window by deleting the exact row the check above observed, rather
+    // than an unconditional delete of "whatever's there now". If two resend requests race
+    // past the cooldown check together, only the one that actually deletes `latestOtp.id`
+    // wins the create below — the loser's deleteMany matches zero rows and it backs off
+    // with 429 instead of silently clobbering the winner's freshly created OTP. (The email
+    // for the losing request has already been sent by this point — a known, accepted gap;
+    // closing it fully needs a unique constraint + pre-send atomic claim.)
+    if (latestOtp) {
+      const { count } = await prisma.emailOtp.deleteMany({ where: { id: latestOtp.id } });
+      if (count === 0) {
+        return res.status(429).json({
+          error: 'Silakan tunggu beberapa saat sebelum meminta kode OTP baru.',
+        });
+      }
+    } else {
+      // No prior row existed at the cooldown check — nothing to claim. Still sweep any
+      // out-of-band leftovers for this user so create() below can't collide.
+      await prisma.emailOtp.deleteMany({ where: { userId: user.id } });
+    }
 
     await prisma.emailOtp.create({
       data: {

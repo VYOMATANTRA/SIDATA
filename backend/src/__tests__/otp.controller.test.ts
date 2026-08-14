@@ -154,19 +154,46 @@ describe('verifyOtp', () => {
     assert.equal(res.status, 200);
   });
 
-  it('locks out and deletes the record after 5 failed attempts, even with the correct code', async (t) => {
-    const db = withDb(t, {
-      user: unverifiedUser(),
-      otp: otpRecord({ attempts: 5 }),
-    });
-    const res = fakeRes();
-    await verifyOtp(req({ email: 'user@example.com', otp: '123456' }), res);
-    assert.equal(res.status, 429);
-    assert.deepEqual(res.body, {
-      error: 'Batas percobaan salah telah tercapai. Silakan minta kode OTP baru.',
-    });
-    assert.equal(db.calls.emailOtp!.delete!.length, 1);
-  });
+  it(
+    'locks out at 5 failed attempts, even with the correct code, and leaves the record ' +
+      "intact so resendOtp's 60s cooldown still applies",
+    async (t) => {
+      const db = withDb(t, {
+        user: unverifiedUser(),
+        otp: otpRecord({ attempts: 5 }),
+      });
+      const res = fakeRes();
+      await verifyOtp(req({ email: 'user@example.com', otp: '123456' }), res);
+      assert.equal(res.status, 429);
+      assert.deepEqual(res.body, {
+        error: 'Batas percobaan salah telah tercapai. Silakan minta kode OTP baru.',
+      });
+      assert.equal(db.calls.emailOtp?.delete, undefined, 'lockout must not delete the row');
+      assert.ok(db.state.otp, 'the OTP row must survive lockout so the cooldown still holds');
+    },
+  );
+
+  it(
+    'REGRESSION: concurrent verify requests cannot both slip past the attempt cap — the ' +
+      'reserve is a single atomic updateMany, not a read-then-write',
+    async (t) => {
+      const db = withDb(t, {
+        user: unverifiedUser(),
+        otp: otpRecord({ attempts: 4 }),
+        overrides: {
+          emailOtp: {
+            // Simulates the row having already been claimed by a concurrent request
+            // between this request's findFirst and its updateMany.
+            updateMany: () => ({ count: 0 }),
+          },
+        },
+      });
+      const res = fakeRes();
+      await verifyOtp(req({ email: 'user@example.com', otp: '123456' }), res);
+      assert.equal(res.status, 429);
+      assert.equal(db.calls.emailOtp!.updateMany!.length, 1);
+    },
+  );
 
   it('does not lock out at 4 attempts', async (t) => {
     withDb(t, {
@@ -187,7 +214,7 @@ describe('verifyOtp', () => {
     await verifyOtp(req({ email: 'user@example.com', otp: '999999' }), res);
     assert.equal(res.status, 400);
     assert.deepEqual(res.body, { error: 'Kode OTP salah. Sisa percobaan: 2' });
-    assert.equal(db.calls.emailOtp!.update!.length, 1);
+    assert.equal(db.calls.emailOtp!.updateMany!.length, 1);
     assert.equal(db.state.otp!.attempts, 3);
   });
 
@@ -354,6 +381,32 @@ describe('resendOtp', () => {
     assert.equal(res.status, 429);
     assert.deepEqual(res.body, { error: 'Silakan tunggu 1 detik sebelum meminta kode OTP baru.' });
   });
+
+  it(
+    'REGRESSION: a concurrent resend that already claimed the prior OTP row backs off with ' +
+      "429 instead of overwriting the winning request's freshly created code",
+    async (t) => {
+      const existingOtp = otpRecord({ createdAt: new Date(Date.now() - 61_000) });
+      const db = withDb(t, {
+        user: unverifiedUser(),
+        otp: existingOtp,
+        overrides: {
+          emailOtp: {
+            // Simulates another concurrent resend having already deleted this exact row
+            // between this request's findFirst and its own claim attempt.
+            deleteMany: () => ({ count: 0 }),
+          },
+        },
+      });
+      withMailer(t, { ok: true });
+      const res = fakeRes();
+
+      await resendOtp(req({ email: 'user@example.com' }), res);
+
+      assert.equal(res.status, 429);
+      assert.equal(db.calls.emailOtp?.create, undefined, 'the loser must not create a new OTP row');
+    },
+  );
 
   it('sends a fresh OTP and stores a hash matching the emailed code', async (t) => {
     const db = withDb(t, { user: unverifiedUser() });

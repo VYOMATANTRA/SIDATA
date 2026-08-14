@@ -110,14 +110,45 @@ export function fakePrisma(initial: FakePrismaState = {}): FakePrismaHandle {
         }
         return { ...state.otp };
       },
+      // Simulates a real `UPDATE ... WHERE <conditions>`: only mutates + reports count: 1
+      // when every condition in `where` still holds against current state, so tests can
+      // exercise the "another request already won the race" (count: 0) branch.
+      updateMany: (...args: unknown[]) => {
+        const { where, data } = args[0] as { where: AnyRecord; data: AnyRecord };
+        if (!state.otp) return { count: 0 };
+        if (where.id !== undefined && where.id !== state.otp.id) return { count: 0 };
+
+        const attemptsCond = where.attempts as { lt?: number } | undefined;
+        if (
+          attemptsCond &&
+          typeof attemptsCond === 'object' &&
+          'lt' in attemptsCond &&
+          !((state.otp.attempts as number) < (attemptsCond.lt as number))
+        ) {
+          return { count: 0 };
+        }
+
+        const increment = data.attempts as { increment?: number } | undefined;
+        if (increment && typeof increment === 'object' && 'increment' in increment) {
+          state.otp.attempts = (state.otp.attempts as number) + (increment.increment ?? 0);
+        } else if (data.attempts !== undefined) {
+          state.otp.attempts = data.attempts;
+        }
+        return { count: 1 };
+      },
       delete: () => {
         state.otp = null;
         return {};
       },
-      deleteMany: () => {
-        const count = state.otp ? 1 : 0;
+      // `where.id`, when present, scopes the delete to that exact row — matching a real
+      // `DELETE ... WHERE id = ?`. This is what lets a test simulate two concurrent callers
+      // racing to claim the same row: the loser's deleteMany matches zero rows.
+      deleteMany: (...args: unknown[]) => {
+        const { where } = (args[0] as { where?: AnyRecord }) ?? {};
+        if (!state.otp) return { count: 0 };
+        if (where?.id !== undefined && where.id !== state.otp.id) return { count: 0 };
         state.otp = null;
-        return { count };
+        return { count: 1 };
       },
     },
     refreshToken: {
@@ -125,6 +156,7 @@ export function fakePrisma(initial: FakePrismaState = {}): FakePrismaHandle {
         const { data } = args[0] as { data: AnyRecord };
         return { id: ++refreshTokenIdCounter, createdAt: new Date(), isRevoked: false, ...data };
       },
+      updateMany: () => ({ count: 1 }),
     },
   };
 
