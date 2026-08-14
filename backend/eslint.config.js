@@ -37,5 +37,23 @@ export default [
     },
   },
 
+  // Plain Node scripts (e.g. scripts/coverage.mjs) — no TypeScript parser needed, just Node globals.
+  {
+    files: ['**/*.mjs'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: {
+        ...globals.node,
+      },
+    },
+    plugins: {
+      prettier: prettierPlugin,
+    },
+    rules: {
+      'prettier/prettier': 'error',
+    },
+  },
+
   prettierConfig,
 ];

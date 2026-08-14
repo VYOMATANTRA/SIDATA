@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "tsx --import ./src/__tests__/setupEnv.ts --test src/**/*.test.ts",
+    "test": "bash -O globstar -c \"tsx --import ./src/__tests__/setupEnv.ts --test src/**/*.test.ts\"",
+    "test:coverage": "node scripts/coverage.mjs",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

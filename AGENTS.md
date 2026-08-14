@@ -40,6 +40,7 @@ Dev server runs on `http://localhost:5173` by default (Vite).
 | -------------- | --------------------------------- | ---------- |
 | Lint           | `npm run lint`                    | `backend/` |
 | Run tests      | `npm test`                        | `backend/` |
+| Run tests with coverage | `npm run test:coverage`  | `backend/` |
 | Format         | `npm run format`                  | `backend/` |
 | Run server     | `npx tsx src/index.ts` or similar | `backend/` |
 | Run via Docker | `docker compose up --build`       | repo root  |
@@ -95,7 +96,7 @@ Key details:
 - Prisma client output to custom location `../generated/prisma`
 - JWT access + refresh tokens; refresh tokens persisted in DB with `/api/auth/refresh` and `/api/auth/logout` endpoints
 - Uses `dotenv` for environment configuration
-- Unit tests under `src/__tests__/` run via Node's built-in test runner through `tsx` (`npm test`)
+- Unit tests under `src/__tests__/` run via Node's built-in test runner through `tsx` (`npm test`). `npm run test:coverage` runs the same suite with `--experimental-test-coverage` via `backend/scripts/coverage.mjs`, which strips `src/__tests__/**` and `generated/**` out of the printed report so the numbers reflect application code only
 
 ## Tech Stack Summary
 
