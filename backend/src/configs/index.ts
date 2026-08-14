@@ -20,3 +20,6 @@ export const CSRF_SECRET = requireEnv('CSRF_SECRET');
 // (e.g. http://localhost:5173 locally). Do NOT reuse VITE_API_URL here: that variable
 // names the backend URL the frontend calls, not an origin the backend should trust.
 export const CORS_ORIGIN = requireEnv('CORS_ORIGIN');
+
+// BMKG adm4 area code for weather forecast feature. Fixed to Kelurahan Manggar but overridable via env since it's an external identifier, not a secret.
+export const WEATHER_ADM4 = process.env.WEATHER_ADM4 || '64.71.01.1001';
