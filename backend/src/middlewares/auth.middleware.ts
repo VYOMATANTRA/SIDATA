@@ -1,9 +1,10 @@
 import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from '../configs/index.js';
+import type { TokenPayload } from '../utils/jwt.js';
 
 export interface AuthRequest extends Request {
-  user?: string | jwt.JwtPayload;
+  user?: TokenPayload | jwt.JwtPayload;
 }
 
 export const verifyToken = (
@@ -24,7 +25,14 @@ export const verifyToken = (
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET) as TokenPayload & jwt.JwtPayload;
+
+    if (decoded && decoded.scope === 'first_login_only') {
+      return res.status(403).json({
+        error:
+          'Token setup tidak dapat digunakan untuk mengakses endpoint ini. Silakan selesaikan pembuatan kata sandi terlebih dahulu.',
+      });
+    }
 
     req.user = decoded;
 
