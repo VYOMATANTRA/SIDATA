@@ -24,13 +24,16 @@ model User {
   password_hash String?
   auth_provider String         @default("local")
   provider_id   String?
+  email_verified Boolean       @default(false)
   roleId        String
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   
   role          Role           @relation(fields: [roleId], references: [id])
   RefreshTokens RefreshToken[]
+  EmailOtps     EmailOtp[]
 
+  @@index([auth_provider, provider_id])
   @@map("users")
 }
 
@@ -45,4 +48,17 @@ model RefreshToken {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("refresh_tokens")
+}
+
+model EmailOtp {
+  id        String   @id @default(uuid())
+  userId    String
+  otpHash   String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_otps")
 }

@@ -11,7 +11,7 @@ Work from the appropriate directory:
 - Frontend: `frontend/`
 - Backend: `backend/`
 
-Backend requires a `.env` file — `DATABASE_URL` (MySQL), `JWT_SECRET`, `JWT_REFRESH_SECRET`, `CSRF_SECRET`, `CORS_ORIGIN` at minimum (`PORT` defaults to 3000). See `backend/.env.example`. The server validates these at boot and fails fast if any are missing.
+Backend requires a `.env` file — `DATABASE_URL` (MySQL), `JWT_SECRET`, `JWT_REFRESH_SECRET`, `CSRF_SECRET`, `COOKIE_ENCRYPTION_KEY`, `CORS_ORIGIN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`, `GOOGLE_OAUTH_SUCCESS_REDIRECT`, `GOOGLE_OAUTH_FAILURE_REDIRECT`, `TURNSTILE_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM` (`PORT` defaults to 3000). See `backend/.env.example`. The server validates these at boot and fails fast if any are missing.
 
 ## Database
 
@@ -40,6 +40,7 @@ Dev server runs on `http://localhost:5173` by default (Vite).
 | -------------- | --------------------------------- | ---------- |
 | Lint           | `npm run lint`                    | `backend/` |
 | Run tests      | `npm test`                        | `backend/` |
+| Run tests with coverage | `npm run test:coverage`  | `backend/` |
 | Format         | `npm run format`                  | `backend/` |
 | Run server     | `npx tsx src/index.ts` or similar | `backend/` |
 | Run via Docker | `docker compose up --build`       | repo root  |
@@ -81,10 +82,10 @@ Key details:
 - `src/app.ts`: Express app setup (middleware, CORS, route mounting)
 - `src/configs/index.ts`: Typed env var access; validated at boot
 - `src/routes/`: Route definitions (`auth.routes.ts`, `health.routes.ts`, `weather.routes.ts`)
-- `src/controllers/`: Route handlers (`auth.controller.ts` — register/login, `weather.controller.ts` — forecast lookup)
+- `src/controllers/`: Decoupled route handlers (`auth.controller.ts` for local auth, `oauth.controller.ts` for Google OAuth, `otp.controller.ts` for OTP verification, `weather.controller.ts` — forecast lookup)
 - `src/services/`: Business logic sitting between controllers and external/data sources (`weather.service.ts` — caches and transforms BMKG forecasts)
-- `src/middlewares/`: Express middleware (`auth.middleware.ts` — JWT verification, `rateLimit.middleware.ts` — per-route rate limiters)
-- `src/utils/`: `jwt.ts` (token signing), `prisma.ts` (Prisma client instance), `bmkg.ts` (BMKG API fetch + response validation)
+- `src/middlewares/`: Express middleware (`auth.middleware.ts` for JWT, `turnstile.middleware.ts` for anti-bot, `rateLimit.middleware.ts` — per-route rate limiters)
+- `src/utils/`: `jwt.ts` (token signing), `oauth.ts` (Google OAuth PKCE & token verification), `otp.ts` (OTP hashing & expiry), `mailer.ts` (transactional email), `turnstile.ts` (Turnstile API client), `prisma.ts` (Prisma instance), `bmkg.ts` (BMKG API fetch + response validation)
 - `prisma/schema.prisma`: ORM schema (MySQL)
 - `prisma/seed.ts`: Seeds default roles (`user`, `admin`)
 - `generated/prisma/`: Auto-generated Prisma client (do not edit)
@@ -96,7 +97,7 @@ Key details:
 - Prisma client output to custom location `../generated/prisma`
 - JWT access + refresh tokens; refresh tokens persisted in DB with `/api/auth/refresh` and `/api/auth/logout` endpoints
 - Uses `dotenv` for environment configuration
-- Unit tests under `src/__tests__/` run via Node's built-in test runner through `tsx` (`npm test`)
+- Unit tests under `src/__tests__/` run via Node's built-in test runner through `tsx` (`npm test`). `npm run test:coverage` runs the same suite with `--experimental-test-coverage` via `backend/scripts/coverage.mjs`, which strips `src/__tests__/**` and `generated/**` out of the printed report so the numbers reflect application code only
 
 ## Tech Stack Summary
 

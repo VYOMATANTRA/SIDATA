@@ -51,14 +51,25 @@ cp .env.example .env
 
 Fill in `.env` with at least:
 
-| Variable             | Description                                                                         |
-| -------------------- | ----------------------------------------------------------------------------------- |
-| `DATABASE_URL`       | MySQL connection string, e.g. `mysql://root:password@localhost:3306/sidata`         |
-| `JWT_SECRET`         | Secret used to sign access tokens                                                   |
-| `JWT_REFRESH_SECRET` | Secret used to sign refresh tokens                                                  |
-| `CSRF_SECRET`        | Secret used to sign CSRF tokens and cookies                                         |
-| `CORS_ORIGIN`        | Frontend origin allowed to make credentialed requests, e.g. `http://localhost:5173` |
-| `PORT`               | _(optional)_ Backend port, defaults to `3000`                                       |
+| Variable                         | Description                                                                                          |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                   | MySQL connection string, e.g. `mysql://root:password@localhost:3306/sidata`                          |
+| `JWT_SECRET`                     | Secret used to sign access tokens                                                                    |
+| `JWT_REFRESH_SECRET`             | Secret used to sign refresh tokens                                                                   |
+| `CSRF_SECRET`                    | Secret used to sign CSRF tokens and cookies                                                          |
+| `COOKIE_ENCRYPTION_KEY`         | Secret used to encrypt temporary OAuth state and verifier cookies                                    |
+| `CORS_ORIGIN`                    | Frontend origin allowed to make credentialed requests, e.g. `http://localhost:5173`                  |
+| `GOOGLE_CLIENT_ID`               | Google OAuth2 Client ID                                                                              |
+| `GOOGLE_CLIENT_SECRET`           | Google OAuth2 Client Secret                                                                          |
+| `GOOGLE_CALLBACK_URL`           | Google OAuth2 Callback URL, e.g. `http://localhost:3000/api/auth/google/callback`                    |
+| `GOOGLE_OAUTH_SUCCESS_REDIRECT` | Frontend URL for successful OAuth redirect, e.g. `http://localhost:5173/auth/callback`              |
+| `GOOGLE_OAUTH_FAILURE_REDIRECT` | Frontend URL for failed OAuth redirect, e.g. `http://localhost:5173/login?error=oauth_failed`       |
+| `OAUTH_STATE_TTL_SECONDS`       | _(optional)_ TTL for the temporary oauth_state cookie, defaults to `300`                             |
+| `OAUTH_PKCE_TTL_SECONDS`         | _(optional)_ TTL for the temporary oauth_verifier cookie, defaults to `300`                          |
+| `TURNSTILE_SECRET`               | Cloudflare Turnstile anti-bot secret key (`1x0000000000000000000000000000000AA` for local testing)   |
+| `RESEND_API_KEY`                 | Resend API key for transactional emails                                                              |
+| `EMAIL_FROM`                     | Sender identity for transactional emails, e.g. `"SIDATA Kelurahan Manggar <onboarding@resend.dev>"`  |
+| `PORT`                           | _(optional)_ Backend port, defaults to `3000`                                                        |
 
 The server validates these at boot and fails fast if any are missing.
 
@@ -89,9 +100,12 @@ The dev server runs on `http://localhost:5173` by default.
 
 ### Docker (alternative)
 
-From the repo root, with a `.env` providing `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`:
+From the repo root, with a `.env` copied from `.env.example` and filled in (Compose passes the
+MySQL credentials, backend env vars, and `VITE_API_URL_DOCKER`/`VITE_TURNSTILE_SITE_KEY` through
+to the containers — see `docker-compose.yml`):
 
 ```bash
+cp .env.example .env
 docker compose up --build
 ```
 

@@ -17,3 +17,10 @@ const createLimiter = (limit: number) =>
 export const authLimiter = createLimiter(100);
 export const loginLimiter = createLimiter(10);
 export const weatherLimiter = createLimiter(60);
+
+// Session-maintenance endpoints (csrf-token, refresh, logout, me) are hit on every SPA
+// navigation while unauthenticated (see router/index.ts's beforeEach), not just on deliberate
+// user action — sharing authLimiter's 100 req/15min budget with register/login/OTP let
+// multiple unauthenticated users behind one IP (NAT) burn through it purely on silent-refresh
+// retries and lock each other out of logging in. Given a roomier, separate budget instead.
+export const sessionLimiter = createLimiter(300);

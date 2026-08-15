@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "tsx --test src/**/*.test.ts",
+    "test": "bash -O globstar -c \"tsx --import ./src/__tests__/setupEnv.ts --test src/**/*.test.ts\"",
+    "test:coverage": "node scripts/coverage.mjs",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
@@ -18,10 +19,11 @@
     "bcryptjs": "^3.0.2",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
+    "csrf-csrf": "^4.0.3",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.1",
-    "csrf-csrf": "^4.0.3",
+    "google-auth-library": "^9.15.1",
     "jsonwebtoken": "^9.0.3",
     "zod": "^4.4.3",
     "zxcvbn": "^4.4.2"
