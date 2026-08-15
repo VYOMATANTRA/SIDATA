@@ -8,10 +8,11 @@ import {
 } from '../controllers/users.controller.js';
 import { verifyToken } from '../middlewares/auth.middleware.js';
 import { requireAdmin } from '../middlewares/role.middleware.js';
+import { userManagementLimiter } from '../middlewares/rateLimit.middleware.js';
 
 const router = Router();
 
-router.use(verifyToken, requireAdmin);
+router.use(userManagementLimiter, verifyToken, requireAdmin);
 
 router.get('/', getUsers);
 router.get('/roles', getRoles);

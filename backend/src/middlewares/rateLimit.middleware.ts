@@ -23,3 +23,9 @@ export const loginLimiter = createLimiter(10);
 // multiple unauthenticated users behind one IP (NAT) burn through it purely on silent-refresh
 // retries and lock each other out of logging in. Given a roomier, separate budget instead.
 export const sessionLimiter = createLimiter(300);
+
+// User management endpoints access DB & perform bcrypt password hashing
+export const userManagementLimiter = createLimiter(100);
+
+// General public API endpoints rate limiter
+export const apiLimiter = createLimiter(300);
