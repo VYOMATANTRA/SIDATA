@@ -115,6 +115,15 @@ async function handleLogin() {
       return
     }
 
+    if (data.status === 'REQUIRES_PASSWORD_CHANGE' || data.mustChangePassword) {
+      authStore.setSetupAuth(data.setupToken)
+      successMessage.value = 'Login berhasil! Silakan atur kata sandi baru Anda...'
+      setTimeout(() => {
+        router.push('/setup-password')
+      }, 600)
+      return
+    }
+
     if (!response.ok) {
       const errText = data.error || 'Login gagal. Silakan periksa kredensial Anda.'
       if (response.status === 401 || errText.toLowerCase().includes('password') || errText.toLowerCase().includes('kredensial')) {

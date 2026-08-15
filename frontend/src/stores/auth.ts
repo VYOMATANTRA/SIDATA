@@ -12,6 +12,8 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref<UserProfile | null>(null)
   const accessToken = ref<string | null>(null)
   const isInitialized = ref(false)
+  const setupToken = ref<string | null>(null)
+  const mustChangePassword = ref(false)
 
   // Set once a refresh attempt gets a definitive 401/403 back — the server saying "this
   // session is not valid," as opposed to "something went wrong." Retrying a definitive
@@ -25,11 +27,19 @@ export const useAuthStore = defineStore('auth', () => {
   let inFlight: Promise<boolean> | null = null
 
   const isAuthenticated = computed(() => !!accessToken.value)
+  const isAdmin = computed(() => user.value?.role?.toLowerCase() === 'admin')
 
   function setAuth(newUser: UserProfile, token: string) {
     user.value = newUser
     accessToken.value = token
     isInitialized.value = true
+    setupToken.value = null
+    mustChangePassword.value = false
+  }
+
+  function setSetupAuth(token: string) {
+    setupToken.value = token
+    mustChangePassword.value = true
   }
 
   function clearAuth() {
@@ -37,6 +47,8 @@ export const useAuthStore = defineStore('auth', () => {
     accessToken.value = null
     isInitialized.value = true
     refreshDenied.value = false
+    setupToken.value = null
+    mustChangePassword.value = false
   }
 
   async function performInitAuth(): Promise<boolean> {
@@ -101,7 +113,11 @@ export const useAuthStore = defineStore('auth', () => {
     accessToken,
     isInitialized,
     isAuthenticated,
+    isAdmin,
+    setupToken,
+    mustChangePassword,
     setAuth,
+    setSetupAuth,
     clearAuth,
     initAuth,
   }
