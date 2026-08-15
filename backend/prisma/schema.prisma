@@ -25,6 +25,8 @@ model User {
   auth_provider String         @default("local")
   provider_id   String?
   email_verified Boolean       @default(false)
+  requires_password_change Boolean @default(false)
+  deletedAt     DateTime?
   roleId        String
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
