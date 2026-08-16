@@ -51,6 +51,20 @@ describe('getManggarForecast', () => {
     assert.equal(result.stale, false);
   });
 
+  it('dedupes concurrent requests on a cold cache into a single BMKG fetch', async () => {
+    const fetchMock = mockFetchOnce();
+
+    const [first, second, third] = await Promise.all([
+      getManggarForecast(),
+      getManggarForecast(),
+      getManggarForecast(),
+    ]);
+
+    assert.equal(fetchMock.mock.callCount(), 1);
+    assert.deepEqual(first, second);
+    assert.deepEqual(second, third);
+  });
+
   it('serves cached data without calling BMKG again', async () => {
     const fetchMock = mockFetchOnce();
 
@@ -73,5 +87,22 @@ describe('getManggarForecast', () => {
 
     assert.equal(result.stale, true);
     assert.equal(result.location.desa, 'Manggar');
+  });
+
+  it('backs off from BMKG after a failure instead of retrying on every request', async () => {
+    mockFetchOnce();
+    await getManggarForecast();
+    expireWeatherCacheForTests();
+
+    const failingFetch = mock.method(globalThis, 'fetch', async () => {
+      throw new Error('network error');
+    });
+
+    const first = await getManggarForecast();
+    const second = await getManggarForecast();
+
+    assert.equal(failingFetch.mock.callCount(), 1);
+    assert.equal(first.stale, true);
+    assert.equal(second.stale, true);
   });
 });
