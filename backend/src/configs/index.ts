@@ -50,3 +50,15 @@ export const EMAIL_FROM = requireEnv('EMAIL_FROM');
 
 // BMKG adm4 area code for weather forecast feature. Fixed to Kelurahan Manggar but overridable via env since it's an external identifier, not a secret.
 export const WEATHER_ADM4 = process.env.WEATHER_ADM4 || '64.71.01.1001';
+
+// How long a fresh BMKG forecast is served from cache before the next request re-fetches it.
+// Optional — defaults to 1 hour (BMKG only refreshes twice a day).
+export const WEATHER_CACHE_TTL_MS = process.env.WEATHER_CACHE_TTL_MS
+  ? Number(process.env.WEATHER_CACHE_TTL_MS)
+  : 60 * 60 * 1000;
+
+// Backoff window after a failed BMKG refresh before the next fetch attempt is retried, while
+// stale cached data is served in the meantime. Optional — defaults to 5 minutes.
+export const WEATHER_STALE_RETRY_MS = process.env.WEATHER_STALE_RETRY_MS
+  ? Number(process.env.WEATHER_STALE_RETRY_MS)
+  : 5 * 60 * 1000;
