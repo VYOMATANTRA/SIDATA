@@ -48,6 +48,11 @@ export const TURNSTILE_SECRET = requireEnv('TURNSTILE_SECRET');
 export const RESEND_API_KEY = requireEnv('RESEND_API_KEY');
 export const EMAIL_FROM = requireEnv('EMAIL_FROM');
 
+// BMKG public API base URL. Optional — defaults to the production endpoint; overridable for
+// testing against a mock/staging endpoint.
+export const BMKG_BASE_URL =
+  process.env.BMKG_BASE_URL || 'https://api.bmkg.go.id/publik/prakiraan-cuaca';
+
 // BMKG adm4 area code for weather forecast feature. Fixed to Kelurahan Manggar but overridable via env since it's an external identifier, not a secret.
 export const WEATHER_ADM4 = process.env.WEATHER_ADM4 || '64.71.01.1001';
 
