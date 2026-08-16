@@ -1,11 +1,5 @@
 import { fetchBmkgForecast, type BmkgForecastEntry } from '../utils/bmkg.js';
-import { WEATHER_ADM4 } from '../configs/index.js';
-
-// BMKG only refreshes twice a day; caching here also keeps us well under their 60 requests/minute-per-IP limit regardless of site traffic.
-const CACHE_TTL_MS = 60 * 60 * 1000;
-
-// Backoff window used after a failed refresh, so an ongoing BMKG outage doesn't turn into a fetch attempt on every request.
-const STALE_RETRY_MS = 5 * 60 * 1000;
+import { WEATHER_ADM4, WEATHER_CACHE_TTL_MS, WEATHER_STALE_RETRY_MS } from '../configs/index.js';
 
 export interface WeatherForecastEntry {
   datetime: string;
@@ -60,12 +54,12 @@ async function fetchFresh(): Promise<WeatherForecastResult> {
 async function refresh(): Promise<WeatherForecastResult> {
   try {
     const result = await fetchFresh();
-    cache = { result, expiresAt: Date.now() + CACHE_TTL_MS };
+    cache = { result, expiresAt: Date.now() + WEATHER_CACHE_TTL_MS };
     return result;
   } catch (error) {
     if (cache) {
       const staleResult = { ...cache.result, stale: true };
-      cache = { result: staleResult, expiresAt: Date.now() + STALE_RETRY_MS };
+      cache = { result: staleResult, expiresAt: Date.now() + WEATHER_STALE_RETRY_MS };
       return staleResult;
     }
     throw error;
