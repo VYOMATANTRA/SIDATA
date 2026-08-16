@@ -16,7 +16,6 @@ const createLimiter = (limit: number) =>
 
 export const authLimiter = createLimiter(100);
 export const loginLimiter = createLimiter(10);
-export const weatherLimiter = createLimiter(60);
 
 // Session-maintenance endpoints (csrf-token, refresh, logout, me) are hit on every SPA
 // navigation while unauthenticated (see router/index.ts's beforeEach), not just on deliberate
@@ -24,3 +23,9 @@ export const weatherLimiter = createLimiter(60);
 // multiple unauthenticated users behind one IP (NAT) burn through it purely on silent-refresh
 // retries and lock each other out of logging in. Given a roomier, separate budget instead.
 export const sessionLimiter = createLimiter(300);
+
+// The weather widget auto-fetches on every landing-page visit, same as sessionLimiter above —
+// not a deliberate user action. A 60 req/15min budget shared across every visitor behind one
+// NAT IP (school, office, warnet) would let a handful of page loads lock out everyone else on
+// that IP. Given the same roomier budget as sessionLimiter for the same reason.
+export const weatherLimiter = createLimiter(300);
