@@ -1,6 +1,5 @@
 import { z } from 'zod';
-
-const BMKG_BASE_URL = 'https://api.bmkg.go.id/publik/prakiraan-cuaca';
+import { BMKG_BASE_URL } from '../configs/index.js';
 
 const forecastEntrySchema = z.object({
   local_datetime: z.string(),
