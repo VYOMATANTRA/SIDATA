@@ -26,13 +26,16 @@ export const useUsersStore = defineStore('users', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  async function getAuthHeaders() {
+  async function getAuthHeaders(): Promise<Record<string, string>> {
     const csrfToken = await getCsrfToken()
-    return {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'x-csrf-token': csrfToken,
-      Authorization: `Bearer ${authStore.accessToken}`,
     }
+    if (authStore.accessToken) {
+      headers['Authorization'] = `Bearer ${authStore.accessToken}`
+    }
+    return headers
   }
 
   async function fetchUsers() {
@@ -64,10 +67,13 @@ export const useUsersStore = defineStore('users', () => {
         credentials: 'include',
       })
       const data = await res.json()
-      if (res.ok) {
-        roles.value = data.roles || []
+      if (!res.ok) {
+        throw new Error(data.error || 'Gagal memuat daftar role.')
       }
+      roles.value = data.roles || []
     } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Gagal memuat daftar role.'
+      error.value = msg
       console.error('Error fetching roles:', err)
     }
   }

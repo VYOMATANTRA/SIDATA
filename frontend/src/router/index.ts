@@ -46,7 +46,7 @@ router.beforeEach(async (to) => {
 
   const authStore = useAuthStore(pinia)
 
-  if (!authStore.isAuthenticated) {
+  if (!authStore.isAuthenticated && to.name !== 'setup-password' && !authStore.mustChangePassword) {
     await authStore.initAuth()
   }
 

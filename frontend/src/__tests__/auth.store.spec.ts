@@ -152,4 +152,25 @@ describe('auth store', () => {
 
     expect(refreshCalls).toBe(2)
   })
+
+  it('initAuth failure preserves setupToken and mustChangePassword when user is in password setup flow', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+      }
+      return { ok: false, status: 401, json: async () => ({}) } as Response
+    })
+
+    const store = useAuthStore()
+    store.setSetupAuth('valid-setup-token')
+    expect(store.mustChangePassword).toBe(true)
+    expect(store.setupToken).toBe('valid-setup-token')
+
+    const result = await store.initAuth()
+
+    expect(result).toBe(false)
+    expect(store.mustChangePassword).toBe(true)
+    expect(store.setupToken).toBe('valid-setup-token')
+  })
 })

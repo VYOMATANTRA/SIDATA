@@ -42,13 +42,15 @@ export const useAuthStore = defineStore('auth', () => {
     mustChangePassword.value = true
   }
 
-  function clearAuth() {
+  function clearAuth(keepSetup = false) {
     user.value = null
     accessToken.value = null
     isInitialized.value = true
     refreshDenied.value = false
-    setupToken.value = null
-    mustChangePassword.value = false
+    if (!keepSetup) {
+      setupToken.value = null
+      mustChangePassword.value = false
+    }
   }
 
   async function performInitAuth(): Promise<boolean> {
@@ -63,7 +65,7 @@ export const useAuthStore = defineStore('auth', () => {
       })
 
       if (!res.ok) {
-        clearAuth()
+        clearAuth(mustChangePassword.value)
         if (res.status === 401 || res.status === 403) {
           refreshDenied.value = true
         }
@@ -76,10 +78,10 @@ export const useAuthStore = defineStore('auth', () => {
         return true
       }
 
-      clearAuth()
+      clearAuth(mustChangePassword.value)
       return false
     } catch {
-      clearAuth()
+      clearAuth(mustChangePassword.value)
       return false
     } finally {
       isInitialized.value = true

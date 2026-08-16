@@ -23,6 +23,7 @@ const createForm = ref({
 const createError = ref('')
 const createSuccess = ref('')
 const isSubmitting = ref(false)
+let createCloseTimer: ReturnType<typeof setTimeout> | null = null
 
 const filteredUsers = computed(() => {
   if (!searchQuery.value.trim()) return usersStore.users
@@ -37,9 +38,16 @@ onMounted(async () => {
 })
 
 function openCreateModal() {
+  if (createCloseTimer) {
+    clearTimeout(createCloseTimer)
+    createCloseTimer = null
+  }
+  const defaultRole =
+    usersStore.roles.find((r) => r.name.toLowerCase() === 'user') || usersStore.roles[0]
+
   createForm.value = {
     email: '',
-    roleId: usersStore.roles[0]?.id || '',
+    roleId: defaultRole?.id || '',
     password: generateRandomPassword(),
   }
   createError.value = ''
@@ -60,9 +68,11 @@ function openDeleteModal(user: UserItem) {
 
 function generateRandomPassword() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'
+  const array = new Uint32Array(12)
+  crypto.getRandomValues(array)
   let pass = ''
   for (let i = 0; i < 12; i++) {
-    pass += chars.charAt(Math.floor(Math.random() * chars.length))
+    pass += chars.charAt(array[i]! % chars.length)
   }
   return pass
 }
@@ -79,8 +89,9 @@ async function handleCreateUser() {
   try {
     const res = await usersStore.createUser(createForm.value)
     createSuccess.value = res.message || 'Pengguna berhasil dibuat.'
-    setTimeout(() => {
+    createCloseTimer = setTimeout(() => {
       isCreateModalOpen.value = false
+      createCloseTimer = null
     }, 1200)
   } catch (err: unknown) {
     createError.value = err instanceof Error ? err.message : 'Gagal membuat pengguna.'
@@ -307,6 +318,9 @@ async function handleDeleteUser() {
         <div v-if="createSuccess" class="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs rounded-lg">
           {{ createSuccess }}
         </div>
+        <div v-if="!usersStore.roles.length" class="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs rounded-lg">
+          {{ usersStore.error || 'Daftar role tidak tersedia. Silakan muat ulang halaman.' }}
+        </div>
 
         <form @submit.prevent="handleCreateUser" class="space-y-4">
           <div>
@@ -356,7 +370,8 @@ async function handleDeleteUser() {
             <button
               type="button"
               @click="isCreateModalOpen = false"
-              class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg"
+              :disabled="isSubmitting"
+              class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg disabled:opacity-50"
             >
               Batal
             </button>
@@ -383,6 +398,10 @@ async function handleDeleteUser() {
           Pilih role baru untuk <strong class="text-white">{{ selectedUser?.email }}</strong>:
         </p>
 
+        <div v-if="!usersStore.roles.length" class="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs rounded-lg">
+          {{ usersStore.error || 'Daftar role tidak tersedia.' }}
+        </div>
+
         <select
           v-model="newRoleSelection"
           class="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
@@ -396,14 +415,15 @@ async function handleDeleteUser() {
           <button
             type="button"
             @click="isRoleModalOpen = false"
-            class="px-4 py-2 bg-slate-800 text-slate-300 text-sm font-medium rounded-lg"
+            :disabled="isSubmitting"
+            class="px-4 py-2 bg-slate-800 text-slate-300 text-sm font-medium rounded-lg disabled:opacity-50"
           >
             Batal
           </button>
           <button
             @click="handleUpdateRole"
             :disabled="isSubmitting"
-            class="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg shadow-lg shadow-indigo-600/20"
+            class="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg shadow-lg shadow-indigo-600/20 disabled:opacity-50"
           >
             Simpan Perubahan
           </button>
@@ -427,14 +447,15 @@ async function handleDeleteUser() {
           <button
             type="button"
             @click="isDeleteModalOpen = false"
-            class="px-4 py-2 bg-slate-800 text-slate-300 text-sm font-medium rounded-lg"
+            :disabled="isSubmitting"
+            class="px-4 py-2 bg-slate-800 text-slate-300 text-sm font-medium rounded-lg disabled:opacity-50"
           >
             Batal
           </button>
           <button
             @click="handleDeleteUser"
             :disabled="isSubmitting"
-            class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-semibold rounded-lg shadow-lg shadow-red-600/20"
+            class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-semibold rounded-lg shadow-lg shadow-red-600/20 disabled:opacity-50"
           >
             Ya, Nonaktifkan
           </button>
