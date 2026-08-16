@@ -18,15 +18,42 @@ const turnstileToken = ref('')
 const isLoading = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
+const serverPasswordError = ref('')
 
 const isPasswordTouched = ref(false)
 const isConfirmTouched = ref(false)
 
+const COMMON_WEAK_PASSWORDS = [
+  '12345678',
+  '123456789',
+  '1234567890',
+  'password',
+  'password123',
+  'qwertyui',
+  'qwerty123',
+  'indonesia',
+  'admin1234',
+]
+
+function isWeakPassword(pwd: string, mail: string): boolean {
+  const lower = pwd.toLowerCase()
+  if (COMMON_WEAK_PASSWORDS.includes(lower)) return true
+  if (mail) {
+    const parts = mail.split('@')
+    const prefix = (parts[0] || '').toLowerCase()
+    if (prefix && prefix.length >= 3 && lower.includes(prefix)) return true
+  }
+  return false
+}
+
 const passwordError = computed(() => {
+  if (serverPasswordError.value) return serverPasswordError.value
   if (!isPasswordTouched.value) return ''
   if (!newPassword.value) return 'Kata sandi baru wajib diisi'
-  if (newPassword.value.length < 8) return 'Kata sandi minimal 8 karakter (Standar NIST)'
-  if (newPassword.value.length > 128) return 'Kata sandi maksimal 128 karakter'
+  if (newPassword.value.length < 8) return 'Kata sandi minimal harus 8 karakter.'
+  if (newPassword.value.length > 128) return 'Kata sandi terlalu panjang (maksimal 128 karakter).'
+  if (isWeakPassword(newPassword.value, authStore.user?.email || ''))
+    return 'Kata sandi terlalu lemah atau umum digunakan.'
   return ''
 })
 
@@ -41,11 +68,19 @@ const isFormValid = computed(() => {
   return (
     newPassword.value &&
     confirmPassword.value &&
+    newPassword.value.length >= 8 &&
+    newPassword.value.length <= 128 &&
+    !isWeakPassword(newPassword.value, authStore.user?.email || '') &&
+    newPassword.value === confirmPassword.value &&
     !passwordError.value &&
-    !confirmError.value &&
-    newPassword.value === confirmPassword.value
+    !confirmError.value
   )
 })
+
+function onPasswordInput() {
+  isPasswordTouched.value = true
+  serverPasswordError.value = ''
+}
 
 function resetTurnstile() {
   turnstileRef.value?.reset()
@@ -55,6 +90,7 @@ function resetTurnstile() {
 async function handleSetupPassword() {
   isPasswordTouched.value = true
   isConfirmTouched.value = true
+  serverPasswordError.value = ''
 
   if (!isFormValid.value) return
 
@@ -82,7 +118,12 @@ async function handleSetupPassword() {
     const data = await response.json()
 
     if (!response.ok) {
-      errorMessage.value = data.error || 'Gagal memperbarui kata sandi. Silakan coba lagi.'
+      const errText = data.error || 'Gagal memperbarui kata sandi. Silakan coba lagi.'
+      if (errText.toLowerCase().includes('password') || errText.toLowerCase().includes('sandi')) {
+        serverPasswordError.value = errText
+      } else {
+        errorMessage.value = errText
+      }
       resetTurnstile()
       return
     }
@@ -146,32 +187,62 @@ async function handleSetupPassword() {
       <form @submit.prevent="handleSetupPassword" class="space-y-4">
         <!-- New Password -->
         <div>
-          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+          <label
+            class="block text-xs font-semibold uppercase tracking-wider mb-1 transition-colors"
+            :class="passwordError ? 'text-rose-400' : 'text-slate-300'"
+          >
             Kata Sandi Baru
           </label>
           <input
             v-model="newPassword"
             type="password"
+            required
             placeholder="Minimal 8 karakter"
-            @input="isPasswordTouched = true"
-            class="w-full px-4 py-2.5 bg-slate-900/70 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition"
+            @blur="isPasswordTouched = true"
+            @input="onPasswordInput"
+            class="w-full px-4 py-2.5 bg-slate-900/70 border-2 rounded-lg text-white placeholder-slate-500 focus:outline-none transition text-sm font-medium"
+            :class="
+              passwordError
+                ? 'border-rose-500 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20'
+                : 'border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20'
+            "
           />
-          <p v-if="passwordError" class="text-red-400 text-xs mt-1">{{ passwordError }}</p>
+          <div v-if="passwordError" class="flex items-center gap-1.5 mt-1.5 text-xs text-rose-400 font-medium">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-rose-400 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+            <span>{{ passwordError }}</span>
+          </div>
         </div>
 
         <!-- Confirm Password -->
         <div>
-          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+          <label
+            class="block text-xs font-semibold uppercase tracking-wider mb-1 transition-colors"
+            :class="confirmError ? 'text-rose-400' : 'text-slate-300'"
+          >
             Konfirmasi Kata Sandi Baru
           </label>
           <input
             v-model="confirmPassword"
             type="password"
+            required
             placeholder="Ulangi kata sandi baru"
+            @blur="isConfirmTouched = true"
             @input="isConfirmTouched = true"
-            class="w-full px-4 py-2.5 bg-slate-900/70 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition"
+            class="w-full px-4 py-2.5 bg-slate-900/70 border-2 rounded-lg text-white placeholder-slate-500 focus:outline-none transition text-sm font-medium"
+            :class="
+              confirmError
+                ? 'border-rose-500 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20'
+                : 'border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20'
+            "
           />
-          <p v-if="confirmError" class="text-red-400 text-xs mt-1">{{ confirmError }}</p>
+          <div v-if="confirmError" class="flex items-center gap-1.5 mt-1.5 text-xs text-rose-400 font-medium">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-rose-400 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+            <span>{{ confirmError }}</span>
+          </div>
         </div>
 
         <!-- Turnstile Widget -->
@@ -187,7 +258,12 @@ async function handleSetupPassword() {
         <button
           type="submit"
           :disabled="isLoading || !isFormValid || !turnstileToken"
-          class="w-full py-3 px-4 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-semibold rounded-lg shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition transform duration-150 active:scale-[0.98]"
+          class="w-full py-3 px-4 font-semibold rounded-lg shadow-lg transition duration-150 active:scale-[0.98] text-sm tracking-wide disabled:opacity-50 disabled:cursor-not-allowed"
+          :class="
+            isLoading || !isFormValid || !turnstileToken
+              ? 'bg-slate-700 text-slate-400 shadow-none'
+              : 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white shadow-indigo-500/20 cursor-pointer'
+          "
         >
           <span v-if="isLoading" class="flex items-center justify-center gap-2">
             <svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24" fill="none">
