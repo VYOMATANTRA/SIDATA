@@ -220,14 +220,18 @@ export const firstLoginPassword = async (req: Request, res: Response): Promise<R
       return res.status(400).json({ error: 'Kata sandi baru wajib diisi.' });
     }
 
-    let decoded: { id?: string; scope?: string } | jwt.JwtPayload;
+    let decoded: jwt.JwtPayload;
     try {
-      decoded = jwt.verify(setupToken, JWT_SECRET);
+      const verified = jwt.verify(setupToken, JWT_SECRET);
+      if (typeof verified === 'string' || !verified) {
+        return res.status(403).json({ error: 'Token setup tidak valid.' });
+      }
+      decoded = verified;
     } catch {
       return res.status(403).json({ error: 'Token setup tidak valid atau sudah kedaluwarsa.' });
     }
 
-    if (!decoded || decoded.scope !== 'first_login_only' || !decoded.id) {
+    if (!decoded || decoded.scope !== 'first_login_only' || typeof decoded.id !== 'string') {
       return res.status(403).json({ error: 'Token setup tidak valid.' });
     }
 
@@ -238,6 +242,10 @@ export const firstLoginPassword = async (req: Request, res: Response): Promise<R
 
     if (!user || user.deletedAt != null) {
       return res.status(404).json({ error: 'Pengguna tidak ditemukan atau telah dinonaktifkan.' });
+    }
+
+    if (!user.requires_password_change) {
+      return res.status(403).json({ error: 'Token setup tidak valid atau sudah digunakan.' });
     }
 
     if (newPassword.length < 8) {

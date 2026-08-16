@@ -401,6 +401,89 @@ describe('googleCallback failure branches', () => {
       prisma.role.findUnique = originalRoleFindUnique;
     }
   });
+
+  it('redirects with reason=account_deactivated when the user matching provider_id is soft-deleted', async () => {
+    const originalGetToken = OAuth2Client.prototype.getToken;
+    const originalVerifyIdToken = OAuth2Client.prototype.verifyIdToken;
+    const originalUserFindFirst = prisma.user.findFirst;
+
+    OAuth2Client.prototype.getToken = (async () => ({
+      tokens: { id_token: 'fake-id-token' },
+    })) as unknown as typeof OAuth2Client.prototype.getToken;
+    OAuth2Client.prototype.verifyIdToken = (async () => ({
+      getPayload: () => ({
+        sub: 'sub-deleted',
+        email: 'deleted@example.com',
+        email_verified: true,
+      }),
+    })) as unknown as typeof OAuth2Client.prototype.verifyIdToken;
+    prisma.user.findFirst = (async () => ({
+      id: 'deleted-user',
+      email: 'deleted@example.com',
+      deletedAt: new Date(),
+      role: { name: 'user' },
+    })) as unknown as typeof prisma.user.findFirst;
+
+    try {
+      const { res, redirectedUrl, clearedCookieNames } = mockRedirectRes();
+      const reqMock = {
+        query: { code: 'abc', state: 'real-state' },
+        cookies: validOAuthCookies('real-state', 'real-verifier'),
+      } as unknown as Request;
+
+      await googleCallback(reqMock, res);
+
+      assert.equal(new URL(redirectedUrl()).searchParams.get('reason'), 'account_deactivated');
+      assert.ok(clearedCookieNames().includes('oauth_state'));
+    } finally {
+      OAuth2Client.prototype.getToken = originalGetToken;
+      OAuth2Client.prototype.verifyIdToken = originalVerifyIdToken;
+      prisma.user.findFirst = originalUserFindFirst;
+    }
+  });
+
+  it('redirects with reason=account_deactivated when the user matching email on auto-link is soft-deleted', async () => {
+    const originalGetToken = OAuth2Client.prototype.getToken;
+    const originalVerifyIdToken = OAuth2Client.prototype.verifyIdToken;
+    const originalUserFindFirst = prisma.user.findFirst;
+    const originalUserFindUnique = prisma.user.findUnique;
+
+    OAuth2Client.prototype.getToken = (async () => ({
+      tokens: { id_token: 'fake-id-token' },
+    })) as unknown as typeof OAuth2Client.prototype.getToken;
+    OAuth2Client.prototype.verifyIdToken = (async () => ({
+      getPayload: () => ({
+        sub: 'sub-new',
+        email: 'deleted-local@example.com',
+        email_verified: true,
+      }),
+    })) as unknown as typeof OAuth2Client.prototype.verifyIdToken;
+    prisma.user.findFirst = (async () => null) as unknown as typeof prisma.user.findFirst;
+    prisma.user.findUnique = (async () => ({
+      id: 'deleted-local-user',
+      email: 'deleted-local@example.com',
+      deletedAt: new Date(),
+      role: { name: 'user' },
+    })) as unknown as typeof prisma.user.findUnique;
+
+    try {
+      const { res, redirectedUrl, clearedCookieNames } = mockRedirectRes();
+      const reqMock = {
+        query: { code: 'abc', state: 'real-state' },
+        cookies: validOAuthCookies('real-state', 'real-verifier'),
+      } as unknown as Request;
+
+      await googleCallback(reqMock, res);
+
+      assert.equal(new URL(redirectedUrl()).searchParams.get('reason'), 'account_deactivated');
+      assert.ok(clearedCookieNames().includes('oauth_state'));
+    } finally {
+      OAuth2Client.prototype.getToken = originalGetToken;
+      OAuth2Client.prototype.verifyIdToken = originalVerifyIdToken;
+      prisma.user.findFirst = originalUserFindFirst;
+      prisma.user.findUnique = originalUserFindUnique;
+    }
+  });
 });
 
 // SPEC.md §3: "If a verified Google account matches an existing local user's email, the

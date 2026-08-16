@@ -29,7 +29,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<Response |
       include: { role: true },
     });
 
-    if (!user || user.email_verified) {
+    if (!user || user.email_verified || user.deletedAt != null) {
       return res.status(400).json({ error: 'Kode OTP tidak valid atau kedaluwarsa' });
     }
 
@@ -128,7 +128,7 @@ export const resendOtp = async (req: Request, res: Response): Promise<Response |
       where: { email: normalizedEmail },
     });
 
-    if (!user || user.email_verified) {
+    if (!user || user.email_verified || user.deletedAt != null) {
       return res.status(200).json({
         message: 'Kode OTP telah dikirim.',
       });

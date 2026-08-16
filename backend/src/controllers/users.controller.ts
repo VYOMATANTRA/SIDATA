@@ -93,7 +93,7 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<Respo
     });
 
     if (existingUser) {
-      if (existingUser.deletedAt === null) {
+      if (existingUser.deletedAt == null) {
         return res.status(409).json({ error: 'Email sudah terdaftar.' });
       }
 
@@ -103,6 +103,8 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<Respo
         data: {
           deletedAt: null,
           password_hash: passwordHash,
+          auth_provider: 'local',
+          provider_id: null,
           roleId: targetRole.id,
           email_verified: true,
           requires_password_change: true,
@@ -153,6 +155,10 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<Respo
       user: newUser,
     });
   } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'P2002') {
+      return res.status(409).json({ error: 'Email sudah terdaftar.' });
+    }
+
     console.error('Error saat membuat pengguna:', error);
     return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
   }
@@ -163,7 +169,11 @@ export const updateUserRole = async (req: AuthRequest, res: Response): Promise<R
     const { id } = req.params;
     const { roleId } = req.body;
 
-    if (!roleId) {
+    if (!id || typeof id !== 'string') {
+      return res.status(400).json({ error: 'ID pengguna tidak valid.' });
+    }
+
+    if (!roleId || typeof roleId !== 'string') {
       return res.status(400).json({ error: 'Role ID wajib diisi.' });
     }
 
@@ -172,7 +182,7 @@ export const updateUserRole = async (req: AuthRequest, res: Response): Promise<R
       include: { role: true },
     });
 
-    if (!user || user.deletedAt !== null) {
+    if (!user || user.deletedAt != null) {
       return res.status(404).json({ error: 'Pengguna tidak ditemukan atau telah dinonaktifkan.' });
     }
 
@@ -183,16 +193,47 @@ export const updateUserRole = async (req: AuthRequest, res: Response): Promise<R
       return res.status(404).json({ error: 'Role tidak ditemukan.' });
     }
 
-    const updatedUser = await prisma.user.update({
-      where: { id },
-      data: { roleId },
-      select: {
-        id: true,
-        email: true,
-        auth_provider: true,
-        role: { select: { id: true, name: true } },
-      },
-    });
+    const requestingUserId =
+      typeof req.user === 'object' && req.user !== null ? (req.user as { id?: string }).id : null;
+
+    const isDemotingAdmin =
+      user.role.name.toLowerCase() === 'admin' && newRole.name.toLowerCase() !== 'admin';
+
+    if (isDemotingAdmin) {
+      if (requestingUserId && requestingUserId === id) {
+        return res
+          .status(400)
+          .json({ error: 'Anda tidak dapat menurunkan role akun Anda sendiri.' });
+      }
+
+      const adminCount = await prisma.user.count({
+        where: {
+          deletedAt: null,
+          role: { name: 'admin' },
+        },
+      });
+
+      if (adminCount <= 1) {
+        return res.status(400).json({ error: 'Tidak dapat mengubah role Admin terakhir.' });
+      }
+    }
+
+    const [updatedUser] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id },
+        data: { roleId },
+        select: {
+          id: true,
+          email: true,
+          auth_provider: true,
+          role: { select: { id: true, name: true } },
+        },
+      }),
+      prisma.refreshToken.updateMany({
+        where: { userId: id },
+        data: { isRevoked: true },
+      }),
+    ]);
 
     return res.status(200).json({
       message: 'Role pengguna berhasil diperbarui.',
@@ -207,6 +248,10 @@ export const updateUserRole = async (req: AuthRequest, res: Response): Promise<R
 export const deleteUser = async (req: AuthRequest, res: Response): Promise<Response | void> => {
   try {
     const { id } = req.params;
+    if (!id || typeof id !== 'string') {
+      return res.status(400).json({ error: 'ID pengguna tidak valid.' });
+    }
+
     const requestingUserId =
       typeof req.user === 'object' && req.user !== null ? (req.user as { id?: string }).id : null;
 
@@ -219,7 +264,7 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<Respo
       include: { role: true },
     });
 
-    if (!targetUser || targetUser.deletedAt !== null) {
+    if (!targetUser || targetUser.deletedAt != null) {
       return res.status(404).json({ error: 'Pengguna tidak ditemukan atau sudah dinonaktifkan.' });
     }
 

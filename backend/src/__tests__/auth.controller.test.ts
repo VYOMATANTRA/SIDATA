@@ -10,13 +10,16 @@ import {
   logout,
   getMe,
   getCsrfToken,
+  firstLoginPassword,
 } from '../controllers/auth.controller.js';
+import type { AuthRequest } from '../middlewares/auth.middleware.js';
 import prisma from '../utils/prisma.js';
 import { fakePrisma, type FakePrismaState } from './helpers/fakePrisma.js';
 import { fakeRes } from './helpers/fakeRes.js';
 import { fakeMailer, type FakeMailerOptions } from './helpers/fakeMailer.js';
 import { hashOtp } from '../utils/otp.js';
 import { JWT_REFRESH_SECRET } from '../configs/index.js';
+import { generateSetupToken } from '../utils/jwt.js';
 
 const STRONG_PASSWORD = 'Xk9$mQp2vNz7Lw4!'; // zxcvbn score 4 — clears the register() >=2 gate
 
@@ -521,7 +524,7 @@ describe('auth.controller getMe', () => {
     const res = fakeRes();
     const decodedUser = { id: 'user-1', email: 'user@example.com', role: 'user' };
 
-    await getMe({ user: decodedUser } as unknown as Request & { user: unknown }, res);
+    await getMe({ user: decodedUser } as unknown as AuthRequest, res as unknown as Response);
 
     assert.equal(res.status, 200);
     assert.deepEqual(res.body, {
@@ -531,11 +534,71 @@ describe('auth.controller getMe', () => {
   });
 });
 
+describe('auth.controller firstLoginPassword', () => {
+  it('rejects if setup token has already been used (requires_password_change is false)', async (t) => {
+    withDb(t, {
+      user: {
+        id: 'user-already-set',
+        email: 'set@example.com',
+        password_hash: 'somehash',
+        requires_password_change: false,
+        role: { name: 'user' },
+      },
+    });
+
+    const setupToken = generateSetupToken('user-already-set');
+    const res = fakeRes();
+    const req = {
+      body: {
+        setupToken,
+        newPassword: STRONG_PASSWORD,
+      },
+      headers: {},
+    } as unknown as Request;
+
+    await firstLoginPassword(req, res as unknown as Response);
+
+    assert.equal(res.status, 403);
+    assert.deepEqual(res.body, { error: 'Token setup tidak valid atau sudah digunakan.' });
+  });
+
+  it('updates password and issues session on valid first login setup', async (t) => {
+    const db = withDb(t, {
+      user: {
+        id: 'user-must-change',
+        email: 'mustchange@example.com',
+        password_hash: 'initialhash',
+        requires_password_change: true,
+        role: { name: 'user' },
+      },
+    });
+
+    const setupToken = generateSetupToken('user-must-change');
+    const res = fakeRes();
+    const req = {
+      body: {
+        setupToken,
+        newPassword: STRONG_PASSWORD,
+      },
+      headers: {},
+    } as unknown as Request;
+
+    await firstLoginPassword(req, res as unknown as Response);
+
+    assert.equal(res.status, 200);
+    assert.equal(db.state.user?.requires_password_change, false);
+    assert.equal((res.body as { message: string }).message, 'Kata sandi berhasil diperbarui.');
+  });
+});
+
 describe('auth.controller getCsrfToken', () => {
   it('returns 200 with a csrfToken string', async () => {
     const res = fakeRes();
 
-    await getCsrfToken({ ip: '127.0.0.1', cookies: {} } as unknown as Request, res);
+    await getCsrfToken(
+      { ip: '127.0.0.1', cookies: {} } as unknown as Request,
+      res as unknown as Response,
+    );
 
     assert.equal(res.status, 200);
     assert.equal(typeof (res.body as { csrfToken: string }).csrfToken, 'string');

@@ -95,6 +95,11 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
       include: { role: true },
     });
 
+    if (user && user.deletedAt != null) {
+      clearOAuthCookies(res);
+      return res.redirect(buildFailureRedirect('account_deactivated'));
+    }
+
     // 2. Auto-link if user exists by email
     if (!user) {
       const existingUser = await prisma.user.findUnique({
@@ -103,6 +108,11 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
       });
 
       if (existingUser) {
+        if (existingUser.deletedAt != null) {
+          clearOAuthCookies(res);
+          return res.redirect(buildFailureRedirect('account_deactivated'));
+        }
+
         user = await prisma.user.update({
           where: { id: existingUser.id },
           data: {
@@ -161,6 +171,10 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
           });
 
           if (createdUser) {
+            if (createdUser.deletedAt != null) {
+              clearOAuthCookies(res);
+              return res.redirect(buildFailureRedirect('account_deactivated'));
+            }
             user = createdUser;
           } else {
             throw error;
