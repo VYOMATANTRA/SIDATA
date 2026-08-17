@@ -5,6 +5,7 @@ import { CORS_ORIGIN } from './configs/index.js';
 import healthRoutes from './routes/health.routes.js';
 import authRoutes from './routes/auth.routes.js';
 import usersRoutes from './routes/users.routes.js';
+import weatherRoutes from './routes/weather.routes.js';
 import { doubleCsrfProtection, invalidCsrfTokenError } from './middlewares/csrf.middleware.js';
 
 const app = express();
@@ -23,6 +24,7 @@ app.use(doubleCsrfProtection);
 app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/weather', weatherRoutes);
 
 app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (err === invalidCsrfTokenError) {

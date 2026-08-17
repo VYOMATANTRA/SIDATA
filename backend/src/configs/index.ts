@@ -11,6 +11,16 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function optionalNumberEnv(name: string, defaultValue: number): number {
+  const raw = process.env[name];
+  if (!raw) return defaultValue;
+  const value = Number(raw);
+  if (Number.isNaN(value)) {
+    throw new Error(`Invalid environment variable ${name}: "${raw}" is not a number.`);
+  }
+  return value;
+}
+
 export const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
 export const DATABASE_URL = requireEnv('DATABASE_URL');
@@ -47,3 +57,22 @@ export const TURNSTILE_SECRET = requireEnv('TURNSTILE_SECRET');
 // Resend API Mailer Configuration
 export const RESEND_API_KEY = requireEnv('RESEND_API_KEY');
 export const EMAIL_FROM = requireEnv('EMAIL_FROM');
+
+// BMKG public API base URL. Optional — defaults to the production endpoint; overridable for
+// testing against a mock/staging endpoint.
+export const BMKG_BASE_URL =
+  process.env.BMKG_BASE_URL || 'https://api.bmkg.go.id/publik/prakiraan-cuaca';
+
+// BMKG adm4 area code for weather forecast feature. Fixed to Kelurahan Manggar but overridable via env since it's an external identifier, not a secret.
+export const WEATHER_ADM4 = process.env.WEATHER_ADM4 || '64.71.01.1001';
+
+// How long a fresh BMKG forecast is served from cache before the next request re-fetches it.
+// Optional — defaults to 1 hour (BMKG only refreshes twice a day).
+export const WEATHER_CACHE_TTL_MS = optionalNumberEnv('WEATHER_CACHE_TTL_MS', 60 * 60 * 1000);
+
+// Backoff window after a failed BMKG refresh before the next fetch attempt is retried, while
+// stale cached data is served in the meantime. Optional — defaults to 5 minutes.
+export const WEATHER_STALE_RETRY_MS = optionalNumberEnv('WEATHER_STALE_RETRY_MS', 5 * 60 * 1000);
+
+// Max time to wait for a single BMKG API request before aborting. Optional — defaults to 10s.
+export const WEATHER_FETCH_TIMEOUT_MS = optionalNumberEnv('WEATHER_FETCH_TIMEOUT_MS', 10_000);

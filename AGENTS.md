@@ -81,10 +81,11 @@ Key details:
 - `src/index.ts`: Entry point — starts the HTTP listener
 - `src/app.ts`: Express app setup (middleware, CORS, route mounting)
 - `src/configs/index.ts`: Typed env var access; validated at boot
-- `src/routes/`: Route definitions (`auth.routes.ts`, `health.routes.ts`, `users.routes.ts`)
-- `src/controllers/`: Decoupled route handlers (`auth.controller.ts` for local auth, `oauth.controller.ts` for Google OAuth, `otp.controller.ts` for OTP verification, `users.controller.ts` for user management)
-- `src/middlewares/`: Express middleware (`auth.middleware.ts` for JWT, `role.middleware.ts` for role-based authorization, `turnstile.middleware.ts` for anti-bot)
-- `src/utils/`: `jwt.ts` (token signing), `oauth.ts` (Google OAuth PKCE & token verification), `otp.ts` (OTP hashing & expiry), `mailer.ts` (transactional email), `turnstile.ts` (Turnstile API client), `prisma.ts` (Prisma instance)
+- `src/routes/`: Route definitions (`auth.routes.ts`, `health.routes.ts`, `users.routes.ts`, `weather.routes.ts`)
+- `src/controllers/`: Decoupled route handlers (`auth.controller.ts` for local auth, `oauth.controller.ts` for Google OAuth, `otp.controller.ts` for OTP verification, `users.controller.ts` for user management, `weather.controller.ts` — forecast lookup)
+- `src/services/`: Business logic sitting between controllers and external/data sources (`weather.service.ts` — caches and transforms BMKG forecasts)
+- `src/middlewares/`: Express middleware (`auth.middleware.ts` for JWT, `role.middleware.ts` for role-based authorization, `turnstile.middleware.ts` for anti-bot, `rateLimit.middleware.ts` — per-route rate limiters))
+- `src/utils/`: `jwt.ts` (token signing), `oauth.ts` (Google OAuth PKCE & token verification), `otp.ts` (OTP hashing & expiry), `mailer.ts` (transactional email), `turnstile.ts` (Turnstile API client), `prisma.ts` (Prisma instance), `bmkg.ts` (BMKG API fetch + response validation)
 - `prisma/schema.prisma`: ORM schema (MySQL)
 - `prisma/seed.ts`: Seeds default roles (`user`, `admin`)
 - `generated/prisma/`: Auto-generated Prisma client (do not edit)
@@ -130,4 +131,4 @@ Key details:
 
 **Add a store**: Create a new file in `frontend/src/stores/` following Pinia conventions (defineStore), then import and use in components via `useStore()`.
 
-**Backend endpoint**: Add a handler in `backend/src/controllers/`, wire it in the matching file under `backend/src/routes/`, then mount that router in `backend/src/app.ts` if it's a new resource. Middleware (JSON parsing, cookies, CORS) is already configured in `app.ts`.
+**Backend endpoint**: Add a handler in `backend/src/controllers/`, wire it in the matching file under `backend/src/routes/`, then mount that router in `backend/src/app.ts` if it's a new resource. Middleware (JSON parsing, cookies, CORS) is already configured in `app.ts`. If the endpoint has non-trivial logic (external API calls, caching, data transforms), put that in `backend/src/services/` and keep the controller a thin pass-through.
