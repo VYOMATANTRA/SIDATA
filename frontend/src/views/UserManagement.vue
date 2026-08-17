@@ -9,6 +9,7 @@ const authStore = useAuthStore()
 const searchQuery = ref('')
 const isCreateModalOpen = ref(false)
 const isRoleModalOpen = ref(false)
+const isPasswordModalOpen = ref(false)
 const isConfirmModalOpen = ref(false)
 const confirmActionType = ref<'deactivate' | 'activate'>('deactivate')
 
@@ -25,6 +26,53 @@ const createError = ref('')
 const createSuccess = ref('')
 const isSubmitting = ref(false)
 let createCloseTimer: ReturnType<typeof setTimeout> | null = null
+
+// Form state for changing user password
+const newPassword = ref('')
+const isNewPasswordTouched = ref(false)
+const passwordError = ref('')
+const passwordSuccess = ref('')
+let passwordCloseTimer: ReturnType<typeof setTimeout> | null = null
+
+const COMMON_WEAK_PASSWORDS = [
+  '12345678',
+  '123456789',
+  '1234567890',
+  'password',
+  'password123',
+  'qwertyui',
+  'qwerty123',
+  'indonesia',
+  'admin1234',
+]
+
+function isWeakPassword(pwd: string, mail: string): boolean {
+  const lower = pwd.toLowerCase()
+  if (COMMON_WEAK_PASSWORDS.includes(lower)) return true
+  if (mail) {
+    const parts = mail.split('@')
+    const prefix = (parts[0] || '').toLowerCase()
+    if (prefix && prefix.length >= 3 && lower.includes(prefix)) return true
+  }
+  return false
+}
+
+const newPasswordError = computed(() => {
+  if (!isNewPasswordTouched.value) return ''
+  if (!newPassword.value) return 'Password wajib diisi'
+  if (newPassword.value.length < 8) return 'Password minimal harus 8 karakter.'
+  if (newPassword.value.length > 128) return 'Password terlalu panjang (maksimal 128 karakter).'
+  if (isWeakPassword(newPassword.value, selectedUser.value?.email || ''))
+    return 'Password terlalu lemah atau umum digunakan.'
+  return ''
+})
+
+const isNewPasswordValid = computed(() => {
+  if (!newPassword.value) return false
+  if (newPassword.value.length < 8 || newPassword.value.length > 128) return false
+  if (isWeakPassword(newPassword.value, selectedUser.value?.email || '')) return false
+  return true
+})
 
 const filteredUsers = computed(() => {
   if (!searchQuery.value.trim()) return usersStore.users
@@ -63,6 +111,19 @@ function openRoleModal(user: UserItem) {
   selectedUser.value = user
   newRoleSelection.value = user.roleId
   isRoleModalOpen.value = true
+}
+
+function openPasswordModal(user: UserItem) {
+  if (passwordCloseTimer) {
+    clearTimeout(passwordCloseTimer)
+    passwordCloseTimer = null
+  }
+  selectedUser.value = user
+  newPassword.value = ''
+  isNewPasswordTouched.value = false
+  passwordError.value = ''
+  passwordSuccess.value = ''
+  isPasswordModalOpen.value = true
 }
 
 function openConfirmModal(user: UserItem, action: 'deactivate' | 'activate') {
@@ -113,6 +174,27 @@ async function handleUpdateRole() {
     isRoleModalOpen.value = false
   } catch (err: unknown) {
     alert(err instanceof Error ? err.message : 'Gagal memperbarui role')
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+async function handleChangePassword() {
+  isNewPasswordTouched.value = true
+  if (!isNewPasswordValid.value || !selectedUser.value) return
+
+  isSubmitting.value = true
+  passwordError.value = ''
+  passwordSuccess.value = ''
+  try {
+    const res = await usersStore.changeUserPassword(selectedUser.value.id, newPassword.value)
+    passwordSuccess.value = res.message || 'Password pengguna berhasil diperbarui.'
+    passwordCloseTimer = setTimeout(() => {
+      isPasswordModalOpen.value = false
+      passwordCloseTimer = null
+    }, 1200)
+  } catch (err: unknown) {
+    passwordError.value = err instanceof Error ? err.message : 'Gagal mengubah password pengguna.'
   } finally {
     isSubmitting.value = false
   }
@@ -243,8 +325,7 @@ async function handleConfirmAction() {
                     >
                       <circle
                         class="opacity-25"
-                        cx="12"
-                        cy="12"
+                        cx="12" cy="12"
                         r="10"
                         stroke="currentColor"
                         stroke-width="4"
@@ -337,6 +418,12 @@ async function handleConfirmAction() {
                       class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition border border-slate-700"
                     >
                       Ubah Role
+                    </button>
+                    <button
+                      @click="openPasswordModal(u)"
+                      class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition border border-slate-700"
+                    >
+                      Ganti Password
                     </button>
                     <button
                       v-if="u.id !== authStore.user?.id && u.role?.name.toLowerCase() !== 'admin'"
@@ -510,6 +597,85 @@ async function handleConfirmAction() {
             Simpan Perubahan
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div
+      v-if="isPasswordModalOpen"
+      class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+    >
+      <div
+        class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4"
+      >
+        <h2 class="text-xl font-bold text-white">Ganti Kata Sandi Pengguna</h2>
+        <p class="text-slate-400 text-xs">
+          Atur kata sandi baru untuk <strong class="text-white">{{ selectedUser?.email }}</strong
+          >. Pengguna akan diwajibkan mengganti kata sandi saat pertama kali masuk kembali.
+        </p>
+
+        <div
+          v-if="passwordError"
+          class="p-3 bg-red-500/10 border border-red-500/30 text-red-400 text-xs rounded-lg"
+        >
+          {{ passwordError }}
+        </div>
+        <div
+          v-if="passwordSuccess"
+          class="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs rounded-lg"
+        >
+          {{ passwordSuccess }}
+        </div>
+
+        <form @submit.prevent="handleChangePassword" class="space-y-4">
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label class="block text-xs font-semibold text-slate-300 uppercase">
+                Kata Sandi Baru
+              </label>
+              <button
+                type="button"
+                @click="
+                  newPassword = generateRandomPassword();
+                  isNewPasswordTouched = true;
+                "
+                class="text-xs text-indigo-400 hover:underline"
+              >
+                Acak Sandi
+              </button>
+            </div>
+            <input
+              v-model="newPassword"
+              type="text"
+              required
+              @blur="isNewPasswordTouched = true"
+              class="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono text-sm focus:outline-none focus:border-indigo-500"
+            />
+            <p v-if="newPasswordError" class="text-xs text-red-400 mt-1">
+              {{ newPasswordError }}
+            </p>
+          </div>
+
+          <div class="flex justify-end gap-3 pt-3">
+            <button
+              type="button"
+              @click="isPasswordModalOpen = false"
+              :disabled="isSubmitting"
+              class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg disabled:opacity-50"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              :disabled="
+                isSubmitting || (isNewPasswordTouched && !isNewPasswordValid) || !newPassword
+              "
+              class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold rounded-lg shadow-lg shadow-indigo-600/20 disabled:opacity-50"
+            >
+              Simpan Kata Sandi
+            </button>
+          </div>
+        </form>
       </div>
     </div>
 

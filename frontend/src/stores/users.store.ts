@@ -130,6 +130,32 @@ export const useUsersStore = defineStore('users', () => {
     }
   }
 
+  async function changeUserPassword(userId: string, password: string) {
+    loading.value = true
+    error.value = null
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(`/api/users/${userId}/password`, {
+        method: 'PATCH',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({ password }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Gagal mengubah password pengguna.')
+      }
+      await fetchUsers()
+      return data
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Gagal mengubah password pengguna.'
+      error.value = msg
+      throw new Error(msg)
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function updateUserRole(userId: string, roleId: string) {
     loading.value = true
     error.value = null
@@ -190,6 +216,7 @@ export const useUsersStore = defineStore('users', () => {
     fetchRoles,
     createUser,
     reactivateUser,
+    changeUserPassword,
     updateUserRole,
     deleteUser,
   }
