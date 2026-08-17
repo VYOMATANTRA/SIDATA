@@ -105,4 +105,19 @@ describe('getManggarForecast', () => {
     assert.equal(first.stale, true);
     assert.equal(second.stale, true);
   });
+
+  it('falls back to stale cache when BMKG times out', async () => {
+    mockFetchOnce();
+    await getManggarForecast();
+    expireWeatherCacheForTests();
+
+    mock.method(globalThis, 'fetch', async () => {
+      throw new DOMException('The operation was aborted.', 'TimeoutError');
+    });
+
+    const result = await getManggarForecast();
+
+    assert.equal(result.stale, true);
+    assert.equal(result.location.desa, 'Manggar');
+  });
 });

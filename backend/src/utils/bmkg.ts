@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BMKG_BASE_URL } from '../configs/index.js';
+import { BMKG_BASE_URL, WEATHER_FETCH_TIMEOUT_MS } from '../configs/index.js';
 
 const forecastEntrySchema = z.object({
   local_datetime: z.string(),
@@ -28,7 +28,7 @@ export type BmkgResponse = z.infer<typeof bmkgResponseSchema>;
 
 export async function fetchBmkgForecast(adm4: string): Promise<BmkgResponse> {
   const url = `${BMKG_BASE_URL}?adm4=${encodeURIComponent(adm4)}`;
-  const response = await fetch(url);
+  const response = await fetch(url, { signal: AbortSignal.timeout(WEATHER_FETCH_TIMEOUT_MS) });
 
   if (!response.ok) {
     throw new Error(`BMKG API merespons dengan status ${response.status}`);
