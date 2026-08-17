@@ -5,6 +5,7 @@ import {
   getUsers,
   createUser,
   reactivateUser,
+  changeUserPassword,
   updateUserRole,
   deleteUser,
 } from '../controllers/users.controller.js';
@@ -231,6 +232,119 @@ describe('users.controller', () => {
     } finally {
       prisma.user.findUnique = originalFindUnique;
       prisma.user.update = originalUpdate;
+    }
+  });
+
+  it('changeUserPassword rejects invalid input and NIST weak passwords', async () => {
+    const originalFindUnique = prisma.user.findUnique;
+    prisma.user.findUnique = (async () => ({
+      id: 'user-1',
+      email: 'user@example.com',
+      deletedAt: null,
+    })) as unknown as typeof prisma.user.findUnique;
+
+    try {
+      // 1. Missing password
+      const res1 = fakeRes();
+      await changeUserPassword(
+        { params: { id: 'user-1' }, body: {} } as unknown as AuthRequest,
+        res1 as unknown as Response,
+      );
+      assert.equal(res1.status, 400);
+
+      // 2. Short password (< 8 chars)
+      const res2 = fakeRes();
+      await changeUserPassword(
+        { params: { id: 'user-1' }, body: { password: 'short' } } as unknown as AuthRequest,
+        res2 as unknown as Response,
+      );
+      assert.equal(res2.status, 400);
+      assert.deepEqual(res2.body, { error: 'Password minimal harus 8 karakter (Standar NIST).' });
+
+      // 3. Weak password (zxcvbn score < 2)
+      const res3 = fakeRes();
+      await changeUserPassword(
+        { params: { id: 'user-1' }, body: { password: 'password123' } } as unknown as AuthRequest,
+        res3 as unknown as Response,
+      );
+      assert.equal(res3.status, 400);
+      assert.equal(
+        (res3.body as { error: string }).error,
+        'Password terlalu lemah atau umum digunakan.',
+      );
+      assert.ok(Array.isArray((res3.body as { suggestions: string[] }).suggestions));
+    } finally {
+      prisma.user.findUnique = originalFindUnique;
+    }
+  });
+
+  it('changeUserPassword rejects non-existent or soft-deleted users', async () => {
+    const originalFindUnique = prisma.user.findUnique;
+
+    // 1. Not found
+    prisma.user.findUnique = (async () => null) as unknown as typeof prisma.user.findUnique;
+    const res1 = fakeRes();
+    await changeUserPassword(
+      {
+        params: { id: 'non-existent' },
+        body: { password: STRONG_PASSWORD },
+      } as unknown as AuthRequest,
+      res1 as unknown as Response,
+    );
+    assert.equal(res1.status, 404);
+
+    // 2. Soft-deleted
+    prisma.user.findUnique = (async () => ({
+      id: 'deleted-user',
+      email: 'deleted@example.com',
+      deletedAt: new Date(),
+    })) as unknown as typeof prisma.user.findUnique;
+    const res2 = fakeRes();
+    await changeUserPassword(
+      {
+        params: { id: 'deleted-user' },
+        body: { password: STRONG_PASSWORD },
+      } as unknown as AuthRequest,
+      res2 as unknown as Response,
+    );
+    assert.equal(res2.status, 400);
+    assert.deepEqual(res2.body, { error: 'Pengguna dalam status nonaktif.' });
+
+    prisma.user.findUnique = originalFindUnique;
+  });
+
+  it('changeUserPassword updates password hash, sets requires_password_change, and revokes sessions in transaction', async () => {
+    const originalFindUnique = prisma.user.findUnique;
+    const originalTransaction = prisma.$transaction;
+
+    prisma.user.findUnique = (async () => ({
+      id: 'user-1',
+      email: 'user@example.com',
+      deletedAt: null,
+      auth_provider: 'google',
+    })) as unknown as typeof prisma.user.findUnique;
+
+    let transactionExecuted = false;
+    prisma.$transaction = (async () => {
+      transactionExecuted = true;
+      return [];
+    }) as unknown as typeof prisma.$transaction;
+
+    try {
+      const req = {
+        params: { id: 'user-1' },
+        body: { password: STRONG_PASSWORD },
+      } as unknown as AuthRequest;
+
+      const res = fakeRes();
+      await changeUserPassword(req, res as unknown as Response);
+
+      assert.equal(res.status, 200);
+      assert.equal(transactionExecuted, true);
+      assert.deepEqual(res.body, { message: 'Password pengguna berhasil diperbarui.' });
+    } finally {
+      prisma.user.findUnique = originalFindUnique;
+      prisma.$transaction = originalTransaction;
     }
   });
 

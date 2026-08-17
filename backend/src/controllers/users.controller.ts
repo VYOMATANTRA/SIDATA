@@ -266,6 +266,76 @@ export const updateUserRole = async (req: AuthRequest, res: Response): Promise<R
   }
 };
 
+export const changeUserPassword = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<Response | void> => {
+  try {
+    const { id } = req.params;
+    const { password } = req.body;
+
+    if (!id || typeof id !== 'string') {
+      return res.status(400).json({ error: 'ID pengguna tidak valid.' });
+    }
+
+    if (!password || typeof password !== 'string') {
+      return res.status(400).json({ error: 'Password baru wajib diisi.' });
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id },
+      include: { role: true },
+    });
+
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Pengguna tidak ditemukan.' });
+    }
+
+    if (targetUser.deletedAt != null) {
+      return res.status(400).json({ error: 'Pengguna dalam status nonaktif.' });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password minimal harus 8 karakter (Standar NIST).' });
+    }
+    if (password.length > 128) {
+      return res.status(400).json({ error: 'Password terlalu panjang (maksimal 128 karakter).' });
+    }
+
+    const passwordEvaluation = zxcvbn(password, [targetUser.email]);
+    if (passwordEvaluation.score < 2) {
+      return res.status(400).json({
+        error: 'Password terlalu lemah atau umum digunakan.',
+        suggestions: passwordEvaluation.feedback.suggestions,
+      });
+    }
+
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(password, saltRounds);
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id },
+        data: {
+          password_hash: passwordHash,
+          requires_password_change: true,
+          auth_provider: 'local',
+          provider_id: null,
+        },
+      }),
+      prisma.refreshToken.updateMany({
+        where: { userId: id },
+        data: { isRevoked: true },
+      }),
+    ]);
+
+    return res.status(200).json({ message: 'Password pengguna berhasil diperbarui.' });
+  } catch (error) {
+    console.error('Error saat mengubah password pengguna:', error);
+    return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
+  }
+};
+
 export const deleteUser = async (req: AuthRequest, res: Response): Promise<Response | void> => {
   try {
     const { id } = req.params;
