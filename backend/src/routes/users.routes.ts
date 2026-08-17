@@ -3,6 +3,7 @@ import {
   getUsers,
   getRoles,
   createUser,
+  reactivateUser,
   updateUserRole,
   deleteUser,
 } from '../controllers/users.controller.js';
@@ -17,6 +18,7 @@ router.use(userManagementLimiter, verifyToken, requireAdmin);
 router.get('/', getUsers);
 router.get('/roles', getRoles);
 router.post('/', createUser);
+router.patch('/:id/reactivate', reactivateUser);
 router.patch('/:id/role', updateUserRole);
 router.delete('/:id', deleteUser);
 

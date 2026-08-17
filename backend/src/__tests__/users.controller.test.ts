@@ -4,6 +4,7 @@ import type { Response } from 'express';
 import {
   getUsers,
   createUser,
+  reactivateUser,
   updateUserRole,
   deleteUser,
 } from '../controllers/users.controller.js';
@@ -14,7 +15,7 @@ import { fakeRes } from './helpers/fakeRes.js';
 const STRONG_PASSWORD = 'Xk9$mQp2vNz7Lw4!';
 
 describe('users.controller', () => {
-  it('getUsers returns only active users', async () => {
+  it('getUsers returns all users including deletedAt status', async () => {
     const originalFindMany = prisma.user.findMany;
     prisma.user.findMany = (async () => {
       return [
@@ -24,6 +25,18 @@ describe('users.controller', () => {
           auth_provider: 'local',
           email_verified: true,
           requires_password_change: false,
+          deletedAt: null,
+          roleId: 'role-user',
+          role: { id: 'role-user', name: 'user' },
+          createdAt: new Date(),
+        },
+        {
+          id: 'user-2',
+          email: 'user2@example.com',
+          auth_provider: 'local',
+          email_verified: true,
+          requires_password_change: false,
+          deletedAt: new Date(),
           roleId: 'role-user',
           role: { id: 'role-user', name: 'user' },
           createdAt: new Date(),
@@ -36,55 +49,37 @@ describe('users.controller', () => {
       await getUsers({} as AuthRequest, res as unknown as Response);
 
       assert.equal(res.status, 200);
-      const body = res.body as { users: Array<{ email: string }> };
-      assert.ok(body.users && body.users[0]);
-      assert.equal(body.users.length, 1);
-      assert.equal(body.users[0].email, 'user1@example.com');
+      const body = res.body as { users: Array<{ email: string; deletedAt: Date | null }> };
+      assert.ok(body.users);
+      assert.equal(body.users.length, 2);
+      assert.equal(body.users[0]?.email, 'user1@example.com');
+      assert.equal(body.users[0]?.deletedAt, null);
+      assert.equal(body.users[1]?.email, 'user2@example.com');
+      assert.notEqual(body.users[1]?.deletedAt, null);
     } finally {
       prisma.user.findMany = originalFindMany;
     }
   });
 
-  it('createUser reactivates a soft-deleted Google-linked user and resets auth_provider to local', async () => {
+  it('createUser rejects with 409 if email already exists', async () => {
     const originalFindUnique = prisma.user.findUnique;
     const originalRoleFind = prisma.role.findUnique;
-    const originalUpdate = prisma.user.update;
 
     prisma.role.findUnique = (async () => ({
       id: 'role-editor',
       name: 'editor',
     })) as unknown as typeof prisma.role.findUnique;
     prisma.user.findUnique = (async () => ({
-      id: 'deleted-google-user-id',
-      email: 'googleuser@example.com',
-      auth_provider: 'google',
-      provider_id: 'google-sub-123',
-      deletedAt: new Date(),
+      id: 'existing-user-id',
+      email: 'existing@example.com',
+      auth_provider: 'local',
+      deletedAt: null,
     })) as unknown as typeof prisma.user.findUnique;
-
-    let updatedData: {
-      deletedAt?: Date | null;
-      requires_password_change?: boolean;
-      auth_provider?: string;
-      provider_id?: string | null;
-    } = {};
-    prisma.user.update = (async (args: { data: Record<string, unknown> }) => {
-      updatedData = args.data as typeof updatedData;
-      return {
-        id: 'deleted-google-user-id',
-        email: 'googleuser@example.com',
-        auth_provider: 'local',
-        email_verified: true,
-        requires_password_change: true,
-        role: { id: 'role-editor', name: 'editor' },
-        createdAt: new Date(),
-      };
-    }) as unknown as typeof prisma.user.update;
 
     try {
       const req = {
         body: {
-          email: 'googleuser@example.com',
+          email: 'existing@example.com',
           roleId: 'role-editor',
           password: STRONG_PASSWORD,
         },
@@ -93,15 +88,11 @@ describe('users.controller', () => {
       const res = fakeRes();
       await createUser(req, res as unknown as Response);
 
-      assert.equal(res.status, 201);
-      assert.equal(updatedData.deletedAt, null);
-      assert.equal(updatedData.requires_password_change, true);
-      assert.equal(updatedData.auth_provider, 'local');
-      assert.equal(updatedData.provider_id, null);
+      assert.equal(res.status, 409);
+      assert.deepEqual(res.body, { error: 'Email ini sudah dipakai' });
     } finally {
       prisma.user.findUnique = originalFindUnique;
       prisma.role.findUnique = originalRoleFind;
-      prisma.user.update = originalUpdate;
     }
   });
 
@@ -135,11 +126,111 @@ describe('users.controller', () => {
       await createUser(req, res as unknown as Response);
 
       assert.equal(res.status, 409);
-      assert.deepEqual(res.body, { error: 'Email sudah terdaftar.' });
+      assert.deepEqual(res.body, { error: 'Email ini sudah dipakai' });
     } finally {
       prisma.user.findUnique = originalFindUnique;
       prisma.role.findUnique = originalRoleFind;
       prisma.user.create = originalCreate;
+    }
+  });
+
+  it('reactivateUser returns 404 when user is not found', async () => {
+    const originalFindUnique = prisma.user.findUnique;
+    prisma.user.findUnique = (async () => null) as unknown as typeof prisma.user.findUnique;
+
+    try {
+      const req = {
+        params: { id: 'non-existent-user' },
+      } as unknown as AuthRequest;
+
+      const res = fakeRes();
+      await reactivateUser(req, res as unknown as Response);
+
+      assert.equal(res.status, 404);
+      assert.deepEqual(res.body, { error: 'Pengguna tidak ditemukan.' });
+    } finally {
+      prisma.user.findUnique = originalFindUnique;
+    }
+  });
+
+  it('reactivateUser returns 400 when user is already active', async () => {
+    const originalFindUnique = prisma.user.findUnique;
+    prisma.user.findUnique = (async () => ({
+      id: 'active-user',
+      email: 'active@example.com',
+      deletedAt: null,
+      role: { name: 'user' },
+    })) as unknown as typeof prisma.user.findUnique;
+
+    try {
+      const req = {
+        params: { id: 'active-user' },
+      } as unknown as AuthRequest;
+
+      const res = fakeRes();
+      await reactivateUser(req, res as unknown as Response);
+
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, { error: 'Pengguna sudah dalam status aktif.' });
+    } finally {
+      prisma.user.findUnique = originalFindUnique;
+    }
+  });
+
+  it('reactivateUser successfully clears deletedAt and reactivates account', async () => {
+    const originalFindUnique = prisma.user.findUnique;
+    const originalUpdate = prisma.user.update;
+
+    prisma.user.findUnique = (async () => ({
+      id: 'deactivated-user',
+      email: 'deactivated@example.com',
+      deletedAt: new Date(),
+      role: { name: 'user' },
+    })) as unknown as typeof prisma.user.findUnique;
+
+    let updatedPayload: { deletedAt?: Date | null } = {};
+    prisma.user.update = (async (args: { data: { deletedAt: Date | null } }) => {
+      updatedPayload = args.data;
+      return {
+        id: 'deactivated-user',
+        email: 'deactivated@example.com',
+        auth_provider: 'local',
+        email_verified: true,
+        requires_password_change: false,
+        deletedAt: null,
+        roleId: 'role-user',
+        role: { id: 'role-user', name: 'user' },
+        createdAt: new Date(),
+      };
+    }) as unknown as typeof prisma.user.update;
+
+    try {
+      const req = {
+        params: { id: 'deactivated-user' },
+      } as unknown as AuthRequest;
+
+      const res = fakeRes();
+      await reactivateUser(req, res as unknown as Response);
+
+      assert.equal(res.status, 200);
+      assert.equal(updatedPayload.deletedAt, null);
+      assert.deepEqual(res.body, {
+        message: 'Pengguna berhasil diaktifkan kembali.',
+        user: {
+          id: 'deactivated-user',
+          email: 'deactivated@example.com',
+          auth_provider: 'local',
+          email_verified: true,
+          requires_password_change: false,
+          deletedAt: null,
+          roleId: 'role-user',
+          role: { id: 'role-user', name: 'user' },
+          createdAt: (res.body as { user: { createdAt: Date } }).user.createdAt,
+        },
+      });
+    } finally {
+      prisma.user.findUnique = originalFindUnique;
+      prisma.user.update = originalUpdate;
     }
   });
 
@@ -242,6 +333,7 @@ describe('users.controller', () => {
           id: 'user-1',
           email: 'user1@example.com',
           auth_provider: 'local',
+          deletedAt: null,
           role: { id: 'role-admin', name: 'admin' },
         },
         { count: 1 },
@@ -278,7 +370,7 @@ describe('users.controller', () => {
     await deleteUser(req, res as unknown as Response);
 
     assert.equal(res.status, 400);
-    assert.deepEqual(res.body, { error: 'Anda tidak dapat menghapus akun Anda sendiri.' });
+    assert.deepEqual(res.body, { error: 'Anda tidak dapat menonaktifkan akun Anda sendiri.' });
   });
 
   it('deleteUser prevents deleting an Admin account', async () => {
@@ -300,7 +392,32 @@ describe('users.controller', () => {
       await deleteUser(req, res as unknown as Response);
 
       assert.equal(res.status, 403);
-      assert.deepEqual(res.body, { error: 'Admin tidak dapat menghapus sesama akun Admin.' });
+      assert.deepEqual(res.body, { error: 'Admin tidak dapat menonaktifkan sesama akun Admin.' });
+    } finally {
+      prisma.user.findUnique = originalFindUnique;
+    }
+  });
+
+  it('deleteUser returns 400 when user is already deactivated', async () => {
+    const originalFindUnique = prisma.user.findUnique;
+    prisma.user.findUnique = (async () => ({
+      id: 'user-already-deleted',
+      email: 'deleted@example.com',
+      deletedAt: new Date(),
+      role: { name: 'user' },
+    })) as unknown as typeof prisma.user.findUnique;
+
+    try {
+      const req = {
+        params: { id: 'user-already-deleted' },
+        user: { id: 'admin-1', email: 'admin@example.com', role: 'admin' },
+      } as unknown as AuthRequest;
+
+      const res = fakeRes();
+      await deleteUser(req, res as unknown as Response);
+
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, { error: 'Pengguna sudah dalam status nonaktif.' });
     } finally {
       prisma.user.findUnique = originalFindUnique;
     }

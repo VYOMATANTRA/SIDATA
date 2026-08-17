@@ -14,6 +14,7 @@ export interface UserItem {
   auth_provider: string
   email_verified: boolean
   requires_password_change: boolean
+  deletedAt: string | null
   roleId: string
   role: UserRole
   createdAt: string
@@ -104,6 +105,31 @@ export const useUsersStore = defineStore('users', () => {
     }
   }
 
+  async function reactivateUser(userId: string) {
+    loading.value = true
+    error.value = null
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(`/api/users/${userId}/reactivate`, {
+        method: 'PATCH',
+        headers,
+        credentials: 'include',
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Gagal mengaktifkan kembali pengguna.')
+      }
+      await fetchUsers()
+      return data
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Gagal mengaktifkan kembali pengguna.'
+      error.value = msg
+      throw new Error(msg)
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function updateUserRole(userId: string, roleId: string) {
     loading.value = true
     error.value = null
@@ -142,12 +168,12 @@ export const useUsersStore = defineStore('users', () => {
       })
       const data = await res.json()
       if (!res.ok) {
-        throw new Error(data.error || 'Gagal menghapus pengguna.')
+        throw new Error(data.error || 'Gagal menonaktifkan pengguna.')
       }
       await fetchUsers()
       return data
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Gagal menghapus pengguna.'
+      const msg = err instanceof Error ? err.message : 'Gagal menonaktifkan pengguna.'
       error.value = msg
       throw new Error(msg)
     } finally {
@@ -163,6 +189,7 @@ export const useUsersStore = defineStore('users', () => {
     fetchUsers,
     fetchRoles,
     createUser,
+    reactivateUser,
     updateUserRole,
     deleteUser,
   }
