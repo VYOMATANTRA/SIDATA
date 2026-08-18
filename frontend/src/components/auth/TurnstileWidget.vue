@@ -1,81 +1,80 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue';
 
 const emit = defineEmits<{
-  (e: 'verify', token: string): void
-  (e: 'expire'): void
-  (e: 'error'): void
-}>()
+  (e: 'verify', token: string): void;
+  (e: 'expire'): void;
+  (e: 'error'): void;
+}>();
 
-const containerRef = ref<HTMLDivElement | null>(null)
-let widgetId: string | null = null
+const containerRef = ref<HTMLDivElement | null>(null);
+let widgetId: string | null = null;
 
-const siteKey =
-  import.meta.env.VITE_TURNSTILE_SITE_KEY
+const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 
 function renderWidget() {
-  if (!containerRef.value || !window.turnstile) return
+  if (!containerRef.value || !window.turnstile) return;
 
   widgetId = window.turnstile.render(containerRef.value, {
     sitekey: siteKey,
     action: 'turnstile-spin-v2',
     callback: (token: string) => {
-      emit('verify', token)
+      emit('verify', token);
     },
     'expired-callback': () => {
-      emit('expire')
+      emit('expire');
     },
     'error-callback': () => {
-      emit('error')
+      emit('error');
     },
-  })
+  });
 }
 
 onMounted(() => {
   if (window.turnstile) {
-    renderWidget()
-    return
+    renderWidget();
+    return;
   }
 
-  const existingScript = document.getElementById('turnstile-script')
+  const existingScript = document.getElementById('turnstile-script');
   if (!existingScript) {
-    const script = document.createElement('script')
-    script.id = 'turnstile-script'
-    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
-    script.async = true
-    script.defer = true
+    const script = document.createElement('script');
+    script.id = 'turnstile-script';
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    script.async = true;
+    script.defer = true;
     script.onload = () => {
       if (window.turnstile) {
-        renderWidget()
+        renderWidget();
       }
-    }
-    document.head.appendChild(script)
+    };
+    document.head.appendChild(script);
   } else {
     existingScript.addEventListener('load', () => {
       if (window.turnstile) {
-        renderWidget()
+        renderWidget();
       }
-    })
+    });
   }
-})
+});
 
 onUnmounted(() => {
   if (widgetId && window.turnstile) {
-    window.turnstile.remove(widgetId)
+    window.turnstile.remove(widgetId);
   }
-})
+});
 
 function reset() {
   if (widgetId && window.turnstile) {
-    window.turnstile.reset(widgetId)
+    window.turnstile.reset(widgetId);
   }
 }
 
-defineExpose({ reset })
+defineExpose({ reset });
 </script>
 
 <template>
-  <div class="turnstile-container flex justify-center my-3">
+  <div class="turnstile-container my-3 flex justify-center">
     <div
       ref="containerRef"
       class="cf-turnstile"

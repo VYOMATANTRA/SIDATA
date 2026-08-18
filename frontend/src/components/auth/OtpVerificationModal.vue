@@ -1,129 +1,129 @@
 <script setup lang="ts">
-import { ref, watch, onUnmounted } from 'vue'
-import { getCsrfToken } from '../../utils/csrf'
-import TurnstileWidget from './TurnstileWidget.vue'
+import { ref, watch, onUnmounted } from 'vue';
+import { getCsrfToken } from '../../utils/csrf';
+import TurnstileWidget from './TurnstileWidget.vue';
 
 const props = defineProps<{
-  isOpen: boolean
-  email: string
+  isOpen: boolean;
+  email: string;
   /** Skip the initial 60s resend cooldown — e.g. when opened because the first OTP send
    *  already failed, so no code (and no server-side cooldown window) actually exists yet. */
-  skipInitialCooldown?: boolean
-}>()
+  skipInitialCooldown?: boolean;
+}>();
 
 const emit = defineEmits<{
-  (e: 'verified', data: unknown): void
-  (e: 'close'): void
-}>()
+  (e: 'verified', data: unknown): void;
+  (e: 'close'): void;
+}>();
 
-const digits = ref<string[]>(['', '', '', '', '', ''])
-const inputRefs = ref<Array<HTMLInputElement | null>>([])
-const isLoading = ref(false)
-const isResending = ref(false)
-const errorMessage = ref('')
-const successMessage = ref('')
-const countdown = ref(60)
-const turnstileToken = ref('')
-const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
-let timer: ReturnType<typeof setInterval> | null = null
+const digits = ref<string[]>(['', '', '', '', '', '']);
+const inputRefs = ref<Array<HTMLInputElement | null>>([]);
+const isLoading = ref(false);
+const isResending = ref(false);
+const errorMessage = ref('');
+const successMessage = ref('');
+const countdown = ref(60);
+const turnstileToken = ref('');
+const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null);
+let timer: ReturnType<typeof setInterval> | null = null;
 
 function resetTurnstile() {
-  turnstileRef.value?.reset()
-  turnstileToken.value = ''
+  turnstileRef.value?.reset();
+  turnstileToken.value = '';
 }
 
 function startTimer(initialSeconds = 60) {
-  countdown.value = initialSeconds
-  if (timer) clearInterval(timer)
-  timer = null
-  if (initialSeconds <= 0) return
+  countdown.value = initialSeconds;
+  if (timer) clearInterval(timer);
+  timer = null;
+  if (initialSeconds <= 0) return;
   timer = setInterval(() => {
     if (countdown.value > 0) {
-      countdown.value--
+      countdown.value--;
     } else if (timer) {
-      clearInterval(timer)
-      timer = null
+      clearInterval(timer);
+      timer = null;
     }
-  }, 1000)
+  }, 1000);
 }
 
 watch(
   () => props.isOpen,
   (newVal) => {
     if (newVal) {
-      digits.value = ['', '', '', '', '', '']
-      errorMessage.value = ''
-      successMessage.value = ''
-      turnstileToken.value = ''
-      startTimer(props.skipInitialCooldown ? 0 : 60)
+      digits.value = ['', '', '', '', '', ''];
+      errorMessage.value = '';
+      successMessage.value = '';
+      turnstileToken.value = '';
+      startTimer(props.skipInitialCooldown ? 0 : 60);
       setTimeout(() => {
-        inputRefs.value[0]?.focus()
-      }, 100)
+        inputRefs.value[0]?.focus();
+      }, 100);
     }
   },
-)
+);
 
 onUnmounted(() => {
-  if (timer) clearInterval(timer)
-})
+  if (timer) clearInterval(timer);
+});
 
 function handleInput(index: number, event: Event) {
-  const target = event.target as HTMLInputElement
-  const val = target.value.replace(/\D/g, '')
+  const target = event.target as HTMLInputElement;
+  const val = target.value.replace(/\D/g, '');
 
-  digits.value[index] = val.slice(-1)
+  digits.value[index] = val.slice(-1);
 
   if (val && index < 5) {
-    inputRefs.value[index + 1]?.focus()
+    inputRefs.value[index + 1]?.focus();
   }
 
   if (digits.value.every((d) => d !== '')) {
-    submitOtp()
+    submitOtp();
   }
 }
 
 function handleKeyDown(index: number, event: KeyboardEvent) {
   if (event.key === 'Backspace' && !digits.value[index] && index > 0) {
-    inputRefs.value[index - 1]?.focus()
+    inputRefs.value[index - 1]?.focus();
   }
 }
 
 function handlePaste(event: ClipboardEvent) {
-  event.preventDefault()
-  const pasted = event.clipboardData?.getData('text').replace(/\D/g, '') || ''
-  if (!pasted) return
+  event.preventDefault();
+  const pasted = event.clipboardData?.getData('text').replace(/\D/g, '') || '';
+  if (!pasted) return;
 
-  const chars = pasted.slice(0, 6).split('')
+  const chars = pasted.slice(0, 6).split('');
   digits.value = Array(6)
     .fill('')
-    .map((_, i) => chars[i] || '')
+    .map((_, i) => chars[i] || '');
 
-  const nextFocus = Math.min(chars.length, 5)
-  inputRefs.value[nextFocus]?.focus()
+  const nextFocus = Math.min(chars.length, 5);
+  inputRefs.value[nextFocus]?.focus();
 
   if (digits.value.every((d) => d !== '')) {
-    submitOtp()
+    submitOtp();
   }
 }
 
 async function submitOtp() {
-  const otpCode = digits.value.join('')
+  const otpCode = digits.value.join('');
   if (otpCode.length !== 6) {
-    errorMessage.value = 'Kode OTP harus 6 digit angka'
-    return
+    errorMessage.value = 'Kode OTP harus 6 digit angka';
+    return;
   }
 
   if (!turnstileToken.value) {
-    errorMessage.value = 'Mohon selesaikan verifikasi anti-bot terlebih dahulu'
-    return
+    errorMessage.value = 'Mohon selesaikan verifikasi anti-bot terlebih dahulu';
+    return;
   }
 
-  isLoading.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
+  isLoading.value = true;
+  errorMessage.value = '';
+  successMessage.value = '';
 
   try {
-    const csrfToken = await getCsrfToken()
+    const csrfToken = await getCsrfToken();
     const response = await fetch('/api/auth/verify-otp', {
       method: 'POST',
       credentials: 'include',
@@ -136,41 +136,41 @@ async function submitOtp() {
         otp: otpCode,
         turnstileToken: turnstileToken.value,
       }),
-    })
+    });
 
-    const data = await response.json()
+    const data = await response.json();
 
     if (!response.ok) {
-      errorMessage.value = data.error || 'Verifikasi gagal. Silakan periksa kode OTP Anda.'
-      return
+      errorMessage.value = data.error || 'Verifikasi gagal. Silakan periksa kode OTP Anda.';
+      return;
     }
 
-    successMessage.value = 'Verifikasi berhasil! Mengalihkan...'
+    successMessage.value = 'Verifikasi berhasil! Mengalihkan...';
     setTimeout(() => {
-      emit('verified', data)
-    }, 800)
+      emit('verified', data);
+    }, 800);
   } catch {
-    errorMessage.value = 'Terjadi kesalahan jaringan saat verifikasi OTP'
+    errorMessage.value = 'Terjadi kesalahan jaringan saat verifikasi OTP';
   } finally {
-    isLoading.value = false
-    resetTurnstile()
+    isLoading.value = false;
+    resetTurnstile();
   }
 }
 
 async function resendOtp() {
-  if (countdown.value > 0 || isResending.value) return
+  if (countdown.value > 0 || isResending.value) return;
 
   if (!turnstileToken.value) {
-    errorMessage.value = 'Mohon selesaikan verifikasi anti-bot terlebih dahulu'
-    return
+    errorMessage.value = 'Mohon selesaikan verifikasi anti-bot terlebih dahulu';
+    return;
   }
 
-  isResending.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
+  isResending.value = true;
+  errorMessage.value = '';
+  successMessage.value = '';
 
   try {
-    const csrfToken = await getCsrfToken()
+    const csrfToken = await getCsrfToken();
     const response = await fetch('/api/auth/resend-otp', {
       method: 'POST',
       credentials: 'include',
@@ -179,22 +179,22 @@ async function resendOtp() {
         'x-csrf-token': csrfToken,
       },
       body: JSON.stringify({ email: props.email, turnstileToken: turnstileToken.value }),
-    })
+    });
 
-    const data = await response.json()
+    const data = await response.json();
 
     if (!response.ok) {
-      errorMessage.value = data.error || 'Gagal mengirim ulang OTP.'
-      return
+      errorMessage.value = data.error || 'Gagal mengirim ulang OTP.';
+      return;
     }
 
-    successMessage.value = 'Kode OTP baru telah dikirim ke email Anda.'
-    startTimer()
+    successMessage.value = 'Kode OTP baru telah dikirim ke email Anda.';
+    startTimer();
   } catch {
-    errorMessage.value = 'Terjadi kesalahan jaringan saat mengirim ulang OTP'
+    errorMessage.value = 'Terjadi kesalahan jaringan saat mengirim ulang OTP';
   } finally {
-    isResending.value = false
-    resetTurnstile()
+    isResending.value = false;
+    resetTurnstile();
   }
 }
 </script>
@@ -202,18 +202,18 @@ async function resendOtp() {
 <template>
   <div
     v-if="isOpen"
-    class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
   >
     <div
-      class="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 md:p-8 transition-all transform scale-100"
+      class="w-full max-w-md scale-100 transform rounded-2xl border border-slate-100 bg-white p-6 shadow-2xl transition-all md:p-8"
     >
-      <div class="text-center mb-6">
+      <div class="mb-6 text-center">
         <div
-          class="w-14 h-14 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-3"
+          class="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 text-blue-600"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            class="w-7 h-7"
+            class="h-7 w-7"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -227,7 +227,7 @@ async function resendOtp() {
           </svg>
         </div>
         <h3 class="text-xl font-bold text-slate-800">Verifikasi Kode OTP</h3>
-        <p class="text-sm text-slate-500 mt-1">
+        <p class="mt-1 text-sm text-slate-500">
           Masukkan 6 digit kode yang dikirim ke <br />
           <span class="font-semibold text-slate-700">{{ email }}</span>
         </p>
@@ -235,20 +235,20 @@ async function resendOtp() {
 
       <div
         v-if="errorMessage"
-        class="mb-4 p-3 text-sm text-rose-600 bg-rose-50 border border-rose-100 rounded-xl text-center"
+        class="mb-4 rounded-xl border border-rose-100 bg-rose-50 p-3 text-center text-sm text-rose-600"
       >
         {{ errorMessage }}
       </div>
 
       <div
         v-if="successMessage"
-        class="mb-4 p-3 text-sm text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl text-center"
+        class="mb-4 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-center text-sm text-emerald-600"
       >
         {{ successMessage }}
       </div>
 
       <!-- 6 Digit Inputs -->
-      <div class="flex justify-between gap-2 mb-6" @paste="handlePaste">
+      <div class="mb-6 flex justify-between gap-2" @paste="handlePaste">
         <input
           v-for="(_, index) in digits"
           :key="index"
@@ -257,7 +257,7 @@ async function resendOtp() {
           type="text"
           inputmode="numeric"
           maxlength="1"
-          class="w-12 h-14 text-center text-2xl font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100 outline-none transition-all"
+          class="h-14 w-12 rounded-xl border border-slate-200 bg-slate-50 text-center text-2xl font-bold text-slate-800 transition-all outline-none focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
           @input="handleInput(index, $event)"
           @keydown="handleKeyDown(index, $event)"
         />
@@ -273,7 +273,7 @@ async function resendOtp() {
 
       <button
         :disabled="isLoading || digits.some((d) => d === '') || !turnstileToken"
-        class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+        class="w-full rounded-xl bg-blue-600 px-4 py-3 font-medium text-white shadow-lg shadow-blue-500/20 transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
         @click="submitOtp"
       >
         <span v-if="isLoading">Memverifikasi...</span>
@@ -287,7 +287,7 @@ async function resendOtp() {
         <button
           v-else
           :disabled="isResending || !turnstileToken"
-          class="text-blue-600 font-semibold hover:underline disabled:opacity-50"
+          class="font-semibold text-blue-600 hover:underline disabled:opacity-50"
           @click="resendOtp"
         >
           <span v-if="isResending">Mengirim...</span>
@@ -297,7 +297,7 @@ async function resendOtp() {
 
       <div class="mt-4 text-center">
         <button
-          class="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+          class="text-xs text-slate-400 transition-colors hover:text-slate-600"
           @click="emit('close')"
         >
           Batal / Kembali

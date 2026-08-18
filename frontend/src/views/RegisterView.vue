@@ -1,37 +1,37 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
-import GoogleLoginButton from '../components/auth/GoogleLoginButton.vue'
-import TurnstileWidget from '../components/auth/TurnstileWidget.vue'
-import OtpVerificationModal from '../components/auth/OtpVerificationModal.vue'
-import { getCsrfToken } from '../utils/csrf'
-import { useAuthStore } from '../stores/auth'
-import bgImage from '../assets/img/background_laman_depan_kelurahan.png'
-import logoBalikpapan from '../assets/img/logo_balikpapan.png'
+import { ref, computed } from 'vue';
+import { useRouter } from 'vue-router';
+import GoogleLoginButton from '../components/auth/GoogleLoginButton.vue';
+import TurnstileWidget from '../components/auth/TurnstileWidget.vue';
+import OtpVerificationModal from '../components/auth/OtpVerificationModal.vue';
+import { getCsrfToken } from '../utils/csrf';
+import { useAuthStore } from '../stores/auth';
+import bgImage from '../assets/img/background_laman_depan_kelurahan.png';
+import logoBalikpapan from '../assets/img/logo_balikpapan.png';
 
-const router = useRouter()
-const authStore = useAuthStore()
+const router = useRouter();
+const authStore = useAuthStore();
 
-const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
+const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null);
 
-const email = ref('')
-const password = ref('')
-const confirmPassword = ref('')
-const turnstileToken = ref('')
-const isLoading = ref(false)
-const errorMessage = ref('')
-const successMessage = ref('')
+const email = ref('');
+const password = ref('');
+const confirmPassword = ref('');
+const turnstileToken = ref('');
+const isLoading = ref(false);
+const errorMessage = ref('');
+const successMessage = ref('');
 
-const serverEmailError = ref('')
-const serverPasswordError = ref('')
+const serverEmailError = ref('');
+const serverPasswordError = ref('');
 
-const isEmailTouched = ref(false)
-const isPasswordTouched = ref(false)
-const isConfirmPasswordTouched = ref(false)
+const isEmailTouched = ref(false);
+const isPasswordTouched = ref(false);
+const isConfirmPasswordTouched = ref(false);
 
-const isOtpModalOpen = ref(false)
-const registeredEmail = ref('')
-const otpSendFailed = ref(false)
+const isOtpModalOpen = ref(false);
+const registeredEmail = ref('');
+const otpSendFailed = ref(false);
 
 const COMMON_WEAK_PASSWORDS = [
   '12345678',
@@ -43,45 +43,46 @@ const COMMON_WEAK_PASSWORDS = [
   'qwerty123',
   'indonesia',
   'admin1234',
-]
+];
 
 function isWeakPassword(pwd: string, mail: string): boolean {
-  const lower = pwd.toLowerCase()
-  if (COMMON_WEAK_PASSWORDS.includes(lower)) return true
+  const lower = pwd.toLowerCase();
+  if (COMMON_WEAK_PASSWORDS.includes(lower)) return true;
   if (mail) {
-    const parts = mail.split('@')
-    const prefix = (parts[0] || '').toLowerCase()
-    if (prefix && prefix.length >= 3 && lower.includes(prefix)) return true
+    const parts = mail.split('@');
+    const prefix = (parts[0] || '').toLowerCase();
+    if (prefix && prefix.length >= 3 && lower.includes(prefix)) return true;
   }
-  return false
+  return false;
 }
 
 const emailError = computed(() => {
-  if (serverEmailError.value) return serverEmailError.value
-  if (!isEmailTouched.value) return ''
-  if (!email.value.trim()) return 'Email wajib diisi'
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  if (!emailRegex.test(email.value.trim())) return 'Format email tidak valid (contoh: nama@email.com)'
-  return ''
-})
+  if (serverEmailError.value) return serverEmailError.value;
+  if (!isEmailTouched.value) return '';
+  if (!email.value.trim()) return 'Email wajib diisi';
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email.value.trim()))
+    return 'Format email tidak valid (contoh: nama@email.com)';
+  return '';
+});
 
 const passwordError = computed(() => {
-  if (serverPasswordError.value) return serverPasswordError.value
-  if (!isPasswordTouched.value) return ''
-  if (!password.value) return 'Password wajib diisi'
-  if (password.value.length < 8) return 'Password minimal harus 8 karakter (Standar NIST).'
-  if (password.value.length > 128) return 'Password terlalu panjang (maksimal 128 karakter).'
+  if (serverPasswordError.value) return serverPasswordError.value;
+  if (!isPasswordTouched.value) return '';
+  if (!password.value) return 'Password wajib diisi';
+  if (password.value.length < 8) return 'Password minimal harus 8 karakter (Standar NIST).';
+  if (password.value.length > 128) return 'Password terlalu panjang (maksimal 128 karakter).';
   if (isWeakPassword(password.value, email.value.trim()))
-    return 'Password terlalu lemah atau umum digunakan.'
-  return ''
-})
+    return 'Password terlalu lemah atau umum digunakan.';
+  return '';
+});
 
 const confirmPasswordError = computed(() => {
-  if (!isConfirmPasswordTouched.value) return ''
-  if (!confirmPassword.value) return 'Konfirmasi password wajib diisi'
-  if (confirmPassword.value !== password.value) return 'Konfirmasi password tidak cocok'
-  return ''
-})
+  if (!isConfirmPasswordTouched.value) return '';
+  if (!confirmPassword.value) return 'Konfirmasi password wajib diisi';
+  if (confirmPassword.value !== password.value) return 'Konfirmasi password tidak cocok';
+  return '';
+});
 
 const isFormValid = computed(() => {
   return (
@@ -91,41 +92,41 @@ const isFormValid = computed(() => {
     !emailError.value &&
     !passwordError.value &&
     !confirmPasswordError.value
-  )
-})
+  );
+});
 
 function onEmailInput() {
-  isEmailTouched.value = true
-  serverEmailError.value = ''
+  isEmailTouched.value = true;
+  serverEmailError.value = '';
 }
 
 function onPasswordInput() {
-  isPasswordTouched.value = true
-  serverPasswordError.value = ''
+  isPasswordTouched.value = true;
+  serverPasswordError.value = '';
 }
 
 function resetTurnstile() {
-  turnstileRef.value?.reset()
-  turnstileToken.value = ''
+  turnstileRef.value?.reset();
+  turnstileToken.value = '';
 }
 
 async function handleRegister() {
-  isEmailTouched.value = true
-  isPasswordTouched.value = true
-  isConfirmPasswordTouched.value = true
-  serverEmailError.value = ''
-  serverPasswordError.value = ''
+  isEmailTouched.value = true;
+  isPasswordTouched.value = true;
+  isConfirmPasswordTouched.value = true;
+  serverEmailError.value = '';
+  serverPasswordError.value = '';
 
   if (!isFormValid.value) {
-    return
+    return;
   }
 
-  isLoading.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
+  isLoading.value = true;
+  errorMessage.value = '';
+  successMessage.value = '';
 
   try {
-    const csrfToken = await getCsrfToken()
+    const csrfToken = await getCsrfToken();
     const response = await fetch('/api/auth/register', {
       method: 'POST',
       credentials: 'include',
@@ -138,94 +139,106 @@ async function handleRegister() {
         password: password.value,
         turnstileToken: turnstileToken.value,
       }),
-    })
+    });
 
-    const data = await response.json()
+    const data = await response.json();
 
     if (!response.ok) {
-      const errText = data.error || 'Registrasi gagal. Silakan coba lagi.'
+      const errText = data.error || 'Registrasi gagal. Silakan coba lagi.';
       if (response.status === 409 || errText.toLowerCase().includes('email')) {
-        serverEmailError.value = errText
+        serverEmailError.value = errText;
       } else if (errText.toLowerCase().includes('password')) {
-        serverPasswordError.value = errText
+        serverPasswordError.value = errText;
       } else {
-        errorMessage.value = errText
+        errorMessage.value = errText;
       }
-      resetTurnstile()
-      return
+      resetTurnstile();
+      return;
     }
 
     if (data.requiresOtp) {
-      registeredEmail.value = data.email || email.value.trim()
-      otpSendFailed.value = data.otpSent === false
-      isOtpModalOpen.value = true
-      successMessage.value = data.message || 'Kode OTP verifikasi telah dikirim ke email Anda!'
+      registeredEmail.value = data.email || email.value.trim();
+      otpSendFailed.value = data.otpSent === false;
+      isOtpModalOpen.value = true;
+      successMessage.value = data.message || 'Kode OTP verifikasi telah dikirim ke email Anda!';
     } else {
-      successMessage.value = 'Registrasi berhasil!'
+      successMessage.value = 'Registrasi berhasil!';
       setTimeout(() => {
-        router.push('/login')
-      }, 1000)
+        router.push('/login');
+      }, 1000);
     }
   } catch {
-    errorMessage.value = 'Terjadi kesalahan jaringan. Silakan coba lagi.'
-    resetTurnstile()
+    errorMessage.value = 'Terjadi kesalahan jaringan. Silakan coba lagi.';
+    resetTurnstile();
   } finally {
-    isLoading.value = false
+    isLoading.value = false;
   }
 }
 
 function onOtpVerified(data?: unknown) {
-  isOtpModalOpen.value = false
+  isOtpModalOpen.value = false;
   if (data && typeof data === 'object') {
-    const payload = data as { user?: { id: string; email: string; role: string }; accessToken?: string }
+    const payload = data as {
+      user?: { id: string; email: string; role: string };
+      accessToken?: string;
+    };
     if (payload.user && payload.accessToken) {
-      authStore.setAuth(payload.user, payload.accessToken)
+      authStore.setAuth(payload.user, payload.accessToken);
     }
   }
-  successMessage.value = 'Email berhasil diverifikasi! Mengalihkan ke aplikasi...'
+  successMessage.value = 'Email berhasil diverifikasi! Mengalihkan ke aplikasi...';
   setTimeout(() => {
-    router.push('/')
-  }, 1000)
+    router.push('/');
+  }, 1000);
 }
 </script>
 
 <template>
   <div
-    class="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat relative px-4 py-12"
+    class="relative flex min-h-screen items-center justify-center bg-cover bg-center bg-no-repeat px-4 py-12"
     :style="{ backgroundImage: `url(${bgImage})` }"
   >
     <!-- Background overlay for high contrast readability -->
     <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-xs"></div>
 
     <div
-      class="relative z-10 w-full max-w-[720px] bg-white border-2 border-[#0A2353] rounded-[10px] p-10 md:p-14 shadow-2xl text-slate-800"
+      class="relative z-10 w-full max-w-[720px] rounded-[10px] border-2 border-[#0A2353] bg-white p-10 text-slate-800 shadow-2xl md:p-14"
     >
-      <div class="text-center mb-8">
+      <div class="mb-8 text-center">
         <!-- Logo Kota Balikpapan -->
         <img
           :src="logoBalikpapan"
           alt="Logo Kota Balikpapan"
-          class="w-20 h-24 object-contain mx-auto mb-4"
+          class="mx-auto mb-4 h-24 w-20 object-contain"
         />
 
-        <h2 class="text-3xl font-extrabold text-[#0A2353] tracking-tight">Buat Akun SIDATA</h2>
-        <p class="text-sm text-slate-600 mt-2 font-medium">Sistem Informasi Data Terpadu Kelurahan Manggar</p>
+        <h2 class="text-3xl font-extrabold tracking-tight text-[#0A2353]">Buat Akun SIDATA</h2>
+        <p class="mt-2 text-sm font-medium text-slate-600">
+          Sistem Informasi Data Terpadu Kelurahan Manggar
+        </p>
       </div>
 
-      <div v-if="errorMessage" class="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm text-center font-medium">
+      <div
+        v-if="errorMessage"
+        class="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-center text-sm font-medium text-rose-700"
+      >
         {{ errorMessage }}
       </div>
 
-      <div v-if="successMessage" class="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm text-center font-medium">
+      <div
+        v-if="successMessage"
+        class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center text-sm font-medium text-emerald-700"
+      >
         {{ successMessage }}
       </div>
 
-      <form class="space-y-5 max-w-[598px] mx-auto" @submit.prevent="handleRegister">
+      <form class="mx-auto max-w-[598px] space-y-5" @submit.prevent="handleRegister">
         <div>
           <label
-            class="block text-sm font-semibold mb-2 transition-colors"
+            class="mb-2 block text-sm font-semibold transition-colors"
             :class="emailError ? 'text-rose-600' : 'text-[#0A2353]'"
-          >Email</label>
+            >Email</label
+          >
           <input
             v-model="email"
             type="email"
@@ -233,16 +246,28 @@ function onOtpVerified(data?: unknown) {
             placeholder="nama@email.com"
             @blur="isEmailTouched = true"
             @input="onEmailInput"
-            class="w-full h-[46px] px-4 bg-white border-2 rounded-[9px] text-slate-900 placeholder-slate-400 focus:outline-none transition-all text-sm font-medium"
+            class="h-[46px] w-full rounded-[9px] border-2 bg-white px-4 text-sm font-medium text-slate-900 placeholder-slate-400 transition-all focus:outline-none"
             :class="
               emailError
                 ? 'border-rose-500 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20'
                 : 'border-slate-900 focus:border-[#0A2353] focus:ring-2 focus:ring-[#0A2353]/20'
             "
           />
-          <div v-if="emailError" class="flex items-center gap-1.5 mt-1.5 text-xs text-rose-600 font-medium">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-rose-600 shrink-0" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+          <div
+            v-if="emailError"
+            class="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-rose-600"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-4 w-4 shrink-0 text-rose-600"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                clip-rule="evenodd"
+              />
             </svg>
             <span>{{ emailError }}</span>
           </div>
@@ -250,9 +275,10 @@ function onOtpVerified(data?: unknown) {
 
         <div>
           <label
-            class="block text-sm font-semibold mb-2 transition-colors"
+            class="mb-2 block text-sm font-semibold transition-colors"
             :class="passwordError ? 'text-rose-600' : 'text-[#0A2353]'"
-          >Password</label>
+            >Password</label
+          >
           <input
             v-model="password"
             type="password"
@@ -260,16 +286,28 @@ function onOtpVerified(data?: unknown) {
             placeholder="Minimal 8 karakter"
             @blur="isPasswordTouched = true"
             @input="onPasswordInput"
-            class="w-full h-[46px] px-4 bg-white border-2 rounded-[9px] text-slate-900 placeholder-slate-400 focus:outline-none transition-all text-sm font-medium"
+            class="h-[46px] w-full rounded-[9px] border-2 bg-white px-4 text-sm font-medium text-slate-900 placeholder-slate-400 transition-all focus:outline-none"
             :class="
               passwordError
                 ? 'border-rose-500 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20'
                 : 'border-slate-900 focus:border-[#0A2353] focus:ring-2 focus:ring-[#0A2353]/20'
             "
           />
-          <div v-if="passwordError" class="flex items-center gap-1.5 mt-1.5 text-xs text-rose-600 font-medium">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-rose-600 shrink-0" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+          <div
+            v-if="passwordError"
+            class="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-rose-600"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-4 w-4 shrink-0 text-rose-600"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                clip-rule="evenodd"
+              />
             </svg>
             <span>{{ passwordError }}</span>
           </div>
@@ -277,9 +315,10 @@ function onOtpVerified(data?: unknown) {
 
         <div>
           <label
-            class="block text-sm font-semibold mb-2 transition-colors"
+            class="mb-2 block text-sm font-semibold transition-colors"
             :class="confirmPasswordError ? 'text-rose-600' : 'text-[#0A2353]'"
-          >Konfirmasi Password</label>
+            >Konfirmasi Password</label
+          >
           <input
             v-model="confirmPassword"
             type="password"
@@ -287,16 +326,28 @@ function onOtpVerified(data?: unknown) {
             placeholder="Ketik ulang password"
             @blur="isConfirmPasswordTouched = true"
             @input="isConfirmPasswordTouched = true"
-            class="w-full h-[46px] px-4 bg-white border-2 rounded-[9px] text-slate-900 placeholder-slate-400 focus:outline-none transition-all text-sm font-medium"
+            class="h-[46px] w-full rounded-[9px] border-2 bg-white px-4 text-sm font-medium text-slate-900 placeholder-slate-400 transition-all focus:outline-none"
             :class="
               confirmPasswordError
                 ? 'border-rose-500 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20'
                 : 'border-slate-900 focus:border-[#0A2353] focus:ring-2 focus:ring-[#0A2353]/20'
             "
           />
-          <div v-if="confirmPasswordError" class="flex items-center gap-1.5 mt-1.5 text-xs text-rose-600 font-medium">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-rose-600 shrink-0" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+          <div
+            v-if="confirmPasswordError"
+            class="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-rose-600"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-4 w-4 shrink-0 text-rose-600"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                clip-rule="evenodd"
+              />
             </svg>
             <span>{{ confirmPasswordError }}</span>
           </div>
@@ -308,7 +359,7 @@ function onOtpVerified(data?: unknown) {
         <button
           type="submit"
           :disabled="isLoading"
-          class="w-full h-[48px] bg-[#0A2353] hover:bg-[#07193c] text-white font-bold rounded-[9px] shadow-lg shadow-[#0A2353]/20 disabled:opacity-50 transition-all cursor-pointer text-base tracking-wide"
+          class="h-[48px] w-full cursor-pointer rounded-[9px] bg-[#0A2353] text-base font-bold tracking-wide text-white shadow-lg shadow-[#0A2353]/20 transition-all hover:bg-[#07193c] disabled:opacity-50"
         >
           <span v-if="isLoading">Memproses Registrasi...</span>
           <span v-else>Daftar & Kirim Kode OTP</span>
@@ -316,20 +367,24 @@ function onOtpVerified(data?: unknown) {
       </form>
 
       <!-- Divider with 'Atau' text -->
-      <div class="relative flex items-center justify-center my-6 max-w-[598px] mx-auto">
-        <div class="border-t border-slate-200 w-full"></div>
-        <span class="bg-white px-4 text-xs text-slate-500 uppercase font-bold tracking-wider">Atau</span>
-        <div class="border-t border-slate-200 w-full"></div>
+      <div class="relative mx-auto my-6 flex max-w-[598px] items-center justify-center">
+        <div class="w-full border-t border-slate-200"></div>
+        <span class="bg-white px-4 text-xs font-bold tracking-wider text-slate-500 uppercase"
+          >Atau</span
+        >
+        <div class="w-full border-t border-slate-200"></div>
       </div>
 
       <!-- Google OAuth Button -->
-      <div class="mb-6 max-w-[598px] mx-auto">
+      <div class="mx-auto mb-6 max-w-[598px]">
         <GoogleLoginButton />
       </div>
 
-      <div class="mt-8 text-center text-sm text-slate-600 font-medium">
+      <div class="mt-8 text-center text-sm font-medium text-slate-600">
         Sudah memiliki akun?
-        <router-link to="/login" class="text-[#0A2353] font-bold hover:underline ml-1">Masuk ke Sistem</router-link>
+        <router-link to="/login" class="ml-1 font-bold text-[#0A2353] hover:underline"
+          >Masuk ke Sistem</router-link
+        >
       </div>
     </div>
 
