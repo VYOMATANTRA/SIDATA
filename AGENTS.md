@@ -81,13 +81,13 @@ Key details:
 - `src/index.ts`: Entry point — starts the HTTP listener
 - `src/app.ts`: Express app setup (middleware, CORS, route mounting)
 - `src/configs/index.ts`: Typed env var access; validated at boot
-- `src/routes/`: Route definitions (`auth.routes.ts`, `health.routes.ts`, `weather.routes.ts`)
-- `src/controllers/`: Decoupled route handlers (`auth.controller.ts` for local auth, `oauth.controller.ts` for Google OAuth, `otp.controller.ts` for OTP verification, `weather.controller.ts` — forecast lookup)
-- `src/services/`: Business logic sitting between controllers and external/data sources (`weather.service.ts` — caches and transforms BMKG forecasts)
+- `src/routes/`: Route definitions (`auth.routes.ts`, `health.routes.ts`, `weather.routes.ts`, `maps.routes.ts`)
+- `src/controllers/`: Decoupled route handlers (`auth.controller.ts` for local auth, `oauth.controller.ts` for Google OAuth, `otp.controller.ts` for OTP verification, `weather.controller.ts` — forecast lookup, `maps.controller.ts` — spatial points and RT leader lookup)
+- `src/services/`: Business logic sitting between controllers and external/data sources (`weather.service.ts` — caches and transforms BMKG forecasts, `maps.service.ts` — spatial points querying and RT leader coordinate resolution)
 - `src/middlewares/`: Express middleware (`auth.middleware.ts` for JWT, `turnstile.middleware.ts` for anti-bot, `rateLimit.middleware.ts` — per-route rate limiters)
 - `src/utils/`: `jwt.ts` (token signing), `oauth.ts` (Google OAuth PKCE & token verification), `otp.ts` (OTP hashing & expiry), `mailer.ts` (transactional email), `turnstile.ts` (Turnstile API client), `prisma.ts` (Prisma instance), `bmkg.ts` (BMKG API fetch + response validation)
 - `prisma/schema.prisma`: ORM schema (MySQL)
-- `prisma/seed.ts`: Seeds default roles (`user`, `admin`)
+- `prisma/seed.ts`: Seeds default roles (`user`, `admin`), sample RT leaders, and spatial points
 - `generated/prisma/`: Auto-generated Prisma client (do not edit)
 
 Key details:
