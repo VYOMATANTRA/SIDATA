@@ -13,6 +13,12 @@ const router = Router();
 //   2. verifyToken            — validates JWT, hydrates req.user from DB, rejects deleted accounts
 //   3. requireTurnstile       — bot deterrent (CPU-expensive endpoint; cheap extra layer)
 //   4. handler                — verifies current password, validates + hashes new, atomic swap
-router.post('/change-password', changePasswordLimiter, verifyToken, requireTurnstile, changeOwnPassword);
+router.post(
+  '/change-password',
+  changePasswordLimiter,
+  verifyToken,
+  requireTurnstile,
+  changeOwnPassword,
+);
 
 export default router;

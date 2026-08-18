@@ -12,12 +12,10 @@ import { REFRESH_TOKEN_COOKIE_NAME } from '../utils/session.js';
 const STRONG_PASSWORD = 'Xk9$mQp2vNz7Lw4!';
 const STRONG_PASSWORD_2 = 'Qr5#jH8nBe3Wy6@Z';
 let STRONG_PASSWORD_HASH: string;
-let STRONG_PASSWORD_2_HASH: string;
 
 // Hash once before all tests to avoid per-test bcrypt overhead.
 {
   STRONG_PASSWORD_HASH = await bcrypt.hash(STRONG_PASSWORD, 10);
-  STRONG_PASSWORD_2_HASH = await bcrypt.hash(STRONG_PASSWORD_2, 10);
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -26,10 +24,7 @@ let STRONG_PASSWORD_2_HASH: string;
  * Builds a minimal AuthRequest-like object with req.user set from JWT.
  * The user ID is the single source of truth; it is never read from body.
  */
-function makeReq(
-  userId: string,
-  body: Record<string, unknown> = {},
-): AuthRequest {
+function makeReq(userId: string, body: Record<string, unknown> = {}): AuthRequest {
   return {
     user: { id: userId, email: 'user@example.com', role: 'user' },
     body,
@@ -39,13 +34,15 @@ function makeReq(
 /**
  * Returns a minimal DB user record for the "happy path" scenario.
  */
-function activeLocalUser(overrides: Partial<{
-  id: string;
-  email: string;
-  password_hash: string | null;
-  auth_provider: string;
-  deletedAt: Date | null;
-}> = {}) {
+function activeLocalUser(
+  overrides: Partial<{
+    id: string;
+    email: string;
+    password_hash: string | null;
+    auth_provider: string;
+    deletedAt: Date | null;
+  }> = {},
+) {
   return {
     id: 'user-1',
     email: 'user@example.com',
@@ -59,7 +56,6 @@ function activeLocalUser(overrides: Partial<{
 // ── Test suite ────────────────────────────────────────────────────────────────
 
 describe('profile.controller — changeOwnPassword', () => {
-
   // ── Input validation ───────────────────────────────────────────────────────
 
   it('returns 400 when currentPassword is missing', async () => {
@@ -69,10 +65,7 @@ describe('profile.controller — changeOwnPassword', () => {
       res as unknown as Response,
     );
     assert.equal(res.status, 400);
-    assert.equal(
-      (res.body as { error: string }).error,
-      'Kata sandi saat ini wajib diisi.',
-    );
+    assert.equal((res.body as { error: string }).error, 'Kata sandi saat ini wajib diisi.');
   });
 
   it('returns 400 when newPassword is missing', async () => {
@@ -82,10 +75,7 @@ describe('profile.controller — changeOwnPassword', () => {
       res as unknown as Response,
     );
     assert.equal(res.status, 400);
-    assert.equal(
-      (res.body as { error: string }).error,
-      'Kata sandi baru wajib diisi.',
-    );
+    assert.equal((res.body as { error: string }).error, 'Kata sandi baru wajib diisi.');
   });
 
   it('returns 400 when newPassword is shorter than 8 characters', async () => {
@@ -149,8 +139,7 @@ describe('profile.controller — changeOwnPassword', () => {
   it('returns 401 when the user is soft-deleted (defensive)', async () => {
     const original = prisma.user.findUnique;
     prisma.user.findUnique = (async () =>
-      activeLocalUser({ deletedAt: new Date() })
-    ) as unknown as typeof prisma.user.findUnique;
+      activeLocalUser({ deletedAt: new Date() })) as unknown as typeof prisma.user.findUnique;
     try {
       const res = fakeRes();
       await changeOwnPassword(
@@ -166,8 +155,10 @@ describe('profile.controller — changeOwnPassword', () => {
   it('returns 400 when account is OAuth-only (no password_hash)', async () => {
     const original = prisma.user.findUnique;
     prisma.user.findUnique = (async () =>
-      activeLocalUser({ password_hash: null, auth_provider: 'google' })
-    ) as unknown as typeof prisma.user.findUnique;
+      activeLocalUser({
+        password_hash: null,
+        auth_provider: 'google',
+      })) as unknown as typeof prisma.user.findUnique;
     try {
       const res = fakeRes();
       await changeOwnPassword(
@@ -189,8 +180,7 @@ describe('profile.controller — changeOwnPassword', () => {
   it('returns 401 with a generic error when currentPassword does not match DB hash', async () => {
     const original = prisma.user.findUnique;
     prisma.user.findUnique = (async () =>
-      activeLocalUser()
-    ) as unknown as typeof prisma.user.findUnique;
+      activeLocalUser()) as unknown as typeof prisma.user.findUnique;
     try {
       const res = fakeRes();
       await changeOwnPassword(
@@ -199,10 +189,7 @@ describe('profile.controller — changeOwnPassword', () => {
       );
       assert.equal(res.status, 401);
       // Must NOT reveal "password was wrong" vs "user not found" — same message
-      assert.equal(
-        (res.body as { error: string }).error,
-        'Kredensial tidak valid.',
-      );
+      assert.equal((res.body as { error: string }).error, 'Kredensial tidak valid.');
     } finally {
       prisma.user.findUnique = original;
     }
@@ -220,8 +207,9 @@ describe('profile.controller — changeOwnPassword', () => {
     // that even if string comparison were bypassed, bcrypt compare catches it.
     const original = prisma.user.findUnique;
     prisma.user.findUnique = (async () =>
-      activeLocalUser({ password_hash: STRONG_PASSWORD_HASH })
-    ) as unknown as typeof prisma.user.findUnique;
+      activeLocalUser({
+        password_hash: STRONG_PASSWORD_HASH,
+      })) as unknown as typeof prisma.user.findUnique;
     try {
       // We call with a pre-hashed new password that matches the stored hash — to do this
       // programmatically we'd need the same plaintext. Since bcrypt.compare(same, hash)==true,
@@ -253,8 +241,9 @@ describe('profile.controller — changeOwnPassword', () => {
     const original = prisma.user.findUnique;
     // Use a different stored hash so the same-password guards don't fire on "password123"
     prisma.user.findUnique = (async () =>
-      activeLocalUser({ password_hash: STRONG_PASSWORD_HASH })
-    ) as unknown as typeof prisma.user.findUnique;
+      activeLocalUser({
+        password_hash: STRONG_PASSWORD_HASH,
+      })) as unknown as typeof prisma.user.findUnique;
     try {
       const res = fakeRes();
       await changeOwnPassword(
@@ -279,8 +268,7 @@ describe('profile.controller — changeOwnPassword', () => {
     const originalTransaction = prisma.$transaction;
 
     prisma.user.findUnique = (async () =>
-      activeLocalUser()
-    ) as unknown as typeof prisma.user.findUnique;
+      activeLocalUser()) as unknown as typeof prisma.user.findUnique;
 
     let transactionOps: unknown[] = [];
     prisma.$transaction = (async (ops: unknown[]) => {
@@ -349,8 +337,14 @@ describe('profile.controller — changeOwnPassword', () => {
       await changeOwnPassword(req, res as unknown as Response);
 
       // Only the JWT-derived ID should ever be used in DB queries
-      assert.ok(capturedIds.every((id) => id === 'jwt-user-id'), 'Only JWT ID must be used in DB queries');
-      assert.ok(!capturedIds.includes('victim-user-id'), 'Body-supplied IDs must never reach DB queries');
+      assert.ok(
+        capturedIds.every((id) => id === 'jwt-user-id'),
+        'Only JWT ID must be used in DB queries',
+      );
+      assert.ok(
+        !capturedIds.includes('victim-user-id'),
+        'Body-supplied IDs must never reach DB queries',
+      );
     } finally {
       prisma.user.findUnique = originalFindUnique;
     }

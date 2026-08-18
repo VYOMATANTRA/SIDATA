@@ -4,10 +4,7 @@ import zxcvbn from 'zxcvbn';
 import prisma from '../utils/prisma.js';
 import type { AuthRequest } from '../middlewares/auth.middleware.js';
 import type { TokenPayload } from '../utils/jwt.js';
-import {
-  REFRESH_TOKEN_COOKIE_NAME,
-  REFRESH_TOKEN_COOKIE_OPTIONS,
-} from '../utils/session.js';
+import { REFRESH_TOKEN_COOKIE_NAME, REFRESH_TOKEN_COOKIE_OPTIONS } from '../utils/session.js';
 
 /**
  * POST /api/profile/change-password
@@ -51,10 +48,14 @@ export const changeOwnPassword = async (
 
     // ── 3. New password strength validation (before any DB call) ─────────────
     if (newPassword.length < 8) {
-      return res.status(400).json({ error: 'Kata sandi baru minimal harus 8 karakter (Standar NIST).' });
+      return res
+        .status(400)
+        .json({ error: 'Kata sandi baru minimal harus 8 karakter (Standar NIST).' });
     }
     if (newPassword.length > 128) {
-      return res.status(400).json({ error: 'Kata sandi baru terlalu panjang (maksimal 128 karakter).' });
+      return res
+        .status(400)
+        .json({ error: 'Kata sandi baru terlalu panjang (maksimal 128 karakter).' });
     }
 
     // Early same-password check (string-level, before bcrypt round-trips)
