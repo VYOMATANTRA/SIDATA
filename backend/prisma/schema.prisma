@@ -62,3 +62,53 @@ model EmailOtp {
 
   @@map("email_otps")
 }
+
+enum SpatialPointType {
+  ketua_rt
+  bank_sampah
+  fasilitas_umum
+}
+
+model SpatialPoint {
+  id        String           @id @default(uuid())
+  name      String
+  type      SpatialPointType
+  latitude  Float
+  longitude Float
+  metadata  Json?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  rtCoverages SpatialPointRt[]
+
+  @@index([type])
+  @@map("spatial_points")
+}
+
+model SpatialPointRt {
+  id       Int          @id @default(autoincrement())
+  pointId  String       @map("point_id")
+  rtNumber Int          @map("rt_number")
+
+  point    SpatialPoint @relation(fields: [pointId], references: [id], onDelete: Cascade)
+  rtLeader RtLeader?    @relation(fields: [rtNumber], references: [rtNumber], onDelete: Cascade)
+
+  @@unique([pointId, rtNumber])
+  @@index([rtNumber])
+  @@index([pointId])
+  @@map("spatial_point_rt")
+}
+
+model RtLeader {
+  rtNumber        Int              @id @map("rt_number")
+  name            String
+  phone           String
+  phoneIsWhatsapp Boolean          @default(true) @map("phone_is_whatsapp")
+  alamat          String?          @db.Text
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  spatialPoints   SpatialPointRt[]
+
+  @@map("rt_leaders")
+}
