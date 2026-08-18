@@ -1,1 +1,59 @@
-@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,100..900;1,100..900&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  /* Colors */
+  --color-brand-ungu-janda: #bb63ff;
+  --color-brand-ubi-ungu: #5b58eb;
+  --color-brand-biru-hytam: #0a2353; /* Primary Base Color */
+  --color-brand-biru-aja: #112c71;
+  --color-brand-cyan: #56e1e9;
+  --color-brand-dark-bg: rgba(0, 27, 72, 0.9); /* Used for specific UI buttons/overlays */
+
+  --color-surface-glass: rgba(255, 255, 255, 0.2); /* For stat containers */
+  --color-surface-footer: #0a2353;
+
+  /* Typography */
+  --font-sans: 'Public Sans', sans-serif;
+
+  /* Border Radius */
+  --radius-btn: 10px;
+  --radius-card: 12px;
+}
+
+/* Custom Typography Utilities (Tailwind v4) */
+@utility text-h1 {
+  font-size: 42px;
+  line-height: 68px;
+  font-weight: 700;
+}
+
+@utility text-h2 {
+  font-size: 26px;
+  line-height: 42px;
+  font-weight: 600;
+}
+
+@utility text-h3 {
+  font-size: 16px;
+  line-height: 26px;
+  font-weight: 500;
+}
+
+@utility text-h4 {
+  font-size: 10px;
+  line-height: 16px;
+  font-weight: 400;
+}
+
+@utility text-body-lg {
+  font-size: 16px;
+  line-height: 26px;
+  font-weight: 400;
+}
+
+@utility text-body-sm {
+  font-size: 14px;
+  line-height: 23px;
+  font-weight: 400;
+}
