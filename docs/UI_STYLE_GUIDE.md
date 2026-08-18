@@ -9,6 +9,7 @@ To ensure Antigravity uses the exact hex values and fonts, inject these design t
 
 ```css
 @import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,100..900;1,100..900&display=swap");
 
 @theme {
   /* Colors */
@@ -90,7 +91,7 @@ File modularization is strictly enforced. Below are the structural rules for Ant
 
 ### A. Buttons (`BaseButton.vue`)
 
-Buttons must accept props for `variant` (primary, secondary), `state` (default, hover, disabled), and `icon` (boolean).
+Buttons must accept props for `variant` (primary, secondary), `state` (default, hover, disabled), and `withIcon` (boolean).
 
 **1. Custom Micro-Button (Per User Specifications):**
 
@@ -103,7 +104,7 @@ Buttons must accept props for `variant` (primary, secondary), `state` (default, 
 
 - **Primary Default:** `bg-brand-biru-hytam text-white border border-transparent`
 - **Primary Hover:** `bg-white text-brand-biru-hytam border border-brand-biru-hytam`
-- **Primary Disabled:** `bg-gray-300 text-gray-100 cursor-not-allowed`
+- **Primary Disabled:** `bg-gray-300 text-gray-600 cursor-not-allowed`
 - **Secondary Default:** `bg-white text-brand-biru-hytam border border-brand-biru-hytam`
 - **Secondary Hover:** `bg-brand-biru-hytam text-white border border-transparent`
 - **Icon Treatment:** If `withIcon` is true, wrap content in `flex items-center gap-2`.
@@ -125,24 +126,23 @@ Used for displaying demographic and regional data over image backgrounds.
 The design is mobile-first, optimized for a `412px` viewport.
 
 - **Hero Section (`HeroSection.vue`):**
-- Padding: `pt-[250px] pb-[80px] px-[16px]`
-- Layout: `flex flex-col items-center gap-[13px]`
-- Background: Linear gradient overlay `rgba(0,0,0,0.4)` over image.
+  - **Padding:** `pt-[250px] pb-[80px] px-[16px]`
+  - **Layout:** `flex flex-col items-center gap-[13px]`
+  - **Background:** Linear gradient overlay `rgba(0,0,0,0.4)` over image.
 
 - **Standard Section Containers:**
-- Padding: `py-[116px] px-[20px]`
-- Gap between text area and cards: `10px`
-- Background: Linear gradient overlay `rgba(0,0,0,0.75)` to `rgba(68,68,68,0.75)` blending with images.
+  - **Padding:** `py-[116px] px-[20px]`
+  - **Gap between text area and cards:** `10px`
+  - **Background:** Linear gradient overlay `rgba(0,0,0,0.75)` to `rgba(68,68,68,0.75)` blending with images.
 
 ### D. Footer (`AppFooter.vue`)
 
 - **Container:** `bg-surface-footer px-[30px] pt-[22px] pb-[0px]`
 - **Branding Area:** `flex flex-row items-center gap-[15px]`
 - **Dividers:** Vertical/Horizontal lines using `border border-white` or `border-black/25`.
-- **Link Columns:** `flex flex-col gap-[5px]`.
-- Column Titles: `text-h3 text-white`
-- Links: `text-body-sm text-white hover:opacity-80 transition-opacity`
-
+- **Link Columns:** `flex flex-col gap-[5px]`
+  - **Column Titles:** `text-h3 text-white`
+  - **Links:** `text-body-sm text-white hover:opacity-80 transition-opacity`
 - **Copyright Text:** `text-body-sm text-white text-center w-full mt-4`
 
 ## 4. Coding Directives for Antigravity
