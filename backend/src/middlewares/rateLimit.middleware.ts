@@ -19,6 +19,9 @@ export const loginLimiter = createLimiter(10);
 
 export const weatherLimiter = createLimiter(300);
 
+// Maps and spatial data rate limiter
+export const mapsLimiter = createLimiter(300);
+
 // Session-maintenance endpoints (csrf-token, refresh, logout, me) are hit on every SPA
 // navigation while unauthenticated (see router/index.ts's beforeEach), not just on deliberate
 // user action — sharing authLimiter's 100 req/15min budget with register/login/OTP let
