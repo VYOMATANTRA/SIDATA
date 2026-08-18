@@ -1,6 +1,6 @@
-import { createRouter, createWebHistory } from 'vue-router'
-import { getActivePinia } from 'pinia'
-import { useAuthStore } from '../stores/auth'
+import { createRouter, createWebHistory } from 'vue-router';
+import { getActivePinia } from 'pinia';
+import { useAuthStore } from '../stores/auth';
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -26,14 +26,24 @@ const router = createRouter({
       name: 'auth-callback',
       component: () => import('../views/AuthCallbackView.vue'),
     },
+    {
+      path: '/peta',
+      name: 'peta',
+      component: () => import('../views/MapMockView.vue'),
+    },
+    {
+      path: '/peta-preview',
+      name: 'peta-preview',
+      component: () => import('../views/MapMockView.vue'),
+    },
   ],
-})
+});
 
 router.beforeEach(async (to) => {
-  const pinia = getActivePinia()
-  if (!pinia) return
+  const pinia = getActivePinia();
+  if (!pinia) return;
 
-  const authStore = useAuthStore(pinia)
+  const authStore = useAuthStore(pinia);
 
   // Gate on isAuthenticated rather than isInitialized: the latter is set permanently once
   // the first attempt completes, success or failure, so gating on it would mean a single
@@ -45,16 +55,16 @@ router.beforeEach(async (to) => {
   // failure) — see the refreshDenied/inFlight comments in stores/auth.ts. Known caveat: a
   // login performed in another tab is not picked up by this tab's guard on navigation.
   if (!authStore.isAuthenticated) {
-    await authStore.initAuth()
+    await authStore.initAuth();
   }
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    return { name: 'login' }
+    return { name: 'login' };
   }
 
   if ((to.name === 'login' || to.name === 'register') && authStore.isAuthenticated) {
-    return { name: 'home' }
+    return { name: 'home' };
   }
-})
+});
 
-export default router
+export default router;
