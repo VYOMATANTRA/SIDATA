@@ -2,8 +2,6 @@
 
 ## 1. Core Design Tokens (Tailwind v4 Configuration)
 
-To ensure Antigravity uses the exact hex values and fonts, inject these design tokens directly into your main CSS file (e.g., `style.css` or `app.css`) using Tailwind v4's `@theme` and `@utility` directives.
-
 **Font Family:** `Public Sans` (Google Fonts)
 **Base Theme:** Mobile-first approach, light theme default (no dark mode).
 
@@ -87,7 +85,7 @@ Use these custom Tailwind utility classes (defined above) to enforce the typogra
 
 ## 3. Vue Component Specifications
 
-File modularization is strictly enforced. Below are the structural rules for Antigravity to build the core components using Vue 3 and Tailwind v4.
+File modularization is strictly enforced. Below are the structural rules to build the core components using Vue 3 and Tailwind v4.
 
 ### A. Buttons (`BaseButton.vue`)
 
@@ -145,7 +143,7 @@ The design is mobile-first, optimized for a `412px` viewport.
   - **Links:** `text-body-sm text-white hover:opacity-80 transition-opacity`
 - **Copyright Text:** `text-body-sm text-white text-center w-full mt-4`
 
-## 4. Coding Directives for Antigravity
+## 4. Coding Directives
 
 1. **Vue `<script setup>` Structure:** Use Vue 3 Composition API with `<script setup>`.
 2. **Tailwind v4 Best Practices:** Rely on the natively defined `@theme` variables (e.g., `bg-brand-biru-hytam`) and custom `@utility` classes (e.g., `text-h1`) rather than heavy arbitrary brackets (like `text-[42px]`) to maintain the single source of truth.
