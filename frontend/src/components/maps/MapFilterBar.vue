@@ -14,7 +14,7 @@ const emit = defineEmits<{
   (e: 'update:rt', rt: number | null): void;
 }>();
 
-const rtInput = ref<string>(props.activeRt ? String(props.activeRt) : '');
+const rtInput = ref<string | number>(props.activeRt ? String(props.activeRt) : '');
 
 watch(
   () => props.activeRt,
@@ -28,7 +28,9 @@ function handleTypeClick(type: SpatialPointType | 'all') {
 }
 
 function handleRtSearch() {
-  const parsed = parseInt(rtInput.value.trim(), 10);
+  const strVal =
+    rtInput.value !== null && rtInput.value !== undefined ? String(rtInput.value).trim() : '';
+  const parsed = parseInt(strVal, 10);
   if (!Number.isNaN(parsed) && parsed > 0) {
     emit('update:rt', parsed);
   } else {
