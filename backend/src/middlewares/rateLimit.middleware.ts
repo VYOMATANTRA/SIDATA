@@ -29,5 +29,9 @@ export const sessionLimiter = createLimiter(300);
 // User management endpoints access DB & perform bcrypt password hashing
 export const userManagementLimiter = createLimiter(100);
 
+// Self-service password change: runs bcrypt.compare + bcrypt.hash on every request.
+// Budget matches loginLimiter (same security weight — both gatekeep credential changes).
+export const changePasswordLimiter = createLimiter(10);
+
 // General public API endpoints rate limiter
 export const apiLimiter = createLimiter(300);
