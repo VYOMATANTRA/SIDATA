@@ -28,46 +28,29 @@
   /* Typography */
   --font-sans: "Public Sans", sans-serif;
 
+  --text-xs: 10px;
+  --text-xs--line-height: 16px;
+  --text-xs--font-weight: 400;
+
+  --text-sm: 14px;
+  --text-sm--line-height: 23px;
+  --text-sm--font-weight: 400;
+
+  --text-base: 16px;
+  --text-base--line-height: 26px;
+  --text-base--font-weight: 400;
+
+  --text-lg: 26px;
+  --text-lg--line-height: 42px;
+  --text-lg--font-weight: 600;
+
+  --text-xl: 42px;
+  --text-xl--line-height: 68px;
+  --text-xl--font-weight: 700;
+
   /* Border Radius */
   --radius-btn: 10px;
   --radius-card: 12px;
-}
-
-/* Custom Typography Utilities (Tailwind v4) */
-@utility text-h1 {
-  font-size: 42px;
-  line-height: 68px;
-  font-weight: 700;
-}
-
-@utility text-h2 {
-  font-size: 26px;
-  line-height: 42px;
-  font-weight: 600;
-}
-
-@utility text-h3 {
-  font-size: 16px;
-  line-height: 26px;
-  font-weight: 500;
-}
-
-@utility text-h4 {
-  font-size: 10px;
-  line-height: 16px;
-  font-weight: 400;
-}
-
-@utility text-body-lg {
-  font-size: 16px;
-  line-height: 26px;
-  font-weight: 400;
-}
-
-@utility text-body-sm {
-  font-size: 14px;
-  line-height: 23px;
-  font-weight: 400;
 }
 ```
 
