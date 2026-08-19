@@ -59,7 +59,8 @@
 Font sizes are mapped directly onto Tailwind's default `text-*` scale via `@theme` (not custom
 `@utility` classes), so the standard size utilities below already carry the project's line-height
 and weight values — no bespoke `text-h*`/`text-body-*` classes exist. `h1`, `h2`, and `p` also get
-their size applied automatically at the element level (see `@layer base` above); the utility
+their size applied automatically at the element level via an `@layer base` rule (not shown in the
+`@theme` sample above; add it alongside the token definitions when implementing); the utility
 classes remain for non-semantic elements or overrides.
 
 - **XL (Heading 1, 42px/68px/700):** `text-xl text-white`
