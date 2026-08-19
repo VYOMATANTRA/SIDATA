@@ -24,7 +24,6 @@
   ); /* Used for specific UI buttons/overlays */
 
   --color-surface-glass: rgba(255, 255, 255, 0.2); /* For stat containers */
-  --color-surface-footer: #0a2353;
 
   /* Typography */
   --font-sans: "Public Sans", sans-serif;
