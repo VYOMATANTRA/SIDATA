@@ -56,14 +56,18 @@
 
 ## 2. Typography System
 
-Use these custom Tailwind utility classes (defined above) to enforce the typography hierarchy across all Vue components.
+Font sizes are mapped directly onto Tailwind's default `text-*` scale via `@theme` (not custom
+`@utility` classes), so the standard size utilities below already carry the project's line-height
+and weight values — no bespoke `text-h*`/`text-body-*` classes exist. `h1`, `h2`, and `p` also get
+their size applied automatically at the element level (see `@layer base` above); the utility
+classes remain for non-semantic elements or overrides.
 
-- **H1 (Hero Titles):** `text-h1 text-white`
-- **H2 (Section Titles/Sambutan):** `text-h2` (Use `text-white` on dark backgrounds)
-- **H3 (Subtitles/Nav Links):** `text-h3`
-- **H4 (Small Labels/Specific Buttons):** `text-h4`
-- **Body Large (General Descriptions):** `text-body-lg`
-- **Body Small (Footer Text/Minor Details):** `text-body-sm`
+- **XL (Heading 1, 42px/68px/700):** `text-xl text-white`
+- **LG (Heading 2, 26px/42px/600):** `text-lg` (Use `text-white` on dark backgrounds)
+- **Base (Subtitles/Nav Links/General Descriptions, 16px/26px):** `text-base` — add `font-medium`
+  for subtitle/nav-link emphasis (500 weight); omit it for plain body copy (400 weight)
+- **SM (Minor Details, 14px/23px/400):** `text-sm`
+- **XS (Small Labels/Specific Buttons, 10px/16px/400):** `text-xs`
 
 ## 3. Vue Component Specifications
 
@@ -77,7 +81,7 @@ Buttons must accept props for `variant` (primary, secondary), `state` (default, 
 
 - **Padding:** `py-[10px] px-[7px]`
 - **Border:** `border border-brand-navy`
-- **Text:** `text-h4` (10px, Regular)
+- **Text:** `text-xs` (10px, Regular)
 - **Radius:** `rounded-btn` (10px)
 
 **2. Standard Action Buttons (Based on UI Toolkit):**
@@ -98,7 +102,7 @@ Used for displaying demographic and regional data over image backgrounds.
 - **Padding:** `py-[10px] px-[13px]`
 - **Layout:** `flex flex-row justify-between items-center gap-[10px]`
 - **Stat Value (Number):** `text-[16px] font-medium leading-[26px] text-white text-center`
-- **Stat Label (Text):** `text-h4 text-white text-center`
+- **Stat Label (Text):** `text-xs text-white text-center`
 - **Icons:** Contained within a `30x30px` frame with a `border-2 border-white` configuration.
 
 ### C. Layout & Sections
@@ -121,12 +125,12 @@ The design is mobile-first, optimized for a `412px` viewport.
 - **Branding Area:** `flex flex-row items-center gap-[15px]`
 - **Dividers:** Vertical/Horizontal lines using `border border-white` or `border-black/25`.
 - **Link Columns:** `flex flex-col gap-[5px]`
-  - **Column Titles:** `text-h3 text-white`
-  - **Links:** `text-body-sm text-white hover:opacity-80 transition-opacity`
-- **Copyright Text:** `text-body-sm text-white text-center w-full mt-4`
+  - **Column Titles:** `text-base font-medium text-white`
+  - **Links:** `text-sm text-white hover:opacity-80 transition-opacity`
+- **Copyright Text:** `text-sm text-white text-center w-full mt-4`
 
 ## 4. Coding Directives
 
 1. **Vue `<script setup>` Structure:** Use Vue 3 Composition API with `<script setup>`.
-2. **Tailwind v4 Best Practices:** Rely on the natively defined `@theme` variables (e.g., `bg-brand-navy`) and custom `@utility` classes (e.g., `text-h1`) rather than heavy arbitrary brackets (like `text-[42px]`) to maintain the single source of truth.
+2. **Tailwind v4 Best Practices:** Rely on the natively defined `@theme` variables (e.g., `bg-brand-navy`, `text-xl`) rather than heavy arbitrary brackets (like `text-[42px]`) to maintain the single source of truth.
 3. **Component Modularity:** Break down complex screens. E.g., The Stat Overview should consist of `<StatSection>`, which loops through an array of objects to render multiple `<StatCard>` components.
