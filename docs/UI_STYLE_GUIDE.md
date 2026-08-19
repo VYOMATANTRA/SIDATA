@@ -11,12 +11,12 @@
 
 @theme {
   /* Colors */
-  --color-brand-ungu-janda: #bb63ff;
-  --color-brand-ubi-ungu: #5b58eb;
-  --color-brand-biru-hytam: #0a2353; /* Primary Base Color */
-  --color-brand-biru-aja: #112c71;
+  --color-brand-violet: #bb63ff;
+  --color-brand-indigo: #5b58eb;
+  --color-brand-navy: #0a2353; /* Primary Base Color */
+  --color-brand-navy-deep: #112c71;
   --color-brand-cyan: #56e1e9;
-  --color-brand-dark-bg: rgba(
+  --color-brand-navy-overlay: rgba(
     0,
     27,
     72,
@@ -94,17 +94,17 @@ Buttons must accept props for `variant` (primary, secondary), `state` (default, 
 **1. Custom Micro-Button (Per User Specifications):**
 
 - **Padding:** `py-[10px] px-[7px]`
-- **Border:** `border border-brand-biru-hytam`
+- **Border:** `border border-brand-navy`
 - **Text:** `text-h4` (10px, Regular)
 - **Radius:** `rounded-btn` (10px)
 
 **2. Standard Action Buttons (Based on UI Toolkit):**
 
-- **Primary Default:** `bg-brand-biru-hytam text-white border border-transparent`
-- **Primary Hover:** `bg-white text-brand-biru-hytam border border-brand-biru-hytam`
+- **Primary Default:** `bg-brand-navy text-white border border-transparent`
+- **Primary Hover:** `bg-white text-brand-navy border border-brand-navy`
 - **Primary Disabled:** `bg-gray-300 text-gray-600 cursor-not-allowed`
-- **Secondary Default:** `bg-white text-brand-biru-hytam border border-brand-biru-hytam`
-- **Secondary Hover:** `bg-brand-biru-hytam text-white border border-transparent`
+- **Secondary Default:** `bg-white text-brand-navy border border-brand-navy`
+- **Secondary Hover:** `bg-brand-navy text-white border border-transparent`
 - **Icon Treatment:** If `withIcon` is true, wrap content in `flex items-center gap-2`.
 
 ### B. Glassmorphism Stat Cards (`StatCard.vue`)
@@ -146,5 +146,5 @@ The design is mobile-first, optimized for a `412px` viewport.
 ## 4. Coding Directives
 
 1. **Vue `<script setup>` Structure:** Use Vue 3 Composition API with `<script setup>`.
-2. **Tailwind v4 Best Practices:** Rely on the natively defined `@theme` variables (e.g., `bg-brand-biru-hytam`) and custom `@utility` classes (e.g., `text-h1`) rather than heavy arbitrary brackets (like `text-[42px]`) to maintain the single source of truth.
+2. **Tailwind v4 Best Practices:** Rely on the natively defined `@theme` variables (e.g., `bg-brand-navy`) and custom `@utility` classes (e.g., `text-h1`) rather than heavy arbitrary brackets (like `text-[42px]`) to maintain the single source of truth.
 3. **Component Modularity:** Break down complex screens. E.g., The Stat Overview should consist of `<StatSection>`, which loops through an array of objects to render multiple `<StatCard>` components.
