@@ -102,7 +102,7 @@ Used for displaying demographic and regional data over image backgrounds.
 - **Border Radius:** `rounded-card` (12px)
 - **Padding:** `py-[10px] px-[13px]`
 - **Layout:** `flex flex-row justify-between items-center gap-[10px]`
-- **Stat Value (Number):** `text-[16px] font-medium leading-[26px] text-white text-center`
+- **Stat Value (Number):** `text-base font-medium text-white text-center`
 - **Stat Label (Text):** `text-xs text-white text-center`
 - **Icons:** Contained within a `30x30px` frame with a `border-2 border-white` configuration.
 
