@@ -342,7 +342,7 @@ describe('profile.controller — changeOwnPassword', () => {
         'Only JWT ID must be used in DB queries',
       );
       assert.ok(
-        !capturedIds.includes('victim-user-id'),
+        !(capturedIds as string[]).includes('victim-user-id'),
         'Body-supplied IDs must never reach DB queries',
       );
     } finally {

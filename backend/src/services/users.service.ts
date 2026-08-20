@@ -5,9 +5,9 @@ import { normalizeEmail } from '../utils/validation.js';
 
 export class UserServiceError extends Error {
   statusCode: number;
-  suggestions?: string[];
+  suggestions?: string[] | undefined;
 
-  constructor(message: string, statusCode: number, suggestions?: string[]) {
+  constructor(message: string, statusCode: number, suggestions?: string[] | undefined) {
     super(message);
     this.name = 'UserServiceError';
     this.statusCode = statusCode;
@@ -179,7 +179,7 @@ export const reactivateExistingUser = async (id: unknown) => {
 export const updateUserRoleService = async (params: {
   id: unknown;
   roleId: unknown;
-  requestingUserId?: string | null;
+  requestingUserId?: string | null | undefined;
 }) => {
   const { id, roleId, requestingUserId } = params;
 
@@ -253,7 +253,7 @@ export const updateUserRoleService = async (params: {
 export const changeUserPasswordService = async (params: {
   id: unknown;
   password: unknown;
-  requestingUserId?: string | null;
+  requestingUserId?: string | null | undefined;
 }) => {
   const { id, password, requestingUserId } = params;
 
@@ -330,7 +330,7 @@ export const changeUserPasswordService = async (params: {
 
 export const deleteUserService = async (params: {
   id: unknown;
-  requestingUserId?: string | null;
+  requestingUserId?: string | null | undefined;
 }) => {
   const { id, requestingUserId } = params;
 

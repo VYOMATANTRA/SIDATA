@@ -4,9 +4,9 @@ import prisma from '../utils/prisma.js';
 
 export class ProfileServiceError extends Error {
   statusCode: number;
-  suggestions?: string[];
+  suggestions?: string[] | undefined;
 
-  constructor(message: string, statusCode: number, suggestions?: string[]) {
+  constructor(message: string, statusCode: number, suggestions?: string[] | undefined) {
     super(message);
     this.name = 'ProfileServiceError';
     this.statusCode = statusCode;
@@ -15,7 +15,7 @@ export class ProfileServiceError extends Error {
 }
 
 export const changeOwnPasswordService = async (params: {
-  userId?: string;
+  userId?: string | undefined;
   currentPassword?: unknown;
   newPassword?: unknown;
 }) => {

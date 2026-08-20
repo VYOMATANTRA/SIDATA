@@ -78,7 +78,12 @@ export const updateUserRole = async (req: AuthRequest, res: Response): Promise<R
     const { id } = req.params;
     const { roleId } = req.body;
     const requestingUserId =
-      typeof req.user === 'object' && req.user !== null ? (req.user as { id?: string }).id : null;
+      typeof req.user === 'object' &&
+      req.user !== null &&
+      'id' in req.user &&
+      typeof req.user.id === 'string'
+        ? req.user.id
+        : null;
 
     const updatedUser = await updateUserRoleService({ id, roleId, requestingUserId });
     return res.status(200).json({
@@ -103,7 +108,12 @@ export const changeUserPassword = async (
     const { id } = req.params;
     const { password } = req.body;
     const requestingUserId =
-      typeof req.user === 'object' && req.user !== null ? (req.user as { id?: string }).id : null;
+      typeof req.user === 'object' &&
+      req.user !== null &&
+      'id' in req.user &&
+      typeof req.user.id === 'string'
+        ? req.user.id
+        : null;
 
     await changeUserPasswordService({ id, password, requestingUserId });
     return res.status(200).json({ message: 'Password pengguna berhasil diperbarui.' });
@@ -124,7 +134,12 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<Respo
   try {
     const { id } = req.params;
     const requestingUserId =
-      typeof req.user === 'object' && req.user !== null ? (req.user as { id?: string }).id : null;
+      typeof req.user === 'object' &&
+      req.user !== null &&
+      'id' in req.user &&
+      typeof req.user.id === 'string'
+        ? req.user.id
+        : null;
 
     await deleteUserService({ id, requestingUserId });
     return res.status(200).json({ message: 'Pengguna berhasil dinonaktifkan.' });
