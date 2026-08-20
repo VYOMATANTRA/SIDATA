@@ -75,12 +75,15 @@ export const changeOwnPasswordService = async (params: {
     throw new ProfileServiceError('Kata sandi baru tidak boleh sama dengan kata sandi lama.', 400);
   }
 
-  const passwordEvaluation = zxcvbn(newPassword, [user.email]);
-  if (passwordEvaluation.score < 2) {
+  const strength = zxcvbn(newPassword, [user.email]);
+  if (strength.score < 2) {
+    const suggestions = strength.feedback.suggestions
+      ? [...strength.feedback.suggestions]
+      : undefined;
     throw new ProfileServiceError(
       'Kata sandi baru terlalu lemah atau umum digunakan.',
       400,
-      passwordEvaluation.feedback.suggestions,
+      suggestions,
     );
   }
 

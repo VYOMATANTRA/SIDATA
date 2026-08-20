@@ -50,7 +50,10 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<Respo
       return res.status(409).json({ error: 'Email ini sudah dipakai' });
     }
 
-    console.error('Error saat membuat pengguna:', error);
+    console.error(
+      'Error saat membuat pengguna:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
     return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
   }
 };
@@ -68,7 +71,10 @@ export const reactivateUser = async (req: AuthRequest, res: Response): Promise<R
       return res.status(error.statusCode).json({ error: error.message });
     }
 
-    console.error('Error saat mengaktifkan kembali pengguna:', error);
+    console.error(
+      'Error saat mengaktifkan kembali pengguna:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
     return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
   }
 };
@@ -95,7 +101,10 @@ export const updateUserRole = async (req: AuthRequest, res: Response): Promise<R
       return res.status(error.statusCode).json({ error: error.message });
     }
 
-    console.error('Error saat memperbarui role pengguna:', error);
+    console.error(
+      'Error saat memperbarui role pengguna:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
     return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
   }
 };
@@ -125,7 +134,10 @@ export const changeUserPassword = async (
       });
     }
 
-    console.error('Error saat mengubah password pengguna:', error);
+    console.error(
+      'Error saat mengubah password pengguna:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
     return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
   }
 };
@@ -148,7 +160,10 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<Respo
       return res.status(error.statusCode).json({ error: error.message });
     }
 
-    console.error('Error saat menghapus pengguna:', error);
+    console.error(
+      'Error saat menghapus pengguna:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
     return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
   }
 };

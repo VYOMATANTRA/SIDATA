@@ -40,7 +40,10 @@ export const changeOwnPassword = async (
       });
     }
 
-    console.error('Error saat mengubah kata sandi:', error);
+    console.error(
+      'Error saat mengubah kata sandi:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server.',
+    );
     return res.status(500).json({ error: 'Terjadi kesalahan internal server.' });
   }
 };

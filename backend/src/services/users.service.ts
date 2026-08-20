@@ -75,13 +75,12 @@ export const createAdminUser = async (payload: {
     throw new UserServiceError('Password terlalu panjang (maksimal 128 karakter).', 400);
   }
 
-  const passwordEvaluation = zxcvbn(password, [normalizedEmail]);
-  if (passwordEvaluation.score < 2) {
-    throw new UserServiceError(
-      'Password terlalu lemah atau umum digunakan.',
-      400,
-      passwordEvaluation.feedback.suggestions,
-    );
+  const strength = zxcvbn(password, [normalizedEmail]);
+  if (strength.score < 2) {
+    const suggestions = strength.feedback.suggestions
+      ? [...strength.feedback.suggestions]
+      : undefined;
+    throw new UserServiceError('Password terlalu lemah atau umum digunakan.', 400, suggestions);
   }
 
   const targetRole = await prisma.role.findUnique({
@@ -299,13 +298,12 @@ export const changeUserPasswordService = async (params: {
     throw new UserServiceError('Password terlalu panjang (maksimal 128 karakter).', 400);
   }
 
-  const passwordEvaluation = zxcvbn(password, [targetUser.email]);
-  if (passwordEvaluation.score < 2) {
-    throw new UserServiceError(
-      'Password terlalu lemah atau umum digunakan.',
-      400,
-      passwordEvaluation.feedback.suggestions,
-    );
+  const strength = zxcvbn(password, [targetUser.email]);
+  if (strength.score < 2) {
+    const suggestions = strength.feedback.suggestions
+      ? [...strength.feedback.suggestions]
+      : undefined;
+    throw new UserServiceError('Password terlalu lemah atau umum digunakan.', 400, suggestions);
   }
 
   const saltRounds = 10;
