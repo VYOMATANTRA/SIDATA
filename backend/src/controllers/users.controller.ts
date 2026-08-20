@@ -85,9 +85,6 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<Respo
       return res.status(404).json({ error: 'Role yang dipilih tidak ditemukan.' });
     }
 
-    const saltRounds = 10;
-    const passwordHash = await bcrypt.hash(password, saltRounds);
-
     const existingUser = await prisma.user.findUnique({
       where: { email: normalizedEmail },
     });
@@ -95,6 +92,9 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<Respo
     if (existingUser) {
       return res.status(409).json({ error: 'Email ini sudah dipakai' });
     }
+
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(password, saltRounds);
 
     const newUser = await prisma.user.create({
       data: {
