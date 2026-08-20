@@ -19,8 +19,12 @@ export const loginLimiter = createLimiter(10);
 
 export const weatherLimiter = createLimiter(300);
 
-// Maps and spatial data rate limiter
-export const mapsLimiter = createLimiter(300);
+// Maps and spatial data rate limiters.
+// Separated per resource to prevent landing page fan-out (/summary + /points + /rt-leaders)
+// from exhausting a shared bucket when multiple users browse from the same NAT/office IP.
+export const mapsPointsLimiter = createLimiter(300);
+export const mapsRtLeadersLimiter = createLimiter(300);
+export const mapsSummaryLimiter = createLimiter(300);
 
 // Session-maintenance endpoints (csrf-token, refresh, logout, me) are hit on every SPA
 // navigation while unauthenticated (see router/index.ts's beforeEach), not just on deliberate
