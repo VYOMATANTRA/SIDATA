@@ -92,7 +92,12 @@ function mapPointToDTO(point: {
   }>;
 }): SpatialPointDTO {
   const rts = point.rtCoverages.map((cov) => cov.rtNumber).sort((a, b) => a - b);
-  const primaryLeader = point.rtCoverages.find((cov) => cov.rtLeader !== null)?.rtLeader ?? null;
+  // Per SPEC.md §7: Only 'ketua_rt' points are 1:1 with an RT leader.
+  // Multi-RT points (e.g. Bank Sampah) cover multiple RTs and do not have a single leader contact.
+  const ketuaRtLeader =
+    point.type === 'ketua_rt'
+      ? (point.rtCoverages.find((cov) => cov.rtLeader !== null)?.rtLeader ?? null)
+      : null;
 
   return {
     id: point.id,
@@ -102,13 +107,13 @@ function mapPointToDTO(point: {
     longitude: point.longitude,
     metadata: (point.metadata as Record<string, unknown>) ?? null,
     rts,
-    rtLeader: primaryLeader
+    rtLeader: ketuaRtLeader
       ? {
-          rtNumber: primaryLeader.rtNumber,
-          name: primaryLeader.name,
-          phone: primaryLeader.phone,
-          phoneIsWhatsapp: primaryLeader.phoneIsWhatsapp,
-          alamat: primaryLeader.alamat,
+          rtNumber: ketuaRtLeader.rtNumber,
+          name: ketuaRtLeader.name,
+          phone: ketuaRtLeader.phone,
+          phoneIsWhatsapp: ketuaRtLeader.phoneIsWhatsapp,
+          alamat: ketuaRtLeader.alamat,
         }
       : null,
     createdAt: point.createdAt.toISOString(),
@@ -138,6 +143,7 @@ export async function getSpatialPoints(filter?: SpatialPointFilter): Promise<Spa
     where,
     include: {
       rtCoverages: {
+        orderBy: { rtNumber: 'asc' },
         include: {
           rtLeader: true,
         },
@@ -177,6 +183,7 @@ export async function getSpatialPointById(id: string): Promise<SpatialPointDTO |
     where: { id },
     include: {
       rtCoverages: {
+        orderBy: { rtNumber: 'asc' },
         include: {
           rtLeader: true,
         },
@@ -189,6 +196,46 @@ export async function getSpatialPointById(id: string): Promise<SpatialPointDTO |
   }
 
   return mapPointToDTO(point);
+}
+
+interface RtLeaderWithSpatialPoints {
+  rtNumber: number;
+  name: string;
+  phone: string;
+  phoneIsWhatsapp: boolean;
+  alamat: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  spatialPoints: Array<{
+    point: {
+      id: string;
+      type: SpatialPointType;
+      latitude: number;
+      longitude: number;
+    };
+  }>;
+}
+
+function mapLeaderToDTO(leader: RtLeaderWithSpatialPoints): RtLeaderDTO {
+  // Per SPEC.md §7: Only match coordinates where spatial_points.type is 'ketua_rt'
+  const ketuaRtPoint = leader.spatialPoints.find((sp) => sp.point.type === 'ketua_rt')?.point;
+
+  return {
+    rtNumber: leader.rtNumber,
+    name: leader.name,
+    phone: leader.phone,
+    phoneIsWhatsapp: leader.phoneIsWhatsapp,
+    alamat: leader.alamat,
+    coordinates: ketuaRtPoint
+      ? {
+          latitude: ketuaRtPoint.latitude,
+          longitude: ketuaRtPoint.longitude,
+          pointId: ketuaRtPoint.id,
+        }
+      : null,
+    createdAt: leader.createdAt.toISOString(),
+    updatedAt: leader.updatedAt.toISOString(),
+  };
 }
 
 export async function getRtLeaders(query?: RtLeaderQuery): Promise<{
@@ -210,7 +257,11 @@ export async function getRtLeaders(query?: RtLeaderQuery): Promise<{
   if (query?.search && query.search.trim() !== '') {
     const term = query.search.trim();
     const parsedRt = parseInt(term, 10);
-    if (!Number.isNaN(parsedRt) && String(parsedRt) === term) {
+    if (
+      typeof query?.rtNumber !== 'number' &&
+      !Number.isNaN(parsedRt) &&
+      String(parsedRt) === term
+    ) {
       where.rtNumber = parsedRt;
     } else {
       where.OR = [{ name: { contains: term } }, { alamat: { contains: term } }];
@@ -234,27 +285,7 @@ export async function getRtLeaders(query?: RtLeaderQuery): Promise<{
     }),
   ]);
 
-  const mappedLeaders: RtLeaderDTO[] = leaders.map((leader) => {
-    // Per SPEC.md §7: Only match coordinates where spatial_points.type is 'ketua_rt'
-    const ketuaRtPoint = leader.spatialPoints.find((sp) => sp.point.type === 'ketua_rt')?.point;
-
-    return {
-      rtNumber: leader.rtNumber,
-      name: leader.name,
-      phone: leader.phone,
-      phoneIsWhatsapp: leader.phoneIsWhatsapp,
-      alamat: leader.alamat,
-      coordinates: ketuaRtPoint
-        ? {
-            latitude: ketuaRtPoint.latitude,
-            longitude: ketuaRtPoint.longitude,
-            pointId: ketuaRtPoint.id,
-          }
-        : null,
-      createdAt: leader.createdAt.toISOString(),
-      updatedAt: leader.updatedAt.toISOString(),
-    };
-  });
+  const mappedLeaders: RtLeaderDTO[] = (leaders as RtLeaderWithSpatialPoints[]).map(mapLeaderToDTO);
 
   return {
     leaders: mappedLeaders,
@@ -278,29 +309,11 @@ export async function getRtLeaderByRtNumber(rtNumber: number): Promise<RtLeaderD
     return null;
   }
 
-  // Per SPEC.md §7: Coordinate resolution joins only spatial_points.type = 'ketua_rt'
-  const ketuaRtPoint = leader.spatialPoints.find((sp) => sp.point.type === 'ketua_rt')?.point;
-
-  return {
-    rtNumber: leader.rtNumber,
-    name: leader.name,
-    phone: leader.phone,
-    phoneIsWhatsapp: leader.phoneIsWhatsapp,
-    alamat: leader.alamat,
-    coordinates: ketuaRtPoint
-      ? {
-          latitude: ketuaRtPoint.latitude,
-          longitude: ketuaRtPoint.longitude,
-          pointId: ketuaRtPoint.id,
-        }
-      : null,
-    createdAt: leader.createdAt.toISOString(),
-    updatedAt: leader.updatedAt.toISOString(),
-  };
+  return mapLeaderToDTO(leader);
 }
 
 export async function getMapSummary(): Promise<MapSummaryDTO> {
-  const [totalPoints, pointsGrouped, totalRtLeaders, rtLeaders] = await Promise.all([
+  const [totalPoints, pointsGrouped, totalRtLeaders, rtLeadersWithCoordinates] = await Promise.all([
     prisma.spatialPoint.count(),
     prisma.spatialPoint.groupBy({
       by: ['type'],
@@ -309,11 +322,13 @@ export async function getMapSummary(): Promise<MapSummaryDTO> {
       },
     }),
     prisma.rtLeader.count(),
-    prisma.rtLeader.findMany({
-      include: {
+    prisma.rtLeader.count({
+      where: {
         spatialPoints: {
-          include: {
-            point: true,
+          some: {
+            point: {
+              type: 'ketua_rt',
+            },
           },
         },
       },
@@ -323,14 +338,6 @@ export async function getMapSummary(): Promise<MapSummaryDTO> {
   const pointsByType: Record<string, number> = {};
   for (const group of pointsGrouped) {
     pointsByType[group.type] = group._count._all;
-  }
-
-  let rtLeadersWithCoordinates = 0;
-  for (const leader of rtLeaders) {
-    const hasKetuaRtPoint = leader.spatialPoints.some((sp) => sp.point.type === 'ketua_rt');
-    if (hasKetuaRtPoint) {
-      rtLeadersWithCoordinates++;
-    }
   }
 
   return {

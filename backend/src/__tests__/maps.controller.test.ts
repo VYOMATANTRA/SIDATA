@@ -45,14 +45,23 @@ describe('maps.controller', () => {
     createdAt: new Date('2026-08-01T00:00:00Z'),
     updatedAt: new Date('2026-08-01T00:00:00Z'),
     rtCoverages: [
-      { rtNumber: 1, rtLeader: null },
+      {
+        rtNumber: 1,
+        rtLeader: {
+          rtNumber: 1,
+          name: 'Bambang Supriyanto',
+          phone: '081234567801',
+          phoneIsWhatsapp: true,
+          alamat: 'Jl. Mulawarman No. 12',
+        },
+      },
       { rtNumber: 2, rtLeader: null },
       { rtNumber: 3, rtLeader: null },
     ],
   };
 
   describe('listPoints', () => {
-    it('returns all points with standard JSON structure', async () => {
+    it('returns all points with standard JSON structure and isolates rtLeader to ketua_rt', async () => {
       const originalFindMany = prisma.spatialPoint.findMany;
       prisma.spatialPoint.findMany = (async () => [
         sampleKetuaRtPoint,
@@ -66,12 +75,23 @@ describe('maps.controller', () => {
         await listPoints(req, res as unknown as Response);
 
         assert.equal(res.status, 200);
-        const body = res.body as { points: Array<{ name: string; rts: number[] }>; total: number };
+        const body = res.body as {
+          points: Array<{
+            name: string;
+            rts: number[];
+            rtLeader: { name: string; rtNumber: number } | null;
+          }>;
+          total: number;
+        };
         assert.equal(body.total, 2);
         assert.equal(body.points[0]?.name, 'Pos RT 01');
         assert.deepEqual(body.points[0]?.rts, [1]);
+        assert.equal(body.points[0]?.rtLeader?.name, 'Bambang Supriyanto');
+
+        // Multi-RT bank_sampah points must have rtLeader: null even if rtCoverages has leaders
         assert.equal(body.points[1]?.name, 'Bank Sampah Sejahtera');
         assert.deepEqual(body.points[1]?.rts, [1, 2, 3]);
+        assert.equal(body.points[1]?.rtLeader, null);
       } finally {
         prisma.spatialPoint.findMany = originalFindMany;
       }
@@ -168,21 +188,42 @@ describe('maps.controller', () => {
   });
 
   describe('getPoint', () => {
-    it('returns a single spatial point by ID', async () => {
+    it('returns a single spatial point by ID with rtLeader for ketua_rt and null for multi-rt', async () => {
       const originalFindUnique = prisma.spatialPoint.findUnique;
-      prisma.spatialPoint.findUnique = (async () =>
-        sampleKetuaRtPoint) as unknown as typeof prisma.spatialPoint.findUnique;
 
       try {
-        const req = { params: { id: 'point-rt-1' } } as unknown as Request;
-        const res = fakeRes();
+        // 1. Ketua RT point returns rtLeader
+        prisma.spatialPoint.findUnique = (async () =>
+          sampleKetuaRtPoint) as unknown as typeof prisma.spatialPoint.findUnique;
 
-        await getPoint(req, res as unknown as Response);
+        const req1 = { params: { id: 'point-rt-1' } } as unknown as Request;
+        const res1 = fakeRes();
 
-        assert.equal(res.status, 200);
-        const body = res.body as { point: { id: string; name: string } };
-        assert.equal(body.point.id, 'point-rt-1');
-        assert.equal(body.point.name, 'Pos RT 01');
+        await getPoint(req1, res1 as unknown as Response);
+
+        assert.equal(res1.status, 200);
+        const body1 = res1.body as {
+          point: { id: string; name: string; rtLeader: { name: string } | null };
+        };
+        assert.equal(body1.point.id, 'point-rt-1');
+        assert.equal(body1.point.name, 'Pos RT 01');
+        assert.equal(body1.point.rtLeader?.name, 'Bambang Supriyanto');
+
+        // 2. Bank Sampah point returns rtLeader: null
+        prisma.spatialPoint.findUnique = (async () =>
+          sampleBankSampahPoint) as unknown as typeof prisma.spatialPoint.findUnique;
+
+        const req2 = { params: { id: 'point-bs-1' } } as unknown as Request;
+        const res2 = fakeRes();
+
+        await getPoint(req2, res2 as unknown as Response);
+
+        assert.equal(res2.status, 200);
+        const body2 = res2.body as {
+          point: { id: string; name: string; rtLeader: unknown };
+        };
+        assert.equal(body2.point.id, 'point-bs-1');
+        assert.equal(body2.point.rtLeader, null);
       } finally {
         prisma.spatialPoint.findUnique = originalFindUnique;
       }
@@ -324,6 +365,65 @@ describe('maps.controller', () => {
         prisma.rtLeader.findMany = originalFindMany;
       }
     });
+
+    it('sets rtNumber filter when standalone numeric search is provided', async () => {
+      const originalCount = prisma.rtLeader.count;
+      const originalFindMany = prisma.rtLeader.findMany;
+
+      let capturedWhere: Record<string, unknown> | undefined;
+      prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
+      prisma.rtLeader.findMany = (async (args: { where?: Record<string, unknown> }) => {
+        capturedWhere = args.where;
+        return [];
+      }) as unknown as typeof prisma.rtLeader.findMany;
+
+      try {
+        const req = {
+          query: { search: '7' },
+        } as unknown as Request;
+        const res = fakeRes();
+
+        await listRtLeaders(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        assert.equal(capturedWhere?.rtNumber, 7);
+        assert.equal(capturedWhere?.OR, undefined);
+      } finally {
+        prisma.rtLeader.count = originalCount;
+        prisma.rtLeader.findMany = originalFindMany;
+      }
+    });
+
+    it('preserves explicit rt filter when numeric search is also provided', async () => {
+      const originalCount = prisma.rtLeader.count;
+      const originalFindMany = prisma.rtLeader.findMany;
+
+      let capturedWhere: Record<string, unknown> | undefined;
+      prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
+      prisma.rtLeader.findMany = (async (args: { where?: Record<string, unknown> }) => {
+        capturedWhere = args.where;
+        return [];
+      }) as unknown as typeof prisma.rtLeader.findMany;
+
+      try {
+        const req = {
+          query: { rt: '3', search: '7' },
+        } as unknown as Request;
+        const res = fakeRes();
+
+        await listRtLeaders(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        assert.equal(capturedWhere?.rtNumber, 3);
+        assert.deepEqual(capturedWhere?.OR, [
+          { name: { contains: '7' } },
+          { alamat: { contains: '7' } },
+        ]);
+      } finally {
+        prisma.rtLeader.count = originalCount;
+        prisma.rtLeader.findMany = originalFindMany;
+      }
+    });
   });
 
   describe('getRtLeader', () => {
@@ -402,22 +502,18 @@ describe('maps.controller', () => {
       const originalPointCount = prisma.spatialPoint.count;
       const originalGroupBy = prisma.spatialPoint.groupBy;
       const originalLeaderCount = prisma.rtLeader.count;
-      const originalLeaderFindMany = prisma.rtLeader.findMany;
 
       prisma.spatialPoint.count = (async () => 5) as unknown as typeof prisma.spatialPoint.count;
       prisma.spatialPoint.groupBy = (async () => [
         { type: 'ketua_rt', _count: { _all: 3 } },
         { type: 'bank_sampah', _count: { _all: 2 } },
       ]) as unknown as typeof prisma.spatialPoint.groupBy;
-      prisma.rtLeader.count = (async () => 10) as unknown as typeof prisma.rtLeader.count;
-      prisma.rtLeader.findMany = (async () => [
-        {
-          spatialPoints: [{ point: { type: 'ketua_rt' } }],
-        },
-        {
-          spatialPoints: [{ point: { type: 'bank_sampah' } }],
-        },
-      ]) as unknown as typeof prisma.rtLeader.findMany;
+      prisma.rtLeader.count = (async (args?: { where?: unknown }) => {
+        if (args?.where) {
+          return 4; // rtLeadersWithCoordinates
+        }
+        return 10; // totalRtLeaders
+      }) as unknown as typeof prisma.rtLeader.count;
 
       try {
         const req = {} as unknown as Request;
@@ -438,13 +534,12 @@ describe('maps.controller', () => {
         assert.equal(body.pointsByType.ketua_rt, 3);
         assert.equal(body.pointsByType.bank_sampah, 2);
         assert.equal(body.totalRtLeaders, 10);
-        assert.equal(body.rtLeadersWithCoordinates, 1);
-        assert.equal(body.rtLeadersWithoutCoordinates, 9);
+        assert.equal(body.rtLeadersWithCoordinates, 4);
+        assert.equal(body.rtLeadersWithoutCoordinates, 6);
       } finally {
         prisma.spatialPoint.count = originalPointCount;
         prisma.spatialPoint.groupBy = originalGroupBy;
         prisma.rtLeader.count = originalLeaderCount;
-        prisma.rtLeader.findMany = originalLeaderFindMany;
       }
     });
   });
