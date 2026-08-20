@@ -94,7 +94,9 @@ export const useUsersStore = defineStore('users', () => {
       if (!res.ok) {
         throw new Error(data.error || 'Gagal membuat pengguna.')
       }
-      await fetchUsers()
+      if (data.user) {
+        users.value.unshift(data.user)
+      }
       return data
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Gagal membuat pengguna.'
@@ -119,7 +121,13 @@ export const useUsersStore = defineStore('users', () => {
       if (!res.ok) {
         throw new Error(data.error || 'Gagal mengaktifkan kembali pengguna.')
       }
-      await fetchUsers()
+      const target = users.value.find((u) => u.id === userId)
+      if (target) {
+        target.deletedAt = null
+        if (data.user) {
+          Object.assign(target, data.user)
+        }
+      }
       return data
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Gagal mengaktifkan kembali pengguna.'
@@ -145,7 +153,11 @@ export const useUsersStore = defineStore('users', () => {
       if (!res.ok) {
         throw new Error(data.error || 'Gagal mengubah password pengguna.')
       }
-      await fetchUsers()
+      const target = users.value.find((u) => u.id === userId)
+      if (target) {
+        target.requires_password_change = true
+        target.auth_provider = 'local'
+      }
       return data
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Gagal mengubah password pengguna.'
@@ -171,7 +183,19 @@ export const useUsersStore = defineStore('users', () => {
       if (!res.ok) {
         throw new Error(data.error || 'Gagal mengubah role pengguna.')
       }
-      await fetchUsers()
+      const target = users.value.find((u) => u.id === userId)
+      if (target) {
+        if (data.user?.role) {
+          target.role = data.user.role
+          target.roleId = data.user.roleId || data.user.role.id || roleId
+        } else {
+          const matchedRole = roles.value.find((r) => r.id === roleId)
+          if (matchedRole) {
+            target.role = matchedRole
+            target.roleId = roleId
+          }
+        }
+      }
       return data
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Gagal mengubah role pengguna.'
@@ -196,7 +220,10 @@ export const useUsersStore = defineStore('users', () => {
       if (!res.ok) {
         throw new Error(data.error || 'Gagal menonaktifkan pengguna.')
       }
-      await fetchUsers()
+      const target = users.value.find((u) => u.id === userId)
+      if (target) {
+        target.deletedAt = new Date().toISOString()
+      }
       return data
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Gagal menonaktifkan pengguna.'
