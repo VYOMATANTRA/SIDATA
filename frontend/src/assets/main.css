@@ -1,1 +1,61 @@
+@import url('https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,100..900;1,100..900&display=swap');
 @import "tailwindcss";
+
+@theme {
+    /* Colors */
+    --color-brand-violet: #bb63ff;
+    --color-brand-indigo: #5b58eb;
+    --color-brand-navy: #0a2353; /* Primary Base Color */
+    --color-brand-navy-deep: #112c71;
+    --color-brand-cyan: #56e1e9;
+    --color-brand-navy-overlay: rgba(
+    0,
+    27,
+    72,
+    0.9
+    ); /* Used for specific UI buttons/overlays */
+
+    --color-surface-glass: rgba(255, 255, 255, 0.2); /* For stat containers */
+
+
+    /* Typography */
+    --font-sans: "Public Sans", sans-serif;
+
+    --text-xs: 10px;
+    --text-xs--line-height: 16px;
+    --text-xs--font-weight: 400;
+
+    --text-sm: 14px;
+    --text-sm--line-height: 23px;
+    --text-sm--font-weight: 400;
+
+    --text-base: 16px;
+    --text-base--line-height: 26px;
+    --text-base--font-weight: 400;
+
+    --text-lg: 26px;
+    --text-lg--line-height: 42px;
+    --text-lg--font-weight: 600;
+
+    --text-xl: 42px;
+    --text-xl--line-height: 68px;
+    --text-xl--font-weight: 700;
+
+    /* Border Radius */
+    --radius-btn: 10px;
+    --radius-card: 12px;
+}
+
+@layer base {
+    h1 {
+        font-size: var(--text-xl);
+    }
+
+    h2 {
+        font-size: var(--text-lg);
+    }
+
+    p {
+        font-size: var(--text-base);
+    }
+}

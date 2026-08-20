@@ -124,12 +124,13 @@ docker compose up --build
 
 ### Backend (`backend/`)
 
-| Task           | Command                                 |
-| -------------- | --------------------------------------- |
-| Lint           | `npm run lint`                          |
-| Format         | `npm run format`                        |
-| Run server     | `npx tsx src/index.ts`                  |
-| Run via Docker | `docker compose up --build` (repo root) |
+| Task                 | Command                                 |
+| -------------------- | --------------------------------------- |
+| Run unit tests       | `npm test`                              |
+| Lint                 | `npm run lint`                          |
+| Format code          | `npm run format`                        |
+| Run server           | `npx tsx src/index.ts`                  |
+| Run via Docker       | `docker compose up --build` (repo root) |
 
 ## Project Structure
 
