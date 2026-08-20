@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import SetupPassword from '../views/SetupPassword.vue'
@@ -95,5 +95,30 @@ describe('SetupPassword.vue', () => {
 
     const button = wrapper.find('button[type="submit"]')
     expect(button.attributes('disabled')).toBeDefined()
+  })
+
+  it('redirects to /login?reason=setup_required when mounted without setupToken', async () => {
+    sessionStorage.clear()
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const authStore = useAuthStore(pinia)
+    authStore.clearAuth()
+
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/setup-password', name: 'setup-password', component: SetupPassword },
+        { path: '/login', name: 'login', component: { template: '<div>login</div>' } },
+      ],
+    })
+
+    await router.push('/setup-password')
+    await router.isReady()
+
+    mount(SetupPassword, { global: { plugins: [pinia, router] } })
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe('login')
+    expect(router.currentRoute.value.query.reason).toBe('setup_required')
   })
 })

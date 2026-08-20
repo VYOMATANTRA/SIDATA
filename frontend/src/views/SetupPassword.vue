@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import TurnstileWidget from '../components/auth/TurnstileWidget.vue'
 import { getCsrfToken } from '../utils/csrf'
@@ -9,6 +9,12 @@ import logoBalikpapan from '../assets/img/logo_balikpapan.png'
 
 const router = useRouter()
 const authStore = useAuthStore()
+
+onMounted(() => {
+  if (!authStore.setupToken && !authStore.mustChangePassword) {
+    router.replace({ name: 'login', query: { reason: 'setup_required' } })
+  }
+})
 
 const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
 
@@ -119,7 +125,13 @@ async function handleSetupPassword() {
 
     if (!response.ok) {
       const errText = data.error || 'Gagal memperbarui kata sandi. Silakan coba lagi.'
-      if (errText.toLowerCase().includes('password') || errText.toLowerCase().includes('sandi')) {
+      if (response.status === 401 || response.status === 403) {
+        errorMessage.value = `${errText} Mengalihkan ke halaman login...`
+        authStore.clearAuth()
+        setTimeout(() => {
+          router.push({ name: 'login', query: { reason: 'setup_required' } })
+        }, 2000)
+      } else if (errText.toLowerCase().includes('password') || errText.toLowerCase().includes('sandi')) {
         serverPasswordError.value = errText
       } else {
         errorMessage.value = errText
