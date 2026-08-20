@@ -241,6 +241,7 @@ describe('users.controller', () => {
       id: 'user-1',
       email: 'user@example.com',
       deletedAt: null,
+      role: { id: 'role-1', name: 'user' },
     })) as unknown as typeof prisma.user.findUnique;
 
     try {
@@ -313,6 +314,51 @@ describe('users.controller', () => {
     prisma.user.findUnique = originalFindUnique;
   });
 
+  it('changeUserPassword prevents self password reset via admin endpoint', async () => {
+    const req = {
+      params: { id: 'admin-self' },
+      body: { password: STRONG_PASSWORD },
+      user: { id: 'admin-self', email: 'admin@example.com', role: 'admin' },
+    } as unknown as AuthRequest;
+
+    const res = fakeRes();
+    await changeUserPassword(req, res as unknown as Response);
+
+    assert.equal(res.status, 400);
+    assert.deepEqual(res.body, {
+      error: 'Anda tidak dapat mengatur ulang kata sandi akun Anda sendiri melalui menu ini.',
+    });
+  });
+
+  it('changeUserPassword prevents resetting peer admin password', async () => {
+    const originalFindUnique = prisma.user.findUnique;
+
+    prisma.user.findUnique = (async () => ({
+      id: 'other-admin',
+      email: 'peer@example.com',
+      deletedAt: null,
+      role: { id: 'role-admin', name: 'admin' },
+    })) as unknown as typeof prisma.user.findUnique;
+
+    try {
+      const req = {
+        params: { id: 'other-admin' },
+        body: { password: STRONG_PASSWORD },
+        user: { id: 'current-admin', email: 'admin@example.com', role: 'admin' },
+      } as unknown as AuthRequest;
+
+      const res = fakeRes();
+      await changeUserPassword(req, res as unknown as Response);
+
+      assert.equal(res.status, 403);
+      assert.deepEqual(res.body, {
+        error: 'Admin tidak dapat mengatur ulang kata sandi sesama akun Admin.',
+      });
+    } finally {
+      prisma.user.findUnique = originalFindUnique;
+    }
+  });
+
   it('changeUserPassword updates password hash, sets requires_password_change, and revokes sessions in transaction', async () => {
     const originalFindUnique = prisma.user.findUnique;
     const originalTransaction = prisma.$transaction;
@@ -322,6 +368,7 @@ describe('users.controller', () => {
       email: 'user@example.com',
       deletedAt: null,
       auth_provider: 'google',
+      role: { id: 'role-user', name: 'user' },
     })) as unknown as typeof prisma.user.findUnique;
 
     let transactionExecuted = false;
@@ -334,6 +381,7 @@ describe('users.controller', () => {
       const req = {
         params: { id: 'user-1' },
         body: { password: STRONG_PASSWORD },
+        user: { id: 'admin-1', email: 'admin@example.com', role: 'admin' },
       } as unknown as AuthRequest;
 
       const res = fakeRes();

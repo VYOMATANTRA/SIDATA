@@ -282,6 +282,15 @@ export const changeUserPassword = async (
       return res.status(400).json({ error: 'Password baru wajib diisi.' });
     }
 
+    const requestingUserId =
+      typeof req.user === 'object' && req.user !== null ? (req.user as { id?: string }).id : null;
+
+    if (requestingUserId && requestingUserId === id) {
+      return res.status(400).json({
+        error: 'Anda tidak dapat mengatur ulang kata sandi akun Anda sendiri melalui menu ini.',
+      });
+    }
+
     const targetUser = await prisma.user.findUnique({
       where: { id },
       include: { role: true },
@@ -293,6 +302,12 @@ export const changeUserPassword = async (
 
     if (targetUser.deletedAt != null) {
       return res.status(400).json({ error: 'Pengguna dalam status nonaktif.' });
+    }
+
+    if (targetUser.role?.name?.toLowerCase() === 'admin') {
+      return res
+        .status(403)
+        .json({ error: 'Admin tidak dapat mengatur ulang kata sandi sesama akun Admin.' });
     }
 
     if (password.length < 8) {
