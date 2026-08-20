@@ -17,14 +17,24 @@ import {
 
 const router = Router();
 
-router.use(verifyToken, requireAdmin);
-
-router.get('/', userManagementReadLimiter, getUsers);
-router.get('/roles', userManagementReadLimiter, getRoles);
-router.post('/', userManagementWriteLimiter, createUser);
-router.patch('/:id/reactivate', userManagementWriteLimiter, reactivateUser);
-router.patch('/:id/password', userManagementWriteLimiter, changeUserPassword);
-router.patch('/:id/role', userManagementWriteLimiter, updateUserRole);
-router.delete('/:id', userManagementWriteLimiter, deleteUser);
+router.get('/', userManagementReadLimiter, verifyToken, requireAdmin, getUsers);
+router.get('/roles', userManagementReadLimiter, verifyToken, requireAdmin, getRoles);
+router.post('/', userManagementWriteLimiter, verifyToken, requireAdmin, createUser);
+router.patch(
+  '/:id/reactivate',
+  userManagementWriteLimiter,
+  verifyToken,
+  requireAdmin,
+  reactivateUser,
+);
+router.patch(
+  '/:id/password',
+  userManagementWriteLimiter,
+  verifyToken,
+  requireAdmin,
+  changeUserPassword,
+);
+router.patch('/:id/role', userManagementWriteLimiter, verifyToken, requireAdmin, updateUserRole);
+router.delete('/:id', userManagementWriteLimiter, verifyToken, requireAdmin, deleteUser);
 
 export default router;
