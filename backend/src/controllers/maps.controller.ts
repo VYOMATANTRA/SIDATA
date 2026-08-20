@@ -11,6 +11,31 @@ import type { SpatialPointType } from '../../generated/prisma/client.js';
 
 const VALID_SPATIAL_TYPES: SpatialPointType[] = ['ketua_rt', 'bank_sampah', 'fasilitas_umum'];
 
+function parsePositiveIntParam(
+  value: unknown,
+  errorMessage: string,
+): { value?: number; error?: string } {
+  if (typeof value !== 'string' || value.trim() === '') {
+    return {};
+  }
+  const parsed = parseInt(value, 10);
+  if (Number.isNaN(parsed) || parsed <= 0) {
+    return { error: errorMessage };
+  }
+  return { value: parsed };
+}
+
+function parseOptionalInt(value: unknown, min = 0): number | undefined {
+  if (typeof value !== 'string' || value.trim() === '') {
+    return undefined;
+  }
+  const parsed = parseInt(value, 10);
+  if (Number.isNaN(parsed) || parsed < min) {
+    return undefined;
+  }
+  return parsed;
+}
+
 export const listPoints = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { type, rt, format } = req.query;
@@ -25,13 +50,12 @@ export const listPoints = async (req: Request, res: Response): Promise<Response>
       parsedType = type as SpatialPointType;
     }
 
-    let parsedRtNumber: number | undefined;
-    if (typeof rt === 'string' && rt.trim() !== '') {
-      const parsed = parseInt(rt, 10);
-      if (Number.isNaN(parsed) || parsed <= 0) {
-        return res.status(400).json({ error: 'Nomor RT harus berupa angka positif' });
-      }
-      parsedRtNumber = parsed;
+    const { value: parsedRtNumber, error: rtError } = parsePositiveIntParam(
+      rt,
+      'Nomor RT harus berupa angka positif',
+    );
+    if (rtError) {
+      return res.status(400).json({ error: rtError });
     }
 
     const filter = {
@@ -75,32 +99,20 @@ export const listRtLeaders = async (req: Request, res: Response): Promise<Respon
   try {
     const { search, rt, limit, offset, page } = req.query;
 
-    let parsedRtNumber: number | undefined;
-    if (typeof rt === 'string' && rt.trim() !== '') {
-      const parsed = parseInt(rt, 10);
-      if (Number.isNaN(parsed) || parsed <= 0) {
-        return res.status(400).json({ error: 'Nomor RT harus berupa angka positif' });
-      }
-      parsedRtNumber = parsed;
+    const { value: parsedRtNumber, error: rtError } = parsePositiveIntParam(
+      rt,
+      'Nomor RT harus berupa angka positif',
+    );
+    if (rtError) {
+      return res.status(400).json({ error: rtError });
     }
 
-    let parsedLimit: number | undefined;
-    if (typeof limit === 'string') {
-      const l = parseInt(limit, 10);
-      if (!Number.isNaN(l) && l > 0) {
-        parsedLimit = l;
-      }
-    }
+    const parsedLimit = parseOptionalInt(limit, 1);
+    let parsedOffset = parseOptionalInt(offset, 0);
 
-    let parsedOffset: number | undefined;
-    if (typeof offset === 'string') {
-      const o = parseInt(offset, 10);
-      if (!Number.isNaN(o) && o >= 0) {
-        parsedOffset = o;
-      }
-    } else if (typeof page === 'string' && parsedLimit) {
-      const p = parseInt(page, 10);
-      if (!Number.isNaN(p) && p > 0) {
+    if (parsedOffset === undefined && typeof page === 'string' && parsedLimit) {
+      const p = parseOptionalInt(page, 1);
+      if (p !== undefined) {
         parsedOffset = (p - 1) * parsedLimit;
       }
     }
@@ -122,14 +134,16 @@ export const listRtLeaders = async (req: Request, res: Response): Promise<Respon
 export const getRtLeader = async (req: Request, res: Response): Promise<Response> => {
   try {
     const rtParam = req.params['rtNumber'];
-    const rtNumberStr = typeof rtParam === 'string' ? rtParam : '';
-    const parsed = parseInt(rtNumberStr, 10);
+    const { value: parsedRtNumber, error: rtError } = parsePositiveIntParam(
+      rtParam,
+      'Nomor RT harus berupa angka positif',
+    );
 
-    if (Number.isNaN(parsed) || parsed <= 0) {
-      return res.status(400).json({ error: 'Nomor RT harus berupa angka positif' });
+    if (rtError || parsedRtNumber === undefined) {
+      return res.status(400).json({ error: rtError ?? 'Nomor RT harus berupa angka positif' });
     }
 
-    const leader = await getRtLeaderByRtNumber(parsed);
+    const leader = await getRtLeaderByRtNumber(parsedRtNumber);
     if (!leader) {
       return res.status(404).json({ error: 'Ketua RT tidak ditemukan' });
     }
