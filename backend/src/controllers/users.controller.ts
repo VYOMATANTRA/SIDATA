@@ -247,6 +247,7 @@ export const updateUserRole = async (req: AuthRequest, res: Response): Promise<R
           email: true,
           auth_provider: true,
           deletedAt: true,
+          roleId: true,
           role: { select: { id: true, name: true } },
         },
       }),

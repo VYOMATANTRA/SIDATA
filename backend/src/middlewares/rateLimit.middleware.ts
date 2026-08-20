@@ -26,8 +26,9 @@ export const weatherLimiter = createLimiter(300);
 // retries and lock each other out of logging in. Given a roomier, separate budget instead.
 export const sessionLimiter = createLimiter(300);
 
-// User management endpoints access DB & perform bcrypt password hashing
-export const userManagementLimiter = createLimiter(100);
+// User management endpoints: read operations (300 req/15min) separate from bcrypt/transaction writes (100 req/15min)
+export const userManagementReadLimiter = createLimiter(300);
+export const userManagementWriteLimiter = createLimiter(100);
 
 // Self-service password change: runs bcrypt.compare + bcrypt.hash on every request.
 // Budget matches loginLimiter (same security weight — both gatekeep credential changes).
