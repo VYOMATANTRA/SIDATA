@@ -97,6 +97,44 @@ describe('users.controller', () => {
     }
   });
 
+  it('createUser rejects with 409 and guides to reactivation if email belongs to a soft-deleted user', async () => {
+    const originalFindUnique = prisma.user.findUnique;
+    const originalRoleFind = prisma.role.findUnique;
+
+    prisma.role.findUnique = (async () => ({
+      id: 'role-editor',
+      name: 'editor',
+    })) as unknown as typeof prisma.role.findUnique;
+    prisma.user.findUnique = (async () => ({
+      id: 'deleted-user-id',
+      email: 'deleted@example.com',
+      auth_provider: 'local',
+      deletedAt: new Date(),
+    })) as unknown as typeof prisma.user.findUnique;
+
+    try {
+      const req = {
+        body: {
+          email: 'deleted@example.com',
+          roleId: 'role-editor',
+          password: STRONG_PASSWORD,
+        },
+      } as AuthRequest;
+
+      const res = fakeRes();
+      await createUser(req, res as unknown as Response);
+
+      assert.equal(res.status, 409);
+      assert.deepEqual(res.body, {
+        error:
+          'Akun dengan email ini telah dinonaktifkan. Gunakan fitur aktivasi kembali akun untuk mengaktifkannya.',
+      });
+    } finally {
+      prisma.user.findUnique = originalFindUnique;
+      prisma.role.findUnique = originalRoleFind;
+    }
+  });
+
   it('createUser catches Prisma P2002 race condition and returns 409', async () => {
     const originalFindUnique = prisma.user.findUnique;
     const originalRoleFind = prisma.role.findUnique;

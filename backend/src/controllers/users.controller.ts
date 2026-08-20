@@ -90,6 +90,12 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<Respo
     });
 
     if (existingUser) {
+      if (existingUser.deletedAt != null) {
+        return res.status(409).json({
+          error:
+            'Akun dengan email ini telah dinonaktifkan. Gunakan fitur aktivasi kembali akun untuk mengaktifkannya.',
+        });
+      }
       return res.status(409).json({ error: 'Email ini sudah dipakai' });
     }
 
