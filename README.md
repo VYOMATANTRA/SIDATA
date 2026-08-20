@@ -43,10 +43,17 @@ cd SIDATA
 
 ### 2. Backend setup
 
+Copy `.env.example` to `.env` at the root of the repository:
+
+```bash
+cp .env.example .env
+```
+
+Install backend dependencies:
+
 ```bash
 cd backend
 npm ci
-cp .env.example .env
 ```
 
 Fill in `.env` with at least:

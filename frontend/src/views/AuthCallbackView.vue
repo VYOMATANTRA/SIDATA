@@ -10,7 +10,7 @@ const statusMessage = ref('Memproses autentikasi Google...')
 const errorMessage = ref('')
 
 // OAuth failures never reach this view: GOOGLE_OAUTH_FAILURE_REDIRECT points at /login (see
-// backend/.env.example), which is where LoginView.vue handles the ?error=/?reason= query
+// .env.example), which is where LoginView.vue handles the ?error=/?reason= query
 // params. This view is only ever reached via the success redirect, so it just needs to
 // finish the same silent-refresh flow the app already runs on every boot.
 onMounted(async () => {
