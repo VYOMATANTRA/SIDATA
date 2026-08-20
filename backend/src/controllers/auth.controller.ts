@@ -244,6 +244,13 @@ export const firstLoginPassword = async (req: Request, res: Response): Promise<R
       return res.status(404).json({ error: 'Pengguna tidak ditemukan atau telah dinonaktifkan.' });
     }
 
+    if (user.auth_provider !== 'local') {
+      return res.status(403).json({
+        error:
+          'Akun ini menggunakan autentikasi pihak ketiga dan tidak dapat mengatur kata sandi lokal.',
+      });
+    }
+
     if (!user.requires_password_change) {
       return res.status(403).json({ error: 'Token setup tidak valid atau sudah digunakan.' });
     }

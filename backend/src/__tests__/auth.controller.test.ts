@@ -562,11 +562,44 @@ describe('auth.controller firstLoginPassword', () => {
     assert.deepEqual(res.body, { error: 'Token setup tidak valid atau sudah digunakan.' });
   });
 
+  it('rejects if user auth_provider is not local (e.g. Google OAuth account)', async (t) => {
+    withDb(t, {
+      user: {
+        id: 'google-user-1',
+        email: 'googleuser@example.com',
+        auth_provider: 'google',
+        provider_id: 'google-sub-123',
+        password_hash: null,
+        requires_password_change: true,
+        role: { name: 'user' },
+      },
+    });
+
+    const setupToken = generateSetupToken('google-user-1');
+    const res = fakeRes();
+    const req = {
+      body: {
+        setupToken,
+        newPassword: STRONG_PASSWORD,
+      },
+      headers: {},
+    } as unknown as Request;
+
+    await firstLoginPassword(req, res as unknown as Response);
+
+    assert.equal(res.status, 403);
+    assert.deepEqual(res.body, {
+      error:
+        'Akun ini menggunakan autentikasi pihak ketiga dan tidak dapat mengatur kata sandi lokal.',
+    });
+  });
+
   it('updates password and issues session on valid first login setup', async (t) => {
     const db = withDb(t, {
       user: {
         id: 'user-must-change',
         email: 'mustchange@example.com',
+        auth_provider: 'local',
         password_hash: 'initialhash',
         requires_password_change: true,
         role: { name: 'user' },

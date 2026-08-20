@@ -71,7 +71,8 @@ export function fakePrisma(initial: FakePrismaState = {}): FakePrismaHandle {
   // Anything not listed here for a given model falls back to the throwing default below.
   const derived: Partial<Record<ModelName, Partial<Record<string, AnyFn>>>> = {
     user: {
-      findUnique: () => (state.user ? { ...state.user, role: { ...state.role } } : null),
+      findUnique: () =>
+        state.user ? { auth_provider: 'local', ...state.user, role: { ...state.role } } : null,
       update: (...args: unknown[]) => {
         const { data } = args[0] as { data: AnyRecord };
         if (!state.user) throw new Error('fakePrisma: user.update called with no user in state');

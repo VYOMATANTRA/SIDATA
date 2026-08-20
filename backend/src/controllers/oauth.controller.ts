@@ -120,14 +120,16 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
             provider_id: googleProfile.sub,
             email_verified: true,
             password_hash: null,
+            requires_password_change: false,
           },
           include: { role: true },
         });
 
         // The local password is being retired in favor of Google sign-in — revoke any
-        // refresh tokens issued under it. Without this, a session obtained via a
-        // compromised password would keep working via /api/auth/refresh even after the
-        // account moves to Google-only auth.
+        // refresh tokens issued under it and clear requires_password_change so any
+        // pending first-login setup token cannot be used to reinstate a local password.
+        // Without this, a session obtained via a compromised password would keep working
+        // via /api/auth/refresh even after the account moves to Google-only auth.
         await prisma.refreshToken.updateMany({
           where: { userId: existingUser.id, isRevoked: false },
           data: { isRevoked: true },

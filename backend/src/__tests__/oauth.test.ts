@@ -572,10 +572,11 @@ describe('googleCallback auto-link by email', () => {
             provider_id: 'google-sub-linked',
             email_verified: true,
             password_hash: null,
+            requires_password_change: false,
           },
           include: { role: true },
         },
-        'auto-link must set auth_provider/provider_id/email_verified and clear the local password hash',
+        'auto-link must set auth_provider/provider_id/email_verified, clear the local password hash, and clear requires_password_change',
       );
       assert.deepEqual(
         revokeArgs,
@@ -585,6 +586,93 @@ describe('googleCallback auto-link by email', () => {
         },
         "auto-link must revoke the linked account's pre-existing refresh tokens, so a " +
           'session obtained under the old local password stops working',
+      );
+    } finally {
+      OAuth2Client.prototype.getToken = originalGetToken;
+      OAuth2Client.prototype.verifyIdToken = originalVerifyIdToken;
+      prisma.user.findFirst = originalUserFindFirst;
+      prisma.user.findUnique = originalUserFindUnique;
+      prisma.user.update = originalUserUpdate;
+      prisma.refreshToken.create = originalRefreshTokenCreate;
+      prisma.refreshToken.updateMany = originalRefreshTokenUpdateMany;
+    }
+  });
+
+  it('clears requires_password_change to false when auto-linking a local user that had a pending forced password change', async () => {
+    const originalGetToken = OAuth2Client.prototype.getToken;
+    const originalVerifyIdToken = OAuth2Client.prototype.verifyIdToken;
+    const originalUserFindFirst = prisma.user.findFirst;
+    const originalUserFindUnique = prisma.user.findUnique;
+    const originalUserUpdate = prisma.user.update;
+    const originalRefreshTokenCreate = prisma.refreshToken.create;
+    const originalRefreshTokenUpdateMany = prisma.refreshToken.updateMany;
+
+    const userWithPendingPasswordChange = {
+      id: 'local-user-pending-pw',
+      email: 'pendingpw@example.com',
+      auth_provider: 'local',
+      provider_id: null,
+      password_hash: 'temp-hash',
+      requires_password_change: true,
+      roleId: 'role-1',
+      role: { id: 'role-1', name: 'user' },
+    };
+
+    OAuth2Client.prototype.getToken = (async () => ({
+      tokens: { id_token: 'fake-id-token' },
+    })) as unknown as typeof OAuth2Client.prototype.getToken;
+    OAuth2Client.prototype.verifyIdToken = (async () => ({
+      getPayload: () => ({
+        sub: 'google-sub-pending',
+        email: 'pendingpw@example.com',
+        email_verified: true,
+      }),
+    })) as unknown as typeof OAuth2Client.prototype.verifyIdToken;
+
+    prisma.user.findFirst = (async () => null) as unknown as typeof prisma.user.findFirst;
+    prisma.user.findUnique = (async () =>
+      userWithPendingPasswordChange) as unknown as typeof prisma.user.findUnique;
+
+    let updatedData: unknown;
+    prisma.user.update = (async (args: { data: unknown }) => {
+      updatedData = args.data;
+      return {
+        ...userWithPendingPasswordChange,
+        auth_provider: 'google',
+        provider_id: 'google-sub-pending',
+        email_verified: true,
+        password_hash: null,
+        requires_password_change: false,
+      };
+    }) as unknown as typeof prisma.user.update;
+
+    prisma.refreshToken.create = (async () => ({
+      id: 2,
+      userId: 'local-user-pending-pw',
+      token: 'mock-refresh-token',
+      expiresAt: new Date(Date.now() + 3600000),
+      isRevoked: false,
+      createdAt: new Date(),
+    })) as unknown as typeof prisma.refreshToken.create;
+
+    prisma.refreshToken.updateMany = (async () => ({
+      count: 1,
+    })) as unknown as typeof prisma.refreshToken.updateMany;
+
+    try {
+      const { res, redirectedUrl } = mockRedirectRes();
+      const reqMock = {
+        query: { code: 'abc', state: 'real-state' },
+        cookies: validOAuthCookies('real-state', 'real-verifier'),
+      } as unknown as Request;
+
+      await googleCallback(reqMock, res);
+
+      assert.equal(redirectedUrl(), GOOGLE_OAUTH_SUCCESS_REDIRECT);
+      assert.equal(
+        (updatedData as { requires_password_change?: boolean })?.requires_password_change,
+        false,
+        'requires_password_change must be cleared to false upon auto-linking to Google',
       );
     } finally {
       OAuth2Client.prototype.getToken = originalGetToken;
