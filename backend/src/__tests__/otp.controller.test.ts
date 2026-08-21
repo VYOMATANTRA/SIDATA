@@ -124,6 +124,23 @@ describe('verifyOtp', () => {
     },
   );
 
+  it('rejects outright when user is soft-deleted', async (t) => {
+    const db = withDb(t, {
+      user: { ...unverifiedUser(), deletedAt: new Date() },
+    });
+
+    const res = fakeRes();
+    await verifyOtp(req({ email: 'user@example.com', otp: '123456' }), res);
+
+    assert.equal(res.status, 400);
+    assert.deepEqual(res.body, { error: 'Kode OTP tidak valid atau kedaluwarsa' });
+    assert.equal(
+      db.calls.emailOtp,
+      undefined,
+      'the OTP table must never be touched when user is soft-deleted',
+    );
+  });
+
   it('returns 400 when there is no OTP record for the user', async (t) => {
     withDb(t, { user: unverifiedUser() });
     const res = fakeRes();
@@ -341,6 +358,14 @@ describe('resendOtp', () => {
 
   it('returns 200 with generic message when the account is already verified', async (t) => {
     withDb(t, { user: verifiedUser() });
+    const res = fakeRes();
+    await resendOtp(req({ email: 'user@example.com' }), res);
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, { message: 'Kode OTP telah dikirim.' });
+  });
+
+  it('returns 200 with generic message when the account is soft-deleted', async (t) => {
+    withDb(t, { user: { ...unverifiedUser(), deletedAt: new Date() } });
     const res = fakeRes();
     await resendOtp(req({ email: 'user@example.com' }), res);
     assert.equal(res.status, 200);

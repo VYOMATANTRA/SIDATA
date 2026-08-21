@@ -22,6 +22,17 @@ const router = createRouter({
       component: () => import('../views/RegisterView.vue'),
     },
     {
+      path: '/setup-password',
+      name: 'setup-password',
+      component: () => import('../views/SetupPassword.vue'),
+    },
+    {
+      path: '/users',
+      name: 'user-management',
+      component: () => import('../views/UserManagement.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
       path: '/auth/callback',
       name: 'auth-callback',
       component: () => import('../views/AuthCallbackView.vue'),
@@ -35,21 +46,26 @@ router.beforeEach(async (to) => {
 
   const authStore = useAuthStore(pinia)
 
-  // Gate on isAuthenticated rather than isInitialized: the latter is set permanently once
-  // the first attempt completes, success or failure, so gating on it would mean a single
-  // transient /api/auth/refresh failure (cold start, dropped connection) permanently disables
-  // silent refresh for the rest of the tab's life even though the session cookie may still be
-  // valid. initAuth() itself already short-circuits once a token is actually held, so this
-  // only re-attempts while genuinely unauthenticated. initAuth() also de-dupes concurrent
-  // calls and stops retrying after a definitive 401/403 (but not after a network/5xx
-  // failure) — see the refreshDenied/inFlight comments in stores/auth.ts. Known caveat: a
-  // login performed in another tab is not picked up by this tab's guard on navigation.
-  if (!authStore.isAuthenticated) {
+  if (to.name === 'setup-password') {
+    if (!authStore.setupToken && !authStore.mustChangePassword) {
+      return { name: 'login', query: { reason: 'setup_required' } }
+    }
+  }
+
+  if (!authStore.isAuthenticated && to.name !== 'setup-password' && !authStore.mustChangePassword) {
     await authStore.initAuth()
+  }
+
+  if (authStore.mustChangePassword && to.name !== 'setup-password') {
+    return { name: 'setup-password' }
   }
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     return { name: 'login' }
+  }
+
+  if (to.meta.requiresAdmin && !authStore.isAdmin) {
+    return { name: 'home' }
   }
 
   if ((to.name === 'login' || to.name === 'register') && authStore.isAuthenticated) {

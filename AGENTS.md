@@ -81,10 +81,10 @@ Key details:
 - `src/index.ts`: Entry point — starts the HTTP listener
 - `src/app.ts`: Express app setup (middleware, CORS, route mounting)
 - `src/configs/index.ts`: Typed env var access; validated at boot
-- `src/routes/`: Route definitions (`auth.routes.ts`, `health.routes.ts`, `weather.routes.ts`)
-- `src/controllers/`: Decoupled route handlers (`auth.controller.ts` for local auth, `oauth.controller.ts` for Google OAuth, `otp.controller.ts` for OTP verification, `weather.controller.ts` — forecast lookup)
-- `src/services/`: Business logic sitting between controllers and external/data sources (`weather.service.ts` — caches and transforms BMKG forecasts)
-- `src/middlewares/`: Express middleware (`auth.middleware.ts` for JWT, `turnstile.middleware.ts` for anti-bot, `rateLimit.middleware.ts` — per-route rate limiters)
+- `src/routes/`: Route definitions (`auth.routes.ts`, `health.routes.ts`, `profile.routes.ts`, `users.routes.ts`, `weather.routes.ts`)
+- `src/controllers/`: Decoupled route handlers (`auth.controller.ts` for local auth, `oauth.controller.ts` for Google OAuth, `otp.controller.ts` for OTP verification, `profile.controller.ts` for self-service credential changes, `users.controller.ts` for user management, `weather.controller.ts` — forecast lookup)
+- `src/services/`: Business logic sitting between controllers and external/data sources (`users.service.ts` — user management & role administration, `profile.service.ts` — self-service credential updates, `weather.service.ts` — caches and transforms BMKG forecasts)
+- `src/middlewares/`: Express middleware (`auth.middleware.ts` for JWT, `role.middleware.ts` for role-based authorization, `turnstile.middleware.ts` for anti-bot, `rateLimit.middleware.ts` — per-route rate limiters))
 - `src/utils/`: `jwt.ts` (token signing), `oauth.ts` (Google OAuth PKCE & token verification), `otp.ts` (OTP hashing & expiry), `mailer.ts` (transactional email), `turnstile.ts` (Turnstile API client), `prisma.ts` (Prisma instance), `bmkg.ts` (BMKG API fetch + response validation)
 - `prisma/schema.prisma`: ORM schema (MySQL)
 - `prisma/seed.ts`: Seeds default roles (`user`, `admin`)

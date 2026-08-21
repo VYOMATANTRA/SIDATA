@@ -152,4 +152,65 @@ describe('auth store', () => {
 
     expect(refreshCalls).toBe(2)
   })
+
+  it('initAuth failure preserves setupToken and mustChangePassword when user is in password setup flow', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+      }
+      return { ok: false, status: 401, json: async () => ({}) } as Response
+    })
+
+    const store = useAuthStore()
+    store.setSetupAuth('valid-setup-token')
+    expect(store.mustChangePassword).toBe(true)
+    expect(store.setupToken).toBe('valid-setup-token')
+
+    const result = await store.initAuth()
+
+    expect(result).toBe(false)
+    expect(store.mustChangePassword).toBe(true)
+    expect(store.setupToken).toBe('valid-setup-token')
+  })
+
+  it('setSetupAuth persists setupToken to sessionStorage and initializes store on reload', () => {
+    sessionStorage.clear()
+    const store = useAuthStore()
+    store.setSetupAuth('persisted-setup-token')
+
+    expect(sessionStorage.getItem('sidata_setup_token')).toBe('persisted-setup-token')
+    expect(store.setupToken).toBe('persisted-setup-token')
+    expect(store.mustChangePassword).toBe(true)
+
+    // Simulate page reload by creating a new store instance
+    setActivePinia(createPinia())
+    const reloadedStore = useAuthStore()
+    expect(reloadedStore.setupToken).toBe('persisted-setup-token')
+    expect(reloadedStore.mustChangePassword).toBe(true)
+  })
+
+  it('setAuth clears setupToken from store and sessionStorage', () => {
+    sessionStorage.clear()
+    const store = useAuthStore()
+    store.setSetupAuth('persisted-setup-token')
+    expect(sessionStorage.getItem('sidata_setup_token')).toBe('persisted-setup-token')
+
+    store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'access-token')
+    expect(store.setupToken).toBeNull()
+    expect(store.mustChangePassword).toBe(false)
+    expect(sessionStorage.getItem('sidata_setup_token')).toBeNull()
+  })
+
+  it('clearAuth clears setupToken from store and sessionStorage when keepSetup is false', () => {
+    sessionStorage.clear()
+    const store = useAuthStore()
+    store.setSetupAuth('persisted-setup-token')
+    expect(sessionStorage.getItem('sidata_setup_token')).toBe('persisted-setup-token')
+
+    store.clearAuth(false)
+    expect(store.setupToken).toBeNull()
+    expect(store.mustChangePassword).toBe(false)
+    expect(sessionStorage.getItem('sidata_setup_token')).toBeNull()
+  })
 })

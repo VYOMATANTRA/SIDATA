@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   register,
   login,
+  firstLoginPassword,
   refreshToken,
   logout,
   getMe,
@@ -20,6 +21,7 @@ const router = Router();
 router.get('/csrf-token', sessionLimiter, getCsrfToken);
 router.post('/register', authLimiter, requireTurnstile, register);
 router.post('/login', authLimiter, loginLimiter, requireTurnstile, login);
+router.post('/first-login-password', authLimiter, requireTurnstile, firstLoginPassword);
 router.post('/verify-otp', authLimiter, requireTurnstile, verifyOtp);
 router.post('/resend-otp', authLimiter, requireTurnstile, resendOtp);
 router.post('/refresh', sessionLimiter, refreshToken);
