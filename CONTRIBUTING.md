@@ -12,10 +12,10 @@ Work from the appropriate directory:
 - Frontend: `frontend/`
 - Backend: `backend/`
 
-Backend requires a `.env` file (`DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`,
+Backend requires a `.env` file at the repository root (`DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`,
 `CSRF_SECRET`, `COOKIE_ENCRYPTION_KEY`, `CORS_ORIGIN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`,
 `GOOGLE_OAUTH_SUCCESS_REDIRECT`, `GOOGLE_OAUTH_FAILURE_REDIRECT`, `TURNSTILE_SECRET`, `RESEND_API_KEY`,
-`EMAIL_FROM` — see `backend/.env.example`). The server validates these at boot and
+`EMAIL_FROM` — see `.env.example`; use `localhost` for local runs, `mysql` host for Docker). The server validates these at boot and
 fails fast if any are missing. Mutating auth requests must include an `x-csrf-token` header
 obtained from `GET /api/auth/csrf-token`.
 
