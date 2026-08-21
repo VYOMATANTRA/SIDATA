@@ -36,14 +36,14 @@ Dev server runs on `http://localhost:5173` by default (Vite).
 
 ### Backend (Express + Prisma)
 
-| Task           | Command                           | Location   |
-| -------------- | --------------------------------- | ---------- |
-| Lint           | `npm run lint`                    | `backend/` |
-| Run tests      | `npm test`                        | `backend/` |
-| Run tests with coverage | `npm run test:coverage`  | `backend/` |
-| Format         | `npm run format`                  | `backend/` |
-| Run server     | `npx tsx src/index.ts` or similar | `backend/` |
-| Run via Docker | `docker compose up --build`       | repo root  |
+| Task                    | Command                           | Location   |
+| ----------------------- | --------------------------------- | ---------- |
+| Lint                    | `npm run lint`                    | `backend/` |
+| Run tests               | `npm test`                        | `backend/` |
+| Run tests with coverage | `npm run test:coverage`           | `backend/` |
+| Format                  | `npm run format`                  | `backend/` |
+| Run server              | `npx tsx src/index.ts` or similar | `backend/` |
+| Run via Docker          | `docker compose up --build`       | repo root  |
 
 Backend runs on port from `PORT` env var (default 3000). Prisma client is generated to `generated/prisma/`.
 
@@ -56,6 +56,8 @@ Backend runs on port from `PORT` env var (default 3000). Prisma client is genera
 **Keep documentation in sync** — whenever a change affects setup, commands, architecture, env vars, or workflows, update the relevant docs (README.md, CONTRIBUTING.md, SECURITY.md, this file) in the same PR rather than leaving them stale.
 
 **Keep the spec in sync** — whenever a change settles or revises a product/domain decision (page structure, content model, roles, data-entry rules, schema design intent, scope), update `docs/SPEC.md` in the same PR. Record the decision and the rule it implies, not the deliberation behind it — rationale for settled questions is context every future session pays for. Unresolved questions belong in SPEC.md §10 and nowhere else.
+
+**Accessibility** — frontend markup MUST use semantic HTML and SHOULD conform to WCAG 2.1 Level A. See `docs/ACCESSIBILITY.md` for the concrete rules; apply them while writing a component, not as a retrofit.
 
 ## Architecture
 
@@ -118,6 +120,7 @@ Key details:
 - **ESLint configs**: `frontend/eslint.config.ts`, `backend/eslint.config.js`
 - **TypeScript**: `frontend/tsconfig.json`, `backend/tsconfig.json` (with app config for frontend)
 - **Vite config**: `frontend/vite.config.ts` (Tailwind, Vue plugins, `@` alias)
+- **`docs/ACCESSIBILITY.md`**: Semantic HTML rules (MUST) and WCAG 2.1 Level A conformance target (SHOULD) for frontend markup
 
 ## Common Workflows
 

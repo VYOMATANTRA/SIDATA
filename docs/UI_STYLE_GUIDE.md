@@ -130,7 +130,33 @@ The design is mobile-first, optimized for a `412px` viewport.
   - **Links:** `text-sm text-white hover:opacity-80 transition-opacity`
 - **Copyright Text:** `text-sm text-white text-center w-full mt-4`
 
-## 4. Coding Directives
+## 4. Accessibility
+
+Frontend markup MUST use semantic HTML and SHOULD conform to WCAG 2.1 Level A. The full rules,
+the per-criterion table, and the current known-gaps list live in
+[`docs/ACCESSIBILITY.md`](ACCESSIBILITY.md) — read that before building a new component, not
+after. The short version that applies directly to the components below:
+
+- **Buttons (§3.A):** render a real `<button type="button">` by default; switch to `<a href>`
+  only when a destination is passed — never a `<div>` with a click handler. This is already
+  `BaseButton.vue`'s behavior; keep it that way as variants are added.
+- **Stat cards (§3.B):** value/label pairs are semantically a description list (`<dl>/<dt>/<dd>`),
+  not a plain `<div>` stack — `KeyStatistics.vue` already does this.
+- **Layout & sections (§3.C):** each routed view gets exactly one `<main>` and one `<h1>`; section
+  components use `<section>`, not bare `<div>`.
+- **Footer (§3.D):** stays a real `<footer>` with `<nav aria-label="...">` per link column (already
+  the convention); every link needs a real `href`, not a placeholder `"#"`.
+
+### Forms
+
+No form component exists in this style guide yet, but the auth views (`LoginView.vue`,
+`RegisterView.vue`, `SetupPassword.vue`) set the pattern new forms will follow. Every control MUST
+pair a `<label for="...">` with a matching input `id` — a sibling `<label>` with no `for` looks
+right visually but is not programmatically associated with its input. Credential fields SHOULD set
+`autocomplete` (`email`, `current-password`, `new-password`). See
+[`docs/ACCESSIBILITY.md`](ACCESSIBILITY.md) §4 for the rest.
+
+## 5. Coding Directives
 
 1. **Vue `<script setup>` Structure:** Use Vue 3 Composition API with `<script setup>`.
 2. **Tailwind v4 Best Practices:** Rely on the natively defined `@theme` variables (e.g., `bg-brand-navy`, `text-xl`) rather than heavy arbitrary brackets (like `text-[42px]`) to maintain the single source of truth.
