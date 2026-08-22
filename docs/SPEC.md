@@ -21,6 +21,9 @@ Balikpapan. It is:
   it explains the PPID request procedure for data not published on the site; it never hosts PPID
   documents (e.g. no Transparansi Keuangan).
 
+Frontend markup must use semantic HTML and target WCAG 2.1 Level A conformance — see
+[`docs/ACCESSIBILITY.md`](ACCESSIBILITY.md) for the rules this implies.
+
 Related but distinct artifacts that feed into the site's content:
 
 - **Eco Boba booklet** — full training-documentation artifact (separate publication). Its content
@@ -206,6 +209,10 @@ Plus the landing page itself.
   collection is a Prodeskel-stage concern.
 - **Civil-administration features** (the earlier-explored district-level admin system / VPS
   infrastructure work) — a separate, earlier workstream, not part of this site.
+- **WCAG Level AA/AAA conformance** — the target is Level A (§1). AA criteria such as color
+  contrast (1.4.3) and visible focus indicators (2.4.7) are documented as SHOULD-level guidance in
+  `docs/ACCESSIBILITY.md` rather than enforced, since no automated audit or CI gate exists yet to
+  hold the higher bar.
 
 ## 10. Open Items
 
