@@ -6,6 +6,7 @@
   "scripts": {
     "test": "bash -O globstar -c \"tsx --import ./src/__tests__/setupEnv.ts --test src/**/*.test.ts\"",
     "test:coverage": "node scripts/coverage.mjs",
+    "dev:seed": "tsx scripts/dev-seed.ts",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
