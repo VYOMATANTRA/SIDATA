@@ -514,7 +514,7 @@ describe('maps.controller', () => {
       }
     });
 
-    it('sets rtNumber filter when standalone numeric search is provided', async () => {
+    it('includes rtNumber and substring matches in OR when standalone numeric search is provided', async () => {
       const originalCount = prisma.rtLeader.count;
       const originalFindMany = prisma.rtLeader.findMany;
       const originalCoverageFindMany = prisma.spatialPointRt.findMany;
@@ -537,8 +537,12 @@ describe('maps.controller', () => {
         await listRtLeaders(req, res as unknown as Response);
 
         assert.equal(res.status, 200);
-        assert.equal(capturedWhere?.rtNumber, 7);
-        assert.equal(capturedWhere?.OR, undefined);
+        assert.equal(capturedWhere?.rtNumber, undefined);
+        assert.deepEqual(capturedWhere?.OR, [
+          { rtNumber: 7 },
+          { name: { contains: '7' } },
+          { alamat: { contains: '7' } },
+        ]);
       } finally {
         prisma.rtLeader.count = originalCount;
         prisma.rtLeader.findMany = originalFindMany;

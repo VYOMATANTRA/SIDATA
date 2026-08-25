@@ -242,6 +242,7 @@ export async function getRtLeaders(query?: RtLeaderQuery): Promise<{
   const where: {
     rtNumber?: number;
     OR?: Array<{
+      rtNumber?: number;
       name?: { contains: string };
       alamat?: { contains: string };
     }>;
@@ -254,12 +255,14 @@ export async function getRtLeaders(query?: RtLeaderQuery): Promise<{
   if (query?.search && query.search.trim() !== '') {
     const term = query.search.trim();
     const parsedRt = parseInt(term, 10);
-    if (
-      typeof query?.rtNumber !== 'number' &&
-      !Number.isNaN(parsedRt) &&
-      String(parsedRt) === term
-    ) {
-      where.rtNumber = parsedRt;
+    const isPureInteger = !Number.isNaN(parsedRt) && String(parsedRt) === term;
+
+    if (isPureInteger && typeof query?.rtNumber !== 'number') {
+      where.OR = [
+        { rtNumber: parsedRt },
+        { name: { contains: term } },
+        { alamat: { contains: term } },
+      ];
     } else {
       where.OR = [{ name: { contains: term } }, { alamat: { contains: term } }];
     }
