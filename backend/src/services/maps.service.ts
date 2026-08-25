@@ -1,6 +1,12 @@
 import prisma from '../utils/prisma.js';
 import type { SpatialPointType } from '../../generated/prisma/client.js';
 
+export const ALL_SPATIAL_POINT_TYPES: readonly SpatialPointType[] = [
+  'ketua_rt',
+  'bank_sampah',
+  'fasilitas_umum',
+] as const;
+
 export interface SpatialPointDTO {
   id: string;
   name: string;
@@ -376,7 +382,11 @@ export async function getMapSummary(): Promise<MapSummaryDTO> {
     }),
   ]);
 
-  const pointsByType: Record<string, number> = {};
+  const pointsByType: Record<string, number> = {
+    ketua_rt: 0,
+    bank_sampah: 0,
+    fasilitas_umum: 0,
+  };
   for (const group of pointsGrouped) {
     pointsByType[group.type] = group._count._all;
   }

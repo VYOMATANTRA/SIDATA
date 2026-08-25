@@ -771,6 +771,7 @@ describe('maps.controller', () => {
         assert.equal(body.totalPoints, 5);
         assert.equal(body.pointsByType.ketua_rt, 3);
         assert.equal(body.pointsByType.bank_sampah, 2);
+        assert.equal(body.pointsByType.fasilitas_umum, 0);
         assert.equal(body.totalRtLeaders, 10);
         assert.equal(body.rtLeadersWithCoordinates, 4);
         assert.equal(body.rtLeadersWithoutCoordinates, 6);
