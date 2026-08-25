@@ -33,8 +33,10 @@ export interface AuditRetentionSettings {
   critical: number;
 }
 
-export const getAuditRetentionSettings = async (): Promise<AuditRetentionSettings> => {
-  const rows = await prisma.systemSetting.findMany({
+export const getAuditRetentionSettings = async (
+  client: { systemSetting: Pick<typeof prisma.systemSetting, 'findMany'> } = prisma,
+): Promise<AuditRetentionSettings> => {
+  const rows = await client.systemSetting.findMany({
     where: { key: { in: Object.values(AUDIT_RETENTION_KEYS) } },
   });
 
@@ -93,32 +95,43 @@ export const updateAuditRetentionSettings = async (params: {
 }) => {
   const { payload, actor, context } = params;
   const next = validateRetentionPayload(payload);
-  const before = await getAuditRetentionSettings();
-
-  const upsertOne = (key: string, value: number, updatedById: string | null | undefined) =>
-    prisma.systemSetting.upsert({
-      where: { key },
-      update: { value: String(value), updatedById: updatedById ?? null },
-      create: { key, value: String(value), updatedById: updatedById ?? null },
-    });
 
   // Shortening retention is the single most useful move for someone covering their tracks, so
   // this change is logged at `critical` severity — the loudest level the system has — with the
-  // full before/after in metadata. This write goes through the same "mutation + audit row in
-  // one transaction" pattern as users.service.ts, so a failed audit write rolls back the
-  // settings change rather than leaving an unlogged retention change in place.
-  await prisma.$transaction([
-    upsertOne(AUDIT_RETENTION_KEYS.info, next.info, actor.id),
-    upsertOne(AUDIT_RETENTION_KEYS.warning, next.warning, actor.id),
-    upsertOne(AUDIT_RETENTION_KEYS.critical, next.critical, actor.id),
-    buildAuditLog({
-      action: AUDIT_ACTIONS.SETTINGS_AUDIT_RETENTION_CHANGED,
-      actor,
-      target: { type: 'system_setting', id: 'audit_retention', label: 'Retensi Audit Log' },
-      metadata: { before, after: next },
-      context,
-    }),
-  ]);
+  // full before/after in metadata. That before/after has to be trustworthy, so this uses the
+  // interactive form of $transaction (unlike the array form used elsewhere, e.g.
+  // users.service.ts): a `SELECT ... FOR UPDATE` locks the three rows first, serializing this
+  // against any concurrent retention update, so the "before" read below is guaranteed to be the
+  // value that directly preceded this write rather than a stale read racing another admin's
+  // in-flight change. A failed audit write still rolls back the settings change, same as before.
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT setting_key FROM system_settings WHERE setting_key IN (${AUDIT_RETENTION_KEYS.info}, ${AUDIT_RETENTION_KEYS.warning}, ${AUDIT_RETENTION_KEYS.critical}) FOR UPDATE`;
+    const before = await getAuditRetentionSettings(tx);
 
-  return next;
+    // Sequential, not Promise.all: interactive transactions run on a single shared connection,
+    // so concurrent queries against the same `tx` risk interleaving/closed-transaction errors.
+    const upsertOne = (key: string, value: number) =>
+      tx.systemSetting.upsert({
+        where: { key },
+        update: { value: String(value), updatedById: actor.id ?? null },
+        create: { key, value: String(value), updatedById: actor.id ?? null },
+      });
+
+    await upsertOne(AUDIT_RETENTION_KEYS.info, next.info);
+    await upsertOne(AUDIT_RETENTION_KEYS.warning, next.warning);
+    await upsertOne(AUDIT_RETENTION_KEYS.critical, next.critical);
+
+    await buildAuditLog(
+      {
+        action: AUDIT_ACTIONS.SETTINGS_AUDIT_RETENTION_CHANGED,
+        actor,
+        target: { type: 'system_setting', id: 'audit_retention', label: 'Retensi Audit Log' },
+        metadata: { before, after: next },
+        context,
+      },
+      tx,
+    );
+
+    return next;
+  });
 };

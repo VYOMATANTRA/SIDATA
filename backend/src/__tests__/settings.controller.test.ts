@@ -110,15 +110,31 @@ describe('settings.controller updateAuditRetention', () => {
 
   it('accepts 0 (infinite) at the more-severe end of the ordering', async () => {
     const originalFindMany = prisma.systemSetting.findMany;
+    const originalUpsert = prisma.systemSetting.upsert;
+    const originalAuditCreate = prisma.auditLog.create;
     const originalTransaction = prisma.$transaction;
+    const originalQueryRaw = prisma.$queryRaw;
 
     prisma.systemSetting.findMany =
       (async () => []) as unknown as typeof prisma.systemSetting.findMany;
-    let transactionOps: unknown[] = [];
-    prisma.$transaction = (async (ops: unknown[]) => {
-      transactionOps = ops;
-      return [];
+    let upsertCount = 0;
+    prisma.systemSetting.upsert = (async (args: { create: Record<string, unknown> }) => {
+      upsertCount += 1;
+      return { ...args.create, updatedAt: new Date() };
+    }) as unknown as typeof prisma.systemSetting.upsert;
+    let auditCreateCount = 0;
+    prisma.auditLog.create = (async (args: { data: Record<string, unknown> }) => {
+      auditCreateCount += 1;
+      return { id: 'audit-1', ...args.data };
+    }) as unknown as typeof prisma.auditLog.create;
+    // updateAuditRetentionSettings now uses the interactive (callback) form of $transaction —
+    // see settings.service.ts — so the stub must invoke the callback with the stubbed `prisma`
+    // as `tx`, same as fakePrisma.ts's helper does for other tests.
+    prisma.$transaction = (async (arg: unknown) => {
+      if (typeof arg === 'function') return (arg as (tx: typeof prisma) => unknown)(prisma);
+      throw new Error('expected the interactive (function) form of $transaction');
     }) as unknown as typeof prisma.$transaction;
+    prisma.$queryRaw = (async () => []) as unknown as typeof prisma.$queryRaw;
 
     try {
       // warning/critical=0 (infinite) with a finite, smaller info is a valid ordering: nothing
@@ -130,10 +146,14 @@ describe('settings.controller updateAuditRetention', () => {
       );
 
       assert.equal(res.status, 200);
-      assert.equal(transactionOps.length, 4, 'expects 3 upserts + 1 audit log write');
+      assert.equal(upsertCount, 3, 'expects 3 upserts (info/warning/critical)');
+      assert.equal(auditCreateCount, 1, 'expects 1 audit log write');
     } finally {
       prisma.systemSetting.findMany = originalFindMany;
+      prisma.systemSetting.upsert = originalUpsert;
+      prisma.auditLog.create = originalAuditCreate;
       prisma.$transaction = originalTransaction;
+      prisma.$queryRaw = originalQueryRaw;
     }
   });
 
@@ -141,6 +161,7 @@ describe('settings.controller updateAuditRetention', () => {
     const originalFindMany = prisma.systemSetting.findMany;
     const originalUpsert = prisma.systemSetting.upsert;
     const originalTransaction = prisma.$transaction;
+    const originalQueryRaw = prisma.$queryRaw;
     const originalAuditCreate = prisma.auditLog.create;
 
     prisma.systemSetting.findMany = (async () => [
@@ -149,9 +170,6 @@ describe('settings.controller updateAuditRetention', () => {
       { key: 'audit.retention_critical_days', value: '0' },
     ]) as unknown as typeof prisma.systemSetting.findMany;
 
-    // $transaction below faithfully awaits its array (Promise.all) so the audit-log assertions
-    // can trust what was actually passed to it — which means every other op in that array needs
-    // a real stub too, or Promise.all would touch a real (absent) database.
     prisma.systemSetting.upsert = (async (args: { create: Record<string, unknown> }) => ({
       ...args.create,
       updatedAt: new Date(),
@@ -162,8 +180,15 @@ describe('settings.controller updateAuditRetention', () => {
       auditLogged = args.data;
       return { id: 'audit-1', ...args.data };
     }) as unknown as typeof prisma.auditLog.create;
-    prisma.$transaction = (async (ops: unknown[]) =>
-      Promise.all(ops)) as unknown as typeof prisma.$transaction;
+    // updateAuditRetentionSettings now uses the interactive (callback) form of $transaction —
+    // see settings.service.ts — so the stub invokes the callback with the stubbed `prisma` as
+    // `tx`, same as fakePrisma.ts's helper does for other tests. The FOR UPDATE lock query is
+    // stubbed to a no-op since there's no real DB in this test.
+    prisma.$transaction = (async (arg: unknown) => {
+      if (typeof arg === 'function') return (arg as (tx: typeof prisma) => unknown)(prisma);
+      throw new Error('expected the interactive (function) form of $transaction');
+    }) as unknown as typeof prisma.$transaction;
+    prisma.$queryRaw = (async () => []) as unknown as typeof prisma.$queryRaw;
 
     try {
       const res = fakeRes();
@@ -182,6 +207,7 @@ describe('settings.controller updateAuditRetention', () => {
       prisma.systemSetting.findMany = originalFindMany;
       prisma.systemSetting.upsert = originalUpsert;
       prisma.$transaction = originalTransaction;
+      prisma.$queryRaw = originalQueryRaw;
       prisma.auditLog.create = originalAuditCreate;
     }
   });

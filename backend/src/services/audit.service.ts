@@ -86,15 +86,21 @@ export interface AuditEntry {
 }
 
 /**
- * Builds (but does not await) the `prisma.auditLog.create(...)` call for one entry, so it can
- * be pushed as an extra op into an existing `prisma.$transaction([...])` array — the codebase
- * uses only the array/batch form of $transaction (see users.service.ts, profile.service.ts),
- * never the interactive callback form, so there is no `tx` client to thread through; this is
- * the shape that form requires. Prisma Client promises are lazy, so calling this does not touch
- * the DB until the resulting promise is awaited (directly, or via $transaction).
+ * Builds (but does not await) the `auditLog.create(...)` call for one entry, so it can be pushed
+ * as an extra op into an existing `prisma.$transaction([...])` array — the codebase mostly uses
+ * only the array/batch form of $transaction (see users.service.ts, profile.service.ts), not the
+ * interactive callback form, so there is usually no `tx` client to thread through. The optional
+ * `client` param exists for the rare case that does need the interactive form — e.g.
+ * settings.service.ts's retention update, where the audit row's "before" metadata must be read
+ * under the same row lock that guards the write, which the array form can't express. Prisma
+ * Client promises are lazy, so calling this does not touch the DB until the resulting promise is
+ * awaited (directly, via $transaction, or by the interactive-transaction runtime).
  */
-export function buildAuditLog(entry: AuditEntry) {
-  return prisma.auditLog.create({
+export function buildAuditLog(
+  entry: AuditEntry,
+  client: { auditLog: Pick<typeof prisma.auditLog, 'create'> } = prisma,
+) {
+  return client.auditLog.create({
     data: {
       action: entry.action.action,
       severity: entry.action.severity,
