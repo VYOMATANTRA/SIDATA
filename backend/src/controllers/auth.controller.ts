@@ -199,17 +199,17 @@ export const login = async (req: Request, res: Response): Promise<Response | voi
       });
     }
 
-    const { accessToken } = await issueSession(res, {
-      id: user.id,
-      email: user.email,
-      role: user.role.name,
-    });
-
     await recordAuditLog({
       action: AUDIT_ACTIONS.AUTH_LOGIN,
       actor: { id: user.id, email: user.email, role: user.role.name },
       target: { type: 'user', id: user.id, label: user.email },
       context: extractRequestContext(req),
+    });
+
+    const { accessToken } = await issueSession(res, {
+      id: user.id,
+      email: user.email,
+      role: user.role.name,
     });
 
     return res.status(200).json({
