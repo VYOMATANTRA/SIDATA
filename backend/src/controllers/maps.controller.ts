@@ -10,6 +10,7 @@ import {
 import type { SpatialPointType } from '../../generated/prisma/client.js';
 
 const VALID_SPATIAL_TYPES: SpatialPointType[] = ['ketua_rt', 'bank_sampah', 'fasilitas_umum'];
+export const DEFAULT_PAGE_SIZE = 10;
 
 function parsePositiveIntParam(
   value: unknown,
@@ -107,12 +108,15 @@ export const listRtLeaders = async (req: Request, res: Response): Promise<Respon
       return res.status(400).json({ error: rtError });
     }
 
-    const parsedLimit = parseOptionalInt(limit, 1);
+    let parsedLimit = parseOptionalInt(limit, 1);
     let parsedOffset = parseOptionalInt(offset, 0);
 
-    if (parsedOffset === undefined && typeof page === 'string' && parsedLimit) {
+    if (parsedOffset === undefined && typeof page === 'string' && page.trim() !== '') {
       const p = parseOptionalInt(page, 1);
       if (p !== undefined) {
+        if (parsedLimit === undefined) {
+          parsedLimit = DEFAULT_PAGE_SIZE;
+        }
         parsedOffset = (p - 1) * parsedLimit;
       }
     }

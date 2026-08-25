@@ -366,6 +366,102 @@ describe('maps.controller', () => {
       }
     });
 
+    it('defaults limit to 10 and computes skip when page is provided without limit', async () => {
+      const originalCount = prisma.rtLeader.count;
+      const originalFindMany = prisma.rtLeader.findMany;
+
+      let capturedArgs: { take?: number; skip?: number; where?: unknown } | undefined;
+      prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
+      prisma.rtLeader.findMany = (async (args: {
+        take?: number;
+        skip?: number;
+        where?: unknown;
+      }) => {
+        capturedArgs = args;
+        return [];
+      }) as unknown as typeof prisma.rtLeader.findMany;
+
+      try {
+        const req = {
+          query: { page: '2' },
+        } as unknown as Request;
+        const res = fakeRes();
+
+        await listRtLeaders(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        assert.equal(capturedArgs?.take, 10);
+        assert.equal(capturedArgs?.skip, 10); // page 2 with default limit 10 => skip 10
+      } finally {
+        prisma.rtLeader.count = originalCount;
+        prisma.rtLeader.findMany = originalFindMany;
+      }
+    });
+
+    it('defaults limit to 10 and sets skip to 0 when page: "1" is provided without limit', async () => {
+      const originalCount = prisma.rtLeader.count;
+      const originalFindMany = prisma.rtLeader.findMany;
+
+      let capturedArgs: { take?: number; skip?: number; where?: unknown } | undefined;
+      prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
+      prisma.rtLeader.findMany = (async (args: {
+        take?: number;
+        skip?: number;
+        where?: unknown;
+      }) => {
+        capturedArgs = args;
+        return [];
+      }) as unknown as typeof prisma.rtLeader.findMany;
+
+      try {
+        const req = {
+          query: { page: '1' },
+        } as unknown as Request;
+        const res = fakeRes();
+
+        await listRtLeaders(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        assert.equal(capturedArgs?.take, 10);
+        assert.equal(capturedArgs?.skip, 0); // page 1 with default limit 10 => skip 0
+      } finally {
+        prisma.rtLeader.count = originalCount;
+        prisma.rtLeader.findMany = originalFindMany;
+      }
+    });
+
+    it('leaves take and skip undefined when no pagination parameters are provided', async () => {
+      const originalCount = prisma.rtLeader.count;
+      const originalFindMany = prisma.rtLeader.findMany;
+
+      let capturedArgs: { take?: number; skip?: number; where?: unknown } | undefined;
+      prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
+      prisma.rtLeader.findMany = (async (args: {
+        take?: number;
+        skip?: number;
+        where?: unknown;
+      }) => {
+        capturedArgs = args;
+        return [];
+      }) as unknown as typeof prisma.rtLeader.findMany;
+
+      try {
+        const req = {
+          query: {},
+        } as unknown as Request;
+        const res = fakeRes();
+
+        await listRtLeaders(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        assert.equal(capturedArgs?.take, undefined);
+        assert.equal(capturedArgs?.skip, undefined);
+      } finally {
+        prisma.rtLeader.count = originalCount;
+        prisma.rtLeader.findMany = originalFindMany;
+      }
+    });
+
     it('sets rtNumber filter when standalone numeric search is provided', async () => {
       const originalCount = prisma.rtLeader.count;
       const originalFindMany = prisma.rtLeader.findMany;
