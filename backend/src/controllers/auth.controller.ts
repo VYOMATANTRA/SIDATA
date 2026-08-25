@@ -15,6 +15,8 @@ import { JWT_SECRET, JWT_REFRESH_SECRET } from '../configs/index.js';
 import { normalizeEmail } from '../utils/validation.js';
 import { generate6DigitOtp, hashOtp, getOtpExpiration } from '../utils/otp.js';
 import { sendOtpEmail } from '../utils/mailer.js';
+import { recordAuditLog, AUDIT_ACTIONS } from '../services/audit.service.js';
+import { extractRequestContext } from '../utils/requestContext.js';
 
 export const register = async (req: Request, res: Response): Promise<Response | void> => {
   try {
@@ -156,11 +158,25 @@ export const login = async (req: Request, res: Response): Promise<Response | voi
     });
 
     if (!user || user.deletedAt != null || !user.password_hash) {
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.AUTH_LOGIN_FAILED,
+        target: { type: 'user', label: normalizedEmail },
+        outcome: 'failure',
+        metadata: { reason: 'invalid_credentials' },
+        context: extractRequestContext(req),
+      });
       return res.status(401).json({ error: 'Kredensial tidak valid' });
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
     if (!isPasswordValid) {
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.AUTH_LOGIN_FAILED,
+        target: { type: 'user', id: user.id, label: user.email },
+        outcome: 'failure',
+        metadata: { reason: 'invalid_credentials' },
+        context: extractRequestContext(req),
+      });
       return res.status(401).json({ error: 'Kredensial tidak valid' });
     }
 
@@ -187,6 +203,13 @@ export const login = async (req: Request, res: Response): Promise<Response | voi
       id: user.id,
       email: user.email,
       role: user.role.name,
+    });
+
+    await recordAuditLog({
+      action: AUDIT_ACTIONS.AUTH_LOGIN,
+      actor: { id: user.id, email: user.email, role: user.role.name },
+      target: { type: 'user', id: user.id, label: user.email },
+      context: extractRequestContext(req),
     });
 
     return res.status(200).json({
@@ -281,6 +304,13 @@ export const firstLoginPassword = async (req: Request, res: Response): Promise<R
       },
     });
 
+    await recordAuditLog({
+      action: AUDIT_ACTIONS.AUTH_FIRST_LOGIN_PASSWORD_SET,
+      actor: { id: user.id, email: user.email, role: user.role.name },
+      target: { type: 'user', id: user.id, label: user.email },
+      context: extractRequestContext(req),
+    });
+
     const { accessToken } = await issueSession(res, {
       id: user.id,
       email: user.email,
@@ -342,6 +372,13 @@ export const refreshToken = async (req: Request, res: Response): Promise<Respons
     const payload = jwt.verify(token, JWT_REFRESH_SECRET) as { id: string };
 
     if (!payload || payload.id !== existingToken.userId) {
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.AUTH_REFRESH_TOKEN_MISMATCH,
+        target: { type: 'user', id: existingToken.userId, label: existingToken.user.email },
+        outcome: 'failure',
+        metadata: { refreshTokenId: existingToken.id },
+        context: extractRequestContext(req),
+      });
       return res.status(403).json({ error: 'Token tidak cocok' });
     }
 
@@ -374,12 +411,32 @@ export const logout = async (req: Request, res: Response): Promise<Response | vo
       return res.status(204).send(); // 204 No Content
     }
 
+    // Looked up before revoking purely to attach an actor to the audit row below — updateMany
+    // itself doesn't return the affected row's data.
+    const existingToken = await prisma.refreshToken.findUnique({
+      where: { token },
+      include: { user: { include: { role: true } } },
+    });
+
     await prisma.refreshToken.updateMany({
       where: { token },
       data: { isRevoked: true },
     });
 
     res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, REFRESH_TOKEN_COOKIE_OPTIONS);
+
+    if (existingToken) {
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.AUTH_LOGOUT,
+        actor: {
+          id: existingToken.userId,
+          email: existingToken.user.email,
+          role: existingToken.user.role.name,
+        },
+        target: { type: 'user', id: existingToken.userId, label: existingToken.user.email },
+        context: extractRequestContext(req),
+      });
+    }
 
     return res.status(200).json({ message: 'Logout berhasil' });
   } catch (error) {

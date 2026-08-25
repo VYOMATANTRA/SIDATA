@@ -445,6 +445,9 @@ describe('auth.controller refreshToken', () => {
     // string equality — this is the "token tidak cocok" integrity check.
     const mismatchedToken = jwt.sign({ id: 'attacker-id' }, JWT_REFRESH_SECRET);
     const originalFindUnique = prisma.refreshToken.findUnique;
+    const originalAuditCreate = prisma.auditLog.create;
+    const originalTransaction = prisma.$transaction;
+
     prisma.refreshToken.findUnique = (async () => ({
       id: 'token-1',
       token: mismatchedToken,
@@ -454,14 +457,29 @@ describe('auth.controller refreshToken', () => {
       user: { id: 'user-1', email: 'user@example.com', role: { name: 'user' } },
     })) as unknown as typeof prisma.refreshToken.findUnique;
 
+    // This branch records an auth.refresh_token_mismatch audit row via recordAuditLog, which
+    // wraps a single prisma.auditLog.create in prisma.$transaction([...]) — stub both so the
+    // test doesn't need a real DB.
+    let auditLogged: Record<string, unknown> | undefined;
+    prisma.auditLog.create = (async (args: { data: Record<string, unknown> }) => {
+      auditLogged = args.data;
+      return { id: 'audit-1', ...args.data };
+    }) as unknown as typeof prisma.auditLog.create;
+    prisma.$transaction = (async (ops: unknown[]) =>
+      Promise.all(ops)) as unknown as typeof prisma.$transaction;
+
     try {
       const res = fakeRes();
       await refreshToken({ cookies: { refreshToken: mismatchedToken } } as unknown as Request, res);
 
       assert.equal(res.status, 403);
       assert.deepEqual(res.body, { error: 'Token tidak cocok' });
+      assert.equal(auditLogged?.action, 'auth.refresh_token_mismatch');
+      assert.equal(auditLogged?.severity, 'critical');
     } finally {
       prisma.refreshToken.findUnique = originalFindUnique;
+      prisma.auditLog.create = originalAuditCreate;
+      prisma.$transaction = originalTransaction;
     }
   });
 });
@@ -488,11 +506,32 @@ describe('auth.controller logout', () => {
 
   it('revokes the stored token and clears the cookie when a refresh token cookie is present', async () => {
     const originalUpdateMany = prisma.refreshToken.updateMany;
+    const originalFindUnique = prisma.refreshToken.findUnique;
+    const originalAuditCreate = prisma.auditLog.create;
+    const originalTransaction = prisma.$transaction;
+
     let updateArgs: unknown;
     prisma.refreshToken.updateMany = (async (args: unknown) => {
       updateArgs = args;
       return { count: 1 };
     }) as unknown as typeof prisma.refreshToken.updateMany;
+
+    // logout() looks the token up (for the audit actor) before revoking it.
+    prisma.refreshToken.findUnique = (async () => ({
+      id: 'token-1',
+      token: 'some-token',
+      userId: 'user-1',
+      isRevoked: false,
+      user: { id: 'user-1', email: 'user@example.com', role: { name: 'user' } },
+    })) as unknown as typeof prisma.refreshToken.findUnique;
+
+    let auditLogged: Record<string, unknown> | undefined;
+    prisma.auditLog.create = (async (args: { data: Record<string, unknown> }) => {
+      auditLogged = args.data;
+      return { id: 'audit-1', ...args.data };
+    }) as unknown as typeof prisma.auditLog.create;
+    prisma.$transaction = (async (ops: unknown[]) =>
+      Promise.all(ops)) as unknown as typeof prisma.$transaction;
 
     try {
       const res = fakeRes();
@@ -504,6 +543,8 @@ describe('auth.controller logout', () => {
         where: { token: 'some-token' },
         data: { isRevoked: true },
       });
+      assert.equal(auditLogged?.action, 'auth.logout');
+      assert.equal(auditLogged?.actorId, 'user-1');
       const clearedRefreshCookie = res.clearedCookies.find((c) => c.name === 'refreshToken');
       assert.ok(clearedRefreshCookie, 'the refreshToken cookie should be cleared');
       assert.equal(
@@ -515,6 +556,9 @@ describe('auth.controller logout', () => {
       );
     } finally {
       prisma.refreshToken.updateMany = originalUpdateMany;
+      prisma.refreshToken.findUnique = originalFindUnique;
+      prisma.auditLog.create = originalAuditCreate;
+      prisma.$transaction = originalTransaction;
     }
   });
 });

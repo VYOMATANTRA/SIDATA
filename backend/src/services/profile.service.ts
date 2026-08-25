@@ -1,6 +1,12 @@
 import bcrypt from 'bcryptjs';
 import zxcvbn from 'zxcvbn';
 import prisma from '../utils/prisma.js';
+import {
+  buildAuditLog,
+  AUDIT_ACTIONS,
+  type AuditActor,
+  type AuditRequestContext,
+} from './audit.service.js';
 
 export class ProfileServiceError extends Error {
   statusCode: number;
@@ -18,8 +24,10 @@ export const changeOwnPasswordService = async (params: {
   userId?: string | undefined;
   currentPassword?: unknown;
   newPassword?: unknown;
+  actor?: AuditActor | null | undefined;
+  context?: AuditRequestContext | undefined;
 }) => {
-  const { userId, currentPassword, newPassword } = params;
+  const { userId, currentPassword, newPassword, actor, context } = params;
 
   if (!userId) {
     throw new ProfileServiceError('Akses ditolak.', 401);
@@ -101,6 +109,12 @@ export const changeOwnPasswordService = async (params: {
     prisma.refreshToken.updateMany({
       where: { userId },
       data: { isRevoked: true },
+    }),
+    buildAuditLog({
+      action: AUDIT_ACTIONS.PROFILE_PASSWORD_CHANGED,
+      actor: actor ?? { id: userId, email: user.email },
+      target: { type: 'user', id: userId, label: user.email },
+      context,
     }),
   ]);
 };

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import type { Request, Response } from 'express';
 import { OAuth2Client } from 'google-auth-library';
 import {
@@ -50,6 +50,35 @@ function mockRedirectRes(): MockRedirectRes {
     cookieCalls: () => cookieCalls,
   };
 }
+
+// googleCallback records an audit row on nearly every branch (state mismatch, account linking,
+// session revocation, new-user creation). Rather than hand-patch prisma.auditLog.create and
+// prisma.$transaction into every one of the ~15 tests below, stub them file-wide: any test that
+// cares what was logged can still read `auditLogs` populated here.
+let auditLogs: Array<Record<string, unknown>>;
+let originalAuditCreate: typeof prisma.auditLog.create;
+let originalTransaction: typeof prisma.$transaction;
+let auditLogIdCounter = 0;
+
+beforeEach(() => {
+  auditLogs = [];
+  originalAuditCreate = prisma.auditLog.create;
+  originalTransaction = prisma.$transaction;
+
+  prisma.auditLog.create = (async (args: { data: Record<string, unknown> }) => {
+    const row = { id: `audit-${++auditLogIdCounter}`, ...args.data };
+    auditLogs.push(row);
+    return row;
+  }) as unknown as typeof prisma.auditLog.create;
+
+  prisma.$transaction = (async (ops: unknown[]) =>
+    Promise.all(ops)) as unknown as typeof prisma.$transaction;
+});
+
+afterEach(() => {
+  prisma.auditLog.create = originalAuditCreate;
+  prisma.$transaction = originalTransaction;
+});
 
 describe('oauth utility module', () => {
   it('generateOAuthState returns a secure 64-char hex string', () => {

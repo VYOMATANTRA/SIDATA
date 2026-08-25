@@ -16,7 +16,7 @@ import prisma from '../../utils/prisma.js';
 type AnyRecord = Record<string, unknown>;
 type AnyFn = (...args: unknown[]) => unknown;
 
-const MODELS = ['user', 'role', 'emailOtp', 'refreshToken'] as const;
+const MODELS = ['user', 'role', 'emailOtp', 'refreshToken', 'auditLog', 'systemSetting'] as const;
 type ModelName = (typeof MODELS)[number];
 
 // The standard Prisma Client CRUD surface. Anything a test doesn't wire via state/overrides
@@ -42,7 +42,12 @@ export interface FakePrismaState {
 }
 
 export interface FakePrismaHandle {
-  state: { user: AnyRecord | null; role: AnyRecord | null; otp: AnyRecord | null };
+  state: {
+    user: AnyRecord | null;
+    role: AnyRecord | null;
+    otp: AnyRecord | null;
+    auditLogs: AnyRecord[];
+  };
   calls: Record<string, Record<string, unknown[][]>>;
   restore: () => void;
 }
@@ -50,12 +55,17 @@ export interface FakePrismaHandle {
 let otpIdCounter = 0;
 let refreshTokenIdCounter = 0;
 let newUserIdCounter = 0;
+let auditLogIdCounter = 0;
 
 export function fakePrisma(initial: FakePrismaState = {}): FakePrismaHandle {
   const state = {
     user: initial.user ?? null,
     role: initial.role ?? { id: 'role-user', name: 'user' },
     otp: initial.otp ?? null,
+    // Every prisma.auditLog.create(...) call made during the test lands here in insertion
+    // order, so a test can assert "a login_failed row with actorId null was written" without
+    // stubbing auditLog itself.
+    auditLogs: [] as AnyRecord[],
   };
 
   const calls: Record<string, Record<string, unknown[][]>> = {};
@@ -159,6 +169,24 @@ export function fakePrisma(initial: FakePrismaState = {}): FakePrismaHandle {
       },
       updateMany: () => ({ count: 1 }),
     },
+    // Every controller call site (login, logout, OTP verify, OAuth linking, etc.) writes here
+    // via recordAuditLog/buildAuditLog. Only `create` is derived — tests that need to assert
+    // acknowledge/immutability behavior should stub update/delete explicitly via `overrides`.
+    auditLog: {
+      create: (...args: unknown[]) => {
+        const { data } = args[0] as { data: AnyRecord };
+        const row = { id: `audit-${++auditLogIdCounter}`, createdAt: new Date(), ...data };
+        state.auditLogs.push(row);
+        return row;
+      },
+    },
+    systemSetting: {
+      findMany: () => [],
+      upsert: (...args: unknown[]) => {
+        const { create } = args[0] as { create: AnyRecord };
+        return { updatedAt: new Date(), ...create };
+      },
+    },
   };
 
   for (const model of MODELS) {
@@ -184,11 +212,28 @@ export function fakePrisma(initial: FakePrismaState = {}): FakePrismaHandle {
     }
   }
 
+  // recordAuditLog (src/services/audit.service.ts) wraps every standalone auth-event audit
+  // write in `prisma.$transaction([buildAuditLog(entry)])`. Each array element is already a
+  // real (stubbed) model-method call by the time it reaches here — see the array literal
+  // evaluation order note in users.controller.test.ts — so this just needs to await them.
+  const originalTransaction = (prisma as unknown as { $transaction: AnyFn }).$transaction;
+  originals.push({ model: 'user', method: '$transaction', fn: originalTransaction });
+  (prisma as unknown as { $transaction: AnyFn }).$transaction = (async (arg: unknown) => {
+    record('user', '$transaction', [arg]);
+    if (Array.isArray(arg)) return Promise.all(arg);
+    if (typeof arg === 'function') return arg(prisma);
+    throw new Error('fakePrisma: unsupported $transaction argument');
+  }) as unknown as AnyFn;
+
   return {
     state,
     calls,
     restore() {
       for (const { model, method, fn } of originals) {
+        if (method === '$transaction') {
+          (prisma as unknown as Record<string, AnyFn>).$transaction = fn as AnyFn;
+          continue;
+        }
         (prisma as unknown as Record<string, Record<string, AnyFn>>)[model]![method] = fn as AnyFn;
       }
     },

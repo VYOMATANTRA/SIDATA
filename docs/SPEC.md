@@ -75,6 +75,46 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
 - **Admin User Management & Soft Deletion**: Only Admins can manage users and roles. Account deletion is performed via soft deletion (`deletedAt`). Deactivated accounts remain visible in the Admin User Management table with their status displayed. Soft-deleting an account immediately revokes all active refresh tokens for that user and blocks active JWT access tokens via real-time DB verification. Admins cannot deactivate, change the password of, or demote their own account or peer Admin accounts via the User Management endpoints (self-service password changes must go through the `/api/profile/change-password` endpoint). Public registration using a soft-deleted email returns a distinct notification (`409 Conflict`) instructing the user to contact an Administrator, while creating an account in User Management with an email belonging to a soft-deleted account returns `409 Conflict` directing the Administrator to use account reactivation instead. User management API rate limiting separates read operations (`GET /api/users`, `GET /api/users/roles` at 300 req/15min) from mutating actions (`POST`, `PATCH`, `DELETE` at 100 req/15min) to prevent high-frequency administrative workflows and NAT-shared IP environments from tripping false-positive rate limit locks.
 - **Account Reactivation & Forced Password Change**: Admins can reactivate soft-deleted accounts directly via the dedicated reactivation toggle in the User Management table, confirmed via a modal popup. Accounts created or having their password reset by an Admin are trusted (`email_verified = true`), enforce NIST password guidelines (8–128 characters, zxcvbn strength >= 2), revoke all outstanding sessions immediately, and are flagged with `requires_password_change = true`. Upon logging in with an admin-assigned password, users receive a restricted setup token and must complete the Cloudflare Turnstile-protected password setup flow (`/setup-password`) before gaining access to standard protected routes. Setting a new password via the first-login setup flow is restricted strictly to local accounts (`auth_provider = 'local'`).
 
+### Audit Trail
+
+Every admin user-management action (create, reactivate, role change, password reset, deactivate)
+and every security-relevant auth event (login success/failure, logout, first-login password set,
+Google account linking, session revocation, OAuth state mismatch, refresh-token mismatch, OTP
+verification/lockout) is recorded in `audit_logs` (§7). Read access is admin-only
+(`GET /api/audit-logs`, `/summary`); there is no editor-facing or public view. `audit_logs` is
+also where the tier-1 prose-builder override log (§5) belongs once that CMS work lands, rather
+than a second table — `target_type`/`target_id` are unconstrained (no FK) specifically so future
+content tables (indicators, prose, RT leaders, etc.) can be audited without a schema change.
+
+- **Severity is fixed per action, not chosen per call site** — `info` / `warning` / `critical`,
+  defined once in `backend/src/services/audit.service.ts`'s `AUDIT_ACTIONS` table. `critical`
+  covers privilege-affecting or credential-affecting events (role changes, admin password
+  resets, Google account linking, OAuth/refresh-token integrity failures, OTP lockout, and
+  retention-policy changes themselves). A `critical` row stays open (`acknowledgedAt = null`)
+  until an admin explicitly acknowledges it (`PATCH /api/audit-logs/:id/acknowledge`); an
+  unacknowledged `critical` row is never pruned, regardless of age.
+- **Never logged**: password hashes, plaintext passwords, JWTs/refresh tokens, OTP codes. A
+  password-change event records only that a change happened, not any credential material.
+- **Write semantics**: an audit row is written in the same DB transaction as the mutation it
+  records wherever one already exists (admin user-management actions); standalone auth events
+  are wrapped in a dedicated single-row transaction. A failed audit write is not silently
+  swallowed — it surfaces as a failed request, by design, rather than risk a mutation with no
+  corresponding log entry.
+- **Tamper defense is two layers**: an application-level guard (a Prisma client extension)
+  blocks any write to an existing `audit_logs` row other than the two acknowledge columns; the
+  actual enforcement is column-level MySQL grants on the app's runtime DB user — no `DELETE`,
+  `UPDATE` restricted to the acknowledge columns — applied via a checked-in, manually-run script
+  (`backend/scripts/grants/audit-logs-grants.sql`), separate from Prisma migrations.
+- **Retention is admin-configurable per severity** (`GET`/`PATCH /api/settings/audit-retention`,
+  values in whole days, `0` = keep forever), defaulting to keep-forever on a fresh install so
+  nothing is silently deleted until an admin opts in. `critical` retention must be >= `warning`
+  >= `info` (treating `0` as infinite) — a more severe event may not be discarded before a less
+  severe one. Changing retention is itself logged at `critical` severity with before/after
+  values, since shortening it is the single most useful move for covering one's tracks. Pruning
+  executes outside the running app, via a separate privileged DB connection
+  (`backend/scripts/prune-audit-logs.ts`), never through the app's own (deliberately
+  DELETE-incapable) runtime user.
+
 ## 4. Data Entry
 
 Hybrid model:
@@ -145,6 +185,16 @@ with `@@map` when implementing.
 No indicator-citation-tracking table exists. Cerita-page data citations (e.g. the Bank Sampah
 page citing Ekonomi & Ketertiban figures) stay informal/manual in prose text, not structurally
 linked.
+
+Two more tables exist alongside the auth layer (`Role`, `User`, `RefreshToken`, `EmailOtp`),
+implemented and out of scope for this schema pass in the same way those are:
+
+- `audit_logs` — the audit trail (§3). `target_type`/`target_id` are deliberately not a foreign
+  key, so it can log actions against any of the 10 content tables above once they exist, without
+  a schema change. This is also where the §5 tier-1 prose-builder override log belongs.
+- `system_settings` — generic key/value store; first (and so far only) use is admin-configurable
+  audit log retention (§3). CMS settings introduced later should live here too rather than in a
+  new table.
 
 Weather widget data (§8) has no table here, and isn't merely uncovered by this pass — it's
 out of scope for this schema entirely. It's fetched live from BMKG's public API and cached
