@@ -19,8 +19,12 @@ function parsePositiveIntParam(
   if (typeof value !== 'string' || value.trim() === '') {
     return {};
   }
-  const parsed = parseInt(value, 10);
-  if (Number.isNaN(parsed) || parsed <= 0) {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    return { error: errorMessage };
+  }
+  const parsed = parseInt(trimmed, 10);
+  if (parsed <= 0) {
     return { error: errorMessage };
   }
   return { value: parsed };
@@ -30,8 +34,12 @@ function parseOptionalInt(value: unknown, min = 0): number | undefined {
   if (typeof value !== 'string' || value.trim() === '') {
     return undefined;
   }
-  const parsed = parseInt(value, 10);
-  if (Number.isNaN(parsed) || parsed < min) {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    return undefined;
+  }
+  const parsed = parseInt(trimmed, 10);
+  if (parsed < min) {
     return undefined;
   }
   return parsed;

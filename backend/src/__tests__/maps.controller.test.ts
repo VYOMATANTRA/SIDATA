@@ -209,6 +209,15 @@ describe('maps.controller', () => {
       );
       assert.equal(res1.status, 400);
 
+      // Trailing non-digit characters must be rejected with 400 instead of partially parsing leading digits
+      const resTrailing = fakeRes();
+      await listPoints(
+        { query: { rt: '5abc' } } as unknown as Request,
+        resTrailing as unknown as Response,
+      );
+      assert.equal(resTrailing.status, 400);
+      assert.deepEqual(resTrailing.body, { error: 'Nomor RT harus berupa angka positif' });
+
       const originalFindMany = prisma.spatialPoint.findMany;
       const originalLeaderFindMany = prisma.rtLeader.findMany;
       let capturedWhere: { rtCoverages?: { some: { rtNumber: number } } } | undefined;
@@ -584,6 +593,50 @@ describe('maps.controller', () => {
         prisma.spatialPointRt.findMany = originalCoverageFindMany;
       }
     });
+
+    it('rejects rt with trailing non-digits in listRtLeaders with 400 and ignores invalid pagination params', async () => {
+      const res1 = fakeRes();
+      await listRtLeaders(
+        { query: { rt: '5abc' } } as unknown as Request,
+        res1 as unknown as Response,
+      );
+      assert.equal(res1.status, 400);
+      assert.deepEqual(res1.body, { error: 'Nomor RT harus berupa angka positif' });
+
+      const originalCount = prisma.rtLeader.count;
+      const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
+
+      let capturedArgs: { take?: number; skip?: number; where?: unknown } | undefined;
+      prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
+      prisma.rtLeader.findMany = (async (args: {
+        take?: number;
+        skip?: number;
+        where?: unknown;
+      }) => {
+        capturedArgs = args;
+        return [];
+      }) as unknown as typeof prisma.rtLeader.findMany;
+      prisma.spatialPointRt.findMany =
+        (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
+
+      try {
+        const req2 = {
+          query: { limit: '10abc', page: '2xyz', offset: '5abc' },
+        } as unknown as Request;
+        const res2 = fakeRes();
+
+        await listRtLeaders(req2, res2 as unknown as Response);
+
+        assert.equal(res2.status, 200);
+        assert.equal(capturedArgs?.take, undefined);
+        assert.equal(capturedArgs?.skip, undefined);
+      } finally {
+        prisma.rtLeader.count = originalCount;
+        prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
+      }
+    });
   });
 
   describe('getRtLeader', () => {
@@ -647,6 +700,15 @@ describe('maps.controller', () => {
         res1 as unknown as Response,
       );
       assert.equal(res1.status, 400);
+
+      // Trailing non-digit characters in path param must be rejected with 400
+      const resTrailing = fakeRes();
+      await getRtLeader(
+        { params: { rtNumber: '3xyz' } } as unknown as Request,
+        resTrailing as unknown as Response,
+      );
+      assert.equal(resTrailing.status, 400);
+      assert.deepEqual(resTrailing.body, { error: 'Nomor RT harus berupa angka positif' });
 
       const originalFindUnique = prisma.rtLeader.findUnique;
       prisma.rtLeader.findUnique = (async () =>
