@@ -24,13 +24,6 @@ describe('maps.controller', () => {
     rtCoverages: [
       {
         rtNumber: 1,
-        rtLeader: {
-          rtNumber: 1,
-          name: 'Bambang Supriyanto',
-          phone: '081234567801',
-          phoneIsWhatsapp: true,
-          alamat: 'Jl. Mulawarman No. 12',
-        },
       },
     ],
   };
@@ -44,29 +37,32 @@ describe('maps.controller', () => {
     metadata: { jadwal: 'Minggu 09:00' },
     createdAt: new Date('2026-08-01T00:00:00Z'),
     updatedAt: new Date('2026-08-01T00:00:00Z'),
-    rtCoverages: [
-      {
-        rtNumber: 1,
-        rtLeader: {
-          rtNumber: 1,
-          name: 'Bambang Supriyanto',
-          phone: '081234567801',
-          phoneIsWhatsapp: true,
-          alamat: 'Jl. Mulawarman No. 12',
-        },
-      },
-      { rtNumber: 2, rtLeader: null },
-      { rtNumber: 3, rtLeader: null },
-    ],
+    rtCoverages: [{ rtNumber: 1 }, { rtNumber: 2 }, { rtNumber: 3 }],
+  };
+
+  const sampleRtLeader1 = {
+    rtNumber: 1,
+    name: 'Bambang Supriyanto',
+    phone: '081234567801',
+    phoneIsWhatsapp: true,
+    alamat: 'Jl. Mulawarman No. 12',
+    createdAt: new Date('2026-08-01T00:00:00Z'),
+    updatedAt: new Date('2026-08-01T00:00:00Z'),
   };
 
   describe('listPoints', () => {
     it('returns all points with standard JSON structure and isolates rtLeader to ketua_rt', async () => {
       const originalFindMany = prisma.spatialPoint.findMany;
+      const originalLeaderFindMany = prisma.rtLeader.findMany;
+
       prisma.spatialPoint.findMany = (async () => [
         sampleKetuaRtPoint,
         sampleBankSampahPoint,
       ]) as unknown as typeof prisma.spatialPoint.findMany;
+
+      prisma.rtLeader.findMany = (async () => [
+        sampleRtLeader1,
+      ]) as unknown as typeof prisma.rtLeader.findMany;
 
       try {
         const req = { query: {} } as unknown as Request;
@@ -94,14 +90,56 @@ describe('maps.controller', () => {
         assert.equal(body.points[1]?.rtLeader, null);
       } finally {
         prisma.spatialPoint.findMany = originalFindMany;
+        prisma.rtLeader.findMany = originalLeaderFindMany;
+      }
+    });
+
+    it('returns rtLeader: null when ketua_rt point references an RT without an existing leader', async () => {
+      const originalFindMany = prisma.spatialPoint.findMany;
+      const originalLeaderFindMany = prisma.rtLeader.findMany;
+
+      prisma.spatialPoint.findMany = (async () => [
+        sampleKetuaRtPoint,
+      ]) as unknown as typeof prisma.spatialPoint.findMany;
+
+      // No leader exists for RT 1
+      prisma.rtLeader.findMany = (async () => []) as unknown as typeof prisma.rtLeader.findMany;
+
+      try {
+        const req = { query: {} } as unknown as Request;
+        const res = fakeRes();
+
+        await listPoints(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        const body = res.body as {
+          points: Array<{
+            name: string;
+            rts: number[];
+            rtLeader: unknown;
+          }>;
+          total: number;
+        };
+        assert.equal(body.total, 1);
+        assert.equal(body.points[0]?.name, 'Pos RT 01');
+        assert.equal(body.points[0]?.rtLeader, null);
+      } finally {
+        prisma.spatialPoint.findMany = originalFindMany;
+        prisma.rtLeader.findMany = originalLeaderFindMany;
       }
     });
 
     it('returns GeoJSON FeatureCollection when format=geojson', async () => {
       const originalFindMany = prisma.spatialPoint.findMany;
+      const originalLeaderFindMany = prisma.rtLeader.findMany;
+
       prisma.spatialPoint.findMany = (async () => [
         sampleKetuaRtPoint,
       ]) as unknown as typeof prisma.spatialPoint.findMany;
+
+      prisma.rtLeader.findMany = (async () => [
+        sampleRtLeader1,
+      ]) as unknown as typeof prisma.rtLeader.findMany;
 
       try {
         const req = { query: { format: 'geojson' } } as unknown as Request;
@@ -128,6 +166,7 @@ describe('maps.controller', () => {
         assert.equal(body.features[0]?.properties.name, 'Pos RT 01');
       } finally {
         prisma.spatialPoint.findMany = originalFindMany;
+        prisma.rtLeader.findMany = originalLeaderFindMany;
       }
     });
 
@@ -140,11 +179,13 @@ describe('maps.controller', () => {
       assert.equal(res1.status, 400);
 
       const originalFindMany = prisma.spatialPoint.findMany;
+      const originalLeaderFindMany = prisma.rtLeader.findMany;
       let capturedWhere: Record<string, unknown> | undefined;
       prisma.spatialPoint.findMany = (async (args: { where: Record<string, unknown> }) => {
         capturedWhere = args.where;
         return [sampleBankSampahPoint];
       }) as unknown as typeof prisma.spatialPoint.findMany;
+      prisma.rtLeader.findMany = (async () => []) as unknown as typeof prisma.rtLeader.findMany;
 
       try {
         const res2 = fakeRes();
@@ -156,6 +197,7 @@ describe('maps.controller', () => {
         assert.equal(capturedWhere?.type, 'bank_sampah');
       } finally {
         prisma.spatialPoint.findMany = originalFindMany;
+        prisma.rtLeader.findMany = originalLeaderFindMany;
       }
     });
 
@@ -168,6 +210,7 @@ describe('maps.controller', () => {
       assert.equal(res1.status, 400);
 
       const originalFindMany = prisma.spatialPoint.findMany;
+      const originalLeaderFindMany = prisma.rtLeader.findMany;
       let capturedWhere: { rtCoverages?: { some: { rtNumber: number } } } | undefined;
       prisma.spatialPoint.findMany = (async (args: {
         where: { rtCoverages?: { some: { rtNumber: number } } };
@@ -175,6 +218,9 @@ describe('maps.controller', () => {
         capturedWhere = args.where;
         return [sampleKetuaRtPoint];
       }) as unknown as typeof prisma.spatialPoint.findMany;
+      prisma.rtLeader.findMany = (async () => [
+        sampleRtLeader1,
+      ]) as unknown as typeof prisma.rtLeader.findMany;
 
       try {
         const res2 = fakeRes();
@@ -183,6 +229,7 @@ describe('maps.controller', () => {
         assert.equal(capturedWhere?.rtCoverages?.some?.rtNumber, 1);
       } finally {
         prisma.spatialPoint.findMany = originalFindMany;
+        prisma.rtLeader.findMany = originalLeaderFindMany;
       }
     });
   });
@@ -190,11 +237,14 @@ describe('maps.controller', () => {
   describe('getPoint', () => {
     it('returns a single spatial point by ID with rtLeader for ketua_rt and null for multi-rt', async () => {
       const originalFindUnique = prisma.spatialPoint.findUnique;
+      const originalLeaderFindUnique = prisma.rtLeader.findUnique;
 
       try {
         // 1. Ketua RT point returns rtLeader
         prisma.spatialPoint.findUnique = (async () =>
           sampleKetuaRtPoint) as unknown as typeof prisma.spatialPoint.findUnique;
+        prisma.rtLeader.findUnique = (async () =>
+          sampleRtLeader1) as unknown as typeof prisma.rtLeader.findUnique;
 
         const req1 = { params: { id: 'point-rt-1' } } as unknown as Request;
         const res1 = fakeRes();
@@ -226,6 +276,7 @@ describe('maps.controller', () => {
         assert.equal(body2.point.rtLeader, null);
       } finally {
         prisma.spatialPoint.findUnique = originalFindUnique;
+        prisma.rtLeader.findUnique = originalLeaderFindUnique;
       }
     });
 
@@ -252,6 +303,7 @@ describe('maps.controller', () => {
     it('resolves coordinates strictly from spatial_points with type=ketua_rt', async () => {
       const originalCount = prisma.rtLeader.count;
       const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
 
       prisma.rtLeader.count = (async () => 2) as unknown as typeof prisma.rtLeader.count;
       prisma.rtLeader.findMany = (async () => [
@@ -263,25 +315,6 @@ describe('maps.controller', () => {
           alamat: 'Jl. Mulawarman No. 12',
           createdAt: new Date(),
           updatedAt: new Date(),
-          spatialPoints: [
-            {
-              point: {
-                id: 'point-rt-1',
-                type: 'ketua_rt',
-                latitude: -1.2235,
-                longitude: 116.9521,
-              },
-            },
-            {
-              // Bank sampah point also covering RT 1 should NOT be chosen as the leader's coordinates
-              point: {
-                id: 'point-bs-1',
-                type: 'bank_sampah',
-                latitude: -1.2299,
-                longitude: 116.9599,
-              },
-            },
-          ],
         },
         {
           rtNumber: 2,
@@ -291,19 +324,21 @@ describe('maps.controller', () => {
           alamat: 'Jl. Pemuda RT 02',
           createdAt: new Date(),
           updatedAt: new Date(),
-          // Only covered by bank sampah, no ketua_rt point surveyed yet
-          spatialPoints: [
-            {
-              point: {
-                id: 'point-bs-1',
-                type: 'bank_sampah',
-                latitude: -1.2299,
-                longitude: 116.9599,
-              },
-            },
-          ],
         },
       ]) as unknown as typeof prisma.rtLeader.findMany;
+
+      // Only RT 1 has a ketua_rt point coverage
+      prisma.spatialPointRt.findMany = (async () => [
+        {
+          rtNumber: 1,
+          point: {
+            id: 'point-rt-1',
+            type: 'ketua_rt',
+            latitude: -1.2235,
+            longitude: 116.9521,
+          },
+        },
+      ]) as unknown as typeof prisma.spatialPointRt.findMany;
 
       try {
         const req = { query: {} } as unknown as Request;
@@ -321,22 +356,24 @@ describe('maps.controller', () => {
         };
 
         assert.equal(body.total, 2);
-        // RT 1: Coordinate correctly picked from 'ketua_rt' point, not the bank sampah point
+        // RT 1: Coordinate correctly picked from 'ketua_rt' point
         assert.equal(body.leaders[0]?.coordinates?.pointId, 'point-rt-1');
         assert.equal(body.leaders[0]?.coordinates?.latitude, -1.2235);
         assert.equal(body.leaders[0]?.coordinates?.longitude, 116.9521);
 
-        // RT 2: Since only bank_sampah point is linked, coordinates should resolve to null per SPEC.md §7
+        // RT 2: No ketua_rt point surveyed yet => coordinates should resolve to null per SPEC.md §7
         assert.equal(body.leaders[1]?.coordinates, null);
       } finally {
         prisma.rtLeader.count = originalCount;
         prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
       }
     });
 
     it('handles search and pagination parameters correctly', async () => {
       const originalCount = prisma.rtLeader.count;
       const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
 
       let capturedArgs: { take?: number; skip?: number; where?: unknown } | undefined;
       prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
@@ -348,6 +385,8 @@ describe('maps.controller', () => {
         capturedArgs = args;
         return [];
       }) as unknown as typeof prisma.rtLeader.findMany;
+      prisma.spatialPointRt.findMany =
+        (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
 
       try {
         const req = {
@@ -363,12 +402,14 @@ describe('maps.controller', () => {
       } finally {
         prisma.rtLeader.count = originalCount;
         prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
       }
     });
 
     it('defaults limit to 10 and computes skip when page is provided without limit', async () => {
       const originalCount = prisma.rtLeader.count;
       const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
 
       let capturedArgs: { take?: number; skip?: number; where?: unknown } | undefined;
       prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
@@ -380,6 +421,8 @@ describe('maps.controller', () => {
         capturedArgs = args;
         return [];
       }) as unknown as typeof prisma.rtLeader.findMany;
+      prisma.spatialPointRt.findMany =
+        (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
 
       try {
         const req = {
@@ -395,12 +438,14 @@ describe('maps.controller', () => {
       } finally {
         prisma.rtLeader.count = originalCount;
         prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
       }
     });
 
     it('defaults limit to 10 and sets skip to 0 when page: "1" is provided without limit', async () => {
       const originalCount = prisma.rtLeader.count;
       const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
 
       let capturedArgs: { take?: number; skip?: number; where?: unknown } | undefined;
       prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
@@ -412,6 +457,8 @@ describe('maps.controller', () => {
         capturedArgs = args;
         return [];
       }) as unknown as typeof prisma.rtLeader.findMany;
+      prisma.spatialPointRt.findMany =
+        (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
 
       try {
         const req = {
@@ -427,12 +474,14 @@ describe('maps.controller', () => {
       } finally {
         prisma.rtLeader.count = originalCount;
         prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
       }
     });
 
     it('leaves take and skip undefined when no pagination parameters are provided', async () => {
       const originalCount = prisma.rtLeader.count;
       const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
 
       let capturedArgs: { take?: number; skip?: number; where?: unknown } | undefined;
       prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
@@ -444,6 +493,8 @@ describe('maps.controller', () => {
         capturedArgs = args;
         return [];
       }) as unknown as typeof prisma.rtLeader.findMany;
+      prisma.spatialPointRt.findMany =
+        (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
 
       try {
         const req = {
@@ -459,12 +510,14 @@ describe('maps.controller', () => {
       } finally {
         prisma.rtLeader.count = originalCount;
         prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
       }
     });
 
     it('sets rtNumber filter when standalone numeric search is provided', async () => {
       const originalCount = prisma.rtLeader.count;
       const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
 
       let capturedWhere: Record<string, unknown> | undefined;
       prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
@@ -472,6 +525,8 @@ describe('maps.controller', () => {
         capturedWhere = args.where;
         return [];
       }) as unknown as typeof prisma.rtLeader.findMany;
+      prisma.spatialPointRt.findMany =
+        (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
 
       try {
         const req = {
@@ -487,12 +542,14 @@ describe('maps.controller', () => {
       } finally {
         prisma.rtLeader.count = originalCount;
         prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
       }
     });
 
     it('preserves explicit rt filter when numeric search is also provided', async () => {
       const originalCount = prisma.rtLeader.count;
       const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
 
       let capturedWhere: Record<string, unknown> | undefined;
       prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
@@ -500,6 +557,8 @@ describe('maps.controller', () => {
         capturedWhere = args.where;
         return [];
       }) as unknown as typeof prisma.rtLeader.findMany;
+      prisma.spatialPointRt.findMany =
+        (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
 
       try {
         const req = {
@@ -518,6 +577,7 @@ describe('maps.controller', () => {
       } finally {
         prisma.rtLeader.count = originalCount;
         prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
       }
     });
   });
@@ -525,6 +585,8 @@ describe('maps.controller', () => {
   describe('getRtLeader', () => {
     it('returns a single RT leader with joined coordinates', async () => {
       const originalFindUnique = prisma.rtLeader.findUnique;
+      const originalFindFirst = prisma.spatialPointRt.findFirst;
+
       prisma.rtLeader.findUnique = (async () => ({
         rtNumber: 1,
         name: 'Bambang Supriyanto',
@@ -533,17 +595,23 @@ describe('maps.controller', () => {
         alamat: 'Jl. Mulawarman No. 12',
         createdAt: new Date(),
         updatedAt: new Date(),
-        spatialPoints: [
-          {
-            point: {
-              id: 'point-rt-1',
-              type: 'ketua_rt',
-              latitude: -1.2235,
-              longitude: 116.9521,
-            },
-          },
-        ],
       })) as unknown as typeof prisma.rtLeader.findUnique;
+
+      prisma.spatialPointRt.findFirst = (async () => ({
+        id: 1,
+        pointId: 'point-rt-1',
+        rtNumber: 1,
+        point: {
+          id: 'point-rt-1',
+          name: 'Pos RT 01',
+          type: 'ketua_rt',
+          latitude: -1.2235,
+          longitude: 116.9521,
+          metadata: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      })) as unknown as typeof prisma.spatialPointRt.findFirst;
 
       try {
         const req = { params: { rtNumber: '1' } } as unknown as Request;
@@ -564,6 +632,7 @@ describe('maps.controller', () => {
         assert.equal(body.leader.coordinates?.latitude, -1.2235);
       } finally {
         prisma.rtLeader.findUnique = originalFindUnique;
+        prisma.spatialPointRt.findFirst = originalFindFirst;
       }
     });
 
@@ -598,6 +667,7 @@ describe('maps.controller', () => {
       const originalPointCount = prisma.spatialPoint.count;
       const originalGroupBy = prisma.spatialPoint.groupBy;
       const originalLeaderCount = prisma.rtLeader.count;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
 
       prisma.spatialPoint.count = (async () => 5) as unknown as typeof prisma.spatialPoint.count;
       prisma.spatialPoint.groupBy = (async () => [
@@ -610,6 +680,12 @@ describe('maps.controller', () => {
         }
         return 10; // totalRtLeaders
       }) as unknown as typeof prisma.rtLeader.count;
+      prisma.spatialPointRt.findMany = (async () => [
+        { rtNumber: 1 },
+        { rtNumber: 2 },
+        { rtNumber: 3 },
+        { rtNumber: 4 },
+      ]) as unknown as typeof prisma.spatialPointRt.findMany;
 
       try {
         const req = {} as unknown as Request;
@@ -636,6 +712,7 @@ describe('maps.controller', () => {
         prisma.spatialPoint.count = originalPointCount;
         prisma.spatialPoint.groupBy = originalGroupBy;
         prisma.rtLeader.count = originalLeaderCount;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
       }
     });
   });
