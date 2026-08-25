@@ -14,12 +14,7 @@ import { PrismaClient } from '../generated/prisma/client.js';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { AUDIT_ADMIN_DATABASE_URL } from '../src/configs/index.js';
 import { AUDIT_ACTIONS, type AuditSeverity } from '../src/services/audit.service.js';
-
-const RETENTION_KEYS: Record<AuditSeverity, string> = {
-  info: 'audit.retention_info_days',
-  warning: 'audit.retention_warning_days',
-  critical: 'audit.retention_critical_days',
-};
+import { AUDIT_RETENTION_KEYS as RETENTION_KEYS } from '../src/services/settings.service.js';
 
 function getPrivilegedClient() {
   if (!AUDIT_ADMIN_DATABASE_URL) {
