@@ -8,10 +8,38 @@ export interface UserProfile {
   role: string
 }
 
+const SETUP_TOKEN_KEY = 'sidata_setup_token'
+
+function getStoredSetupToken(): string | null {
+  if (typeof window === 'undefined' || !window.sessionStorage) return null
+  try {
+    return sessionStorage.getItem(SETUP_TOKEN_KEY)
+  } catch {
+    return null
+  }
+}
+
+function saveStoredSetupToken(token: string) {
+  if (typeof window === 'undefined' || !window.sessionStorage) return
+  try {
+    sessionStorage.setItem(SETUP_TOKEN_KEY, token)
+  } catch {}
+}
+
+function removeStoredSetupToken() {
+  if (typeof window === 'undefined' || !window.sessionStorage) return
+  try {
+    sessionStorage.removeItem(SETUP_TOKEN_KEY)
+  } catch {}
+}
+
 export const useAuthStore = defineStore('auth', () => {
+  const initialSetupToken = getStoredSetupToken()
   const user = ref<UserProfile | null>(null)
   const accessToken = ref<string | null>(null)
   const isInitialized = ref(false)
+  const setupToken = ref<string | null>(initialSetupToken)
+  const mustChangePassword = ref(!!initialSetupToken)
 
   // Set once a refresh attempt gets a definitive 401/403 back — the server saying "this
   // session is not valid," as opposed to "something went wrong." Retrying a definitive
@@ -25,18 +53,33 @@ export const useAuthStore = defineStore('auth', () => {
   let inFlight: Promise<boolean> | null = null
 
   const isAuthenticated = computed(() => !!accessToken.value)
+  const isAdmin = computed(() => user.value?.role?.toLowerCase() === 'admin')
 
   function setAuth(newUser: UserProfile, token: string) {
     user.value = newUser
     accessToken.value = token
     isInitialized.value = true
+    setupToken.value = null
+    mustChangePassword.value = false
+    removeStoredSetupToken()
   }
 
-  function clearAuth() {
+  function setSetupAuth(token: string) {
+    setupToken.value = token
+    mustChangePassword.value = true
+    saveStoredSetupToken(token)
+  }
+
+  function clearAuth(keepSetup = false) {
     user.value = null
     accessToken.value = null
     isInitialized.value = true
     refreshDenied.value = false
+    if (!keepSetup) {
+      setupToken.value = null
+      mustChangePassword.value = false
+      removeStoredSetupToken()
+    }
   }
 
   async function performInitAuth(): Promise<boolean> {
@@ -51,7 +94,7 @@ export const useAuthStore = defineStore('auth', () => {
       })
 
       if (!res.ok) {
-        clearAuth()
+        clearAuth(mustChangePassword.value)
         if (res.status === 401 || res.status === 403) {
           refreshDenied.value = true
         }
@@ -64,10 +107,10 @@ export const useAuthStore = defineStore('auth', () => {
         return true
       }
 
-      clearAuth()
+      clearAuth(mustChangePassword.value)
       return false
     } catch {
-      clearAuth()
+      clearAuth(mustChangePassword.value)
       return false
     } finally {
       isInitialized.value = true
@@ -101,7 +144,11 @@ export const useAuthStore = defineStore('auth', () => {
     accessToken,
     isInitialized,
     isAuthenticated,
+    isAdmin,
+    setupToken,
+    mustChangePassword,
     setAuth,
+    setSetupAuth,
     clearAuth,
     initAuth,
   }

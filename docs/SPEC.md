@@ -21,6 +21,9 @@ Balikpapan. It is:
   it explains the PPID request procedure for data not published on the site; it never hosts PPID
   documents (e.g. no Transparansi Keuangan).
 
+Frontend markup must use semantic HTML and target WCAG 2.1 Level A conformance — see
+[`docs/ACCESSIBILITY.md`](ACCESSIBILITY.md) for the rules this implies.
+
 Related but distinct artifacts that feed into the site's content:
 
 - **Eco Boba booklet** — full training-documentation artifact (separate publication). Its content
@@ -67,8 +70,10 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
 
 - **Local Registration & Email OTP**: Registration with email/password sets `email_verified = false` initially. A 6-digit numeric OTP (15-minute TTL, maximum 5 failed attempts) is dispatched to the user's email. Account requires OTP verification before local login access is granted. Successful OTP verification sets `email_verified = true` and auto-logs in the user. Local accounts that already existed before OTP verification was introduced are grandfathered in as verified (backfilled at the migration that added the column) rather than retroactively locked out — they never had OTP verification to go through. Hitting the 5-attempt cap does not discard the OTP record — it stays in place so the resend cooldown below still applies to it; only a genuinely expired OTP is deleted outright.
 - **OTP Resend Cooldown**: Requesting a new OTP is throttled to one request per 60 seconds per account, enforced against the existing OTP record's creation time (not a separate counter) — which is why the record survives attempt-lockout rather than being deleted.
-- **Google OAuth2**: Authentication via Google uses the OAuth 2.0 Authorization Code + PKCE (S256) flow. Users created via Google OAuth have `email_verified = true` automatically. If a verified Google account matches an existing local user's email, the account is automatically linked (`auth_provider = 'google'`, `provider_id = sub`) and that account's outstanding refresh tokens are revoked, so a session obtained under the old local password stops working once the account moves to Google-only auth. Session tokens are issued via `httpOnly` refresh cookies without passing tokens in URL query strings.
-- **Anti-Bot Protection**: Mutating authentication endpoints (registration, login, OTP verification, OTP resend) enforce Cloudflare Turnstile verification.
+- **Google OAuth2**: Authentication via Google uses the OAuth 2.0 Authorization Code + PKCE (S256) flow. Users created via Google OAuth have `email_verified = true` automatically. If a verified Google account matches an existing local user's email, the account is automatically linked (`auth_provider = 'google'`, `provider_id = sub`), clears any pending first-login password change flag (`requires_password_change = false`), clears `password_hash = null`, and that account's outstanding refresh tokens are revoked, so a session obtained under the old local password stops working once the account moves to Google-only auth. Session tokens are issued via `httpOnly` refresh cookies without passing tokens in URL query strings.
+- **Anti-Bot Protection**: Mutating authentication endpoints (registration, login, OTP verification, OTP resend, first-login password setup) enforce Cloudflare Turnstile verification.
+- **Admin User Management & Soft Deletion**: Only Admins can manage users and roles. Account deletion is performed via soft deletion (`deletedAt`). Deactivated accounts remain visible in the Admin User Management table with their status displayed. Soft-deleting an account immediately revokes all active refresh tokens for that user and blocks active JWT access tokens via real-time DB verification. Admins cannot deactivate, change the password of, or demote their own account or peer Admin accounts via the User Management endpoints (self-service password changes must go through the `/api/profile/change-password` endpoint). Public registration using a soft-deleted email returns a distinct notification (`409 Conflict`) instructing the user to contact an Administrator, while creating an account in User Management with an email belonging to a soft-deleted account returns `409 Conflict` directing the Administrator to use account reactivation instead. User management API rate limiting separates read operations (`GET /api/users`, `GET /api/users/roles` at 300 req/15min) from mutating actions (`POST`, `PATCH`, `DELETE` at 100 req/15min) to prevent high-frequency administrative workflows and NAT-shared IP environments from tripping false-positive rate limit locks.
+- **Account Reactivation & Forced Password Change**: Admins can reactivate soft-deleted accounts directly via the dedicated reactivation toggle in the User Management table, confirmed via a modal popup. Accounts created or having their password reset by an Admin are trusted (`email_verified = true`), enforce NIST password guidelines (8–128 characters, zxcvbn strength >= 2), revoke all outstanding sessions immediately, and are flagged with `requires_password_change = true`. Upon logging in with an admin-assigned password, users receive a restricted setup token and must complete the Cloudflare Turnstile-protected password setup flow (`/setup-password`) before gaining access to standard protected routes. Setting a new password via the first-login setup flow is restricted strictly to local accounts (`auth_provider = 'local'`).
 
 ## 4. Data Entry
 
@@ -204,6 +209,10 @@ Plus the landing page itself.
   collection is a Prodeskel-stage concern.
 - **Civil-administration features** (the earlier-explored district-level admin system / VPS
   infrastructure work) — a separate, earlier workstream, not part of this site.
+- **WCAG Level AA/AAA conformance** — the target is Level A (§1). AA criteria such as color
+  contrast (1.4.3) and visible focus indicators (2.4.7) are documented as SHOULD-level guidance in
+  `docs/ACCESSIBILITY.md` rather than enforced, since no automated audit or CI gate exists yet to
+  hold the higher bar.
 
 ## 10. Open Items
 

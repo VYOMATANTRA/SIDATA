@@ -43,17 +43,26 @@ cd SIDATA
 
 ### 2. Backend setup
 
+Copy `.env.example` to `.env` at the root of the repository:
+
+```bash
+cp .env.example .env
+```
+
+> **Note for local (non-Docker) runs**: `.env.example` defaults `DATABASE_URL` to host `mysql` for Docker Compose. When running MySQL directly on your machine or connecting to a local instance, update `DATABASE_URL` in `.env` to use `localhost` (e.g. `mysql://sidata:changeme@localhost:3306/sidata` or with your local MySQL credentials).
+
+Install backend dependencies:
+
 ```bash
 cd backend
 npm ci
-cp .env.example .env
 ```
 
 Fill in `.env` with at least:
 
 | Variable                         | Description                                                                                          |
 | -------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                   | MySQL connection string, e.g. `mysql://root:password@localhost:3306/sidata`                          |
+| `DATABASE_URL`                   | MySQL connection string, e.g. `mysql://root:password@localhost:3306/sidata` (swap host `mysql` to `localhost` for local runs) |
 | `JWT_SECRET`                     | Secret used to sign access tokens                                                                    |
 | `JWT_REFRESH_SECRET`             | Secret used to sign refresh tokens                                                                   |
 | `CSRF_SECRET`                    | Secret used to sign CSRF tokens and cookies                                                          |

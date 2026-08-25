@@ -1,12 +1,12 @@
 import dotenv from 'dotenv';
 import path from 'node:path';
 
-dotenv.config({ path: path.resolve(import.meta.dirname, '../../.env') });
+dotenv.config({ path: path.resolve(import.meta.dirname, '../../../.env') });
 
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) {
-    throw new Error(`Missing required environment variable: ${name}. See backend/.env.example.`);
+    throw new Error(`Missing required environment variable: ${name}. See root .env.example.`);
   }
   return value;
 }

@@ -67,6 +67,11 @@ function resetTurnstile() {
 }
 
 onMounted(() => {
+  if (route.query.reason === 'setup_required') {
+    errorMessage.value =
+      'Sesi penyiapan kata sandi tidak ditemukan atau telah kedaluwarsa. Silakan masuk kembali untuk melanjutkan.'
+    return
+  }
   if (route.query.error === 'oauth_failed' || route.query.reason) {
     const reason = route.query.reason ? String(route.query.reason) : ''
     errorMessage.value = reason
@@ -112,6 +117,15 @@ async function handleLogin() {
       isOtpModalOpen.value = true
       errorMessage.value = data.error || 'Email Anda belum diverifikasi. Silakan masukkan kode OTP.'
       resetTurnstile()
+      return
+    }
+
+    if (data.status === 'REQUIRES_PASSWORD_CHANGE' || data.mustChangePassword) {
+      authStore.setSetupAuth(data.setupToken)
+      successMessage.value = 'Login berhasil! Silakan atur kata sandi baru Anda...'
+      setTimeout(() => {
+        router.push('/setup-password')
+      }, 600)
       return
     }
 

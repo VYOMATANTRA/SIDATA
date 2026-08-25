@@ -45,4 +45,30 @@ describe('router auth guard retry behavior', () => {
       expect(authStore.isAuthenticated).toBe(true)
     },
   )
+
+  it('redirects to /login?reason=setup_required when navigating to /setup-password without setup token', async () => {
+    sessionStorage.clear()
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async () => {
+      return { ok: false, status: 401, json: async () => ({}) } as Response
+    })
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const authStore = useAuthStore(pinia)
+    authStore.clearAuth()
+
+    await router.push('/setup-password')
+    expect(router.currentRoute.value.name).toBe('login')
+    expect(router.currentRoute.value.query.reason).toBe('setup_required')
+  })
+
+  it('allows navigating to /setup-password when setupToken is present', async () => {
+    sessionStorage.clear()
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const authStore = useAuthStore(pinia)
+    authStore.setSetupAuth('valid-token')
+
+    await router.push('/setup-password')
+    expect(router.currentRoute.value.name).toBe('setup-password')
+  })
 })

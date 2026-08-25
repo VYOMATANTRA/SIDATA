@@ -11,7 +11,7 @@ Work from the appropriate directory:
 - Frontend: `frontend/`
 - Backend: `backend/`
 
-Backend requires a `.env` file — `DATABASE_URL` (MySQL), `JWT_SECRET`, `JWT_REFRESH_SECRET`, `CSRF_SECRET`, `COOKIE_ENCRYPTION_KEY`, `CORS_ORIGIN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`, `GOOGLE_OAUTH_SUCCESS_REDIRECT`, `GOOGLE_OAUTH_FAILURE_REDIRECT`, `TURNSTILE_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM` (`PORT` defaults to 3000). See `backend/.env.example`. The server validates these at boot and fails fast if any are missing.
+Backend requires a `.env` file at the repository root — `DATABASE_URL` (MySQL, `localhost` for local dev or `mysql` under Docker Compose), `JWT_SECRET`, `JWT_REFRESH_SECRET`, `CSRF_SECRET`, `COOKIE_ENCRYPTION_KEY`, `CORS_ORIGIN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`, `GOOGLE_OAUTH_SUCCESS_REDIRECT`, `GOOGLE_OAUTH_FAILURE_REDIRECT`, `TURNSTILE_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM` (`PORT` defaults to 3000). See `.env.example`. The server validates these at boot and fails fast if any are missing.
 
 ## Database
 
@@ -36,14 +36,14 @@ Dev server runs on `http://localhost:5173` by default (Vite).
 
 ### Backend (Express + Prisma)
 
-| Task           | Command                           | Location   |
-| -------------- | --------------------------------- | ---------- |
-| Lint           | `npm run lint`                    | `backend/` |
-| Run tests      | `npm test`                        | `backend/` |
-| Run tests with coverage | `npm run test:coverage`  | `backend/` |
-| Format         | `npm run format`                  | `backend/` |
-| Run server     | `npx tsx src/index.ts` or similar | `backend/` |
-| Run via Docker | `docker compose up --build`       | repo root  |
+| Task                    | Command                           | Location   |
+| ----------------------- | --------------------------------- | ---------- |
+| Lint                    | `npm run lint`                    | `backend/` |
+| Run tests               | `npm test`                        | `backend/` |
+| Run tests with coverage | `npm run test:coverage`           | `backend/` |
+| Format                  | `npm run format`                  | `backend/` |
+| Run server              | `npx tsx src/index.ts` or similar | `backend/` |
+| Run via Docker          | `docker compose up --build`       | repo root  |
 
 Backend runs on port from `PORT` env var (default 3000). Prisma client is generated to `generated/prisma/`.
 
@@ -56,6 +56,8 @@ Backend runs on port from `PORT` env var (default 3000). Prisma client is genera
 **Keep documentation in sync** — whenever a change affects setup, commands, architecture, env vars, or workflows, update the relevant docs (README.md, CONTRIBUTING.md, SECURITY.md, this file) in the same PR rather than leaving them stale.
 
 **Keep the spec in sync** — whenever a change settles or revises a product/domain decision (page structure, content model, roles, data-entry rules, schema design intent, scope), update `docs/SPEC.md` in the same PR. Record the decision and the rule it implies, not the deliberation behind it — rationale for settled questions is context every future session pays for. Unresolved questions belong in SPEC.md §10 and nowhere else.
+
+**Accessibility** — frontend markup MUST use semantic HTML and SHOULD conform to WCAG 2.1 Level A. See `docs/ACCESSIBILITY.md` for the concrete rules; apply them while writing a component, not as a retrofit.
 
 ## Architecture
 
@@ -81,10 +83,10 @@ Key details:
 - `src/index.ts`: Entry point — starts the HTTP listener
 - `src/app.ts`: Express app setup (middleware, CORS, route mounting)
 - `src/configs/index.ts`: Typed env var access; validated at boot
-- `src/routes/`: Route definitions (`auth.routes.ts`, `health.routes.ts`, `weather.routes.ts`, `maps.routes.ts`)
-- `src/controllers/`: Decoupled route handlers (`auth.controller.ts` for local auth, `oauth.controller.ts` for Google OAuth, `otp.controller.ts` for OTP verification, `weather.controller.ts` — forecast lookup, `maps.controller.ts` — spatial points and RT leader lookup)
-- `src/services/`: Business logic sitting between controllers and external/data sources (`weather.service.ts` — caches and transforms BMKG forecasts, `maps.service.ts` — spatial points querying and RT leader coordinate resolution)
-- `src/middlewares/`: Express middleware (`auth.middleware.ts` for JWT, `turnstile.middleware.ts` for anti-bot, `rateLimit.middleware.ts` — per-route rate limiters)
+- `src/routes/`: Route definitions (`auth.routes.ts`, `health.routes.ts`, `profile.routes.ts`, `users.routes.ts`, `weather.routes.ts`, `maps.routes.ts`)
+- `src/controllers/`: Decoupled route handlers (`auth.controller.ts` for local auth, `oauth.controller.ts` for Google OAuth, `otp.controller.ts` for OTP verification, `profile.controller.ts` for self-service credential changes, `users.controller.ts` for user management, `weather.controller.ts` — forecast lookup, `maps.controller.ts` — spatial points and RT leader lookup)
+- `src/services/`: Business logic sitting between controllers and external/data sources (`users.service.ts` — user management & role administration, `profile.service.ts` — self-service credential updates, `weather.service.ts` — caches and transforms BMKG forecasts, `maps.service.ts` — spatial points querying and RT leader coordinate resolution)
+- `src/middlewares/`: Express middleware (`auth.middleware.ts` for JWT, `role.middleware.ts` for role-based authorization, `turnstile.middleware.ts` for anti-bot, `rateLimit.middleware.ts` — per-route rate limiters)
 - `src/utils/`: `jwt.ts` (token signing), `oauth.ts` (Google OAuth PKCE & token verification), `otp.ts` (OTP hashing & expiry), `mailer.ts` (transactional email), `turnstile.ts` (Turnstile API client), `prisma.ts` (Prisma instance), `bmkg.ts` (BMKG API fetch + response validation)
 - `prisma/schema.prisma`: ORM schema (MySQL)
 - `prisma/seed.ts`: Seeds default roles (`user`, `admin`), sample RT leaders, and spatial points
@@ -118,6 +120,7 @@ Key details:
 - **ESLint configs**: `frontend/eslint.config.ts`, `backend/eslint.config.js`
 - **TypeScript**: `frontend/tsconfig.json`, `backend/tsconfig.json` (with app config for frontend)
 - **Vite config**: `frontend/vite.config.ts` (Tailwind, Vue plugins, `@` alias)
+- **`docs/ACCESSIBILITY.md`**: Semantic HTML rules (MUST) and WCAG 2.1 Level A conformance target (SHOULD) for frontend markup
 
 ## Common Workflows
 
