@@ -291,6 +291,35 @@ describe('maps.controller', () => {
         prisma.rtLeader.findMany = originalLeaderFindMany;
       }
     });
+
+    it('returns 400 when type is sent as a repeated query key (array)', async () => {
+      const res = fakeRes();
+      // Express parses ?type=ketua_rt&type=bogus as an array
+      await listPoints(
+        { query: { type: ['ketua_rt', 'bogus'] } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+    });
+
+    it('returns 400 when rt is sent as a repeated query key (array) in listPoints', async () => {
+      const res = fakeRes();
+      await listPoints(
+        { query: { rt: ['1', '2'] } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, { error: 'Nomor RT harus berupa angka positif' });
+    });
+
+    it('returns 400 when format is sent as a repeated query key (array)', async () => {
+      const res = fakeRes();
+      await listPoints(
+        { query: { format: ['geojson', 'json'] } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+    });
   });
 
   describe('getPoint', () => {
@@ -704,6 +733,61 @@ describe('maps.controller', () => {
       );
       assert.equal(res.status, 400);
       assert.deepEqual(res.body, { error: 'Nomor RT harus berupa angka positif' });
+    });
+
+    it('returns 400 when rt is sent as a repeated query key (array) in listRtLeaders', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { rt: ['1', '2'] } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, { error: 'Nomor RT harus berupa angka positif' });
+    });
+
+    it('returns 400 when search is sent as a repeated query key (array)', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { search: ['foo', 'bar'] } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+    });
+
+    it('returns 400 when limit is sent as a repeated query key (array)', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { limit: ['10', '20'] } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai limit tidak valid. Harus berupa angka bulat positif.',
+      });
+    });
+
+    it('returns 400 when offset is sent as a repeated query key (array)', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { offset: ['0', '5'] } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai offset tidak valid. Harus berupa angka bulat non-negatif.',
+      });
+    });
+
+    it('returns 400 when page is sent as a repeated query key (array)', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { page: ['1', '2'] } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai page tidak valid. Harus berupa angka bulat positif.',
+      });
     });
 
     it('returns 400 for limit=0 (below minimum of 1)', async () => {

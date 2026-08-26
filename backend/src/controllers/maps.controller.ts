@@ -16,6 +16,11 @@ function parsePositiveIntParam(
   value: unknown,
   errorMessage: string,
 ): { value?: number; error?: string } {
+  // Repeated query keys are parsed by Express as an array. Treat as invalid
+  // rather than silently dropping the filter.
+  if (Array.isArray(value)) {
+    return { error: errorMessage };
+  }
   if (typeof value !== 'string' || value.trim() === '') {
     return {};
   }
@@ -48,6 +53,11 @@ type PaginationParamResult =
  * rather than silently falling back to the unbounded default.
  */
 function parsePaginationParam(value: unknown, min = 0): PaginationParamResult {
+  // Repeated query keys are parsed by Express as an array. Treat as invalid
+  // rather than silently falling back to 'absent' (unbounded query).
+  if (Array.isArray(value)) {
+    return { kind: 'invalid' };
+  }
   if (typeof value !== 'string' || value.trim() === '') {
     return { kind: 'absent' };
   }
@@ -65,6 +75,15 @@ function parsePaginationParam(value: unknown, min = 0): PaginationParamResult {
 export const listPoints = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { type, rt, format } = req.query;
+
+    if (Array.isArray(type)) {
+      return res.status(400).json({
+        error: `Tipe titik spasial tidak valid. Pilihan yang valid: ${VALID_SPATIAL_TYPES.join(', ')}`,
+      });
+    }
+    if (Array.isArray(format)) {
+      return res.status(400).json({ error: 'Parameter format tidak boleh dikirim lebih dari satu kali' });
+    }
 
     let parsedType: SpatialPointType | undefined;
     if (typeof type === 'string' && type.trim() !== '') {
@@ -124,6 +143,13 @@ export const getPoint = async (req: Request, res: Response): Promise<Response> =
 export const listRtLeaders = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { search, rt, limit, offset, page } = req.query;
+
+    if (Array.isArray(search)) {
+      return res.status(400).json({ error: 'Parameter search tidak boleh dikirim lebih dari satu kali' });
+    }
+    if (Array.isArray(page)) {
+      return res.status(400).json({ error: 'Nilai page tidak valid. Harus berupa angka bulat positif.' });
+    }
 
     const { value: parsedRtNumber, error: rtError } = parsePositiveIntParam(
       rt,
