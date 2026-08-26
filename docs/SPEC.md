@@ -79,7 +79,10 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
 
 Hybrid model:
 
-- **Scalar indicator figures** — bulk XLS import, falling back to manual entry (see §10).
+- **Scalar indicator figures** — manual, form-based entry. Bulk XLS import is deferred and out
+  of current scope; it depends on a Prodeskel XLS export that has not been confirmed to exist.
+  If such an export is confirmed later, import would layer on top of manual entry, not replace
+  it.
 - **Matrix/table-shaped data** (age pyramid, 17-group ethnicity, religion×sex, occupation table —
   4 fixed-shape tables) — manual, form-based entry only. Bulk import is explicitly out of scope
   for these.
@@ -176,6 +179,17 @@ buried inside a stat page. Entry points:
 - Pemerintahan & Kelembagaan, chapter 2.3 (Pemerintahan Kelurahan), **links to** this page rather
   than duplicating the table, so the 100 rows have exactly one home.
 
+The page provides **in-table search**: a single labelled text input filtering on both
+`rt_number` and leader `name`, applied client-side over the full 100-row set (no server
+round-trip, no pagination). The visible row count is announced as results change
+("Menampilkan N dari 100 RT"). Rows remain sorted by `rt_number` and the unfiltered table is
+the default state, so the page is fully usable with JavaScript-driven filtering ignored. No
+RT-range grouping or collapsible bands — flat table only.
+
+Accessibility implications, per `docs/ACCESSIBILITY.md`: the input needs a real `<label>` (not
+placeholder-only), the result count belongs in an `aria-live="polite"` region, and the table
+keeps proper `<caption>` / `<th scope>` semantics under filtering.
+
 **Footer:**
 
 - **Sumber Daya** — Publikasi (Prodeskel publications, infographics, Eco Boba booklet, etc.), Peta
@@ -209,6 +223,9 @@ Plus the landing page itself.
   collection is a Prodeskel-stage concern.
 - **Civil-administration features** (the earlier-explored district-level admin system / VPS
   infrastructure work) — a separate, earlier workstream, not part of this site.
+- **Bulk XLS import of scalar figures** — deferred, not dropped. Contingent on a confirmed
+  Prodeskel XLS export; until then scalar figures are entered manually (§4). Matrix/table-shaped
+  data is excluded from bulk import permanently, not just deferred.
 - **WCAG Level AA/AAA conformance** — the target is Level A (§1). AA criteria such as color
   contrast (1.4.3) and visible focus indicators (2.4.7) are documented as SHOULD-level guidance in
   `docs/ACCESSIBILITY.md` rather than enforced, since no automated audit or CI gate exists yet to
@@ -218,6 +235,4 @@ Plus the landing page itself.
 
 Single register — unresolved questions live here and nowhere else.
 
-- Whether the Prodeskel app can export XLS, which the bulk-import path in §4 depends on. If not,
-  scalar figures fall back to manual entry.
-- Whether the Ketua RT page (§8) needs in-table search/filter, given 100 rows to scan.
+_None currently open._

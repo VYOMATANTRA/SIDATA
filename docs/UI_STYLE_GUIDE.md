@@ -110,6 +110,11 @@ Used for displaying demographic and regional data over image backgrounds.
 
 The design is mobile-first, optimized for a `412px` viewport.
 
+**Desktop scope (decided 2026-08-24):** desktop/larger-viewport layouts are in scope for
+launch, not deferred. No desktop frames exist in the Figma source (`SIDATA Manggar`,
+fileKey `tnVcKOGwKTaFCG40wUHQpr`) yet — that design work, including the breakpoint
+strategy itself, is still outstanding and tracked as unstarted, not merely undocumented.
+
 - **Hero Section (`HeroSection.vue`):**
   - **Padding:** `pt-[250px] pb-[80px] px-[16px]`
   - **Layout:** `flex flex-col items-center gap-[13px]`
