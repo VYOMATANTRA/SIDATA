@@ -30,19 +30,36 @@ function parsePositiveIntParam(
   return { value: parsed };
 }
 
-function parseOptionalInt(value: unknown, min = 0): number | undefined {
+type PaginationParamResult =
+  | { kind: 'absent' }
+  | { kind: 'valid'; value: number }
+  | { kind: 'invalid' };
+
+/**
+ * Parse an optional pagination query parameter.
+ *
+ * Returns:
+ *   { kind: 'absent' }          — param was not supplied or was an empty string
+ *   { kind: 'valid', value }    — param was a non-negative integer ≥ min
+ *   { kind: 'invalid' }         — param was supplied but failed validation
+ *                                 (non-numeric, negative, or below min)
+ *
+ * Callers MUST handle 'invalid' explicitly and return a 400 to the client
+ * rather than silently falling back to the unbounded default.
+ */
+function parsePaginationParam(value: unknown, min = 0): PaginationParamResult {
   if (typeof value !== 'string' || value.trim() === '') {
-    return undefined;
+    return { kind: 'absent' };
   }
   const trimmed = value.trim();
   if (!/^\d+$/.test(trimmed)) {
-    return undefined;
+    return { kind: 'invalid' };
   }
   const parsed = parseInt(trimmed, 10);
   if (parsed < min) {
-    return undefined;
+    return { kind: 'invalid' };
   }
-  return parsed;
+  return { kind: 'valid', value: parsed };
 }
 
 export const listPoints = async (req: Request, res: Response): Promise<Response> => {
@@ -116,16 +133,28 @@ export const listRtLeaders = async (req: Request, res: Response): Promise<Respon
       return res.status(400).json({ error: rtError });
     }
 
-    let parsedLimit = parseOptionalInt(limit, 1);
-    let parsedOffset = parseOptionalInt(offset, 0);
+    const limitResult = parsePaginationParam(limit, 1);
+    if (limitResult.kind === 'invalid') {
+      return res.status(400).json({ error: 'Nilai limit tidak valid. Harus berupa angka bulat positif.' });
+    }
+    let parsedLimit: number | undefined = limitResult.kind === 'valid' ? limitResult.value : undefined;
+
+    const offsetResult = parsePaginationParam(offset, 0);
+    if (offsetResult.kind === 'invalid') {
+      return res.status(400).json({ error: 'Nilai offset tidak valid. Harus berupa angka bulat non-negatif.' });
+    }
+    let parsedOffset: number | undefined = offsetResult.kind === 'valid' ? offsetResult.value : undefined;
 
     if (parsedOffset === undefined && typeof page === 'string' && page.trim() !== '') {
-      const p = parseOptionalInt(page, 1);
-      if (p !== undefined) {
+      const pageResult = parsePaginationParam(page, 1);
+      if (pageResult.kind === 'invalid') {
+        return res.status(400).json({ error: 'Nilai page tidak valid. Harus berupa angka bulat positif.' });
+      }
+      if (pageResult.kind === 'valid') {
         if (parsedLimit === undefined) {
           parsedLimit = DEFAULT_PAGE_SIZE;
         }
-        parsedOffset = (p - 1) * parsedLimit;
+        parsedOffset = (pageResult.value - 1) * parsedLimit;
       }
     }
 

@@ -594,26 +594,84 @@ describe('maps.controller', () => {
       }
     });
 
-    it('rejects rt with trailing non-digits in listRtLeaders with 400 and ignores invalid pagination params', async () => {
-      const res1 = fakeRes();
+    it('rejects rt with trailing non-digits in listRtLeaders with 400', async () => {
+      const res = fakeRes();
       await listRtLeaders(
         { query: { rt: '5abc' } } as unknown as Request,
-        res1 as unknown as Response,
+        res as unknown as Response,
       );
-      assert.equal(res1.status, 400);
-      assert.deepEqual(res1.body, { error: 'Nomor RT harus berupa angka positif' });
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, { error: 'Nomor RT harus berupa angka positif' });
+    });
 
+    it('returns 400 for limit=0 (below minimum of 1)', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { limit: '0' } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai limit tidak valid. Harus berupa angka bulat positif.',
+      });
+    });
+
+    it('returns 400 for non-numeric limit', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { limit: '10abc' } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai limit tidak valid. Harus berupa angka bulat positif.',
+      });
+    });
+
+    it('returns 400 for non-numeric offset', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { offset: '5abc' } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai offset tidak valid. Harus berupa angka bulat non-negatif.',
+      });
+    });
+
+    it('returns 400 for page=0 (below minimum of 1)', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { page: '0' } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai page tidak valid. Harus berupa angka bulat positif.',
+      });
+    });
+
+    it('returns 400 for non-numeric page', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { page: '2xyz' } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai page tidak valid. Harus berupa angka bulat positif.',
+      });
+    });
+
+    it('accepts limit=1 (boundary minimum) and offset=0 without error', async () => {
       const originalCount = prisma.rtLeader.count;
       const originalFindMany = prisma.rtLeader.findMany;
       const originalCoverageFindMany = prisma.spatialPointRt.findMany;
 
-      let capturedArgs: { take?: number; skip?: number; where?: unknown } | undefined;
+      let capturedArgs: { take?: number; skip?: number } | undefined;
       prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
-      prisma.rtLeader.findMany = (async (args: {
-        take?: number;
-        skip?: number;
-        where?: unknown;
-      }) => {
+      prisma.rtLeader.findMany = (async (args: { take?: number; skip?: number }) => {
         capturedArgs = args;
         return [];
       }) as unknown as typeof prisma.rtLeader.findMany;
@@ -621,16 +679,14 @@ describe('maps.controller', () => {
         (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
 
       try {
-        const req2 = {
-          query: { limit: '10abc', page: '2xyz', offset: '5abc' },
-        } as unknown as Request;
-        const res2 = fakeRes();
+        const req = { query: { limit: '1', offset: '0' } } as unknown as Request;
+        const res = fakeRes();
 
-        await listRtLeaders(req2, res2 as unknown as Response);
+        await listRtLeaders(req, res as unknown as Response);
 
-        assert.equal(res2.status, 200);
-        assert.equal(capturedArgs?.take, undefined);
-        assert.equal(capturedArgs?.skip, undefined);
+        assert.equal(res.status, 200);
+        assert.equal(capturedArgs?.take, 1);
+        assert.equal(capturedArgs?.skip, 0);
       } finally {
         prisma.rtLeader.count = originalCount;
         prisma.rtLeader.findMany = originalFindMany;
