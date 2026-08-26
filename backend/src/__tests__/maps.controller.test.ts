@@ -426,8 +426,7 @@ describe('maps.controller', () => {
         assert.equal(body.point.rtLeader, null);
         // Must surface the anomaly
         assert.ok(
-          typeof body.point.integrityWarning === 'string' &&
-            body.point.integrityWarning.length > 0,
+          typeof body.point.integrityWarning === 'string' && body.point.integrityWarning.length > 0,
           'integrityWarning should be a non-empty string',
         );
         // Leader DB lookup must be skipped — no point fetching data that won't be used

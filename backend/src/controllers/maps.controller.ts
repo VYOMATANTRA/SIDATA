@@ -36,9 +36,7 @@ function parsePositiveIntParam(
 }
 
 type PaginationParamResult =
-  | { kind: 'absent' }
-  | { kind: 'valid'; value: number }
-  | { kind: 'invalid' };
+  { kind: 'absent' } | { kind: 'valid'; value: number } | { kind: 'invalid' };
 
 /**
  * Parse an optional pagination query parameter.
@@ -82,7 +80,9 @@ export const listPoints = async (req: Request, res: Response): Promise<Response>
       });
     }
     if (Array.isArray(format)) {
-      return res.status(400).json({ error: 'Parameter format tidak boleh dikirim lebih dari satu kali' });
+      return res
+        .status(400)
+        .json({ error: 'Parameter format tidak boleh dikirim lebih dari satu kali' });
     }
 
     let parsedType: SpatialPointType | undefined;
@@ -145,10 +145,14 @@ export const listRtLeaders = async (req: Request, res: Response): Promise<Respon
     const { search, rt, limit, offset, page } = req.query;
 
     if (Array.isArray(search)) {
-      return res.status(400).json({ error: 'Parameter search tidak boleh dikirim lebih dari satu kali' });
+      return res
+        .status(400)
+        .json({ error: 'Parameter search tidak boleh dikirim lebih dari satu kali' });
     }
     if (Array.isArray(page)) {
-      return res.status(400).json({ error: 'Nilai page tidak valid. Harus berupa angka bulat positif.' });
+      return res
+        .status(400)
+        .json({ error: 'Nilai page tidak valid. Harus berupa angka bulat positif.' });
     }
 
     const { value: parsedRtNumber, error: rtError } = parsePositiveIntParam(
@@ -161,20 +165,28 @@ export const listRtLeaders = async (req: Request, res: Response): Promise<Respon
 
     const limitResult = parsePaginationParam(limit, 1);
     if (limitResult.kind === 'invalid') {
-      return res.status(400).json({ error: 'Nilai limit tidak valid. Harus berupa angka bulat positif.' });
+      return res
+        .status(400)
+        .json({ error: 'Nilai limit tidak valid. Harus berupa angka bulat positif.' });
     }
-    let parsedLimit: number | undefined = limitResult.kind === 'valid' ? limitResult.value : undefined;
+    let parsedLimit: number | undefined =
+      limitResult.kind === 'valid' ? limitResult.value : undefined;
 
     const offsetResult = parsePaginationParam(offset, 0);
     if (offsetResult.kind === 'invalid') {
-      return res.status(400).json({ error: 'Nilai offset tidak valid. Harus berupa angka bulat non-negatif.' });
+      return res
+        .status(400)
+        .json({ error: 'Nilai offset tidak valid. Harus berupa angka bulat non-negatif.' });
     }
-    let parsedOffset: number | undefined = offsetResult.kind === 'valid' ? offsetResult.value : undefined;
+    let parsedOffset: number | undefined =
+      offsetResult.kind === 'valid' ? offsetResult.value : undefined;
 
     if (parsedOffset === undefined && typeof page === 'string' && page.trim() !== '') {
       const pageResult = parsePaginationParam(page, 1);
       if (pageResult.kind === 'invalid') {
-        return res.status(400).json({ error: 'Nilai page tidak valid. Harus berupa angka bulat positif.' });
+        return res
+          .status(400)
+          .json({ error: 'Nilai page tidak valid. Harus berupa angka bulat positif.' });
       }
       if (pageResult.kind === 'valid') {
         if (parsedLimit === undefined) {
