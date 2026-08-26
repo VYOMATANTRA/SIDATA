@@ -22,6 +22,13 @@ export interface SpatialPointDTO {
     phoneIsWhatsapp: boolean;
     alamat: string | null;
   } | null;
+  /**
+   * Present only when a data-integrity violation is detected at read time.
+   * A `ketua_rt` point must cover exactly one RT (SPEC.md §7), but MySQL
+   * cannot enforce this with a partial unique index. When the invariant is
+   * broken, `rtLeader` is set to null and this field describes the anomaly.
+   */
+  integrityWarning?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -106,17 +113,35 @@ function mapPointToDTO(
   // Per SPEC.md §7: Only 'ketua_rt' points are 1:1 with an RT leader.
   // Multi-RT points (e.g. Bank Sampah) cover multiple RTs and do not have a single leader contact.
   let rtLeader: SpatialPointDTO['rtLeader'] = null;
-  if (point.type === 'ketua_rt' && rts.length > 0 && rts[0] !== undefined) {
-    const leader = leaderLookup?.get(rts[0]);
-    if (leader) {
-      rtLeader = {
-        rtNumber: leader.rtNumber,
-        name: leader.name,
-        phone: leader.phone,
-        phoneIsWhatsapp: leader.phoneIsWhatsapp,
-        alamat: leader.alamat,
-      };
+  let integrityWarning: string | undefined;
+
+  if (point.type === 'ketua_rt') {
+    if (rts.length === 1 && rts[0] !== undefined) {
+      // Correct: exactly one RT coverage, look up the leader.
+      const leader = leaderLookup?.get(rts[0]);
+      if (leader) {
+        rtLeader = {
+          rtNumber: leader.rtNumber,
+          name: leader.name,
+          phone: leader.phone,
+          phoneIsWhatsapp: leader.phoneIsWhatsapp,
+          alamat: leader.alamat,
+        };
+      }
+    } else if (rts.length > 1) {
+      // Data-integrity violation: SPEC.md §7 requires exactly one RT per ketua_rt point,
+      // but MySQL cannot enforce this with a partial unique index. Log and surface the anomaly
+      // rather than silently returning only the lowest-numbered RT's leader contact.
+      console.error(
+        `[maps.service] Integrity violation: ketua_rt point "${point.id}" is linked to ` +
+          `${rts.length.toString()} RT coverages (${rts.join(', ')}). ` +
+          `Expected exactly 1. rtLeader will be null until corrected.`,
+      );
+      integrityWarning =
+        `ketua_rt point linked to ${rts.length.toString()} RT coverages ` +
+        `(RT ${rts.join(', ')}); leader contact omitted pending data correction`;
     }
+    // rts.length === 0: no coverage yet, rtLeader stays null — not an error.
   }
 
   return {
@@ -128,6 +153,7 @@ function mapPointToDTO(
     metadata: (point.metadata as Record<string, unknown>) ?? null,
     rts,
     rtLeader,
+    ...(integrityWarning !== undefined ? { integrityWarning } : {}),
     createdAt: point.createdAt.toISOString(),
     updatedAt: point.updatedAt.toISOString(),
   };
@@ -229,7 +255,10 @@ export async function getSpatialPointById(id: string): Promise<SpatialPointDTO |
     }
   >();
 
-  if (point.type === 'ketua_rt' && rts.length > 0 && rts[0] !== undefined) {
+  if (point.type === 'ketua_rt' && rts.length === 1 && rts[0] !== undefined) {
+    // Only fetch the leader when there is exactly one RT coverage (the correct invariant).
+    // Multi-RT ketua_rt points are a data-integrity violation (SPEC.md §7); mapPointToDTO
+    // will detect rts.length > 1 via the leaderMap miss and surface integrityWarning.
     const leader = await prisma.rtLeader.findUnique({
       where: { rtNumber: rts[0] },
     });

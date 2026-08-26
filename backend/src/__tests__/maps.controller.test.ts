@@ -129,6 +129,56 @@ describe('maps.controller', () => {
       }
     });
 
+    it('returns rtLeader: null and integrityWarning when a ketua_rt point has multiple RT coverages', async () => {
+      const originalFindMany = prisma.spatialPoint.findMany;
+      const originalLeaderFindMany = prisma.rtLeader.findMany;
+
+      // ketua_rt point erroneously linked to two RTs — violates SPEC.md §7
+      const multiRtKetuaRtPoint = {
+        ...sampleKetuaRtPoint,
+        rtCoverages: [{ rtNumber: 4 }, { rtNumber: 7 }],
+      };
+
+      prisma.spatialPoint.findMany = (async () => [
+        multiRtKetuaRtPoint,
+      ]) as unknown as typeof prisma.spatialPoint.findMany;
+
+      prisma.rtLeader.findMany = (async () => [
+        sampleRtLeader1,
+      ]) as unknown as typeof prisma.rtLeader.findMany;
+
+      try {
+        const req = { query: {} } as unknown as Request;
+        const res = fakeRes();
+
+        await listPoints(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        const body = res.body as {
+          points: Array<{
+            name: string;
+            rts: number[];
+            rtLeader: unknown;
+            integrityWarning?: string;
+          }>;
+          total: number;
+        };
+        assert.equal(body.total, 1);
+        assert.deepEqual(body.points[0]?.rts, [4, 7]);
+        // Must not silently return only RT 4's leader
+        assert.equal(body.points[0]?.rtLeader, null);
+        // Must surface the anomaly to API consumers
+        assert.ok(
+          typeof body.points[0]?.integrityWarning === 'string' &&
+            body.points[0].integrityWarning.length > 0,
+          'integrityWarning should be a non-empty string',
+        );
+      } finally {
+        prisma.spatialPoint.findMany = originalFindMany;
+        prisma.rtLeader.findMany = originalLeaderFindMany;
+      }
+    });
+
     it('returns GeoJSON FeatureCollection when format=geojson', async () => {
       const originalFindMany = prisma.spatialPoint.findMany;
       const originalLeaderFindMany = prisma.rtLeader.findMany;
@@ -304,6 +354,58 @@ describe('maps.controller', () => {
         assert.deepEqual(res.body, { error: 'Titik spasial tidak ditemukan' });
       } finally {
         prisma.spatialPoint.findUnique = originalFindUnique;
+      }
+    });
+
+    it('returns rtLeader: null and integrityWarning via getPoint when a ketua_rt point has multiple RT coverages', async () => {
+      const originalFindUnique = prisma.spatialPoint.findUnique;
+      const originalLeaderFindUnique = prisma.rtLeader.findUnique;
+
+      // ketua_rt point erroneously linked to two RTs — violates SPEC.md §7
+      const multiRtKetuaRtPoint = {
+        ...sampleKetuaRtPoint,
+        rtCoverages: [{ rtNumber: 4 }, { rtNumber: 7 }],
+      };
+
+      prisma.spatialPoint.findUnique = (async () =>
+        multiRtKetuaRtPoint) as unknown as typeof prisma.spatialPoint.findUnique;
+
+      // Should not be called — guard fires before the DB lookup
+      let leaderLookupCalled = false;
+      prisma.rtLeader.findUnique = (async () => {
+        leaderLookupCalled = true;
+        return sampleRtLeader1;
+      }) as unknown as typeof prisma.rtLeader.findUnique;
+
+      try {
+        const req = { params: { id: 'point-rt-1' } } as unknown as Request;
+        const res = fakeRes();
+
+        await getPoint(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        const body = res.body as {
+          point: {
+            id: string;
+            rts: number[];
+            rtLeader: unknown;
+            integrityWarning?: string;
+          };
+        };
+        assert.deepEqual(body.point.rts, [4, 7]);
+        // Must not silently return only RT 4's leader
+        assert.equal(body.point.rtLeader, null);
+        // Must surface the anomaly
+        assert.ok(
+          typeof body.point.integrityWarning === 'string' &&
+            body.point.integrityWarning.length > 0,
+          'integrityWarning should be a non-empty string',
+        );
+        // Leader DB lookup must be skipped — no point fetching data that won't be used
+        assert.equal(leaderLookupCalled, false);
+      } finally {
+        prisma.spatialPoint.findUnique = originalFindUnique;
+        prisma.rtLeader.findUnique = originalLeaderFindUnique;
       }
     });
   });
