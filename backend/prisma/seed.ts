@@ -19,7 +19,7 @@ async function main() {
     },
   });
 
-  // Seed sample RT Leaders (RT 01 - RT 05)
+  // Seed sample RT Leaders (RT 01 - RT 03)
   const rt1 = await prisma.rtLeader.upsert({
     where: { rtNumber: 1 },
     update: {},
