@@ -6,10 +6,10 @@ import {
   getRtLeaders,
   getRtLeaderByRtNumber,
   getMapSummary,
+  ALL_SPATIAL_POINT_TYPES,
 } from '../services/maps.service.js';
 import type { SpatialPointType } from '../../generated/prisma/client.js';
 
-const VALID_SPATIAL_TYPES: SpatialPointType[] = ['ketua_rt', 'bank_sampah', 'fasilitas_umum'];
 export const DEFAULT_PAGE_SIZE = 10;
 
 function parsePositiveIntParam(
@@ -78,7 +78,7 @@ export const listPoints = async (req: Request, res: Response): Promise<Response>
 
     if (Array.isArray(type)) {
       return res.status(400).json({
-        error: `Tipe titik spasial tidak valid. Pilihan yang valid: ${VALID_SPATIAL_TYPES.join(', ')}`,
+        error: `Tipe titik spasial tidak valid. Pilihan yang valid: ${ALL_SPATIAL_POINT_TYPES.join(', ')}`,
       });
     }
     if (Array.isArray(format)) {
@@ -87,9 +87,9 @@ export const listPoints = async (req: Request, res: Response): Promise<Response>
 
     let parsedType: SpatialPointType | undefined;
     if (typeof type === 'string' && type.trim() !== '') {
-      if (!VALID_SPATIAL_TYPES.includes(type as SpatialPointType)) {
+      if (!ALL_SPATIAL_POINT_TYPES.includes(type as SpatialPointType)) {
         return res.status(400).json({
-          error: `Tipe titik spasial tidak valid. Pilihan yang valid: ${VALID_SPATIAL_TYPES.join(', ')}`,
+          error: `Tipe titik spasial tidak valid. Pilihan yang valid: ${ALL_SPATIAL_POINT_TYPES.join(', ')}`,
         });
       }
       parsedType = type as SpatialPointType;
