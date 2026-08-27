@@ -11,6 +11,8 @@ import {
 import type { SpatialPointType } from '../../generated/prisma/client.js';
 
 export const DEFAULT_PAGE_SIZE = 10;
+export const VALID_SPATIAL_FORMATS = ['geojson', 'json'] as const;
+export type SpatialPointFormat = (typeof VALID_SPATIAL_FORMATS)[number];
 
 function parsePositiveIntParam(
   value: unknown,
@@ -85,6 +87,16 @@ export const listPoints = async (req: Request, res: Response): Promise<Response>
         .json({ error: 'Parameter format tidak boleh dikirim lebih dari satu kali' });
     }
 
+    let parsedFormat: SpatialPointFormat | undefined;
+    if (typeof format === 'string' && format.trim() !== '') {
+      if (!VALID_SPATIAL_FORMATS.includes(format as SpatialPointFormat)) {
+        return res.status(400).json({
+          error: `Format tidak valid. Pilihan yang valid: ${VALID_SPATIAL_FORMATS.join(', ')}`,
+        });
+      }
+      parsedFormat = format as SpatialPointFormat;
+    }
+
     let parsedType: SpatialPointType | undefined;
     if (typeof type === 'string' && type.trim() !== '') {
       if (!ALL_SPATIAL_POINT_TYPES.includes(type as SpatialPointType)) {
@@ -108,7 +120,7 @@ export const listPoints = async (req: Request, res: Response): Promise<Response>
       rtNumber: parsedRtNumber,
     };
 
-    if (format === 'geojson') {
+    if (parsedFormat === 'geojson') {
       const geojson = await getSpatialPointsAsGeoJson(filter);
       return res.status(200).json(geojson);
     }

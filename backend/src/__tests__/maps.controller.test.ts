@@ -220,6 +220,59 @@ describe('maps.controller', () => {
       }
     });
 
+    it('returns standard JSON structure when format=json is explicitly provided', async () => {
+      const originalFindMany = prisma.spatialPoint.findMany;
+      const originalLeaderFindMany = prisma.rtLeader.findMany;
+
+      prisma.spatialPoint.findMany = (async () => [
+        sampleKetuaRtPoint,
+      ]) as unknown as typeof prisma.spatialPoint.findMany;
+
+      prisma.rtLeader.findMany = (async () => [
+        sampleRtLeader1,
+      ]) as unknown as typeof prisma.rtLeader.findMany;
+
+      try {
+        const req = { query: { format: 'json' } } as unknown as Request;
+        const res = fakeRes();
+
+        await listPoints(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        const body = res.body as {
+          points: Array<{ name: string }>;
+          total: number;
+        };
+        assert.equal(body.total, 1);
+        assert.equal(body.points[0]?.name, 'Pos RT 01');
+      } finally {
+        prisma.spatialPoint.findMany = originalFindMany;
+        prisma.rtLeader.findMany = originalLeaderFindMany;
+      }
+    });
+
+    it('rejects invalid format with 400', async () => {
+      const res1 = fakeRes();
+      await listPoints(
+        { query: { format: 'invalid_format' } } as unknown as Request,
+        res1 as unknown as Response,
+      );
+      assert.equal(res1.status, 400);
+      assert.deepEqual(res1.body, {
+        error: 'Format tidak valid. Pilihan yang valid: geojson, json',
+      });
+
+      const res2 = fakeRes();
+      await listPoints(
+        { query: { format: 'geoJson' } } as unknown as Request,
+        res2 as unknown as Response,
+      );
+      assert.equal(res2.status, 400);
+      assert.deepEqual(res2.body, {
+        error: 'Format tidak valid. Pilihan yang valid: geojson, json',
+      });
+    });
+
     it('filters points by type and handles invalid type with 400', async () => {
       const res1 = fakeRes();
       await listPoints(
