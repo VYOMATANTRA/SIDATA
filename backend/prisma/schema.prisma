@@ -114,6 +114,8 @@ model RtLeader {
   updatedAt       DateTime @updatedAt
 
   @@map("rt_leaders")
+}
+
 /// Append-only audit trail. Rows are inserted by the app's runtime DB user and never updated
 /// or deleted by it, other than the two acknowledge columns below — see backend/scripts/grants/
 /// audit-logs-grants.sql for the DB-level enforcement and src/utils/prisma.ts for the app-level

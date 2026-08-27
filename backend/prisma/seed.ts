@@ -117,6 +117,9 @@ async function main() {
         pointId: pointBankSampah.id,
         rtNumber: rtNum,
       },
+    });
+  }
+
   // Audit log retention defaults to "0" (keep forever) for every severity — a fresh install
   // must never silently delete evidence; an admin has to opt into pruning via
   // PATCH /api/settings/audit-retention. See docs/SPEC.md §3 and backend/scripts/prune-audit-logs.ts.
