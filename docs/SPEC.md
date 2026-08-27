@@ -125,12 +125,14 @@ Instead, safety is built into what prose is _allowed to claim at write-time_:
 
 10 tables. Scope is content data only — CMS/admin tables (roles, prose-builder templates,
 override logs) are a separate concern and not covered by this pass. (The existing `Role`, `User`,
-`RefreshToken` tables in `schema.prisma` are the auth layer, already implemented, and distinct
+`RefreshToken`, and `EmailOtp` tables in `schema.prisma` are the auth layer, already implemented, and distinct
 from the tables below.)
 
-This section is design intent expressed in raw-DDL vocabulary (`ENUM`, `CHECK`, snake_case table
-names); none of these 10 tables exist yet. Translate into `backend/prisma/schema.prisma` models
-with `@@map` when implementing.
+This section expresses design intent in raw-DDL vocabulary (`ENUM`, `CHECK`, snake_case table
+names). 3 of these tables (`spatial_points`, `spatial_point_rt`, `rt_leaders`) are implemented
+in `backend/prisma/schema.prisma` (migration `20260819000000_add_spatial_and_rt_tables`); the remaining
+7 tables (`pages`, `chapters`, `sections`, `indicators`, `indicator_tables`, `indicator_table_rows`,
+`content_blocks`) remain pending implementation. Translate into Prisma models with `@@map` when implementing.
 
 | Table                                       | Purpose / key design notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
