@@ -934,6 +934,46 @@ describe('maps.controller', () => {
       }
     });
 
+    it('returns leader with coordinates: null when no ketua_rt point is associated', async () => {
+      const originalFindUnique = prisma.rtLeader.findUnique;
+      const originalFindFirst = prisma.spatialPointRt.findFirst;
+
+      prisma.rtLeader.findUnique = (async () => ({
+        rtNumber: 2,
+        name: 'Hj. Siti Aminah',
+        phone: '081234567802',
+        phoneIsWhatsapp: true,
+        alamat: 'Jl. Pemuda RT 02',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })) as unknown as typeof prisma.rtLeader.findUnique;
+
+      prisma.spatialPointRt.findFirst = (async () =>
+        null) as unknown as typeof prisma.spatialPointRt.findFirst;
+
+      try {
+        const req = { params: { rtNumber: '2' } } as unknown as Request;
+        const res = fakeRes();
+
+        await getRtLeader(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        const body = res.body as {
+          leader: {
+            rtNumber: number;
+            name: string;
+            coordinates: unknown;
+          };
+        };
+        assert.equal(body.leader.rtNumber, 2);
+        assert.equal(body.leader.name, 'Hj. Siti Aminah');
+        assert.equal(body.leader.coordinates, null);
+      } finally {
+        prisma.rtLeader.findUnique = originalFindUnique;
+        prisma.spatialPointRt.findFirst = originalFindFirst;
+      }
+    });
+
     it('rejects invalid RT number with 400 and returns 404 for non-existent RT', async () => {
       const res1 = fakeRes();
       await getRtLeader(
@@ -952,8 +992,11 @@ describe('maps.controller', () => {
       assert.deepEqual(resTrailing.body, { error: 'Nomor RT harus berupa angka positif' });
 
       const originalFindUnique = prisma.rtLeader.findUnique;
+      const originalFindFirst = prisma.spatialPointRt.findFirst;
       prisma.rtLeader.findUnique = (async () =>
         null) as unknown as typeof prisma.rtLeader.findUnique;
+      prisma.spatialPointRt.findFirst = (async () =>
+        null) as unknown as typeof prisma.spatialPointRt.findFirst;
 
       try {
         const res2 = fakeRes();
@@ -965,6 +1008,7 @@ describe('maps.controller', () => {
         assert.deepEqual(res2.body, { error: 'Ketua RT tidak ditemukan' });
       } finally {
         prisma.rtLeader.findUnique = originalFindUnique;
+        prisma.spatialPointRt.findFirst = originalFindFirst;
       }
     });
   });

@@ -357,23 +357,24 @@ export async function getRtLeaders(query?: RtLeaderQuery): Promise<{
 }
 
 export async function getRtLeaderByRtNumber(rtNumber: number): Promise<RtLeaderDTO | null> {
-  const leader = await prisma.rtLeader.findUnique({
-    where: { rtNumber },
-  });
+  const [leader, ketuaRtCoverage] = await Promise.all([
+    prisma.rtLeader.findUnique({
+      where: { rtNumber },
+    }),
+    prisma.spatialPointRt.findFirst({
+      where: {
+        rtNumber,
+        point: { type: 'ketua_rt' },
+      },
+      include: {
+        point: true,
+      },
+    }),
+  ]);
 
   if (!leader) {
     return null;
   }
-
-  const ketuaRtCoverage = await prisma.spatialPointRt.findFirst({
-    where: {
-      rtNumber,
-      point: { type: 'ketua_rt' },
-    },
-    include: {
-      point: true,
-    },
-  });
 
   return {
     rtNumber: leader.rtNumber,
