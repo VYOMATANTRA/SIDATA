@@ -4,6 +4,8 @@ import { normalizeEmail } from '../utils/validation.js';
 import { generate6DigitOtp, hashOtp, verifyOtpHash, getOtpExpiration } from '../utils/otp.js';
 import { sendOtpEmail } from '../utils/mailer.js';
 import { issueSession } from '../utils/session.js';
+import { recordAuditLog, AUDIT_ACTIONS } from '../services/audit.service.js';
+import { extractRequestContext } from '../utils/requestContext.js';
 
 const MAX_OTP_ATTEMPTS = 5;
 
@@ -61,6 +63,12 @@ export const verifyOtp = async (req: Request, res: Response): Promise<Response |
     });
 
     if (reserved === 0) {
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.AUTH_OTP_ATTEMPTS_EXCEEDED,
+        target: { type: 'user', id: user.id, label: user.email },
+        outcome: 'failure',
+        context: extractRequestContext(req),
+      });
       return res.status(429).json({
         error: 'Batas percobaan salah telah tercapai. Silakan minta kode OTP baru.',
       });
@@ -83,6 +91,13 @@ export const verifyOtp = async (req: Request, res: Response): Promise<Response |
 
     await prisma.emailOtp.deleteMany({
       where: { userId: user.id },
+    });
+
+    await recordAuditLog({
+      action: AUDIT_ACTIONS.AUTH_EMAIL_VERIFIED,
+      actor: { id: user.id, email: user.email, role: user.role.name },
+      target: { type: 'user', id: user.id, label: user.email },
+      context: extractRequestContext(req),
     });
 
     // Auto-Login: Issue JWT Access Token and Refresh Token Cookie

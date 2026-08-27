@@ -16,6 +16,8 @@ import {
   GOOGLE_OAUTH_SUCCESS_REDIRECT,
   GOOGLE_OAUTH_FAILURE_REDIRECT,
 } from '../configs/index.js';
+import { recordAuditLog, AUDIT_ACTIONS } from '../services/audit.service.js';
+import { extractRequestContext } from '../utils/requestContext.js';
 
 function buildFailureRedirect(reason: string): string {
   const url = new URL(GOOGLE_OAUTH_FAILURE_REDIRECT);
@@ -63,6 +65,11 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
     const savedVerifier = decryptCookieValue(rawVerifierCookie);
 
     if (!savedState || !state || savedState !== state) {
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.AUTH_OAUTH_STATE_MISMATCH,
+        outcome: 'failure',
+        context: extractRequestContext(req),
+      });
       clearOAuthCookies(res);
       return res.redirect(buildFailureRedirect('invalid_state'));
     }
@@ -125,6 +132,17 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
           include: { role: true },
         });
 
+        // Highest-value audit event in the codebase: this silently retires a local password
+        // (nulls password_hash) and flips the account to Google-only. An admin should be able
+        // to see exactly when and for which account this happened.
+        await recordAuditLog({
+          action: AUDIT_ACTIONS.AUTH_GOOGLE_ACCOUNT_LINKED,
+          actor: { id: user.id, email: user.email, role: user.role.name },
+          target: { type: 'user', id: user.id, label: user.email },
+          metadata: { googleSub: googleProfile.sub },
+          context: extractRequestContext(req),
+        });
+
         // The local password is being retired in favor of Google sign-in — revoke any
         // refresh tokens issued under it and clear requires_password_change so any
         // pending first-login setup token cannot be used to reinstate a local password.
@@ -133,6 +151,14 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
         await prisma.refreshToken.updateMany({
           where: { userId: existingUser.id, isRevoked: false },
           data: { isRevoked: true },
+        });
+
+        await recordAuditLog({
+          action: AUDIT_ACTIONS.AUTH_SESSIONS_REVOKED,
+          actor: { id: user.id, email: user.email, role: user.role.name },
+          target: { type: 'user', id: user.id, label: user.email },
+          metadata: { reason: 'google_account_linked' },
+          context: extractRequestContext(req),
         });
       }
     }
@@ -159,6 +185,14 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
             roleId: userRole.id,
           },
           include: { role: true },
+        });
+
+        await recordAuditLog({
+          action: AUDIT_ACTIONS.USER_CREATED_VIA_GOOGLE,
+          actor: { id: user.id, email: user.email, role: user.role.name },
+          target: { type: 'user', id: user.id, label: user.email },
+          metadata: { googleSub: googleProfile.sub },
+          context: extractRequestContext(req),
         });
       } catch (error) {
         if (error instanceof Error && 'code' in error && error.code === 'P2002') {

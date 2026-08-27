@@ -288,8 +288,8 @@ describe('profile.controller — changeOwnPassword', () => {
 
       assert.equal(res.status, 200);
 
-      // Transaction must have been called with exactly 2 ops (user.update + refreshToken.updateMany)
-      assert.equal(transactionOps.length, 2, 'Transaction should contain exactly 2 operations');
+      // Transaction must have been called with exactly 3 ops (user.update + refreshToken.updateMany + audit log)
+      assert.equal(transactionOps.length, 3, 'Transaction should contain exactly 3 operations');
 
       // Response signals session invalidation to the frontend
       assert.equal((res.body as { sessionInvalidated: boolean }).sessionInvalidated, true);

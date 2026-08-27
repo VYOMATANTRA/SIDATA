@@ -2,6 +2,8 @@ import type { Response } from 'express';
 import type { AuthRequest } from '../middlewares/auth.middleware.js';
 import type { TokenPayload } from '../utils/jwt.js';
 import { REFRESH_TOKEN_COOKIE_NAME, REFRESH_TOKEN_COOKIE_OPTIONS } from '../utils/session.js';
+import { extractRequestActor } from '../utils/actor.js';
+import { extractRequestContext } from '../utils/requestContext.js';
 import { ProfileServiceError, changeOwnPasswordService } from '../services/profile.service.js';
 
 /**
@@ -23,7 +25,13 @@ export const changeOwnPassword = async (
       newPassword?: unknown;
     };
 
-    await changeOwnPasswordService({ userId, currentPassword, newPassword });
+    await changeOwnPasswordService({
+      userId,
+      currentPassword,
+      newPassword,
+      actor: extractRequestActor(req),
+      context: extractRequestContext(req),
+    });
 
     // Clear refresh token cookie on this response
     res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, REFRESH_TOKEN_COOKIE_OPTIONS);

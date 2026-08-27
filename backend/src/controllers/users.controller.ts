@@ -1,5 +1,7 @@
 import type { Response } from 'express';
 import type { AuthRequest } from '../middlewares/auth.middleware.js';
+import { extractRequestActor } from '../utils/actor.js';
+import { extractRequestContext } from '../utils/requestContext.js';
 import {
   UserServiceError,
   getUsersList,
@@ -33,7 +35,11 @@ export const getRoles = async (req: AuthRequest, res: Response): Promise<Respons
 
 export const createUser = async (req: AuthRequest, res: Response): Promise<Response | void> => {
   try {
-    const newUser = await createAdminUser(req.body);
+    const newUser = await createAdminUser(
+      req.body,
+      extractRequestActor(req),
+      extractRequestContext(req),
+    );
     return res.status(201).json({
       message: 'Pengguna berhasil dibuat.',
       user: newUser,
@@ -61,7 +67,11 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<Respo
 export const reactivateUser = async (req: AuthRequest, res: Response): Promise<Response | void> => {
   try {
     const { id } = req.params;
-    const updatedUser = await reactivateExistingUser(id);
+    const updatedUser = await reactivateExistingUser(
+      id,
+      extractRequestActor(req),
+      extractRequestContext(req),
+    );
     return res.status(200).json({
       message: 'Pengguna berhasil diaktifkan kembali.',
       user: updatedUser,
@@ -83,15 +93,15 @@ export const updateUserRole = async (req: AuthRequest, res: Response): Promise<R
   try {
     const { id } = req.params;
     const { roleId } = req.body;
-    const requestingUserId =
-      typeof req.user === 'object' &&
-      req.user !== null &&
-      'id' in req.user &&
-      typeof req.user.id === 'string'
-        ? req.user.id
-        : null;
+    const actor = extractRequestActor(req);
 
-    const updatedUser = await updateUserRoleService({ id, roleId, requestingUserId });
+    const updatedUser = await updateUserRoleService({
+      id,
+      roleId,
+      requestingUserId: actor?.id ?? null,
+      actor,
+      context: extractRequestContext(req),
+    });
     return res.status(200).json({
       message: 'Role pengguna berhasil diperbarui.',
       user: updatedUser,
@@ -116,15 +126,15 @@ export const changeUserPassword = async (
   try {
     const { id } = req.params;
     const { password } = req.body;
-    const requestingUserId =
-      typeof req.user === 'object' &&
-      req.user !== null &&
-      'id' in req.user &&
-      typeof req.user.id === 'string'
-        ? req.user.id
-        : null;
+    const actor = extractRequestActor(req);
 
-    await changeUserPasswordService({ id, password, requestingUserId });
+    await changeUserPasswordService({
+      id,
+      password,
+      requestingUserId: actor?.id ?? null,
+      actor,
+      context: extractRequestContext(req),
+    });
     return res.status(200).json({ message: 'Password pengguna berhasil diperbarui.' });
   } catch (error) {
     if (error instanceof UserServiceError) {
@@ -145,15 +155,14 @@ export const changeUserPassword = async (
 export const deleteUser = async (req: AuthRequest, res: Response): Promise<Response | void> => {
   try {
     const { id } = req.params;
-    const requestingUserId =
-      typeof req.user === 'object' &&
-      req.user !== null &&
-      'id' in req.user &&
-      typeof req.user.id === 'string'
-        ? req.user.id
-        : null;
+    const actor = extractRequestActor(req);
 
-    await deleteUserService({ id, requestingUserId });
+    await deleteUserService({
+      id,
+      requestingUserId: actor?.id ?? null,
+      actor,
+      context: extractRequestContext(req),
+    });
     return res.status(200).json({ message: 'Pengguna berhasil dinonaktifkan.' });
   } catch (error) {
     if (error instanceof UserServiceError) {

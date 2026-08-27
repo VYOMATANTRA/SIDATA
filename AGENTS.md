@@ -13,6 +13,8 @@ Work from the appropriate directory:
 
 Backend requires a `.env` file at the repository root — `DATABASE_URL` (MySQL, `localhost` for local dev or `mysql` under Docker Compose), `JWT_SECRET`, `JWT_REFRESH_SECRET`, `CSRF_SECRET`, `COOKIE_ENCRYPTION_KEY`, `CORS_ORIGIN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`, `GOOGLE_OAUTH_SUCCESS_REDIRECT`, `GOOGLE_OAUTH_FAILURE_REDIRECT`, `TURNSTILE_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM` (`PORT` defaults to 3000). See `.env.example`. The server validates these at boot and fails fast if any are missing.
 
+Two more env vars are optional but matter for the audit trail (see the Audit Trail subsection below): `TRUST_PROXY` (Express `trust proxy` setting — set this behind any reverse proxy, or `req.ip` on every audit log row/rate-limiter bucket/CSRF session key resolves to the proxy, not the client) and `AUDIT_ADMIN_DATABASE_URL` (a privileged DB connection used only by `backend/scripts/`, never by the running server).
+
 ## Database
 
 DB engine is **MySQL**, full stop — but you'll correctly see @prisma/adapter-mariadb in code, since that's Prisma 7's single driver adapter for both engines. Don't 'correct' it.
@@ -83,14 +85,15 @@ Key details:
 - `src/index.ts`: Entry point — starts the HTTP listener
 - `src/app.ts`: Express app setup (middleware, CORS, route mounting)
 - `src/configs/index.ts`: Typed env var access; validated at boot
-- `src/routes/`: Route definitions (`auth.routes.ts`, `health.routes.ts`, `profile.routes.ts`, `users.routes.ts`, `weather.routes.ts`)
-- `src/controllers/`: Decoupled route handlers (`auth.controller.ts` for local auth, `oauth.controller.ts` for Google OAuth, `otp.controller.ts` for OTP verification, `profile.controller.ts` for self-service credential changes, `users.controller.ts` for user management, `weather.controller.ts` — forecast lookup)
-- `src/services/`: Business logic sitting between controllers and external/data sources (`users.service.ts` — user management & role administration, `profile.service.ts` — self-service credential updates, `weather.service.ts` — caches and transforms BMKG forecasts)
+- `src/routes/`: Route definitions (`auth.routes.ts`, `health.routes.ts`, `profile.routes.ts`, `users.routes.ts`, `weather.routes.ts`, `audit.routes.ts`, `settings.routes.ts`)
+- `src/controllers/`: Decoupled route handlers (`auth.controller.ts` for local auth, `oauth.controller.ts` for Google OAuth, `otp.controller.ts` for OTP verification, `profile.controller.ts` for self-service credential changes, `users.controller.ts` for user management, `weather.controller.ts` — forecast lookup, `audit.controller.ts` — audit log list/summary/acknowledge, `settings.controller.ts` — audit retention config)
+- `src/services/`: Business logic sitting between controllers and external/data sources (`users.service.ts` — user management & role administration, `profile.service.ts` — self-service credential updates, `weather.service.ts` — caches and transforms BMKG forecasts, `audit.service.ts` — audit log writes/reads and the `AUDIT_ACTIONS` severity table, `settings.service.ts` — audit retention settings)
 - `src/middlewares/`: Express middleware (`auth.middleware.ts` for JWT, `role.middleware.ts` for role-based authorization, `turnstile.middleware.ts` for anti-bot, `rateLimit.middleware.ts` — per-route rate limiters))
-- `src/utils/`: `jwt.ts` (token signing), `oauth.ts` (Google OAuth PKCE & token verification), `otp.ts` (OTP hashing & expiry), `mailer.ts` (transactional email), `turnstile.ts` (Turnstile API client), `prisma.ts` (Prisma instance), `bmkg.ts` (BMKG API fetch + response validation)
+- `src/utils/`: `jwt.ts` (token signing), `oauth.ts` (Google OAuth PKCE & token verification), `otp.ts` (OTP hashing & expiry), `mailer.ts` (transactional email), `turnstile.ts` (Turnstile API client), `prisma.ts` (Prisma instance — wraps `audit_logs` writes in an append-only guard, see Audit Trail below), `bmkg.ts` (BMKG API fetch + response validation), `auditLogGuard.ts` (the append-only guard's pure logic), `actor.ts` / `requestContext.ts` (pull `{id, email, role}` and `{ipAddress, userAgent}` off a request for audit entries)
 - `prisma/schema.prisma`: ORM schema (MySQL)
-- `prisma/seed.ts`: Seeds default roles (`user`, `admin`)
+- `prisma/seed.ts`: Seeds default roles (`user`, `admin`) and default audit retention settings (keep-forever)
 - `generated/prisma/`: Auto-generated Prisma client (do not edit)
+- `scripts/grants/audit-logs-grants.sql`, `scripts/prune-audit-logs.ts`: audit trail operations — see Audit Trail below
 
 Key details:
 
@@ -100,6 +103,13 @@ Key details:
 - JWT access + refresh tokens; refresh tokens persisted in DB with `/api/auth/refresh` and `/api/auth/logout` endpoints
 - Uses `dotenv` for environment configuration
 - Unit tests under `src/__tests__/` run via Node's built-in test runner through `tsx` (`npm test`). `npm run test:coverage` runs the same suite with `--experimental-test-coverage` via `backend/scripts/coverage.mjs`, which strips `src/__tests__/**` and `generated/**` out of the printed report so the numbers reflect application code only
+
+#### Audit Trail
+
+Every admin user-management action and security-relevant auth event writes an `audit_logs` row (see `docs/SPEC.md` §3 for the product-level rules — severity levels, retention policy, what must never appear in `metadata`). Two things make this more than "just another table":
+
+- **Tamper defense is two layers.** Layer 1 is app-level: the Prisma client singleton in `src/utils/prisma.ts` is `$extends`-wrapped so `auditLog.update`/`.delete`/`.deleteMany`/`.upsert` throw unless the write touches only `acknowledgedAt`/`acknowledgedById` (logic in `src/utils/auditLogGuard.ts`). This is a guardrail against careless app code, not a security boundary. Layer 2 is the one that actually holds: `backend/scripts/grants/audit-logs-grants.sql` strips the app's runtime DB user down to `SELECT`, `INSERT`, and column-scoped `UPDATE` on `audit_logs` — no `DELETE`, no unrestricted `UPDATE` — via MySQL grants. **Run that script once per environment**, or the app's DB user retains its default full rights on the table and layer 2 is absent.
+- **Retention pruning runs outside the app.** `backend/scripts/prune-audit-logs.ts` connects with `AUDIT_ADMIN_DATABASE_URL` — a separate, privileged DB connection, never the app's — because deleting rows is exactly what layer 2 just took away from the app user. Run it on a schedule (host cron, or a Docker sidecar). It reads the per-severity retention settings (`GET`/`PATCH /api/settings/audit-retention`, admin-only), never prunes an unacknowledged `critical` row regardless of age, and writes its own `audit.pruned` summary row.
 
 ## Tech Stack Summary
 

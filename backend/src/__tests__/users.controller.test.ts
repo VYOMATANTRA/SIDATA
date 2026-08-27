@@ -139,6 +139,8 @@ describe('users.controller', () => {
     const originalFindUnique = prisma.user.findUnique;
     const originalRoleFind = prisma.role.findUnique;
     const originalCreate = prisma.user.create;
+    const originalAuditCreate = prisma.auditLog.create;
+    const originalTransaction = prisma.$transaction;
 
     prisma.role.findUnique = (async () => ({
       id: 'role-1',
@@ -151,6 +153,17 @@ describe('users.controller', () => {
       err.code = 'P2002';
       throw err;
     }) as unknown as typeof prisma.user.create;
+
+    // createAdminUser wraps user.create + the audit-log write in one $transaction. The audit
+    // write itself must be harmless here (it's never reached — user.create rejects first), and
+    // $transaction must genuinely propagate that rejection (rather than the established
+    // "ignore the array, return a canned value" pattern used elsewhere in this file) so the
+    // P2002 mapping this test exercises actually fires.
+    prisma.auditLog.create = (async () => ({
+      id: 'audit-noop',
+    })) as unknown as typeof prisma.auditLog.create;
+    prisma.$transaction = (async (ops: unknown[]) =>
+      Promise.all(ops)) as unknown as typeof prisma.$transaction;
 
     try {
       const req = {
@@ -170,6 +183,8 @@ describe('users.controller', () => {
       prisma.user.findUnique = originalFindUnique;
       prisma.role.findUnique = originalRoleFind;
       prisma.user.create = originalCreate;
+      prisma.auditLog.create = originalAuditCreate;
+      prisma.$transaction = originalTransaction;
     }
   });
 
@@ -219,6 +234,7 @@ describe('users.controller', () => {
   it('reactivateUser successfully clears deletedAt and reactivates account', async () => {
     const originalFindUnique = prisma.user.findUnique;
     const originalUpdate = prisma.user.update;
+    const originalTransaction = prisma.$transaction;
 
     prisma.user.findUnique = (async () => ({
       id: 'deactivated-user',
@@ -228,20 +244,31 @@ describe('users.controller', () => {
     })) as unknown as typeof prisma.user.findUnique;
 
     let updatedPayload: { deletedAt?: Date | null } = {};
+    const reactivatedUser = {
+      id: 'deactivated-user',
+      email: 'deactivated@example.com',
+      auth_provider: 'local',
+      email_verified: true,
+      requires_password_change: false,
+      deletedAt: null,
+      roleId: 'role-user',
+      role: { id: 'role-user', name: 'user' },
+      createdAt: new Date(),
+    };
     prisma.user.update = (async (args: { data: { deletedAt: Date | null } }) => {
       updatedPayload = args.data;
-      return {
-        id: 'deactivated-user',
-        email: 'deactivated@example.com',
-        auth_provider: 'local',
-        email_verified: true,
-        requires_password_change: false,
-        deletedAt: null,
-        roleId: 'role-user',
-        role: { id: 'role-user', name: 'user' },
-        createdAt: new Date(),
-      };
+      return reactivatedUser;
     }) as unknown as typeof prisma.user.update;
+
+    // reactivateExistingUser wraps user.update + the audit-log write in one $transaction.
+    // Following the file's established pattern: ignore the array, return the canned result the
+    // service destructures — real DB access from either op's dangling (never-awaited) promise
+    // never happens as a result.
+    let transactionOps: unknown[] = [];
+    prisma.$transaction = (async (ops: unknown[]) => {
+      transactionOps = ops;
+      return [reactivatedUser];
+    }) as unknown as typeof prisma.$transaction;
 
     try {
       const req = {
@@ -253,23 +280,19 @@ describe('users.controller', () => {
 
       assert.equal(res.status, 200);
       assert.equal(updatedPayload.deletedAt, null);
+      assert.equal(
+        transactionOps.length,
+        2,
+        'Transaction should contain exactly 2 operations (user.update + audit log)',
+      );
       assert.deepEqual(res.body, {
         message: 'Pengguna berhasil diaktifkan kembali.',
-        user: {
-          id: 'deactivated-user',
-          email: 'deactivated@example.com',
-          auth_provider: 'local',
-          email_verified: true,
-          requires_password_change: false,
-          deletedAt: null,
-          roleId: 'role-user',
-          role: { id: 'role-user', name: 'user' },
-          createdAt: (res.body as { user: { createdAt: Date } }).user.createdAt,
-        },
+        user: reactivatedUser,
       });
     } finally {
       prisma.user.findUnique = originalFindUnique;
       prisma.user.update = originalUpdate;
+      prisma.$transaction = originalTransaction;
     }
   });
 
@@ -409,9 +432,9 @@ describe('users.controller', () => {
       role: { id: 'role-user', name: 'user' },
     })) as unknown as typeof prisma.user.findUnique;
 
-    let transactionExecuted = false;
-    prisma.$transaction = (async () => {
-      transactionExecuted = true;
+    let transactionOps: unknown[] = [];
+    prisma.$transaction = (async (ops: unknown[]) => {
+      transactionOps = ops;
       return [];
     }) as unknown as typeof prisma.$transaction;
 
@@ -426,7 +449,11 @@ describe('users.controller', () => {
       await changeUserPassword(req, res as unknown as Response);
 
       assert.equal(res.status, 200);
-      assert.equal(transactionExecuted, true);
+      assert.equal(
+        transactionOps.length,
+        3,
+        'Transaction should contain exactly 3 operations (user.update + refreshToken.updateMany + audit log)',
+      );
       assert.deepEqual(res.body, { message: 'Password pengguna berhasil diperbarui.' });
     } finally {
       prisma.user.findUnique = originalFindUnique;
@@ -525,9 +552,9 @@ describe('users.controller', () => {
       name: 'admin',
     })) as unknown as typeof prisma.role.findUnique;
 
-    let transactionCalled = false;
-    prisma.$transaction = (async () => {
-      transactionCalled = true;
+    let transactionOps: unknown[] = [];
+    prisma.$transaction = (async (ops: unknown[]) => {
+      transactionOps = ops;
       return [
         {
           id: 'user-1',
@@ -551,7 +578,11 @@ describe('users.controller', () => {
       await updateUserRole(req, res as unknown as Response);
 
       assert.equal(res.status, 200);
-      assert.equal(transactionCalled, true);
+      assert.equal(
+        transactionOps.length,
+        3,
+        'Transaction should contain exactly 3 operations (user.update + refreshToken.updateMany + audit log)',
+      );
       assert.equal((res.body as { message: string }).message, 'Role pengguna berhasil diperbarui.');
     } finally {
       prisma.user.findUnique = originalFindUnique;
@@ -634,9 +665,9 @@ describe('users.controller', () => {
       role: { name: 'user' },
     })) as unknown as typeof prisma.user.findUnique;
 
-    let transactionCalled = false;
-    prisma.$transaction = (async () => {
-      transactionCalled = true;
+    let transactionOps: unknown[] = [];
+    prisma.$transaction = (async (ops: unknown[]) => {
+      transactionOps = ops;
       return [];
     }) as unknown as typeof prisma.$transaction;
 
@@ -650,7 +681,11 @@ describe('users.controller', () => {
       await deleteUser(req, res as unknown as Response);
 
       assert.equal(res.status, 200);
-      assert.equal(transactionCalled, true);
+      assert.equal(
+        transactionOps.length,
+        3,
+        'Transaction should contain exactly 3 operations (user.update + refreshToken.updateMany + audit log)',
+      );
     } finally {
       prisma.user.findUnique = originalFindUnique;
       prisma.$transaction = originalTransaction;
