@@ -2,6 +2,12 @@ import bcrypt from 'bcryptjs';
 import zxcvbn from 'zxcvbn';
 import prisma from '../utils/prisma.js';
 import { normalizeEmail } from '../utils/validation.js';
+import {
+  buildAuditLog,
+  AUDIT_ACTIONS,
+  type AuditActor,
+  type AuditRequestContext,
+} from './audit.service.js';
 
 export class UserServiceError extends Error {
   statusCode: number;
@@ -43,11 +49,15 @@ export const getRolesList = async () => {
   });
 };
 
-export const createAdminUser = async (payload: {
-  email?: unknown;
-  roleId?: unknown;
-  password?: unknown;
-}) => {
+export const createAdminUser = async (
+  payload: {
+    email?: unknown;
+    roleId?: unknown;
+    password?: unknown;
+  },
+  actor?: AuditActor | null | undefined,
+  context?: AuditRequestContext | undefined,
+) => {
   const { email, roleId, password } = payload;
 
   if (!email || !roleId || !password) {
@@ -107,33 +117,46 @@ export const createAdminUser = async (payload: {
   const saltRounds = 10;
   const passwordHash = await bcrypt.hash(password, saltRounds);
 
-  const newUser = await prisma.user.create({
-    data: {
-      email: normalizedEmail,
-      password_hash: passwordHash,
-      auth_provider: 'local',
-      email_verified: true,
-      requires_password_change: true,
-      roleId: targetRole.id,
-    },
-    select: {
-      id: true,
-      email: true,
-      auth_provider: true,
-      email_verified: true,
-      requires_password_change: true,
-      deletedAt: true,
-      role: {
-        select: { id: true, name: true },
+  const [newUser] = await prisma.$transaction([
+    prisma.user.create({
+      data: {
+        email: normalizedEmail,
+        password_hash: passwordHash,
+        auth_provider: 'local',
+        email_verified: true,
+        requires_password_change: true,
+        roleId: targetRole.id,
       },
-      createdAt: true,
-    },
-  });
+      select: {
+        id: true,
+        email: true,
+        auth_provider: true,
+        email_verified: true,
+        requires_password_change: true,
+        deletedAt: true,
+        role: {
+          select: { id: true, name: true },
+        },
+        createdAt: true,
+      },
+    }),
+    buildAuditLog({
+      action: AUDIT_ACTIONS.USER_CREATED_BY_ADMIN,
+      actor,
+      target: { type: 'user', label: normalizedEmail },
+      metadata: { roleId: targetRole.id, roleName: targetRole.name },
+      context,
+    }),
+  ]);
 
   return newUser;
 };
 
-export const reactivateExistingUser = async (id: unknown) => {
+export const reactivateExistingUser = async (
+  id: unknown,
+  actor?: AuditActor | null | undefined,
+  context?: AuditRequestContext | undefined,
+) => {
   if (!id || typeof id !== 'string') {
     throw new UserServiceError('ID pengguna tidak valid.', 400);
   }
@@ -151,26 +174,34 @@ export const reactivateExistingUser = async (id: unknown) => {
     throw new UserServiceError('Pengguna sudah dalam status aktif.', 400);
   }
 
-  const updatedUser = await prisma.user.update({
-    where: { id },
-    data: { deletedAt: null },
-    select: {
-      id: true,
-      email: true,
-      auth_provider: true,
-      email_verified: true,
-      requires_password_change: true,
-      deletedAt: true,
-      roleId: true,
-      role: {
-        select: {
-          id: true,
-          name: true,
+  const [updatedUser] = await prisma.$transaction([
+    prisma.user.update({
+      where: { id },
+      data: { deletedAt: null },
+      select: {
+        id: true,
+        email: true,
+        auth_provider: true,
+        email_verified: true,
+        requires_password_change: true,
+        deletedAt: true,
+        roleId: true,
+        role: {
+          select: {
+            id: true,
+            name: true,
+          },
         },
+        createdAt: true,
       },
-      createdAt: true,
-    },
-  });
+    }),
+    buildAuditLog({
+      action: AUDIT_ACTIONS.USER_REACTIVATED,
+      actor,
+      target: { type: 'user', id: targetUser.id, label: targetUser.email },
+      context,
+    }),
+  ]);
 
   return updatedUser;
 };
@@ -179,8 +210,10 @@ export const updateUserRoleService = async (params: {
   id: unknown;
   roleId: unknown;
   requestingUserId?: string | null | undefined;
+  actor?: AuditActor | null | undefined;
+  context?: AuditRequestContext | undefined;
 }) => {
-  const { id, roleId, requestingUserId } = params;
+  const { id, roleId, requestingUserId, actor, context } = params;
 
   if (!id || typeof id !== 'string') {
     throw new UserServiceError('ID pengguna tidak valid.', 400);
@@ -244,6 +277,18 @@ export const updateUserRoleService = async (params: {
       where: { userId: id },
       data: { isRevoked: true },
     }),
+    buildAuditLog({
+      action: AUDIT_ACTIONS.USER_ROLE_CHANGED,
+      actor,
+      target: { type: 'user', id: user.id, label: user.email },
+      metadata: {
+        fromRoleId: user.role.id,
+        fromRoleName: user.role.name,
+        toRoleId: targetRole.id,
+        toRoleName: targetRole.name,
+      },
+      context,
+    }),
   ]);
 
   return updatedUser;
@@ -253,8 +298,10 @@ export const changeUserPasswordService = async (params: {
   id: unknown;
   password: unknown;
   requestingUserId?: string | null | undefined;
+  actor?: AuditActor | null | undefined;
+  context?: AuditRequestContext | undefined;
 }) => {
-  const { id, password, requestingUserId } = params;
+  const { id, password, requestingUserId, actor, context } = params;
 
   if (!id || typeof id !== 'string') {
     throw new UserServiceError('ID pengguna tidak valid.', 400);
@@ -323,14 +370,22 @@ export const changeUserPasswordService = async (params: {
       where: { userId: id },
       data: { isRevoked: true },
     }),
+    buildAuditLog({
+      action: AUDIT_ACTIONS.USER_PASSWORD_RESET_BY_ADMIN,
+      actor,
+      target: { type: 'user', id: targetUser.id, label: targetUser.email },
+      context,
+    }),
   ]);
 };
 
 export const deleteUserService = async (params: {
   id: unknown;
   requestingUserId?: string | null | undefined;
+  actor?: AuditActor | null | undefined;
+  context?: AuditRequestContext | undefined;
 }) => {
-  const { id, requestingUserId } = params;
+  const { id, requestingUserId, actor, context } = params;
 
   if (!id || typeof id !== 'string') {
     throw new UserServiceError('ID pengguna tidak valid.', 400);
@@ -365,6 +420,12 @@ export const deleteUserService = async (params: {
     prisma.refreshToken.updateMany({
       where: { userId: id },
       data: { isRevoked: true },
+    }),
+    buildAuditLog({
+      action: AUDIT_ACTIONS.USER_DEACTIVATED,
+      actor,
+      target: { type: 'user', id: targetUser.id, label: targetUser.email },
+      context,
     }),
   ]);
 };
