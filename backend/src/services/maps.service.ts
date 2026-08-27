@@ -412,11 +412,9 @@ export async function getMapSummary(): Promise<MapSummaryDTO> {
     }),
   ]);
 
-  const pointsByType: Record<string, number> = {
-    ketua_rt: 0,
-    bank_sampah: 0,
-    fasilitas_umum: 0,
-  };
+  const pointsByType: Record<string, number> = Object.fromEntries(
+    ALL_SPATIAL_POINT_TYPES.map((type) => [type, 0]),
+  );
   for (const group of pointsGrouped) {
     pointsByType[group.type] = group._count._all;
   }
