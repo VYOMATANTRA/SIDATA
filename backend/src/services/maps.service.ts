@@ -290,7 +290,11 @@ export async function getRtLeaders(query?: RtLeaderQuery): Promise<{
   if (query?.search && query.search.trim() !== '') {
     const term = query.search.trim();
     const parsedRt = parseInt(term, 10);
-    const isPureInteger = !Number.isNaN(parsedRt) && String(parsedRt) === term;
+    const isPureInteger =
+      !Number.isNaN(parsedRt) &&
+      String(parsedRt) === term &&
+      parsedRt > 0 &&
+      parsedRt <= 2_147_483_647;
 
     if (isPureInteger && typeof query?.rtNumber !== 'number') {
       where.OR = [

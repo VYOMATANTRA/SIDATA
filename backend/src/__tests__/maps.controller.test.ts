@@ -321,6 +321,23 @@ describe('maps.controller', () => {
       assert.equal(resTrailing.status, 400);
       assert.deepEqual(resTrailing.body, { error: 'Nomor RT harus berupa angka positif' });
 
+      // Overflows exceeding MAX_MYSQL_INT (2147483647) must be rejected with 400
+      const resOverflow = fakeRes();
+      await listPoints(
+        { query: { rt: '99999999999999999999' } } as unknown as Request,
+        resOverflow as unknown as Response,
+      );
+      assert.equal(resOverflow.status, 400);
+      assert.deepEqual(resOverflow.body, { error: 'Nomor RT harus berupa angka positif' });
+
+      const resOverflow2 = fakeRes();
+      await listPoints(
+        { query: { rt: '2147483648' } } as unknown as Request,
+        resOverflow2 as unknown as Response,
+      );
+      assert.equal(resOverflow2.status, 400);
+      assert.deepEqual(resOverflow2.body, { error: 'Nomor RT harus berupa angka positif' });
+
       const originalFindMany = prisma.spatialPoint.findMany;
       const originalLeaderFindMany = prisma.rtLeader.findMany;
       let capturedWhere: { rtCoverages?: { some: { rtNumber: number } } } | undefined;
@@ -902,6 +919,94 @@ describe('maps.controller', () => {
       });
     });
 
+    it('returns 400 when limit exceeds MAX_MYSQL_INT (overflow protection)', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { limit: '99999999999999999999' } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai limit tidak valid. Harus berupa angka bulat positif.',
+      });
+
+      const res2 = fakeRes();
+      await listRtLeaders(
+        { query: { limit: '2147483648' } } as unknown as Request,
+        res2 as unknown as Response,
+      );
+      assert.equal(res2.status, 400);
+      assert.deepEqual(res2.body, {
+        error: 'Nilai limit tidak valid. Harus berupa angka bulat positif.',
+      });
+    });
+
+    it('returns 400 when offset exceeds MAX_MYSQL_INT (overflow protection)', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { offset: '99999999999999999999' } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai offset tidak valid. Harus berupa angka bulat non-negatif.',
+      });
+
+      const res2 = fakeRes();
+      await listRtLeaders(
+        { query: { offset: '2147483648' } } as unknown as Request,
+        res2 as unknown as Response,
+      );
+      assert.equal(res2.status, 400);
+      assert.deepEqual(res2.body, {
+        error: 'Nilai offset tidak valid. Harus berupa angka bulat non-negatif.',
+      });
+    });
+
+    it('returns 400 when page exceeds MAX_MYSQL_INT or offset calculation overflows', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { page: '99999999999999999999' } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai page tidak valid. Harus berupa angka bulat positif.',
+      });
+
+      const res2 = fakeRes();
+      await listRtLeaders(
+        { query: { page: '2147483648' } } as unknown as Request,
+        res2 as unknown as Response,
+      );
+      assert.equal(res2.status, 400);
+      assert.deepEqual(res2.body, {
+        error: 'Nilai page tidak valid. Harus berupa angka bulat positif.',
+      });
+
+      const res3 = fakeRes();
+      await listRtLeaders(
+        { query: { page: '2147483647', limit: '2' } } as unknown as Request,
+        res3 as unknown as Response,
+      );
+      assert.equal(res3.status, 400);
+      assert.deepEqual(res3.body, {
+        error: 'Nilai page tidak valid. Harus berupa angka bulat positif.',
+      });
+    });
+
+    it('returns 400 when rt exceeds MAX_MYSQL_INT in listRtLeaders', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { rt: '99999999999999999999' } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nomor RT harus berupa angka positif',
+      });
+    });
+
     it('accepts limit=1 (boundary minimum) and offset=0 without error', async () => {
       const originalCount = prisma.rtLeader.count;
       const originalFindMany = prisma.rtLeader.findMany;
@@ -1043,6 +1148,15 @@ describe('maps.controller', () => {
       );
       assert.equal(resTrailing.status, 400);
       assert.deepEqual(resTrailing.body, { error: 'Nomor RT harus berupa angka positif' });
+
+      // Overflows exceeding MAX_MYSQL_INT must be rejected with 400
+      const resOverflow = fakeRes();
+      await getRtLeader(
+        { params: { rtNumber: '99999999999999999999' } } as unknown as Request,
+        resOverflow as unknown as Response,
+      );
+      assert.equal(resOverflow.status, 400);
+      assert.deepEqual(resOverflow.body, { error: 'Nomor RT harus berupa angka positif' });
 
       const originalFindUnique = prisma.rtLeader.findUnique;
       const originalFindFirst = prisma.spatialPointRt.findFirst;

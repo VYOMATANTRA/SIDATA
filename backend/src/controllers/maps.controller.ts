@@ -11,48 +11,23 @@ import {
 import type { SpatialPointType } from '../../generated/prisma/client.js';
 
 export const DEFAULT_PAGE_SIZE = 10;
+export const MAX_MYSQL_INT = 2_147_483_647;
 export const VALID_SPATIAL_FORMATS = ['geojson', 'json'] as const;
 export type SpatialPointFormat = (typeof VALID_SPATIAL_FORMATS)[number];
-
-function parsePositiveIntParam(
-  value: unknown,
-  errorMessage: string,
-): { value?: number; error?: string } {
-  // Repeated query keys are parsed by Express as an array. Treat as invalid
-  // rather than silently dropping the filter.
-  if (Array.isArray(value)) {
-    return { error: errorMessage };
-  }
-  if (typeof value !== 'string' || value.trim() === '') {
-    return {};
-  }
-  const trimmed = value.trim();
-  if (!/^\d+$/.test(trimmed)) {
-    return { error: errorMessage };
-  }
-  const parsed = parseInt(trimmed, 10);
-  if (parsed <= 0) {
-    return { error: errorMessage };
-  }
-  return { value: parsed };
-}
 
 type PaginationParamResult =
   { kind: 'absent' } | { kind: 'valid'; value: number } | { kind: 'invalid' };
 
 /**
- * Parse an optional pagination query parameter.
+ * Parse an integer parameter with non-negative bounds and MySQL INT overflow protection.
  *
  * Returns:
- *   { kind: 'absent' }          — param was not supplied or was an empty string
- *   { kind: 'valid', value }    — param was a non-negative integer ≥ min
- *   { kind: 'invalid' }         — param was supplied but failed validation
- *                                 (non-numeric, negative, or below min)
- *
- * Callers MUST handle 'invalid' explicitly and return a 400 to the client
- * rather than silently falling back to the unbounded default.
+ *   { kind: 'absent' }       — param was not supplied or was an empty string
+ *   { kind: 'valid', value } — param was a valid integer within [min, max]
+ *   { kind: 'invalid' }      — param was supplied but failed validation
+ *                              (array, non-numeric, negative, out of bounds, or overflows max)
  */
-function parsePaginationParam(value: unknown, min = 0): PaginationParamResult {
+function parseBoundedInt(value: unknown, min = 0, max = MAX_MYSQL_INT): PaginationParamResult {
   // Repeated query keys are parsed by Express as an array. Treat as invalid
   // rather than silently falling back to 'absent' (unbounded query).
   if (Array.isArray(value)) {
@@ -66,10 +41,29 @@ function parsePaginationParam(value: unknown, min = 0): PaginationParamResult {
     return { kind: 'invalid' };
   }
   const parsed = parseInt(trimmed, 10);
-  if (parsed < min) {
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
     return { kind: 'invalid' };
   }
   return { kind: 'valid', value: parsed };
+}
+
+function parsePositiveIntParam(
+  value: unknown,
+  errorMessage: string,
+  max = MAX_MYSQL_INT,
+): { value?: number; error?: string } {
+  const result = parseBoundedInt(value, 1, max);
+  if (result.kind === 'invalid') {
+    return { error: errorMessage };
+  }
+  if (result.kind === 'valid') {
+    return { value: result.value };
+  }
+  return {};
+}
+
+function parsePaginationParam(value: unknown, min = 0, max = MAX_MYSQL_INT): PaginationParamResult {
+  return parseBoundedInt(value, min, max);
 }
 
 export const listPoints = async (req: Request, res: Response): Promise<Response> => {
@@ -204,7 +198,13 @@ export const listRtLeaders = async (req: Request, res: Response): Promise<Respon
         if (parsedLimit === undefined) {
           parsedLimit = DEFAULT_PAGE_SIZE;
         }
-        parsedOffset = (pageResult.value - 1) * parsedLimit;
+        const computedOffset = (pageResult.value - 1) * parsedLimit;
+        if (computedOffset > MAX_MYSQL_INT) {
+          return res
+            .status(400)
+            .json({ error: 'Nilai page tidak valid. Harus berupa angka bulat positif.' });
+        }
+        parsedOffset = computedOffset;
       }
     }
 
