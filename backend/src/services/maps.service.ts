@@ -136,6 +136,9 @@ function mapPointToDTO(
             phoneIsWhatsapp: leader.phoneIsWhatsapp,
             alamat: leader.alamat,
           };
+        } else if (leaderLookup !== undefined) {
+          // Orphaned RT coverage: point references an RT with no corresponding row in rt_leaders.
+          integrityWarning = `No Ketua RT leader record found for RT ${rts[0].toString()}; leader contact omitted pending data correction`;
         }
       }
     } else if (rts.length > 1) {

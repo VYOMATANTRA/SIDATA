@@ -106,7 +106,7 @@ describe('maps.controller', () => {
       }
     });
 
-    it('returns rtLeader: null when ketua_rt point references an RT without an existing leader', async () => {
+    it('returns rtLeader: null and integrityWarning when ketua_rt point references an RT without an existing leader', async () => {
       const originalFindMany = prisma.spatialPoint.findMany;
       const originalLeaderFindMany = prisma.rtLeader.findMany;
 
@@ -129,12 +129,16 @@ describe('maps.controller', () => {
             name: string;
             rts: number[];
             rtLeader: unknown;
+            integrityWarning?: string;
           }>;
           total: number;
         };
         assert.equal(body.total, 1);
         assert.equal(body.points[0]?.name, 'Pos RT 01');
         assert.equal(body.points[0]?.rtLeader, null);
+        assert.ok(
+          body.points[0]?.integrityWarning?.includes('No Ketua RT leader record found for RT 1'),
+        );
       } finally {
         prisma.spatialPoint.findMany = originalFindMany;
         prisma.rtLeader.findMany = originalLeaderFindMany;
@@ -646,6 +650,41 @@ describe('maps.controller', () => {
         prisma.spatialPoint.findUnique = originalFindUnique;
         prisma.rtLeader.findUnique = originalLeaderFindUnique;
         prisma.spatialPointRt.findMany = originalCoverageFindMany;
+      }
+    });
+
+    it('returns rtLeader: null and integrityWarning via getPoint when ketua_rt point references an RT without an existing leader', async () => {
+      const originalFindUnique = prisma.spatialPoint.findUnique;
+      const originalLeaderFindUnique = prisma.rtLeader.findUnique;
+
+      prisma.spatialPoint.findUnique = (async () =>
+        sampleKetuaRtPoint) as unknown as typeof prisma.spatialPoint.findUnique;
+
+      prisma.rtLeader.findUnique = (async () =>
+        null) as unknown as typeof prisma.rtLeader.findUnique;
+
+      try {
+        const req = { params: { id: 'point-rt-1' } } as unknown as Request;
+        const res = fakeRes();
+
+        await getPoint(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        const body = res.body as {
+          point: {
+            id: string;
+            rts: number[];
+            rtLeader: unknown;
+            integrityWarning?: string;
+          };
+        };
+        assert.equal(body.point.rtLeader, null);
+        assert.ok(
+          body.point.integrityWarning?.includes('No Ketua RT leader record found for RT 1'),
+        );
+      } finally {
+        prisma.spatialPoint.findUnique = originalFindUnique;
+        prisma.rtLeader.findUnique = originalLeaderFindUnique;
       }
     });
   });
