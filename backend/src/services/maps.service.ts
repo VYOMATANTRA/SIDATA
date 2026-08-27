@@ -108,6 +108,7 @@ function mapPointToDTO(
       alamat: string | null;
     }
   >,
+  duplicateKetuaRtNumbers?: Set<number>,
 ): SpatialPointDTO {
   const rts = point.rtCoverages.map((cov) => cov.rtNumber).sort((a, b) => a - b);
   // Per SPEC.md §7: Only 'ketua_rt' points are 1:1 with an RT leader.
@@ -117,16 +118,25 @@ function mapPointToDTO(
 
   if (point.type === 'ketua_rt') {
     if (rts.length === 1 && rts[0] !== undefined) {
-      // Correct: exactly one RT coverage, look up the leader.
-      const leader = leaderLookup?.get(rts[0]);
-      if (leader) {
-        rtLeader = {
-          rtNumber: leader.rtNumber,
-          name: leader.name,
-          phone: leader.phone,
-          phoneIsWhatsapp: leader.phoneIsWhatsapp,
-          alamat: leader.alamat,
-        };
+      if (duplicateKetuaRtNumbers?.has(rts[0])) {
+        // Cross-point integrity violation: Multiple ketua_rt points are assigned to the same RT number.
+        console.error(
+          `[maps.service] Integrity violation: multiple ketua_rt points are assigned to RT ${rts[0].toString()} ` +
+            `(found on point "${point.id}"). Expected exactly 1 ketua_rt point per RT. rtLeader will be null until corrected.`,
+        );
+        integrityWarning = `Multiple ketua_rt points are assigned to RT ${rts[0].toString()}; leader contact omitted pending data correction`;
+      } else {
+        // Correct: exactly one RT coverage with no cross-point duplicates, look up the leader.
+        const leader = leaderLookup?.get(rts[0]);
+        if (leader) {
+          rtLeader = {
+            rtNumber: leader.rtNumber,
+            name: leader.name,
+            phone: leader.phone,
+            phoneIsWhatsapp: leader.phoneIsWhatsapp,
+            alamat: leader.alamat,
+          };
+        }
       }
     } else if (rts.length > 1) {
       // Data-integrity violation: SPEC.md §7 requires exactly one RT per ketua_rt point,
@@ -177,24 +187,48 @@ export async function getSpatialPoints(filter?: SpatialPointFilter): Promise<Spa
     };
   }
 
-  const points = await prisma.spatialPoint.findMany({
-    where,
-    include: {
-      rtCoverages: {
-        orderBy: { rtNumber: 'asc' },
+  const [points, allKetuaRtCoverages] = await Promise.all([
+    prisma.spatialPoint.findMany({
+      where,
+      include: {
+        rtCoverages: {
+          orderBy: { rtNumber: 'asc' },
+        },
       },
-    },
-    orderBy: { name: 'asc' },
-  });
+      orderBy: { name: 'asc' },
+    }),
+    prisma.spatialPointRt.findMany({
+      where: {
+        point: { type: 'ketua_rt' },
+      },
+      select: {
+        pointId: true,
+        rtNumber: true,
+      },
+    }),
+  ]);
 
-  const ketuaRtNumbers = points
-    .filter((p) => p.type === 'ketua_rt')
-    .flatMap((p) => p.rtCoverages.map((cov) => cov.rtNumber));
+  const rtCountMap = new Map<number, number>();
+  for (const cov of allKetuaRtCoverages) {
+    rtCountMap.set(cov.rtNumber, (rtCountMap.get(cov.rtNumber) ?? 0) + 1);
+  }
+
+  const duplicateKetuaRtNumbers = new Set<number>();
+  for (const [rtNumber, count] of rtCountMap.entries()) {
+    if (count > 1) {
+      duplicateKetuaRtNumbers.add(rtNumber);
+    }
+  }
+
+  const validKetuaRtNumbers = points
+    .filter((p) => p.type === 'ketua_rt' && p.rtCoverages.length === 1)
+    .flatMap((p) => p.rtCoverages.map((cov) => cov.rtNumber))
+    .filter((rtNumber) => !duplicateKetuaRtNumbers.has(rtNumber));
 
   const leaders =
-    ketuaRtNumbers.length > 0
+    validKetuaRtNumbers.length > 0
       ? await prisma.rtLeader.findMany({
-          where: { rtNumber: { in: ketuaRtNumbers } },
+          where: { rtNumber: { in: validKetuaRtNumbers } },
         })
       : [];
 
@@ -203,7 +237,7 @@ export async function getSpatialPoints(filter?: SpatialPointFilter): Promise<Spa
     leaderMap.set(leader.rtNumber, leader);
   }
 
-  return points.map((p) => mapPointToDTO(p, leaderMap));
+  return points.map((p) => mapPointToDTO(p, leaderMap, duplicateKetuaRtNumbers));
 }
 
 export async function getSpatialPointsAsGeoJson(
@@ -254,20 +288,30 @@ export async function getSpatialPointById(id: string): Promise<SpatialPointDTO |
       alamat: string | null;
     }
   >();
+  const duplicateKetuaRtNumbers = new Set<number>();
 
   if (point.type === 'ketua_rt' && rts.length === 1 && rts[0] !== undefined) {
-    // Only fetch the leader when there is exactly one RT coverage (the correct invariant).
-    // Multi-RT ketua_rt points are a data-integrity violation (SPEC.md §7); mapPointToDTO
-    // will detect rts.length > 1 via the leaderMap miss and surface integrityWarning.
-    const leader = await prisma.rtLeader.findUnique({
-      where: { rtNumber: rts[0] },
+    const conflictingPoints = await prisma.spatialPointRt.findMany({
+      where: {
+        rtNumber: rts[0],
+        point: { type: 'ketua_rt' },
+        pointId: { not: point.id },
+      },
     });
-    if (leader) {
-      leaderMap.set(leader.rtNumber, leader);
+
+    if (conflictingPoints.length > 0) {
+      duplicateKetuaRtNumbers.add(rts[0]);
+    } else {
+      const leader = await prisma.rtLeader.findUnique({
+        where: { rtNumber: rts[0] },
+      });
+      if (leader) {
+        leaderMap.set(leader.rtNumber, leader);
+      }
     }
   }
 
-  return mapPointToDTO(point, leaderMap);
+  return mapPointToDTO(point, leaderMap, duplicateKetuaRtNumbers);
 }
 
 export async function getRtLeaders(query?: RtLeaderQuery): Promise<{
