@@ -53,6 +53,16 @@ const router = createRouter({
       path: '/link',
       redirect: '/mockup/link',
     },
+    {
+      path: '/mockup/navbar',
+      name: 'navbar-mockup',
+      component: () => import('../views/NavbarShowcaseView.vue'),
+      meta: { title: 'Navbar Component Mockup - SIDATA' },
+    },
+    {
+      path: '/navbar',
+      redirect: '/mockup/navbar',
+    },
   ],
 })
 
