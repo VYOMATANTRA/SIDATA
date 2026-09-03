@@ -72,7 +72,7 @@ describe('router auth guard retry behavior', () => {
     expect(router.currentRoute.value.name).toBe('setup-password')
   })
 
-  it('navigates to /mockup/button', async () => {
+  it('navigates to /mockup/button and redirects /link to /mockup/link', async () => {
     sessionStorage.clear()
     const pinia = createPinia()
     setActivePinia(pinia)
@@ -82,5 +82,9 @@ describe('router auth guard retry behavior', () => {
     await router.push('/mockup/button')
     expect(router.currentRoute.value.path).toBe('/mockup/button')
     expect(router.currentRoute.value.name).toBe('button-mockup')
+
+    await router.push('/link')
+    expect(router.currentRoute.value.path).toBe('/mockup/link')
+    expect(router.currentRoute.value.name).toBe('link-mockup')
   })
 })

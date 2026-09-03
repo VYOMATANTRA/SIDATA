@@ -43,6 +43,16 @@ const router = createRouter({
       component: () => import('../views/ButtonShowcaseView.vue'),
       meta: { title: 'Button Component Mockup - SIDATA' },
     },
+    {
+      path: '/mockup/link',
+      name: 'link-mockup',
+      component: () => import('../views/LinkShowcaseView.vue'),
+      meta: { title: 'Link Component Mockup - SIDATA' },
+    },
+    {
+      path: '/link',
+      redirect: '/mockup/link',
+    },
   ],
 })
 
