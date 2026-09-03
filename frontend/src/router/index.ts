@@ -37,6 +37,12 @@ const router = createRouter({
       name: 'auth-callback',
       component: () => import('../views/AuthCallbackView.vue'),
     },
+    {
+      path: '/mockup/button',
+      name: 'button-mockup',
+      component: () => import('../views/ButtonShowcaseView.vue'),
+      meta: { title: 'Button Component Mockup - SIDATA' },
+    },
   ],
 })
 
