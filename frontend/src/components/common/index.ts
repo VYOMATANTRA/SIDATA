@@ -4,3 +4,5 @@ export { default as BaseLink } from './BaseLink.vue';
 export type { LinkProps } from './BaseLink.vue';
 export { default as AppNavbar } from './AppNavbar.vue';
 export type { NavbarProps } from './AppNavbar.vue';
+export { default as AppFooter } from './AppFooter.vue';
+export type { FooterProps } from './AppFooter.vue';

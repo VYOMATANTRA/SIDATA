@@ -63,6 +63,16 @@ const router = createRouter({
       path: '/navbar',
       redirect: '/mockup/navbar',
     },
+    {
+      path: '/mockup/footer',
+      name: 'footer-mockup',
+      component: () => import('../views/FooterShowcaseView.vue'),
+      meta: { title: 'Footer Component Mockup - SIDATA' },
+    },
+    {
+      path: '/footer',
+      redirect: '/mockup/footer',
+    },
   ],
 })
 

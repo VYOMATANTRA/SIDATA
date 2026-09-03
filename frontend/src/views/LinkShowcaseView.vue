@@ -62,13 +62,25 @@ const generatedSnippet = computed(() => {
             to="/mockup/button"
             class="rounded-btn border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
           >
-            ❖ Button Mockup
+            ❖ Button
           </router-link>
           <router-link
             to="/mockup/link"
             class="rounded-btn border border-brand-navy bg-brand-navy px-3 py-1.5 text-xs font-medium text-white transition-colors"
           >
-            ❖ Link Mockup
+            ❖ Link
+          </router-link>
+          <router-link
+            to="/mockup/navbar"
+            class="rounded-btn border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            ❖ Navbar
+          </router-link>
+          <router-link
+            to="/mockup/footer"
+            class="rounded-btn border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            ❖ Footer
           </router-link>
           <router-link
             to="/"
