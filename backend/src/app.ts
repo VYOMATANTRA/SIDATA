@@ -8,11 +8,8 @@ import usersRoutes from './routes/users.routes.js';
 import profileRoutes from './routes/profile.routes.js';
 import weatherRoutes from './routes/weather.routes.js';
 import mapsRoutes from './routes/maps.routes.js';
-<<<<<<< HEAD
-=======
 import auditRoutes from './routes/audit.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
->>>>>>> main
 import { doubleCsrfProtection, invalidCsrfTokenError } from './middlewares/csrf.middleware.js';
 
 const app = express();

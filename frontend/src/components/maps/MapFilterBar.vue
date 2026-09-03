@@ -48,15 +48,20 @@ function handleClearRt() {
 <template>
   <div class="flex w-full flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
     <!-- Category Filter Pills -->
-    <div class="flex scrollbar-none items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+    <div
+      class="flex scrollbar-none items-center gap-2 overflow-x-auto pb-1 sm:pb-0"
+      role="group"
+      aria-label="Filter kategori titik spasial"
+    >
       <button
         type="button"
-        class="rounded-btn text-body-sm cursor-pointer px-3.5 py-1.5 font-medium whitespace-nowrap transition-all select-none"
+        class="rounded-btn text-sm cursor-pointer px-3.5 py-1.5 font-medium whitespace-nowrap transition-all select-none"
         :class="
           activeType === 'all'
-            ? 'bg-brand-biru-hytam text-white shadow-sm'
+            ? 'bg-brand-navy text-white shadow-sm'
             : 'border border-slate-200 bg-white/80 text-slate-700 hover:bg-white'
         "
+        :aria-pressed="activeType === 'all'"
         @click="handleTypeClick('all')"
       >
         Semua Titik
@@ -64,16 +69,17 @@ function handleClearRt() {
 
       <button
         type="button"
-        class="rounded-btn text-body-sm flex cursor-pointer items-center gap-1.5 px-3.5 py-1.5 font-medium whitespace-nowrap transition-all select-none"
+        class="rounded-btn text-sm flex cursor-pointer items-center gap-1.5 px-3.5 py-1.5 font-medium whitespace-nowrap transition-all select-none"
         :class="
           activeType === 'ketua_rt'
-            ? 'bg-brand-ubi-ungu text-white shadow-sm'
+            ? 'bg-brand-indigo text-white shadow-sm'
             : 'border border-slate-200 bg-white/80 text-slate-700 hover:bg-white'
         "
+        :aria-pressed="activeType === 'ketua_rt'"
         @click="handleTypeClick('ketua_rt')"
       >
         <span
-          class="h-2.5 w-2.5 rounded-full bg-[#5b58eb]"
+          class="h-2.5 w-2.5 rounded-full bg-brand-indigo"
           :class="{ 'bg-white': activeType === 'ketua_rt' }"
         />
         Ketua RT
@@ -81,12 +87,13 @@ function handleClearRt() {
 
       <button
         type="button"
-        class="rounded-btn text-body-sm flex cursor-pointer items-center gap-1.5 px-3.5 py-1.5 font-medium whitespace-nowrap transition-all select-none"
+        class="rounded-btn text-sm flex cursor-pointer items-center gap-1.5 px-3.5 py-1.5 font-medium whitespace-nowrap transition-all select-none"
         :class="
           activeType === 'bank_sampah'
             ? 'bg-emerald-700 text-white shadow-sm'
             : 'border border-slate-200 bg-white/80 text-slate-700 hover:bg-white'
         "
+        :aria-pressed="activeType === 'bank_sampah'"
         @click="handleTypeClick('bank_sampah')"
       >
         <span
@@ -98,16 +105,17 @@ function handleClearRt() {
 
       <button
         type="button"
-        class="rounded-btn text-body-sm flex cursor-pointer items-center gap-1.5 px-3.5 py-1.5 font-medium whitespace-nowrap transition-all select-none"
+        class="rounded-btn text-sm flex cursor-pointer items-center gap-1.5 px-3.5 py-1.5 font-medium whitespace-nowrap transition-all select-none"
         :class="
           activeType === 'fasilitas_umum'
-            ? 'bg-purple-700 text-white shadow-sm'
+            ? 'bg-brand-violet text-white shadow-sm'
             : 'border border-slate-200 bg-white/80 text-slate-700 hover:bg-white'
         "
+        :aria-pressed="activeType === 'fasilitas_umum'"
         @click="handleTypeClick('fasilitas_umum')"
       >
         <span
-          class="h-2.5 w-2.5 rounded-full bg-[#bb63ff]"
+          class="h-2.5 w-2.5 rounded-full bg-brand-violet"
           :class="{ 'bg-white': activeType === 'fasilitas_umum' }"
         />
         Fasilitas Umum
@@ -116,12 +124,14 @@ function handleClearRt() {
 
     <!-- RT Search Filter -->
     <div class="relative flex min-w-[140px] shrink-0 items-center sm:w-[160px]">
+      <label for="rt-filter-input" class="sr-only">Filter berdasarkan nomor RT</label>
       <input
+        id="rt-filter-input"
         v-model="rtInput"
         type="number"
         min="1"
         placeholder="Filter RT (e.g. 1)"
-        class="rounded-btn text-body-sm focus:border-brand-ubi-ungu w-full border border-slate-200 bg-white py-1.5 pr-8 pl-3 text-slate-800 placeholder-slate-400 shadow-sm focus:outline-none"
+        class="rounded-btn text-sm focus:border-brand-indigo w-full border border-slate-200 bg-white py-1.5 pr-8 pl-3 text-slate-800 placeholder-slate-400 shadow-sm focus:outline-none"
         @keydown.enter.prevent="handleRtSearch"
         @blur="handleRtSearch"
       />
@@ -129,6 +139,7 @@ function handleClearRt() {
         v-if="rtInput"
         type="button"
         class="absolute right-2 cursor-pointer text-sm text-slate-400 hover:text-slate-600"
+        aria-label="Hapus filter nomor RT"
         @click="handleClearRt"
       >
         ✕

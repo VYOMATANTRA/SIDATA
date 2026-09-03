@@ -71,7 +71,7 @@ async function handleLogout() {
       <div class="flex flex-col items-center justify-center gap-3 pt-6 sm:flex-row">
         <router-link
           to="/peta"
-          class="bg-brand-biru-hytam hover:bg-brand-ubi-ungu text-body-sm rounded-btn flex cursor-pointer items-center gap-2 px-5 py-2.5 font-medium text-white shadow-md transition-all"
+          class="bg-brand-navy hover:bg-brand-indigo text-sm rounded-btn flex cursor-pointer items-center gap-2 px-5 py-2.5 font-medium text-white shadow-md transition-all"
         >
           <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
@@ -87,7 +87,7 @@ async function handleLogout() {
         <button
           @click="handleLogout"
           :disabled="isLoggingOut"
-          class="text-body-sm rounded-btn cursor-pointer border border-slate-200 bg-slate-100 px-5 py-2.5 font-medium text-slate-800 transition-all hover:bg-slate-200 disabled:opacity-50"
+          class="text-sm rounded-btn cursor-pointer border border-slate-200 bg-slate-100 px-5 py-2.5 font-medium text-slate-800 transition-all hover:bg-slate-200 disabled:opacity-50"
         >
           <span v-if="isLoggingOut">Memproses...</span>
           <span v-else>Keluar (Logout)</span>

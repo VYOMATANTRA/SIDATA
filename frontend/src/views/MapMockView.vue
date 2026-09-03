@@ -34,7 +34,7 @@ function handleCloseDrawer() {
   <div class="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900">
     <!-- Header Section -->
     <header
-      class="bg-brand-biru-hytam border-brand-biru-aja border-b px-4 py-6 text-white shadow-md sm:px-8"
+      class="bg-brand-navy border-brand-navy-deep border-b px-4 py-6 text-white shadow-md sm:px-8"
     >
       <div
         class="mx-auto flex max-w-6xl flex-col items-start justify-between gap-4 sm:flex-row sm:items-center"
@@ -42,21 +42,21 @@ function handleCloseDrawer() {
         <div>
           <div class="mb-1 flex items-center gap-2">
             <span
-              class="bg-brand-ubi-ungu text-h4 rounded px-2 py-0.5 font-bold tracking-wider text-white uppercase"
+              class="bg-brand-indigo text-xs rounded px-2 py-0.5 font-bold tracking-wider text-white uppercase"
             >
               Proof of Concept
             </span>
             <span class="text-xs text-white/70">SIDATA Kelurahan Manggar</span>
           </div>
-          <h1 class="text-h2 font-bold tracking-tight text-white">Peta Interaktif Wilayah</h1>
-          <p class="text-body-sm mt-0.5 text-white/80">
+          <h1 class="text-lg font-bold tracking-tight text-white">Peta Interaktif Wilayah</h1>
+          <p class="text-sm mt-0.5 text-white/80">
             Persebaran Pos Ketua RT, Bank Sampah Unit, dan Fasilitas Umum di Kelurahan Manggar.
           </p>
         </div>
 
         <router-link
           to="/"
-          class="text-body-sm rounded-btn inline-flex items-center gap-1.5 bg-white/10 px-3 py-1.5 text-white/80 transition-colors hover:bg-white/20 hover:text-white"
+          class="text-sm rounded-btn inline-flex items-center gap-1.5 bg-white/10 px-3 py-1.5 text-white/80 transition-colors hover:bg-white/20 hover:text-white"
         >
           <span>← Kembali ke Beranda</span>
         </router-link>
@@ -85,9 +85,9 @@ function handleCloseDrawer() {
         <!-- Loading Overlay -->
         <div
           v-if="mapsStore.isLoading"
-          class="text-brand-biru-hytam text-body-sm absolute inset-0 z-[1200] flex items-center justify-center gap-2 bg-white/70 font-medium backdrop-blur-sm"
+          class="text-brand-navy text-sm absolute inset-0 z-[1200] flex items-center justify-center gap-2 bg-white/70 font-medium backdrop-blur-sm"
         >
-          <svg class="text-brand-ubi-ungu h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
+          <svg class="text-brand-indigo h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle
               class="opacity-25"
               cx="12"

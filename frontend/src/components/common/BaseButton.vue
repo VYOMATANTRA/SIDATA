@@ -28,17 +28,17 @@ const baseClasses = computed(() => {
     'inline-flex items-center justify-center transition-all duration-200 font-sans cursor-pointer select-none text-center';
 
   if (props.disabled) {
-    return `${common} bg-gray-300 text-gray-600 cursor-not-allowed border border-transparent rounded-btn px-4 py-2 text-body-sm`;
+    return `${common} bg-gray-300 text-gray-600 cursor-not-allowed border border-transparent rounded-btn px-4 py-2 text-sm`;
   }
 
   switch (props.variant) {
     case 'micro':
-      return `${common} py-[10px] px-[7px] border border-brand-biru-hytam rounded-btn text-h4 bg-white text-brand-biru-hytam hover:bg-brand-biru-hytam hover:text-white`;
+      return `${common} py-[10px] px-[7px] border border-brand-navy rounded-btn text-xs bg-white text-brand-navy hover:bg-brand-navy hover:text-white`;
     case 'secondary':
-      return `${common} px-4 py-2.5 rounded-btn border border-brand-biru-hytam bg-white text-brand-biru-hytam text-body-sm font-medium hover:bg-brand-biru-hytam hover:text-white hover:border-transparent`;
+      return `${common} px-4 py-2.5 rounded-btn border border-brand-navy bg-white text-brand-navy text-sm font-medium hover:bg-brand-navy hover:text-white hover:border-transparent`;
     case 'primary':
     default:
-      return `${common} px-4 py-2.5 rounded-btn border border-transparent bg-brand-biru-hytam text-white text-body-sm font-medium hover:bg-white hover:text-brand-biru-hytam hover:border-brand-biru-hytam shadow-sm`;
+      return `${common} px-4 py-2.5 rounded-btn border border-transparent bg-brand-navy text-white text-sm font-medium hover:bg-white hover:text-brand-navy hover:border-brand-navy shadow-sm`;
   }
 });
 

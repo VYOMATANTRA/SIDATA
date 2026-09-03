@@ -14,6 +14,7 @@ describe('MapSummaryDropdown.vue', () => {
     totalRtLeaders: 100,
     rtLeadersWithCoordinates: 2,
     rtLeadersWithoutCoordinates: 98,
+    rtLeadersWithIntegrityConflicts: 0,
   };
 
   it('renders trigger button with title', () => {

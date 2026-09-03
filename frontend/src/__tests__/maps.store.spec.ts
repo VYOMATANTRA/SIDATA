@@ -39,6 +39,7 @@ describe('maps.ts Pinia Store', () => {
     totalRtLeaders: 100,
     rtLeadersWithCoordinates: 1,
     rtLeadersWithoutCoordinates: 99,
+    rtLeadersWithIntegrityConflicts: 0,
   };
 
   it('loads points and applies category filter', async () => {

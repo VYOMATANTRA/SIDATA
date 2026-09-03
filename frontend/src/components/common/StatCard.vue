@@ -15,19 +15,19 @@ withDefaults(defineProps<Props>(), {
     class="rounded-card flex flex-row items-center justify-between gap-[10px] px-[13px] py-[10px] backdrop-blur-md transition-transform hover:scale-[1.02]"
     :class="{
       'bg-surface-glass border border-white/20 text-white shadow-sm': theme === 'glass',
-      'bg-brand-biru-hytam border-brand-biru-aja border text-white shadow-md': theme === 'dark',
-      'text-brand-biru-hytam border border-slate-200 bg-white/90 shadow-sm': theme === 'light',
+      'bg-brand-navy border-brand-navy-deep border text-white shadow-md': theme === 'dark',
+      'text-brand-navy border border-slate-200 bg-white/90 shadow-sm': theme === 'light',
     }"
   >
     <div class="flex flex-col text-left">
       <span
-        class="text-[16px] leading-[26px] font-semibold"
-        :class="theme === 'light' ? 'text-brand-biru-hytam' : 'text-white'"
+        class="text-base font-medium"
+        :class="theme === 'light' ? 'text-brand-navy' : 'text-white'"
       >
         {{ value }}
       </span>
       <span
-        class="text-h4 tracking-wider uppercase"
+        class="text-xs tracking-wider uppercase"
         :class="theme === 'light' ? 'text-slate-600' : 'text-white/80'"
       >
         {{ label }}
@@ -39,7 +39,7 @@ withDefaults(defineProps<Props>(), {
       class="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border-2"
       :class="
         theme === 'light'
-          ? 'border-brand-biru-hytam text-brand-biru-hytam'
+          ? 'border-brand-navy text-brand-navy'
           : 'border-white text-white'
       "
     >

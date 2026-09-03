@@ -41,11 +41,13 @@ const router = createRouter({
       path: '/peta',
       name: 'peta',
       component: () => import('../views/MapMockView.vue'),
+      meta: { title: 'Peta Interaktif - SIDATA Kelurahan Manggar' },
     },
     {
       path: '/peta-preview',
       name: 'peta-preview',
       component: () => import('../views/MapMockView.vue'),
+      meta: { title: 'Peta Interaktif - SIDATA Kelurahan Manggar' },
     },
   ],
 });

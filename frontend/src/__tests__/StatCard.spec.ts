@@ -27,7 +27,7 @@ describe('StatCard.vue', () => {
       },
     });
 
-    expect(wrapper.classes()).toContain('bg-brand-biru-hytam');
+    expect(wrapper.classes()).toContain('bg-brand-navy');
   });
 
   it('renders icon slot inside a 30x30px frame with border per style guide', () => {

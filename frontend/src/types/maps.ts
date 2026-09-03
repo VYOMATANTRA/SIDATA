@@ -15,6 +15,7 @@ export interface SpatialPointDTO {
     phoneIsWhatsapp: boolean;
     alamat: string | null;
   } | null;
+  integrityWarning?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -46,6 +47,7 @@ export interface RtLeaderDTO {
     longitude: number;
     pointId: string;
   } | null;
+  integrityWarning?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -61,6 +63,7 @@ export interface MapSummaryDTO {
   totalRtLeaders: number;
   rtLeadersWithCoordinates: number;
   rtLeadersWithoutCoordinates: number;
+  rtLeadersWithIntegrityConflicts: number;
 }
 
 export interface SpatialPointFilter {

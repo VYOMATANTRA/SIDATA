@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, onUnmounted } from 'vue';
 import type { SpatialPointDTO, RtLeaderDTO } from '../../types/maps';
 import BaseButton from '../common/BaseButton.vue';
 
@@ -14,13 +14,27 @@ const emit = defineEmits<{
   (e: 'close'): void;
 }>();
 
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    emit('close');
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown);
+});
+
 const typeBadge = computed(() => {
   if (!props.point) return { label: '', class: '' };
   switch (props.point.type) {
     case 'ketua_rt':
       return {
         label: 'Pos / Ketua RT',
-        class: 'bg-brand-ubi-ungu/10 text-brand-ubi-ungu border-brand-ubi-ungu/30',
+        class: 'bg-brand-indigo/10 text-brand-indigo border-brand-indigo/30',
       };
     case 'bank_sampah':
       return {
@@ -28,7 +42,7 @@ const typeBadge = computed(() => {
         class: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       };
     case 'fasilitas_umum':
-      return { label: 'Fasilitas Umum', class: 'bg-purple-50 text-purple-700 border-purple-200' };
+      return { label: 'Fasilitas Umum', class: 'bg-brand-violet/10 text-brand-violet border-brand-violet/30' };
     default:
       return { label: props.point.type, class: 'bg-slate-100 text-slate-700 border-slate-200' };
   }
@@ -69,6 +83,8 @@ const metadataEntries = computed(() => {
 <template>
   <div
     v-if="point"
+    role="region"
+    aria-label="Detail Titik Spasial"
     class="w-full max-w-lg rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-xl backdrop-blur-md transition-all duration-300"
   >
     <!-- Header: Type Badge & Close Button -->
@@ -92,7 +108,7 @@ const metadataEntries = computed(() => {
 
     <!-- Title & Location -->
     <div class="mt-3">
-      <h3 class="text-h3 text-brand-biru-hytam font-bold">
+      <h3 class="text-base font-semibold text-brand-navy">
         {{ point.name }}
       </h3>
       <div class="mt-1 flex items-center gap-2 text-xs text-slate-500">
@@ -119,9 +135,29 @@ const metadataEntries = computed(() => {
       </div>
     </div>
 
+    <!-- Data Integrity Warning Banner (SPEC §7) -->
+    <div
+      v-if="point.integrityWarning"
+      class="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800"
+      role="alert"
+    >
+      <svg class="mt-0.5 h-4 w-4 shrink-0 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+        />
+      </svg>
+      <div>
+        <span class="block font-semibold">Peringatan Integritas Data:</span>
+        <span>{{ point.integrityWarning }}</span>
+      </div>
+    </div>
+
     <!-- RT Coverage Tags (Especially for multi-RT Bank Sampah) -->
     <div v-if="point.rts.length > 0" class="mt-3.5">
-      <span class="text-h4 mb-1 block font-semibold tracking-wider text-slate-400 uppercase">
+      <span class="mb-1 block text-xs font-semibold tracking-wider text-slate-400 uppercase">
         Cakupan Wilayah:
       </span>
       <div class="flex flex-wrap gap-1.5">
@@ -141,7 +177,7 @@ const metadataEntries = computed(() => {
       class="mt-4 space-y-2 rounded-xl border border-slate-200/80 bg-slate-50 p-3.5"
     >
       <div class="flex items-center justify-between">
-        <span class="text-brand-biru-hytam text-xs font-semibold tracking-wider uppercase">
+        <span class="text-xs font-semibold tracking-wider text-brand-navy uppercase">
           Kontak Ketua RT
         </span>
         <span class="text-xs font-medium text-slate-500">
@@ -187,7 +223,7 @@ const metadataEntries = computed(() => {
           variant="primary"
           :with-icon="true"
           :href="phoneTelUrl"
-          class="bg-brand-biru-hytam w-full text-white"
+          class="w-full text-white"
         >
           <template #icon>
             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

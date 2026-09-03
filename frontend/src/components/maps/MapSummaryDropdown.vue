@@ -21,12 +21,20 @@ function handleClickOutside(event: MouseEvent) {
   }
 }
 
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && isOpen.value) {
+    isOpen.value = false;
+  }
+}
+
 onMounted(() => {
   document.addEventListener('click', handleClickOutside);
+  window.addEventListener('keydown', handleKeydown);
 });
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside);
+  window.removeEventListener('keydown', handleKeydown);
 });
 </script>
 
@@ -35,8 +43,10 @@ onUnmounted(() => {
     <!-- Dropdown Trigger Button -->
     <button
       type="button"
-      class="text-brand-biru-hytam text-body-sm inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200/90 bg-white/95 px-3.5 py-2 font-medium shadow-md backdrop-blur-md transition-all hover:bg-white"
-      :class="{ 'ring-brand-ubi-ungu/30 border-brand-ubi-ungu ring-2': isOpen }"
+      class="text-brand-navy text-sm inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200/90 bg-white/95 px-3.5 py-2 font-medium shadow-md backdrop-blur-md transition-all hover:bg-white"
+      :class="{ 'ring-brand-indigo/30 border-brand-indigo ring-2': isOpen }"
+      aria-haspopup="true"
+      :aria-expanded="isOpen"
       @click="toggleDropdown"
     >
       <span>Ringkasan Data</span>
@@ -62,7 +72,7 @@ onUnmounted(() => {
     >
       <div
         v-if="isOpen"
-        class="text-body-sm absolute left-0 z-50 mt-2 w-64 divide-y divide-slate-100 rounded-2xl border border-slate-200/90 bg-white/95 p-3.5 shadow-xl backdrop-blur-md"
+        class="text-sm absolute left-0 z-50 mt-2 w-64 divide-y divide-slate-100 rounded-2xl border border-slate-200/90 bg-white/95 p-3.5 shadow-xl backdrop-blur-md"
       >
         <div class="pb-2.5">
           <span class="block text-xs font-semibold tracking-wider text-slate-400 uppercase">
@@ -74,7 +84,7 @@ onUnmounted(() => {
         <ul class="space-y-2 py-2 text-slate-700">
           <li class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <span class="bg-brand-biru-hytam h-2.5 w-2.5 rounded-full" />
+              <span class="bg-brand-navy h-2.5 w-2.5 rounded-full" />
               <span>Total Titik Spasial</span>
             </div>
             <span class="font-bold text-slate-900">{{ summary.totalPoints }}</span>
@@ -82,7 +92,7 @@ onUnmounted(() => {
 
           <li class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <span class="h-2.5 w-2.5 rounded-full bg-[#5b58eb]" />
+              <span class="h-2.5 w-2.5 rounded-full bg-brand-indigo" />
               <span>Pos / Ketua RT</span>
             </div>
             <span class="font-semibold text-slate-800">{{
@@ -102,7 +112,7 @@ onUnmounted(() => {
 
           <li class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <span class="h-2.5 w-2.5 rounded-full bg-[#bb63ff]" />
+              <span class="h-2.5 w-2.5 rounded-full bg-brand-violet" />
               <span>Fasilitas Umum</span>
             </div>
             <span class="font-semibold text-slate-800">{{
@@ -111,11 +121,20 @@ onUnmounted(() => {
           </li>
         </ul>
 
-        <div class="flex items-center justify-between pt-2 text-xs text-slate-500">
-          <span>RT Berkoordinat:</span>
-          <span class="font-medium text-slate-700">
-            {{ summary.rtLeadersWithCoordinates }} / {{ summary.totalRtLeaders }} RT
-          </span>
+        <div class="space-y-1.5 pt-2 text-xs text-slate-500">
+          <div class="flex items-center justify-between">
+            <span>RT Berkoordinat:</span>
+            <span class="font-medium text-slate-700">
+              {{ summary.rtLeadersWithCoordinates }} / {{ summary.totalRtLeaders }} RT
+            </span>
+          </div>
+          <div
+            v-if="summary.rtLeadersWithIntegrityConflicts > 0"
+            class="flex items-center justify-between text-amber-700 font-medium"
+          >
+            <span>Konflik Integritas:</span>
+            <span>{{ summary.rtLeadersWithIntegrityConflicts }} RT</span>
+          </div>
         </div>
       </div>
     </transition>

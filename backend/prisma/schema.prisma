@@ -97,10 +97,6 @@ model SpatialPointRt {
   rtNumber Int          @map("rt_number")
 
   point    SpatialPoint @relation(fields: [pointId], references: [id], onDelete: Cascade)
-<<<<<<< HEAD
-  rtLeader RtLeader?    @relation(fields: [rtNumber], references: [rtNumber], onDelete: Cascade)
-=======
->>>>>>> main
 
   @@unique([pointId, rtNumber])
   @@index([rtNumber])
@@ -109,19 +105,6 @@ model SpatialPointRt {
 }
 
 model RtLeader {
-<<<<<<< HEAD
-  rtNumber        Int              @id @map("rt_number")
-  name            String
-  phone           String
-  phoneIsWhatsapp Boolean          @default(true) @map("phone_is_whatsapp")
-  alamat          String?          @db.Text
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-
-  spatialPoints   SpatialPointRt[]
-
-  @@map("rt_leaders")
-=======
   rtNumber        Int      @id @map("rt_number")
   name            String
   phone           String
@@ -183,5 +166,4 @@ model SystemSetting {
   updatedAt   DateTime @updatedAt
 
   @@map("system_settings")
->>>>>>> main
 }

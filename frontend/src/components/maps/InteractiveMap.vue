@@ -25,14 +25,14 @@ const DEFAULT_CENTER: [number, number] = [-1.2235, 116.9521];
 const DEFAULT_ZOOM = 14;
 
 function createCustomPin(type: SpatialPointType, isSelected: boolean, rtNumber?: number) {
-  let bgClass = 'bg-[#5b58eb]';
+  let bgClass = 'bg-brand-indigo';
   let label = 'RT';
 
   if (type === 'bank_sampah') {
     bgClass = 'bg-emerald-600';
     label = 'BS';
   } else if (type === 'fasilitas_umum') {
-    bgClass = 'bg-[#bb63ff]';
+    bgClass = 'bg-brand-violet';
     label = 'FU';
   }
 

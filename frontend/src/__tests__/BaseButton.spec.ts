@@ -11,7 +11,7 @@ describe('BaseButton.vue', () => {
     });
 
     expect(wrapper.text()).toContain('Klik Saya');
-    expect(wrapper.classes()).toContain('bg-brand-biru-hytam');
+    expect(wrapper.classes()).toContain('bg-brand-navy');
     expect(wrapper.classes()).toContain('rounded-btn');
   });
 
@@ -25,8 +25,8 @@ describe('BaseButton.vue', () => {
       },
     });
 
-    expect(wrapper.classes()).toContain('text-h4');
-    expect(wrapper.classes()).toContain('border-brand-biru-hytam');
+    expect(wrapper.classes()).toContain('text-xs');
+    expect(wrapper.classes()).toContain('border-brand-navy');
   });
 
   it('renders secondary variant with white background and brand border', () => {
@@ -40,7 +40,7 @@ describe('BaseButton.vue', () => {
     });
 
     expect(wrapper.classes()).toContain('bg-white');
-    expect(wrapper.classes()).toContain('border-brand-biru-hytam');
+    expect(wrapper.classes()).toContain('border-brand-navy');
   });
 
   it('handles disabled state and prevents click emit', async () => {
