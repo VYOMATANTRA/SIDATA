@@ -60,6 +60,13 @@ export interface RtLeaderDTO {
     longitude: number;
     pointId: string;
   } | null;
+  /**
+   * Present only when a data-integrity violation is detected at read time.
+   * Mirrors SpatialPointDTO.integrityWarning (see there) — same underlying
+   * anomaly, viewed from the leader side: `coordinates` is null and this
+   * field describes why.
+   */
+  integrityWarning?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -70,6 +77,12 @@ export interface MapSummaryDTO {
   totalRtLeaders: number;
   rtLeadersWithCoordinates: number;
   rtLeadersWithoutCoordinates: number;
+  /**
+   * Subset of rtLeadersWithoutCoordinates: RTs where a ketua_rt data-integrity
+   * violation (not merely absent coverage) is why no coordinates are served.
+   * See mapPointToDTO/resolveRtCoverage for the shared resolution rule.
+   */
+  rtLeadersWithIntegrityConflicts: number;
 }
 
 export interface SpatialPointFilter {
@@ -82,6 +95,99 @@ export interface RtLeaderQuery {
   rtNumber?: number | undefined;
   limit?: number | undefined;
   offset?: number | undefined;
+}
+
+/**
+ * Shared read-time resolution rule for the ketua_rt <-> RT invariant (SPEC.md §7):
+ * an RT resolves to a single ketua_rt point's coordinates only if exactly one
+ * ketua_rt point covers it AND that point covers exactly one RT. MySQL cannot
+ * enforce this with a partial unique index, so both the points-side (rtLeader)
+ * and leader-side (coordinates) read paths call this instead of each
+ * reimplementing (or skipping) the check.
+ */
+interface KetuaRtCoverageRow {
+  pointId: string;
+  rtNumber: number;
+  totalRtCoverage: number;
+}
+
+interface RtCoverageResolution {
+  pointId: string | null;
+  conflict: 'multiple-points' | 'multi-rt-point' | null;
+  warning?: string;
+}
+
+function resolveRtCoverage(
+  rtNumber: number,
+  covering: Array<{ pointId: string; totalRtCoverage: number }>,
+): RtCoverageResolution {
+  if (covering.length === 0) {
+    return { pointId: null, conflict: null };
+  }
+
+  if (covering.length > 1) {
+    console.error(
+      `[maps.service] Integrity violation: multiple ketua_rt points are assigned to RT ${rtNumber.toString()} ` +
+        `(points: ${covering.map((c) => c.pointId).join(', ')}). Expected exactly 1 ketua_rt point per RT.`,
+    );
+    return {
+      pointId: null,
+      conflict: 'multiple-points',
+      warning: `Multiple ketua_rt points are assigned to RT ${rtNumber.toString()}; coordinates omitted pending data correction`,
+    };
+  }
+
+  const [only] = covering;
+  if (only && only.totalRtCoverage > 1) {
+    console.error(
+      `[maps.service] Integrity violation: ketua_rt point "${only.pointId}" is linked to ` +
+        `${only.totalRtCoverage.toString()} RT coverages, including RT ${rtNumber.toString()}. Expected exactly 1.`,
+    );
+    return {
+      pointId: null,
+      conflict: 'multi-rt-point',
+      warning:
+        `ketua_rt point "${only.pointId}" is linked to ${only.totalRtCoverage.toString()} RT coverages; ` +
+        `coordinates for RT ${rtNumber.toString()} omitted pending data correction`,
+    };
+  }
+
+  return { pointId: only ? only.pointId : null, conflict: null };
+}
+
+function resolveRtCoverageMap(rows: KetuaRtCoverageRow[]): Map<number, RtCoverageResolution> {
+  const byRt = new Map<number, Array<{ pointId: string; totalRtCoverage: number }>>();
+  for (const row of rows) {
+    const existing = byRt.get(row.rtNumber) ?? [];
+    existing.push({ pointId: row.pointId, totalRtCoverage: row.totalRtCoverage });
+    byRt.set(row.rtNumber, existing);
+  }
+
+  const resolutions = new Map<number, RtCoverageResolution>();
+  for (const [rtNumber, covering] of byRt.entries()) {
+    resolutions.set(rtNumber, resolveRtCoverage(rtNumber, covering));
+  }
+  return resolutions;
+}
+
+/**
+ * Derives each row's totalRtCoverage by counting rows per pointId. Only valid
+ * when `rows` is a globally-complete set of ketua_rt coverages (i.e. not
+ * filtered down to a page of RT numbers) — otherwise a point covering RTs
+ * outside the filtered set would be undercounted.
+ */
+function withDerivedCoverageCounts(
+  rows: Array<{ pointId: string; rtNumber: number }>,
+): KetuaRtCoverageRow[] {
+  const countsByPoint = new Map<string, number>();
+  for (const row of rows) {
+    countsByPoint.set(row.pointId, (countsByPoint.get(row.pointId) ?? 0) + 1);
+  }
+  return rows.map((row) => ({
+    pointId: row.pointId,
+    rtNumber: row.rtNumber,
+    totalRtCoverage: countsByPoint.get(row.pointId) ?? 1,
+  }));
 }
 
 function mapPointToDTO(
@@ -211,14 +317,11 @@ export async function getSpatialPoints(filter?: SpatialPointFilter): Promise<Spa
     }),
   ]);
 
-  const rtCountMap = new Map<number, number>();
-  for (const cov of allKetuaRtCoverages) {
-    rtCountMap.set(cov.rtNumber, (rtCountMap.get(cov.rtNumber) ?? 0) + 1);
-  }
+  const coverageResolutions = resolveRtCoverageMap(withDerivedCoverageCounts(allKetuaRtCoverages));
 
   const duplicateKetuaRtNumbers = new Set<number>();
-  for (const [rtNumber, count] of rtCountMap.entries()) {
-    if (count > 1) {
+  for (const [rtNumber, resolution] of coverageResolutions.entries()) {
+    if (resolution.conflict === 'multiple-points') {
       duplicateKetuaRtNumbers.add(rtNumber);
     }
   }
@@ -294,17 +397,33 @@ export async function getSpatialPointById(id: string): Promise<SpatialPointDTO |
   const duplicateKetuaRtNumbers = new Set<number>();
 
   if (point.type === 'ketua_rt' && rts.length === 1 && rts[0] !== undefined) {
-    const conflictingPoints = await prisma.spatialPointRt.findMany({
+    const otherCoverages = await prisma.spatialPointRt.findMany({
       where: {
         rtNumber: rts[0],
         point: { type: 'ketua_rt' },
         pointId: { not: point.id },
       },
+      select: {
+        pointId: true,
+        point: { select: { id: true, _count: { select: { rtCoverages: true } } } },
+      },
     });
 
-    if (conflictingPoints.length > 0) {
+    const covering = [
+      { pointId: point.id, totalRtCoverage: rts.length },
+      ...otherCoverages.map((c) => ({
+        pointId: c.point.id,
+        totalRtCoverage: c.point._count.rtCoverages,
+      })),
+    ];
+
+    // Shared resolution rule (see resolveRtCoverage above mapPointToDTO) instead of
+    // reimplementing the ketua_rt <-> RT conflict check inline.
+    const resolution = resolveRtCoverage(rts[0], covering);
+
+    if (resolution.conflict === 'multiple-points') {
       duplicateKetuaRtNumbers.add(rts[0]);
-    } else {
+    } else if (resolution.pointId === point.id) {
       const leader = await prisma.rtLeader.findUnique({
         where: { rtNumber: rts[0] },
       });
@@ -312,6 +431,8 @@ export async function getSpatialPointById(id: string): Promise<SpatialPointDTO |
         leaderMap.set(leader.rtNumber, leader);
       }
     }
+    // Any other conflict (e.g. 'multi-rt-point') leaves leaderMap empty, so
+    // rtLeader stays null without a bespoke branch here.
   }
 
   return mapPointToDTO(point, leaderMap, duplicateKetuaRtNumbers);
@@ -336,12 +457,13 @@ export async function getRtLeaders(query?: RtLeaderQuery): Promise<{
 
   if (query?.search && query.search.trim() !== '') {
     const term = query.search.trim();
+    // Accept zero-padded input ("007") the same way parseBoundedInt in
+    // maps.controller.ts does for the `rt`/`:rtNumber` params — a strict
+    // String(parsedRt) === term round-trip would otherwise reject it and
+    // silently fall back to name/alamat-only search.
     const parsedRt = parseInt(term, 10);
     const isPureInteger =
-      !Number.isNaN(parsedRt) &&
-      String(parsedRt) === term &&
-      parsedRt > 0 &&
-      parsedRt <= 2_147_483_647;
+      /^\d+$/.test(term) && !Number.isNaN(parsedRt) && parsedRt > 0 && parsedRt <= 2_147_483_647;
 
     if (isPureInteger && typeof query?.rtNumber !== 'number') {
       where.OR = [
@@ -365,6 +487,9 @@ export async function getRtLeaders(query?: RtLeaderQuery): Promise<{
   ]);
 
   const rtNumbers = leaders.map((l) => l.rtNumber);
+  // Note: `_count.rtCoverages` is the point's TOTAL coverage count, not just
+  // its coverage within `rtNumbers` — required so resolveRtCoverage can tell
+  // a genuinely single-RT point from one that also covers RTs outside this page.
   const ketuaRtCoverages =
     rtNumbers.length > 0
       ? await prisma.spatialPointRt.findMany({
@@ -372,34 +497,55 @@ export async function getRtLeaders(query?: RtLeaderQuery): Promise<{
             rtNumber: { in: rtNumbers },
             point: { type: 'ketua_rt' },
           },
-          include: {
-            point: true,
+          select: {
+            rtNumber: true,
+            pointId: true,
+            point: {
+              select: {
+                id: true,
+                latitude: true,
+                longitude: true,
+                _count: { select: { rtCoverages: true } },
+              },
+            },
           },
+          orderBy: [{ rtNumber: 'asc' }, { pointId: 'asc' }],
         })
       : [];
 
-  const coordinatesMap = new Map<
-    number,
-    { latitude: number; longitude: number; pointId: string }
-  >();
+  const coordinatesByPoint = new Map<string, { latitude: number; longitude: number }>();
   for (const cov of ketuaRtCoverages) {
-    coordinatesMap.set(cov.rtNumber, {
+    coordinatesByPoint.set(cov.point.id, {
       latitude: cov.point.latitude,
       longitude: cov.point.longitude,
-      pointId: cov.point.id,
     });
   }
 
-  const mappedLeaders: RtLeaderDTO[] = leaders.map((leader) => ({
-    rtNumber: leader.rtNumber,
-    name: leader.name,
-    phone: leader.phone,
-    phoneIsWhatsapp: leader.phoneIsWhatsapp,
-    alamat: leader.alamat,
-    coordinates: coordinatesMap.get(leader.rtNumber) ?? null,
-    createdAt: leader.createdAt.toISOString(),
-    updatedAt: leader.updatedAt.toISOString(),
-  }));
+  const coverageResolutions = resolveRtCoverageMap(
+    ketuaRtCoverages.map((cov) => ({
+      pointId: cov.point.id,
+      rtNumber: cov.rtNumber,
+      totalRtCoverage: cov.point._count.rtCoverages,
+    })),
+  );
+
+  const mappedLeaders: RtLeaderDTO[] = leaders.map((leader) => {
+    const resolution = coverageResolutions.get(leader.rtNumber);
+    const resolvedPointId = resolution?.pointId ?? null;
+    const coords = resolvedPointId ? coordinatesByPoint.get(resolvedPointId) : undefined;
+
+    return {
+      rtNumber: leader.rtNumber,
+      name: leader.name,
+      phone: leader.phone,
+      phoneIsWhatsapp: leader.phoneIsWhatsapp,
+      alamat: leader.alamat,
+      coordinates: coords && resolvedPointId ? { ...coords, pointId: resolvedPointId } : null,
+      ...(resolution?.warning !== undefined ? { integrityWarning: resolution.warning } : {}),
+      createdAt: leader.createdAt.toISOString(),
+      updatedAt: leader.updatedAt.toISOString(),
+    };
+  });
 
   return {
     leaders: mappedLeaders,
@@ -408,18 +554,31 @@ export async function getRtLeaders(query?: RtLeaderQuery): Promise<{
 }
 
 export async function getRtLeaderByRtNumber(rtNumber: number): Promise<RtLeaderDTO | null> {
-  const [leader, ketuaRtCoverage] = await Promise.all([
+  const [leader, ketuaRtCoverages] = await Promise.all([
     prisma.rtLeader.findUnique({
       where: { rtNumber },
     }),
-    prisma.spatialPointRt.findFirst({
+    // findMany (not findFirst) + resolveRtCoverage: a single arbitrary,
+    // unordered pick here could silently disagree with getRtLeaders for the
+    // same RT — see the shared resolution rule above mapPointToDTO.
+    prisma.spatialPointRt.findMany({
       where: {
         rtNumber,
         point: { type: 'ketua_rt' },
       },
-      include: {
-        point: true,
+      select: {
+        rtNumber: true,
+        pointId: true,
+        point: {
+          select: {
+            id: true,
+            latitude: true,
+            longitude: true,
+            _count: { select: { rtCoverages: true } },
+          },
+        },
       },
+      orderBy: { pointId: 'asc' },
     }),
   ]);
 
@@ -427,19 +586,31 @@ export async function getRtLeaderByRtNumber(rtNumber: number): Promise<RtLeaderD
     return null;
   }
 
+  const resolution = resolveRtCoverage(
+    rtNumber,
+    ketuaRtCoverages.map((cov) => ({
+      pointId: cov.point.id,
+      totalRtCoverage: cov.point._count.rtCoverages,
+    })),
+  );
+  const resolvedPoint = resolution.pointId
+    ? ketuaRtCoverages.find((cov) => cov.point.id === resolution.pointId)?.point
+    : undefined;
+
   return {
     rtNumber: leader.rtNumber,
     name: leader.name,
     phone: leader.phone,
     phoneIsWhatsapp: leader.phoneIsWhatsapp,
     alamat: leader.alamat,
-    coordinates: ketuaRtCoverage
+    coordinates: resolvedPoint
       ? {
-          latitude: ketuaRtCoverage.point.latitude,
-          longitude: ketuaRtCoverage.point.longitude,
-          pointId: ketuaRtCoverage.point.id,
+          latitude: resolvedPoint.latitude,
+          longitude: resolvedPoint.longitude,
+          pointId: resolvedPoint.id,
         }
       : null,
+    ...(resolution.warning !== undefined ? { integrityWarning: resolution.warning } : {}),
     createdAt: leader.createdAt.toISOString(),
     updatedAt: leader.updatedAt.toISOString(),
   };
@@ -455,11 +626,13 @@ export async function getMapSummary(): Promise<MapSummaryDTO> {
       },
     }),
     prisma.rtLeader.count(),
+    // Global (unfiltered) coverage set, so withDerivedCoverageCounts can
+    // correctly derive each point's total RT coverage.
     prisma.spatialPointRt.findMany({
       where: {
         point: { type: 'ketua_rt' },
       },
-      select: { rtNumber: true },
+      select: { rtNumber: true, pointId: true },
     }),
   ]);
 
@@ -470,18 +643,26 @@ export async function getMapSummary(): Promise<MapSummaryDTO> {
     pointsByType[group.type] = group._count._all;
   }
 
-  const uniqueRtNumbersWithCoordinates = Array.from(
-    new Set(ketuaRtCoverages.map((cov) => cov.rtNumber)),
-  );
+  const coverageResolutions = resolveRtCoverageMap(withDerivedCoverageCounts(ketuaRtCoverages));
 
-  let rtLeadersWithCoordinates = 0;
-  if (uniqueRtNumbersWithCoordinates.length > 0) {
-    rtLeadersWithCoordinates = await prisma.rtLeader.count({
-      where: {
-        rtNumber: { in: uniqueRtNumbersWithCoordinates },
-      },
-    });
+  const resolvedRtNumbers: number[] = [];
+  const conflictedRtNumbers: number[] = [];
+  for (const [rtNumber, resolution] of coverageResolutions.entries()) {
+    if (resolution.pointId) {
+      resolvedRtNumbers.push(rtNumber);
+    } else if (resolution.conflict) {
+      conflictedRtNumbers.push(rtNumber);
+    }
   }
+
+  const [rtLeadersWithCoordinates, rtLeadersWithIntegrityConflicts] = await Promise.all([
+    resolvedRtNumbers.length > 0
+      ? prisma.rtLeader.count({ where: { rtNumber: { in: resolvedRtNumbers } } })
+      : Promise.resolve(0),
+    conflictedRtNumbers.length > 0
+      ? prisma.rtLeader.count({ where: { rtNumber: { in: conflictedRtNumbers } } })
+      : Promise.resolve(0),
+  ]);
 
   return {
     totalPoints,
@@ -489,5 +670,6 @@ export async function getMapSummary(): Promise<MapSummaryDTO> {
     totalRtLeaders,
     rtLeadersWithCoordinates,
     rtLeadersWithoutCoordinates: totalRtLeaders - rtLeadersWithCoordinates,
+    rtLeadersWithIntegrityConflicts,
   };
 }
