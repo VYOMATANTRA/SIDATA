@@ -45,6 +45,7 @@ Dev server runs on `http://localhost:5173` by default (Vite).
 | Run tests with coverage | `npm run test:coverage`           | `backend/` |
 | Format                  | `npm run format`                  | `backend/` |
 | Run server              | `npx tsx src/index.ts` or similar | `backend/` |
+| Seed dev admin          | `npm run dev:seed`                | `backend/` |
 | Run via Docker          | `docker compose up --build`       | repo root  |
 
 Backend runs on port from `PORT` env var (default 3000). Prisma client is generated to `generated/prisma/`.
