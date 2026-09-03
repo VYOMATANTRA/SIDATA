@@ -67,11 +67,11 @@ const emailError = computed(() => {
 });
 
 const passwordError = computed(() => {
-  if (serverPasswordError.value) return serverPasswordError.value;
-  if (!isPasswordTouched.value) return '';
-  if (!password.value) return 'Password wajib diisi';
-  if (password.value.length < 8) return 'Password minimal harus 8 karakter (Standar NIST).';
-  if (password.value.length > 128) return 'Password terlalu panjang (maksimal 128 karakter).';
+  if (serverPasswordError.value) return serverPasswordError.value
+  if (!isPasswordTouched.value) return ''
+  if (!password.value) return 'Password wajib diisi'
+  if (password.value.length < 8) return 'Password minimal harus 8 karakter.'
+  if (password.value.length > 128) return 'Password terlalu panjang (maksimal 128 karakter).'
   if (isWeakPassword(password.value, email.value.trim()))
     return 'Password terlalu lemah atau umum digunakan.';
   return '';

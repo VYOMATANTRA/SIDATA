@@ -19,8 +19,12 @@ export const loginLimiter = createLimiter(10);
 
 export const weatherLimiter = createLimiter(300);
 
-// Maps and spatial data rate limiter
-export const mapsLimiter = createLimiter(300);
+// Maps and spatial data rate limiters.
+// Separated per resource to prevent landing page fan-out (/summary + /points + /rt-leaders)
+// from exhausting a shared bucket when multiple users browse from the same NAT/office IP.
+export const mapsPointsLimiter = createLimiter(300);
+export const mapsRtLeadersLimiter = createLimiter(300);
+export const mapsSummaryLimiter = createLimiter(300);
 
 // Session-maintenance endpoints (csrf-token, refresh, logout, me) are hit on every SPA
 // navigation while unauthenticated (see router/index.ts's beforeEach), not just on deliberate
@@ -28,3 +32,14 @@ export const mapsLimiter = createLimiter(300);
 // multiple unauthenticated users behind one IP (NAT) burn through it purely on silent-refresh
 // retries and lock each other out of logging in. Given a roomier, separate budget instead.
 export const sessionLimiter = createLimiter(300);
+
+// User management endpoints: read operations (300 req/15min) separate from bcrypt/transaction writes (100 req/15min)
+export const userManagementReadLimiter = createLimiter(300);
+export const userManagementWriteLimiter = createLimiter(100);
+
+// Self-service password change: runs bcrypt.compare + bcrypt.hash on every request.
+// Budget matches loginLimiter (same security weight — both gatekeep credential changes).
+export const changePasswordLimiter = createLimiter(10);
+
+// General public API endpoints rate limiter
+export const apiLimiter = createLimiter(300);

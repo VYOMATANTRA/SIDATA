@@ -6,32 +6,107 @@ import {
   getRtLeaders,
   getRtLeaderByRtNumber,
   getMapSummary,
+  ALL_SPATIAL_POINT_TYPES,
 } from '../services/maps.service.js';
 import type { SpatialPointType } from '../../generated/prisma/client.js';
 
-const VALID_SPATIAL_TYPES: SpatialPointType[] = ['ketua_rt', 'bank_sampah', 'fasilitas_umum'];
+export const DEFAULT_PAGE_SIZE = 10;
+export const MAX_MYSQL_INT = 2_147_483_647;
+export const VALID_SPATIAL_FORMATS = ['geojson', 'json'] as const;
+export type SpatialPointFormat = (typeof VALID_SPATIAL_FORMATS)[number];
+
+type PaginationParamResult =
+  { kind: 'absent' } | { kind: 'valid'; value: number } | { kind: 'invalid' };
+
+/**
+ * Parse an integer parameter with non-negative bounds and MySQL INT overflow protection.
+ *
+ * Returns:
+ *   { kind: 'absent' }       — param was not supplied or was an empty string
+ *   { kind: 'valid', value } — param was a valid integer within [min, max]
+ *   { kind: 'invalid' }      — param was supplied but failed validation
+ *                              (array, non-numeric, negative, out of bounds, or overflows max)
+ */
+function parseBoundedInt(value: unknown, min = 0, max = MAX_MYSQL_INT): PaginationParamResult {
+  // Repeated query keys are parsed by Express as an array. Treat as invalid
+  // rather than silently falling back to 'absent' (unbounded query).
+  if (Array.isArray(value)) {
+    return { kind: 'invalid' };
+  }
+  if (typeof value !== 'string' || value.trim() === '') {
+    return { kind: 'absent' };
+  }
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    return { kind: 'invalid' };
+  }
+  const parsed = parseInt(trimmed, 10);
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    return { kind: 'invalid' };
+  }
+  return { kind: 'valid', value: parsed };
+}
+
+function parsePositiveIntParam(
+  value: unknown,
+  errorMessage: string,
+  max = MAX_MYSQL_INT,
+): { value?: number; error?: string } {
+  const result = parseBoundedInt(value, 1, max);
+  if (result.kind === 'invalid') {
+    return { error: errorMessage };
+  }
+  if (result.kind === 'valid') {
+    return { value: result.value };
+  }
+  return {};
+}
+
+function parsePaginationParam(value: unknown, min = 0, max = MAX_MYSQL_INT): PaginationParamResult {
+  return parseBoundedInt(value, min, max);
+}
 
 export const listPoints = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { type, rt, format } = req.query;
 
+    if (Array.isArray(type)) {
+      return res.status(400).json({
+        error: `Tipe titik spasial tidak valid. Pilihan yang valid: ${ALL_SPATIAL_POINT_TYPES.join(', ')}`,
+      });
+    }
+    if (Array.isArray(format)) {
+      return res
+        .status(400)
+        .json({ error: 'Parameter format tidak boleh dikirim lebih dari satu kali' });
+    }
+
+    let parsedFormat: SpatialPointFormat | undefined;
+    if (typeof format === 'string' && format.trim() !== '') {
+      if (!VALID_SPATIAL_FORMATS.includes(format as SpatialPointFormat)) {
+        return res.status(400).json({
+          error: `Format tidak valid. Pilihan yang valid: ${VALID_SPATIAL_FORMATS.join(', ')}`,
+        });
+      }
+      parsedFormat = format as SpatialPointFormat;
+    }
+
     let parsedType: SpatialPointType | undefined;
     if (typeof type === 'string' && type.trim() !== '') {
-      if (!VALID_SPATIAL_TYPES.includes(type as SpatialPointType)) {
+      if (!ALL_SPATIAL_POINT_TYPES.includes(type as SpatialPointType)) {
         return res.status(400).json({
-          error: `Tipe titik spasial tidak valid. Pilihan yang valid: ${VALID_SPATIAL_TYPES.join(', ')}`,
+          error: `Tipe titik spasial tidak valid. Pilihan yang valid: ${ALL_SPATIAL_POINT_TYPES.join(', ')}`,
         });
       }
       parsedType = type as SpatialPointType;
     }
 
-    let parsedRtNumber: number | undefined;
-    if (typeof rt === 'string' && rt.trim() !== '') {
-      const parsed = parseInt(rt, 10);
-      if (Number.isNaN(parsed) || parsed <= 0) {
-        return res.status(400).json({ error: 'Nomor RT harus berupa angka positif' });
-      }
-      parsedRtNumber = parsed;
+    const { value: parsedRtNumber, error: rtError } = parsePositiveIntParam(
+      rt,
+      'Nomor RT harus berupa angka positif',
+    );
+    if (rtError) {
+      return res.status(400).json({ error: rtError });
     }
 
     const filter = {
@@ -39,7 +114,7 @@ export const listPoints = async (req: Request, res: Response): Promise<Response>
       rtNumber: parsedRtNumber,
     };
 
-    if (format === 'geojson') {
+    if (parsedFormat === 'geojson') {
       const geojson = await getSpatialPointsAsGeoJson(filter);
       return res.status(200).json(geojson);
     }
@@ -75,33 +150,61 @@ export const listRtLeaders = async (req: Request, res: Response): Promise<Respon
   try {
     const { search, rt, limit, offset, page } = req.query;
 
-    let parsedRtNumber: number | undefined;
-    if (typeof rt === 'string' && rt.trim() !== '') {
-      const parsed = parseInt(rt, 10);
-      if (Number.isNaN(parsed) || parsed <= 0) {
-        return res.status(400).json({ error: 'Nomor RT harus berupa angka positif' });
-      }
-      parsedRtNumber = parsed;
+    if (Array.isArray(search)) {
+      return res
+        .status(400)
+        .json({ error: 'Parameter search tidak boleh dikirim lebih dari satu kali' });
+    }
+    if (Array.isArray(page)) {
+      return res
+        .status(400)
+        .json({ error: 'Nilai page tidak valid. Harus berupa angka bulat positif.' });
     }
 
-    let parsedLimit: number | undefined;
-    if (typeof limit === 'string') {
-      const l = parseInt(limit, 10);
-      if (!Number.isNaN(l) && l > 0) {
-        parsedLimit = l;
-      }
+    const { value: parsedRtNumber, error: rtError } = parsePositiveIntParam(
+      rt,
+      'Nomor RT harus berupa angka positif',
+    );
+    if (rtError) {
+      return res.status(400).json({ error: rtError });
     }
 
-    let parsedOffset: number | undefined;
-    if (typeof offset === 'string') {
-      const o = parseInt(offset, 10);
-      if (!Number.isNaN(o) && o >= 0) {
-        parsedOffset = o;
+    const limitResult = parsePaginationParam(limit, 1);
+    if (limitResult.kind === 'invalid') {
+      return res
+        .status(400)
+        .json({ error: 'Nilai limit tidak valid. Harus berupa angka bulat positif.' });
+    }
+    let parsedLimit: number | undefined =
+      limitResult.kind === 'valid' ? limitResult.value : undefined;
+
+    const offsetResult = parsePaginationParam(offset, 0);
+    if (offsetResult.kind === 'invalid') {
+      return res
+        .status(400)
+        .json({ error: 'Nilai offset tidak valid. Harus berupa angka bulat non-negatif.' });
+    }
+    let parsedOffset: number | undefined =
+      offsetResult.kind === 'valid' ? offsetResult.value : undefined;
+
+    if (parsedOffset === undefined && typeof page === 'string' && page.trim() !== '') {
+      const pageResult = parsePaginationParam(page, 1);
+      if (pageResult.kind === 'invalid') {
+        return res
+          .status(400)
+          .json({ error: 'Nilai page tidak valid. Harus berupa angka bulat positif.' });
       }
-    } else if (typeof page === 'string' && parsedLimit) {
-      const p = parseInt(page, 10);
-      if (!Number.isNaN(p) && p > 0) {
-        parsedOffset = (p - 1) * parsedLimit;
+      if (pageResult.kind === 'valid') {
+        if (parsedLimit === undefined) {
+          parsedLimit = DEFAULT_PAGE_SIZE;
+        }
+        const computedOffset = (pageResult.value - 1) * parsedLimit;
+        if (computedOffset > MAX_MYSQL_INT) {
+          return res
+            .status(400)
+            .json({ error: 'Nilai page tidak valid. Harus berupa angka bulat positif.' });
+        }
+        parsedOffset = computedOffset;
       }
     }
 
@@ -122,14 +225,16 @@ export const listRtLeaders = async (req: Request, res: Response): Promise<Respon
 export const getRtLeader = async (req: Request, res: Response): Promise<Response> => {
   try {
     const rtParam = req.params['rtNumber'];
-    const rtNumberStr = typeof rtParam === 'string' ? rtParam : '';
-    const parsed = parseInt(rtNumberStr, 10);
+    const { value: parsedRtNumber, error: rtError } = parsePositiveIntParam(
+      rtParam,
+      'Nomor RT harus berupa angka positif',
+    );
 
-    if (Number.isNaN(parsed) || parsed <= 0) {
-      return res.status(400).json({ error: 'Nomor RT harus berupa angka positif' });
+    if (rtError || parsedRtNumber === undefined) {
+      return res.status(400).json({ error: rtError ?? 'Nomor RT harus berupa angka positif' });
     }
 
-    const leader = await getRtLeaderByRtNumber(parsed);
+    const leader = await getRtLeaderByRtNumber(parsedRtNumber);
     if (!leader) {
       return res.status(404).json({ error: 'Ketua RT tidak ditemukan' });
     }

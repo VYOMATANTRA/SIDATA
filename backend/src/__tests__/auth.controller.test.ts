@@ -10,13 +10,16 @@ import {
   logout,
   getMe,
   getCsrfToken,
+  firstLoginPassword,
 } from '../controllers/auth.controller.js';
+import type { AuthRequest } from '../middlewares/auth.middleware.js';
 import prisma from '../utils/prisma.js';
 import { fakePrisma, type FakePrismaState } from './helpers/fakePrisma.js';
 import { fakeRes } from './helpers/fakeRes.js';
 import { fakeMailer, type FakeMailerOptions } from './helpers/fakeMailer.js';
 import { hashOtp } from '../utils/otp.js';
 import { JWT_REFRESH_SECRET } from '../configs/index.js';
+import { generateSetupToken } from '../utils/jwt.js';
 
 const STRONG_PASSWORD = 'Xk9$mQp2vNz7Lw4!'; // zxcvbn score 4 — clears the register() >=2 gate
 
@@ -442,6 +445,9 @@ describe('auth.controller refreshToken', () => {
     // string equality — this is the "token tidak cocok" integrity check.
     const mismatchedToken = jwt.sign({ id: 'attacker-id' }, JWT_REFRESH_SECRET);
     const originalFindUnique = prisma.refreshToken.findUnique;
+    const originalAuditCreate = prisma.auditLog.create;
+    const originalTransaction = prisma.$transaction;
+
     prisma.refreshToken.findUnique = (async () => ({
       id: 'token-1',
       token: mismatchedToken,
@@ -451,14 +457,29 @@ describe('auth.controller refreshToken', () => {
       user: { id: 'user-1', email: 'user@example.com', role: { name: 'user' } },
     })) as unknown as typeof prisma.refreshToken.findUnique;
 
+    // This branch records an auth.refresh_token_mismatch audit row via recordAuditLog, which
+    // wraps a single prisma.auditLog.create in prisma.$transaction([...]) — stub both so the
+    // test doesn't need a real DB.
+    let auditLogged: Record<string, unknown> | undefined;
+    prisma.auditLog.create = (async (args: { data: Record<string, unknown> }) => {
+      auditLogged = args.data;
+      return { id: 'audit-1', ...args.data };
+    }) as unknown as typeof prisma.auditLog.create;
+    prisma.$transaction = (async (ops: unknown[]) =>
+      Promise.all(ops)) as unknown as typeof prisma.$transaction;
+
     try {
       const res = fakeRes();
       await refreshToken({ cookies: { refreshToken: mismatchedToken } } as unknown as Request, res);
 
       assert.equal(res.status, 403);
       assert.deepEqual(res.body, { error: 'Token tidak cocok' });
+      assert.equal(auditLogged?.action, 'auth.refresh_token_mismatch');
+      assert.equal(auditLogged?.severity, 'critical');
     } finally {
       prisma.refreshToken.findUnique = originalFindUnique;
+      prisma.auditLog.create = originalAuditCreate;
+      prisma.$transaction = originalTransaction;
     }
   });
 });
@@ -485,11 +506,32 @@ describe('auth.controller logout', () => {
 
   it('revokes the stored token and clears the cookie when a refresh token cookie is present', async () => {
     const originalUpdateMany = prisma.refreshToken.updateMany;
+    const originalFindUnique = prisma.refreshToken.findUnique;
+    const originalAuditCreate = prisma.auditLog.create;
+    const originalTransaction = prisma.$transaction;
+
     let updateArgs: unknown;
     prisma.refreshToken.updateMany = (async (args: unknown) => {
       updateArgs = args;
       return { count: 1 };
     }) as unknown as typeof prisma.refreshToken.updateMany;
+
+    // logout() looks the token up (for the audit actor) before revoking it.
+    prisma.refreshToken.findUnique = (async () => ({
+      id: 'token-1',
+      token: 'some-token',
+      userId: 'user-1',
+      isRevoked: false,
+      user: { id: 'user-1', email: 'user@example.com', role: { name: 'user' } },
+    })) as unknown as typeof prisma.refreshToken.findUnique;
+
+    let auditLogged: Record<string, unknown> | undefined;
+    prisma.auditLog.create = (async (args: { data: Record<string, unknown> }) => {
+      auditLogged = args.data;
+      return { id: 'audit-1', ...args.data };
+    }) as unknown as typeof prisma.auditLog.create;
+    prisma.$transaction = (async (ops: unknown[]) =>
+      Promise.all(ops)) as unknown as typeof prisma.$transaction;
 
     try {
       const res = fakeRes();
@@ -501,6 +543,8 @@ describe('auth.controller logout', () => {
         where: { token: 'some-token' },
         data: { isRevoked: true },
       });
+      assert.equal(auditLogged?.action, 'auth.logout');
+      assert.equal(auditLogged?.actorId, 'user-1');
       const clearedRefreshCookie = res.clearedCookies.find((c) => c.name === 'refreshToken');
       assert.ok(clearedRefreshCookie, 'the refreshToken cookie should be cleared');
       assert.equal(
@@ -512,6 +556,9 @@ describe('auth.controller logout', () => {
       );
     } finally {
       prisma.refreshToken.updateMany = originalUpdateMany;
+      prisma.refreshToken.findUnique = originalFindUnique;
+      prisma.auditLog.create = originalAuditCreate;
+      prisma.$transaction = originalTransaction;
     }
   });
 });
@@ -521,7 +568,7 @@ describe('auth.controller getMe', () => {
     const res = fakeRes();
     const decodedUser = { id: 'user-1', email: 'user@example.com', role: 'user' };
 
-    await getMe({ user: decodedUser } as unknown as Request & { user: unknown }, res);
+    await getMe({ user: decodedUser } as unknown as AuthRequest, res as unknown as Response);
 
     assert.equal(res.status, 200);
     assert.deepEqual(res.body, {
@@ -531,11 +578,104 @@ describe('auth.controller getMe', () => {
   });
 });
 
+describe('auth.controller firstLoginPassword', () => {
+  it('rejects if setup token has already been used (requires_password_change is false)', async (t) => {
+    withDb(t, {
+      user: {
+        id: 'user-already-set',
+        email: 'set@example.com',
+        password_hash: 'somehash',
+        requires_password_change: false,
+        role: { name: 'user' },
+      },
+    });
+
+    const setupToken = generateSetupToken('user-already-set');
+    const res = fakeRes();
+    const req = {
+      body: {
+        setupToken,
+        newPassword: STRONG_PASSWORD,
+      },
+      headers: {},
+    } as unknown as Request;
+
+    await firstLoginPassword(req, res as unknown as Response);
+
+    assert.equal(res.status, 403);
+    assert.deepEqual(res.body, { error: 'Token setup tidak valid atau sudah digunakan.' });
+  });
+
+  it('rejects if user auth_provider is not local (e.g. Google OAuth account)', async (t) => {
+    withDb(t, {
+      user: {
+        id: 'google-user-1',
+        email: 'googleuser@example.com',
+        auth_provider: 'google',
+        provider_id: 'google-sub-123',
+        password_hash: null,
+        requires_password_change: true,
+        role: { name: 'user' },
+      },
+    });
+
+    const setupToken = generateSetupToken('google-user-1');
+    const res = fakeRes();
+    const req = {
+      body: {
+        setupToken,
+        newPassword: STRONG_PASSWORD,
+      },
+      headers: {},
+    } as unknown as Request;
+
+    await firstLoginPassword(req, res as unknown as Response);
+
+    assert.equal(res.status, 403);
+    assert.deepEqual(res.body, {
+      error:
+        'Akun ini menggunakan autentikasi pihak ketiga dan tidak dapat mengatur kata sandi lokal.',
+    });
+  });
+
+  it('updates password and issues session on valid first login setup', async (t) => {
+    const db = withDb(t, {
+      user: {
+        id: 'user-must-change',
+        email: 'mustchange@example.com',
+        auth_provider: 'local',
+        password_hash: 'initialhash',
+        requires_password_change: true,
+        role: { name: 'user' },
+      },
+    });
+
+    const setupToken = generateSetupToken('user-must-change');
+    const res = fakeRes();
+    const req = {
+      body: {
+        setupToken,
+        newPassword: STRONG_PASSWORD,
+      },
+      headers: {},
+    } as unknown as Request;
+
+    await firstLoginPassword(req, res as unknown as Response);
+
+    assert.equal(res.status, 200);
+    assert.equal(db.state.user?.requires_password_change, false);
+    assert.equal((res.body as { message: string }).message, 'Kata sandi berhasil diperbarui.');
+  });
+});
+
 describe('auth.controller getCsrfToken', () => {
   it('returns 200 with a csrfToken string', async () => {
     const res = fakeRes();
 
-    await getCsrfToken({ ip: '127.0.0.1', cookies: {} } as unknown as Request, res);
+    await getCsrfToken(
+      { ip: '127.0.0.1', cookies: {} } as unknown as Request,
+      res as unknown as Response,
+    );
 
     assert.equal(res.status, 200);
     assert.equal(typeof (res.body as { csrfToken: string }).csrfToken, 'string');

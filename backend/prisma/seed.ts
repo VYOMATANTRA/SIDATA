@@ -1,4 +1,5 @@
 import prisma from '../src/utils/prisma.js';
+import { AUDIT_RETENTION_KEYS } from '../src/services/settings.service.js';
 
 async function main() {
   console.log('Memulai proses seeding...');
@@ -19,7 +20,11 @@ async function main() {
     },
   });
 
+<<<<<<< HEAD
   // Seed sample RT Leaders (RT 01 - RT 05)
+=======
+  // Seed sample RT Leaders (RT 01 - RT 03)
+>>>>>>> main
   const rt1 = await prisma.rtLeader.upsert({
     where: { rtNumber: 1 },
     update: {},
@@ -119,6 +124,20 @@ async function main() {
     });
   }
 
+<<<<<<< HEAD
+=======
+  // Audit log retention defaults to "0" (keep forever) for every severity — a fresh install
+  // must never silently delete evidence; an admin has to opt into pruning via
+  // PATCH /api/settings/audit-retention. See docs/SPEC.md §3 and backend/scripts/prune-audit-logs.ts.
+  for (const key of Object.values(AUDIT_RETENTION_KEYS)) {
+    await prisma.systemSetting.upsert({
+      where: { key },
+      update: {},
+      create: { key, value: '0' },
+    });
+  }
+
+>>>>>>> main
   console.log('seeding selesai');
   console.log({ roleUser, roleAdmin, sampleRt: [rt1.rtNumber, rt2.rtNumber, rt3.rtNumber] });
 }

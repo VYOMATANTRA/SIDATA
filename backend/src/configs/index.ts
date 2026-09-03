@@ -1,12 +1,12 @@
 import dotenv from 'dotenv';
 import path from 'node:path';
 
-dotenv.config({ path: path.resolve(import.meta.dirname, '../../.env') });
+dotenv.config({ path: path.resolve(import.meta.dirname, '../../../.env') });
 
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) {
-    throw new Error(`Missing required environment variable: ${name}. See backend/.env.example.`);
+    throw new Error(`Missing required environment variable: ${name}. See root .env.example.`);
   }
   return value;
 }
@@ -76,3 +76,20 @@ export const WEATHER_STALE_RETRY_MS = optionalNumberEnv('WEATHER_STALE_RETRY_MS'
 
 // Max time to wait for a single BMKG API request before aborting. Optional — defaults to 10s.
 export const WEATHER_FETCH_TIMEOUT_MS = optionalNumberEnv('WEATHER_FETCH_TIMEOUT_MS', 10_000);
+
+// Express `trust proxy` setting (see app.ts) — how many reverse-proxy hops to trust for
+// X-Forwarded-* headers, needed for req.ip (and therefore rate-limiter keying, CSRF session
+// keying, and the ipAddress recorded on every audit log row) to reflect the real client behind
+// the Docker/VPS deploy target. Optional — Express's default (trust proxy disabled) applies
+// when unset, which is correct for local/non-proxied dev. Accepts 'true'/'false', a hop count
+// (e.g. '1'), or any string Express's own trust-proxy parser understands (e.g. 'loopback').
+export const TRUST_PROXY = process.env.TRUST_PROXY;
+
+// Privileged DB connection used ONLY by backend/scripts/ (retention pruning, the audit_logs
+// grant script) — never by the running server (src/app.ts never imports this). Keeping it
+// separate from DATABASE_URL is what makes the audit_logs no-DELETE grant meaningful: the app's
+// runtime connection physically cannot delete a row even if application code tried. Optional at
+// boot — only the pruning script needs it, and that script fails loudly rather than silently
+// falling back to DATABASE_URL if it's unset. See backend/scripts/prune-audit-logs.ts and
+// backend/scripts/grants/audit-logs-grants.sql.
+export const AUDIT_ADMIN_DATABASE_URL = process.env.AUDIT_ADMIN_DATABASE_URL;

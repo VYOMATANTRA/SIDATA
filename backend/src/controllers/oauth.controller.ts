@@ -16,6 +16,8 @@ import {
   GOOGLE_OAUTH_SUCCESS_REDIRECT,
   GOOGLE_OAUTH_FAILURE_REDIRECT,
 } from '../configs/index.js';
+import { recordAuditLog, AUDIT_ACTIONS } from '../services/audit.service.js';
+import { extractRequestContext } from '../utils/requestContext.js';
 
 function buildFailureRedirect(reason: string): string {
   const url = new URL(GOOGLE_OAUTH_FAILURE_REDIRECT);
@@ -63,6 +65,11 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
     const savedVerifier = decryptCookieValue(rawVerifierCookie);
 
     if (!savedState || !state || savedState !== state) {
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.AUTH_OAUTH_STATE_MISMATCH,
+        outcome: 'failure',
+        context: extractRequestContext(req),
+      });
       clearOAuthCookies(res);
       return res.redirect(buildFailureRedirect('invalid_state'));
     }
@@ -95,6 +102,11 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
       include: { role: true },
     });
 
+    if (user && user.deletedAt != null) {
+      clearOAuthCookies(res);
+      return res.redirect(buildFailureRedirect('account_deactivated'));
+    }
+
     // 2. Auto-link if user exists by email
     if (!user) {
       const existingUser = await prisma.user.findUnique({
@@ -103,6 +115,11 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
       });
 
       if (existingUser) {
+        if (existingUser.deletedAt != null) {
+          clearOAuthCookies(res);
+          return res.redirect(buildFailureRedirect('account_deactivated'));
+        }
+
         user = await prisma.user.update({
           where: { id: existingUser.id },
           data: {
@@ -110,17 +127,38 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
             provider_id: googleProfile.sub,
             email_verified: true,
             password_hash: null,
+            requires_password_change: false,
           },
           include: { role: true },
         });
 
+        // Highest-value audit event in the codebase: this silently retires a local password
+        // (nulls password_hash) and flips the account to Google-only. An admin should be able
+        // to see exactly when and for which account this happened.
+        await recordAuditLog({
+          action: AUDIT_ACTIONS.AUTH_GOOGLE_ACCOUNT_LINKED,
+          actor: { id: user.id, email: user.email, role: user.role.name },
+          target: { type: 'user', id: user.id, label: user.email },
+          metadata: { googleSub: googleProfile.sub },
+          context: extractRequestContext(req),
+        });
+
         // The local password is being retired in favor of Google sign-in — revoke any
-        // refresh tokens issued under it. Without this, a session obtained via a
-        // compromised password would keep working via /api/auth/refresh even after the
-        // account moves to Google-only auth.
+        // refresh tokens issued under it and clear requires_password_change so any
+        // pending first-login setup token cannot be used to reinstate a local password.
+        // Without this, a session obtained via a compromised password would keep working
+        // via /api/auth/refresh even after the account moves to Google-only auth.
         await prisma.refreshToken.updateMany({
           where: { userId: existingUser.id, isRevoked: false },
           data: { isRevoked: true },
+        });
+
+        await recordAuditLog({
+          action: AUDIT_ACTIONS.AUTH_SESSIONS_REVOKED,
+          actor: { id: user.id, email: user.email, role: user.role.name },
+          target: { type: 'user', id: user.id, label: user.email },
+          metadata: { reason: 'google_account_linked' },
+          context: extractRequestContext(req),
         });
       }
     }
@@ -148,6 +186,14 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
           },
           include: { role: true },
         });
+
+        await recordAuditLog({
+          action: AUDIT_ACTIONS.USER_CREATED_VIA_GOOGLE,
+          actor: { id: user.id, email: user.email, role: user.role.name },
+          target: { type: 'user', id: user.id, label: user.email },
+          metadata: { googleSub: googleProfile.sub },
+          context: extractRequestContext(req),
+        });
       } catch (error) {
         if (error instanceof Error && 'code' in error && error.code === 'P2002') {
           const createdUser = await prisma.user.findFirst({
@@ -161,6 +207,10 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
           });
 
           if (createdUser) {
+            if (createdUser.deletedAt != null) {
+              clearOAuthCookies(res);
+              return res.redirect(buildFailureRedirect('account_deactivated'));
+            }
             user = createdUser;
           } else {
             throw error;

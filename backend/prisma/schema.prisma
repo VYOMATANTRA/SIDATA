@@ -25,6 +25,8 @@ model User {
   auth_provider String         @default("local")
   provider_id   String?
   email_verified Boolean       @default(false)
+  requires_password_change Boolean @default(false)
+  deletedAt     DateTime?
   roleId        String
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -33,6 +35,10 @@ model User {
   RefreshTokens RefreshToken[]
   EmailOtps     EmailOtp[]
 
+  AuditLogsAsActor       AuditLog[]      @relation("AuditLogActor")
+  AuditLogsAcknowledged  AuditLog[]      @relation("AuditLogAcknowledgedBy")
+  SystemSettingsUpdated  SystemSetting[] @relation("SystemSettingUpdatedBy")
+
   @@index([auth_provider, provider_id])
   @@map("users")
 }
@@ -40,7 +46,7 @@ model User {
 model RefreshToken {
   id         Int      @id @default(autoincrement())
   userId     String
-  token      String   @unique
+  token      String   @unique @db.VarChar(512)
   expiresAt  DateTime
   isRevoked  Boolean  @default(false)
   createdAt  DateTime @default(now())
@@ -91,7 +97,10 @@ model SpatialPointRt {
   rtNumber Int          @map("rt_number")
 
   point    SpatialPoint @relation(fields: [pointId], references: [id], onDelete: Cascade)
+<<<<<<< HEAD
   rtLeader RtLeader?    @relation(fields: [rtNumber], references: [rtNumber], onDelete: Cascade)
+=======
+>>>>>>> main
 
   @@unique([pointId, rtNumber])
   @@index([rtNumber])
@@ -100,6 +109,7 @@ model SpatialPointRt {
 }
 
 model RtLeader {
+<<<<<<< HEAD
   rtNumber        Int              @id @map("rt_number")
   name            String
   phone           String
@@ -111,4 +121,67 @@ model RtLeader {
   spatialPoints   SpatialPointRt[]
 
   @@map("rt_leaders")
+=======
+  rtNumber        Int      @id @map("rt_number")
+  name            String
+  phone           String
+  phoneIsWhatsapp Boolean  @default(true) @map("phone_is_whatsapp")
+  alamat          String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("rt_leaders")
+}
+
+/// Append-only audit trail. Rows are inserted by the app's runtime DB user and never updated
+/// or deleted by it, other than the two acknowledge columns below — see backend/scripts/grants/
+/// audit-logs-grants.sql for the DB-level enforcement and src/utils/prisma.ts for the app-level
+/// guard. targetId/targetType are intentionally not a foreign key: this table is also the future
+/// home for CMS content-edit logging (SPEC.md §7 "override logs"), whose tables don't exist yet.
+model AuditLog {
+  id        String   @id @default(uuid())
+  action    String
+  outcome   String   @default("success")
+  severity  String   @default("info")
+
+  acknowledgedAt   DateTime?
+  acknowledgedById String?
+  acknowledgedBy   User?     @relation("AuditLogAcknowledgedBy", fields: [acknowledgedById], references: [id], onDelete: SetNull)
+
+  actorId    String?
+  actor      User?   @relation("AuditLogActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorEmail String?
+  actorRole  String?
+
+  targetType  String?
+  targetId    String?
+  targetLabel String?
+
+  metadata  Json?
+  ipAddress String? @db.VarChar(45)
+  userAgent String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId])
+  @@index([action, createdAt])
+  @@index([createdAt])
+  @@index([severity, acknowledgedAt])
+  @@map("audit_logs")
+}
+
+/// Generic key/value settings store. First use is admin-configurable audit log retention
+/// (see backend/src/services/settings.service.ts); the CMS work in SPEC.md §7 is expected
+/// to want a home for its own settings here too.
+model SystemSetting {
+  key   String @id @map("setting_key")
+  value String
+
+  updatedById String?
+  updatedBy   User?   @relation("SystemSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_settings")
+>>>>>>> main
 }

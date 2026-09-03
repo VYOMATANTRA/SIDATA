@@ -19,7 +19,7 @@ describe('sendOtpEmail environment-gated logging', () => {
     globalThis.fetch = (async () => ({
       ok: false,
       json: async () => ({ error: 'API Key Invalid' }),
-    })) as typeof fetch;
+    })) as unknown as typeof fetch;
 
     try {
       process.env.NODE_ENV = 'production';
@@ -60,7 +60,7 @@ describe('sendOtpEmail environment-gated logging', () => {
     globalThis.fetch = (async () => ({
       ok: false,
       json: async () => ({ error: 'Simulated dev failure' }),
-    })) as typeof fetch;
+    })) as unknown as typeof fetch;
 
     try {
       process.env.NODE_ENV = 'development';

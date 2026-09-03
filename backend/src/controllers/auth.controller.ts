@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../utils/prisma.js';
-import { generateAccessToken } from '../utils/jwt.js';
+import { generateAccessToken, generateSetupToken } from '../utils/jwt.js';
 import {
   issueSession,
   REFRESH_TOKEN_COOKIE_NAME,
@@ -11,10 +11,12 @@ import jwt from 'jsonwebtoken';
 import type { AuthRequest } from '../middlewares/auth.middleware.js';
 import { generateCsrfToken } from '../middlewares/csrf.middleware.js';
 import zxcvbn from 'zxcvbn';
-import { JWT_REFRESH_SECRET } from '../configs/index.js';
+import { JWT_SECRET, JWT_REFRESH_SECRET } from '../configs/index.js';
 import { normalizeEmail } from '../utils/validation.js';
 import { generate6DigitOtp, hashOtp, getOtpExpiration } from '../utils/otp.js';
 import { sendOtpEmail } from '../utils/mailer.js';
+import { recordAuditLog, AUDIT_ACTIONS } from '../services/audit.service.js';
+import { extractRequestContext } from '../utils/requestContext.js';
 
 export const register = async (req: Request, res: Response): Promise<Response | void> => {
   try {
@@ -55,6 +57,12 @@ export const register = async (req: Request, res: Response): Promise<Response | 
     });
 
     if (existingUser) {
+      if (existingUser.deletedAt != null) {
+        return res.status(409).json({
+          error:
+            'Akun dengan email ini telah dinonaktifkan. Silakan hubungi Administrator untuk mengaktifkan kembali akun Anda.',
+        });
+      }
       return res.status(409).json({ error: 'Email sudah terdaftar' });
     }
 
@@ -75,6 +83,7 @@ export const register = async (req: Request, res: Response): Promise<Response | 
         password_hash: passwordHash,
         auth_provider: 'local',
         email_verified: false,
+        requires_password_change: false,
         roleId: userRole.id,
       },
       select: {
@@ -148,12 +157,26 @@ export const login = async (req: Request, res: Response): Promise<Response | voi
       include: { role: true },
     });
 
-    if (!user || !user.password_hash) {
+    if (!user || user.deletedAt != null || !user.password_hash) {
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.AUTH_LOGIN_FAILED,
+        target: { type: 'user', label: normalizedEmail },
+        outcome: 'failure',
+        metadata: { reason: 'invalid_credentials' },
+        context: extractRequestContext(req),
+      });
       return res.status(401).json({ error: 'Kredensial tidak valid' });
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
     if (!isPasswordValid) {
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.AUTH_LOGIN_FAILED,
+        target: { type: 'user', id: user.id, label: user.email },
+        outcome: 'failure',
+        metadata: { reason: 'invalid_credentials' },
+        context: extractRequestContext(req),
+      });
       return res.status(401).json({ error: 'Kredensial tidak valid' });
     }
 
@@ -165,6 +188,23 @@ export const login = async (req: Request, res: Response): Promise<Response | voi
         email: user.email,
       });
     }
+
+    if (user.requires_password_change) {
+      const setupToken = generateSetupToken(user.id);
+      return res.status(200).json({
+        status: 'REQUIRES_PASSWORD_CHANGE',
+        mustChangePassword: true,
+        setupToken,
+        message: 'Anda harus mengganti kata sandi pada login pertama.',
+      });
+    }
+
+    await recordAuditLog({
+      action: AUDIT_ACTIONS.AUTH_LOGIN,
+      actor: { id: user.id, email: user.email, role: user.role.name },
+      target: { type: 'user', id: user.id, label: user.email },
+      context: extractRequestContext(req),
+    });
 
     const { accessToken } = await issueSession(res, {
       id: user.id,
@@ -183,6 +223,111 @@ export const login = async (req: Request, res: Response): Promise<Response | voi
     });
   } catch (error) {
     console.error('Error saat login:', error);
+    return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
+  }
+};
+
+export const firstLoginPassword = async (req: Request, res: Response): Promise<Response | void> => {
+  try {
+    const { setupToken: bodySetupToken, newPassword } = req.body;
+    const authHeader = req.headers.authorization;
+    const bearerToken =
+      authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+    const setupToken = bodySetupToken || bearerToken;
+
+    if (!setupToken) {
+      return res.status(401).json({ error: 'Token setup tidak ditemukan.' });
+    }
+
+    if (!newPassword) {
+      return res.status(400).json({ error: 'Kata sandi baru wajib diisi.' });
+    }
+
+    let decoded: jwt.JwtPayload;
+    try {
+      const verified = jwt.verify(setupToken, JWT_SECRET);
+      if (typeof verified === 'string' || !verified) {
+        return res.status(403).json({ error: 'Token setup tidak valid.' });
+      }
+      decoded = verified;
+    } catch {
+      return res.status(403).json({ error: 'Token setup tidak valid atau sudah kedaluwarsa.' });
+    }
+
+    if (!decoded || decoded.scope !== 'first_login_only' || typeof decoded.id !== 'string') {
+      return res.status(403).json({ error: 'Token setup tidak valid.' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+      include: { role: true },
+    });
+
+    if (!user || user.deletedAt != null) {
+      return res.status(404).json({ error: 'Pengguna tidak ditemukan atau telah dinonaktifkan.' });
+    }
+
+    if (user.auth_provider !== 'local') {
+      return res.status(403).json({
+        error:
+          'Akun ini menggunakan autentikasi pihak ketiga dan tidak dapat mengatur kata sandi lokal.',
+      });
+    }
+
+    if (!user.requires_password_change) {
+      return res.status(403).json({ error: 'Token setup tidak valid atau sudah digunakan.' });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'Password minimal harus 8 karakter (Standar NIST).' });
+    }
+    if (newPassword.length > 128) {
+      return res.status(400).json({ error: 'Password terlalu panjang (maksimal 128 karakter).' });
+    }
+
+    const passwordEvaluation = zxcvbn(newPassword, [user.email]);
+    if (passwordEvaluation.score < 2) {
+      return res.status(400).json({
+        error: 'Password terlalu lemah atau umum digunakan.',
+        suggestions: passwordEvaluation.feedback.suggestions,
+      });
+    }
+
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(newPassword, saltRounds);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password_hash: passwordHash,
+        requires_password_change: false,
+      },
+    });
+
+    await recordAuditLog({
+      action: AUDIT_ACTIONS.AUTH_FIRST_LOGIN_PASSWORD_SET,
+      actor: { id: user.id, email: user.email, role: user.role.name },
+      target: { type: 'user', id: user.id, label: user.email },
+      context: extractRequestContext(req),
+    });
+
+    const { accessToken } = await issueSession(res, {
+      id: user.id,
+      email: user.email,
+      role: user.role.name,
+    });
+
+    return res.status(200).json({
+      message: 'Kata sandi berhasil diperbarui.',
+      accessToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role.name,
+      },
+    });
+  } catch (error) {
+    console.error('Error saat pembaruan kata sandi login pertama:', error);
     return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
   }
 };
@@ -210,7 +355,7 @@ export const refreshToken = async (req: Request, res: Response): Promise<Respons
       return res.status(403).json({ error: 'Refresh token tidak valid' });
     }
 
-    if (existingToken.isRevoked) {
+    if (existingToken.isRevoked || existingToken.user.deletedAt != null) {
       return res.status(403).json({ error: 'Refresh token sudah dicabut' });
     }
 
@@ -227,6 +372,13 @@ export const refreshToken = async (req: Request, res: Response): Promise<Respons
     const payload = jwt.verify(token, JWT_REFRESH_SECRET) as { id: string };
 
     if (!payload || payload.id !== existingToken.userId) {
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.AUTH_REFRESH_TOKEN_MISMATCH,
+        target: { type: 'user', id: existingToken.userId, label: existingToken.user.email },
+        outcome: 'failure',
+        metadata: { refreshTokenId: existingToken.id },
+        context: extractRequestContext(req),
+      });
       return res.status(403).json({ error: 'Token tidak cocok' });
     }
 
@@ -259,12 +411,32 @@ export const logout = async (req: Request, res: Response): Promise<Response | vo
       return res.status(204).send(); // 204 No Content
     }
 
+    // Looked up before revoking purely to attach an actor to the audit row below — updateMany
+    // itself doesn't return the affected row's data.
+    const existingToken = await prisma.refreshToken.findUnique({
+      where: { token },
+      include: { user: { include: { role: true } } },
+    });
+
     await prisma.refreshToken.updateMany({
       where: { token },
       data: { isRevoked: true },
     });
 
     res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, REFRESH_TOKEN_COOKIE_OPTIONS);
+
+    if (existingToken) {
+      await recordAuditLog({
+        action: AUDIT_ACTIONS.AUTH_LOGOUT,
+        actor: {
+          id: existingToken.userId,
+          email: existingToken.user.email,
+          role: existingToken.user.role.name,
+        },
+        target: { type: 'user', id: existingToken.userId, label: existingToken.user.email },
+        context: extractRequestContext(req),
+      });
+    }
 
     return res.status(200).json({ message: 'Logout berhasil' });
   } catch (error) {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import type { Request, Response } from 'express';
 import {
   listPoints,
@@ -12,6 +12,18 @@ import prisma from '../utils/prisma.js';
 import { fakeRes } from './helpers/fakeRes.js';
 
 describe('maps.controller', () => {
+  let originalGlobalCoverageFindMany: typeof prisma.spatialPointRt.findMany;
+
+  beforeEach(() => {
+    originalGlobalCoverageFindMany = prisma.spatialPointRt.findMany;
+    prisma.spatialPointRt.findMany =
+      (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
+  });
+
+  afterEach(() => {
+    prisma.spatialPointRt.findMany = originalGlobalCoverageFindMany;
+  });
+
   const sampleKetuaRtPoint = {
     id: 'point-rt-1',
     name: 'Pos RT 01',
@@ -24,13 +36,6 @@ describe('maps.controller', () => {
     rtCoverages: [
       {
         rtNumber: 1,
-        rtLeader: {
-          rtNumber: 1,
-          name: 'Bambang Supriyanto',
-          phone: '081234567801',
-          phoneIsWhatsapp: true,
-          alamat: 'Jl. Mulawarman No. 12',
-        },
       },
     ],
   };
@@ -44,20 +49,32 @@ describe('maps.controller', () => {
     metadata: { jadwal: 'Minggu 09:00' },
     createdAt: new Date('2026-08-01T00:00:00Z'),
     updatedAt: new Date('2026-08-01T00:00:00Z'),
-    rtCoverages: [
-      { rtNumber: 1, rtLeader: null },
-      { rtNumber: 2, rtLeader: null },
-      { rtNumber: 3, rtLeader: null },
-    ],
+    rtCoverages: [{ rtNumber: 1 }, { rtNumber: 2 }, { rtNumber: 3 }],
+  };
+
+  const sampleRtLeader1 = {
+    rtNumber: 1,
+    name: 'Bambang Supriyanto',
+    phone: '081234567801',
+    phoneIsWhatsapp: true,
+    alamat: 'Jl. Mulawarman No. 12',
+    createdAt: new Date('2026-08-01T00:00:00Z'),
+    updatedAt: new Date('2026-08-01T00:00:00Z'),
   };
 
   describe('listPoints', () => {
-    it('returns all points with standard JSON structure', async () => {
+    it('returns all points with standard JSON structure and isolates rtLeader to ketua_rt', async () => {
       const originalFindMany = prisma.spatialPoint.findMany;
+      const originalLeaderFindMany = prisma.rtLeader.findMany;
+
       prisma.spatialPoint.findMany = (async () => [
         sampleKetuaRtPoint,
         sampleBankSampahPoint,
       ]) as unknown as typeof prisma.spatialPoint.findMany;
+
+      prisma.rtLeader.findMany = (async () => [
+        sampleRtLeader1,
+      ]) as unknown as typeof prisma.rtLeader.findMany;
 
       try {
         const req = { query: {} } as unknown as Request;
@@ -66,22 +83,212 @@ describe('maps.controller', () => {
         await listPoints(req, res as unknown as Response);
 
         assert.equal(res.status, 200);
-        const body = res.body as { points: Array<{ name: string; rts: number[] }>; total: number };
+        const body = res.body as {
+          points: Array<{
+            name: string;
+            rts: number[];
+            rtLeader: { name: string; rtNumber: number } | null;
+          }>;
+          total: number;
+        };
         assert.equal(body.total, 2);
         assert.equal(body.points[0]?.name, 'Pos RT 01');
         assert.deepEqual(body.points[0]?.rts, [1]);
+        assert.equal(body.points[0]?.rtLeader?.name, 'Bambang Supriyanto');
+
+        // Multi-RT bank_sampah points must have rtLeader: null even if rtCoverages has leaders
         assert.equal(body.points[1]?.name, 'Bank Sampah Sejahtera');
         assert.deepEqual(body.points[1]?.rts, [1, 2, 3]);
+        assert.equal(body.points[1]?.rtLeader, null);
       } finally {
         prisma.spatialPoint.findMany = originalFindMany;
+        prisma.rtLeader.findMany = originalLeaderFindMany;
+      }
+    });
+
+    it('returns rtLeader: null and integrityWarning when ketua_rt point references an RT without an existing leader', async () => {
+      const originalFindMany = prisma.spatialPoint.findMany;
+      const originalLeaderFindMany = prisma.rtLeader.findMany;
+
+      prisma.spatialPoint.findMany = (async () => [
+        sampleKetuaRtPoint,
+      ]) as unknown as typeof prisma.spatialPoint.findMany;
+
+      // No leader exists for RT 1
+      prisma.rtLeader.findMany = (async () => []) as unknown as typeof prisma.rtLeader.findMany;
+
+      try {
+        const req = { query: {} } as unknown as Request;
+        const res = fakeRes();
+
+        await listPoints(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        const body = res.body as {
+          points: Array<{
+            name: string;
+            rts: number[];
+            rtLeader: unknown;
+            integrityWarning?: string;
+          }>;
+          total: number;
+        };
+        assert.equal(body.total, 1);
+        assert.equal(body.points[0]?.name, 'Pos RT 01');
+        assert.equal(body.points[0]?.rtLeader, null);
+        assert.ok(
+          body.points[0]?.integrityWarning?.includes('No Ketua RT leader record found for RT 1'),
+        );
+      } finally {
+        prisma.spatialPoint.findMany = originalFindMany;
+        prisma.rtLeader.findMany = originalLeaderFindMany;
+      }
+    });
+
+    it('returns rtLeader: null and integrityWarning when a ketua_rt point has multiple RT coverages', async () => {
+      const originalFindMany = prisma.spatialPoint.findMany;
+      const originalLeaderFindMany = prisma.rtLeader.findMany;
+
+      // ketua_rt point erroneously linked to two RTs — violates SPEC.md §7
+      const multiRtKetuaRtPoint = {
+        ...sampleKetuaRtPoint,
+        rtCoverages: [{ rtNumber: 4 }, { rtNumber: 7 }],
+      };
+
+      prisma.spatialPoint.findMany = (async () => [
+        multiRtKetuaRtPoint,
+      ]) as unknown as typeof prisma.spatialPoint.findMany;
+
+      prisma.rtLeader.findMany = (async () => [
+        sampleRtLeader1,
+      ]) as unknown as typeof prisma.rtLeader.findMany;
+
+      try {
+        const req = { query: {} } as unknown as Request;
+        const res = fakeRes();
+
+        await listPoints(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        const body = res.body as {
+          points: Array<{
+            name: string;
+            rts: number[];
+            rtLeader: unknown;
+            integrityWarning?: string;
+          }>;
+          total: number;
+        };
+        assert.equal(body.total, 1);
+        assert.deepEqual(body.points[0]?.rts, [4, 7]);
+        // Must not silently return only RT 4's leader
+        assert.equal(body.points[0]?.rtLeader, null);
+        // Must surface the anomaly to API consumers
+        assert.ok(
+          typeof body.points[0]?.integrityWarning === 'string' &&
+            body.points[0].integrityWarning.length > 0,
+          'integrityWarning should be a non-empty string',
+        );
+      } finally {
+        prisma.spatialPoint.findMany = originalFindMany;
+        prisma.rtLeader.findMany = originalLeaderFindMany;
+      }
+    });
+
+    it('returns rtLeader: null and integrityWarning when two different ketua_rt points share the same RT number (cross-point duplicate)', async () => {
+      const originalFindMany = prisma.spatialPoint.findMany;
+      const originalLeaderFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
+
+      const pointA = {
+        id: 'point-rt-1a',
+        name: 'Pos RT 01 Utara',
+        type: 'ketua_rt' as const,
+        latitude: -1.2235,
+        longitude: 116.9521,
+        metadata: null,
+        createdAt: new Date('2026-08-01T00:00:00Z'),
+        updatedAt: new Date('2026-08-01T00:00:00Z'),
+        rtCoverages: [{ rtNumber: 1 }],
+      };
+
+      const pointB = {
+        id: 'point-rt-1b',
+        name: 'Pos RT 01 Selatan',
+        type: 'ketua_rt' as const,
+        latitude: -1.224,
+        longitude: 116.9525,
+        metadata: null,
+        createdAt: new Date('2026-08-01T00:00:00Z'),
+        updatedAt: new Date('2026-08-01T00:00:00Z'),
+        rtCoverages: [{ rtNumber: 1 }],
+      };
+
+      prisma.spatialPoint.findMany = (async () => [
+        pointA,
+        pointB,
+      ]) as unknown as typeof prisma.spatialPoint.findMany;
+
+      prisma.spatialPointRt.findMany = (async () => [
+        { pointId: 'point-rt-1a', rtNumber: 1 },
+        { pointId: 'point-rt-1b', rtNumber: 1 },
+      ]) as unknown as typeof prisma.spatialPointRt.findMany;
+
+      let leaderFindManyCalled = false;
+      prisma.rtLeader.findMany = (async () => {
+        leaderFindManyCalled = true;
+        return [sampleRtLeader1];
+      }) as unknown as typeof prisma.rtLeader.findMany;
+
+      try {
+        const req = { query: {} } as unknown as Request;
+        const res = fakeRes();
+
+        await listPoints(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        const body = res.body as {
+          points: Array<{
+            id: string;
+            name: string;
+            rtLeader: unknown;
+            integrityWarning?: string;
+          }>;
+          total: number;
+        };
+
+        assert.equal(body.total, 2);
+        assert.equal(body.points[0]?.rtLeader, null);
+        assert.ok(
+          body.points[0]?.integrityWarning?.includes(
+            'Multiple ketua_rt points are assigned to RT 1',
+          ),
+        );
+        assert.equal(body.points[1]?.rtLeader, null);
+        assert.ok(
+          body.points[1]?.integrityWarning?.includes(
+            'Multiple ketua_rt points are assigned to RT 1',
+          ),
+        );
+        assert.equal(leaderFindManyCalled, false);
+      } finally {
+        prisma.spatialPoint.findMany = originalFindMany;
+        prisma.rtLeader.findMany = originalLeaderFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
       }
     });
 
     it('returns GeoJSON FeatureCollection when format=geojson', async () => {
       const originalFindMany = prisma.spatialPoint.findMany;
+      const originalLeaderFindMany = prisma.rtLeader.findMany;
+
       prisma.spatialPoint.findMany = (async () => [
         sampleKetuaRtPoint,
       ]) as unknown as typeof prisma.spatialPoint.findMany;
+
+      prisma.rtLeader.findMany = (async () => [
+        sampleRtLeader1,
+      ]) as unknown as typeof prisma.rtLeader.findMany;
 
       try {
         const req = { query: { format: 'geojson' } } as unknown as Request;
@@ -108,7 +315,61 @@ describe('maps.controller', () => {
         assert.equal(body.features[0]?.properties.name, 'Pos RT 01');
       } finally {
         prisma.spatialPoint.findMany = originalFindMany;
+        prisma.rtLeader.findMany = originalLeaderFindMany;
       }
+    });
+
+    it('returns standard JSON structure when format=json is explicitly provided', async () => {
+      const originalFindMany = prisma.spatialPoint.findMany;
+      const originalLeaderFindMany = prisma.rtLeader.findMany;
+
+      prisma.spatialPoint.findMany = (async () => [
+        sampleKetuaRtPoint,
+      ]) as unknown as typeof prisma.spatialPoint.findMany;
+
+      prisma.rtLeader.findMany = (async () => [
+        sampleRtLeader1,
+      ]) as unknown as typeof prisma.rtLeader.findMany;
+
+      try {
+        const req = { query: { format: 'json' } } as unknown as Request;
+        const res = fakeRes();
+
+        await listPoints(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        const body = res.body as {
+          points: Array<{ name: string }>;
+          total: number;
+        };
+        assert.equal(body.total, 1);
+        assert.equal(body.points[0]?.name, 'Pos RT 01');
+      } finally {
+        prisma.spatialPoint.findMany = originalFindMany;
+        prisma.rtLeader.findMany = originalLeaderFindMany;
+      }
+    });
+
+    it('rejects invalid format with 400', async () => {
+      const res1 = fakeRes();
+      await listPoints(
+        { query: { format: 'invalid_format' } } as unknown as Request,
+        res1 as unknown as Response,
+      );
+      assert.equal(res1.status, 400);
+      assert.deepEqual(res1.body, {
+        error: 'Format tidak valid. Pilihan yang valid: geojson, json',
+      });
+
+      const res2 = fakeRes();
+      await listPoints(
+        { query: { format: 'geoJson' } } as unknown as Request,
+        res2 as unknown as Response,
+      );
+      assert.equal(res2.status, 400);
+      assert.deepEqual(res2.body, {
+        error: 'Format tidak valid. Pilihan yang valid: geojson, json',
+      });
     });
 
     it('filters points by type and handles invalid type with 400', async () => {
@@ -120,11 +381,13 @@ describe('maps.controller', () => {
       assert.equal(res1.status, 400);
 
       const originalFindMany = prisma.spatialPoint.findMany;
+      const originalLeaderFindMany = prisma.rtLeader.findMany;
       let capturedWhere: Record<string, unknown> | undefined;
       prisma.spatialPoint.findMany = (async (args: { where: Record<string, unknown> }) => {
         capturedWhere = args.where;
         return [sampleBankSampahPoint];
       }) as unknown as typeof prisma.spatialPoint.findMany;
+      prisma.rtLeader.findMany = (async () => []) as unknown as typeof prisma.rtLeader.findMany;
 
       try {
         const res2 = fakeRes();
@@ -136,6 +399,7 @@ describe('maps.controller', () => {
         assert.equal(capturedWhere?.type, 'bank_sampah');
       } finally {
         prisma.spatialPoint.findMany = originalFindMany;
+        prisma.rtLeader.findMany = originalLeaderFindMany;
       }
     });
 
@@ -147,7 +411,34 @@ describe('maps.controller', () => {
       );
       assert.equal(res1.status, 400);
 
+      // Trailing non-digit characters must be rejected with 400 instead of partially parsing leading digits
+      const resTrailing = fakeRes();
+      await listPoints(
+        { query: { rt: '5abc' } } as unknown as Request,
+        resTrailing as unknown as Response,
+      );
+      assert.equal(resTrailing.status, 400);
+      assert.deepEqual(resTrailing.body, { error: 'Nomor RT harus berupa angka positif' });
+
+      // Overflows exceeding MAX_MYSQL_INT (2147483647) must be rejected with 400
+      const resOverflow = fakeRes();
+      await listPoints(
+        { query: { rt: '99999999999999999999' } } as unknown as Request,
+        resOverflow as unknown as Response,
+      );
+      assert.equal(resOverflow.status, 400);
+      assert.deepEqual(resOverflow.body, { error: 'Nomor RT harus berupa angka positif' });
+
+      const resOverflow2 = fakeRes();
+      await listPoints(
+        { query: { rt: '2147483648' } } as unknown as Request,
+        resOverflow2 as unknown as Response,
+      );
+      assert.equal(resOverflow2.status, 400);
+      assert.deepEqual(resOverflow2.body, { error: 'Nomor RT harus berupa angka positif' });
+
       const originalFindMany = prisma.spatialPoint.findMany;
+      const originalLeaderFindMany = prisma.rtLeader.findMany;
       let capturedWhere: { rtCoverages?: { some: { rtNumber: number } } } | undefined;
       prisma.spatialPoint.findMany = (async (args: {
         where: { rtCoverages?: { some: { rtNumber: number } } };
@@ -155,6 +446,9 @@ describe('maps.controller', () => {
         capturedWhere = args.where;
         return [sampleKetuaRtPoint];
       }) as unknown as typeof prisma.spatialPoint.findMany;
+      prisma.rtLeader.findMany = (async () => [
+        sampleRtLeader1,
+      ]) as unknown as typeof prisma.rtLeader.findMany;
 
       try {
         const res2 = fakeRes();
@@ -163,28 +457,83 @@ describe('maps.controller', () => {
         assert.equal(capturedWhere?.rtCoverages?.some?.rtNumber, 1);
       } finally {
         prisma.spatialPoint.findMany = originalFindMany;
+        prisma.rtLeader.findMany = originalLeaderFindMany;
       }
+    });
+
+    it('returns 400 when type is sent as a repeated query key (array)', async () => {
+      const res = fakeRes();
+      // Express parses ?type=ketua_rt&type=bogus as an array
+      await listPoints(
+        { query: { type: ['ketua_rt', 'bogus'] } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+    });
+
+    it('returns 400 when rt is sent as a repeated query key (array) in listPoints', async () => {
+      const res = fakeRes();
+      await listPoints(
+        { query: { rt: ['1', '2'] } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, { error: 'Nomor RT harus berupa angka positif' });
+    });
+
+    it('returns 400 when format is sent as a repeated query key (array)', async () => {
+      const res = fakeRes();
+      await listPoints(
+        { query: { format: ['geojson', 'json'] } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
     });
   });
 
   describe('getPoint', () => {
-    it('returns a single spatial point by ID', async () => {
+    it('returns a single spatial point by ID with rtLeader for ketua_rt and null for multi-rt', async () => {
       const originalFindUnique = prisma.spatialPoint.findUnique;
-      prisma.spatialPoint.findUnique = (async () =>
-        sampleKetuaRtPoint) as unknown as typeof prisma.spatialPoint.findUnique;
+      const originalLeaderFindUnique = prisma.rtLeader.findUnique;
 
       try {
-        const req = { params: { id: 'point-rt-1' } } as unknown as Request;
-        const res = fakeRes();
+        // 1. Ketua RT point returns rtLeader
+        prisma.spatialPoint.findUnique = (async () =>
+          sampleKetuaRtPoint) as unknown as typeof prisma.spatialPoint.findUnique;
+        prisma.rtLeader.findUnique = (async () =>
+          sampleRtLeader1) as unknown as typeof prisma.rtLeader.findUnique;
 
-        await getPoint(req, res as unknown as Response);
+        const req1 = { params: { id: 'point-rt-1' } } as unknown as Request;
+        const res1 = fakeRes();
 
-        assert.equal(res.status, 200);
-        const body = res.body as { point: { id: string; name: string } };
-        assert.equal(body.point.id, 'point-rt-1');
-        assert.equal(body.point.name, 'Pos RT 01');
+        await getPoint(req1, res1 as unknown as Response);
+
+        assert.equal(res1.status, 200);
+        const body1 = res1.body as {
+          point: { id: string; name: string; rtLeader: { name: string } | null };
+        };
+        assert.equal(body1.point.id, 'point-rt-1');
+        assert.equal(body1.point.name, 'Pos RT 01');
+        assert.equal(body1.point.rtLeader?.name, 'Bambang Supriyanto');
+
+        // 2. Bank Sampah point returns rtLeader: null
+        prisma.spatialPoint.findUnique = (async () =>
+          sampleBankSampahPoint) as unknown as typeof prisma.spatialPoint.findUnique;
+
+        const req2 = { params: { id: 'point-bs-1' } } as unknown as Request;
+        const res2 = fakeRes();
+
+        await getPoint(req2, res2 as unknown as Response);
+
+        assert.equal(res2.status, 200);
+        const body2 = res2.body as {
+          point: { id: string; name: string; rtLeader: unknown };
+        };
+        assert.equal(body2.point.id, 'point-bs-1');
+        assert.equal(body2.point.rtLeader, null);
       } finally {
         prisma.spatialPoint.findUnique = originalFindUnique;
+        prisma.rtLeader.findUnique = originalLeaderFindUnique;
       }
     });
 
@@ -205,12 +554,149 @@ describe('maps.controller', () => {
         prisma.spatialPoint.findUnique = originalFindUnique;
       }
     });
+
+    it('returns rtLeader: null and integrityWarning via getPoint when a ketua_rt point has multiple RT coverages', async () => {
+      const originalFindUnique = prisma.spatialPoint.findUnique;
+      const originalLeaderFindUnique = prisma.rtLeader.findUnique;
+
+      // ketua_rt point erroneously linked to two RTs — violates SPEC.md §7
+      const multiRtKetuaRtPoint = {
+        ...sampleKetuaRtPoint,
+        rtCoverages: [{ rtNumber: 4 }, { rtNumber: 7 }],
+      };
+
+      prisma.spatialPoint.findUnique = (async () =>
+        multiRtKetuaRtPoint) as unknown as typeof prisma.spatialPoint.findUnique;
+
+      // Should not be called — guard fires before the DB lookup
+      let leaderLookupCalled = false;
+      prisma.rtLeader.findUnique = (async () => {
+        leaderLookupCalled = true;
+        return sampleRtLeader1;
+      }) as unknown as typeof prisma.rtLeader.findUnique;
+
+      try {
+        const req = { params: { id: 'point-rt-1' } } as unknown as Request;
+        const res = fakeRes();
+
+        await getPoint(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        const body = res.body as {
+          point: {
+            id: string;
+            rts: number[];
+            rtLeader: unknown;
+            integrityWarning?: string;
+          };
+        };
+        assert.deepEqual(body.point.rts, [4, 7]);
+        // Must not silently return only RT 4's leader
+        assert.equal(body.point.rtLeader, null);
+        // Must surface the anomaly
+        assert.ok(
+          typeof body.point.integrityWarning === 'string' && body.point.integrityWarning.length > 0,
+          'integrityWarning should be a non-empty string',
+        );
+        // Leader DB lookup must be skipped — no point fetching data that won't be used
+        assert.equal(leaderLookupCalled, false);
+      } finally {
+        prisma.spatialPoint.findUnique = originalFindUnique;
+        prisma.rtLeader.findUnique = originalLeaderFindUnique;
+      }
+    });
+
+    it('returns rtLeader: null and integrityWarning via getPoint when another ketua_rt point claims the same RT', async () => {
+      const originalFindUnique = prisma.spatialPoint.findUnique;
+      const originalLeaderFindUnique = prisma.rtLeader.findUnique;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
+
+      prisma.spatialPoint.findUnique = (async () =>
+        sampleKetuaRtPoint) as unknown as typeof prisma.spatialPoint.findUnique;
+
+      // Another ketua_rt point also claims RT 1
+      prisma.spatialPointRt.findMany = (async () => [
+        {
+          pointId: 'point-rt-1-duplicate',
+          point: { id: 'point-rt-1-duplicate', _count: { rtCoverages: 1 } },
+        },
+      ]) as unknown as typeof prisma.spatialPointRt.findMany;
+
+      let leaderLookupCalled = false;
+      prisma.rtLeader.findUnique = (async () => {
+        leaderLookupCalled = true;
+        return sampleRtLeader1;
+      }) as unknown as typeof prisma.rtLeader.findUnique;
+
+      try {
+        const req = { params: { id: 'point-rt-1' } } as unknown as Request;
+        const res = fakeRes();
+
+        await getPoint(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        const body = res.body as {
+          point: {
+            id: string;
+            rts: number[];
+            rtLeader: unknown;
+            integrityWarning?: string;
+          };
+        };
+
+        assert.equal(body.point.rtLeader, null);
+        assert.ok(
+          body.point.integrityWarning?.includes('Multiple ketua_rt points are assigned to RT 1'),
+        );
+        assert.equal(leaderLookupCalled, false);
+      } finally {
+        prisma.spatialPoint.findUnique = originalFindUnique;
+        prisma.rtLeader.findUnique = originalLeaderFindUnique;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
+      }
+    });
+
+    it('returns rtLeader: null and integrityWarning via getPoint when ketua_rt point references an RT without an existing leader', async () => {
+      const originalFindUnique = prisma.spatialPoint.findUnique;
+      const originalLeaderFindUnique = prisma.rtLeader.findUnique;
+
+      prisma.spatialPoint.findUnique = (async () =>
+        sampleKetuaRtPoint) as unknown as typeof prisma.spatialPoint.findUnique;
+
+      prisma.rtLeader.findUnique = (async () =>
+        null) as unknown as typeof prisma.rtLeader.findUnique;
+
+      try {
+        const req = { params: { id: 'point-rt-1' } } as unknown as Request;
+        const res = fakeRes();
+
+        await getPoint(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        const body = res.body as {
+          point: {
+            id: string;
+            rts: number[];
+            rtLeader: unknown;
+            integrityWarning?: string;
+          };
+        };
+        assert.equal(body.point.rtLeader, null);
+        assert.ok(
+          body.point.integrityWarning?.includes('No Ketua RT leader record found for RT 1'),
+        );
+      } finally {
+        prisma.spatialPoint.findUnique = originalFindUnique;
+        prisma.rtLeader.findUnique = originalLeaderFindUnique;
+      }
+    });
   });
 
   describe('listRtLeaders', () => {
     it('resolves coordinates strictly from spatial_points with type=ketua_rt', async () => {
       const originalCount = prisma.rtLeader.count;
       const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
 
       prisma.rtLeader.count = (async () => 2) as unknown as typeof prisma.rtLeader.count;
       prisma.rtLeader.findMany = (async () => [
@@ -222,25 +708,6 @@ describe('maps.controller', () => {
           alamat: 'Jl. Mulawarman No. 12',
           createdAt: new Date(),
           updatedAt: new Date(),
-          spatialPoints: [
-            {
-              point: {
-                id: 'point-rt-1',
-                type: 'ketua_rt',
-                latitude: -1.2235,
-                longitude: 116.9521,
-              },
-            },
-            {
-              // Bank sampah point also covering RT 1 should NOT be chosen as the leader's coordinates
-              point: {
-                id: 'point-bs-1',
-                type: 'bank_sampah',
-                latitude: -1.2299,
-                longitude: 116.9599,
-              },
-            },
-          ],
         },
         {
           rtNumber: 2,
@@ -250,19 +717,22 @@ describe('maps.controller', () => {
           alamat: 'Jl. Pemuda RT 02',
           createdAt: new Date(),
           updatedAt: new Date(),
-          // Only covered by bank sampah, no ketua_rt point surveyed yet
-          spatialPoints: [
-            {
-              point: {
-                id: 'point-bs-1',
-                type: 'bank_sampah',
-                latitude: -1.2299,
-                longitude: 116.9599,
-              },
-            },
-          ],
         },
       ]) as unknown as typeof prisma.rtLeader.findMany;
+
+      // Only RT 1 has a ketua_rt point coverage
+      prisma.spatialPointRt.findMany = (async () => [
+        {
+          rtNumber: 1,
+          pointId: 'point-rt-1',
+          point: {
+            id: 'point-rt-1',
+            latitude: -1.2235,
+            longitude: 116.9521,
+            _count: { rtCoverages: 1 },
+          },
+        },
+      ]) as unknown as typeof prisma.spatialPointRt.findMany;
 
       try {
         const req = { query: {} } as unknown as Request;
@@ -280,22 +750,24 @@ describe('maps.controller', () => {
         };
 
         assert.equal(body.total, 2);
-        // RT 1: Coordinate correctly picked from 'ketua_rt' point, not the bank sampah point
+        // RT 1: Coordinate correctly picked from 'ketua_rt' point
         assert.equal(body.leaders[0]?.coordinates?.pointId, 'point-rt-1');
         assert.equal(body.leaders[0]?.coordinates?.latitude, -1.2235);
         assert.equal(body.leaders[0]?.coordinates?.longitude, 116.9521);
 
-        // RT 2: Since only bank_sampah point is linked, coordinates should resolve to null per SPEC.md §7
+        // RT 2: No ketua_rt point surveyed yet => coordinates should resolve to null per SPEC.md §7
         assert.equal(body.leaders[1]?.coordinates, null);
       } finally {
         prisma.rtLeader.count = originalCount;
         prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
       }
     });
 
     it('handles search and pagination parameters correctly', async () => {
       const originalCount = prisma.rtLeader.count;
       const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
 
       let capturedArgs: { take?: number; skip?: number; where?: unknown } | undefined;
       prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
@@ -307,6 +779,8 @@ describe('maps.controller', () => {
         capturedArgs = args;
         return [];
       }) as unknown as typeof prisma.rtLeader.findMany;
+      prisma.spatialPointRt.findMany =
+        (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
 
       try {
         const req = {
@@ -322,6 +796,694 @@ describe('maps.controller', () => {
       } finally {
         prisma.rtLeader.count = originalCount;
         prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
+      }
+    });
+
+    it('defaults limit to 10 and computes skip when page is provided without limit', async () => {
+      const originalCount = prisma.rtLeader.count;
+      const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
+
+      let capturedArgs: { take?: number; skip?: number; where?: unknown } | undefined;
+      prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
+      prisma.rtLeader.findMany = (async (args: {
+        take?: number;
+        skip?: number;
+        where?: unknown;
+      }) => {
+        capturedArgs = args;
+        return [];
+      }) as unknown as typeof prisma.rtLeader.findMany;
+      prisma.spatialPointRt.findMany =
+        (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
+
+      try {
+        const req = {
+          query: { page: '2' },
+        } as unknown as Request;
+        const res = fakeRes();
+
+        await listRtLeaders(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        assert.equal(capturedArgs?.take, 10);
+        assert.equal(capturedArgs?.skip, 10); // page 2 with default limit 10 => skip 10
+      } finally {
+        prisma.rtLeader.count = originalCount;
+        prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
+      }
+    });
+
+    it('defaults limit to 10 and sets skip to 0 when page: "1" is provided without limit', async () => {
+      const originalCount = prisma.rtLeader.count;
+      const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
+
+      let capturedArgs: { take?: number; skip?: number; where?: unknown } | undefined;
+      prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
+      prisma.rtLeader.findMany = (async (args: {
+        take?: number;
+        skip?: number;
+        where?: unknown;
+      }) => {
+        capturedArgs = args;
+        return [];
+      }) as unknown as typeof prisma.rtLeader.findMany;
+      prisma.spatialPointRt.findMany =
+        (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
+
+      try {
+        const req = {
+          query: { page: '1' },
+        } as unknown as Request;
+        const res = fakeRes();
+
+        await listRtLeaders(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        assert.equal(capturedArgs?.take, 10);
+        assert.equal(capturedArgs?.skip, 0); // page 1 with default limit 10 => skip 0
+      } finally {
+        prisma.rtLeader.count = originalCount;
+        prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
+      }
+    });
+
+    it('leaves take and skip undefined when no pagination parameters are provided', async () => {
+      const originalCount = prisma.rtLeader.count;
+      const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
+
+      let capturedArgs: { take?: number; skip?: number; where?: unknown } | undefined;
+      prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
+      prisma.rtLeader.findMany = (async (args: {
+        take?: number;
+        skip?: number;
+        where?: unknown;
+      }) => {
+        capturedArgs = args;
+        return [];
+      }) as unknown as typeof prisma.rtLeader.findMany;
+      prisma.spatialPointRt.findMany =
+        (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
+
+      try {
+        const req = {
+          query: {},
+        } as unknown as Request;
+        const res = fakeRes();
+
+        await listRtLeaders(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        assert.equal(capturedArgs?.take, undefined);
+        assert.equal(capturedArgs?.skip, undefined);
+      } finally {
+        prisma.rtLeader.count = originalCount;
+        prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
+      }
+    });
+
+    it('includes rtNumber and substring matches in OR when standalone numeric search is provided', async () => {
+      const originalCount = prisma.rtLeader.count;
+      const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
+
+      let capturedWhere: Record<string, unknown> | undefined;
+      prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
+      prisma.rtLeader.findMany = (async (args: { where?: Record<string, unknown> }) => {
+        capturedWhere = args.where;
+        return [];
+      }) as unknown as typeof prisma.rtLeader.findMany;
+      prisma.spatialPointRt.findMany =
+        (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
+
+      try {
+        const req = {
+          query: { search: '7' },
+        } as unknown as Request;
+        const res = fakeRes();
+
+        await listRtLeaders(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        assert.equal(capturedWhere?.rtNumber, undefined);
+        assert.deepEqual(capturedWhere?.OR, [
+          { rtNumber: 7 },
+          { name: { contains: '7' } },
+          { alamat: { contains: '7' } },
+        ]);
+      } finally {
+        prisma.rtLeader.count = originalCount;
+        prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
+      }
+    });
+
+    it('preserves explicit rt filter when numeric search is also provided', async () => {
+      const originalCount = prisma.rtLeader.count;
+      const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
+
+      let capturedWhere: Record<string, unknown> | undefined;
+      prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
+      prisma.rtLeader.findMany = (async (args: { where?: Record<string, unknown> }) => {
+        capturedWhere = args.where;
+        return [];
+      }) as unknown as typeof prisma.rtLeader.findMany;
+      prisma.spatialPointRt.findMany =
+        (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
+
+      try {
+        const req = {
+          query: { rt: '3', search: '7' },
+        } as unknown as Request;
+        const res = fakeRes();
+
+        await listRtLeaders(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        assert.equal(capturedWhere?.rtNumber, 3);
+        assert.deepEqual(capturedWhere?.OR, [
+          { name: { contains: '7' } },
+          { alamat: { contains: '7' } },
+        ]);
+      } finally {
+        prisma.rtLeader.count = originalCount;
+        prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
+      }
+    });
+
+    it('matches zero-padded numeric search against rtNumber ("007" resolves to RT 7)', async () => {
+      const originalCount = prisma.rtLeader.count;
+      const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
+
+      let capturedWhere: Record<string, unknown> | undefined;
+      prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
+      prisma.rtLeader.findMany = (async (args: { where?: Record<string, unknown> }) => {
+        capturedWhere = args.where;
+        return [];
+      }) as unknown as typeof prisma.rtLeader.findMany;
+      prisma.spatialPointRt.findMany =
+        (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
+
+      try {
+        const req = { query: { search: '007' } } as unknown as Request;
+        const res = fakeRes();
+
+        await listRtLeaders(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        assert.deepEqual(capturedWhere?.OR, [
+          { rtNumber: 7 },
+          { name: { contains: '007' } },
+          { alamat: { contains: '007' } },
+        ]);
+      } finally {
+        prisma.rtLeader.count = originalCount;
+        prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
+      }
+    });
+
+    it('excludes rtNumber from OR when the search term is not a pure integer', async () => {
+      const originalCount = prisma.rtLeader.count;
+      const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
+
+      let capturedWhere: Record<string, unknown> | undefined;
+      prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
+      prisma.rtLeader.findMany = (async (args: { where?: Record<string, unknown> }) => {
+        capturedWhere = args.where;
+        return [];
+      }) as unknown as typeof prisma.rtLeader.findMany;
+      prisma.spatialPointRt.findMany =
+        (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
+
+      try {
+        const req = { query: { search: '7abc' } } as unknown as Request;
+        const res = fakeRes();
+
+        await listRtLeaders(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        assert.deepEqual(capturedWhere?.OR, [
+          { name: { contains: '7abc' } },
+          { alamat: { contains: '7abc' } },
+        ]);
+      } finally {
+        prisma.rtLeader.count = originalCount;
+        prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
+      }
+    });
+
+    it('returns coordinates: null and integrityWarning when two ketua_rt points claim the same RT', async () => {
+      const originalCount = prisma.rtLeader.count;
+      const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
+
+      prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
+      prisma.rtLeader.findMany = (async () => [
+        {
+          rtNumber: 7,
+          name: 'Budi Santoso',
+          phone: '081234567807',
+          phoneIsWhatsapp: true,
+          alamat: 'Jl. Ahmad Yani RT 07',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]) as unknown as typeof prisma.rtLeader.findMany;
+
+      prisma.spatialPointRt.findMany = (async () => [
+        {
+          rtNumber: 7,
+          pointId: 'point-rt-7a',
+          point: {
+            id: 'point-rt-7a',
+            latitude: -1.22,
+            longitude: 116.95,
+            _count: { rtCoverages: 1 },
+          },
+        },
+        {
+          rtNumber: 7,
+          pointId: 'point-rt-7b',
+          point: {
+            id: 'point-rt-7b',
+            latitude: -1.221,
+            longitude: 116.951,
+            _count: { rtCoverages: 1 },
+          },
+        },
+      ]) as unknown as typeof prisma.spatialPointRt.findMany;
+
+      try {
+        const req = { query: {} } as unknown as Request;
+        const res = fakeRes();
+
+        await listRtLeaders(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        const body = res.body as {
+          leaders: Array<{ rtNumber: number; coordinates: unknown; integrityWarning?: string }>;
+        };
+        assert.equal(body.leaders[0]?.coordinates, null);
+        assert.ok(
+          body.leaders[0]?.integrityWarning?.includes(
+            'Multiple ketua_rt points are assigned to RT 7',
+          ),
+        );
+      } finally {
+        prisma.rtLeader.count = originalCount;
+        prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
+      }
+    });
+
+    it('returns coordinates: null and integrityWarning when the covering ketua_rt point spans multiple RTs', async () => {
+      const originalCount = prisma.rtLeader.count;
+      const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
+
+      prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
+      prisma.rtLeader.findMany = (async () => [
+        {
+          rtNumber: 4,
+          name: 'Dewi Lestari',
+          phone: '081234567804',
+          phoneIsWhatsapp: true,
+          alamat: 'Jl. Sudirman RT 04',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]) as unknown as typeof prisma.rtLeader.findMany;
+
+      // The one covering point also claims RT 8 outside this page (totalRtCoverage: 2)
+      prisma.spatialPointRt.findMany = (async () => [
+        {
+          rtNumber: 4,
+          pointId: 'point-rt-4',
+          point: {
+            id: 'point-rt-4',
+            latitude: -1.223,
+            longitude: 116.953,
+            _count: { rtCoverages: 2 },
+          },
+        },
+      ]) as unknown as typeof prisma.spatialPointRt.findMany;
+
+      try {
+        const req = { query: {} } as unknown as Request;
+        const res = fakeRes();
+
+        await listRtLeaders(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        const body = res.body as {
+          leaders: Array<{ rtNumber: number; coordinates: unknown; integrityWarning?: string }>;
+        };
+        assert.equal(body.leaders[0]?.coordinates, null);
+        assert.ok(body.leaders[0]?.integrityWarning?.includes('is linked to 2 RT coverages'));
+      } finally {
+        prisma.rtLeader.count = originalCount;
+        prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
+      }
+    });
+
+    it('resolves coordinates for unconflicted RTs while flagging only the conflicted RT', async () => {
+      const originalCount = prisma.rtLeader.count;
+      const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
+
+      prisma.rtLeader.count = (async () => 2) as unknown as typeof prisma.rtLeader.count;
+      prisma.rtLeader.findMany = (async () => [
+        {
+          rtNumber: 1,
+          name: 'Bambang Supriyanto',
+          phone: '081234567801',
+          phoneIsWhatsapp: true,
+          alamat: 'Jl. Mulawarman No. 12',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          rtNumber: 7,
+          name: 'Budi Santoso',
+          phone: '081234567807',
+          phoneIsWhatsapp: true,
+          alamat: 'Jl. Ahmad Yani RT 07',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]) as unknown as typeof prisma.rtLeader.findMany;
+
+      // RT 1 resolves cleanly; RT 7 has two competing ketua_rt points
+      prisma.spatialPointRt.findMany = (async () => [
+        {
+          rtNumber: 1,
+          pointId: 'point-rt-1',
+          point: {
+            id: 'point-rt-1',
+            latitude: -1.2235,
+            longitude: 116.9521,
+            _count: { rtCoverages: 1 },
+          },
+        },
+        {
+          rtNumber: 7,
+          pointId: 'point-rt-7a',
+          point: {
+            id: 'point-rt-7a',
+            latitude: -1.22,
+            longitude: 116.95,
+            _count: { rtCoverages: 1 },
+          },
+        },
+        {
+          rtNumber: 7,
+          pointId: 'point-rt-7b',
+          point: {
+            id: 'point-rt-7b',
+            latitude: -1.221,
+            longitude: 116.951,
+            _count: { rtCoverages: 1 },
+          },
+        },
+      ]) as unknown as typeof prisma.spatialPointRt.findMany;
+
+      try {
+        const req = { query: {} } as unknown as Request;
+        const res = fakeRes();
+
+        await listRtLeaders(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        const body = res.body as {
+          leaders: Array<{ rtNumber: number; coordinates: unknown; integrityWarning?: string }>;
+        };
+        assert.equal(body.leaders[0]?.rtNumber, 1);
+        assert.equal(body.leaders[0]?.coordinates !== null, true);
+        assert.equal(body.leaders[0]?.integrityWarning, undefined);
+
+        assert.equal(body.leaders[1]?.rtNumber, 7);
+        assert.equal(body.leaders[1]?.coordinates, null);
+        assert.ok(body.leaders[1]?.integrityWarning?.includes('RT 7'));
+      } finally {
+        prisma.rtLeader.count = originalCount;
+        prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
+      }
+    });
+
+    it('rejects rt with trailing non-digits in listRtLeaders with 400', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { rt: '5abc' } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, { error: 'Nomor RT harus berupa angka positif' });
+    });
+
+    it('returns 400 when rt is sent as a repeated query key (array) in listRtLeaders', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { rt: ['1', '2'] } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, { error: 'Nomor RT harus berupa angka positif' });
+    });
+
+    it('returns 400 when search is sent as a repeated query key (array)', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { search: ['foo', 'bar'] } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+    });
+
+    it('returns 400 when limit is sent as a repeated query key (array)', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { limit: ['10', '20'] } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai limit tidak valid. Harus berupa angka bulat positif.',
+      });
+    });
+
+    it('returns 400 when offset is sent as a repeated query key (array)', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { offset: ['0', '5'] } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai offset tidak valid. Harus berupa angka bulat non-negatif.',
+      });
+    });
+
+    it('returns 400 when page is sent as a repeated query key (array)', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { page: ['1', '2'] } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai page tidak valid. Harus berupa angka bulat positif.',
+      });
+    });
+
+    it('returns 400 for limit=0 (below minimum of 1)', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { limit: '0' } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai limit tidak valid. Harus berupa angka bulat positif.',
+      });
+    });
+
+    it('returns 400 for non-numeric limit', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { limit: '10abc' } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai limit tidak valid. Harus berupa angka bulat positif.',
+      });
+    });
+
+    it('returns 400 for non-numeric offset', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { offset: '5abc' } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai offset tidak valid. Harus berupa angka bulat non-negatif.',
+      });
+    });
+
+    it('returns 400 for page=0 (below minimum of 1)', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { page: '0' } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai page tidak valid. Harus berupa angka bulat positif.',
+      });
+    });
+
+    it('returns 400 for non-numeric page', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { page: '2xyz' } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai page tidak valid. Harus berupa angka bulat positif.',
+      });
+    });
+
+    it('returns 400 when limit exceeds MAX_MYSQL_INT (overflow protection)', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { limit: '99999999999999999999' } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai limit tidak valid. Harus berupa angka bulat positif.',
+      });
+
+      const res2 = fakeRes();
+      await listRtLeaders(
+        { query: { limit: '2147483648' } } as unknown as Request,
+        res2 as unknown as Response,
+      );
+      assert.equal(res2.status, 400);
+      assert.deepEqual(res2.body, {
+        error: 'Nilai limit tidak valid. Harus berupa angka bulat positif.',
+      });
+    });
+
+    it('returns 400 when offset exceeds MAX_MYSQL_INT (overflow protection)', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { offset: '99999999999999999999' } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai offset tidak valid. Harus berupa angka bulat non-negatif.',
+      });
+
+      const res2 = fakeRes();
+      await listRtLeaders(
+        { query: { offset: '2147483648' } } as unknown as Request,
+        res2 as unknown as Response,
+      );
+      assert.equal(res2.status, 400);
+      assert.deepEqual(res2.body, {
+        error: 'Nilai offset tidak valid. Harus berupa angka bulat non-negatif.',
+      });
+    });
+
+    it('returns 400 when page exceeds MAX_MYSQL_INT or offset calculation overflows', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { page: '99999999999999999999' } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nilai page tidak valid. Harus berupa angka bulat positif.',
+      });
+
+      const res2 = fakeRes();
+      await listRtLeaders(
+        { query: { page: '2147483648' } } as unknown as Request,
+        res2 as unknown as Response,
+      );
+      assert.equal(res2.status, 400);
+      assert.deepEqual(res2.body, {
+        error: 'Nilai page tidak valid. Harus berupa angka bulat positif.',
+      });
+
+      const res3 = fakeRes();
+      await listRtLeaders(
+        { query: { page: '2147483647', limit: '2' } } as unknown as Request,
+        res3 as unknown as Response,
+      );
+      assert.equal(res3.status, 400);
+      assert.deepEqual(res3.body, {
+        error: 'Nilai page tidak valid. Harus berupa angka bulat positif.',
+      });
+    });
+
+    it('returns 400 when rt exceeds MAX_MYSQL_INT in listRtLeaders', async () => {
+      const res = fakeRes();
+      await listRtLeaders(
+        { query: { rt: '99999999999999999999' } } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        error: 'Nomor RT harus berupa angka positif',
+      });
+    });
+
+    it('accepts limit=1 (boundary minimum) and offset=0 without error', async () => {
+      const originalCount = prisma.rtLeader.count;
+      const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
+
+      let capturedArgs: { take?: number; skip?: number } | undefined;
+      prisma.rtLeader.count = (async () => 1) as unknown as typeof prisma.rtLeader.count;
+      prisma.rtLeader.findMany = (async (args: { take?: number; skip?: number }) => {
+        capturedArgs = args;
+        return [];
+      }) as unknown as typeof prisma.rtLeader.findMany;
+      prisma.spatialPointRt.findMany =
+        (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
+
+      try {
+        const req = { query: { limit: '1', offset: '0' } } as unknown as Request;
+        const res = fakeRes();
+
+        await listRtLeaders(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        assert.equal(capturedArgs?.take, 1);
+        assert.equal(capturedArgs?.skip, 0);
+      } finally {
+        prisma.rtLeader.count = originalCount;
+        prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
       }
     });
   });
@@ -329,6 +1491,8 @@ describe('maps.controller', () => {
   describe('getRtLeader', () => {
     it('returns a single RT leader with joined coordinates', async () => {
       const originalFindUnique = prisma.rtLeader.findUnique;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
+
       prisma.rtLeader.findUnique = (async () => ({
         rtNumber: 1,
         name: 'Bambang Supriyanto',
@@ -337,17 +1501,20 @@ describe('maps.controller', () => {
         alamat: 'Jl. Mulawarman No. 12',
         createdAt: new Date(),
         updatedAt: new Date(),
-        spatialPoints: [
-          {
-            point: {
-              id: 'point-rt-1',
-              type: 'ketua_rt',
-              latitude: -1.2235,
-              longitude: 116.9521,
-            },
-          },
-        ],
       })) as unknown as typeof prisma.rtLeader.findUnique;
+
+      prisma.spatialPointRt.findMany = (async () => [
+        {
+          rtNumber: 1,
+          pointId: 'point-rt-1',
+          point: {
+            id: 'point-rt-1',
+            latitude: -1.2235,
+            longitude: 116.9521,
+            _count: { rtCoverages: 1 },
+          },
+        },
+      ]) as unknown as typeof prisma.spatialPointRt.findMany;
 
       try {
         const req = { params: { rtNumber: '1' } } as unknown as Request;
@@ -368,6 +1535,47 @@ describe('maps.controller', () => {
         assert.equal(body.leader.coordinates?.latitude, -1.2235);
       } finally {
         prisma.rtLeader.findUnique = originalFindUnique;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
+      }
+    });
+
+    it('returns leader with coordinates: null when no ketua_rt point is associated', async () => {
+      const originalFindUnique = prisma.rtLeader.findUnique;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
+
+      prisma.rtLeader.findUnique = (async () => ({
+        rtNumber: 2,
+        name: 'Hj. Siti Aminah',
+        phone: '081234567802',
+        phoneIsWhatsapp: true,
+        alamat: 'Jl. Pemuda RT 02',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })) as unknown as typeof prisma.rtLeader.findUnique;
+
+      prisma.spatialPointRt.findMany =
+        (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
+
+      try {
+        const req = { params: { rtNumber: '2' } } as unknown as Request;
+        const res = fakeRes();
+
+        await getRtLeader(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        const body = res.body as {
+          leader: {
+            rtNumber: number;
+            name: string;
+            coordinates: unknown;
+          };
+        };
+        assert.equal(body.leader.rtNumber, 2);
+        assert.equal(body.leader.name, 'Hj. Siti Aminah');
+        assert.equal(body.leader.coordinates, null);
+      } finally {
+        prisma.rtLeader.findUnique = originalFindUnique;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
       }
     });
 
@@ -379,9 +1587,30 @@ describe('maps.controller', () => {
       );
       assert.equal(res1.status, 400);
 
+      // Trailing non-digit characters in path param must be rejected with 400
+      const resTrailing = fakeRes();
+      await getRtLeader(
+        { params: { rtNumber: '3xyz' } } as unknown as Request,
+        resTrailing as unknown as Response,
+      );
+      assert.equal(resTrailing.status, 400);
+      assert.deepEqual(resTrailing.body, { error: 'Nomor RT harus berupa angka positif' });
+
+      // Overflows exceeding MAX_MYSQL_INT must be rejected with 400
+      const resOverflow = fakeRes();
+      await getRtLeader(
+        { params: { rtNumber: '99999999999999999999' } } as unknown as Request,
+        resOverflow as unknown as Response,
+      );
+      assert.equal(resOverflow.status, 400);
+      assert.deepEqual(resOverflow.body, { error: 'Nomor RT harus berupa angka positif' });
+
       const originalFindUnique = prisma.rtLeader.findUnique;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
       prisma.rtLeader.findUnique = (async () =>
         null) as unknown as typeof prisma.rtLeader.findUnique;
+      prisma.spatialPointRt.findMany =
+        (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
 
       try {
         const res2 = fakeRes();
@@ -393,6 +1622,111 @@ describe('maps.controller', () => {
         assert.deepEqual(res2.body, { error: 'Ketua RT tidak ditemukan' });
       } finally {
         prisma.rtLeader.findUnique = originalFindUnique;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
+      }
+    });
+
+    it('returns coordinates: null and integrityWarning when two ketua_rt points claim the same RT', async () => {
+      const originalFindUnique = prisma.rtLeader.findUnique;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
+
+      prisma.rtLeader.findUnique = (async () => ({
+        rtNumber: 7,
+        name: 'Budi Santoso',
+        phone: '081234567807',
+        phoneIsWhatsapp: true,
+        alamat: 'Jl. Ahmad Yani RT 07',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })) as unknown as typeof prisma.rtLeader.findUnique;
+
+      // Two different ketua_rt points both claim RT 7
+      prisma.spatialPointRt.findMany = (async () => [
+        {
+          rtNumber: 7,
+          pointId: 'point-rt-7a',
+          point: {
+            id: 'point-rt-7a',
+            latitude: -1.22,
+            longitude: 116.95,
+            _count: { rtCoverages: 1 },
+          },
+        },
+        {
+          rtNumber: 7,
+          pointId: 'point-rt-7b',
+          point: {
+            id: 'point-rt-7b',
+            latitude: -1.221,
+            longitude: 116.951,
+            _count: { rtCoverages: 1 },
+          },
+        },
+      ]) as unknown as typeof prisma.spatialPointRt.findMany;
+
+      try {
+        const req = { params: { rtNumber: '7' } } as unknown as Request;
+        const res = fakeRes();
+
+        await getRtLeader(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        const body = res.body as {
+          leader: { coordinates: unknown; integrityWarning?: string };
+        };
+        assert.equal(body.leader.coordinates, null);
+        assert.ok(
+          body.leader.integrityWarning?.includes('Multiple ketua_rt points are assigned to RT 7'),
+        );
+      } finally {
+        prisma.rtLeader.findUnique = originalFindUnique;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
+      }
+    });
+
+    it('returns coordinates: null and integrityWarning when the covering ketua_rt point spans multiple RTs', async () => {
+      const originalFindUnique = prisma.rtLeader.findUnique;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
+
+      prisma.rtLeader.findUnique = (async () => ({
+        rtNumber: 4,
+        name: 'Dewi Lestari',
+        phone: '081234567804',
+        phoneIsWhatsapp: true,
+        alamat: 'Jl. Sudirman RT 04',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })) as unknown as typeof prisma.rtLeader.findUnique;
+
+      // The single covering point also claims RT 8 (totalRtCoverage: 2)
+      prisma.spatialPointRt.findMany = (async () => [
+        {
+          rtNumber: 4,
+          pointId: 'point-rt-4',
+          point: {
+            id: 'point-rt-4',
+            latitude: -1.223,
+            longitude: 116.953,
+            _count: { rtCoverages: 2 },
+          },
+        },
+      ]) as unknown as typeof prisma.spatialPointRt.findMany;
+
+      try {
+        const req = { params: { rtNumber: '4' } } as unknown as Request;
+        const res = fakeRes();
+
+        await getRtLeader(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        const body = res.body as {
+          leader: { coordinates: unknown; integrityWarning?: string };
+        };
+        assert.equal(body.leader.coordinates, null);
+        assert.ok(body.leader.integrityWarning?.includes('is linked to 2 RT coverages'));
+      } finally {
+        prisma.rtLeader.findUnique = originalFindUnique;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
       }
     });
   });
@@ -402,22 +1736,29 @@ describe('maps.controller', () => {
       const originalPointCount = prisma.spatialPoint.count;
       const originalGroupBy = prisma.spatialPoint.groupBy;
       const originalLeaderCount = prisma.rtLeader.count;
-      const originalLeaderFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
 
       prisma.spatialPoint.count = (async () => 5) as unknown as typeof prisma.spatialPoint.count;
       prisma.spatialPoint.groupBy = (async () => [
         { type: 'ketua_rt', _count: { _all: 3 } },
         { type: 'bank_sampah', _count: { _all: 2 } },
       ]) as unknown as typeof prisma.spatialPoint.groupBy;
-      prisma.rtLeader.count = (async () => 10) as unknown as typeof prisma.rtLeader.count;
-      prisma.rtLeader.findMany = (async () => [
-        {
-          spatialPoints: [{ point: { type: 'ketua_rt' } }],
-        },
-        {
-          spatialPoints: [{ point: { type: 'bank_sampah' } }],
-        },
-      ]) as unknown as typeof prisma.rtLeader.findMany;
+      prisma.rtLeader.count = (async (args?: { where?: { rtNumber?: { in: number[] } } }) => {
+        const inList = args?.where?.rtNumber?.in;
+        if (inList?.includes(1)) {
+          return 4; // rtLeadersWithCoordinates (resolved RTs)
+        }
+        if (inList) {
+          return 0; // rtLeadersWithIntegrityConflicts (no conflicted RTs in this fixture)
+        }
+        return 10; // totalRtLeaders
+      }) as unknown as typeof prisma.rtLeader.count;
+      prisma.spatialPointRt.findMany = (async () => [
+        { rtNumber: 1, pointId: 'point-rt-1' },
+        { rtNumber: 2, pointId: 'point-rt-2' },
+        { rtNumber: 3, pointId: 'point-rt-3' },
+        { rtNumber: 4, pointId: 'point-rt-4' },
+      ]) as unknown as typeof prisma.spatialPointRt.findMany;
 
       try {
         const req = {} as unknown as Request;
@@ -432,19 +1773,79 @@ describe('maps.controller', () => {
           totalRtLeaders: number;
           rtLeadersWithCoordinates: number;
           rtLeadersWithoutCoordinates: number;
+          rtLeadersWithIntegrityConflicts: number;
         };
 
         assert.equal(body.totalPoints, 5);
         assert.equal(body.pointsByType.ketua_rt, 3);
         assert.equal(body.pointsByType.bank_sampah, 2);
+        assert.equal(body.pointsByType.fasilitas_umum, 0);
         assert.equal(body.totalRtLeaders, 10);
-        assert.equal(body.rtLeadersWithCoordinates, 1);
-        assert.equal(body.rtLeadersWithoutCoordinates, 9);
+        assert.equal(body.rtLeadersWithCoordinates, 4);
+        assert.equal(body.rtLeadersWithoutCoordinates, 6);
+        assert.equal(body.rtLeadersWithIntegrityConflicts, 0);
       } finally {
         prisma.spatialPoint.count = originalPointCount;
         prisma.spatialPoint.groupBy = originalGroupBy;
         prisma.rtLeader.count = originalLeaderCount;
-        prisma.rtLeader.findMany = originalLeaderFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
+      }
+    });
+
+    it('excludes RTs with conflicting ketua_rt coverage from rtLeadersWithCoordinates and reports rtLeadersWithIntegrityConflicts', async () => {
+      const originalPointCount = prisma.spatialPoint.count;
+      const originalGroupBy = prisma.spatialPoint.groupBy;
+      const originalLeaderCount = prisma.rtLeader.count;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
+
+      prisma.spatialPoint.count = (async () => 4) as unknown as typeof prisma.spatialPoint.count;
+      prisma.spatialPoint.groupBy = (async () => [
+        { type: 'ketua_rt', _count: { _all: 3 } },
+      ]) as unknown as typeof prisma.spatialPoint.groupBy;
+
+      // RT 1: cleanly resolved. RT 7: two competing ketua_rt points (conflict).
+      prisma.spatialPointRt.findMany = (async () => [
+        { rtNumber: 1, pointId: 'point-rt-1' },
+        { rtNumber: 7, pointId: 'point-rt-7a' },
+        { rtNumber: 7, pointId: 'point-rt-7b' },
+      ]) as unknown as typeof prisma.spatialPointRt.findMany;
+
+      prisma.rtLeader.count = (async (args?: { where?: { rtNumber?: { in: number[] } } }) => {
+        const inList = args?.where?.rtNumber?.in;
+        if (inList?.includes(1)) {
+          return 1; // rtLeadersWithCoordinates
+        }
+        if (inList?.includes(7)) {
+          return 1; // rtLeadersWithIntegrityConflicts
+        }
+        return 10; // totalRtLeaders
+      }) as unknown as typeof prisma.rtLeader.count;
+
+      try {
+        const req = {} as unknown as Request;
+        const res = fakeRes();
+
+        await getSummary(req, res as unknown as Response);
+
+        assert.equal(res.status, 200);
+        const body = res.body as {
+          totalRtLeaders: number;
+          rtLeadersWithCoordinates: number;
+          rtLeadersWithoutCoordinates: number;
+          rtLeadersWithIntegrityConflicts: number;
+        };
+
+        assert.equal(body.totalRtLeaders, 10);
+        // RT 7 must NOT be counted as "has coordinates" despite having ketua_rt coverage
+        assert.equal(body.rtLeadersWithCoordinates, 1);
+        assert.equal(body.rtLeadersWithIntegrityConflicts, 1);
+        // The three counts must still sum to totalRtLeaders
+        assert.equal(body.rtLeadersWithCoordinates + body.rtLeadersWithoutCoordinates, 10);
+      } finally {
+        prisma.spatialPoint.count = originalPointCount;
+        prisma.spatialPoint.groupBy = originalGroupBy;
+        prisma.rtLeader.count = originalLeaderCount;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
       }
     });
   });
