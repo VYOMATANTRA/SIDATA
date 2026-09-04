@@ -73,7 +73,11 @@ const emit = defineEmits<{
     <!-- 2. StatCard Sub-component -->
     <div class="w-full">
       <slot name="card">
-        <StatCard :items="stats" :variant="cardVariant" />
+        <StatCard :items="stats" :variant="cardVariant">
+          <template v-if="$slots['card-empty']" #empty>
+            <slot name="card-empty" />
+          </template>
+        </StatCard>
       </slot>
     </div>
 

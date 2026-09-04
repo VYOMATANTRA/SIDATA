@@ -62,7 +62,7 @@ const defaultStats: StatItem[] = [
 
 // Computed list of items (supports both array prop or single-item shorthand)
 const displayedItems = computed<StatItem[]>(() => {
-  if (props.items && props.items.length > 0) {
+  if (props.items !== undefined) {
     return props.items;
   }
   if (props.value !== undefined && props.label !== undefined) {
@@ -105,11 +105,12 @@ const variantClasses = computed(() => {
     <!-- Screen-reader-only heading for accessibility conformance (WCAG 2.1 Level A) -->
     <h2 class="sr-only">{{ title }}</h2>
 
-    <!-- 
+    <!--
       Semantic Description List (<dl>) adhering to docs/UI_STYLE_GUIDE.md & docs/ACCESSIBILITY.md
       Layout: Flexbox with justify-center and equal gaps, ensuring stats are always centered with equal spacing regardless of count.
     -->
     <dl
+      v-if="displayedItems.length > 0"
       class="flex flex-wrap items-start justify-center gap-x-6 gap-y-6 text-center sm:gap-x-10 md:gap-x-14"
       data-test="stat-list"
     >
@@ -235,5 +236,19 @@ const variantClasses = computed(() => {
         </dd>
       </div>
     </dl>
+    <div
+      v-else
+      class="flex flex-col items-center justify-center py-6 text-center"
+      data-test="stat-empty"
+    >
+      <slot name="empty">
+        <p
+          class="text-sm italic"
+          :class="variant === 'light' ? 'text-slate-500' : 'text-slate-400'"
+        >
+          Tidak ada data statistik yang ditampilkan.
+        </p>
+      </slot>
+    </div>
   </div>
 </template>

@@ -168,4 +168,40 @@ describe('StatOverview.vue', () => {
     expect(wrapper.find('.test-desc').text()).toBe('Deskripsi Slot');
     expect(wrapper.find('.test-custom-icon').text()).toBe('✨');
   });
+
+  it('renders empty state when stats is an intentionally empty array', () => {
+    const wrapper = mount(StatOverview, {
+      props: {
+        title: 'Empty Stats Overview',
+        stats: [],
+      },
+      global: {
+        stubs: { RouterLink: true },
+      },
+    });
+
+    expect(wrapper.find('[data-test="stat-list"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="stat-empty"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="stat-empty"]').text()).toContain(
+      'Tidak ada data statistik yang ditampilkan.',
+    );
+  });
+
+  it('supports custom card-empty slot when stats is empty', () => {
+    const wrapper = mount(StatOverview, {
+      props: {
+        title: 'Empty With Custom Slot',
+        stats: [],
+      },
+      slots: {
+        'card-empty': '<div class="custom-card-empty">Memuat data demografi...</div>',
+      },
+      global: {
+        stubs: { RouterLink: true },
+      },
+    });
+
+    expect(wrapper.find('.custom-card-empty').exists()).toBe(true);
+    expect(wrapper.find('.custom-card-empty').text()).toBe('Memuat data demografi...');
+  });
 });

@@ -135,4 +135,32 @@ describe('StatCard.vue', () => {
 
     expect(wrapper.find('.custom-icon').exists()).toBe(true);
   });
+
+  it('renders empty state when items is an intentionally empty array', () => {
+    const wrapper = mount(StatCard, {
+      props: {
+        items: [],
+      },
+    });
+
+    expect(wrapper.find('[data-test="stat-list"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="stat-empty"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="stat-empty"]').text()).toContain(
+      'Tidak ada data statistik yang ditampilkan.',
+    );
+  });
+
+  it('supports custom empty slot when items is empty', () => {
+    const wrapper = mount(StatCard, {
+      props: {
+        items: [],
+      },
+      slots: {
+        empty: '<p class="custom-empty-state">Data sedang dimuat...</p>',
+      },
+    });
+
+    expect(wrapper.find('.custom-empty-state').exists()).toBe(true);
+    expect(wrapper.find('.custom-empty-state').text()).toBe('Data sedang dimuat...');
+  });
 });
