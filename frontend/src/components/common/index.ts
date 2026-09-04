@@ -14,5 +14,8 @@ export { default as SectionTextArea } from './SectionTextArea.vue';
 export type { SectionTextAreaProps } from './SectionTextArea.vue';
 export { default as StatOverview } from './StatOverview.vue';
 export type { StatOverviewProps } from './StatOverview.vue';
+export { default as HugeQuote } from './HugeQuote.vue';
+export type { HugeQuoteProps } from './HugeQuote.vue';
+
 
 
