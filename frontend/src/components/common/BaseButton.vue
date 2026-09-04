@@ -28,6 +28,7 @@ const props = withDefaults(defineProps<ButtonProps>(), {
   rounded: 'btn',
   href: undefined,
   target: undefined,
+  rel: undefined,
 });
 
 const emit = defineEmits<{
@@ -38,7 +39,12 @@ const isDisabled = computed(() => props.disabled || props.state === 'disabled');
 
 const isExternal = computed(() => {
   if (props.target === '_blank') return true;
-  if (props.href && (props.href.startsWith('http://') || props.href.startsWith('https://'))) {
+  if (
+    props.href &&
+    (props.href.startsWith('http://') ||
+      props.href.startsWith('https://') ||
+      props.href.startsWith('//'))
+  ) {
     return true;
   }
   return false;
@@ -143,7 +149,7 @@ function handleClick(event: MouseEvent) {
   <component
     :is="href ? 'a' : 'button'"
     :href="!isDisabled ? href : undefined"
-    :rel="computedRel"
+    :rel="href ? computedRel : undefined"
     :target="href ? target : undefined"
     :type="!href ? type : undefined"
     :disabled="!href ? isDisabled : undefined"

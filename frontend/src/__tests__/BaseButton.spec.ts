@@ -192,4 +192,70 @@ describe('BaseButton.vue', () => {
     await wrapper.trigger('click');
     expect(wrapper.emitted('click')).toBeUndefined();
   });
+
+  it('automatically applies rel="noopener noreferrer" when target="_blank" even for relative URLs', () => {
+    const wrapper = mount(BaseButton, {
+      props: {
+        href: '/internal-page',
+        target: '_blank',
+        label: 'New Tab',
+      },
+    });
+
+    expect(wrapper.attributes('rel')).toBe('noopener noreferrer');
+  });
+
+  it('automatically applies rel="noopener noreferrer" for external URLs without target="_blank"', () => {
+    const wrapperHttps = mount(BaseButton, {
+      props: {
+        href: 'https://external.example.com',
+        label: 'External Link',
+      },
+    });
+    expect(wrapperHttps.attributes('rel')).toBe('noopener noreferrer');
+
+    const wrapperProtoRelative = mount(BaseButton, {
+      props: {
+        href: '//external.example.com',
+        label: 'Protocol Relative',
+      },
+    });
+    expect(wrapperProtoRelative.attributes('rel')).toBe('noopener noreferrer');
+  });
+
+  it('preserves custom rel prop when explicitly specified', () => {
+    const wrapper = mount(BaseButton, {
+      props: {
+        href: 'https://external.example.com',
+        target: '_blank',
+        rel: 'author nofollow',
+        label: 'Custom Rel',
+      },
+    });
+
+    expect(wrapper.attributes('rel')).toBe('author nofollow');
+  });
+
+  it('does not render rel attribute for relative internal links without target="_blank"', () => {
+    const wrapper = mount(BaseButton, {
+      props: {
+        href: '/internal-page',
+        label: 'Internal Link',
+      },
+    });
+
+    expect(wrapper.attributes('rel')).toBeUndefined();
+  });
+
+  it('does not render rel attribute on button elements without href', () => {
+    const wrapper = mount(BaseButton, {
+      props: {
+        label: 'Standard Button',
+        rel: 'noopener',
+      },
+    });
+
+    expect(wrapper.element.tagName).toBe('BUTTON');
+    expect(wrapper.attributes('rel')).toBeUndefined();
+  });
 });
