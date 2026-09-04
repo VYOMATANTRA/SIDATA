@@ -6,3 +6,5 @@ export { default as AppNavbar } from './AppNavbar.vue';
 export type { NavbarProps } from './AppNavbar.vue';
 export { default as AppFooter } from './AppFooter.vue';
 export type { FooterProps } from './AppFooter.vue';
+export { default as BarDiagram } from './BarDiagram.vue';
+export type { BarDiagramProps, BarDiagramItem } from './BarDiagram.vue';

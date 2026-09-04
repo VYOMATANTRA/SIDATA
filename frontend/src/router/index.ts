@@ -73,6 +73,16 @@ const router = createRouter({
       path: '/footer',
       redirect: '/mockup/footer',
     },
+    {
+      path: '/mockup/bar-diagram',
+      name: 'bar-diagram-mockup',
+      component: () => import('../views/BarDiagramShowcaseView.vue'),
+      meta: { title: 'Bar Diagram Component Mockup - SIDATA' },
+    },
+    {
+      path: '/bar-diagram',
+      redirect: '/mockup/bar-diagram',
+    },
   ],
 })
 

@@ -75,6 +75,12 @@ const generatedSnippet = computed(() => {
             ❖ Footer
           </router-link>
           <router-link
+            to="/mockup/bar-diagram"
+            class="rounded-btn border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            ❖ Bar Diagram
+          </router-link>
+          <router-link
             to="/"
             class="rounded-btn border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
           >
