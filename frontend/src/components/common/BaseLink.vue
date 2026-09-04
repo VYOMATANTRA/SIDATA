@@ -34,6 +34,15 @@ const props = withDefaults(defineProps<LinkProps>(), {
 
 const isRouterLink = computed(() => !!props.to && !props.disabled);
 
+const hasValidHref = computed(() => {
+  if (props.disabled) return false;
+  if (!props.href) return false;
+  const trimmed = props.href.trim();
+  return trimmed !== '' && trimmed !== '#';
+});
+
+const isAnchor = computed(() => !props.to && hasValidHref.value);
+
 const isExternal = computed(() => {
   if (props.target === '_blank') return true;
   if (props.href && (props.href.startsWith('http://') || props.href.startsWith('https://'))) {
@@ -88,7 +97,7 @@ const stateClasses = computed(() => {
     :to="to"
     :target="target"
     :rel="computedRel"
-    class="group inline-flex items-center no-underline select-none cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-indigo focus-visible:ring-offset-2 rounded-xs"
+    class="group focus-visible:ring-brand-indigo inline-flex cursor-pointer items-center rounded-xs no-underline select-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
     :class="[sizeClasses, colorClasses, stateClasses]"
   >
     <!-- Left Icon (Slot or Prop) -->
@@ -108,10 +117,7 @@ const stateClasses = computed(() => {
     </span>
 
     <!-- Text Label -->
-    <span
-      class="inline-block"
-      data-test="link-label"
-    >
+    <span class="inline-block" data-test="link-label">
       <slot>{{ label }}</slot>
     </span>
 
@@ -128,25 +134,18 @@ const stateClasses = computed(() => {
           class="h-4 w-4 shrink-0"
         />
         <span v-else-if="rightIcon">{{ rightIcon }}</span>
-        <span v-else-if="withArrow" class="font-bold leading-none select-none">→</span>
+        <span v-else-if="withArrow" class="leading-none font-bold select-none">→</span>
       </slot>
     </span>
   </RouterLink>
 
   <a
-    v-else
-    :href="!disabled ? (href || '#') : undefined"
+    v-else-if="isAnchor && href"
+    :href="href"
     :target="target"
     :rel="computedRel"
-    :aria-disabled="disabled ? 'true' : undefined"
-    :tabindex="disabled ? -1 : undefined"
-    class="group inline-flex items-center no-underline select-none cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-indigo focus-visible:ring-offset-2 rounded-xs"
-    :class="[
-      sizeClasses,
-      colorClasses,
-      stateClasses,
-      { 'opacity-50 cursor-not-allowed pointer-events-none': disabled },
-    ]"
+    class="group focus-visible:ring-brand-indigo inline-flex cursor-pointer items-center rounded-xs no-underline select-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+    :class="[sizeClasses, colorClasses, stateClasses]"
   >
     <!-- Left Icon (Slot or Prop) -->
     <span
@@ -165,10 +164,7 @@ const stateClasses = computed(() => {
     </span>
 
     <!-- Text Label -->
-    <span
-      class="inline-block"
-      data-test="link-label"
-    >
+    <span class="inline-block" data-test="link-label">
       <slot>{{ label }}</slot>
     </span>
 
@@ -185,8 +181,56 @@ const stateClasses = computed(() => {
           class="h-4 w-4 shrink-0"
         />
         <span v-else-if="rightIcon">{{ rightIcon }}</span>
-        <span v-else-if="withArrow" class="font-bold leading-none select-none">→</span>
+        <span v-else-if="withArrow" class="leading-none font-bold select-none">→</span>
       </slot>
     </span>
   </a>
+
+  <button
+    v-else
+    type="button"
+    disabled
+    aria-disabled="true"
+    tabindex="-1"
+    class="group pointer-events-none inline-flex cursor-not-allowed items-center rounded-xs no-underline opacity-50 select-none focus-visible:outline-none"
+    :class="[sizeClasses, colorClasses, stateClasses]"
+  >
+    <!-- Left Icon (Slot or Prop) -->
+    <span
+      v-if="$slots.leftIcon || leftIcon"
+      class="inline-flex shrink-0 items-center justify-center no-underline"
+      data-test="left-icon"
+    >
+      <slot name="leftIcon">
+        <component
+          :is="leftIcon"
+          v-if="typeof leftIcon === 'object' || typeof leftIcon === 'function'"
+          class="h-4 w-4 shrink-0"
+        />
+        <span v-else>{{ leftIcon }}</span>
+      </slot>
+    </span>
+
+    <!-- Text Label -->
+    <span class="inline-block" data-test="link-label">
+      <slot>{{ label }}</slot>
+    </span>
+
+    <!-- Right Icon / Arrow -->
+    <span
+      v-if="$slots.rightIcon || rightIcon || withArrow"
+      class="inline-flex shrink-0 items-center justify-center no-underline"
+      data-test="right-icon"
+    >
+      <slot name="rightIcon">
+        <component
+          :is="rightIcon"
+          v-if="typeof rightIcon === 'object' || typeof rightIcon === 'function'"
+          class="h-4 w-4 shrink-0"
+        />
+        <span v-else-if="rightIcon">{{ rightIcon }}</span>
+        <span v-else-if="withArrow" class="leading-none font-bold select-none">→</span>
+      </slot>
+    </span>
+  </button>
 </template>

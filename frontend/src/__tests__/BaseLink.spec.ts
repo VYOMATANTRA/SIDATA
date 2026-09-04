@@ -106,7 +106,7 @@ describe('BaseLink.vue', () => {
     expect(blank.attributes('rel')).toBe('noopener noreferrer');
   });
 
-  it('handles disabled state properly per accessibility requirements', () => {
+  it('handles disabled state properly by rendering a disabled button per accessibility requirements', () => {
     const wrapper = mount(BaseLink, {
       props: {
         href: '/somewhere',
@@ -115,10 +115,40 @@ describe('BaseLink.vue', () => {
       },
     });
 
+    expect(wrapper.element.tagName).toBe('BUTTON');
     expect(wrapper.attributes('href')).toBeUndefined();
+    expect(wrapper.attributes('disabled')).toBeDefined();
     expect(wrapper.attributes('aria-disabled')).toBe('true');
     expect(wrapper.attributes('tabindex')).toBe('-1');
     expect(wrapper.classes()).toContain('cursor-not-allowed');
+  });
+
+  it('renders a disabled button when neither to nor href is supplied per ACCESSIBILITY.md', () => {
+    const wrapper = mount(BaseLink, {
+      props: {
+        label: 'No destination link',
+      },
+    });
+
+    expect(wrapper.element.tagName).toBe('BUTTON');
+    expect(wrapper.attributes('href')).toBeUndefined();
+    expect(wrapper.attributes('disabled')).toBeDefined();
+    expect(wrapper.attributes('aria-disabled')).toBe('true');
+    expect(wrapper.classes()).toContain('cursor-not-allowed');
+  });
+
+  it('renders a disabled button instead of forbidden href="#" placeholder', () => {
+    const wrapper = mount(BaseLink, {
+      props: {
+        href: '#',
+        label: 'Forbidden placeholder',
+      },
+    });
+
+    expect(wrapper.element.tagName).toBe('BUTTON');
+    expect(wrapper.attributes('href')).toBeUndefined();
+    expect(wrapper.attributes('disabled')).toBeDefined();
+    expect(wrapper.attributes('aria-disabled')).toBe('true');
   });
 
   it('supports custom slots and withArrow=false', () => {

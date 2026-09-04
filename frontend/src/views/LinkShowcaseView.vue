@@ -184,18 +184,17 @@ const generatedSnippet = computed(() => {
                 <div class="space-y-8">
                   <!-- Row 1: Default State -->
                   <div>
-                    <BaseLink
-                      href="#"
-                      state="default"
-                      size="lg"
-                      label="Link label"
-                      @click.prevent
-                    />
+                    <BaseLink to="/mockup/link" state="default" size="lg" label="Link label" />
                   </div>
 
                   <!-- Row 2: Hover State -->
                   <div>
-                    <BaseLink href="#" state="hover" size="lg" label="Link label" @click.prevent />
+                    <BaseLink to="/mockup/link" state="hover" size="lg" label="Link label" />
+                  </div>
+
+                  <!-- Row 3: Placeholder (No destination, renders disabled button per ACCESSIBILITY.md) -->
+                  <div>
+                    <BaseLink state="default" size="lg" label="Link label (placeholder)" />
                   </div>
                 </div>
               </div>
