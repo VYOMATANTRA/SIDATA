@@ -204,4 +204,35 @@ describe('StatOverview.vue', () => {
     expect(wrapper.find('.custom-card-empty').exists()).toBe(true);
     expect(wrapper.find('.custom-card-empty').text()).toBe('Memuat data demografi...');
   });
+
+  it('forwards title to nested StatCard landmark and screen-reader heading', () => {
+    const wrapper = mount(StatOverview, {
+      props: {
+        title: 'Struktur Rukun Tetangga',
+      },
+      global: {
+        stubs: { RouterLink: true },
+      },
+    });
+
+    const statCard = wrapper.find('[data-test="stat-card"]');
+    expect(statCard.attributes('aria-label')).toBe('Struktur Rukun Tetangga');
+    expect(statCard.find('h2.sr-only').text()).toBe('Struktur Rukun Tetangga');
+  });
+
+  it('supports cardTitle override for nested StatCard when specified', () => {
+    const wrapper = mount(StatOverview, {
+      props: {
+        title: 'Section Heading',
+        cardTitle: 'Custom Card Landmark',
+      },
+      global: {
+        stubs: { RouterLink: true },
+      },
+    });
+
+    const statCard = wrapper.find('[data-test="stat-card"]');
+    expect(statCard.attributes('aria-label')).toBe('Custom Card Landmark');
+    expect(statCard.find('h2.sr-only').text()).toBe('Custom Card Landmark');
+  });
 });

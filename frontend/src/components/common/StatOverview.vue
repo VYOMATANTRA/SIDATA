@@ -12,6 +12,8 @@ export interface StatOverviewProps {
   eyebrow?: string;
   /** List of statistics for the StatCard */
   stats?: StatItem[];
+  /** Optional custom title override for the nested StatCard landmark (defaults to title) */
+  cardTitle?: string;
   /** Action button label (default: 'Lihat selengkapnya') */
   buttonLabel?: string;
   /** Vue router route destination for button */
@@ -32,6 +34,7 @@ withDefaults(defineProps<StatOverviewProps>(), {
   description: '',
   eyebrow: '',
   stats: undefined,
+  cardTitle: undefined,
   buttonLabel: 'Lihat selengkapnya',
   to: undefined,
   href: undefined,
@@ -73,7 +76,7 @@ const emit = defineEmits<{
     <!-- 2. StatCard Sub-component -->
     <div class="w-full">
       <slot name="card">
-        <StatCard :items="stats" :variant="cardVariant">
+        <StatCard :items="stats" :variant="cardVariant" :title="cardTitle || title">
           <template v-if="$slots['card-empty']" #empty>
             <slot name="card-empty" />
           </template>
