@@ -168,6 +168,7 @@ describe('BaseButton.vue', () => {
     expect(wrapper.element.tagName).toBe('A');
     expect(wrapper.attributes('href')).toBe('https://example.com');
     expect(wrapper.attributes('target')).toBe('_blank');
+    expect(wrapper.attributes('rel')).toBe('noopener noreferrer');
     expect(wrapper.attributes('type')).toBeUndefined();
 
     await wrapper.trigger('click');
