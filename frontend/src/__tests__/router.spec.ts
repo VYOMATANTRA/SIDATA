@@ -98,5 +98,9 @@ describe('router auth guard retry behavior', () => {
     await router.push('/bar-diagram')
     expect(router.currentRoute.value.path).toBe('/mockup/bar-diagram')
     expect(router.currentRoute.value.name).toBe('bar-diagram-mockup')
+
+    await router.push('/stat-card')
+    expect(router.currentRoute.value.path).toBe('/mockup/stat-card')
+    expect(router.currentRoute.value.name).toBe('stat-card-mockup')
   })
 })

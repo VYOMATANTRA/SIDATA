@@ -83,6 +83,16 @@ const router = createRouter({
       path: '/bar-diagram',
       redirect: '/mockup/bar-diagram',
     },
+    {
+      path: '/mockup/stat-card',
+      name: 'stat-card-mockup',
+      component: () => import('../views/StatCardShowcaseView.vue'),
+      meta: { title: 'Stat Card Component Mockup - SIDATA' },
+    },
+    {
+      path: '/stat-card',
+      redirect: '/mockup/stat-card',
+    },
   ],
 })
 

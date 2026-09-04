@@ -8,3 +8,5 @@ export { default as AppFooter } from './AppFooter.vue';
 export type { FooterProps } from './AppFooter.vue';
 export { default as BarDiagram } from './BarDiagram.vue';
 export type { BarDiagramProps, BarDiagramItem } from './BarDiagram.vue';
+export { default as StatCard } from './StatCard.vue';
+export type { StatCardProps, StatItem } from './StatCard.vue';
