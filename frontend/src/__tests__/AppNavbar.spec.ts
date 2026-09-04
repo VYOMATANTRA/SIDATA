@@ -35,7 +35,7 @@ describe('AppNavbar.vue', () => {
     expect(wrapper.find('nav').attributes('aria-label')).toBe('Navigasi Utama');
   });
 
-  it('renders white variant with solid bg-white and light text colors matching Figma', async () => {
+  it('renders white variant with solid bg-white and high contrast text colors', async () => {
     const router = createMockRouter();
     await router.push('/');
     await router.isReady();
@@ -50,11 +50,11 @@ describe('AppNavbar.vue', () => {
     });
 
     expect(wrapper.find('header').classes()).toContain('bg-white');
-    expect(wrapper.find('[data-test="navbar-title"]').classes()).toContain('text-slate-300');
-    expect(wrapper.find('[data-test="navbar-subtitle"]').classes()).toContain('text-slate-400');
+    expect(wrapper.find('[data-test="navbar-title"]').classes()).toContain('text-slate-900');
+    expect(wrapper.find('[data-test="navbar-subtitle"]').classes()).toContain('text-slate-500');
   });
 
-  it('renders transparent variant with correct text colors', async () => {
+  it('renders transparent variant with correct high contrast text colors', async () => {
     const router = createMockRouter();
     await router.push('/');
     await router.isReady();
@@ -69,8 +69,26 @@ describe('AppNavbar.vue', () => {
     });
 
     expect(wrapper.find('header').classes()).toContain('bg-transparent');
-    expect(wrapper.find('[data-test="navbar-title"]').classes()).toContain('text-slate-300');
-    expect(wrapper.find('[data-test="navbar-subtitle"]').classes()).toContain('text-slate-400');
+    expect(wrapper.find('[data-test="navbar-title"]').classes()).toContain('text-slate-900');
+    expect(wrapper.find('[data-test="navbar-subtitle"]').classes()).toContain('text-slate-500');
+  });
+
+  it('uses dark hamburger icon bars on white variant for non-text contrast', async () => {
+    const router = createMockRouter();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(AppNavbar, {
+      props: {
+        variant: 'white',
+      },
+      global: {
+        plugins: [router],
+      },
+    });
+
+    const bar = wrapper.find('[data-test="hamburger-btn"] span');
+    expect(bar.classes()).toContain('bg-slate-800');
   });
 
   it('supports custom title and subtitle props', async () => {
