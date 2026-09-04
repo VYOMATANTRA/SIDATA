@@ -80,6 +80,13 @@ describe('StatCard.vue', () => {
     const dd = wrapper.findAll('dd');
     expect(dd).toHaveLength(4);
 
+    // Verify dt precedes dd in DOM order within each stat item for screen reader accessibility
+    const statItems = wrapper.findAll('[data-test="stat-item"]');
+    statItems.forEach((item) => {
+      const itemHtml = item.html();
+      expect(itemHtml.indexOf('<dt')).toBeLessThan(itemHtml.indexOf('<dd'));
+    });
+
     // Hidden accessible heading
     const h2 = wrapper.find('h2.sr-only');
     expect(h2.exists()).toBe(true);

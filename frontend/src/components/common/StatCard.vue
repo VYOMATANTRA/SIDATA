@@ -96,7 +96,7 @@ const variantClasses = computed(() => {
 
 <template>
   <div
-    class="w-full rounded-2xl p-6 sm:px-8 sm:py-7 transition-all"
+    class="w-full rounded-2xl p-6 transition-all sm:px-8 sm:py-7"
     :class="[variantClasses, cardClass]"
     data-test="stat-card"
     role="region"
@@ -110,13 +110,13 @@ const variantClasses = computed(() => {
       Layout: Flexbox with justify-center and equal gaps, ensuring stats are always centered with equal spacing regardless of count.
     -->
     <dl
-      class="flex flex-wrap items-start justify-center gap-y-6 gap-x-6 sm:gap-x-10 md:gap-x-14 text-center"
+      class="flex flex-wrap items-start justify-center gap-x-6 gap-y-6 text-center sm:gap-x-10 md:gap-x-14"
       data-test="stat-list"
     >
       <div
         v-for="(item, idx) in displayedItems"
         :key="idx"
-        class="flex flex-col items-center text-center min-w-[120px] max-w-[170px]"
+        class="flex max-w-[170px] min-w-[120px] flex-col items-center text-center"
         data-test="stat-item"
       >
         <!-- Icon Container -->
@@ -215,23 +215,24 @@ const variantClasses = computed(() => {
           </slot>
         </div>
 
-        <!-- Description Details (<dd>): Numeric Stat Value -->
-        <dd
-          class="text-xl sm:text-2xl font-bold tracking-tight leading-tight min-w-0"
-          :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
-          data-test="stat-value"
-        >
-          {{ item.value }}<span v-if="item.unit" class="ml-1 text-sm font-normal">{{ item.unit }}</span>
-        </dd>
-
-        <!-- Description Term (<dt>): Stat Label Description -->
+        <!-- Description Term (<dt>): Stat Label Description (precedes <dd> in DOM for screen readers) -->
         <dt
-          class="mt-1.5 text-xs sm:text-sm leading-snug max-w-[140px] whitespace-pre-line"
-          :class="variant === 'light' ? 'text-slate-600 font-medium' : 'text-slate-200 font-normal'"
+          class="order-2 mt-1.5 max-w-[140px] text-xs leading-snug whitespace-pre-line sm:text-sm"
+          :class="variant === 'light' ? 'font-medium text-slate-600' : 'font-normal text-slate-200'"
           data-test="stat-label"
         >
           {{ item.label }}
         </dt>
+
+        <!-- Description Details (<dd>): Numeric Stat Value -->
+        <dd
+          class="order-1 min-w-0 text-xl leading-tight font-bold tracking-tight sm:text-2xl"
+          :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
+          data-test="stat-value"
+        >
+          {{ item.value
+          }}<span v-if="item.unit" class="ml-1 text-sm font-normal">{{ item.unit }}</span>
+        </dd>
       </div>
     </dl>
   </div>
