@@ -110,5 +110,9 @@ describe('router auth guard retry behavior', () => {
     await router.push('/huge-quote');
     expect(router.currentRoute.value.path).toBe('/mockup/huge-quote');
     expect(router.currentRoute.value.name).toBe('huge-quote-mockup');
+
+    await router.push('/hero');
+    expect(router.currentRoute.value.path).toBe('/mockup/hero');
+    expect(router.currentRoute.value.name).toBe('hero-mockup');
   });
 });

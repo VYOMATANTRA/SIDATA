@@ -67,11 +67,13 @@ const generatedSnippet = computed(() => {
     <header class="border-b border-slate-200 bg-white px-6 py-4 shadow-xs">
       <div class="mx-auto flex max-w-7xl items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="flex h-9 w-9 items-center justify-center rounded-btn bg-brand-navy font-bold text-white">
+          <div
+            class="rounded-btn bg-brand-navy flex h-9 w-9 items-center justify-center font-bold text-white"
+          >
             S
           </div>
           <div>
-            <h1 class="text-base font-bold text-brand-navy">SIDATA Design System</h1>
+            <h1 class="text-brand-navy text-base font-bold">SIDATA Design System</h1>
             <p class="text-xs text-slate-500">Stat Card Component Specification & Verification</p>
           </div>
         </div>
@@ -110,9 +112,27 @@ const generatedSnippet = computed(() => {
           </router-link>
           <router-link
             to="/mockup/stat-card"
-            class="rounded-btn border border-brand-navy bg-brand-navy px-3 py-1.5 text-xs font-medium text-white transition-colors"
+            class="rounded-btn border-brand-navy bg-brand-navy border px-3 py-1.5 text-xs font-medium text-white transition-colors"
           >
             ❖ Stat Card
+          </router-link>
+          <router-link
+            to="/mockup/stat-overview"
+            class="rounded-btn border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            ❖ Stat Overview
+          </router-link>
+          <router-link
+            to="/mockup/huge-quote"
+            class="rounded-btn border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            ❖ Huge Quote
+          </router-link>
+          <router-link
+            to="/mockup/hero"
+            class="rounded-btn border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            ❖ Hero
           </router-link>
           <router-link
             to="/"
@@ -124,21 +144,31 @@ const generatedSnippet = computed(() => {
       </div>
     </header>
 
-    <main class="mx-auto max-w-7xl px-4 py-8 space-y-12 sm:px-6 sm:py-10">
+    <main class="mx-auto max-w-7xl space-y-12 px-4 py-8 sm:px-6 sm:py-10">
       <!-- Section 1: Exact Figma Spec Reproduction -->
       <section class="rounded-card border border-slate-200/80 bg-white p-6 shadow-sm sm:p-10">
-        <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-4">
+        <div
+          class="mb-6 flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between"
+        >
           <div>
-            <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-violet uppercase tracking-wider">
+            <span
+              class="text-brand-violet inline-flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase"
+            >
               <span>❖</span> Figma Component Specification
             </span>
             <h2 class="text-lg font-bold text-slate-900">Demographic Key Statistics Card</h2>
-            <p class="text-xs text-slate-500 mt-0.5">
-              Pixel-perfect reproduction of the Figma stat card slice: 4 demographic metrics with clean SVG icons, bold white values, and semantic description list (<code class="font-mono text-brand-indigo">&lt;dl&gt;/&lt;dt&gt;/&lt;dd&gt;</code>) per <code class="font-mono">docs/ACCESSIBILITY.md</code>.
+            <p class="mt-0.5 text-xs text-slate-500">
+              Pixel-perfect reproduction of the Figma stat card slice: 4 demographic metrics with
+              clean SVG icons, bold white values, and semantic description list (<code
+                class="text-brand-indigo font-mono"
+                >&lt;dl&gt;/&lt;dt&gt;/&lt;dd&gt;</code
+              >) per <code class="font-mono">docs/ACCESSIBILITY.md</code>.
             </p>
           </div>
 
-          <span class="inline-block rounded-btn border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-2xs">
+          <span
+            class="rounded-btn inline-block border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-2xs"
+          >
             Figma Slice
           </span>
         </div>
@@ -146,12 +176,14 @@ const generatedSnippet = computed(() => {
         <!-- Component Display in Spec Box -->
         <div class="space-y-6">
           <div class="mx-auto max-w-3xl">
-            <div class="mb-2 flex items-center gap-1.5 text-xs font-semibold text-brand-violet">
+            <div class="text-brand-violet mb-2 flex items-center gap-1.5 text-xs font-semibold">
               <span>❖</span> StatCard (Default Variant: Dark Charcoal / Standalone)
             </div>
 
             <!-- Purple Dashed Figma Canvas -->
-            <div class="rounded-card border-2 border-dashed border-brand-violet bg-slate-100/60 p-6 sm:p-8 shadow-xs">
+            <div
+              class="rounded-card border-brand-violet border-2 border-dashed bg-slate-100/60 p-6 shadow-xs sm:p-8"
+            >
               <StatCard :items="figmaStats" />
             </div>
           </div>
@@ -163,7 +195,7 @@ const generatedSnippet = computed(() => {
             </div>
 
             <div
-              class="relative overflow-hidden rounded-2xl p-8 sm:p-12 shadow-md flex items-center justify-center"
+              class="relative flex items-center justify-center overflow-hidden rounded-2xl p-8 shadow-md sm:p-12"
               :style="{
                 backgroundImage: `linear-gradient(rgba(10, 35, 83, 0.75), rgba(0, 27, 72, 0.85)), url(${bgHeroImage})`,
                 backgroundSize: 'cover',
@@ -181,12 +213,17 @@ const generatedSnippet = computed(() => {
       <!-- Section 2: Visual Style Variants -->
       <section class="rounded-card border border-slate-200/80 bg-white p-6 shadow-sm sm:p-10">
         <div class="mb-6 border-b border-slate-100 pb-4">
-          <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-indigo uppercase tracking-wider">
+          <span
+            class="text-brand-indigo inline-flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase"
+          >
             🎨 Design System Variants
           </span>
           <h2 class="text-lg font-bold text-slate-900">Supported Theme Variants</h2>
-          <p class="text-xs text-slate-500 mt-0.5">
-            Adheres to <code class="font-mono text-brand-indigo">docs/UI_STYLE_GUIDE.md §3.B</code> tokens: Dark, Glassmorphism (<code class="font-mono">bg-surface-glass</code>), Brand Navy, and Clean Light.
+          <p class="mt-0.5 text-xs text-slate-500">
+            Adheres to
+            <code class="text-brand-indigo font-mono">docs/UI_STYLE_GUIDE.md §3.B</code> tokens:
+            Dark, Glassmorphism (<code class="font-mono">bg-surface-glass</code>), Brand Navy, and
+            Clean Light.
           </p>
         </div>
 
@@ -194,7 +231,10 @@ const generatedSnippet = computed(() => {
           <!-- Variant 1: Dark Charcoal (Figma Original) -->
           <div class="space-y-2">
             <div class="flex items-center justify-between text-xs font-semibold text-slate-700">
-              <span>1. Dark Charcoal (<code class="font-mono text-brand-indigo">variant="dark"</code>)</span>
+              <span
+                >1. Dark Charcoal (<code class="text-brand-indigo font-mono">variant="dark"</code
+                >)</span
+              >
               <span class="text-slate-400">Default Figma Slice</span>
             </div>
             <div class="rounded-card bg-slate-100 p-4">
@@ -205,7 +245,10 @@ const generatedSnippet = computed(() => {
           <!-- Variant 2: Glassmorphism -->
           <div class="space-y-2">
             <div class="flex items-center justify-between text-xs font-semibold text-slate-700">
-              <span>2. Glassmorphism (<code class="font-mono text-brand-indigo">variant="glass"</code>)</span>
+              <span
+                >2. Glassmorphism (<code class="text-brand-indigo font-mono">variant="glass"</code
+                >)</span
+              >
               <span class="text-slate-400">docs/UI_STYLE_GUIDE.md §3.B</span>
             </div>
             <div
@@ -221,7 +264,10 @@ const generatedSnippet = computed(() => {
           <!-- Variant 3: Brand Navy -->
           <div class="space-y-2">
             <div class="flex items-center justify-between text-xs font-semibold text-slate-700">
-              <span>3. Brand Navy (<code class="font-mono text-brand-indigo">variant="navy"</code>)</span>
+              <span
+                >3. Brand Navy (<code class="text-brand-indigo font-mono">variant="navy"</code
+                >)</span
+              >
               <span class="text-slate-400">Brand Navy Token (#0a2353)</span>
             </div>
             <div class="rounded-card bg-slate-100 p-4">
@@ -232,7 +278,10 @@ const generatedSnippet = computed(() => {
           <!-- Variant 4: Clean Light -->
           <div class="space-y-2">
             <div class="flex items-center justify-between text-xs font-semibold text-slate-700">
-              <span>4. Clean Light (<code class="font-mono text-brand-indigo">variant="light"</code>)</span>
+              <span
+                >4. Clean Light (<code class="text-brand-indigo font-mono">variant="light"</code
+                >)</span
+              >
               <span class="text-slate-400">Light section container</span>
             </div>
             <div class="rounded-card bg-slate-100 p-4">
@@ -245,18 +294,23 @@ const generatedSnippet = computed(() => {
       <!-- Section 3: Interactive Testing Playground -->
       <section class="rounded-card border border-slate-200/80 bg-white p-6 shadow-sm sm:p-10">
         <div class="mb-6 border-b border-slate-100 pb-4">
-          <span class="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-brand-indigo">
+          <span
+            class="text-brand-indigo inline-flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase"
+          >
             ⚡ Interactive Component Tester
           </span>
           <h2 class="text-lg font-bold text-slate-900">Live Dynamic Playground</h2>
           <p class="mt-0.5 text-xs text-slate-500">
-            Customize figures, labels, and icons dynamically; switch background contexts; and preview responsive reflow.
+            Customize figures, labels, and icons dynamically; switch background contexts; and
+            preview responsive reflow.
           </p>
         </div>
 
         <div class="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
           <!-- Controls Panel -->
-          <div class="space-y-5 rounded-card border border-slate-200/80 bg-slate-50/50 p-5 lg:col-span-5">
+          <div
+            class="rounded-card space-y-5 border border-slate-200/80 bg-slate-50/50 p-5 lg:col-span-5"
+          >
             <h3 class="text-sm font-semibold text-slate-800">Card Configuration</h3>
 
             <!-- Variant Selector -->
@@ -266,7 +320,11 @@ const generatedSnippet = computed(() => {
                 <button
                   type="button"
                   class="rounded-btn border px-3 py-1.5 text-xs font-medium transition-colors"
-                  :class="playgroundVariant === 'dark' ? 'border-brand-navy bg-brand-navy text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'"
+                  :class="
+                    playgroundVariant === 'dark'
+                      ? 'border-brand-navy bg-brand-navy text-white'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  "
                   @click="playgroundVariant = 'dark'"
                 >
                   Dark (Figma)
@@ -274,7 +332,11 @@ const generatedSnippet = computed(() => {
                 <button
                   type="button"
                   class="rounded-btn border px-3 py-1.5 text-xs font-medium transition-colors"
-                  :class="playgroundVariant === 'glass' ? 'border-brand-navy bg-brand-navy text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'"
+                  :class="
+                    playgroundVariant === 'glass'
+                      ? 'border-brand-navy bg-brand-navy text-white'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  "
                   @click="playgroundVariant = 'glass'"
                 >
                   Glassmorphism
@@ -282,7 +344,11 @@ const generatedSnippet = computed(() => {
                 <button
                   type="button"
                   class="rounded-btn border px-3 py-1.5 text-xs font-medium transition-colors"
-                  :class="playgroundVariant === 'navy' ? 'border-brand-navy bg-brand-navy text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'"
+                  :class="
+                    playgroundVariant === 'navy'
+                      ? 'border-brand-navy bg-brand-navy text-white'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  "
                   @click="playgroundVariant = 'navy'"
                 >
                   Brand Navy
@@ -290,7 +356,11 @@ const generatedSnippet = computed(() => {
                 <button
                   type="button"
                   class="rounded-btn border px-3 py-1.5 text-xs font-medium transition-colors"
-                  :class="playgroundVariant === 'light' ? 'border-brand-navy bg-brand-navy text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'"
+                  :class="
+                    playgroundVariant === 'light'
+                      ? 'border-brand-navy bg-brand-navy text-white'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  "
                   @click="playgroundVariant = 'light'"
                 >
                   Clean Light
@@ -300,12 +370,18 @@ const generatedSnippet = computed(() => {
 
             <!-- Background Mode Selector -->
             <div>
-              <label class="mb-1.5 block text-xs font-medium text-slate-600">Preview Background</label>
+              <label class="mb-1.5 block text-xs font-medium text-slate-600"
+                >Preview Background</label
+              >
               <div class="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   class="rounded-btn border px-3 py-1.5 text-xs font-medium transition-colors"
-                  :class="playgroundBgMode === 'image' ? 'border-brand-navy bg-brand-navy text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'"
+                  :class="
+                    playgroundBgMode === 'image'
+                      ? 'border-brand-navy bg-brand-navy text-white'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  "
                   @click="playgroundBgMode = 'image'"
                 >
                   Hero Image
@@ -313,7 +389,11 @@ const generatedSnippet = computed(() => {
                 <button
                   type="button"
                   class="rounded-btn border px-3 py-1.5 text-xs font-medium transition-colors"
-                  :class="playgroundBgMode === 'neutral' ? 'border-brand-navy bg-brand-navy text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'"
+                  :class="
+                    playgroundBgMode === 'neutral'
+                      ? 'border-brand-navy bg-brand-navy text-white'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  "
                   @click="playgroundBgMode = 'neutral'"
                 >
                   Neutral Grey
@@ -337,7 +417,7 @@ const generatedSnippet = computed(() => {
                   </button>
                   <button
                     type="button"
-                    class="rounded-btn bg-brand-navy px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-navy-deep transition-colors"
+                    class="rounded-btn bg-brand-navy hover:bg-brand-navy-deep px-2.5 py-1 text-xs font-medium text-white transition-colors"
                     @click="addStat"
                   >
                     + Tambah
@@ -349,7 +429,7 @@ const generatedSnippet = computed(() => {
                 <div
                   v-for="(item, idx) in editableStats"
                   :key="idx"
-                  class="space-y-2 rounded-btn border border-slate-200 bg-white p-3 text-xs shadow-2xs"
+                  class="rounded-btn space-y-2 border border-slate-200 bg-white p-3 text-xs shadow-2xs"
                 >
                   <div class="flex items-center justify-between">
                     <span class="font-semibold text-slate-700">Item {{ idx + 1 }}</span>
@@ -369,14 +449,14 @@ const generatedSnippet = computed(() => {
                       <input
                         v-model="item.value"
                         type="text"
-                        class="w-full rounded border border-slate-200 px-2 py-1 text-xs font-bold text-slate-900 focus:outline-none focus:border-brand-navy"
+                        class="focus:border-brand-navy w-full rounded border border-slate-200 px-2 py-1 text-xs font-bold text-slate-900 focus:outline-none"
                       />
                     </div>
                     <div>
                       <label class="block text-[11px] text-slate-500">Ikon</label>
                       <select
                         v-model="item.icon"
-                        class="w-full rounded border border-slate-200 px-1.5 py-1 text-xs text-slate-900 focus:outline-none focus:border-brand-navy"
+                        class="focus:border-brand-navy w-full rounded border border-slate-200 px-1.5 py-1 text-xs text-slate-900 focus:outline-none"
                       >
                         <option v-for="opt in iconChoices" :key="opt.value" :value="opt.value">
                           {{ opt.label }}
@@ -390,7 +470,7 @@ const generatedSnippet = computed(() => {
                     <input
                       v-model="item.label"
                       type="text"
-                      class="w-full rounded border border-slate-200 px-2 py-1 text-xs text-slate-900 focus:outline-none focus:border-brand-navy"
+                      class="focus:border-brand-navy w-full rounded border border-slate-200 px-2 py-1 text-xs text-slate-900 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -401,15 +481,21 @@ const generatedSnippet = computed(() => {
           <!-- Live Output Preview -->
           <div class="space-y-6 lg:col-span-7">
             <div>
-              <span class="mb-2 block text-xs font-semibold text-slate-700">Preview Komponen Langsung</span>
+              <span class="mb-2 block text-xs font-semibold text-slate-700"
+                >Preview Komponen Langsung</span
+              >
               <div
-                class="rounded-2xl p-6 sm:p-10 transition-all flex items-center justify-center"
+                class="flex items-center justify-center rounded-2xl p-6 transition-all sm:p-10"
                 :class="playgroundBgMode === 'image' ? 'shadow-lg' : 'bg-slate-100'"
-                :style="playgroundBgMode === 'image' ? {
-                  backgroundImage: `linear-gradient(rgba(10, 35, 83, 0.75), rgba(0, 27, 72, 0.85)), url(${bgHeroImage})`,
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
-                } : {}"
+                :style="
+                  playgroundBgMode === 'image'
+                    ? {
+                        backgroundImage: `linear-gradient(rgba(10, 35, 83, 0.75), rgba(0, 27, 72, 0.85)), url(${bgHeroImage})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                      }
+                    : {}
+                "
               >
                 <div class="w-full max-w-2xl">
                   <StatCard :items="editableStats" :variant="playgroundVariant" />
@@ -422,7 +508,9 @@ const generatedSnippet = computed(() => {
               <div class="mb-1.5 flex items-center justify-between">
                 <span class="text-xs font-semibold text-slate-700">Vue SFC Usage Snippet</span>
               </div>
-              <pre class="overflow-x-auto rounded-card bg-slate-900 p-4 text-xs text-slate-200"><code>{{ generatedSnippet }}</code></pre>
+              <pre
+                class="rounded-card overflow-x-auto bg-slate-900 p-4 text-xs text-slate-200"
+              ><code>{{ generatedSnippet }}</code></pre>
             </div>
           </div>
         </div>

@@ -47,11 +47,13 @@ const generatedSnippet = computed(() => {
     <header class="border-b border-slate-200 bg-white px-6 py-4 shadow-xs">
       <div class="mx-auto flex max-w-7xl items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="flex h-9 w-9 items-center justify-center rounded-btn bg-brand-navy font-bold text-white">
+          <div
+            class="rounded-btn bg-brand-navy flex h-9 w-9 items-center justify-center font-bold text-white"
+          >
             S
           </div>
           <div>
-            <h1 class="text-base font-bold text-brand-navy">SIDATA Design System</h1>
+            <h1 class="text-brand-navy text-base font-bold">SIDATA Design System</h1>
             <p class="text-xs text-slate-500">Base UI Component Specification & Verification</p>
           </div>
         </div>
@@ -66,7 +68,7 @@ const generatedSnippet = computed(() => {
           </router-link>
           <router-link
             to="/mockup/link"
-            class="rounded-btn border border-brand-navy bg-brand-navy px-3 py-1.5 text-xs font-medium text-white transition-colors"
+            class="rounded-btn border-brand-navy bg-brand-navy border px-3 py-1.5 text-xs font-medium text-white transition-colors"
           >
             ❖ Link
           </router-link>
@@ -95,6 +97,24 @@ const generatedSnippet = computed(() => {
             ❖ Stat Card
           </router-link>
           <router-link
+            to="/mockup/stat-overview"
+            class="rounded-btn border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            ❖ Stat Overview
+          </router-link>
+          <router-link
+            to="/mockup/huge-quote"
+            class="rounded-btn border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            ❖ Huge Quote
+          </router-link>
+          <router-link
+            to="/mockup/hero"
+            class="rounded-btn border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            ❖ Hero
+          </router-link>
+          <router-link
             to="/"
             class="rounded-btn border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
           >
@@ -104,23 +124,29 @@ const generatedSnippet = computed(() => {
       </div>
     </header>
 
-    <main class="mx-auto max-w-7xl px-4 py-8 space-y-12 sm:px-6 sm:py-10">
+    <main class="mx-auto max-w-7xl space-y-12 px-4 py-8 sm:px-6 sm:py-10">
       <!-- Section 1: Exact Figma Spec Matrix for Link Component -->
       <section class="rounded-card border border-slate-200/80 bg-white p-6 shadow-sm sm:p-10">
         <!-- Top Badge matching Figma screenshot -->
         <div class="mb-8">
-          <span class="inline-block rounded-btn border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-2xs">
+          <span
+            class="rounded-btn inline-block border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-2xs"
+          >
             Links
           </span>
         </div>
 
         <!-- Figma Spec Layout Canvas -->
         <div class="overflow-x-auto pb-6">
-          <div class="mx-auto flex max-w-4xl flex-col items-start gap-12 sm:flex-row sm:items-start sm:gap-16">
+          <div
+            class="mx-auto flex max-w-4xl flex-col items-start gap-12 sm:flex-row sm:items-start sm:gap-16"
+          >
             <!-- Left Header: Size -->
             <div class="shrink-0">
               <div class="mb-1 text-xs font-medium text-slate-400">Size</div>
-              <div class="inline-block border-b-2 border-brand-navy pb-0.5 text-xl font-bold text-slate-900">
+              <div
+                class="border-brand-navy inline-block border-b-2 pb-0.5 text-xl font-bold text-slate-900"
+              >
                 Large
               </div>
             </div>
@@ -129,26 +155,32 @@ const generatedSnippet = computed(() => {
             <div class="shrink-0 space-y-8">
               <div>
                 <div class="mb-1 text-xs font-medium text-slate-400">State</div>
-                <div class="inline-block border-b-2 border-brand-cyan pb-0.5 text-xl font-bold text-slate-900">
+                <div
+                  class="border-brand-cyan inline-block border-b-2 pb-0.5 text-xl font-bold text-slate-900"
+                >
                   Default
                 </div>
               </div>
 
               <div>
-                <div class="inline-block border-b-2 border-brand-cyan pb-0.5 text-xl font-bold text-slate-900">
+                <div
+                  class="border-brand-cyan inline-block border-b-2 pb-0.5 text-xl font-bold text-slate-900"
+                >
                   Hover
                 </div>
               </div>
             </div>
 
             <!-- Right: Figma Component Container (❖ Link) -->
-            <div class="flex-1 w-full max-w-md">
-              <div class="mb-2 flex items-center gap-1.5 text-xs font-semibold text-brand-violet">
+            <div class="w-full max-w-md flex-1">
+              <div class="text-brand-violet mb-2 flex items-center gap-1.5 text-xs font-semibold">
                 <span>❖</span> Link
               </div>
 
               <!-- Purple Dashed Box matching Figma Spec -->
-              <div class="rounded-card border-2 border-dashed border-brand-violet bg-white/70 p-8 shadow-xs">
+              <div
+                class="rounded-card border-brand-violet border-2 border-dashed bg-white/70 p-8 shadow-xs"
+              >
                 <div class="space-y-8">
                   <!-- Row 1: Default State -->
                   <div>
@@ -163,13 +195,7 @@ const generatedSnippet = computed(() => {
 
                   <!-- Row 2: Hover State -->
                   <div>
-                    <BaseLink
-                      href="#"
-                      state="hover"
-                      size="lg"
-                      label="Link label"
-                      @click.prevent
-                    />
+                    <BaseLink href="#" state="hover" size="lg" label="Link label" @click.prevent />
                   </div>
                 </div>
               </div>
@@ -181,18 +207,23 @@ const generatedSnippet = computed(() => {
       <!-- Section 2: Interactive Testing Playground for Link Component -->
       <section class="rounded-card border border-slate-200/80 bg-white p-6 shadow-sm sm:p-10">
         <div class="mb-6 border-b border-slate-100 pb-4">
-          <span class="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-brand-indigo">
+          <span
+            class="text-brand-indigo inline-flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase"
+          >
             ⚡ Interactive Testing Playground
           </span>
           <h2 class="text-lg font-bold text-slate-900">Live Link Tester</h2>
           <p class="mt-0.5 text-xs text-slate-500">
-            Test live mouse hover, font weight transitions, keyboard focus rings, size scales, and router integration.
+            Test live mouse hover, font weight transitions, keyboard focus rings, size scales, and
+            router integration.
           </p>
         </div>
 
         <div class="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
           <!-- Controls Panel -->
-          <div class="space-y-4 rounded-card border border-slate-200/80 bg-slate-50/50 p-5 lg:col-span-5">
+          <div
+            class="rounded-card space-y-4 border border-slate-200/80 bg-slate-50/50 p-5 lg:col-span-5"
+          >
             <h3 class="text-sm font-semibold text-slate-800">Link Properties</h3>
 
             <!-- Size Selector -->
@@ -200,11 +231,15 @@ const generatedSnippet = computed(() => {
               <label class="mb-1.5 block text-xs font-medium text-slate-600">Size Scale</label>
               <div class="grid grid-cols-3 gap-2">
                 <button
-                  v-for="s in (['sm', 'md', 'lg'] as const)"
+                  v-for="s in ['sm', 'md', 'lg'] as const"
                   :key="s"
                   type="button"
                   class="rounded-btn border px-3 py-1.5 text-xs font-medium uppercase transition-colors"
-                  :class="playgroundSize === s ? 'border-brand-navy bg-brand-navy text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'"
+                  :class="
+                    playgroundSize === s
+                      ? 'border-brand-navy bg-brand-navy text-white'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  "
                   @click="playgroundSize = s"
                 >
                   {{ s }}
@@ -217,11 +252,15 @@ const generatedSnippet = computed(() => {
               <label class="mb-1.5 block text-xs font-medium text-slate-600">Color Variant</label>
               <div class="grid grid-cols-3 gap-2">
                 <button
-                  v-for="v in (['navy', 'indigo', 'white'] as const)"
+                  v-for="v in ['navy', 'indigo', 'white'] as const"
                   :key="v"
                   type="button"
                   class="rounded-btn border px-3 py-1.5 text-xs font-medium capitalize transition-colors"
-                  :class="playgroundVariant === v ? 'border-brand-navy bg-brand-navy text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'"
+                  :class="
+                    playgroundVariant === v
+                      ? 'border-brand-navy bg-brand-navy text-white'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  "
                   @click="playgroundVariant = v"
                 >
                   {{ v }}
@@ -274,7 +313,7 @@ const generatedSnippet = computed(() => {
                 id="link-label-input"
                 v-model="playgroundLabel"
                 type="text"
-                class="w-full rounded-btn border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:border-brand-navy focus:outline-none"
+                class="rounded-btn focus:border-brand-navy w-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:outline-none"
               />
             </div>
 
@@ -287,7 +326,7 @@ const generatedSnippet = computed(() => {
                 id="link-href-input"
                 v-model="playgroundHref"
                 type="text"
-                class="w-full rounded-btn border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:border-brand-navy focus:outline-none"
+                class="rounded-btn focus:border-brand-navy w-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:outline-none"
               />
             </div>
           </div>
@@ -296,7 +335,7 @@ const generatedSnippet = computed(() => {
           <div class="space-y-6 lg:col-span-7">
             <!-- Canvas Preview -->
             <div
-              class="flex min-h-[220px] flex-col items-center justify-center rounded-card border border-dashed border-slate-200 p-8 transition-colors"
+              class="rounded-card flex min-h-[220px] flex-col items-center justify-center border border-dashed border-slate-200 p-8 transition-colors"
               :class="playgroundVariant === 'white' ? 'bg-brand-navy' : 'bg-slate-50/70'"
             >
               <BaseLink
@@ -315,12 +354,19 @@ const generatedSnippet = computed(() => {
                 :class="playgroundVariant === 'white' ? 'text-white/70' : 'text-slate-500'"
               >
                 <span class="inline-flex items-center gap-1.5">
-                  <span class="font-medium" :class="playgroundVariant === 'white' ? 'text-white' : 'text-slate-700'">
+                  <span
+                    class="font-medium"
+                    :class="playgroundVariant === 'white' ? 'text-white' : 'text-slate-700'"
+                  >
                     Clicks:
                   </span>
                   <span
                     class="rounded-btn px-2 py-0.5 font-mono font-bold"
-                    :class="playgroundVariant === 'white' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-800'"
+                    :class="
+                      playgroundVariant === 'white'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-slate-200 text-slate-800'
+                    "
                   >
                     {{ clickCount }}
                   </span>
@@ -335,7 +381,9 @@ const generatedSnippet = computed(() => {
                 <span class="text-xs font-semibold text-slate-700">Vue SFC Usage Snippet</span>
                 <span class="text-[11px] text-slate-400">Copy-paste ready</span>
               </div>
-              <pre class="overflow-x-auto rounded-card bg-brand-navy p-4 font-mono text-xs text-white"><code>{{ generatedSnippet }}</code></pre>
+              <pre
+                class="rounded-card bg-brand-navy overflow-x-auto p-4 font-mono text-xs text-white"
+              ><code>{{ generatedSnippet }}</code></pre>
             </div>
           </div>
         </div>

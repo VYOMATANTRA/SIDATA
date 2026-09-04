@@ -39,11 +39,13 @@ const generatedSnippet = computed(() => {
     <header class="border-b border-slate-200 bg-white px-6 py-4 shadow-xs">
       <div class="mx-auto flex max-w-7xl items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="flex h-9 w-9 items-center justify-center rounded-btn bg-brand-navy font-bold text-white">
+          <div
+            class="rounded-btn bg-brand-navy flex h-9 w-9 items-center justify-center font-bold text-white"
+          >
             S
           </div>
           <div>
-            <h1 class="text-base font-bold text-brand-navy">SIDATA Design System</h1>
+            <h1 class="text-brand-navy text-base font-bold">SIDATA Design System</h1>
             <p class="text-xs text-slate-500">Footer Component Specification & Verification</p>
           </div>
         </div>
@@ -70,7 +72,7 @@ const generatedSnippet = computed(() => {
           </router-link>
           <router-link
             to="/mockup/footer"
-            class="rounded-btn border border-brand-navy bg-brand-navy px-3 py-1.5 text-xs font-medium text-white transition-colors"
+            class="rounded-btn border-brand-navy bg-brand-navy border px-3 py-1.5 text-xs font-medium text-white transition-colors"
           >
             ❖ Footer
           </router-link>
@@ -87,6 +89,24 @@ const generatedSnippet = computed(() => {
             ❖ Stat Card
           </router-link>
           <router-link
+            to="/mockup/stat-overview"
+            class="rounded-btn border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            ❖ Stat Overview
+          </router-link>
+          <router-link
+            to="/mockup/huge-quote"
+            class="rounded-btn border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            ❖ Huge Quote
+          </router-link>
+          <router-link
+            to="/mockup/hero"
+            class="rounded-btn border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            ❖ Hero
+          </router-link>
+          <router-link
             to="/"
             class="rounded-btn border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
           >
@@ -96,35 +116,46 @@ const generatedSnippet = computed(() => {
       </div>
     </header>
 
-    <main class="mx-auto max-w-7xl px-4 py-8 space-y-12 sm:px-6 sm:py-10">
+    <main class="mx-auto max-w-7xl space-y-12 px-4 py-8 sm:px-6 sm:py-10">
       <!-- Section 1: Exact Mobile Spec Matrix matching Figma -->
       <section class="rounded-card border border-slate-200/80 bg-white p-6 shadow-sm sm:p-10">
         <!-- Top Badge -->
-        <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-4">
+        <div
+          class="mb-6 flex flex-col gap-2 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between"
+        >
           <div>
-            <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-violet uppercase tracking-wider">
+            <span
+              class="text-brand-violet inline-flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase"
+            >
               <span>❖</span> Mobile Viewport Specification (412px)
             </span>
             <h2 class="text-lg font-bold text-slate-900">Mobile Layout & Spacing Spec</h2>
-            <p class="text-xs text-slate-500 mt-0.5">
-              Exact representation of the Figma mobile footer frame, verified with all 7 partner and program assets.
+            <p class="mt-0.5 text-xs text-slate-500">
+              Exact representation of the Figma mobile footer frame, verified with all 7 partner and
+              program assets.
             </p>
           </div>
-          <span class="inline-block rounded-btn border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-2xs">
+          <span
+            class="rounded-btn inline-block border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-2xs"
+          >
             Footers
           </span>
         </div>
 
         <!-- Figma Component Container (❖ Footer) -->
         <div class="mx-auto max-w-lg">
-          <div class="mb-2 flex items-center gap-1.5 text-xs font-semibold text-brand-violet">
+          <div class="text-brand-violet mb-2 flex items-center gap-1.5 text-xs font-semibold">
             <span>❖</span> Footer (Mobile)
           </div>
 
           <!-- Purple Dashed Box matching Figma Spec -->
-          <div class="rounded-card border-2 border-dashed border-brand-violet bg-slate-100 p-4 sm:p-6 shadow-xs">
+          <div
+            class="rounded-card border-brand-violet border-2 border-dashed bg-slate-100 p-4 shadow-xs sm:p-6"
+          >
             <!-- Simulated Mobile Device Frame (412px) -->
-            <div class="mx-auto max-w-[412px] overflow-hidden rounded-xl border border-slate-700 shadow-2xl">
+            <div
+              class="mx-auto max-w-[412px] overflow-hidden rounded-xl border border-slate-700 shadow-2xl"
+            >
               <AppFooter />
             </div>
           </div>
@@ -134,12 +165,15 @@ const generatedSnippet = computed(() => {
       <!-- Section 2: Desktop Layout Specification -->
       <section class="rounded-card border border-slate-200/80 bg-white p-6 shadow-sm sm:p-10">
         <div class="mb-6 border-b border-slate-100 pb-4">
-          <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-indigo uppercase tracking-wider">
+          <span
+            class="text-brand-indigo inline-flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase"
+          >
             🖥️ Desktop Viewport Specification
           </span>
           <h2 class="text-lg font-bold text-slate-900">Desktop 12-Column Responsive Layout</h2>
-          <p class="text-xs text-slate-500 mt-0.5">
-            Full-width expanded layout with 4-column brand address section, 3 distinct link groups, inline SDG badges, and horizontal collaboration logos.
+          <p class="mt-0.5 text-xs text-slate-500">
+            Full-width expanded layout with 4-column brand address section, 3 distinct link groups,
+            inline SDG badges, and horizontal collaboration logos.
           </p>
         </div>
 
@@ -151,28 +185,39 @@ const generatedSnippet = computed(() => {
       <!-- Section 3: Interactive Testing Playground -->
       <section class="rounded-card border border-slate-200/80 bg-white p-6 shadow-sm sm:p-10">
         <div class="mb-6 border-b border-slate-100 pb-4">
-          <span class="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-brand-indigo">
+          <span
+            class="text-brand-indigo inline-flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase"
+          >
             ⚡ Interactive Testing Playground
           </span>
           <h2 class="text-lg font-bold text-slate-900">Live Component Tester</h2>
           <p class="mt-0.5 text-xs text-slate-500">
-            Customize footer props, switch between desktop, tablet, and mobile previews, and inspect responsiveness.
+            Customize footer props, switch between desktop, tablet, and mobile previews, and inspect
+            responsiveness.
           </p>
         </div>
 
         <div class="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
           <!-- Controls Panel -->
-          <div class="space-y-4 rounded-card border border-slate-200/80 bg-slate-50/50 p-5 lg:col-span-4">
+          <div
+            class="rounded-card space-y-4 border border-slate-200/80 bg-slate-50/50 p-5 lg:col-span-4"
+          >
             <h3 class="text-sm font-semibold text-slate-800">Footer Properties</h3>
 
             <!-- Viewport Switcher -->
             <div>
-              <label class="mb-1.5 block text-xs font-medium text-slate-600">Preview Viewport</label>
+              <label class="mb-1.5 block text-xs font-medium text-slate-600"
+                >Preview Viewport</label
+              >
               <div class="grid grid-cols-3 gap-1.5">
                 <button
                   type="button"
                   class="rounded-btn border px-2 py-1.5 text-xs font-medium transition-colors"
-                  :class="activePreviewMode === 'desktop' ? 'border-brand-navy bg-brand-navy text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'"
+                  :class="
+                    activePreviewMode === 'desktop'
+                      ? 'border-brand-navy bg-brand-navy text-white'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  "
                   @click="activePreviewMode = 'desktop'"
                 >
                   Desktop
@@ -180,7 +225,11 @@ const generatedSnippet = computed(() => {
                 <button
                   type="button"
                   class="rounded-btn border px-2 py-1.5 text-xs font-medium transition-colors"
-                  :class="activePreviewMode === 'tablet' ? 'border-brand-navy bg-brand-navy text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'"
+                  :class="
+                    activePreviewMode === 'tablet'
+                      ? 'border-brand-navy bg-brand-navy text-white'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  "
                   @click="activePreviewMode = 'tablet'"
                 >
                   Tablet (800px)
@@ -188,7 +237,11 @@ const generatedSnippet = computed(() => {
                 <button
                   type="button"
                   class="rounded-btn border px-2 py-1.5 text-xs font-medium transition-colors"
-                  :class="activePreviewMode === 'mobile' ? 'border-brand-navy bg-brand-navy text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'"
+                  :class="
+                    activePreviewMode === 'mobile'
+                      ? 'border-brand-navy bg-brand-navy text-white'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  "
                   @click="activePreviewMode = 'mobile'"
                 >
                   Mobile (412px)
@@ -205,7 +258,7 @@ const generatedSnippet = computed(() => {
                 id="footer-phone-input"
                 v-model="playgroundPhone"
                 type="text"
-                class="w-full rounded-btn border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:border-brand-navy focus:outline-none"
+                class="rounded-btn focus:border-brand-navy w-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:outline-none"
               />
             </div>
 
@@ -218,20 +271,23 @@ const generatedSnippet = computed(() => {
                 id="footer-year-input"
                 v-model.number="playgroundYear"
                 type="number"
-                class="w-full rounded-btn border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:border-brand-navy focus:outline-none"
+                class="rounded-btn focus:border-brand-navy w-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:outline-none"
               />
             </div>
 
             <!-- Address Lines Input -->
             <div>
-              <label for="footer-address-input" class="mb-1 block text-xs font-medium text-slate-600">
+              <label
+                for="footer-address-input"
+                class="mb-1 block text-xs font-medium text-slate-600"
+              >
                 Address Lines (one per row)
               </label>
               <textarea
                 id="footer-address-input"
                 v-model="addressInput"
                 rows="4"
-                class="w-full rounded-btn border border-slate-200 bg-white p-2 text-xs text-slate-900 focus:border-brand-navy focus:outline-none"
+                class="rounded-btn focus:border-brand-navy w-full border border-slate-200 bg-white p-2 text-xs text-slate-900 focus:outline-none"
                 @input="updateAddress"
               />
             </div>
@@ -241,7 +297,7 @@ const generatedSnippet = computed(() => {
           <div class="space-y-6 lg:col-span-8">
             <!-- Canvas Preview -->
             <div
-              class="overflow-hidden rounded-card border border-slate-200/80 bg-slate-100 p-4 transition-colors"
+              class="rounded-card overflow-hidden border border-slate-200/80 bg-slate-100 p-4 transition-colors"
             >
               <div
                 class="mx-auto overflow-hidden rounded-xl shadow-lg transition-all duration-300"
@@ -265,7 +321,9 @@ const generatedSnippet = computed(() => {
                 <span class="text-xs font-semibold text-slate-700">Vue SFC Usage Snippet</span>
                 <span class="text-[11px] text-slate-400">Copy-paste ready</span>
               </div>
-              <pre class="overflow-x-auto rounded-card bg-brand-navy p-4 font-mono text-xs text-white"><code>{{ generatedSnippet }}</code></pre>
+              <pre
+                class="rounded-card bg-brand-navy overflow-x-auto p-4 font-mono text-xs text-white"
+              ><code>{{ generatedSnippet }}</code></pre>
             </div>
           </div>
         </div>

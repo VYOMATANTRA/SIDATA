@@ -133,12 +133,16 @@ const dataJsonSnippet = computed(() => {
     <header class="border-b border-slate-200 bg-white px-6 py-4 shadow-xs">
       <div class="mx-auto flex max-w-7xl items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="flex h-9 w-9 items-center justify-center rounded-btn bg-brand-navy font-bold text-white">
+          <div
+            class="rounded-btn bg-brand-navy flex h-9 w-9 items-center justify-center font-bold text-white"
+          >
             S
           </div>
           <div>
-            <h1 class="text-base font-bold text-brand-navy">SIDATA Design System</h1>
-            <p class="text-xs text-slate-500">Bar Diagram Component Specification & CMS Dynamic Data</p>
+            <h1 class="text-brand-navy text-base font-bold">SIDATA Design System</h1>
+            <p class="text-xs text-slate-500">
+              Bar Diagram Component Specification & CMS Dynamic Data
+            </p>
           </div>
         </div>
 
@@ -170,7 +174,7 @@ const dataJsonSnippet = computed(() => {
           </router-link>
           <router-link
             to="/mockup/bar-diagram"
-            class="rounded-btn border border-brand-navy bg-brand-navy px-3 py-1.5 text-xs font-medium text-white transition-colors"
+            class="rounded-btn border-brand-navy bg-brand-navy border px-3 py-1.5 text-xs font-medium text-white transition-colors"
           >
             ❖ Bar Diagram
           </router-link>
@@ -179,6 +183,24 @@ const dataJsonSnippet = computed(() => {
             class="rounded-btn border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
           >
             ❖ Stat Card
+          </router-link>
+          <router-link
+            to="/mockup/stat-overview"
+            class="rounded-btn border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            ❖ Stat Overview
+          </router-link>
+          <router-link
+            to="/mockup/huge-quote"
+            class="rounded-btn border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            ❖ Huge Quote
+          </router-link>
+          <router-link
+            to="/mockup/hero"
+            class="rounded-btn border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            ❖ Hero
           </router-link>
           <router-link
             to="/"
@@ -190,29 +212,40 @@ const dataJsonSnippet = computed(() => {
       </div>
     </header>
 
-    <main class="mx-auto max-w-7xl px-4 py-8 space-y-12 sm:px-6 sm:py-10">
+    <main class="mx-auto max-w-7xl space-y-12 px-4 py-8 sm:px-6 sm:py-10">
       <!-- Section 1: Exact Figma Component Reproduction -->
       <section class="rounded-card border border-slate-200/80 bg-white p-6 shadow-sm sm:p-10">
-        <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-4">
+        <div
+          class="mb-6 flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between"
+        >
           <div>
-            <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-violet uppercase tracking-wider">
+            <span
+              class="text-brand-violet inline-flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase"
+            >
               <span>❖</span> Figma Component Specification
             </span>
             <h2 class="text-lg font-bold text-slate-900">Tingkat Pendidikan Penduduk Card</h2>
-            <p class="text-xs text-slate-500 mt-0.5">
-              Pixel-perfect reproduction of the card design adhering to <code class="font-mono text-brand-indigo">main.css</code> tokens:
-              <code class="font-mono">brand-navy (#0a2353)</code>, <code class="font-mono">rounded-card (12px)</code>, soft ice-blue track <code class="font-mono">(#ecf6f9)</code>, and custom report icon.
+            <p class="mt-0.5 text-xs text-slate-500">
+              Pixel-perfect reproduction of the card design adhering to
+              <code class="text-brand-indigo font-mono">main.css</code> tokens:
+              <code class="font-mono">brand-navy (#0a2353)</code>,
+              <code class="font-mono">rounded-card (12px)</code>, soft ice-blue track
+              <code class="font-mono">(#ecf6f9)</code>, and custom report icon.
             </p>
           </div>
 
           <!-- Toggle between Raw Figma Wireframe (zeros) and Populated Real Data -->
           <div class="flex items-center gap-2">
             <span class="text-xs text-slate-500">Mode:</span>
-            <div class="inline-flex rounded-btn border border-slate-200 bg-slate-50 p-0.5 text-xs">
+            <div class="rounded-btn inline-flex border border-slate-200 bg-slate-50 p-0.5 text-xs">
               <button
                 type="button"
                 class="rounded-btn px-2.5 py-1 font-medium transition-colors"
-                :class="figmaDataMode === 'real' ? 'bg-brand-navy text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'"
+                :class="
+                  figmaDataMode === 'real'
+                    ? 'bg-brand-navy text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                "
                 @click="figmaDataMode = 'real'"
               >
                 Data Riil (3.420 jiwa)
@@ -220,7 +253,11 @@ const dataJsonSnippet = computed(() => {
               <button
                 type="button"
                 class="rounded-btn px-2.5 py-1 font-medium transition-colors"
-                :class="figmaDataMode === 'zero' ? 'bg-brand-navy text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'"
+                :class="
+                  figmaDataMode === 'zero'
+                    ? 'bg-brand-navy text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                "
                 @click="figmaDataMode = 'zero'"
               >
                 Wireframe Figma (Nilai 0)
@@ -231,12 +268,14 @@ const dataJsonSnippet = computed(() => {
 
         <!-- Component Display in Spec Box -->
         <div class="mx-auto max-w-md">
-          <div class="mb-2 flex items-center gap-1.5 text-xs font-semibold text-brand-violet">
+          <div class="text-brand-violet mb-2 flex items-center gap-1.5 text-xs font-semibold">
             <span>❖</span> Bar Diagram (Card Container)
           </div>
 
           <!-- Purple Dashed Figma Canvas -->
-          <div class="rounded-card border-2 border-dashed border-brand-violet bg-slate-100/60 p-6 shadow-xs">
+          <div
+            class="rounded-card border-brand-violet border-2 border-dashed bg-slate-100/60 p-6 shadow-xs"
+          >
             <BarDiagram
               title="Tingkat Pendidikan Penduduk"
               :items="figmaDisplayedItems"
@@ -249,12 +288,15 @@ const dataJsonSnippet = computed(() => {
       <!-- Section 2: Interactive CMS Playground -->
       <section class="rounded-card border border-slate-200/80 bg-white p-6 shadow-sm sm:p-10">
         <div class="mb-6 border-b border-slate-100 pb-4">
-          <span class="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-brand-indigo">
+          <span
+            class="text-brand-indigo inline-flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase"
+          >
             ⚡ CMS Dynamic Data Simulator
           </span>
           <h2 class="text-lg font-bold text-slate-900">Live Dynamic Data Playground</h2>
           <p class="mt-0.5 text-xs text-slate-500">
-            Simulate editing diagram titles, adding/removing dynamic categories, setting values, units, and custom scaling as would be entered through an administrative CMS.
+            Simulate editing diagram titles, adding/removing dynamic categories, setting values,
+            units, and custom scaling as would be entered through an administrative CMS.
           </p>
         </div>
 
@@ -263,21 +305,21 @@ const dataJsonSnippet = computed(() => {
           <span class="text-xs font-medium text-slate-500">Muat Preset Cerita:</span>
           <button
             type="button"
-            class="rounded-btn border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300"
+            class="rounded-btn border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50"
             @click="resetToEducation"
           >
             📚 Pendidikan (Pendidikan Chapter)
           </button>
           <button
             type="button"
-            class="rounded-btn border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300"
+            class="rounded-btn border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50"
             @click="loadImmunizationPreset"
           >
             💉 Imunisasi Balita (Kesehatan Chapter)
           </button>
           <button
             type="button"
-            class="rounded-btn border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300"
+            class="rounded-btn border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50"
             @click="loadWastePreset"
           >
             ♻️ Bank Sampah (Persampahan Chapter)
@@ -286,7 +328,9 @@ const dataJsonSnippet = computed(() => {
 
         <div class="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
           <!-- CMS Controls Panel -->
-          <div class="space-y-5 rounded-card border border-slate-200/80 bg-slate-50/50 p-5 lg:col-span-5">
+          <div
+            class="rounded-card space-y-5 border border-slate-200/80 bg-slate-50/50 p-5 lg:col-span-5"
+          >
             <h3 class="text-sm font-semibold text-slate-800">CMS Configuration Form</h3>
 
             <!-- Title Input -->
@@ -298,7 +342,7 @@ const dataJsonSnippet = computed(() => {
                 id="cms-title-input"
                 v-model="cmsTitle"
                 type="text"
-                class="w-full rounded-btn border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:border-brand-navy focus:outline-none"
+                class="rounded-btn focus:border-brand-navy w-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:outline-none"
               />
             </div>
 
@@ -313,7 +357,7 @@ const dataJsonSnippet = computed(() => {
                   v-model="cmsUnit"
                   type="text"
                   placeholder="e.g. jiwa, %, kg"
-                  class="w-full rounded-btn border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:border-brand-navy focus:outline-none"
+                  class="rounded-btn focus:border-brand-navy w-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:outline-none"
                 />
               </div>
 
@@ -324,7 +368,7 @@ const dataJsonSnippet = computed(() => {
                 <select
                   id="cms-color-select"
                   v-model="cmsSelectedColor"
-                  class="w-full rounded-btn border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:border-brand-navy focus:outline-none"
+                  class="rounded-btn focus:border-brand-navy w-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:outline-none"
                 >
                   <option v-for="c in colorOptions" :key="c.value" :value="c.value">
                     {{ c.label }}
@@ -339,7 +383,7 @@ const dataJsonSnippet = computed(() => {
                 <input
                   v-model="cmsUseCustomMax"
                   type="checkbox"
-                  class="rounded border-slate-300 text-brand-navy focus:ring-brand-navy"
+                  class="text-brand-navy focus:ring-brand-navy rounded border-slate-300"
                 />
                 Kunci Batas Maksimum (Custom Max Scale)
               </label>
@@ -348,10 +392,11 @@ const dataJsonSnippet = computed(() => {
                   v-model.number="cmsCustomMax"
                   type="number"
                   placeholder="e.g. 100 untuk persentase"
-                  class="w-full rounded-btn border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:border-brand-navy focus:outline-none"
+                  class="rounded-btn focus:border-brand-navy w-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:outline-none"
                 />
                 <p class="mt-1 text-[11px] text-slate-500">
-                  Jika tidak dikunci, panjang bar dihitung otomatis proporsional terhadap nilai tertinggi.
+                  Jika tidak dikunci, panjang bar dihitung otomatis proporsional terhadap nilai
+                  tertinggi.
                 </p>
               </div>
             </div>
@@ -362,7 +407,7 @@ const dataJsonSnippet = computed(() => {
                 <input
                   v-model="cmsShowValues"
                   type="checkbox"
-                  class="rounded border-slate-300 text-brand-navy focus:ring-brand-navy"
+                  class="text-brand-navy focus:ring-brand-navy rounded border-slate-300"
                 />
                 Tampilkan Label Angka di Kanan
               </label>
@@ -370,7 +415,7 @@ const dataJsonSnippet = computed(() => {
                 <input
                   v-model="cmsFormatNumbers"
                   type="checkbox"
-                  class="rounded border-slate-300 text-brand-navy focus:ring-brand-navy"
+                  class="text-brand-navy focus:ring-brand-navy rounded border-slate-300"
                 />
                 Format Titik Ribuan Indonesia (e.g. 3.420)
               </label>
@@ -378,7 +423,7 @@ const dataJsonSnippet = computed(() => {
                 <input
                   v-model="cmsLoading"
                   type="checkbox"
-                  class="rounded border-slate-300 text-brand-navy focus:ring-brand-navy"
+                  class="text-brand-navy focus:ring-brand-navy rounded border-slate-300"
                 />
                 Simulasi Status Memuat (Skeleton Loading)
               </label>
@@ -392,7 +437,7 @@ const dataJsonSnippet = computed(() => {
                 </span>
                 <button
                   type="button"
-                  class="rounded-btn bg-brand-navy px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-navy-deep transition-colors"
+                  class="rounded-btn bg-brand-navy hover:bg-brand-navy-deep px-2.5 py-1 text-xs font-medium text-white transition-colors"
                   @click="addItem"
                 >
                   + Tambah Kategori
@@ -403,14 +448,14 @@ const dataJsonSnippet = computed(() => {
                 <div
                   v-for="(item, idx) in cmsItems"
                   :key="idx"
-                  class="flex items-center gap-2 rounded-btn border border-slate-200 bg-white p-2 text-xs shadow-2xs"
+                  class="rounded-btn flex items-center gap-2 border border-slate-200 bg-white p-2 text-xs shadow-2xs"
                 >
-                  <div class="flex-1 min-w-0">
+                  <div class="min-w-0 flex-1">
                     <input
                       v-model="item.label"
                       type="text"
                       placeholder="Nama Bar"
-                      class="w-full font-medium text-slate-900 focus:outline-none border-b border-transparent focus:border-brand-navy pb-0.5"
+                      class="focus:border-brand-navy w-full border-b border-transparent pb-0.5 font-medium text-slate-900 focus:outline-none"
                     />
                   </div>
                   <div class="w-24 shrink-0">
@@ -418,12 +463,12 @@ const dataJsonSnippet = computed(() => {
                       v-model.number="item.value"
                       type="number"
                       placeholder="Nilai"
-                      class="w-full rounded border border-slate-200 px-2 py-0.5 text-right font-bold text-brand-navy focus:outline-none focus:border-brand-navy"
+                      class="text-brand-navy focus:border-brand-navy w-full rounded border border-slate-200 px-2 py-0.5 text-right font-bold focus:outline-none"
                     />
                   </div>
                   <button
                     type="button"
-                    class="h-6 w-6 shrink-0 rounded text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                    class="h-6 w-6 shrink-0 rounded text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
                     title="Hapus Kategori"
                     @click="removeItem(idx)"
                   >
@@ -438,7 +483,9 @@ const dataJsonSnippet = computed(() => {
           <div class="space-y-6 lg:col-span-7">
             <!-- Dynamic Canvas Preview -->
             <div>
-              <span class="mb-2 block text-xs font-semibold text-slate-700">Preview Komponen Langsung</span>
+              <span class="mb-2 block text-xs font-semibold text-slate-700"
+                >Preview Komponen Langsung</span
+              >
               <div class="rounded-card border border-slate-200/80 bg-slate-100 p-6">
                 <BarDiagram
                   :title="cmsTitle"
@@ -459,14 +506,18 @@ const dataJsonSnippet = computed(() => {
                 <div class="mb-1 flex items-center justify-between">
                   <span class="text-xs font-semibold text-slate-700">Vue SFC Usage Snippet</span>
                 </div>
-                <pre class="overflow-x-auto rounded-card bg-slate-900 p-3.5 text-xs text-slate-200"><code>{{ generatedSnippet }}</code></pre>
+                <pre
+                  class="rounded-card overflow-x-auto bg-slate-900 p-3.5 text-xs text-slate-200"
+                ><code>{{ generatedSnippet }}</code></pre>
               </div>
 
               <div>
                 <div class="mb-1 flex items-center justify-between">
                   <span class="text-xs font-semibold text-slate-700">CMS Data JSON Payload</span>
                 </div>
-                <pre class="max-h-48 overflow-x-auto rounded-card bg-slate-900 p-3.5 text-xs text-slate-200"><code>{{ dataJsonSnippet }}</code></pre>
+                <pre
+                  class="rounded-card max-h-48 overflow-x-auto bg-slate-900 p-3.5 text-xs text-slate-200"
+                ><code>{{ dataJsonSnippet }}</code></pre>
               </div>
             </div>
           </div>

@@ -16,6 +16,5 @@ export { default as StatOverview } from './StatOverview.vue';
 export type { StatOverviewProps } from './StatOverview.vue';
 export { default as HugeQuote } from './HugeQuote.vue';
 export type { HugeQuoteProps } from './HugeQuote.vue';
-
-
-
+export { default as SectionHero } from './SectionHero.vue';
+export type { SectionHeroProps } from './SectionHero.vue';

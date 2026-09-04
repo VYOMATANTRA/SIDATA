@@ -113,6 +113,16 @@ const router = createRouter({
       path: '/huge-quote',
       redirect: '/mockup/huge-quote',
     },
+    {
+      path: '/mockup/hero',
+      name: 'hero-mockup',
+      component: () => import('../views/HeroShowcaseView.vue'),
+      meta: { title: 'SectionHero Component Mockup - SIDATA' },
+    },
+    {
+      path: '/hero',
+      redirect: '/mockup/hero',
+    },
   ],
 });
 
