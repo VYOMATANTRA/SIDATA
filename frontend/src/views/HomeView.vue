@@ -53,11 +53,18 @@ async function handleLogout() {
 
       <div v-if="logoutError" class="text-rose-600 text-sm font-medium">{{ logoutError }}</div>
 
-      <div class="pt-6">
+      <div class="pt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+        <router-link
+          to="/mockup/button"
+          class="px-5 py-2.5 bg-brand-navy hover:bg-brand-navy-deep text-white font-medium text-sm rounded-btn transition-all shadow-md cursor-pointer flex items-center gap-2"
+        >
+          <span>❖ Lihat Mockup Button</span>
+        </router-link>
+
         <button
           @click="handleLogout"
           :disabled="isLoggingOut"
-          class="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm rounded-xl transition-all shadow-md cursor-pointer disabled:opacity-50"
+          class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 font-medium text-sm rounded-btn transition-all cursor-pointer disabled:opacity-50"
         >
           <span v-if="isLoggingOut">Memproses...</span>
           <span v-else>Keluar (Logout)</span>
