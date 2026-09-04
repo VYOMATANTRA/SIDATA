@@ -1,6 +1,6 @@
-import { createRouter, createWebHistory } from 'vue-router'
-import { getActivePinia } from 'pinia'
-import { useAuthStore } from '../stores/auth'
+import { createRouter, createWebHistory } from 'vue-router';
+import { getActivePinia } from 'pinia';
+import { useAuthStore } from '../stores/auth';
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -93,40 +93,50 @@ const router = createRouter({
       path: '/stat-card',
       redirect: '/mockup/stat-card',
     },
+    {
+      path: '/mockup/stat-overview',
+      name: 'stat-overview-mockup',
+      component: () => import('../views/StatOverviewShowcaseView.vue'),
+      meta: { title: 'Stat Overview Component Mockup - SIDATA' },
+    },
+    {
+      path: '/stat-overview',
+      redirect: '/mockup/stat-overview',
+    },
   ],
-})
+});
 
 router.beforeEach(async (to) => {
-  const pinia = getActivePinia()
-  if (!pinia) return
+  const pinia = getActivePinia();
+  if (!pinia) return;
 
-  const authStore = useAuthStore(pinia)
+  const authStore = useAuthStore(pinia);
 
   if (to.name === 'setup-password') {
     if (!authStore.setupToken && !authStore.mustChangePassword) {
-      return { name: 'login', query: { reason: 'setup_required' } }
+      return { name: 'login', query: { reason: 'setup_required' } };
     }
   }
 
   if (!authStore.isAuthenticated && to.name !== 'setup-password' && !authStore.mustChangePassword) {
-    await authStore.initAuth()
+    await authStore.initAuth();
   }
 
   if (authStore.mustChangePassword && to.name !== 'setup-password') {
-    return { name: 'setup-password' }
+    return { name: 'setup-password' };
   }
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    return { name: 'login' }
+    return { name: 'login' };
   }
 
   if (to.meta.requiresAdmin && !authStore.isAdmin) {
-    return { name: 'home' }
+    return { name: 'home' };
   }
 
   if ((to.name === 'login' || to.name === 'register') && authStore.isAuthenticated) {
-    return { name: 'home' }
+    return { name: 'home' };
   }
-})
+});
 
-export default router
+export default router;

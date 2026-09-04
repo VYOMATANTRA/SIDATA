@@ -12,4 +12,7 @@ export { default as StatCard } from './StatCard.vue';
 export type { StatCardProps, StatItem } from './StatCard.vue';
 export { default as SectionTextArea } from './SectionTextArea.vue';
 export type { SectionTextAreaProps } from './SectionTextArea.vue';
+export { default as StatOverview } from './StatOverview.vue';
+export type { StatOverviewProps } from './StatOverview.vue';
+
 
