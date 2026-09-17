@@ -43,13 +43,25 @@ describe('AppFooter.vue', () => {
       },
     });
 
-    expect(wrapper.find('[data-test="logo-balikpapan"]').attributes('alt')).toBe('Logo Kota Balikpapan');
-    expect(wrapper.find('[data-test="logo-desa-cantik"]').attributes('alt')).toBe('Logo Desa Cantik');
+    expect(wrapper.find('[data-test="logo-balikpapan"]').attributes('alt')).toBe(
+      'Logo Kota Balikpapan',
+    );
+    expect(wrapper.find('[data-test="logo-desa-cantik"]').attributes('alt')).toBe(
+      'Logo Desa Cantik',
+    );
     expect(wrapper.find('[data-test="badge-sdgs-desa"]').attributes('alt')).toBe('Logo SDGs Desa');
-    expect(wrapper.find('[data-test="badge-sdgs-17"]').attributes('alt')).toBe('Logo SDGs 17: Kemitraan untuk Pembangunan Desa');
-    expect(wrapper.find('[data-test="logo-bps"]').attributes('alt')).toBe('Logo Badan Pusat Statistik (BPS)');
-    expect(wrapper.find('[data-test="logo-itk"]').attributes('alt')).toBe('Logo Institut Teknologi Kalimantan (ITK)');
-    expect(wrapper.find('[data-test="logo-vyomatantra"]').attributes('alt')).toBe('Logo Tim Inovasi Sosial VYOMATANTRA');
+    expect(wrapper.find('[data-test="badge-sdgs-17"]').attributes('alt')).toBe(
+      'Logo SDGs 17: Kemitraan untuk Pembangunan Desa',
+    );
+    expect(wrapper.find('[data-test="logo-bps"]').attributes('alt')).toBe(
+      'Logo Badan Pusat Statistik (BPS)',
+    );
+    expect(wrapper.find('[data-test="logo-itk"]').attributes('alt')).toBe(
+      'Logo Institut Teknologi Kalimantan (ITK)',
+    );
+    expect(wrapper.find('[data-test="logo-vyomatantra"]').attributes('alt')).toBe(
+      'Logo Tim Inovasi Sosial VYOMATANTRA',
+    );
   });
 
   it('renders office address and accessible phone link', async () => {
@@ -115,7 +127,9 @@ describe('AppFooter.vue', () => {
       },
     });
 
-    expect(wrapper.find('[data-test="copyright-text"]').text()).toContain('© 2027. Hak cipta dilindungi undang-undang.');
+    expect(wrapper.find('[data-test="copyright-text"]').text()).toContain(
+      '© 2027. Hak cipta dilindungi undang-undang.',
+    );
   });
 
   it('renders all branding, badges, navigation links, and partners in the unified responsive layout', async () => {
@@ -140,5 +154,41 @@ describe('AppFooter.vue', () => {
     expect(wrapper.text()).toContain('Sumber Daya');
     expect(wrapper.text()).toContain('Cerita');
     expect(wrapper.text()).toContain('Tentang');
+  });
+
+  it('applies harmonized responsive font size classes across headings, links, phone, and copyright', async () => {
+    const router = createMockRouter();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(AppFooter, {
+      global: {
+        plugins: [router],
+      },
+    });
+
+    // Column headings should maintain text-base
+    const headings = wrapper.findAll('h2');
+    headings.forEach((h2) => {
+      expect(h2.classes()).toContain('text-base');
+    });
+
+    // Navigation links should have responsive scale text-xs sm:text-sm
+    const navLinks = wrapper.findAll('nav a');
+    expect(navLinks.length).toBeGreaterThan(0);
+    navLinks.forEach((link) => {
+      expect(link.classes()).toContain('text-xs');
+      expect(link.classes()).toContain('sm:text-sm');
+    });
+
+    // Phone link inside address should match the address text-xs sm:text-sm scale
+    const phoneLink = wrapper.find('address a');
+    expect(phoneLink.classes()).toContain('text-xs');
+    expect(phoneLink.classes()).toContain('sm:text-sm');
+
+    // Copyright container should scale text-xs sm:text-sm
+    const copyrightContainer = wrapper.find('[data-test="copyright-text"]').element.parentElement;
+    expect(copyrightContainer?.classList.contains('text-xs')).toBe(true);
+    expect(copyrightContainer?.classList.contains('sm:text-sm')).toBe(true);
   });
 });

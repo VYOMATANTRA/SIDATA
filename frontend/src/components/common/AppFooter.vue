@@ -54,7 +54,7 @@ const aboutLinks = [
 
 <template>
   <footer
-    class="app-footer-root w-full bg-brand-navy text-white transition-colors"
+    class="app-footer-root bg-brand-navy w-full text-white transition-colors"
     aria-label="Footer Laman Kelurahan Manggar"
   >
     <div class="mx-auto max-w-7xl px-6 py-10 sm:px-8 sm:py-12 lg:px-12 lg:py-16">
@@ -81,18 +81,21 @@ const aboutLinks = [
               class="h-11 w-auto shrink-0 object-contain sm:h-13"
               data-test="logo-desa-cantik"
             />
-            <div class="flex flex-col text-left min-w-0">
+            <div class="flex min-w-0 flex-col text-left">
               <span class="text-xs font-normal tracking-wide text-slate-200/90 sm:text-sm">
                 Kelurahan Cinta Statistik
               </span>
-              <span class="text-base font-bold leading-tight tracking-tight text-white sm:text-lg">
-                Kelurahan<br class="hidden sm:inline" /> Manggar
+              <span class="text-base leading-tight font-bold tracking-tight text-white sm:text-lg">
+                Kelurahan<br class="hidden sm:inline" />
+                Manggar
               </span>
             </div>
           </div>
 
           <!-- Office Address Block -->
-          <address class="space-y-1 text-xs leading-relaxed text-slate-200/90 not-italic sm:text-sm">
+          <address
+            class="space-y-1 text-xs leading-relaxed text-slate-200/90 not-italic sm:text-sm"
+          >
             <p
               v-for="(line, idx) in addressLines"
               :key="idx"
@@ -106,6 +109,7 @@ const aboutLinks = [
                 :href="`tel:${phone.replace(/[^0-9]/g, '')}`"
                 variant="white"
                 size="sm"
+                class="text-xs sm:text-sm"
                 :with-arrow="false"
               >
                 {{ phone }}
@@ -121,15 +125,14 @@ const aboutLinks = [
         <div class="footer-links-grid">
           <!-- 1. Sumber Daya Navigation -->
           <nav aria-label="Navigasi Sumber Daya" class="link-col-sumber space-y-3">
-            <h2 class="text-sm font-semibold tracking-wide text-white sm:text-base">
-              Sumber Daya
-            </h2>
-            <ul class="space-y-1 text-xs sm:text-sm">
+            <h2 class="text-base font-semibold tracking-wide text-white">Sumber Daya</h2>
+            <ul class="space-y-1.5 sm:space-y-2">
               <li v-for="link in resourceLinks" :key="link.label">
                 <BaseLink
                   :to="link.to"
                   variant="white"
                   size="sm"
+                  class="text-xs sm:text-sm"
                   :with-arrow="false"
                 >
                   {{ link.label }}
@@ -140,15 +143,14 @@ const aboutLinks = [
 
           <!-- 2. Tentang Navigation -->
           <nav aria-label="Navigasi Tentang Kelurahan" class="link-col-tentang space-y-3">
-            <h2 class="text-sm font-semibold tracking-wide text-white sm:text-base">
-              Tentang
-            </h2>
-            <ul class="space-y-1 text-xs sm:text-sm">
+            <h2 class="text-base font-semibold tracking-wide text-white">Tentang</h2>
+            <ul class="space-y-1.5 sm:space-y-2">
               <li v-for="link in aboutLinks" :key="link.label">
                 <BaseLink
                   :to="link.to"
                   variant="white"
                   size="sm"
+                  class="text-xs sm:text-sm"
                   :with-arrow="false"
                 >
                   {{ link.label }}
@@ -159,15 +161,14 @@ const aboutLinks = [
 
           <!-- 3. Cerita Navigation -->
           <nav aria-label="Navigasi Cerita Statistik" class="link-col-cerita space-y-3">
-            <h2 class="text-sm font-semibold tracking-wide text-white sm:text-base">
-              Cerita
-            </h2>
-            <ul class="space-y-1 text-xs sm:text-sm">
+            <h2 class="text-base font-semibold tracking-wide text-white">Cerita</h2>
+            <ul class="space-y-1.5 sm:space-y-2">
               <li v-for="link in storyLinks" :key="link.label">
                 <BaseLink
                   :to="link.to"
                   variant="white"
                   size="sm"
+                  class="text-xs sm:text-sm"
                   :with-arrow="false"
                 >
                   {{ link.label }}
@@ -221,10 +222,10 @@ const aboutLinks = [
       </div>
 
       <!-- Copyright Section -->
-      <div class="mt-8 border-t border-white/10 pt-6 text-center text-xs text-slate-300/80 sm:mt-10">
-        <p data-test="copyright-text">
-          &copy; {{ year }}. Hak cipta dilindungi undang-undang.
-        </p>
+      <div
+        class="mt-8 border-t border-white/10 pt-6 text-center text-xs text-slate-300/80 sm:mt-10 sm:text-sm"
+      >
+        <p data-test="copyright-text">&copy; {{ year }}. Hak cipta dilindungi undang-undang.</p>
       </div>
     </div>
   </footer>
