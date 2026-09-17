@@ -222,22 +222,22 @@ export const DEFAULT_PUBLIC_SETTINGS: PublicSettings = {
 export const coordinatesSchema = z
   .object({
     lat: z
-      .number({ required_error: 'Latitude wajib diisi' })
+      .number({ message: 'Latitude wajib diisi' })
       .finite('Latitude harus berupa angka valid')
       .min(-90, 'Latitude harus di antara -90 dan 90')
       .max(90, 'Latitude harus di antara -90 dan 90'),
     lon: z
-      .number({ required_error: 'Longitude wajib diisi' })
+      .number({ message: 'Longitude wajib diisi' })
       .finite('Longitude harus berupa angka valid')
       .min(-180, 'Longitude harus di antara -180 dan 180')
       .max(180, 'Longitude harus di antara -180 dan 180'),
     zoom: z
-      .number({ required_error: 'Zoom wajib diisi' })
+      .number({ message: 'Zoom wajib diisi' })
       .int('Zoom harus berupa bilangan bulat')
       .min(1, 'Zoom minimal 1')
       .max(20, 'Zoom maksimal 20'),
   })
-  .strict('Terdapat bidang koordinat yang tidak dikenali.');
+  .strict();
 
 const noHtmlRegex = /^[^<>]*$/;
 const singleLineTextRegex = /^[^<>\r\n]*$/;
@@ -332,7 +332,7 @@ export const updatePublicSettingsSchema = z
       )
       .optional(),
   })
-  .strict('Terdapat bidang pengaturan yang tidak dikenali.');
+  .strict();
 
 const PUBLIC_SETTINGS_CACHE_TTL_MS = 60 * 1000;
 let cacheVersion = 0;
