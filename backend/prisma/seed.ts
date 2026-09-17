@@ -4,6 +4,7 @@ import {
   PUBLIC_SETTING_KEYS,
   DEFAULT_PUBLIC_SETTINGS,
 } from '../src/services/settings.service.js';
+import { DEFAULT_CONTENT_BLOCKS } from '../src/services/contentBlocks.service.js';
 
 async function main() {
   console.log('Memulai proses seeding...');
@@ -21,6 +22,14 @@ async function main() {
     update: {},
     create: {
       name: 'admin',
+    },
+  });
+
+  const roleEditor = await prisma.role.upsert({
+    where: { name: 'editor' },
+    update: {},
+    create: {
+      name: 'editor',
     },
   });
 
@@ -159,8 +168,29 @@ async function main() {
     });
   }
 
+  // Seed default content blocks (Hero, Sambutan Lurah, Highlights) per docs/SPEC.md §7 & §8
+  for (const block of DEFAULT_CONTENT_BLOCKS) {
+    await prisma.contentBlock.upsert({
+      where: { slug: block.slug },
+      update: {},
+      create: {
+        slug: block.slug,
+        type: block.type,
+        title: block.title,
+        body: block.body,
+        metadata: block.metadata,
+      },
+    });
+  }
+
   console.log('seeding selesai');
-  console.log({ roleUser, roleAdmin, sampleRt: [rt1.rtNumber, rt2.rtNumber, rt3.rtNumber] });
+  console.log({
+    roleUser,
+    roleEditor,
+    roleAdmin,
+    sampleRt: [rt1.rtNumber, rt2.rtNumber, rt3.rtNumber],
+    seededBlocks: DEFAULT_CONTENT_BLOCKS.map((b) => b.slug),
+  });
 }
 
 main()
