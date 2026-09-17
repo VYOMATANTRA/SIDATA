@@ -6,11 +6,13 @@ import TurnstileWidget from '../components/auth/TurnstileWidget.vue'
 import OtpVerificationModal from '../components/auth/OtpVerificationModal.vue'
 import { getCsrfToken } from '../utils/csrf'
 import { useAuthStore } from '../stores/auth'
+import { useSettingsStore } from '../stores/settings.store'
 import bgImage from '../assets/img/background_laman_depan_kelurahan.png'
 import logoBalikpapan from '../assets/img/logo_balikpapan.png'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const settingsStore = useSettingsStore()
 
 const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
 
@@ -208,8 +210,8 @@ function onOtpVerified(data?: unknown) {
           class="w-20 h-24 object-contain mx-auto mb-4"
         />
 
-        <h2 class="text-3xl font-extrabold text-[#0A2353] tracking-tight">Buat Akun SIDATA</h2>
-        <p class="text-sm text-slate-600 mt-2 font-medium">Sistem Informasi Data Terpadu Kelurahan Manggar</p>
+        <h2 class="text-3xl font-extrabold text-[#0A2353] tracking-tight">Buat Akun {{ settingsStore.appName }}</h2>
+        <p class="text-sm text-slate-600 mt-2 font-medium">{{ settingsStore.tagline || settingsStore.institutionName }}</p>
       </div>
 
       <div v-if="errorMessage" class="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm text-center font-medium">

@@ -3,9 +3,11 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getCsrfToken } from '../utils/csrf'
 import { useAuthStore } from '../stores/auth'
+import { useSettingsStore } from '../stores/settings.store'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const settingsStore = useSettingsStore()
 
 const isLoggingOut = ref(false)
 const logoutError = ref('')
@@ -49,7 +51,7 @@ async function handleLogout() {
         </svg>
       </div>
       <h1 class="text-3xl font-bold text-slate-900 tracking-tight">Login Berhasil</h1>
-      <p class="text-slate-500 text-sm">Selamat datang di Sistem Informasi Data Terpadu Kelurahan Manggar</p>
+      <p class="text-slate-500 text-sm">Selamat datang di {{ settingsStore.tagline || settingsStore.appName }}</p>
 
       <div v-if="logoutError" class="text-rose-600 text-sm font-medium">{{ logoutError }}</div>
 
