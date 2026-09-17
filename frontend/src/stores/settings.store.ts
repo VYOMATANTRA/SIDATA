@@ -1,23 +1,23 @@
-import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { defineStore } from 'pinia';
+import { ref, computed } from 'vue';
 
 export interface CoordinatesSetting {
-  lat: number
-  lon: number
-  zoom: number
+  lat: number;
+  lon: number;
+  zoom: number;
 }
 
 export interface PublicSettings {
-  appName: string
-  institutionName: string
-  tagline: string
-  administrativeArea: string
-  contactPhone: string
-  contactWhatsapp: string
-  contactEmail: string
-  contactAddress: string
-  defaultCoordinates: CoordinatesSetting
-  weatherAdm4: string
+  appName: string;
+  institutionName: string;
+  tagline: string;
+  administrativeArea: string;
+  contactPhone: string;
+  contactWhatsapp: string;
+  contactEmail: string;
+  contactAddress: string;
+  defaultCoordinates: CoordinatesSetting;
+  weatherAdm4: string;
 }
 
 export const DEFAULT_PUBLIC_SETTINGS: PublicSettings = {
@@ -36,59 +36,71 @@ export const DEFAULT_PUBLIC_SETTINGS: PublicSettings = {
     zoom: 13,
   },
   weatherAdm4: '64.71.01.1001',
-}
+};
 
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<PublicSettings>({
     ...DEFAULT_PUBLIC_SETTINGS,
     defaultCoordinates: { ...DEFAULT_PUBLIC_SETTINGS.defaultCoordinates },
-  })
-  const isLoading = ref(false)
-  const isLoaded = ref(false)
-  const error = ref<string | null>(null)
-  const lastPageTitle = ref<string | undefined>(undefined)
+  });
+  const isLoading = ref(false);
+  const isLoaded = ref(false);
+  const error = ref<string | null>(null);
+  const lastPageTitle = ref<string | undefined>(undefined);
 
-  let inFlight: Promise<PublicSettings> | null = null
+  let inFlight: Promise<PublicSettings> | null = null;
 
-  const appName = computed(() => settings.value.appName?.trim() || DEFAULT_PUBLIC_SETTINGS.appName)
+  const appName = computed(() => settings.value.appName?.trim() || DEFAULT_PUBLIC_SETTINGS.appName);
   const institutionName = computed(
     () => settings.value.institutionName?.trim() || DEFAULT_PUBLIC_SETTINGS.institutionName,
-  )
-  const tagline = computed(() => settings.value.tagline || DEFAULT_PUBLIC_SETTINGS.tagline)
+  );
+  const tagline = computed(() => settings.value.tagline || DEFAULT_PUBLIC_SETTINGS.tagline);
   const administrativeArea = computed(
     () => settings.value.administrativeArea || DEFAULT_PUBLIC_SETTINGS.administrativeArea,
-  )
+  );
   const defaultCoordinates = computed(
     () => settings.value.defaultCoordinates || DEFAULT_PUBLIC_SETTINGS.defaultCoordinates,
-  )
+  );
   const weatherAdm4 = computed(
     () => settings.value.weatherAdm4 || DEFAULT_PUBLIC_SETTINGS.weatherAdm4,
-  )
+  );
+  const contactAddress = computed(
+    () => settings.value.contactAddress || DEFAULT_PUBLIC_SETTINGS.contactAddress,
+  );
+  const contactPhone = computed(
+    () => settings.value.contactPhone || DEFAULT_PUBLIC_SETTINGS.contactPhone,
+  );
+  const contactWhatsapp = computed(
+    () => settings.value.contactWhatsapp || DEFAULT_PUBLIC_SETTINGS.contactWhatsapp,
+  );
+  const contactEmail = computed(
+    () => settings.value.contactEmail || DEFAULT_PUBLIC_SETTINGS.contactEmail,
+  );
 
   async function fetchPublicSettings(force = false): Promise<PublicSettings> {
     if (isLoaded.value && !force) {
-      return settings.value
+      return settings.value;
     }
 
     if (inFlight) {
-      return inFlight
+      return inFlight;
     }
 
-    isLoading.value = true
-    error.value = null
+    isLoading.value = true;
+    error.value = null;
 
     inFlight = (async () => {
       try {
         const res = await fetch('/api/settings/public', {
           method: 'GET',
           headers: { Accept: 'application/json' },
-        })
+        });
 
         if (!res.ok) {
-          throw new Error(`Gagal memuat pengaturan publik (HTTP ${res.status})`)
+          throw new Error(`Gagal memuat pengaturan publik (HTTP ${res.status})`);
         }
 
-        const data = await res.json()
+        const data = await res.json();
         if (
           data &&
           typeof data === 'object' &&
@@ -96,18 +108,17 @@ export const useSettingsStore = defineStore('settings', () => {
           typeof data.settings === 'object' &&
           !Array.isArray(data.settings)
         ) {
-          const raw = data.settings as Partial<PublicSettings>
+          const raw = data.settings as Partial<PublicSettings>;
           const coords: Partial<CoordinatesSetting> =
             raw.defaultCoordinates &&
             typeof raw.defaultCoordinates === 'object' &&
             !Array.isArray(raw.defaultCoordinates)
               ? (raw.defaultCoordinates as Partial<CoordinatesSetting>)
-              : {}
+              : {};
 
           settings.value = {
             appName: raw.appName?.trim() || DEFAULT_PUBLIC_SETTINGS.appName,
-            institutionName:
-              raw.institutionName?.trim() || DEFAULT_PUBLIC_SETTINGS.institutionName,
+            institutionName: raw.institutionName?.trim() || DEFAULT_PUBLIC_SETTINGS.institutionName,
             tagline:
               typeof raw.tagline === 'string' ? raw.tagline : DEFAULT_PUBLIC_SETTINGS.tagline,
             administrativeArea:
@@ -148,34 +159,34 @@ export const useSettingsStore = defineStore('settings', () => {
               typeof raw.weatherAdm4 === 'string' && raw.weatherAdm4.trim()
                 ? raw.weatherAdm4.trim()
                 : DEFAULT_PUBLIC_SETTINGS.weatherAdm4,
-          }
-          isLoaded.value = true
+          };
+          isLoaded.value = true;
           // Automatically synchronize document.title once dynamic settings are loaded
-          updateDocumentTitle(lastPageTitle.value)
+          updateDocumentTitle(lastPageTitle.value);
         }
-        return settings.value
+        return settings.value;
       } catch (err) {
-        error.value = err instanceof Error ? err.message : 'Gagal memuat pengaturan publik'
+        error.value = err instanceof Error ? err.message : 'Gagal memuat pengaturan publik';
         // Non-blocking fallback: retain defaults
-        return settings.value
+        return settings.value;
       } finally {
-        isLoading.value = false
-        inFlight = null
+        isLoading.value = false;
+        inFlight = null;
       }
-    })()
+    })();
 
-    return inFlight
+    return inFlight;
   }
 
   function updateDocumentTitle(pageTitle?: string) {
-    lastPageTitle.value = pageTitle
-    if (typeof document === 'undefined') return
-    const currentAppName = settings.value.appName || DEFAULT_PUBLIC_SETTINGS.appName
+    lastPageTitle.value = pageTitle;
+    if (typeof document === 'undefined') return;
+    const currentAppName = settings.value.appName || DEFAULT_PUBLIC_SETTINGS.appName;
     if (pageTitle) {
-      document.title = `${pageTitle} | ${currentAppName}`
+      document.title = `${pageTitle} | ${currentAppName}`;
     } else {
-      const sub = settings.value.tagline || settings.value.institutionName
-      document.title = sub ? `${currentAppName} - ${sub}` : currentAppName
+      const sub = settings.value.tagline || settings.value.institutionName;
+      document.title = sub ? `${currentAppName} - ${sub}` : currentAppName;
     }
   }
 
@@ -190,7 +201,11 @@ export const useSettingsStore = defineStore('settings', () => {
     administrativeArea,
     defaultCoordinates,
     weatherAdm4,
+    contactAddress,
+    contactPhone,
+    contactWhatsapp,
+    contactEmail,
     fetchPublicSettings,
     updateDocumentTitle,
-  }
-})
+  };
+});
