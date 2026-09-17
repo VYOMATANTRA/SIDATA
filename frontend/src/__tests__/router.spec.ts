@@ -1,25 +1,25 @@
-import { describe, it, expect, vi } from 'vitest'
-import { createPinia, setActivePinia } from 'pinia'
-import router from '../router/index'
-import { useAuthStore } from '../stores/auth'
+import { describe, it, expect, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
+import router from '../router/index';
+import { useAuthStore } from '../stores/auth';
 
 describe('router auth guard retry behavior', () => {
   it(
     'REGRESSION (router isInitialized gate): a transient refresh failure does not ' +
       'permanently disable silent refresh on later navigations',
     async () => {
-      const pinia = createPinia()
-      setActivePinia(pinia)
-      const authStore = useAuthStore(pinia)
+      const pinia = createPinia();
+      setActivePinia(pinia);
+      const authStore = useAuthStore(pinia);
 
-      let refreshShouldSucceed = false
+      let refreshShouldSucceed = false;
       globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
-        const url = String(input)
+        const url = String(input);
         if (url.includes('csrf-token')) {
-          return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+          return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response;
         }
         if (!refreshShouldSucceed) {
-          return { ok: false, json: async () => ({}) } as Response
+          return { ok: false, json: async () => ({}) } as Response;
         }
         return {
           ok: true,
@@ -27,48 +27,92 @@ describe('router auth guard retry behavior', () => {
             accessToken: 'new-token',
             user: { id: '1', email: 'user@example.com', role: 'user' },
           }),
-        } as Response
-      })
+        } as Response;
+      });
 
       // First navigation to a guarded route: refresh fails transiently, bounced to /login.
-      await router.push('/')
-      expect(router.currentRoute.value.name).toBe('login')
-      expect(authStore.isAuthenticated).toBe(false)
-      expect(authStore.isInitialized).toBe(true)
+      await router.push('/');
+      expect(router.currentRoute.value.name).toBe('login');
+      expect(authStore.isAuthenticated).toBe(false);
+      expect(authStore.isInitialized).toBe(true);
 
       // The session cookie is actually still valid on a later attempt (e.g. the earlier
       // failure was transient). Before the fix, the router guard never called initAuth()
       // again because isInitialized was already permanently true.
-      refreshShouldSucceed = true
-      await router.push('/')
-      expect(router.currentRoute.value.name).toBe('home')
-      expect(authStore.isAuthenticated).toBe(true)
+      refreshShouldSucceed = true;
+      await router.push('/');
+      expect(router.currentRoute.value.name).toBe('home');
+      expect(authStore.isAuthenticated).toBe(true);
     },
-  )
+  );
 
   it('redirects to /login?reason=setup_required when navigating to /setup-password without setup token', async () => {
-    sessionStorage.clear()
+    sessionStorage.clear();
     globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async () => {
-      return { ok: false, status: 401, json: async () => ({}) } as Response
-    })
-    const pinia = createPinia()
-    setActivePinia(pinia)
-    const authStore = useAuthStore(pinia)
-    authStore.clearAuth()
+      return { ok: false, status: 401, json: async () => ({}) } as Response;
+    });
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore(pinia);
+    authStore.clearAuth();
 
-    await router.push('/setup-password')
-    expect(router.currentRoute.value.name).toBe('login')
-    expect(router.currentRoute.value.query.reason).toBe('setup_required')
-  })
+    await router.push('/setup-password');
+    expect(router.currentRoute.value.name).toBe('login');
+    expect(router.currentRoute.value.query.reason).toBe('setup_required');
+  });
 
   it('allows navigating to /setup-password when setupToken is present', async () => {
-    sessionStorage.clear()
-    const pinia = createPinia()
-    setActivePinia(pinia)
-    const authStore = useAuthStore(pinia)
-    authStore.setSetupAuth('valid-token')
+    sessionStorage.clear();
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore(pinia);
+    authStore.setSetupAuth('valid-token');
 
-    await router.push('/setup-password')
-    expect(router.currentRoute.value.name).toBe('setup-password')
-  })
-})
+    await router.push('/setup-password');
+    expect(router.currentRoute.value.name).toBe('setup-password');
+  });
+
+  it('navigates to /mockup/button, /mockup/link, /mockup/navbar, and redirects /footer to /mockup/footer', async () => {
+    sessionStorage.clear();
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore(pinia);
+    authStore.clearAuth();
+
+    await router.push('/mockup/button');
+    expect(router.currentRoute.value.path).toBe('/mockup/button');
+    expect(router.currentRoute.value.name).toBe('button-mockup');
+
+    await router.push('/link');
+    expect(router.currentRoute.value.path).toBe('/mockup/link');
+    expect(router.currentRoute.value.name).toBe('link-mockup');
+
+    await router.push('/navbar');
+    expect(router.currentRoute.value.path).toBe('/mockup/navbar');
+    expect(router.currentRoute.value.name).toBe('navbar-mockup');
+
+    await router.push('/footer');
+    expect(router.currentRoute.value.path).toBe('/mockup/footer');
+    expect(router.currentRoute.value.name).toBe('footer-mockup');
+
+    await router.push('/bar-diagram');
+    expect(router.currentRoute.value.path).toBe('/mockup/bar-diagram');
+    expect(router.currentRoute.value.name).toBe('bar-diagram-mockup');
+
+    await router.push('/stat-card');
+    expect(router.currentRoute.value.path).toBe('/mockup/stat-card');
+    expect(router.currentRoute.value.name).toBe('stat-card-mockup');
+
+    await router.push('/stat-overview');
+    expect(router.currentRoute.value.path).toBe('/mockup/stat-overview');
+    expect(router.currentRoute.value.name).toBe('stat-overview-mockup');
+
+    await router.push('/huge-quote');
+    expect(router.currentRoute.value.path).toBe('/mockup/huge-quote');
+    expect(router.currentRoute.value.name).toBe('huge-quote-mockup');
+
+    await router.push('/hero');
+    expect(router.currentRoute.value.path).toBe('/mockup/hero');
+    expect(router.currentRoute.value.name).toBe('hero-mockup');
+  });
+});
