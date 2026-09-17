@@ -18,3 +18,24 @@ export const requireAdmin = (
 
   return next();
 };
+
+export const requireEditorOrAdmin = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Response | void => {
+  const user = req.user;
+
+  if (!user || typeof user === 'string' || !('role' in user) || typeof user.role !== 'string') {
+    return res.status(401).json({ error: 'Akses ditolak. Pengguna belum terautentikasi.' });
+  }
+
+  const role = user.role.toLowerCase();
+  if (role !== 'admin' && role !== 'editor') {
+    return res
+      .status(403)
+      .json({ error: 'Akses ditolak. Membutuhkan hak akses Editor atau Admin.' });
+  }
+
+  return next();
+};

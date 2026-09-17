@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { Response } from 'express';
-import { requireAdmin } from '../middlewares/role.middleware.js';
+import { requireAdmin, requireEditorOrAdmin } from '../middlewares/role.middleware.js';
 import type { AuthRequest } from '../middlewares/auth.middleware.js';
 import { fakeRes } from './helpers/fakeRes.js';
 
@@ -77,5 +77,60 @@ describe('role.middleware requireAdmin', () => {
     requireAdmin(req2, res2 as unknown as Response, next2);
     assert.equal(spy2.calls, 1);
     assert.notEqual(typeof res2.status, 'number');
+  });
+});
+
+describe('role.middleware requireEditorOrAdmin', () => {
+  it('rejects with 401 when req.user is missing or invalid', () => {
+    const res = fakeRes();
+    const { next, spy } = nextSpy();
+
+    requireEditorOrAdmin({} as AuthRequest, res as unknown as Response, next);
+
+    assert.equal(res.status, 401);
+    assert.deepEqual(res.body, { error: 'Akses ditolak. Pengguna belum terautentikasi.' });
+    assert.equal(spy.calls, 0);
+  });
+
+  it('rejects with 403 when req.user role is regular user', () => {
+    const res = fakeRes();
+    const { next, spy } = nextSpy();
+    const req = {
+      user: { id: 'user-1', email: 'user@example.com', role: 'user' },
+    } as unknown as AuthRequest;
+
+    requireEditorOrAdmin(req, res as unknown as Response, next);
+
+    assert.equal(res.status, 403);
+    assert.deepEqual(res.body, {
+      error: 'Akses ditolak. Membutuhkan hak akses Editor atau Admin.',
+    });
+    assert.equal(spy.calls, 0);
+  });
+
+  it('calls next() when req.user role is Editor (case-insensitive)', () => {
+    const res = fakeRes();
+    const { next, spy } = nextSpy();
+    const req = {
+      user: { id: 'editor-1', email: 'editor@example.com', role: 'editor' },
+    } as unknown as AuthRequest;
+
+    requireEditorOrAdmin(req, res as unknown as Response, next);
+
+    assert.equal(spy.calls, 1);
+    assert.notEqual(typeof res.status, 'number');
+  });
+
+  it('calls next() when req.user role is Admin (case-insensitive)', () => {
+    const res = fakeRes();
+    const { next, spy } = nextSpy();
+    const req = {
+      user: { id: 'admin-1', email: 'admin@example.com', role: 'Admin' },
+    } as unknown as AuthRequest;
+
+    requireEditorOrAdmin(req, res as unknown as Response, next);
+
+    assert.equal(spy.calls, 1);
+    assert.notEqual(typeof res.status, 'number');
   });
 });
