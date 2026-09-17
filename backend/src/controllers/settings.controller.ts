@@ -1,4 +1,4 @@
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import type { AuthRequest } from '../middlewares/auth.middleware.js';
 import { extractRequestActor } from '../utils/actor.js';
 import { extractRequestContext } from '../utils/requestContext.js';
@@ -6,6 +6,8 @@ import {
   SettingsServiceError,
   getAuditRetentionSettings,
   updateAuditRetentionSettings,
+  getPublicSettings,
+  updatePublicSettings,
 } from '../services/settings.service.js';
 
 export const getAuditRetention = async (
@@ -50,6 +52,54 @@ export const updateAuditRetention = async (
     }
     console.error(
       'Error saat memperbarui pengaturan retensi audit log:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
+    return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
+  }
+};
+
+export const getPublicSettingsHandler = async (
+  _req: Request,
+  res: Response,
+): Promise<Response | void> => {
+  try {
+    const settings = await getPublicSettings();
+    return res.status(200).json({ settings });
+  } catch (error) {
+    console.error(
+      'Error saat mengambil pengaturan publik:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
+    return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
+  }
+};
+
+export const updatePublicSettingsHandler = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<Response | void> => {
+  try {
+    const actor = extractRequestActor(req);
+    if (!actor) {
+      return res.status(401).json({ error: 'Akses ditolak. Pengguna belum terautentikasi.' });
+    }
+
+    const settings = await updatePublicSettings({
+      payload: req.body,
+      actor,
+      context: extractRequestContext(req),
+    });
+
+    return res.status(200).json({
+      message: 'Pengaturan profil publik berhasil diperbarui.',
+      settings,
+    });
+  } catch (error) {
+    if (error instanceof SettingsServiceError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    console.error(
+      'Error saat memperbarui pengaturan profil publik:',
       error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
     );
     return res.status(500).json({ error: 'Terjadi kesalahan internal server' });

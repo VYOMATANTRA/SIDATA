@@ -51,6 +51,7 @@ export const AUDIT_ACTIONS = {
   AUTH_OTP_ATTEMPTS_EXCEEDED: defineAction('auth.otp_attempts_exceeded', 'critical'),
 
   SETTINGS_AUDIT_RETENTION_CHANGED: defineAction('settings.audit_retention_changed', 'critical'),
+  SETTINGS_PUBLIC_UPDATED: defineAction('settings.public_updated', 'info'),
   AUDIT_PRUNED: defineAction('audit.pruned', 'info'),
 } as const satisfies Record<string, AuditActionDef>;
 

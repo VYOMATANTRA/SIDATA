@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import prisma from '../utils/prisma.js';
+import { Prisma } from '../../generated/prisma/client.js';
 import {
   buildAuditLog,
   AUDIT_ACTIONS,
@@ -55,24 +57,49 @@ export const getAuditRetentionSettings = async (
   };
 };
 
-function validateRetentionPayload(payload: {
-  info?: unknown;
-  warning?: unknown;
-  critical?: unknown;
-}): AuditRetentionSettings {
+const MAX_RETENTION_DAYS = 36500; // 100 years
+
+function validateRetentionPayload(payload: unknown): AuditRetentionSettings {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+    throw new SettingsServiceError('Payload pengaturan tidak valid.', 400);
+  }
+
+  const allowedKeys = new Set(['info', 'warning', 'critical']);
+  for (const key of Object.keys(payload)) {
+    if (!allowedKeys.has(key)) {
+      throw new SettingsServiceError(
+        `Terdapat bidang pengaturan retensi yang tidak dikenali: "${key}".`,
+        400,
+      );
+    }
+  }
+
+  const record = payload as Record<string, unknown>;
+
   const validateOne = (value: unknown, label: string): number => {
-    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    if (
+      typeof value !== 'number' ||
+      !Number.isInteger(value) ||
+      !Number.isSafeInteger(value) ||
+      value < 0
+    ) {
       throw new SettingsServiceError(
         `Nilai retensi "${label}" harus berupa bilangan bulat non-negatif (0 = simpan selamanya).`,
+        400,
+      );
+    }
+    if (value > MAX_RETENTION_DAYS) {
+      throw new SettingsServiceError(
+        `Nilai retensi "${label}" maksimal ${MAX_RETENTION_DAYS} hari (100 tahun). Gunakan 0 untuk menyimpan selamanya.`,
         400,
       );
     }
     return value;
   };
 
-  const info = validateOne(payload.info, 'info');
-  const warning = validateOne(payload.warning, 'warning');
-  const critical = validateOne(payload.critical, 'critical');
+  const info = validateOne(record.info, 'info');
+  const warning = validateOne(record.warning, 'warning');
+  const critical = validateOne(record.critical, 'critical');
 
   // 0 means "keep forever" — treat it as infinite for the ordering check, since infinite
   // retention always satisfies "at least as long as" regardless of position.
@@ -89,12 +116,13 @@ function validateRetentionPayload(payload: {
 }
 
 export const updateAuditRetentionSettings = async (params: {
-  payload: { info?: unknown; warning?: unknown; critical?: unknown };
+  payload: unknown;
   actor: AuditActor;
   context?: AuditRequestContext | undefined;
 }) => {
   const { payload, actor, context } = params;
   const next = validateRetentionPayload(payload);
+  const actorId = actor.id?.trim() ? actor.id.trim() : null;
 
   // Shortening retention is the single most useful move for someone covering their tracks, so
   // this change is logged at `critical` severity — the loudest level the system has — with the
@@ -113,8 +141,8 @@ export const updateAuditRetentionSettings = async (params: {
     const upsertOne = (key: string, value: number) =>
       tx.systemSetting.upsert({
         where: { key },
-        update: { value: String(value), updatedById: actor.id ?? null },
-        create: { key, value: String(value), updatedById: actor.id ?? null },
+        update: { value: String(value), updatedById: actorId },
+        create: { key, value: String(value), updatedById: actorId },
       });
 
     await upsertOne(AUDIT_RETENTION_KEYS.info, next.info);
@@ -134,4 +162,343 @@ export const updateAuditRetentionSettings = async (params: {
 
     return next;
   });
+};
+
+/**
+ * Whitelist of public setting keys. Only keys defined here are accessible via the
+ * public settings endpoint. This strictly prevents internal/governance settings
+ * (like audit retention) from being exposed.
+ */
+export const PUBLIC_SETTING_KEYS = {
+  appName: 'public.app_name',
+  institutionName: 'public.institution_name',
+  tagline: 'public.tagline',
+  administrativeArea: 'public.administrative_area',
+  contactPhone: 'public.contact_phone',
+  contactWhatsapp: 'public.contact_whatsapp',
+  contactEmail: 'public.contact_email',
+  contactAddress: 'public.contact_address',
+  defaultCoordinates: 'public.default_coordinates',
+  weatherAdm4: 'public.weather_adm4',
+} as const;
+
+export interface CoordinatesSetting {
+  lat: number;
+  lon: number;
+  zoom: number;
+}
+
+export interface PublicSettings {
+  appName: string;
+  institutionName: string;
+  tagline: string;
+  administrativeArea: string;
+  contactPhone: string;
+  contactWhatsapp: string;
+  contactEmail: string;
+  contactAddress: string;
+  defaultCoordinates: CoordinatesSetting;
+  weatherAdm4: string;
+}
+
+export const DEFAULT_PUBLIC_SETTINGS: PublicSettings = {
+  appName: 'SIDATA',
+  institutionName: 'Kelurahan Manggar',
+  tagline: 'Sistem Informasi Data Terpadu Kelurahan Manggar',
+  administrativeArea: 'Kelurahan Manggar, Balikpapan Timur, Kota Balikpapan',
+  contactPhone: '(0542) 746123',
+  contactWhatsapp: '081234567890',
+  contactEmail: 'kelurahan.manggar@balikpapan.go.id',
+  contactAddress:
+    'Jl. Mulawarman No. 1, Manggar, Balikpapan Timur, Kota Balikpapan, Kalimantan Timur 76116',
+  defaultCoordinates: {
+    lat: -1.2251,
+    lon: 116.9438,
+    zoom: 13,
+  },
+  weatherAdm4: '64.71.01.1001',
+};
+
+export const coordinatesSchema = z
+  .object({
+    lat: z
+      .number({ required_error: 'Latitude wajib diisi' })
+      .finite('Latitude harus berupa angka valid')
+      .min(-90, 'Latitude harus di antara -90 dan 90')
+      .max(90, 'Latitude harus di antara -90 dan 90'),
+    lon: z
+      .number({ required_error: 'Longitude wajib diisi' })
+      .finite('Longitude harus berupa angka valid')
+      .min(-180, 'Longitude harus di antara -180 dan 180')
+      .max(180, 'Longitude harus di antara -180 dan 180'),
+    zoom: z
+      .number({ required_error: 'Zoom wajib diisi' })
+      .int('Zoom harus berupa bilangan bulat')
+      .min(1, 'Zoom minimal 1')
+      .max(20, 'Zoom maksimal 20'),
+  })
+  .strict('Terdapat bidang koordinat yang tidak dikenali.');
+
+const noHtmlRegex = /^[^<>]*$/;
+const singleLineTextRegex = /^[^<>\r\n]*$/;
+const phoneFormatRegex = /^(?=.*\d)[\d\s()+-]+$/;
+
+export const updatePublicSettingsSchema = z
+  .object({
+    appName: z
+      .string()
+      .trim()
+      .min(1, 'Nama portal tidak boleh kosong')
+      .max(100, 'Nama portal maksimal 100 karakter')
+      .regex(
+        singleLineTextRegex,
+        'Nama portal tidak boleh mengandung karakter < atau > atau baris baru',
+      )
+      .optional(),
+    institutionName: z
+      .string()
+      .trim()
+      .min(1, 'Nama instansi tidak boleh kosong')
+      .max(150, 'Nama instansi maksimal 150 karakter')
+      .regex(
+        singleLineTextRegex,
+        'Nama instansi tidak boleh mengandung karakter < atau > atau baris baru',
+      )
+      .optional(),
+    tagline: z
+      .string()
+      .trim()
+      .max(255, 'Tagline maksimal 255 karakter')
+      .regex(
+        singleLineTextRegex,
+        'Tagline tidak boleh mengandung karakter < atau > atau baris baru',
+      )
+      .nullable()
+      .transform((val) => val ?? '')
+      .optional(),
+    administrativeArea: z
+      .string()
+      .trim()
+      .max(255, 'Wilayah administratif maksimal 255 karakter')
+      .regex(
+        singleLineTextRegex,
+        'Wilayah administratif tidak boleh mengandung karakter < atau > atau baris baru',
+      )
+      .nullable()
+      .transform((val) => val ?? '')
+      .optional(),
+    contactPhone: z
+      .string()
+      .trim()
+      .max(50, 'Nomor telepon maksimal 50 karakter')
+      .regex(phoneFormatRegex, 'Format nomor telepon tidak valid (hanya angka, spasi, (), +, -)')
+      .or(z.literal(''))
+      .nullable()
+      .transform((val) => val ?? '')
+      .optional(),
+    contactWhatsapp: z
+      .string()
+      .trim()
+      .max(50, 'Nomor WhatsApp maksimal 50 karakter')
+      .regex(phoneFormatRegex, 'Format nomor WhatsApp tidak valid (hanya angka, spasi, (), +, -)')
+      .or(z.literal(''))
+      .nullable()
+      .transform((val) => val ?? '')
+      .optional(),
+    contactEmail: z
+      .string()
+      .trim()
+      .max(254, 'Email maksimal 254 karakter')
+      .email('Format email kontak tidak valid')
+      .or(z.literal(''))
+      .nullable()
+      .transform((val) => val ?? '')
+      .optional(),
+    contactAddress: z
+      .string()
+      .trim()
+      .max(500, 'Alamat kantor maksimal 500 karakter')
+      .regex(noHtmlRegex, 'Alamat kantor tidak boleh mengandung karakter < atau >')
+      .nullable()
+      .transform((val) => val ?? '')
+      .optional(),
+    defaultCoordinates: coordinatesSchema.optional(),
+    weatherAdm4: z
+      .string()
+      .trim()
+      .regex(
+        /^\d{2}\.\d{2}\.\d{2}\.\d{4}$/,
+        'Format kode adm4 BMKG tidak valid (contoh: 64.71.01.1001)',
+      )
+      .optional(),
+  })
+  .strict('Terdapat bidang pengaturan yang tidak dikenali.');
+
+const PUBLIC_SETTINGS_CACHE_TTL_MS = 60 * 1000;
+let cacheVersion = 0;
+let publicSettingsCache: { data: PublicSettings; expiresAt: number } | null = null;
+
+export function invalidatePublicSettingsCache(): void {
+  cacheVersion++;
+  publicSettingsCache = null;
+}
+
+export const getPublicSettings = async (
+  client: { systemSetting: Pick<typeof prisma.systemSetting, 'findMany'> } = prisma,
+  skipCache = false,
+): Promise<PublicSettings> => {
+  const now = Date.now();
+  if (
+    !skipCache &&
+    publicSettingsCache &&
+    publicSettingsCache.expiresAt > now &&
+    client === prisma
+  ) {
+    return structuredClone(publicSettingsCache.data);
+  }
+
+  const versionAtStart = cacheVersion;
+  const rows = await client.systemSetting.findMany({
+    where: { key: { in: Object.values(PUBLIC_SETTING_KEYS) } },
+  });
+
+  const byKey = new Map(rows.map((row) => [row.key, row.value]));
+
+  const parseCoords = (raw?: string): CoordinatesSetting => {
+    if (!raw) return DEFAULT_PUBLIC_SETTINGS.defaultCoordinates;
+    try {
+      const parsed = JSON.parse(raw);
+      const validated = coordinatesSchema.safeParse(parsed);
+      return validated.success ? validated.data : DEFAULT_PUBLIC_SETTINGS.defaultCoordinates;
+    } catch {
+      return DEFAULT_PUBLIC_SETTINGS.defaultCoordinates;
+    }
+  };
+
+  const result: PublicSettings = {
+    appName: byKey.get(PUBLIC_SETTING_KEYS.appName)?.trim() || DEFAULT_PUBLIC_SETTINGS.appName,
+    institutionName:
+      byKey.get(PUBLIC_SETTING_KEYS.institutionName)?.trim() ||
+      DEFAULT_PUBLIC_SETTINGS.institutionName,
+    tagline: byKey.get(PUBLIC_SETTING_KEYS.tagline) ?? DEFAULT_PUBLIC_SETTINGS.tagline,
+    administrativeArea:
+      byKey.get(PUBLIC_SETTING_KEYS.administrativeArea) ??
+      DEFAULT_PUBLIC_SETTINGS.administrativeArea,
+    contactPhone:
+      byKey.get(PUBLIC_SETTING_KEYS.contactPhone) ?? DEFAULT_PUBLIC_SETTINGS.contactPhone,
+    contactWhatsapp:
+      byKey.get(PUBLIC_SETTING_KEYS.contactWhatsapp) ?? DEFAULT_PUBLIC_SETTINGS.contactWhatsapp,
+    contactEmail:
+      byKey.get(PUBLIC_SETTING_KEYS.contactEmail) ?? DEFAULT_PUBLIC_SETTINGS.contactEmail,
+    contactAddress:
+      byKey.get(PUBLIC_SETTING_KEYS.contactAddress) ?? DEFAULT_PUBLIC_SETTINGS.contactAddress,
+    defaultCoordinates: parseCoords(byKey.get(PUBLIC_SETTING_KEYS.defaultCoordinates)),
+    weatherAdm4:
+      byKey.get(PUBLIC_SETTING_KEYS.weatherAdm4)?.trim() || DEFAULT_PUBLIC_SETTINGS.weatherAdm4,
+  };
+
+  // Only store in cache if no invalidation/mutation occurred while the async DB query was in-flight.
+  if (client === prisma && cacheVersion === versionAtStart) {
+    publicSettingsCache = {
+      data: structuredClone(result),
+      expiresAt: now + PUBLIC_SETTINGS_CACHE_TTL_MS,
+    };
+  }
+
+  return structuredClone(result);
+};
+
+export const updatePublicSettings = async (params: {
+  payload: unknown;
+  actor: AuditActor;
+  context?: AuditRequestContext | undefined;
+}): Promise<PublicSettings> => {
+  const { payload, actor, context } = params;
+
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+    throw new SettingsServiceError('Payload pengaturan tidak valid.', 400);
+  }
+
+  const parsed = updatePublicSettingsSchema.safeParse(payload);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    let message = issue?.message ?? 'Validasi pengaturan gagal.';
+    if (issue?.code === 'unrecognized_keys') {
+      const isCoordinates = issue.path.includes('defaultCoordinates');
+      const keys = (issue as { keys?: string[] }).keys?.map((k) => `"${k}"`).join(', ') ?? '';
+      message = isCoordinates
+        ? `Terdapat bidang koordinat yang tidak dikenali: ${keys}`
+        : `Terdapat bidang pengaturan yang tidak dikenali: ${keys}`;
+    }
+    throw new SettingsServiceError(message, 400);
+  }
+
+  const updates = parsed.data;
+  if (Object.keys(updates).length === 0) {
+    throw new SettingsServiceError('Setidaknya satu bidang pengaturan harus dikirimkan.', 400);
+  }
+
+  const actorId = actor.id?.trim() ? actor.id.trim() : null;
+
+  const updated = await prisma.$transaction(async (tx) => {
+    // Lock ALL public setting keys in a deterministic, sorted order to eliminate deadlocks
+    // and completely serialize concurrent admin updates against race conditions or interleaved diffs.
+    const allPublicKeys = Object.values(PUBLIC_SETTING_KEYS).sort();
+    await tx.$queryRaw`SELECT setting_key FROM system_settings WHERE setting_key IN (${Prisma.join(allPublicKeys)}) FOR UPDATE`;
+
+    const before = await getPublicSettings(tx, true);
+
+    const upsertOne = (key: string, val: string) =>
+      tx.systemSetting.upsert({
+        where: { key },
+        update: { value: val, updatedById: actorId },
+        create: { key, value: val, updatedById: actorId },
+      });
+
+    if (updates.appName !== undefined)
+      await upsertOne(PUBLIC_SETTING_KEYS.appName, updates.appName);
+    if (updates.institutionName !== undefined)
+      await upsertOne(PUBLIC_SETTING_KEYS.institutionName, updates.institutionName);
+    if (updates.tagline !== undefined)
+      await upsertOne(PUBLIC_SETTING_KEYS.tagline, updates.tagline);
+    if (updates.administrativeArea !== undefined)
+      await upsertOne(PUBLIC_SETTING_KEYS.administrativeArea, updates.administrativeArea);
+    if (updates.contactPhone !== undefined)
+      await upsertOne(PUBLIC_SETTING_KEYS.contactPhone, updates.contactPhone);
+    if (updates.contactWhatsapp !== undefined)
+      await upsertOne(PUBLIC_SETTING_KEYS.contactWhatsapp, updates.contactWhatsapp);
+    if (updates.contactEmail !== undefined)
+      await upsertOne(PUBLIC_SETTING_KEYS.contactEmail, updates.contactEmail);
+    if (updates.contactAddress !== undefined)
+      await upsertOne(PUBLIC_SETTING_KEYS.contactAddress, updates.contactAddress);
+    if (updates.defaultCoordinates !== undefined)
+      await upsertOne(
+        PUBLIC_SETTING_KEYS.defaultCoordinates,
+        JSON.stringify(updates.defaultCoordinates),
+      );
+    if (updates.weatherAdm4 !== undefined)
+      await upsertOne(PUBLIC_SETTING_KEYS.weatherAdm4, updates.weatherAdm4);
+
+    const after = await getPublicSettings(tx, true);
+
+    await buildAuditLog(
+      {
+        action: AUDIT_ACTIONS.SETTINGS_PUBLIC_UPDATED,
+        actor,
+        target: {
+          type: 'system_setting',
+          id: 'public_settings',
+          label: 'Pengaturan Profil Publik',
+        },
+        metadata: { before, after, changedFields: Object.keys(updates) },
+        context,
+      },
+      tx,
+    );
+
+    return after;
+  });
+
+  invalidatePublicSettingsCache();
+  return updated;
 };

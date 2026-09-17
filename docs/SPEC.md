@@ -197,9 +197,14 @@ implemented and out of scope for this schema pass in the same way those are:
 - `audit_logs` — the audit trail (§3). `target_type`/`target_id` are deliberately not a foreign
   key, so it can log actions against any of the 10 content tables above once they exist, without
   a schema change. This is also where the §5 tier-1 prose-builder override log belongs.
-- `system_settings` — generic key/value store; first (and so far only) use is admin-configurable
-  audit log retention (§3). CMS settings introduced later should live here too rather than in a
-  new table.
+- `system_settings` — generic key/value store. Stores both admin-configurable audit log
+  retention (`audit.retention_*`, §3) and public portal profile/contact metadata (`public.*`
+  covering app name, institution, tagline, administrative area, phone, WhatsApp, email, address,
+  default map coordinates, and BMKG adm4 area code). The `value` column is `TEXT` (migration
+  `20260917170000_expand_system_setting_value_to_text`) to support structured JSON and longer copy.
+  Public settings are read via `GET /api/settings/public` (unauthenticated, cached in-memory with
+  invalidation, whitelist-filtered) and mutated by Admins via `PATCH /api/settings/public`
+  (Zod-validated, audited in `audit_logs` as `settings.public_updated` with before/after diffs).
 
 Weather widget data (§8) has no table here, and isn't merely uncovered by this pass — it's
 out of scope for this schema entirely. It's fetched live from BMKG's public API and cached
