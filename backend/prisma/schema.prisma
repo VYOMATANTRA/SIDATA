@@ -159,7 +159,7 @@ model AuditLog {
 /// to want a home for its own settings here too.
 model SystemSetting {
   key   String @id @map("setting_key")
-  value String
+  value String @db.Text
 
   updatedById String?
   updatedBy   User?   @relation("SystemSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)

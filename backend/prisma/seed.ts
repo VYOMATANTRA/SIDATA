@@ -1,5 +1,9 @@
 import prisma from '../src/utils/prisma.js';
-import { AUDIT_RETENTION_KEYS } from '../src/services/settings.service.js';
+import {
+  AUDIT_RETENTION_KEYS,
+  PUBLIC_SETTING_KEYS,
+  DEFAULT_PUBLIC_SETTINGS,
+} from '../src/services/settings.service.js';
 
 async function main() {
   console.log('Memulai proses seeding...');
@@ -128,6 +132,30 @@ async function main() {
       where: { key },
       update: {},
       create: { key, value: '0' },
+    });
+  }
+
+  // Seed default public settings (portal identity, contact, spatial config)
+  const publicSeedMap: Record<string, string> = {
+    [PUBLIC_SETTING_KEYS.appName]: DEFAULT_PUBLIC_SETTINGS.appName,
+    [PUBLIC_SETTING_KEYS.institutionName]: DEFAULT_PUBLIC_SETTINGS.institutionName,
+    [PUBLIC_SETTING_KEYS.tagline]: DEFAULT_PUBLIC_SETTINGS.tagline,
+    [PUBLIC_SETTING_KEYS.administrativeArea]: DEFAULT_PUBLIC_SETTINGS.administrativeArea,
+    [PUBLIC_SETTING_KEYS.contactPhone]: DEFAULT_PUBLIC_SETTINGS.contactPhone,
+    [PUBLIC_SETTING_KEYS.contactWhatsapp]: DEFAULT_PUBLIC_SETTINGS.contactWhatsapp,
+    [PUBLIC_SETTING_KEYS.contactEmail]: DEFAULT_PUBLIC_SETTINGS.contactEmail,
+    [PUBLIC_SETTING_KEYS.contactAddress]: DEFAULT_PUBLIC_SETTINGS.contactAddress,
+    [PUBLIC_SETTING_KEYS.defaultCoordinates]: JSON.stringify(
+      DEFAULT_PUBLIC_SETTINGS.defaultCoordinates,
+    ),
+    [PUBLIC_SETTING_KEYS.weatherAdm4]: DEFAULT_PUBLIC_SETTINGS.weatherAdm4,
+  };
+
+  for (const [key, value] of Object.entries(publicSeedMap)) {
+    await prisma.systemSetting.upsert({
+      where: { key },
+      update: {},
+      create: { key, value },
     });
   }
 
