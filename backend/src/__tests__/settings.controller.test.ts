@@ -12,6 +12,11 @@ import {
   getFastPublicSettings,
   DEFAULT_PUBLIC_SETTINGS,
 } from '../services/settings.service.js';
+import {
+  getManggarForecast,
+  getWeatherCacheKeysForTests,
+  resetWeatherCache,
+} from '../services/weather.service.js';
 import prisma from '../utils/prisma.js';
 import type { AuthRequest } from '../middlewares/auth.middleware.js';
 import { fakeRes } from './helpers/fakeRes.js';
@@ -1470,6 +1475,85 @@ describe('settings.controller updatePublicSettingsHandler', () => {
       prisma.$transaction = originalTransaction;
       prisma.$queryRaw = originalQueryRaw;
       prisma.auditLog.create = originalAuditCreate;
+      invalidatePublicSettingsCache();
+    }
+  });
+
+  it('evicts previous weather cache entry when weatherAdm4 is updated, but preserves weather cache when weatherAdm4 is unchanged', async () => {
+    resetWeatherCache();
+    invalidatePublicSettingsCache();
+    const originalFindMany = prisma.systemSetting.findMany;
+    const originalUpsert = prisma.systemSetting.upsert;
+    const originalTransaction = prisma.$transaction;
+    const originalQueryRaw = prisma.$queryRaw;
+    const originalAuditCreate = prisma.auditLog.create;
+    const originalFetch = globalThis.fetch;
+
+    // Seed BMKG fetch mock
+    globalThis.fetch = (async () => {
+      return new Response(
+        JSON.stringify({
+          lokasi: { desa: 'Manggar', lat: -1.2, lon: 116.9 },
+          data: [{ cuaca: [] }],
+        }),
+        { status: 200 },
+      );
+    }) as unknown as typeof fetch;
+
+    // Warm weather cache with default adm4 ('64.71.01.1001')
+    await getManggarForecast('64.71.01.1001');
+    assert.ok(getWeatherCacheKeysForTests().includes('64.71.01.1001'));
+
+    const stored = new Map<string, string>([['public.weather_adm4', '64.71.01.1001']]);
+    prisma.systemSetting.findMany = (async () => {
+      return Array.from(stored.entries()).map(([key, value]) => ({ key, value }));
+    }) as unknown as typeof prisma.systemSetting.findMany;
+    prisma.systemSetting.upsert = (async (args: { create: { key: string; value: string } }) => {
+      stored.set(args.create.key, args.create.value);
+      return { ...args.create, updatedAt: new Date() };
+    }) as unknown as typeof prisma.systemSetting.upsert;
+    prisma.auditLog.create = (async () => ({
+      id: 'audit-weather',
+    })) as unknown as typeof prisma.auditLog.create;
+    prisma.$transaction = (async (arg: unknown) => {
+      if (typeof arg === 'function') return (arg as (tx: typeof prisma) => unknown)(prisma);
+      throw new Error('expected interactive transaction');
+    }) as unknown as typeof prisma.$transaction;
+    prisma.$queryRaw = (async () => []) as unknown as typeof prisma.$queryRaw;
+
+    try {
+      // 1. Update unrelated setting (appName): weather cache for 64.71.01.1001 MUST NOT be evicted
+      const res1 = fakeRes();
+      await updatePublicSettingsHandler(
+        makeReq({ body: { appName: 'Brand New Portal' } }),
+        res1 as unknown as Response,
+      );
+      assert.equal(res1.status, 200);
+      assert.ok(
+        getWeatherCacheKeysForTests().includes('64.71.01.1001'),
+        'Unrelated setting update must keep weather cache intact',
+      );
+
+      // 2. Update weatherAdm4 to a new code ('64.71.02.2002'): old code ('64.71.01.1001') MUST be evicted
+      const res2 = fakeRes();
+      await updatePublicSettingsHandler(
+        makeReq({ body: { weatherAdm4: '64.71.02.2002' } }),
+        res2 as unknown as Response,
+      );
+      assert.equal(res2.status, 200);
+      assert.equal(
+        getWeatherCacheKeysForTests().includes('64.71.01.1001'),
+        false,
+        'Old weatherAdm4 must be evicted from weather cache upon setting change',
+      );
+    } finally {
+      prisma.systemSetting.findMany = originalFindMany;
+      prisma.systemSetting.upsert = originalUpsert;
+      prisma.$transaction = originalTransaction;
+      prisma.$queryRaw = originalQueryRaw;
+      prisma.auditLog.create = originalAuditCreate;
+      globalThis.fetch = originalFetch;
+      resetWeatherCache();
       invalidatePublicSettingsCache();
     }
   });

@@ -8,6 +8,7 @@ import {
   type AuditRequestContext,
 } from './audit.service.js';
 import { VersionedTtlCache, executeLockedTransaction } from '../utils/lockTransactionCache.js';
+import { evictWeatherCache } from './weather.service.js';
 
 export class SettingsServiceError extends Error {
   statusCode: number;
@@ -341,8 +342,14 @@ export const publicSettingsCache = new VersionedTtlCache<PublicSettings>({
   baseClient: prisma,
 });
 
-export function invalidatePublicSettingsCache(options?: { preserveLastKnownGood?: boolean }): void {
+export function invalidatePublicSettingsCache(options?: {
+  preserveLastKnownGood?: boolean;
+  evictWeatherCache?: boolean;
+}): void {
   publicSettingsCache.invalidate(options);
+  if (options?.evictWeatherCache) {
+    evictWeatherCache();
+  }
 }
 
 export const getPublicSettings = async (
@@ -489,15 +496,21 @@ export const updatePublicSettings = async (params: {
   const allPublicKeys = Object.values(PUBLIC_SETTING_KEYS).sort();
   const lockQuery = Prisma.sql`SELECT setting_key FROM system_settings WHERE setting_key IN (${Prisma.join(allPublicKeys)}) FOR UPDATE`;
 
+  let previousWeatherAdm4: string | undefined;
+
   return executeLockedTransaction({
     client: prisma,
     lockQuery,
     cache: publicSettingsCache,
     onCommit: (committedAfter) => {
       publicSettingsCache.setCommitted(committedAfter);
+      if (previousWeatherAdm4 && previousWeatherAdm4 !== committedAfter.weatherAdm4) {
+        evictWeatherCache(previousWeatherAdm4);
+      }
     },
     execute: async (tx) => {
       const before = await getPublicSettings(tx, true);
+      previousWeatherAdm4 = before.weatherAdm4;
 
       const upsertOne = (key: string, val: string) =>
         tx.systemSetting.upsert({

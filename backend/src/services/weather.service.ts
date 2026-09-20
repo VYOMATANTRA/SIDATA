@@ -17,6 +17,8 @@ export interface WeatherForecastResult {
   stale: boolean;
 }
 
+export const MAX_WEATHER_CACHE_ENTRIES = 5;
+
 const weatherCacheMap = new Map<string, { result: WeatherForecastResult; expiresAt: number }>();
 const inFlightMap = new Map<string, Promise<WeatherForecastResult>>();
 
@@ -54,6 +56,13 @@ async function fetchFresh(adm4: string = WEATHER_ADM4): Promise<WeatherForecastR
 async function refresh(adm4: string = WEATHER_ADM4): Promise<WeatherForecastResult> {
   try {
     const result = await fetchFresh(adm4);
+    // Cap weatherCacheMap to prevent unbounded memory growth as adm4 configurations change
+    if (weatherCacheMap.size >= MAX_WEATHER_CACHE_ENTRIES && !weatherCacheMap.has(adm4)) {
+      const oldestKey = weatherCacheMap.keys().next().value;
+      if (oldestKey) {
+        weatherCacheMap.delete(oldestKey);
+      }
+    }
     weatherCacheMap.set(adm4, { result, expiresAt: Date.now() + WEATHER_CACHE_TTL_MS });
     return result;
   } catch (error) {
@@ -73,33 +82,54 @@ async function refresh(adm4: string = WEATHER_ADM4): Promise<WeatherForecastResu
 export async function getManggarForecast(
   adm4: string = WEATHER_ADM4,
 ): Promise<WeatherForecastResult> {
-  const cached = weatherCacheMap.get(adm4);
+  const normalizedAdm4 = typeof adm4 === 'string' && adm4.trim() ? adm4.trim() : WEATHER_ADM4;
+  const cached = weatherCacheMap.get(normalizedAdm4);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.result;
   }
 
   // Concurrent callers for the same adm4 share a single in-flight refresh.
-  let pending = inFlightMap.get(adm4);
+  let pending = inFlightMap.get(normalizedAdm4);
   if (!pending) {
-    pending = refresh(adm4).finally(() => {
-      inFlightMap.delete(adm4);
+    pending = refresh(normalizedAdm4).finally(() => {
+      inFlightMap.delete(normalizedAdm4);
     });
-    inFlightMap.set(adm4, pending);
+    inFlightMap.set(normalizedAdm4, pending);
   }
 
   return pending;
 }
 
+/**
+ * Evicts cached weather forecasts and active in-flight tracking for a specific adm4 code,
+ * or clears all entries if no adm4 is provided.
+ */
+export function evictWeatherCache(adm4?: string): void {
+  const trimmed = typeof adm4 === 'string' ? adm4.trim() : '';
+  if (trimmed) {
+    weatherCacheMap.delete(trimmed);
+    inFlightMap.delete(trimmed);
+  } else {
+    weatherCacheMap.clear();
+    inFlightMap.clear();
+  }
+}
+
 // Exposed for tests only, resets the module-level cache between cases.
 export function resetWeatherCache(): void {
-  weatherCacheMap.clear();
-  inFlightMap.clear();
+  evictWeatherCache();
+}
+
+// Exposed for tests only, returns current cached adm4 keys.
+export function getWeatherCacheKeysForTests(): string[] {
+  return Array.from(weatherCacheMap.keys());
 }
 
 // Exposed for tests only, forces the next call to treat the cache as expired without discarding it, so the stale-fallback path can be exercised.
 export function expireWeatherCacheForTests(adm4?: string): void {
-  if (adm4) {
-    const entry = weatherCacheMap.get(adm4);
+  const trimmed = typeof adm4 === 'string' ? adm4.trim() : '';
+  if (trimmed) {
+    const entry = weatherCacheMap.get(trimmed);
     if (entry) {
       entry.expiresAt = 0;
     }

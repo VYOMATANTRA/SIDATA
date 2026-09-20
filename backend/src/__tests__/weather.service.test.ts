@@ -4,6 +4,9 @@ import {
   getManggarForecast,
   resetWeatherCache,
   expireWeatherCacheForTests,
+  evictWeatherCache,
+  getWeatherCacheKeysForTests,
+  MAX_WEATHER_CACHE_ENTRIES,
 } from '../services/weather.service.js';
 
 const sampleBmkgResponse = {
@@ -220,5 +223,60 @@ describe('getManggarForecast', () => {
     assert.equal(b1.location.desa, 'Manggar Baru');
     assert.equal(b2.location.desa, 'Manggar Baru');
     assert.equal(callCount, 2, 'One fetch per unique adm4');
+  });
+
+  it('boundary testing: evictWeatherCache handles empty string, whitespace, null, and undefined safely', () => {
+    // Boundary inputs: whitespace, null, undefined, empty string must not throw
+    evictWeatherCache(null as unknown as string);
+    evictWeatherCache(undefined);
+    evictWeatherCache('');
+    evictWeatherCache('   ');
+    assert.equal(getWeatherCacheKeysForTests().length, 0);
+  });
+
+  it('evicts targeted adm4 without affecting other cached areas', async () => {
+    mock.method(globalThis, 'fetch', async () => {
+      return new Response(JSON.stringify(sampleBmkgResponse), { status: 200 });
+    });
+
+    await getManggarForecast('64.71.01.1001');
+    await getManggarForecast('64.71.01.1002');
+
+    const keysBefore = getWeatherCacheKeysForTests();
+    assert.ok(keysBefore.includes('64.71.01.1001'));
+    assert.ok(keysBefore.includes('64.71.01.1002'));
+    assert.equal(keysBefore.length, 2);
+
+    // Evict only area 1
+    evictWeatherCache('64.71.01.1001');
+
+    const keysAfter = getWeatherCacheKeysForTests();
+    assert.equal(keysAfter.includes('64.71.01.1001'), false, 'Area 1 must be evicted');
+    assert.equal(keysAfter.includes('64.71.01.1002'), true, 'Area 2 must remain cached');
+  });
+
+  it('enforces MAX_WEATHER_CACHE_ENTRIES capacity cap and evicts oldest entry in FIFO order', async () => {
+    mock.method(globalThis, 'fetch', async () => {
+      return new Response(JSON.stringify(sampleBmkgResponse), { status: 200 });
+    });
+
+    assert.equal(MAX_WEATHER_CACHE_ENTRIES, 5);
+
+    // Insert 5 distinct adm4 codes (filling cache to capacity)
+    for (let i = 1; i <= 5; i++) {
+      await getManggarForecast(`64.71.01.100${i}`);
+    }
+
+    let keys = getWeatherCacheKeysForTests();
+    assert.equal(keys.length, 5);
+    assert.equal(keys[0], '64.71.01.1001');
+
+    // Insert 6th adm4 code: must evict the oldest entry ('64.71.01.1001') and keep size at 5
+    await getManggarForecast('64.71.01.1006');
+
+    keys = getWeatherCacheKeysForTests();
+    assert.equal(keys.length, 5, 'Map size must not exceed MAX_WEATHER_CACHE_ENTRIES');
+    assert.equal(keys.includes('64.71.01.1001'), false, 'Oldest entry 1001 must have been evicted');
+    assert.ok(keys.includes('64.71.01.1006'), 'New entry 1006 must be present');
   });
 });
