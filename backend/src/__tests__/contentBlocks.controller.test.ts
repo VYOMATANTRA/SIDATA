@@ -384,6 +384,41 @@ describe('contentBlocks.controller getContentBlockBySlugHandler', () => {
     }
   });
 
+  it('normalizes mixed-case and uppercase slug to lowercase and returns block data', async () => {
+    invalidateContentBlocksCache();
+    const originalFindUnique = prisma.contentBlock.findUnique;
+    let queriedSlug = '';
+
+    prisma.contentBlock.findUnique = (async (args: { where: { slug: string } }) => {
+      queriedSlug = args.where.slug;
+      return {
+        id: 'block-1',
+        sectionId: null,
+        type: 'hero',
+        slug: 'landing-hero',
+        title: 'Hero Title',
+        body: 'Hero Body',
+        metadata: { badge: 'Test' },
+        sortOrder: null,
+        updatedById: null,
+        createdAt: new Date('2026-09-01'),
+        updatedAt: new Date('2026-09-01'),
+      };
+    }) as unknown as typeof prisma.contentBlock.findUnique;
+
+    try {
+      const res = fakeRes();
+      const req = { params: { slug: 'Landing-Hero' } } as unknown as Request;
+      await getContentBlockBySlugHandler(req, res as unknown as Response);
+
+      assert.equal(res.status, 200);
+      assert.equal(queriedSlug, 'landing-hero');
+    } finally {
+      prisma.contentBlock.findUnique = originalFindUnique;
+      invalidateContentBlocksCache();
+    }
+  });
+
   it('enforces client isolation: transaction client bypasses cache and queries client directly', async () => {
     invalidateContentBlocksCache();
     const originalFindMany = prisma.contentBlock.findMany;
@@ -458,8 +493,15 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
     assert.deepEqual(res.body, { error: 'Akses ditolak. Pengguna belum terautentikasi.' });
   });
 
-  it('returns 400 when slug has invalid format (uppercase, spaces, double hyphens)', async () => {
-    const invalidSlugs = ['Landing-Hero', 'landing hero', 'landing--hero', '-hero', 'hero-'];
+  it('returns 400 when slug has invalid format (spaces, double hyphens, special characters)', async () => {
+    const invalidSlugs = [
+      'landing hero',
+      'landing--hero',
+      '-hero',
+      'hero-',
+      'hero@block',
+      'hero_block',
+    ];
     for (const badSlug of invalidSlugs) {
       const res = fakeRes();
       const req = makeReq({
@@ -470,6 +512,73 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
 
       assert.equal(res.status, 400);
       assert.match((res.body as { error: string }).error, /Format slug tidak valid/);
+    }
+  });
+
+  it('normalizes mixed-case and uppercase slugs to lowercase and updates the block successfully', async () => {
+    invalidateContentBlocksCache();
+    const originalTransaction = prisma.$transaction;
+
+    let targetSlugQueried = '';
+    const existingBlock = {
+      id: 'uuid-hero-1',
+      sectionId: null,
+      type: 'hero',
+      slug: 'landing-hero',
+      title: 'Judul Lama',
+      body: 'Konten Lama',
+      metadata: null,
+      sortOrder: null,
+      updatedById: null,
+      createdAt: new Date('2026-09-01'),
+      updatedAt: new Date('2026-09-01'),
+    };
+
+    prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+      const mockTx = {
+        $queryRaw: async () => [],
+        contentBlock: {
+          findUnique: async (args: { where: { slug: string } }) => {
+            targetSlugQueried = args.where.slug;
+            return existingBlock;
+          },
+          update: async (args: { data: Record<string, unknown> }) => ({
+            ...existingBlock,
+            ...args.data,
+          }),
+        },
+        auditLog: {
+          create: async () => {},
+        },
+      };
+      return fn(mockTx as unknown as typeof prisma);
+    }) as unknown as typeof prisma.$transaction;
+
+    try {
+      // Test mixed-case slug
+      const resMixed = fakeRes();
+      const reqMixed = makeReq({
+        params: { slug: 'Landing-Hero' },
+        body: { title: 'Judul Baru Mixed' },
+      });
+      await updateContentBlockHandler(reqMixed, resMixed as unknown as Response);
+
+      assert.equal(resMixed.status, 200);
+      assert.equal(targetSlugQueried, 'landing-hero');
+
+      // Test all-uppercase slug
+      const resUpper = fakeRes();
+      const reqUpper = makeReq({
+        params: { slug: 'LANDING-HERO' },
+        body: { title: 'Judul Baru Upper' },
+      });
+      await updateContentBlockHandler(reqUpper, resUpper as unknown as Response);
+
+      assert.equal(resUpper.status, 200);
+      assert.equal(targetSlugQueried, 'landing-hero');
+    } finally {
+      prisma.$transaction = originalTransaction;
+      invalidateContentBlocksCache();
     }
   });
 

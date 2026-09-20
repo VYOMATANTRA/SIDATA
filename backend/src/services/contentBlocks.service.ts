@@ -285,14 +285,13 @@ export const updateContentBlock = async (
     throw new ContentBlockServiceError('Slug konten tidak valid', 400);
   }
 
-  const trimmedSlug = slug.trim();
-  if (!SLUG_REGEX.test(trimmedSlug) || trimmedSlug.length > 100) {
+  const normalizedSlug = slug.trim().toLowerCase();
+  if (!SLUG_REGEX.test(normalizedSlug) || normalizedSlug.length > 100) {
     throw new ContentBlockServiceError(
       'Format slug tidak valid. Gunakan format kebab-case (maksimal 100 karakter).',
       400,
     );
   }
-  const normalizedSlug = trimmedSlug;
 
   if (typeof rawInput !== 'object' || rawInput === null || Array.isArray(rawInput)) {
     throw new ContentBlockServiceError('Payload pembaruan harus berupa objek JSON.', 400);
