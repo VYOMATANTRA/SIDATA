@@ -1,5 +1,5 @@
 import { RESEND_API_KEY, EMAIL_FROM } from '../configs/index.js';
-import { getPublicSettings, DEFAULT_PUBLIC_SETTINGS } from '../services/settings.service.js';
+import { getFastPublicSettings, DEFAULT_PUBLIC_SETTINGS } from '../services/settings.service.js';
 
 export interface SendOtpEmailParams {
   to: string;
@@ -17,9 +17,20 @@ function escapeHtml(value: unknown): string {
 }
 
 export async function sendOtpEmail({ to, otp }: SendOtpEmailParams): Promise<boolean> {
+  const cleanTo = typeof to === 'string' ? to.trim() : '';
+  const rawOtp = typeof otp === 'string' ? otp : String(otp ?? '');
+  const cleanOtp = rawOtp.replace(/[\r\n]/g, '').trim();
+
+  if (!cleanTo || !cleanOtp) {
+    console.error(
+      `Gagal mengirim email OTP: parameter "to" atau "otp" tidak valid (to: "${to}", otp: "${otp}")`,
+    );
+    return false;
+  }
+
   let settings = DEFAULT_PUBLIC_SETTINGS;
   try {
-    settings = await getPublicSettings();
+    settings = await getFastPublicSettings({ timeoutMs: 200 });
   } catch (err) {
     console.warn('Gagal memuat pengaturan publik untuk email, menggunakan nilai default:', err);
   }
@@ -28,7 +39,6 @@ export async function sendOtpEmail({ to, otp }: SendOtpEmailParams): Promise<boo
     const rawAppName = settings.appName || DEFAULT_PUBLIC_SETTINGS.appName;
     const cleanAppName =
       rawAppName.replace(/[\r\n]+/g, ' ').trim() || DEFAULT_PUBLIC_SETTINGS.appName;
-    const cleanOtp = (otp || '').replace(/[\r\n]/g, '').trim();
 
     const safeAppName = escapeHtml(cleanAppName);
     const safeTaglineOrInst = escapeHtml(settings.tagline || settings.institutionName);
@@ -59,7 +69,7 @@ export async function sendOtpEmail({ to, otp }: SendOtpEmailParams): Promise<boo
       },
       body: JSON.stringify({
         from: EMAIL_FROM,
-        to: [to],
+        to: [cleanTo],
         subject: `[${cleanAppName}] Kode Verifikasi OTP Anda: ${cleanOtp}`,
         html: htmlContent,
       }),
@@ -67,18 +77,18 @@ export async function sendOtpEmail({ to, otp }: SendOtpEmailParams): Promise<boo
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      console.error(`Gagal mengirim email OTP ke ${to} via Resend API:`, errData);
+      console.error(`Gagal mengirim email OTP ke ${cleanTo} via Resend API:`, errData);
       if (process.env.NODE_ENV !== 'production') {
-        console.log(`[DEV MAILER FALLBACK] Kode OTP untuk ${to}: ${otp}`);
+        console.log(`[DEV MAILER FALLBACK] Kode OTP untuk ${cleanTo}: ${cleanOtp}`);
       }
       return false;
     }
 
     return true;
   } catch (error) {
-    console.error(`Gagal mengirim email OTP ke ${to}:`, error);
+    console.error(`Gagal mengirim email OTP ke ${cleanTo}:`, error);
     if (process.env.NODE_ENV !== 'production') {
-      console.log(`[DEV MAILER FALLBACK] Kode OTP untuk ${to}: ${otp}`);
+      console.log(`[DEV MAILER FALLBACK] Kode OTP untuk ${cleanTo}: ${cleanOtp}`);
     }
     return false;
   }
