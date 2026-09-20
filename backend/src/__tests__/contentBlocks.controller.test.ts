@@ -723,4 +723,54 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
       invalidateContentBlocksCache();
     }
   });
+
+  it('boundary testing: handles Date objects including invalid Date (new Date(NaN)) without throwing RangeError', async () => {
+    invalidateContentBlocksCache();
+    const originalTransaction = prisma.$transaction;
+
+    const existingBlock = {
+      id: 'uuid-hero-1',
+      sectionId: null,
+      type: 'hero',
+      slug: 'landing-hero',
+      title: 'Judul',
+      body: 'Konten',
+      metadata: { validDate: new Date('2026-09-01T00:00:00.000Z'), invalidDate: new Date(NaN) },
+      sortOrder: null,
+      updatedById: null,
+      createdAt: new Date('2026-09-01'),
+      updatedAt: new Date('2026-09-01'),
+    };
+
+    prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+      const mockTx = {
+        $queryRaw: async () => [],
+        contentBlock: {
+          findUnique: async () => existingBlock,
+          update: async () => existingBlock,
+        },
+        auditLog: {
+          create: async () => {},
+        },
+      };
+      return fn(mockTx as unknown as typeof prisma);
+    }) as unknown as typeof prisma.$transaction;
+
+    try {
+      const res = fakeRes();
+      const req = makeReq({
+        params: { slug: 'landing-hero' },
+        body: {
+          title: 'Judul Baru',
+        },
+      });
+
+      // Must execute cleanly without throwing RangeError: Invalid time value
+      await updateContentBlockHandler(req, res as unknown as Response);
+      assert.equal(res.status, 200);
+    } finally {
+      prisma.$transaction = originalTransaction;
+      invalidateContentBlocksCache();
+    }
+  });
 });

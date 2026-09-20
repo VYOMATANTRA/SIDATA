@@ -7,6 +7,11 @@ import {
   type AuditActor,
   type AuditRequestContext,
 } from './audit.service.js';
+import {
+  VersionedTtlCache,
+  executeLockedTransaction,
+  withChangeResult,
+} from '../utils/lockTransactionCache.js';
 
 export class ContentBlockServiceError extends Error {
   statusCode: number;
@@ -111,7 +116,7 @@ function canonicalizeJson(obj: unknown): unknown {
     return obj;
   }
   if (obj instanceof Date) {
-    return obj.toISOString();
+    return Number.isNaN(obj.getTime()) ? null : obj.toISOString();
   }
   if (Array.isArray(obj)) {
     return obj.map(canonicalizeJson);
@@ -127,6 +132,16 @@ function canonicalizeJson(obj: unknown): unknown {
 function stableJsonStringify(obj: unknown): string {
   if (obj === null || obj === undefined) return 'null';
   return JSON.stringify(canonicalizeJson(obj));
+}
+
+/**
+ * Evaluates semantic inequality for audit log diffs.
+ * Uses canonicalized JSON stringification to apply uniform comparison semantics across both
+ * scalar fields (string, number, boolean, null) and nested JSON structures without false-positive
+ * diffs caused by object key reordering.
+ */
+function hasFieldChanged(before: unknown, after: unknown): boolean {
+  return stableJsonStringify(before) !== stableJsonStringify(after);
 }
 
 export const updateContentBlockSchema = z
@@ -171,18 +186,18 @@ export const updateContentBlockSchema = z
 export type UpdateContentBlockInput = z.infer<typeof updateContentBlockSchema>;
 
 interface CachedContentBlocks {
-  timestamp: number;
   blocks: ContentBlockDto[];
   bySlug: Map<string, ContentBlockDto>;
 }
 
 const CACHE_TTL_MS = 60 * 1000; // 1 minute
-let cache: CachedContentBlocks | null = null;
-let cacheVersion = 0;
+export const contentBlocksCache = new VersionedTtlCache<CachedContentBlocks>({
+  ttlMs: CACHE_TTL_MS,
+  baseClient: prisma,
+});
 
 export const invalidateContentBlocksCache = (): void => {
-  cacheVersion++;
-  cache = null;
+  contentBlocksCache.invalidate();
 };
 
 function formatContentBlock(block: {
@@ -213,12 +228,12 @@ function formatContentBlock(block: {
 }
 
 export const getAllContentBlocks = async (client = prisma): Promise<ContentBlockDto[]> => {
-  const now = Date.now();
-  if (cache && now - cache.timestamp < CACHE_TTL_MS) {
-    return structuredClone(cache.blocks);
+  const cached = contentBlocksCache.get(client);
+  if (cached) {
+    return structuredClone(cached.blocks);
   }
 
-  const versionAtStart = cacheVersion;
+  const versionAtStart = contentBlocksCache.getVersion();
   const rows = await client.contentBlock.findMany({
     orderBy: [{ sectionId: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
   });
@@ -226,14 +241,7 @@ export const getAllContentBlocks = async (client = prisma): Promise<ContentBlock
   const blocks = rows.map(formatContentBlock);
   const bySlug = new Map<string, ContentBlockDto>(blocks.map((b) => [b.slug, b]));
 
-  // Only store in cache if no invalidation/mutation occurred while async DB query was in-flight (Anti-TOCTOU)
-  if (cacheVersion === versionAtStart) {
-    cache = {
-      timestamp: now,
-      blocks,
-      bySlug,
-    };
-  }
+  contentBlocksCache.set({ blocks, bySlug }, versionAtStart, client);
 
   return structuredClone(blocks);
 };
@@ -251,9 +259,9 @@ export const getContentBlockBySlug = async (
     return null;
   }
 
-  const now = Date.now();
-  if (cache && now - cache.timestamp < CACHE_TTL_MS) {
-    const found = cache.bySlug.get(normalizedSlug);
+  const cached = contentBlocksCache.get(client);
+  if (cached) {
+    const found = cached.bySlug.get(normalizedSlug);
     if (found) return structuredClone(found);
   }
 
@@ -309,85 +317,86 @@ export const updateContentBlock = async (
         : input.title.trim()
       : undefined;
 
-  const updated = await client.$transaction(async (tx) => {
-    // Acquire row-level lock on the target slug to eliminate TOCTOU race conditions and serialize concurrent updates
-    await tx.$queryRaw`SELECT id FROM content_blocks WHERE slug = ${normalizedSlug} FOR UPDATE`;
+  const lockQuery = Prisma.sql`SELECT id FROM content_blocks WHERE slug = ${normalizedSlug} FOR UPDATE`;
 
-    const existing = await tx.contentBlock.findUnique({
-      where: { slug: normalizedSlug },
-    });
+  return executeLockedTransaction({
+    client,
+    lockQuery,
+    cache: contentBlocksCache,
+    execute: async (tx) => {
+      // Acquire row-level lock on the target slug to eliminate TOCTOU race conditions and serialize concurrent updates
+      const existing = await tx.contentBlock.findUnique({
+        where: { slug: normalizedSlug },
+      });
 
-    if (!existing) {
-      throw new ContentBlockServiceError(
-        `Blok konten dengan slug '${normalizedSlug}' tidak ditemukan`,
-        404,
-      );
-    }
+      if (!existing) {
+        throw new ContentBlockServiceError(
+          `Blok konten dengan slug '${normalizedSlug}' tidak ditemukan`,
+          404,
+        );
+      }
 
-    const changes: Record<string, { before: unknown; after: unknown }> = {};
+      const changes: Record<string, { before: unknown; after: unknown }> = {};
 
-    if (sanitizedTitle !== undefined && sanitizedTitle !== existing.title) {
-      changes.title = { before: existing.title, after: sanitizedTitle };
-    }
-    if (input.body !== undefined && input.body !== existing.body) {
-      changes.body = { before: existing.body, after: input.body };
-    }
-    if (input.metadata !== undefined) {
-      const oldMeta = stableJsonStringify(existing.metadata);
-      const newMeta = stableJsonStringify(input.metadata);
-      if (oldMeta !== newMeta) {
+      // Route all field comparisons through the canonicalization helper (hasFieldChanged).
+      // This applies uniform equality semantics across scalar fields (title, body) and nested JSON
+      // fields (metadata), preventing false-positive audit diffs from JSON object key reordering.
+      if (sanitizedTitle !== undefined && hasFieldChanged(existing.title, sanitizedTitle)) {
+        changes.title = { before: existing.title, after: sanitizedTitle };
+      }
+      if (input.body !== undefined && hasFieldChanged(existing.body, input.body)) {
+        changes.body = { before: existing.body, after: input.body };
+      }
+      if (input.metadata !== undefined && hasFieldChanged(existing.metadata, input.metadata)) {
         changes.metadata = { before: existing.metadata, after: input.metadata };
       }
-    }
 
-    // If nothing changed, return early
-    if (Object.keys(changes).length === 0) {
-      return { row: existing, didChange: false };
-    }
+      // If nothing changed, return early
+      if (Object.keys(changes).length === 0) {
+        return withChangeResult(formatContentBlock(existing), false);
+      }
 
-    const actorId = actor?.id?.trim() ? actor.id.trim() : null;
+      const actorId = actor?.id?.trim() ? actor.id.trim() : null;
 
-    const updatedRow = await tx.contentBlock.update({
-      where: { slug: normalizedSlug },
-      data: {
-        ...(sanitizedTitle !== undefined ? { title: sanitizedTitle } : {}),
-        ...(input.body !== undefined ? { body: input.body } : {}),
-        ...(input.metadata !== undefined
-          ? {
-              metadata:
-                input.metadata === null ? Prisma.DbNull : (input.metadata as Prisma.InputJsonValue),
-            }
-          : {}),
-        updatedById: actorId,
-      },
-    });
-
-    const auditOp = buildAuditLog(
-      {
-        action: AUDIT_ACTIONS.CONTENT_BLOCK_UPDATED,
-        actor,
-        target: {
-          type: 'content_block',
-          id: existing.id,
-          label: existing.slug,
+      const updatedRow = await tx.contentBlock.update({
+        where: { slug: normalizedSlug },
+        data: {
+          ...(sanitizedTitle !== undefined ? { title: sanitizedTitle } : {}),
+          ...(input.body !== undefined ? { body: input.body } : {}),
+          ...(input.metadata !== undefined
+            ? {
+                metadata:
+                  input.metadata === null
+                    ? Prisma.DbNull
+                    : (input.metadata as Prisma.InputJsonValue),
+              }
+            : {}),
+          updatedById: actorId,
         },
-        metadata: {
-          slug: existing.slug,
-          type: existing.type,
-          changes,
+      });
+
+      const auditOp = buildAuditLog(
+        {
+          action: AUDIT_ACTIONS.CONTENT_BLOCK_UPDATED,
+          actor,
+          target: {
+            type: 'content_block',
+            id: existing.id,
+            label: existing.slug,
+          },
+          metadata: {
+            slug: existing.slug,
+            type: existing.type,
+            changes,
+          },
+          context: reqContext,
         },
-        context: reqContext,
-      },
-      tx,
-    );
+        tx,
+      );
 
-    await auditOp;
+      await auditOp;
 
-    return { row: updatedRow, didChange: true };
+      return { result: formatContentBlock(updatedRow), didChange: true };
+    },
   });
-
-  if (updated.didChange) {
-    invalidateContentBlocksCache();
-  }
-  return formatContentBlock(updated.row);
 };
