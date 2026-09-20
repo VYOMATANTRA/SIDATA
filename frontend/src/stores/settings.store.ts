@@ -54,27 +54,27 @@ export const useSettingsStore = defineStore('settings', () => {
   const institutionName = computed(
     () => settings.value.institutionName?.trim() || DEFAULT_PUBLIC_SETTINGS.institutionName,
   );
-  const tagline = computed(() => settings.value.tagline || DEFAULT_PUBLIC_SETTINGS.tagline);
+  const tagline = computed(() => settings.value.tagline ?? DEFAULT_PUBLIC_SETTINGS.tagline);
   const administrativeArea = computed(
-    () => settings.value.administrativeArea || DEFAULT_PUBLIC_SETTINGS.administrativeArea,
+    () => settings.value.administrativeArea ?? DEFAULT_PUBLIC_SETTINGS.administrativeArea,
   );
   const defaultCoordinates = computed(
-    () => settings.value.defaultCoordinates || DEFAULT_PUBLIC_SETTINGS.defaultCoordinates,
+    () => settings.value.defaultCoordinates ?? DEFAULT_PUBLIC_SETTINGS.defaultCoordinates,
   );
   const weatherAdm4 = computed(
-    () => settings.value.weatherAdm4 || DEFAULT_PUBLIC_SETTINGS.weatherAdm4,
+    () => settings.value.weatherAdm4 ?? DEFAULT_PUBLIC_SETTINGS.weatherAdm4,
   );
   const contactAddress = computed(
-    () => settings.value.contactAddress || DEFAULT_PUBLIC_SETTINGS.contactAddress,
+    () => settings.value.contactAddress ?? DEFAULT_PUBLIC_SETTINGS.contactAddress,
   );
   const contactPhone = computed(
-    () => settings.value.contactPhone || DEFAULT_PUBLIC_SETTINGS.contactPhone,
+    () => settings.value.contactPhone ?? DEFAULT_PUBLIC_SETTINGS.contactPhone,
   );
   const contactWhatsapp = computed(
-    () => settings.value.contactWhatsapp || DEFAULT_PUBLIC_SETTINGS.contactWhatsapp,
+    () => settings.value.contactWhatsapp ?? DEFAULT_PUBLIC_SETTINGS.contactWhatsapp,
   );
   const contactEmail = computed(
-    () => settings.value.contactEmail || DEFAULT_PUBLIC_SETTINGS.contactEmail,
+    () => settings.value.contactEmail ?? DEFAULT_PUBLIC_SETTINGS.contactEmail,
   );
 
   async function fetchPublicSettings(force = false): Promise<PublicSettings> {

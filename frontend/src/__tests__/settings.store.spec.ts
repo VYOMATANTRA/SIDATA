@@ -153,4 +153,36 @@ describe('settings store', () => {
     expect(store.institutionName).toBe(DEFAULT_PUBLIC_SETTINGS.institutionName);
     expect(store.defaultCoordinates).toEqual(DEFAULT_PUBLIC_SETTINGS.defaultCoordinates);
   });
+
+  it('preserves empty-string values on optional fields and does not collapse them to hardcoded defaults', async () => {
+    const store = useSettingsStore();
+
+    // Simulate backend returning empty strings for cleared contact/optional fields
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        settings: {
+          appName: 'SIDATA Manggar',
+          institutionName: 'Kelurahan Manggar',
+          tagline: '',
+          administrativeArea: '',
+          contactAddress: '',
+          contactPhone: '',
+          contactWhatsapp: '',
+          contactEmail: '',
+        },
+      }),
+    } as Response);
+
+    await store.fetchPublicSettings(true);
+
+    // Cleared fields must remain empty strings in both state and computed properties
+    expect(store.settings.contactPhone).toBe('');
+    expect(store.contactPhone).toBe('');
+    expect(store.contactAddress).toBe('');
+    expect(store.contactWhatsapp).toBe('');
+    expect(store.contactEmail).toBe('');
+    expect(store.tagline).toBe('');
+    expect(store.administrativeArea).toBe('');
+  });
 });
