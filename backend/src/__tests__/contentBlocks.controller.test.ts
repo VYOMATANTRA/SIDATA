@@ -8,7 +8,9 @@ import {
 } from '../controllers/contentBlocks.controller.js';
 import {
   getAllContentBlocks,
+  getContentBlockBySlug,
   invalidateContentBlocksCache,
+  contentBlocksCache,
 } from '../services/contentBlocks.service.js';
 import prisma from '../utils/prisma.js';
 import type { AuthRequest } from '../middlewares/auth.middleware.js';
@@ -206,6 +208,94 @@ describe('contentBlocks.controller getContentBlocksHandler', () => {
       invalidateContentBlocksCache();
     }
   });
+
+  it('enforces client isolation: transaction client bypasses cache and never populates shared cache', async () => {
+    invalidateContentBlocksCache();
+    const originalFindMany = prisma.contentBlock.findMany;
+
+    // 1. Warm cache with root prisma client
+    prisma.contentBlock.findMany = (async () => [
+      {
+        id: 'root-block',
+        sectionId: null,
+        type: 'hero',
+        slug: 'landing-hero',
+        title: 'Committed Root Title',
+        body: 'Committed Body',
+        metadata: null,
+        sortOrder: null,
+        updatedById: null,
+        createdAt: new Date('2026-09-01'),
+        updatedAt: new Date('2026-09-01'),
+      },
+    ]) as unknown as typeof prisma.contentBlock.findMany;
+
+    try {
+      const initial = await getAllContentBlocks();
+      assert.equal(initial[0]?.title, 'Committed Root Title');
+
+      // 2. Query with mock transaction client containing uncommitted data
+      const mockTxClient = {
+        contentBlock: {
+          findMany: async () => [
+            {
+              id: 'tx-block',
+              sectionId: null,
+              type: 'hero',
+              slug: 'landing-hero',
+              title: 'Uncommitted Transaction Title',
+              body: 'Uncommitted Body',
+              metadata: null,
+              sortOrder: null,
+              updatedById: null,
+              createdAt: new Date('2026-09-01'),
+              updatedAt: new Date('2026-09-01'),
+            },
+          ],
+        },
+      };
+
+      // Calling with tx client must bypass warm root cache and return uncommitted tx data
+      const txResult = await getAllContentBlocks(mockTxClient as unknown as typeof prisma);
+      assert.equal(txResult[0]?.title, 'Uncommitted Transaction Title');
+
+      // Subsequent call with default root client must STILL return committed root data, NOT uncommitted tx data
+      const subsequentRoot = await getAllContentBlocks();
+      assert.equal(subsequentRoot[0]?.title, 'Committed Root Title');
+    } finally {
+      prisma.contentBlock.findMany = originalFindMany;
+      invalidateContentBlocksCache();
+    }
+  });
+
+  it('cold cache isolation: transactional read on cold cache does not warm the shared cache', async () => {
+    invalidateContentBlocksCache();
+    const mockTxClient = {
+      contentBlock: {
+        findMany: async () => [
+          {
+            id: 'tx-block-2',
+            sectionId: null,
+            type: 'hero',
+            slug: 'landing-hero',
+            title: 'Uncommitted Cold Title',
+            body: 'Uncommitted Body',
+            metadata: null,
+            sortOrder: null,
+            updatedById: null,
+            createdAt: new Date('2026-09-01'),
+            updatedAt: new Date('2026-09-01'),
+          },
+        ],
+      },
+    };
+
+    const txResult = await getAllContentBlocks(mockTxClient as unknown as typeof prisma);
+    assert.equal(txResult[0]?.title, 'Uncommitted Cold Title');
+
+    // Shared cache must remain cold (null)
+    assert.equal(contentBlocksCache.get(prisma), null);
+  });
 });
 
 /* =========================================================================
@@ -290,6 +380,64 @@ describe('contentBlocks.controller getContentBlockBySlugHandler', () => {
       assert.equal(body.block.title, 'Hero Title');
     } finally {
       prisma.contentBlock.findUnique = originalFindUnique;
+      invalidateContentBlocksCache();
+    }
+  });
+
+  it('enforces client isolation: transaction client bypasses cache and queries client directly', async () => {
+    invalidateContentBlocksCache();
+    const originalFindMany = prisma.contentBlock.findMany;
+
+    // Warm cache with root prisma client
+    prisma.contentBlock.findMany = (async () => [
+      {
+        id: 'block-root',
+        sectionId: null,
+        type: 'hero',
+        slug: 'landing-hero',
+        title: 'Committed Hero Title',
+        body: 'Committed Body',
+        metadata: null,
+        sortOrder: null,
+        updatedById: null,
+        createdAt: new Date('2026-09-01'),
+        updatedAt: new Date('2026-09-01'),
+      },
+    ]) as unknown as typeof prisma.contentBlock.findMany;
+
+    try {
+      await getAllContentBlocks(); // Warms contentBlocksCache
+
+      const mockTxClient = {
+        contentBlock: {
+          findUnique: async () => ({
+            id: 'block-tx',
+            sectionId: null,
+            type: 'hero',
+            slug: 'landing-hero',
+            title: 'Uncommitted Tx Hero Title',
+            body: 'Uncommitted Body',
+            metadata: null,
+            sortOrder: null,
+            updatedById: null,
+            createdAt: new Date('2026-09-01'),
+            updatedAt: new Date('2026-09-01'),
+          }),
+        },
+      };
+
+      // Tx client must bypass warm cache and return uncommitted tx record
+      const txBlock = await getContentBlockBySlug(
+        'landing-hero',
+        mockTxClient as unknown as typeof prisma,
+      );
+      assert.equal(txBlock?.title, 'Uncommitted Tx Hero Title');
+
+      // Root client still reads from warm cache with committed title
+      const rootBlock = await getContentBlockBySlug('landing-hero');
+      assert.equal(rootBlock?.title, 'Committed Hero Title');
+    } finally {
+      prisma.contentBlock.findMany = originalFindMany;
       invalidateContentBlocksCache();
     }
   });

@@ -227,28 +227,26 @@ function formatContentBlock(block: {
   };
 }
 
-export const getAllContentBlocks = async (client = prisma): Promise<ContentBlockDto[]> => {
-  const cached = contentBlocksCache.get(client);
-  if (cached) {
-    return structuredClone(cached.blocks);
-  }
+export const getAllContentBlocks = async (
+  client: { contentBlock: Pick<typeof prisma.contentBlock, 'findMany'> } = prisma,
+): Promise<ContentBlockDto[]> => {
+  const cachedData = await contentBlocksCache.getOrFetch(async (db) => {
+    const rows = await db.contentBlock.findMany({
+      orderBy: [{ sectionId: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+    });
 
-  const versionAtStart = contentBlocksCache.getVersion();
-  const rows = await client.contentBlock.findMany({
-    orderBy: [{ sectionId: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
-  });
+    const blocks = rows.map(formatContentBlock);
+    const bySlug = new Map<string, ContentBlockDto>(blocks.map((b) => [b.slug, b]));
 
-  const blocks = rows.map(formatContentBlock);
-  const bySlug = new Map<string, ContentBlockDto>(blocks.map((b) => [b.slug, b]));
+    return { blocks, bySlug };
+  }, client);
 
-  contentBlocksCache.set({ blocks, bySlug }, versionAtStart, client);
-
-  return structuredClone(blocks);
+  return structuredClone(cachedData.blocks);
 };
 
 export const getContentBlockBySlug = async (
   slug: string,
-  client = prisma,
+  client: { contentBlock: Pick<typeof prisma.contentBlock, 'findUnique'> } = prisma,
 ): Promise<ContentBlockDto | null> => {
   if (!slug || typeof slug !== 'string') {
     return null;
