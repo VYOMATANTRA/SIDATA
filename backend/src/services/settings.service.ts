@@ -7,6 +7,7 @@ import {
   type AuditActor,
   type AuditRequestContext,
 } from './audit.service.js';
+import { VersionedTtlCache, executeLockedTransaction } from '../utils/lockTransactionCache.js';
 
 export class SettingsServiceError extends Error {
   statusCode: number;
@@ -334,78 +335,121 @@ export const updatePublicSettingsSchema = z
   })
   .strict();
 
-const PUBLIC_SETTINGS_CACHE_TTL_MS = 60 * 1000;
-let cacheVersion = 0;
-let publicSettingsCache: { data: PublicSettings; expiresAt: number } | null = null;
+const PUBLIC_SETTINGS_CACHE_TTL_MS = 15 * 60 * 1000;
+export const publicSettingsCache = new VersionedTtlCache<PublicSettings>({
+  ttlMs: PUBLIC_SETTINGS_CACHE_TTL_MS,
+  baseClient: prisma,
+});
 
-export function invalidatePublicSettingsCache(): void {
-  cacheVersion++;
-  publicSettingsCache = null;
+export function invalidatePublicSettingsCache(options?: { preserveLastKnownGood?: boolean }): void {
+  publicSettingsCache.invalidate(options);
 }
 
 export const getPublicSettings = async (
   client: { systemSetting: Pick<typeof prisma.systemSetting, 'findMany'> } = prisma,
   skipCache = false,
 ): Promise<PublicSettings> => {
-  const now = Date.now();
-  if (
-    !skipCache &&
-    publicSettingsCache &&
-    publicSettingsCache.expiresAt > now &&
-    client === prisma
-  ) {
-    return structuredClone(publicSettingsCache.data);
+  return publicSettingsCache.getOrFetch(
+    async (db: typeof client) => {
+      const rows = await db.systemSetting.findMany({
+        where: { key: { in: Object.values(PUBLIC_SETTING_KEYS) } },
+      });
+
+      const byKey = new Map(rows.map((row) => [row.key, row.value]));
+
+      const parseCoords = (raw?: string): CoordinatesSetting => {
+        if (!raw) return DEFAULT_PUBLIC_SETTINGS.defaultCoordinates;
+        try {
+          const parsed = JSON.parse(raw);
+          const validated = coordinatesSchema.safeParse(parsed);
+          return validated.success ? validated.data : DEFAULT_PUBLIC_SETTINGS.defaultCoordinates;
+        } catch {
+          return DEFAULT_PUBLIC_SETTINGS.defaultCoordinates;
+        }
+      };
+
+      return {
+        appName: byKey.get(PUBLIC_SETTING_KEYS.appName)?.trim() || DEFAULT_PUBLIC_SETTINGS.appName,
+        institutionName:
+          byKey.get(PUBLIC_SETTING_KEYS.institutionName)?.trim() ||
+          DEFAULT_PUBLIC_SETTINGS.institutionName,
+        tagline: byKey.get(PUBLIC_SETTING_KEYS.tagline) ?? DEFAULT_PUBLIC_SETTINGS.tagline,
+        administrativeArea:
+          byKey.get(PUBLIC_SETTING_KEYS.administrativeArea) ??
+          DEFAULT_PUBLIC_SETTINGS.administrativeArea,
+        contactPhone:
+          byKey.get(PUBLIC_SETTING_KEYS.contactPhone) ?? DEFAULT_PUBLIC_SETTINGS.contactPhone,
+        contactWhatsapp:
+          byKey.get(PUBLIC_SETTING_KEYS.contactWhatsapp) ?? DEFAULT_PUBLIC_SETTINGS.contactWhatsapp,
+        contactEmail:
+          byKey.get(PUBLIC_SETTING_KEYS.contactEmail) ?? DEFAULT_PUBLIC_SETTINGS.contactEmail,
+        contactAddress:
+          byKey.get(PUBLIC_SETTING_KEYS.contactAddress) ?? DEFAULT_PUBLIC_SETTINGS.contactAddress,
+        defaultCoordinates: parseCoords(byKey.get(PUBLIC_SETTING_KEYS.defaultCoordinates)),
+        weatherAdm4:
+          byKey.get(PUBLIC_SETTING_KEYS.weatherAdm4)?.trim() || DEFAULT_PUBLIC_SETTINGS.weatherAdm4,
+      };
+    },
+    client,
+    { skipCache },
+  );
+};
+
+export interface GetFastPublicSettingsOptions {
+  timeoutMs?: number;
+  client?: { systemSetting: Pick<typeof prisma.systemSetting, 'findMany'> };
+}
+
+/**
+ * Bounded-latency public settings lookup for time-critical flows (e.g. OTP email dispatch)
+ * and high-frequency public reads (e.g. weather forecast).
+ *
+ * Guarantees:
+ * - Cache hit: returns immediately from memory in 0ms (0 DB round trips, 0 pool connections).
+ * - Cache miss: bounds DB wait time with a strict timeout (default: 200ms). If the DB
+ *   is stalled, deadlocked, or connection-pool exhausted, it bails out and returns the in-memory
+ *   last-known-good or default settings without delaying the caller.
+ */
+export const getFastPublicSettings = async (
+  options?: GetFastPublicSettingsOptions,
+): Promise<PublicSettings> => {
+  const client = options?.client ?? prisma;
+  const rawTimeout = options?.timeoutMs;
+  const timeoutMs =
+    typeof rawTimeout === 'number' &&
+    Number.isFinite(rawTimeout) &&
+    rawTimeout > 0 &&
+    rawTimeout <= 2_147_483_647
+      ? Math.max(1, Math.floor(rawTimeout))
+      : 200;
+
+  // 1. In-memory cache hit: 0ms, zero DB load
+  const cached = publicSettingsCache.get(client);
+  if (cached) {
+    return cached;
   }
 
-  const versionAtStart = cacheVersion;
-  const rows = await client.systemSetting.findMany({
-    where: { key: { in: Object.values(PUBLIC_SETTING_KEYS) } },
-  });
+  // 2. Cache miss: race DB fetch against timeout
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(`Pengambilan pengaturan publik melebihi batas waktu ${timeoutMs}ms`));
+      }, timeoutMs);
+    });
 
-  const byKey = new Map(rows.map((row) => [row.key, row.value]));
-
-  const parseCoords = (raw?: string): CoordinatesSetting => {
-    if (!raw) return DEFAULT_PUBLIC_SETTINGS.defaultCoordinates;
-    try {
-      const parsed = JSON.parse(raw);
-      const validated = coordinatesSchema.safeParse(parsed);
-      return validated.success ? validated.data : DEFAULT_PUBLIC_SETTINGS.defaultCoordinates;
-    } catch {
-      return DEFAULT_PUBLIC_SETTINGS.defaultCoordinates;
+    const fresh = await Promise.race([getPublicSettings(client), timeoutPromise]);
+    return fresh;
+  } catch (err) {
+    console.warn(
+      `getFastPublicSettings: fallback ke pengaturan in-memory terakhir (${err instanceof Error ? err.message : String(err)})`,
+    );
+    return publicSettingsCache.getLastKnownGood(DEFAULT_PUBLIC_SETTINGS);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
     }
-  };
-
-  const result: PublicSettings = {
-    appName: byKey.get(PUBLIC_SETTING_KEYS.appName)?.trim() || DEFAULT_PUBLIC_SETTINGS.appName,
-    institutionName:
-      byKey.get(PUBLIC_SETTING_KEYS.institutionName)?.trim() ||
-      DEFAULT_PUBLIC_SETTINGS.institutionName,
-    tagline: byKey.get(PUBLIC_SETTING_KEYS.tagline) ?? DEFAULT_PUBLIC_SETTINGS.tagline,
-    administrativeArea:
-      byKey.get(PUBLIC_SETTING_KEYS.administrativeArea) ??
-      DEFAULT_PUBLIC_SETTINGS.administrativeArea,
-    contactPhone:
-      byKey.get(PUBLIC_SETTING_KEYS.contactPhone) ?? DEFAULT_PUBLIC_SETTINGS.contactPhone,
-    contactWhatsapp:
-      byKey.get(PUBLIC_SETTING_KEYS.contactWhatsapp) ?? DEFAULT_PUBLIC_SETTINGS.contactWhatsapp,
-    contactEmail:
-      byKey.get(PUBLIC_SETTING_KEYS.contactEmail) ?? DEFAULT_PUBLIC_SETTINGS.contactEmail,
-    contactAddress:
-      byKey.get(PUBLIC_SETTING_KEYS.contactAddress) ?? DEFAULT_PUBLIC_SETTINGS.contactAddress,
-    defaultCoordinates: parseCoords(byKey.get(PUBLIC_SETTING_KEYS.defaultCoordinates)),
-    weatherAdm4:
-      byKey.get(PUBLIC_SETTING_KEYS.weatherAdm4)?.trim() || DEFAULT_PUBLIC_SETTINGS.weatherAdm4,
-  };
-
-  // Only store in cache if no invalidation/mutation occurred while the async DB query was in-flight.
-  if (client === prisma && cacheVersion === versionAtStart) {
-    publicSettingsCache = {
-      data: structuredClone(result),
-      expiresAt: now + PUBLIC_SETTINGS_CACHE_TTL_MS,
-    };
   }
-
-  return structuredClone(result);
 };
 
 export const updatePublicSettings = async (params: {
@@ -440,65 +484,83 @@ export const updatePublicSettings = async (params: {
 
   const actorId = actor.id?.trim() ? actor.id.trim() : null;
 
-  const updated = await prisma.$transaction(async (tx) => {
-    // Lock ALL public setting keys in a deterministic, sorted order to eliminate deadlocks
-    // and completely serialize concurrent admin updates against race conditions or interleaved diffs.
-    const allPublicKeys = Object.values(PUBLIC_SETTING_KEYS).sort();
-    await tx.$queryRaw`SELECT setting_key FROM system_settings WHERE setting_key IN (${Prisma.join(allPublicKeys)}) FOR UPDATE`;
+  // Lock ALL public setting keys in a deterministic, sorted order to eliminate deadlocks
+  // and completely serialize concurrent admin updates against race conditions or interleaved diffs.
+  const allPublicKeys = Object.values(PUBLIC_SETTING_KEYS).sort();
+  const lockQuery = Prisma.sql`SELECT setting_key FROM system_settings WHERE setting_key IN (${Prisma.join(allPublicKeys)}) FOR UPDATE`;
 
-    const before = await getPublicSettings(tx, true);
+  return executeLockedTransaction({
+    client: prisma,
+    lockQuery,
+    cache: publicSettingsCache,
+    onCommit: (committedAfter) => {
+      publicSettingsCache.setCommitted(committedAfter);
+    },
+    execute: async (tx) => {
+      const before = await getPublicSettings(tx, true);
 
-    const upsertOne = (key: string, val: string) =>
-      tx.systemSetting.upsert({
-        where: { key },
-        update: { value: val, updatedById: actorId },
-        create: { key, value: val, updatedById: actorId },
-      });
+      const upsertOne = (key: string, val: string) =>
+        tx.systemSetting.upsert({
+          where: { key },
+          update: { value: val, updatedById: actorId },
+          create: { key, value: val, updatedById: actorId },
+        });
 
-    if (updates.appName !== undefined)
-      await upsertOne(PUBLIC_SETTING_KEYS.appName, updates.appName);
-    if (updates.institutionName !== undefined)
-      await upsertOne(PUBLIC_SETTING_KEYS.institutionName, updates.institutionName);
-    if (updates.tagline !== undefined)
-      await upsertOne(PUBLIC_SETTING_KEYS.tagline, updates.tagline);
-    if (updates.administrativeArea !== undefined)
-      await upsertOne(PUBLIC_SETTING_KEYS.administrativeArea, updates.administrativeArea);
-    if (updates.contactPhone !== undefined)
-      await upsertOne(PUBLIC_SETTING_KEYS.contactPhone, updates.contactPhone);
-    if (updates.contactWhatsapp !== undefined)
-      await upsertOne(PUBLIC_SETTING_KEYS.contactWhatsapp, updates.contactWhatsapp);
-    if (updates.contactEmail !== undefined)
-      await upsertOne(PUBLIC_SETTING_KEYS.contactEmail, updates.contactEmail);
-    if (updates.contactAddress !== undefined)
-      await upsertOne(PUBLIC_SETTING_KEYS.contactAddress, updates.contactAddress);
-    if (updates.defaultCoordinates !== undefined)
-      await upsertOne(
-        PUBLIC_SETTING_KEYS.defaultCoordinates,
-        JSON.stringify(updates.defaultCoordinates),
-      );
-    if (updates.weatherAdm4 !== undefined)
-      await upsertOne(PUBLIC_SETTING_KEYS.weatherAdm4, updates.weatherAdm4);
+      if (updates.appName !== undefined)
+        await upsertOne(PUBLIC_SETTING_KEYS.appName, updates.appName);
+      if (updates.institutionName !== undefined)
+        await upsertOne(PUBLIC_SETTING_KEYS.institutionName, updates.institutionName);
+      if (updates.tagline !== undefined)
+        await upsertOne(PUBLIC_SETTING_KEYS.tagline, updates.tagline);
+      if (updates.administrativeArea !== undefined)
+        await upsertOne(PUBLIC_SETTING_KEYS.administrativeArea, updates.administrativeArea);
+      if (updates.contactPhone !== undefined)
+        await upsertOne(PUBLIC_SETTING_KEYS.contactPhone, updates.contactPhone);
+      if (updates.contactWhatsapp !== undefined)
+        await upsertOne(PUBLIC_SETTING_KEYS.contactWhatsapp, updates.contactWhatsapp);
+      if (updates.contactEmail !== undefined)
+        await upsertOne(PUBLIC_SETTING_KEYS.contactEmail, updates.contactEmail);
+      if (updates.contactAddress !== undefined)
+        await upsertOne(PUBLIC_SETTING_KEYS.contactAddress, updates.contactAddress);
+      if (updates.defaultCoordinates !== undefined)
+        await upsertOne(
+          PUBLIC_SETTING_KEYS.defaultCoordinates,
+          JSON.stringify(updates.defaultCoordinates),
+        );
+      if (updates.weatherAdm4 !== undefined)
+        await upsertOne(PUBLIC_SETTING_KEYS.weatherAdm4, updates.weatherAdm4);
 
-    const after = await getPublicSettings(tx, true);
+      // Compute `after` in-memory from `before` + `updates` rather than issuing an extra DB query
+      // while holding the row-level FOR UPDATE lock, minimizing lock hold duration and contention.
+      const after: PublicSettings = {
+        appName: updates.appName ?? before.appName,
+        institutionName: updates.institutionName ?? before.institutionName,
+        tagline: updates.tagline ?? before.tagline,
+        administrativeArea: updates.administrativeArea ?? before.administrativeArea,
+        contactPhone: updates.contactPhone ?? before.contactPhone,
+        contactWhatsapp: updates.contactWhatsapp ?? before.contactWhatsapp,
+        contactEmail: updates.contactEmail ?? before.contactEmail,
+        contactAddress: updates.contactAddress ?? before.contactAddress,
+        defaultCoordinates: updates.defaultCoordinates ?? before.defaultCoordinates,
+        weatherAdm4: updates.weatherAdm4 ?? before.weatherAdm4,
+      };
 
-    await buildAuditLog(
-      {
-        action: AUDIT_ACTIONS.SETTINGS_PUBLIC_UPDATED,
-        actor,
-        target: {
-          type: 'system_setting',
-          id: 'public_settings',
-          label: 'Pengaturan Profil Publik',
+      await buildAuditLog(
+        {
+          action: AUDIT_ACTIONS.SETTINGS_PUBLIC_UPDATED,
+          actor,
+          target: {
+            type: 'system_setting',
+            id: 'public_settings',
+            label: 'Pengaturan Profil Publik',
+          },
+          metadata: { before, after, changedFields: Object.keys(updates) },
+          context,
         },
-        metadata: { before, after, changedFields: Object.keys(updates) },
-        context,
-      },
-      tx,
-    );
+        tx,
+      );
 
-    return after;
+      return after;
+    },
   });
-
-  invalidatePublicSettingsCache();
-  return updated;
 };

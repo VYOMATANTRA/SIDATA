@@ -9,6 +9,7 @@ import {
 } from '../controllers/settings.controller.js';
 import {
   invalidatePublicSettingsCache,
+  getFastPublicSettings,
   DEFAULT_PUBLIC_SETTINGS,
 } from '../services/settings.service.js';
 import prisma from '../utils/prisma.js';
@@ -694,6 +695,148 @@ describe('settings.controller getPublicSettingsHandler', () => {
         2,
         'second call must re-query DB because in-flight invalidation discarded cache write',
       );
+    } finally {
+      prisma.systemSetting.findMany = originalFindMany;
+      invalidatePublicSettingsCache();
+    }
+  });
+});
+
+/* =========================================================================
+ * 3b. PUBLIC PORTAL SETTINGS: FAST BOUNDED LOOKUP (getFastPublicSettings)
+ * ========================================================================= */
+
+describe('settings.service getFastPublicSettings', () => {
+  it('serves warm cached result in 0ms without querying database', async () => {
+    invalidatePublicSettingsCache();
+    const originalFindMany = prisma.systemSetting.findMany;
+    let queryCount = 0;
+
+    prisma.systemSetting.findMany = (async () => {
+      queryCount += 1;
+      return [{ key: 'public.app_name', value: 'Warm Fast App' }];
+    }) as unknown as typeof prisma.systemSetting.findMany;
+
+    try {
+      // 1. First call warms the cache
+      const res1 = await getFastPublicSettings();
+      assert.equal(res1.appName, 'Warm Fast App');
+      assert.equal(queryCount, 1);
+
+      // 2. Second call must return immediately from cache even if findMany would throw
+      prisma.systemSetting.findMany = (() => {
+        throw new Error('Database should not be accessed on warm cache');
+      }) as unknown as typeof prisma.systemSetting.findMany;
+
+      const res2 = await getFastPublicSettings();
+      assert.equal(res2.appName, 'Warm Fast App');
+      assert.equal(queryCount, 1, 'warm cache lookup must not invoke DB');
+    } finally {
+      prisma.systemSetting.findMany = originalFindMany;
+      invalidatePublicSettingsCache();
+    }
+  });
+
+  it('fetches fresh settings from DB when cache is cold', async () => {
+    invalidatePublicSettingsCache();
+    const originalFindMany = prisma.systemSetting.findMany;
+
+    prisma.systemSetting.findMany = (async () => [
+      { key: 'public.app_name', value: 'Cold Fast App' },
+      { key: 'public.weather_adm4', value: '64.71.01.2002' },
+    ]) as unknown as typeof prisma.systemSetting.findMany;
+
+    try {
+      const settings = await getFastPublicSettings();
+      assert.equal(settings.appName, 'Cold Fast App');
+      assert.equal(settings.weatherAdm4, '64.71.01.2002');
+    } finally {
+      prisma.systemSetting.findMany = originalFindMany;
+      invalidatePublicSettingsCache();
+    }
+  });
+
+  it('aborts and falls back to last-known-good settings when DB query exceeds timeoutMs', async () => {
+    invalidatePublicSettingsCache();
+    const originalFindMany = prisma.systemSetting.findMany;
+
+    // Simulate slow database (500ms delay)
+    prisma.systemSetting.findMany = (() => {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve([{ key: 'public.app_name', value: 'Too Slow App' }]);
+        }, 500);
+      });
+    }) as unknown as typeof prisma.systemSetting.findMany;
+
+    try {
+      const start = Date.now();
+      const settings = await getFastPublicSettings({ timeoutMs: 50 });
+      const elapsed = Date.now() - start;
+
+      assert.ok(elapsed < 300, `Expected elapsed time < 300ms, got ${elapsed}ms`);
+      assert.equal(
+        settings.appName,
+        DEFAULT_PUBLIC_SETTINGS.appName,
+        'Should fall back to default appName on timeout',
+      );
+    } finally {
+      prisma.systemSetting.findMany = originalFindMany;
+      invalidatePublicSettingsCache();
+    }
+  });
+
+  it('returns deep clone preventing mutation from polluting internal state', async () => {
+    invalidatePublicSettingsCache();
+    const originalFindMany = prisma.systemSetting.findMany;
+
+    prisma.systemSetting.findMany = (async () => [
+      { key: 'public.app_name', value: 'Immutable App' },
+    ]) as unknown as typeof prisma.systemSetting.findMany;
+
+    try {
+      const res1 = await getFastPublicSettings();
+      res1.appName = 'HACKED_NAME';
+
+      const res2 = await getFastPublicSettings();
+      assert.equal(res2.appName, 'Immutable App', 'Internal state must not be mutated');
+    } finally {
+      prisma.systemSetting.findMany = originalFindMany;
+      invalidatePublicSettingsCache();
+    }
+  });
+
+  it('boundary testing: safely handles non-positive numbers, NaN, and integer overflow for timeoutMs', async () => {
+    invalidatePublicSettingsCache();
+    const originalFindMany = prisma.systemSetting.findMany;
+
+    prisma.systemSetting.findMany = (async () => [
+      { key: 'public.app_name', value: 'Boundary App' },
+    ]) as unknown as typeof prisma.systemSetting.findMany;
+
+    const invalidTimeouts = [
+      0,
+      -1,
+      -100,
+      NaN,
+      Infinity,
+      -Infinity,
+      Number.MAX_SAFE_INTEGER,
+      2_147_483_648,
+      0.5,
+      '' as unknown as number,
+      [] as unknown as number,
+      {} as unknown as number,
+      null as unknown as number,
+      undefined as unknown as number,
+    ];
+
+    try {
+      for (const badTimeout of invalidTimeouts) {
+        invalidatePublicSettingsCache();
+        const settings = await getFastPublicSettings({ timeoutMs: badTimeout });
+        assert.equal(settings.appName, 'Boundary App');
+      }
     } finally {
       prisma.systemSetting.findMany = originalFindMany;
       invalidatePublicSettingsCache();
