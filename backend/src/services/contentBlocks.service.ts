@@ -146,7 +146,7 @@ function hasFieldChanged(before: unknown, after: unknown): boolean {
 
 export const updateContentBlockSchema = z
   .object({
-    title: z.string().max(255, 'Judul maksimal 255 karakter').nullable().optional(),
+    title: z.string().trim().max(255, 'Judul maksimal 255 karakter').nullable().optional(),
     body: z
       .string()
       .trim()

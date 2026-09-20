@@ -646,6 +646,69 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
     }
   });
 
+  it('boundary testing: title trims leading/trailing whitespace before validating max 255 length', async () => {
+    invalidateContentBlocksCache();
+    const originalTransaction = prisma.$transaction;
+
+    let savedTitle: unknown = undefined;
+    const existingBlock = {
+      id: 'uuid-hero-1',
+      sectionId: null,
+      type: 'hero',
+      slug: 'landing-hero',
+      title: 'Judul Lama',
+      body: 'Konten Lama',
+      metadata: null,
+      sortOrder: null,
+      updatedById: null,
+      createdAt: new Date('2026-09-01'),
+      updatedAt: new Date('2026-09-01'),
+    };
+
+    prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+      const mockTx = {
+        $queryRaw: async () => [],
+        contentBlock: {
+          findUnique: async () => existingBlock,
+          update: async (args: { data: Record<string, unknown> }) => {
+            savedTitle = args.data.title;
+            return { ...existingBlock, ...args.data };
+          },
+        },
+        auditLog: {
+          create: async () => {},
+        },
+      };
+      return fn(mockTx as unknown as typeof prisma);
+    }) as unknown as typeof prisma.$transaction;
+
+    try {
+      // 1. Title exceeding 255 characters after trim must be rejected with 400
+      const resTooLong = fakeRes();
+      const reqTooLong = makeReq({
+        params: { slug: 'landing-hero' },
+        body: { title: '   ' + 'a'.repeat(256) + '   ' },
+      });
+      await updateContentBlockHandler(reqTooLong, resTooLong as unknown as Response);
+      assert.equal(resTooLong.status, 400);
+      assert.match((resTooLong.body as { error: string }).error, /Judul maksimal 255 karakter/);
+
+      // 2. Title with raw length > 255 (e.g. 260 chars) but trimmed length <= 255 (e.g. 250 chars) must succeed
+      const rawTitle = '   ' + 'b'.repeat(250) + '       '; // 260 characters raw
+      const resValid = fakeRes();
+      const reqValid = makeReq({
+        params: { slug: 'landing-hero' },
+        body: { title: rawTitle },
+      });
+      await updateContentBlockHandler(reqValid, resValid as unknown as Response);
+      assert.equal(resValid.status, 200);
+      assert.equal(savedTitle, 'b'.repeat(250));
+    } finally {
+      prisma.$transaction = originalTransaction;
+      invalidateContentBlocksCache();
+    }
+  });
+
   it('boundary testing: rejects slugs that exceed 100 characters', async () => {
     const res = fakeRes();
     const req = makeReq({
