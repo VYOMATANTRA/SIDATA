@@ -56,11 +56,13 @@ async function fetchFresh(adm4: string = WEATHER_ADM4): Promise<WeatherForecastR
 async function refresh(adm4: string = WEATHER_ADM4): Promise<WeatherForecastResult> {
   try {
     const result = await fetchFresh(adm4);
-    // Cap weatherCacheMap to prevent unbounded memory growth as adm4 configurations change
-    if (weatherCacheMap.size >= MAX_WEATHER_CACHE_ENTRIES && !weatherCacheMap.has(adm4)) {
-      const oldestKey = weatherCacheMap.keys().next().value;
-      if (oldestKey) {
-        weatherCacheMap.delete(oldestKey);
+    // Move or insert key as most recently used, and evict the least recently used if exceeding capacity
+    if (weatherCacheMap.has(adm4)) {
+      weatherCacheMap.delete(adm4);
+    } else if (weatherCacheMap.size >= MAX_WEATHER_CACHE_ENTRIES) {
+      const leastRecentlyUsedKey = weatherCacheMap.keys().next().value;
+      if (leastRecentlyUsedKey) {
+        weatherCacheMap.delete(leastRecentlyUsedKey);
       }
     }
     weatherCacheMap.set(adm4, { result, expiresAt: Date.now() + WEATHER_CACHE_TTL_MS });
@@ -69,6 +71,7 @@ async function refresh(adm4: string = WEATHER_ADM4): Promise<WeatherForecastResu
     const existing = weatherCacheMap.get(adm4);
     if (existing) {
       const staleResult = { ...existing.result, stale: true };
+      weatherCacheMap.delete(adm4);
       weatherCacheMap.set(adm4, {
         result: staleResult,
         expiresAt: Date.now() + WEATHER_STALE_RETRY_MS,
@@ -85,6 +88,9 @@ export async function getManggarForecast(
   const normalizedAdm4 = typeof adm4 === 'string' && adm4.trim() ? adm4.trim() : WEATHER_ADM4;
   const cached = weatherCacheMap.get(normalizedAdm4);
   if (cached && cached.expiresAt > Date.now()) {
+    // Bump entry to most recently used in JS Map iteration order (LRU policy)
+    weatherCacheMap.delete(normalizedAdm4);
+    weatherCacheMap.set(normalizedAdm4, cached);
     return cached.result;
   }
 

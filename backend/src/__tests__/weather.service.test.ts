@@ -255,14 +255,14 @@ describe('getManggarForecast', () => {
     assert.equal(keysAfter.includes('64.71.01.1002'), true, 'Area 2 must remain cached');
   });
 
-  it('enforces MAX_WEATHER_CACHE_ENTRIES capacity cap and evicts oldest entry in FIFO order', async () => {
+  it('enforces MAX_WEATHER_CACHE_ENTRIES capacity cap and evicts least recently used entry (LRU)', async () => {
     mock.method(globalThis, 'fetch', async () => {
       return new Response(JSON.stringify(sampleBmkgResponse), { status: 200 });
     });
 
     assert.equal(MAX_WEATHER_CACHE_ENTRIES, 5);
 
-    // Insert 5 distinct adm4 codes (filling cache to capacity)
+    // Insert 5 distinct adm4 codes (filling cache to capacity: 1001, 1002, 1003, 1004, 1005)
     for (let i = 1; i <= 5; i++) {
       await getManggarForecast(`64.71.01.100${i}`);
     }
@@ -271,12 +271,30 @@ describe('getManggarForecast', () => {
     assert.equal(keys.length, 5);
     assert.equal(keys[0], '64.71.01.1001');
 
-    // Insert 6th adm4 code: must evict the oldest entry ('64.71.01.1001') and keep size at 5
+    // Access 1001 again (cache hit) — this must bump 1001 to most-recently-used, leaving 1002 as the least recently used
+    await getManggarForecast('64.71.01.1001');
+    keys = getWeatherCacheKeysForTests();
+    assert.equal(keys[0], '64.71.01.1002', '1002 should now be the least recently used entry');
+    assert.equal(
+      keys[keys.length - 1],
+      '64.71.01.1001',
+      '1001 should now be the most recently used entry',
+    );
+
+    // Insert 6th adm4 code: must evict the least recently used entry ('64.71.01.1002'), keeping 1001 cached
     await getManggarForecast('64.71.01.1006');
 
     keys = getWeatherCacheKeysForTests();
     assert.equal(keys.length, 5, 'Map size must not exceed MAX_WEATHER_CACHE_ENTRIES');
-    assert.equal(keys.includes('64.71.01.1001'), false, 'Oldest entry 1001 must have been evicted');
+    assert.equal(
+      keys.includes('64.71.01.1002'),
+      false,
+      'Least recently used entry 1002 must have been evicted',
+    );
+    assert.ok(
+      keys.includes('64.71.01.1001'),
+      'Frequently/recently accessed entry 1001 must remain cached',
+    );
     assert.ok(keys.includes('64.71.01.1006'), 'New entry 1006 must be present');
   });
 });
