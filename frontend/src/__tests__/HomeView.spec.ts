@@ -34,7 +34,8 @@ describe('HomeView rendering & accessibility', () => {
 
     const wrapper = mount(HomeView, { global: { plugins: [pinia, router] } });
 
-    // Check semantic HTML elements per docs/ACCESSIBILITY.md
+    // Check semantic HTML elements and skip link per docs/ACCESSIBILITY.md
+    expect(wrapper.find('a[href="#main-content"]').exists()).toBe(true);
     expect(wrapper.find('nav').exists()).toBe(true);
     expect(wrapper.find('main#main-content').exists()).toBe(true);
 

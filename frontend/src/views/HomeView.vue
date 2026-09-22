@@ -53,6 +53,14 @@ async function handleLogout() {
 
 <template>
   <div class="flex min-h-screen flex-col bg-slate-50 selection:bg-emerald-500 selection:text-white">
+    <!-- Skip to Content Link per docs/ACCESSIBILITY.md §3 (2.4.1) -->
+    <a
+      href="#main-content"
+      class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-xl focus:bg-emerald-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
+    >
+      Lewati ke konten utama
+    </a>
+
     <!-- Top Navigation Bar -->
     <nav
       class="sticky top-0 z-40 border-b border-slate-200/90 bg-white/95 px-4 py-3.5 backdrop-blur-md transition-all sm:px-6 lg:px-8"
