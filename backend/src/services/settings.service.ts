@@ -7,7 +7,11 @@ import {
   type AuditActor,
   type AuditRequestContext,
 } from './audit.service.js';
-import { VersionedTtlCache, executeLockedTransaction } from '../utils/lockTransactionCache.js';
+import {
+  VersionedTtlCache,
+  executeLockedTransaction,
+  withChangeResult,
+} from '../utils/lockTransactionCache.js';
 import { evictWeatherCache } from './weather.service.js';
 
 export class SettingsServiceError extends Error {
@@ -459,6 +463,24 @@ export const getFastPublicSettings = async (
   }
 };
 
+function hasSettingChanged(
+  field: keyof PublicSettings,
+  before: PublicSettings,
+  updates: Partial<PublicSettings>,
+): boolean {
+  const newVal = updates[field];
+  if (newVal === undefined) return false;
+  if (field === 'defaultCoordinates') {
+    const coords = newVal as CoordinatesSetting;
+    return (
+      coords.lat !== before.defaultCoordinates.lat ||
+      coords.lon !== before.defaultCoordinates.lon ||
+      coords.zoom !== before.defaultCoordinates.zoom
+    );
+  }
+  return newVal !== before[field];
+}
+
 export const updatePublicSettings = async (params: {
   payload: unknown;
   actor: AuditActor;
@@ -505,7 +527,8 @@ export const updatePublicSettings = async (params: {
     client: prisma,
     lockQuery,
     cache: publicSettingsCache,
-    onCommit: (committedAfter) => {
+    onCommit: (committedAfter, didChange) => {
+      if (!didChange) return;
       publicSettingsCache.setCommitted(committedAfter);
       if (previousWeatherAdm4 && previousWeatherAdm4 !== committedAfter.weatherAdm4) {
         evictWeatherCache(previousWeatherAdm4);
@@ -515,6 +538,15 @@ export const updatePublicSettings = async (params: {
       const before = await getPublicSettings(tx, true);
       previousWeatherAdm4 = before.weatherAdm4;
 
+      const changedKeys = (Object.keys(updates) as (keyof PublicSettings)[]).filter((key) =>
+        hasSettingChanged(key, before, updates),
+      );
+
+      // If no fields actually changed, short-circuit: skip DB writes, audit log, and cache invalidation
+      if (changedKeys.length === 0) {
+        return withChangeResult(before, false);
+      }
+
       const upsertOne = (key: string, val: string) =>
         tx.systemSetting.upsert({
           where: { key },
@@ -522,28 +554,28 @@ export const updatePublicSettings = async (params: {
           create: { key, value: val, updatedById: actorId },
         });
 
-      if (updates.appName !== undefined)
+      if (changedKeys.includes('appName') && updates.appName !== undefined)
         await upsertOne(PUBLIC_SETTING_KEYS.appName, updates.appName);
-      if (updates.institutionName !== undefined)
+      if (changedKeys.includes('institutionName') && updates.institutionName !== undefined)
         await upsertOne(PUBLIC_SETTING_KEYS.institutionName, updates.institutionName);
-      if (updates.tagline !== undefined)
+      if (changedKeys.includes('tagline') && updates.tagline !== undefined)
         await upsertOne(PUBLIC_SETTING_KEYS.tagline, updates.tagline);
-      if (updates.administrativeArea !== undefined)
+      if (changedKeys.includes('administrativeArea') && updates.administrativeArea !== undefined)
         await upsertOne(PUBLIC_SETTING_KEYS.administrativeArea, updates.administrativeArea);
-      if (updates.contactPhone !== undefined)
+      if (changedKeys.includes('contactPhone') && updates.contactPhone !== undefined)
         await upsertOne(PUBLIC_SETTING_KEYS.contactPhone, updates.contactPhone);
-      if (updates.contactWhatsapp !== undefined)
+      if (changedKeys.includes('contactWhatsapp') && updates.contactWhatsapp !== undefined)
         await upsertOne(PUBLIC_SETTING_KEYS.contactWhatsapp, updates.contactWhatsapp);
-      if (updates.contactEmail !== undefined)
+      if (changedKeys.includes('contactEmail') && updates.contactEmail !== undefined)
         await upsertOne(PUBLIC_SETTING_KEYS.contactEmail, updates.contactEmail);
-      if (updates.contactAddress !== undefined)
+      if (changedKeys.includes('contactAddress') && updates.contactAddress !== undefined)
         await upsertOne(PUBLIC_SETTING_KEYS.contactAddress, updates.contactAddress);
-      if (updates.defaultCoordinates !== undefined)
+      if (changedKeys.includes('defaultCoordinates') && updates.defaultCoordinates !== undefined)
         await upsertOne(
           PUBLIC_SETTING_KEYS.defaultCoordinates,
           JSON.stringify(updates.defaultCoordinates),
         );
-      if (updates.weatherAdm4 !== undefined)
+      if (changedKeys.includes('weatherAdm4') && updates.weatherAdm4 !== undefined)
         await upsertOne(PUBLIC_SETTING_KEYS.weatherAdm4, updates.weatherAdm4);
 
       // Compute `after` in-memory from `before` + `updates` rather than issuing an extra DB query
@@ -570,7 +602,7 @@ export const updatePublicSettings = async (params: {
             id: 'public_settings',
             label: 'Pengaturan Profil Publik',
           },
-          metadata: { before, after, changedFields: Object.keys(updates) },
+          metadata: { before, after, changedFields: changedKeys },
           context,
         },
         tx,
