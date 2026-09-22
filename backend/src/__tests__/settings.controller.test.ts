@@ -11,6 +11,7 @@ import {
   invalidatePublicSettingsCache,
   getFastPublicSettings,
   DEFAULT_PUBLIC_SETTINGS,
+  PUBLIC_SETTING_KEYS,
 } from '../services/settings.service.js';
 import {
   getManggarForecast,
@@ -1426,11 +1427,15 @@ describe('settings.controller updatePublicSettingsHandler', () => {
       return { id: 'audit-2', ...args.data };
     }) as unknown as typeof prisma.auditLog.create;
 
+    let capturedLockQuery: unknown;
     prisma.$transaction = (async (arg: unknown) => {
       if (typeof arg === 'function') return (arg as (tx: typeof prisma) => unknown)(prisma);
       throw new Error('expected interactive transaction');
     }) as unknown as typeof prisma.$transaction;
-    prisma.$queryRaw = (async () => []) as unknown as typeof prisma.$queryRaw;
+    prisma.$queryRaw = (async (query: unknown) => {
+      capturedLockQuery = query;
+      return [];
+    }) as unknown as typeof prisma.$queryRaw;
 
     try {
       const res = fakeRes();
@@ -1448,6 +1453,17 @@ describe('settings.controller updatePublicSettingsHandler', () => {
       assert.equal(res.status, 200);
       assert.equal(auditLogged?.action, 'settings.public_updated');
       assert.equal(auditLogged?.severity, 'info');
+
+      // Verify that lockQuery targets ONLY the updated keys in deterministic sorted order
+      const lockSql = capturedLockQuery as { values: unknown[] };
+      assert.deepEqual(
+        lockSql.values,
+        [
+          PUBLIC_SETTING_KEYS.appName,
+          PUBLIC_SETTING_KEYS.contactPhone,
+          PUBLIC_SETTING_KEYS.defaultCoordinates,
+        ].sort(),
+      );
 
       const metadata = auditLogged?.metadata as {
         before: { appName: string };

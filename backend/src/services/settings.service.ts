@@ -491,10 +491,13 @@ export const updatePublicSettings = async (params: {
 
   const actorId = actor.id?.trim() ? actor.id.trim() : null;
 
-  // Lock ALL public setting keys in a deterministic, sorted order to eliminate deadlocks
-  // and completely serialize concurrent admin updates against race conditions or interleaved diffs.
-  const allPublicKeys = Object.values(PUBLIC_SETTING_KEYS).sort();
-  const lockQuery = Prisma.sql`SELECT setting_key FROM system_settings WHERE setting_key IN (${Prisma.join(allPublicKeys)}) FOR UPDATE`;
+  // Lock only the setting keys present in updates in a deterministic, sorted order to eliminate
+  // deadlocks while allowing concurrent updates to disjoint setting keys to proceed in parallel.
+  const targetPublicKeys = (Object.keys(updates) as (keyof typeof PUBLIC_SETTING_KEYS)[])
+    .map((field) => PUBLIC_SETTING_KEYS[field])
+    .filter(Boolean)
+    .sort();
+  const lockQuery = Prisma.sql`SELECT setting_key FROM system_settings WHERE setting_key IN (${Prisma.join(targetPublicKeys)}) FOR UPDATE`;
 
   let previousWeatherAdm4: string | undefined;
 
