@@ -393,7 +393,7 @@ export const updateContentBlock = async (
 
       await auditOp;
 
-      return { result: formatContentBlock(updatedRow), didChange: true };
+      return formatContentBlock(updatedRow);
     },
   });
 };

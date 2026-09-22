@@ -184,7 +184,7 @@ export type LockQueryOrFn<Tx> = Prisma.Sql | ((tx: Tx) => Promise<unknown>);
 export const LOCKED_OPERATION_RESULT = Symbol.for('sidata.lockedOperationResult');
 
 export interface OperationResultWithChange<T> {
-  [LOCKED_OPERATION_RESULT]?: boolean;
+  [LOCKED_OPERATION_RESULT]: true;
   result: T;
   didChange: boolean;
 }
@@ -199,16 +199,7 @@ export function withChangeResult<T>(result: T, didChange: boolean): OperationRes
 
 function isOperationResultWithChange<T>(val: unknown): val is OperationResultWithChange<T> {
   if (typeof val !== 'object' || val === null) return false;
-  if ((val as Record<symbol, unknown>)[LOCKED_OPERATION_RESULT] === true) {
-    return true;
-  }
-  const keys = Object.keys(val);
-  return (
-    keys.length === 2 &&
-    'result' in val &&
-    'didChange' in val &&
-    typeof (val as { didChange?: unknown }).didChange === 'boolean'
-  );
+  return (val as Record<symbol, unknown>)[LOCKED_OPERATION_RESULT] === true;
 }
 
 export type LockedOperationOutput<T> = T | OperationResultWithChange<T>;

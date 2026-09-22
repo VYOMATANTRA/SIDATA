@@ -285,10 +285,7 @@ describe('utils/lockTransactionCache executeLockedTransaction', () => {
         assert.equal(didChange, false);
         onCommitCalled = true;
       },
-      execute: async () => ({
-        result: 'no-change',
-        didChange: false,
-      }),
+      execute: async () => withChangeResult('no-change', false),
     });
 
     assert.equal(result, 'no-change');
@@ -436,7 +433,7 @@ describe('utils/lockTransactionCache executeLockedTransaction', () => {
           cacheInv = true;
         },
       },
-      execute: async () => ({ result: null, didChange: false }),
+      execute: async () => withChangeResult(null, false),
     });
     assert.equal(res1, null);
     assert.equal(cacheInv, false);
@@ -449,7 +446,7 @@ describe('utils/lockTransactionCache executeLockedTransaction', () => {
           cacheInv = true;
         },
       },
-      execute: async () => ({ result: 0, didChange: false }),
+      execute: async () => withChangeResult(0, false),
     });
     assert.equal(res2, 0);
     assert.equal(cacheInv, false);
@@ -462,7 +459,7 @@ describe('utils/lockTransactionCache executeLockedTransaction', () => {
           cacheInv = true;
         },
       },
-      execute: async () => ({ result: false, didChange: false }),
+      execute: async () => withChangeResult(false, false),
     });
     assert.equal(res3, false);
     assert.equal(cacheInv, false);
@@ -711,7 +708,22 @@ describe('utils/lockTransactionCache boundary conditions & sanity checks', () =>
     });
     assert.deepEqual(returnedNonBoolean, nonBooleanDidChange);
 
-    // 3. Boundary: withChangeResult explicitly wraps and marks didChange: false without stripping
+    // 3. Boundary: Domain object with EXACTLY { result, didChange: boolean } but lacking LOCKED_OPERATION_RESULT symbol MUST NOT be stripped!
+    const plainDtoWithResultAndDidChange = {
+      result: 'plain-dto-result',
+      didChange: true,
+    };
+    const returnedPlainDto = await executeLockedTransaction({
+      client: mockClient,
+      execute: async () => plainDtoWithResultAndDidChange,
+    });
+    assert.deepEqual(
+      returnedPlainDto,
+      plainDtoWithResultAndDidChange,
+      'Plain DTO shaped { result, didChange } without symbol tag must NOT be unwrapped!',
+    );
+
+    // 4. Boundary: withChangeResult explicitly wraps and marks didChange: false without stripping
     let cacheInvalidated = false;
     const dummyCache = {
       invalidate: () => {
