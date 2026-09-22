@@ -191,6 +191,23 @@ interface CachedContentBlocks {
 }
 
 const CACHE_TTL_MS = 60 * 1000; // 1 minute
+
+/**
+ * In-memory table-level cache for content blocks.
+ *
+ * Architectural trade-off (table-level collection cache vs. per-slug caching):
+ * - Reads: Content blocks are predominantly read in batch via `getAllContentBlocks()` by public
+ *   visitors loading portal landing and Cerita pages. Storing `{ blocks, bySlug }` in a single
+ *   table-level cache entry allows `getAllContentBlocks()` to pre-warm all individual slug lookups
+ *   in O(1) without synchronization overhead across multiple cache layers.
+ * - Writes: Single-slug mutations (`updateContentBlock`) are low-frequency administrative actions
+ *   restricted to authenticated Editors/Admins. Invalidating the entire cache on edit ensures
+ *   immediate cross-view consistency (including ordering and list views) at current scale
+ *   (tens of prose blocks per SPEC.md §2/§7).
+ * - Future scaling: If the table grows to hundreds of independently edited prose blocks with
+ *   high-frequency concurrent edits, a per-slug LRU cache paired with granular collection
+ *   invalidation can be introduced.
+ */
 export const contentBlocksCache = new VersionedTtlCache<CachedContentBlocks>({
   ttlMs: CACHE_TTL_MS,
   baseClient: prisma,
