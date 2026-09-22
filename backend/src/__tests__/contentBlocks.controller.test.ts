@@ -801,6 +801,99 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
     }
   });
 
+  it('per-slug caching: updating one slug does not invalidate cached entries for unrelated slugs', async () => {
+    invalidateContentBlocksCache();
+    const originalFindUnique = prisma.contentBlock.findUnique;
+    const originalTransaction = prisma.$transaction;
+
+    const blockHero = {
+      id: 'uuid-1',
+      sectionId: null,
+      type: 'hero',
+      slug: 'landing-hero',
+      title: 'Original Hero Title',
+      body: 'Hero Body',
+      metadata: null,
+      sortOrder: null,
+      updatedById: null,
+      createdAt: new Date('2026-09-01'),
+      updatedAt: new Date('2026-09-01'),
+    };
+
+    const blockSambutan = {
+      id: 'uuid-2',
+      sectionId: null,
+      type: 'sambutan_lurah',
+      slug: 'landing-sambutan-lurah',
+      title: 'Original Sambutan Title',
+      body: 'Sambutan Body',
+      metadata: null,
+      sortOrder: null,
+      updatedById: null,
+      createdAt: new Date('2026-09-01'),
+      updatedAt: new Date('2026-09-01'),
+    };
+
+    let findUniqueCalls: string[] = [];
+    prisma.contentBlock.findUnique = (async ({ where }: { where: { slug: string } }) => {
+      findUniqueCalls.push(where.slug);
+      if (where.slug === 'landing-hero') return blockHero;
+      if (where.slug === 'landing-sambutan-lurah') return blockSambutan;
+      return null;
+    }) as unknown as typeof prisma.contentBlock.findUnique;
+
+    // 1. Fetch sambutan to warm its per-slug cache
+    const firstSambutan = await getContentBlockBySlug('landing-sambutan-lurah');
+    assert.equal(firstSambutan?.title, 'Original Sambutan Title');
+    assert.deepEqual(findUniqueCalls, ['landing-sambutan-lurah']);
+
+    // 2. Mock transaction for updating landing-hero
+    prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+      const mockTx = {
+        $queryRaw: async () => [],
+        contentBlock: {
+          findUnique: async () => blockHero,
+          update: async (args: { data: Record<string, unknown> }) => ({
+            ...blockHero,
+            ...args.data,
+            updatedAt: new Date('2026-09-17'),
+          }),
+        },
+        auditLog: {
+          create: async (args: { data: unknown }) => args.data,
+        },
+      };
+      return fn(mockTx as unknown as typeof prisma);
+    }) as unknown as typeof prisma.$transaction;
+
+    try {
+      const res = fakeRes();
+      const req = makeReq({
+        params: { slug: 'landing-hero' },
+        body: { body: 'Updated Hero Body' },
+        user: { id: 'editor-1', email: 'editor@example.com', role: 'editor' },
+      });
+
+      await updateContentBlockHandler(req, res as unknown as Response);
+      assert.equal(res.status, 200);
+
+      // 3. Clear call log and read landing-sambutan-lurah again
+      findUniqueCalls = [];
+      const secondSambutan = await getContentBlockBySlug('landing-sambutan-lurah');
+      assert.equal(secondSambutan?.title, 'Original Sambutan Title');
+      // Must NOT have queried the database because its cache was not invalidated by the landing-hero update!
+      assert.equal(
+        findUniqueCalls.length,
+        0,
+        'Unrelated slug must be served from cache without querying database',
+      );
+    } finally {
+      prisma.contentBlock.findUnique = originalFindUnique;
+      prisma.$transaction = originalTransaction;
+      invalidateContentBlocksCache();
+    }
+  });
+
   it('returns existing block without writing audit log when no changes occur (including key-order invariance in metadata)', async () => {
     invalidateContentBlocksCache();
     const originalTransaction = prisma.$transaction;

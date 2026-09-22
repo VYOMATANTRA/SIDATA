@@ -185,36 +185,57 @@ export const updateContentBlockSchema = z
 
 export type UpdateContentBlockInput = z.infer<typeof updateContentBlockSchema>;
 
-interface CachedContentBlocks {
-  blocks: ContentBlockDto[];
-  bySlug: Map<string, ContentBlockDto>;
-}
-
 const CACHE_TTL_MS = 60 * 1000; // 1 minute
+const MAX_SLUG_CACHE_ENTRIES = 200;
 
 /**
- * In-memory table-level cache for content blocks.
- *
- * Architectural trade-off (table-level collection cache vs. per-slug caching):
- * - Reads: Content blocks are predominantly read in batch via `getAllContentBlocks()` by public
- *   visitors loading portal landing and Cerita pages. Storing `{ blocks, bySlug }` in a single
- *   table-level cache entry allows `getAllContentBlocks()` to pre-warm all individual slug lookups
- *   in O(1) without synchronization overhead across multiple cache layers.
- * - Writes: Single-slug mutations (`updateContentBlock`) are low-frequency administrative actions
- *   restricted to authenticated Editors/Admins. Invalidating the entire cache on edit ensures
- *   immediate cross-view consistency (including ordering and list views) at current scale
- *   (tens of prose blocks per SPEC.md §2/§7).
- * - Future scaling: If the table grows to hundreds of independently edited prose blocks with
- *   high-frequency concurrent edits, a per-slug LRU cache paired with granular collection
- *   invalidation can be introduced.
+ * In-memory collection cache for all content blocks.
  */
-export const contentBlocksCache = new VersionedTtlCache<CachedContentBlocks>({
+export const contentBlocksCache = new VersionedTtlCache<ContentBlockDto[]>({
   ttlMs: CACHE_TTL_MS,
   baseClient: prisma,
 });
 
-export const invalidateContentBlocksCache = (): void => {
-  contentBlocksCache.invalidate();
+/**
+ * Map of per-slug caches so single-slug reads and edits do not cross-invalidate unrelated slugs.
+ */
+const slugCacheMap = new Map<string, VersionedTtlCache<ContentBlockDto | null>>();
+
+export const getSlugCache = (slug: string): VersionedTtlCache<ContentBlockDto | null> => {
+  const normalized = slug.trim().toLowerCase();
+  let cache = slugCacheMap.get(normalized);
+  if (!cache) {
+    if (slugCacheMap.size >= MAX_SLUG_CACHE_ENTRIES) {
+      const oldestKey = slugCacheMap.keys().next().value;
+      if (oldestKey) {
+        slugCacheMap.delete(oldestKey);
+      }
+    }
+    cache = new VersionedTtlCache<ContentBlockDto | null>({
+      ttlMs: CACHE_TTL_MS,
+      baseClient: prisma,
+    });
+    slugCacheMap.set(normalized, cache);
+  } else {
+    // LRU bump
+    slugCacheMap.delete(normalized);
+    slugCacheMap.set(normalized, cache);
+  }
+  return cache;
+};
+
+export const invalidateContentBlocksCache = (slug?: string): void => {
+  if (slug) {
+    const normalized = slug.trim().toLowerCase();
+    slugCacheMap.get(normalized)?.invalidate();
+    contentBlocksCache.invalidate();
+  } else {
+    contentBlocksCache.invalidate();
+    for (const cache of slugCacheMap.values()) {
+      cache.invalidate();
+    }
+    slugCacheMap.clear();
+  }
 };
 
 function formatContentBlock(block: {
@@ -247,18 +268,22 @@ function formatContentBlock(block: {
 export const getAllContentBlocks = async (
   client: { contentBlock: Pick<typeof prisma.contentBlock, 'findMany'> } = prisma,
 ): Promise<ContentBlockDto[]> => {
-  const cachedData = await contentBlocksCache.getOrFetch(async (db) => {
+  const blocks = await contentBlocksCache.getOrFetch(async (db) => {
     const rows = await db.contentBlock.findMany({
       orderBy: [{ sectionId: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
 
-    const blocks = rows.map(formatContentBlock);
-    const bySlug = new Map<string, ContentBlockDto>(blocks.map((b) => [b.slug, b]));
-
-    return { blocks, bySlug };
+    return rows.map(formatContentBlock);
   }, client);
 
-  return structuredClone(cachedData.blocks);
+  // If this read hit/populated the base client shared cache, warm the per-slug caches
+  if (client === prisma) {
+    for (const b of blocks) {
+      getSlugCache(b.slug).setCommitted(b);
+    }
+  }
+
+  return structuredClone(blocks);
 };
 
 export const getContentBlockBySlug = async (
@@ -274,21 +299,18 @@ export const getContentBlockBySlug = async (
     return null;
   }
 
-  const cached = contentBlocksCache.get(client);
-  if (cached) {
-    const found = cached.bySlug.get(normalizedSlug);
-    if (found) return structuredClone(found);
-  }
+  const slugCache = getSlugCache(normalizedSlug);
+  return slugCache.getOrFetch(async (db) => {
+    const row = await db.contentBlock.findUnique({
+      where: { slug: normalizedSlug },
+    });
 
-  const row = await client.contentBlock.findUnique({
-    where: { slug: normalizedSlug },
-  });
+    if (!row) {
+      return null;
+    }
 
-  if (!row) {
-    return null;
-  }
-
-  return structuredClone(formatContentBlock(row));
+    return formatContentBlock(row);
+  }, client);
 };
 
 export const updateContentBlock = async (
@@ -332,11 +354,15 @@ export const updateContentBlock = async (
       : undefined;
 
   const lockQuery = Prisma.sql`SELECT id FROM content_blocks WHERE slug = ${normalizedSlug} FOR UPDATE`;
+  const targetSlugCache = getSlugCache(normalizedSlug);
 
   return executeLockedTransaction({
     client,
     lockQuery,
-    cache: contentBlocksCache,
+    cache: [contentBlocksCache, targetSlugCache],
+    onCommit: (committedBlock) => {
+      targetSlugCache.setCommitted(committedBlock);
+    },
     execute: async (tx) => {
       // Acquire row-level lock on the target slug to eliminate TOCTOU race conditions and serialize concurrent updates
       const existing = await tx.contentBlock.findUnique({
