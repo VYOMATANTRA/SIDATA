@@ -72,47 +72,53 @@ describe('router auth guard retry behavior', () => {
     expect(router.currentRoute.value.name).toBe('setup-password');
   });
 
-  it('navigates to /mockup/button, /mockup/link, /mockup/navbar, and redirects /footer to /mockup/footer', async () => {
+  it('navigates to public routes /login, /register, and /auth/callback', async () => {
     sessionStorage.clear();
     const pinia = createPinia();
     setActivePinia(pinia);
     const authStore = useAuthStore(pinia);
     authStore.clearAuth();
 
-    await router.push('/mockup/button');
-    expect(router.currentRoute.value.path).toBe('/mockup/button');
-    expect(router.currentRoute.value.name).toBe('button-mockup');
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async () => {
+      return { ok: false, status: 401, json: async () => ({}) } as Response;
+    });
 
-    await router.push('/link');
-    expect(router.currentRoute.value.path).toBe('/mockup/link');
-    expect(router.currentRoute.value.name).toBe('link-mockup');
+    await router.push('/login');
+    expect(router.currentRoute.value.path).toBe('/login');
+    expect(router.currentRoute.value.name).toBe('login');
 
-    await router.push('/navbar');
-    expect(router.currentRoute.value.path).toBe('/mockup/navbar');
-    expect(router.currentRoute.value.name).toBe('navbar-mockup');
+    await router.push('/register');
+    expect(router.currentRoute.value.path).toBe('/register');
+    expect(router.currentRoute.value.name).toBe('register');
 
-    await router.push('/footer');
-    expect(router.currentRoute.value.path).toBe('/mockup/footer');
-    expect(router.currentRoute.value.name).toBe('footer-mockup');
+    await router.push('/auth/callback');
+    expect(router.currentRoute.value.path).toBe('/auth/callback');
+    expect(router.currentRoute.value.name).toBe('auth-callback');
+  });
 
-    await router.push('/bar-diagram');
-    expect(router.currentRoute.value.path).toBe('/mockup/bar-diagram');
-    expect(router.currentRoute.value.name).toBe('bar-diagram-mockup');
+  it('protects /users route with authentication and admin role guards', async () => {
+    sessionStorage.clear();
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore(pinia);
+    authStore.clearAuth();
 
-    await router.push('/stat-card');
-    expect(router.currentRoute.value.path).toBe('/mockup/stat-card');
-    expect(router.currentRoute.value.name).toBe('stat-card-mockup');
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async () => {
+      return { ok: false, status: 401, json: async () => ({}) } as Response;
+    });
 
-    await router.push('/stat-overview');
-    expect(router.currentRoute.value.path).toBe('/mockup/stat-overview');
-    expect(router.currentRoute.value.name).toBe('stat-overview-mockup');
+    // Unauthenticated -> redirected to login
+    await router.push('/users');
+    expect(router.currentRoute.value.name).toBe('login');
 
-    await router.push('/huge-quote');
-    expect(router.currentRoute.value.path).toBe('/mockup/huge-quote');
-    expect(router.currentRoute.value.name).toBe('huge-quote-mockup');
+    // Authenticated non-admin -> redirected to home
+    authStore.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'valid-token');
+    await router.push('/users');
+    expect(router.currentRoute.value.name).toBe('home');
 
-    await router.push('/hero');
-    expect(router.currentRoute.value.path).toBe('/mockup/hero');
-    expect(router.currentRoute.value.name).toBe('hero-mockup');
+    // Authenticated admin -> allowed to access user-management
+    authStore.setAuth({ id: '2', email: 'admin@example.com', role: 'admin' }, 'valid-token');
+    await router.push('/users');
+    expect(router.currentRoute.value.name).toBe('user-management');
   });
 });
