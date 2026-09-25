@@ -171,24 +171,6 @@ export const updateAuditRetentionSettings = async (params: {
   });
 };
 
-/**
- * Whitelist of public setting keys. Only keys defined here are accessible via the
- * public settings endpoint. This strictly prevents internal/governance settings
- * (like audit retention) from being exposed.
- */
-export const PUBLIC_SETTING_KEYS = {
-  appName: 'public.app_name',
-  institutionName: 'public.institution_name',
-  tagline: 'public.tagline',
-  administrativeArea: 'public.administrative_area',
-  contactPhone: 'public.contact_phone',
-  contactWhatsapp: 'public.contact_whatsapp',
-  contactEmail: 'public.contact_email',
-  contactAddress: 'public.contact_address',
-  defaultCoordinates: 'public.default_coordinates',
-  weatherAdm4: 'public.weather_adm4',
-} as const;
-
 export interface CoordinatesSetting {
   lat: number;
   lon: number;
@@ -207,6 +189,24 @@ export interface PublicSettings {
   defaultCoordinates: CoordinatesSetting;
   weatherAdm4: string;
 }
+
+/**
+ * Whitelist of public setting keys. Only keys defined here are accessible via the
+ * public settings endpoint. This strictly prevents internal/governance settings
+ * (like audit retention) from being exposed.
+ */
+export const PUBLIC_SETTING_KEYS = {
+  appName: 'public.app_name',
+  institutionName: 'public.institution_name',
+  tagline: 'public.tagline',
+  administrativeArea: 'public.administrative_area',
+  contactPhone: 'public.contact_phone',
+  contactWhatsapp: 'public.contact_whatsapp',
+  contactEmail: 'public.contact_email',
+  contactAddress: 'public.contact_address',
+  defaultCoordinates: 'public.default_coordinates',
+  weatherAdm4: 'public.weather_adm4',
+} as const satisfies Record<keyof PublicSettings, string>;
 
 export const DEFAULT_PUBLIC_SETTINGS: PublicSettings = {
   appName: 'SIDATA',
@@ -474,6 +474,16 @@ function hasSettingChanged(
   return hasFieldChanged(before[field], newVal);
 }
 
+function serializePublicSetting<K extends keyof PublicSettings>(
+  _key: K,
+  val: PublicSettings[K],
+): string {
+  if (typeof val === 'string') {
+    return val;
+  }
+  return JSON.stringify(val);
+}
+
 export const updatePublicSettings = async (params: {
   payload: unknown;
   actor: AuditActor;
@@ -540,51 +550,24 @@ export const updatePublicSettings = async (params: {
         return withChangeResult(before, false);
       }
 
-      const upsertOne = (key: string, val: string) =>
-        tx.systemSetting.upsert({
-          where: { key },
-          update: { value: val, updatedById: actorId },
-          create: { key, value: val, updatedById: actorId },
+      // Upsert only the setting keys that actually changed
+      for (const key of changedKeys) {
+        const val = updates[key]!;
+        const dbKey = PUBLIC_SETTING_KEYS[key];
+        const serialized = serializePublicSetting(key, val);
+        await tx.systemSetting.upsert({
+          where: { key: dbKey },
+          update: { value: serialized, updatedById: actorId },
+          create: { key: dbKey, value: serialized, updatedById: actorId },
         });
-
-      if (changedKeys.includes('appName') && updates.appName !== undefined)
-        await upsertOne(PUBLIC_SETTING_KEYS.appName, updates.appName);
-      if (changedKeys.includes('institutionName') && updates.institutionName !== undefined)
-        await upsertOne(PUBLIC_SETTING_KEYS.institutionName, updates.institutionName);
-      if (changedKeys.includes('tagline') && updates.tagline !== undefined)
-        await upsertOne(PUBLIC_SETTING_KEYS.tagline, updates.tagline);
-      if (changedKeys.includes('administrativeArea') && updates.administrativeArea !== undefined)
-        await upsertOne(PUBLIC_SETTING_KEYS.administrativeArea, updates.administrativeArea);
-      if (changedKeys.includes('contactPhone') && updates.contactPhone !== undefined)
-        await upsertOne(PUBLIC_SETTING_KEYS.contactPhone, updates.contactPhone);
-      if (changedKeys.includes('contactWhatsapp') && updates.contactWhatsapp !== undefined)
-        await upsertOne(PUBLIC_SETTING_KEYS.contactWhatsapp, updates.contactWhatsapp);
-      if (changedKeys.includes('contactEmail') && updates.contactEmail !== undefined)
-        await upsertOne(PUBLIC_SETTING_KEYS.contactEmail, updates.contactEmail);
-      if (changedKeys.includes('contactAddress') && updates.contactAddress !== undefined)
-        await upsertOne(PUBLIC_SETTING_KEYS.contactAddress, updates.contactAddress);
-      if (changedKeys.includes('defaultCoordinates') && updates.defaultCoordinates !== undefined)
-        await upsertOne(
-          PUBLIC_SETTING_KEYS.defaultCoordinates,
-          JSON.stringify(updates.defaultCoordinates),
-        );
-      if (changedKeys.includes('weatherAdm4') && updates.weatherAdm4 !== undefined)
-        await upsertOne(PUBLIC_SETTING_KEYS.weatherAdm4, updates.weatherAdm4);
+      }
 
       // Compute `after` in-memory from `before` + `updates` rather than issuing an extra DB query
       // while holding the row-level FOR UPDATE lock, minimizing lock hold duration and contention.
-      const after: PublicSettings = {
-        appName: updates.appName ?? before.appName,
-        institutionName: updates.institutionName ?? before.institutionName,
-        tagline: updates.tagline ?? before.tagline,
-        administrativeArea: updates.administrativeArea ?? before.administrativeArea,
-        contactPhone: updates.contactPhone ?? before.contactPhone,
-        contactWhatsapp: updates.contactWhatsapp ?? before.contactWhatsapp,
-        contactEmail: updates.contactEmail ?? before.contactEmail,
-        contactAddress: updates.contactAddress ?? before.contactAddress,
-        defaultCoordinates: updates.defaultCoordinates ?? before.defaultCoordinates,
-        weatherAdm4: updates.weatherAdm4 ?? before.weatherAdm4,
-      };
+      const after: PublicSettings = { ...before };
+      for (const key of changedKeys) {
+        (after as Record<keyof PublicSettings, unknown>)[key] = updates[key];
+      }
 
       await buildAuditLog(
         {

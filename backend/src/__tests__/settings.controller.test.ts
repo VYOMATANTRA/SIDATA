@@ -1724,4 +1724,81 @@ describe('settings.controller updatePublicSettingsHandler', () => {
       invalidatePublicSettingsCache();
     }
   });
+
+  it('correctly persists all 10 public settings and reflects them in audit after snapshot', async () => {
+    invalidatePublicSettingsCache();
+    const originalFindMany = prisma.systemSetting.findMany;
+    const originalUpsert = prisma.systemSetting.upsert;
+    const originalTransaction = prisma.$transaction;
+    const originalQueryRaw = prisma.$queryRaw;
+    const originalAuditCreate = prisma.auditLog.create;
+
+    const upserted = new Map<string, string>();
+    prisma.systemSetting.findMany =
+      (async () => []) as unknown as typeof prisma.systemSetting.findMany;
+    prisma.systemSetting.upsert = (async (args: { create: { key: string; value: string } }) => {
+      upserted.set(args.create.key, args.create.value);
+      return { ...args.create, updatedAt: new Date() };
+    }) as unknown as typeof prisma.systemSetting.upsert;
+
+    let auditData: Record<string, unknown> | undefined;
+    prisma.auditLog.create = (async (args: { data: Record<string, unknown> }) => {
+      auditData = args.data;
+      return { id: 'audit-all-10', ...args.data };
+    }) as unknown as typeof prisma.auditLog.create;
+
+    prisma.$transaction = (async (arg: unknown) => {
+      if (typeof arg === 'function') return (arg as (tx: typeof prisma) => unknown)(prisma);
+      throw new Error('expected interactive transaction');
+    }) as unknown as typeof prisma.$transaction;
+    prisma.$queryRaw = (async () => []) as unknown as typeof prisma.$queryRaw;
+
+    const payload = {
+      appName: 'All New App',
+      institutionName: 'All New Instansi',
+      tagline: 'All New Tagline',
+      administrativeArea: 'All New Area',
+      contactPhone: '0811111111',
+      contactWhatsapp: '0822222222',
+      contactEmail: 'new@example.com',
+      contactAddress: 'All New Address',
+      defaultCoordinates: { lat: -2.0, lon: 117.0, zoom: 15 },
+      weatherAdm4: '64.71.01.1002',
+    };
+
+    try {
+      const res = fakeRes();
+      await updatePublicSettingsHandler(makeReq({ body: payload }), res as unknown as Response);
+
+      assert.equal(res.status, 200);
+      assert.equal(upserted.size, 10);
+      assert.equal(upserted.get(PUBLIC_SETTING_KEYS.appName), 'All New App');
+      assert.equal(upserted.get(PUBLIC_SETTING_KEYS.institutionName), 'All New Instansi');
+      assert.equal(upserted.get(PUBLIC_SETTING_KEYS.tagline), 'All New Tagline');
+      assert.equal(upserted.get(PUBLIC_SETTING_KEYS.administrativeArea), 'All New Area');
+      assert.equal(upserted.get(PUBLIC_SETTING_KEYS.contactPhone), '0811111111');
+      assert.equal(upserted.get(PUBLIC_SETTING_KEYS.contactWhatsapp), '0822222222');
+      assert.equal(upserted.get(PUBLIC_SETTING_KEYS.contactEmail), 'new@example.com');
+      assert.equal(upserted.get(PUBLIC_SETTING_KEYS.contactAddress), 'All New Address');
+      assert.equal(
+        upserted.get(PUBLIC_SETTING_KEYS.defaultCoordinates),
+        JSON.stringify({ lat: -2.0, lon: 117.0, zoom: 15 }),
+      );
+      assert.equal(upserted.get(PUBLIC_SETTING_KEYS.weatherAdm4), '64.71.01.1002');
+
+      const meta = auditData?.metadata as {
+        after: Record<string, unknown>;
+        changedFields: string[];
+      };
+      assert.equal(meta.changedFields.length, 10);
+      assert.deepEqual(meta.after, payload);
+    } finally {
+      prisma.systemSetting.findMany = originalFindMany;
+      prisma.systemSetting.upsert = originalUpsert;
+      prisma.$transaction = originalTransaction;
+      prisma.$queryRaw = originalQueryRaw;
+      prisma.auditLog.create = originalAuditCreate;
+      invalidatePublicSettingsCache();
+    }
+  });
 });
