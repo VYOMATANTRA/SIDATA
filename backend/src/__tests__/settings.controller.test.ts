@@ -1661,4 +1661,67 @@ describe('settings.controller updatePublicSettingsHandler', () => {
       invalidatePublicSettingsCache();
     }
   });
+
+  it('treats nested object settings with reordered keys as identical (no-op)', async () => {
+    invalidatePublicSettingsCache();
+    const originalFindMany = prisma.systemSetting.findMany;
+    const originalUpsert = prisma.systemSetting.upsert;
+    const originalTransaction = prisma.$transaction;
+    const originalQueryRaw = prisma.$queryRaw;
+    const originalAuditCreate = prisma.auditLog.create;
+
+    const stored = new Map<string, string>([
+      [PUBLIC_SETTING_KEYS.appName, 'Current App Name'],
+      [
+        PUBLIC_SETTING_KEYS.defaultCoordinates,
+        JSON.stringify({ lat: -1.23, lon: 116.95, zoom: 14 }),
+      ],
+    ]);
+
+    prisma.systemSetting.findMany = (async () => {
+      return Array.from(stored.entries()).map(([key, value]) => ({ key, value }));
+    }) as unknown as typeof prisma.systemSetting.findMany;
+
+    let upsertCalled = false;
+    prisma.systemSetting.upsert = (async () => {
+      upsertCalled = true;
+      return { key: 'mock', value: 'mock', updatedAt: new Date() };
+    }) as unknown as typeof prisma.systemSetting.upsert;
+
+    let auditCreated = false;
+    prisma.auditLog.create = (async () => {
+      auditCreated = true;
+      return { id: 'audit-noop' };
+    }) as unknown as typeof prisma.auditLog.create;
+
+    prisma.$transaction = (async (arg: unknown) => {
+      if (typeof arg === 'function') return (arg as (tx: typeof prisma) => unknown)(prisma);
+      throw new Error('expected interactive transaction');
+    }) as unknown as typeof prisma.$transaction;
+    prisma.$queryRaw = (async () => []) as unknown as typeof prisma.$queryRaw;
+
+    try {
+      // Submit coordinates with keys in reverse order (zoom, lon, lat)
+      const updateRes = fakeRes();
+      await updatePublicSettingsHandler(
+        makeReq({
+          body: {
+            defaultCoordinates: { zoom: 14, lon: 116.95, lat: -1.23 },
+          },
+        }),
+        updateRes as unknown as Response,
+      );
+
+      assert.equal(updateRes.status, 200);
+      assert.equal(upsertCalled, false, 'No DB upsert should be performed on key-reordered no-op');
+      assert.equal(auditCreated, false, 'No audit log should be written on key-reordered no-op');
+    } finally {
+      prisma.systemSetting.findMany = originalFindMany;
+      prisma.systemSetting.upsert = originalUpsert;
+      prisma.$transaction = originalTransaction;
+      prisma.$queryRaw = originalQueryRaw;
+      prisma.auditLog.create = originalAuditCreate;
+      invalidatePublicSettingsCache();
+    }
+  });
 });

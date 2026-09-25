@@ -12,6 +12,7 @@ import {
   executeLockedTransaction,
   withChangeResult,
 } from '../utils/lockTransactionCache.js';
+import { hasFieldChanged } from '../utils/comparator.js';
 
 export class ContentBlockServiceError extends Error {
   statusCode: number;
@@ -109,39 +110,6 @@ function hasPrototypePollution(val: unknown, depth = 0): boolean {
     if (hasPrototypePollution((val as Record<string, unknown>)[key], depth + 1)) return true;
   }
   return false;
-}
-
-function canonicalizeJson(obj: unknown): unknown {
-  if (obj === null || typeof obj !== 'object') {
-    return obj;
-  }
-  if (obj instanceof Date) {
-    return Number.isNaN(obj.getTime()) ? null : obj.toISOString();
-  }
-  if (Array.isArray(obj)) {
-    return obj.map(canonicalizeJson);
-  }
-  const sortedKeys = Object.keys(obj as Record<string, unknown>).sort();
-  const res: Record<string, unknown> = {};
-  for (const key of sortedKeys) {
-    res[key] = canonicalizeJson((obj as Record<string, unknown>)[key]);
-  }
-  return res;
-}
-
-function stableJsonStringify(obj: unknown): string {
-  if (obj === null || obj === undefined) return 'null';
-  return JSON.stringify(canonicalizeJson(obj));
-}
-
-/**
- * Evaluates semantic inequality for audit log diffs.
- * Uses canonicalized JSON stringification to apply uniform comparison semantics across both
- * scalar fields (string, number, boolean, null) and nested JSON structures without false-positive
- * diffs caused by object key reordering.
- */
-function hasFieldChanged(before: unknown, after: unknown): boolean {
-  return stableJsonStringify(before) !== stableJsonStringify(after);
 }
 
 export const updateContentBlockSchema = z

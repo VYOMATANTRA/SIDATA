@@ -12,6 +12,7 @@ import {
   executeLockedTransaction,
   withChangeResult,
 } from '../utils/lockTransactionCache.js';
+import { hasFieldChanged } from '../utils/comparator.js';
 import { evictWeatherCache } from './weather.service.js';
 
 export class SettingsServiceError extends Error {
@@ -470,15 +471,7 @@ function hasSettingChanged(
 ): boolean {
   const newVal = updates[field];
   if (newVal === undefined) return false;
-  if (field === 'defaultCoordinates') {
-    const coords = newVal as CoordinatesSetting;
-    return (
-      coords.lat !== before.defaultCoordinates.lat ||
-      coords.lon !== before.defaultCoordinates.lon ||
-      coords.zoom !== before.defaultCoordinates.zoom
-    );
-  }
-  return newVal !== before[field];
+  return hasFieldChanged(before[field], newVal);
 }
 
 export const updatePublicSettings = async (params: {
