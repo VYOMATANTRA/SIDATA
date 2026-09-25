@@ -750,7 +750,7 @@ describe('utils/lockTransactionCache boundary conditions & sanity checks', () =>
       result: 42,
       didChange: 1 as unknown as boolean,
     };
-    const returnedNonBoolean = await executeLockedTransaction({
+    const returnedNonBoolean = await executeLockedTransaction<typeof nonBooleanDidChange>({
       client: mockClient,
       execute: async () => nonBooleanDidChange,
     });
@@ -761,7 +761,7 @@ describe('utils/lockTransactionCache boundary conditions & sanity checks', () =>
       result: 'plain-dto-result',
       didChange: true,
     };
-    const returnedPlainDto = await executeLockedTransaction({
+    const returnedPlainDto = await executeLockedTransaction<typeof plainDtoWithResultAndDidChange>({
       client: mockClient,
       execute: async () => plainDtoWithResultAndDidChange,
     });

@@ -467,7 +467,7 @@ export const getFastPublicSettings = async (
 function hasSettingChanged(
   field: keyof PublicSettings,
   before: PublicSettings,
-  updates: Partial<PublicSettings>,
+  updates: { [K in keyof PublicSettings]?: PublicSettings[K] | undefined },
 ): boolean {
   const newVal = updates[field];
   if (newVal === undefined) return false;
