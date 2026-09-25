@@ -13,6 +13,7 @@ import {
   withChangeResult,
 } from '../utils/lockTransactionCache.js';
 import { hasFieldChanged } from '../utils/comparator.js';
+import { KeyedLruCache } from '../utils/keyedCache.js';
 
 export class ContentBlockServiceError extends Error {
   statusCode: number;
@@ -165,31 +166,22 @@ export const contentBlocksCache = new VersionedTtlCache<ContentBlockDto[]>({
 });
 
 /**
- * Map of per-slug caches so single-slug reads and edits do not cross-invalidate unrelated slugs.
+ * Bounded LRU cache of per-slug caches so single-slug reads and edits do not cross-invalidate unrelated slugs.
  */
-const slugCacheMap = new Map<string, VersionedTtlCache<ContentBlockDto | null>>();
+const slugCacheMap = new KeyedLruCache<string, VersionedTtlCache<ContentBlockDto | null>>(
+  MAX_SLUG_CACHE_ENTRIES,
+);
 
 export const getSlugCache = (slug: string): VersionedTtlCache<ContentBlockDto | null> => {
   const normalized = slug.trim().toLowerCase();
-  let cache = slugCacheMap.get(normalized);
-  if (!cache) {
-    if (slugCacheMap.size >= MAX_SLUG_CACHE_ENTRIES) {
-      const oldestKey = slugCacheMap.keys().next().value;
-      if (oldestKey) {
-        slugCacheMap.delete(oldestKey);
-      }
-    }
-    cache = new VersionedTtlCache<ContentBlockDto | null>({
-      ttlMs: CACHE_TTL_MS,
-      baseClient: prisma,
-    });
-    slugCacheMap.set(normalized, cache);
-  } else {
-    // LRU bump
-    slugCacheMap.delete(normalized);
-    slugCacheMap.set(normalized, cache);
-  }
-  return cache;
+  return slugCacheMap.getOrCompute(
+    normalized,
+    () =>
+      new VersionedTtlCache<ContentBlockDto | null>({
+        ttlMs: CACHE_TTL_MS,
+        baseClient: prisma,
+      }),
+  );
 };
 
 export const invalidateContentBlocksCache = (slug?: string): void => {
