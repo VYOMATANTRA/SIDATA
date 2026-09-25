@@ -6,6 +6,7 @@ import {
   DEFAULT_SAMBUTAN_BLOCK,
   DEFAULT_HIGHLIGHTS_BLOCK,
 } from '../stores/contentBlocks.store';
+import { useAuthStore } from '../stores/auth';
 
 describe('contentBlocks store', () => {
   beforeEach(() => {
@@ -84,7 +85,7 @@ describe('contentBlocks store', () => {
     expect(store.isLoading).toBe(false);
   });
 
-  it('updateBlock sends PATCH request with CSRF token and updates store block', async () => {
+  it('updateBlock sends PATCH request with CSRF token and auth header and updates store block', async () => {
     const updatedBlock = {
       id: '1',
       sectionId: null,
@@ -97,7 +98,8 @@ describe('contentBlocks store', () => {
       updatedAt: '2026-09-17T12:00:00.000Z',
     };
 
-    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+    let capturedInit: RequestInit | undefined;
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
       const url = String(input);
       if (url.includes('csrf-token')) {
         return {
@@ -105,12 +107,16 @@ describe('contentBlocks store', () => {
           json: async () => ({ csrfToken: 'test-csrf-token' }),
         } as Response;
       }
+      capturedInit = init;
       return {
         ok: true,
         json: async () => ({ block: updatedBlock }),
       } as Response;
     });
     globalThis.fetch = fetchMock;
+
+    const authStore = useAuthStore();
+    authStore.accessToken = 'mock-access-token';
 
     const store = useContentBlocksStore();
     const result = await store.updateBlock('landing-hero', {
@@ -120,5 +126,55 @@ describe('contentBlocks store', () => {
 
     expect(result.title).toBe('Judul Diperbarui Editor');
     expect(store.hero.title).toBe('Judul Diperbarui Editor');
+    expect(capturedInit?.headers).toEqual({
+      'Content-Type': 'application/json',
+      'x-csrf-token': 'test-csrf-token',
+      Authorization: 'Bearer mock-access-token',
+    });
+  });
+
+  it('updateBlock omits Authorization header when user is unauthenticated', async () => {
+    const updatedBlock = {
+      id: '1',
+      sectionId: null,
+      type: 'hero',
+      slug: 'landing-hero',
+      title: 'Judul Publik',
+      body: 'Isi publik',
+      metadata: null,
+      sortOrder: null,
+      updatedAt: '2026-09-17T12:00:00.000Z',
+    };
+
+    let capturedInit: RequestInit | undefined;
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.includes('csrf-token')) {
+        return {
+          ok: true,
+          json: async () => ({ csrfToken: 'test-csrf-token' }),
+        } as Response;
+      }
+      capturedInit = init;
+      return {
+        ok: true,
+        json: async () => ({ block: updatedBlock }),
+      } as Response;
+    });
+    globalThis.fetch = fetchMock;
+
+    const authStore = useAuthStore();
+    authStore.accessToken = null;
+
+    const store = useContentBlocksStore();
+    await store.updateBlock('landing-hero', {
+      title: 'Judul Publik',
+      body: 'Isi publik',
+    });
+
+    expect(capturedInit?.headers).toEqual({
+      'Content-Type': 'application/json',
+      'x-csrf-token': 'test-csrf-token',
+    });
   });
 });
