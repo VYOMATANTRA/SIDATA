@@ -4,6 +4,9 @@ import {
   getManggarForecast,
   resetWeatherCache,
   expireWeatherCacheForTests,
+  evictWeatherCache,
+  getWeatherCacheKeysForTests,
+  MAX_WEATHER_CACHE_ENTRIES,
 } from '../services/weather.service.js';
 
 const sampleBmkgResponse = {
@@ -119,5 +122,179 @@ describe('getManggarForecast', () => {
 
     assert.equal(result.stale, true);
     assert.equal(result.location.desa, 'Manggar');
+  });
+
+  it('calls BMKG API with custom adm4 parameter', async () => {
+    let calledUrl = '';
+    mock.method(globalThis, 'fetch', async (url: string | URL) => {
+      calledUrl = String(url);
+      return new Response(JSON.stringify(sampleBmkgResponse), { status: 200 });
+    });
+
+    const result = await getManggarForecast('64.71.02.2002');
+    assert.equal(result.location.desa, 'Manggar');
+    assert.ok(calledUrl.includes('adm4=64.71.02.2002'));
+  });
+
+  it('isolates cache per adm4 so different areas do not serve cross-area cached data', async () => {
+    let callCount = 0;
+    mock.method(globalThis, 'fetch', async (url: string | URL) => {
+      callCount++;
+      const isArea1 = String(url).includes('64.71.01.1001');
+      return new Response(
+        JSON.stringify({
+          lokasi: { desa: isArea1 ? 'Manggar' : 'Manggar Baru', lat: -1.22, lon: 116.94 },
+          data: [
+            {
+              cuaca: [
+                [
+                  {
+                    local_datetime: '2026-08-13 12:00:00',
+                    t: 30,
+                    hu: 75,
+                    weather_desc: isArea1 ? 'Cerah' : 'Hujan Ringan',
+                    ws: 12,
+                    wd: 'S',
+                  },
+                ],
+              ],
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    });
+
+    const resArea1 = await getManggarForecast('64.71.01.1001');
+    assert.equal(resArea1.location.desa, 'Manggar');
+    assert.equal(resArea1.forecast[0]?.description, 'Cerah');
+
+    // Requesting a different adm4 must NOT return the cached result of the first adm4
+    const resArea2 = await getManggarForecast('64.71.01.1002');
+    assert.equal(resArea2.location.desa, 'Manggar Baru');
+    assert.equal(resArea2.forecast[0]?.description, 'Hujan Ringan');
+
+    assert.equal(callCount, 2, 'BMKG should be fetched for both distinct adm4 codes');
+
+    // Second request to Area 1 should now hit Area 1's cache
+    const resArea1Cached = await getManggarForecast('64.71.01.1001');
+    assert.equal(resArea1Cached.location.desa, 'Manggar');
+    assert.equal(callCount, 2, 'Should not trigger third fetch because Area 1 is cached');
+  });
+
+  it('dedupes concurrent requests per adm4 independently', async () => {
+    let callCount = 0;
+    mock.method(globalThis, 'fetch', async (url: string | URL) => {
+      callCount++;
+      const isArea1 = String(url).includes('64.71.01.1001');
+      return new Response(
+        JSON.stringify({
+          lokasi: { desa: isArea1 ? 'Manggar' : 'Manggar Baru', lat: -1.22, lon: 116.94 },
+          data: [
+            {
+              cuaca: [
+                [
+                  {
+                    local_datetime: '2026-08-13 12:00:00',
+                    t: 28,
+                    hu: 80,
+                    weather_desc: 'Berawan',
+                    ws: 10,
+                    wd: 'N',
+                  },
+                ],
+              ],
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    });
+
+    const [a1, a2, b1, b2] = await Promise.all([
+      getManggarForecast('64.71.01.1001'),
+      getManggarForecast('64.71.01.1001'),
+      getManggarForecast('64.71.01.1002'),
+      getManggarForecast('64.71.01.1002'),
+    ]);
+
+    assert.equal(a1.location.desa, 'Manggar');
+    assert.equal(a2.location.desa, 'Manggar');
+    assert.equal(b1.location.desa, 'Manggar Baru');
+    assert.equal(b2.location.desa, 'Manggar Baru');
+    assert.equal(callCount, 2, 'One fetch per unique adm4');
+  });
+
+  it('boundary testing: evictWeatherCache handles empty string, whitespace, null, and undefined safely', () => {
+    // Boundary inputs: whitespace, null, undefined, empty string must not throw
+    evictWeatherCache(null as unknown as string);
+    evictWeatherCache(undefined);
+    evictWeatherCache('');
+    evictWeatherCache('   ');
+    assert.equal(getWeatherCacheKeysForTests().length, 0);
+  });
+
+  it('evicts targeted adm4 without affecting other cached areas', async () => {
+    mock.method(globalThis, 'fetch', async () => {
+      return new Response(JSON.stringify(sampleBmkgResponse), { status: 200 });
+    });
+
+    await getManggarForecast('64.71.01.1001');
+    await getManggarForecast('64.71.01.1002');
+
+    const keysBefore = getWeatherCacheKeysForTests();
+    assert.ok(keysBefore.includes('64.71.01.1001'));
+    assert.ok(keysBefore.includes('64.71.01.1002'));
+    assert.equal(keysBefore.length, 2);
+
+    // Evict only area 1
+    evictWeatherCache('64.71.01.1001');
+
+    const keysAfter = getWeatherCacheKeysForTests();
+    assert.equal(keysAfter.includes('64.71.01.1001'), false, 'Area 1 must be evicted');
+    assert.equal(keysAfter.includes('64.71.01.1002'), true, 'Area 2 must remain cached');
+  });
+
+  it('enforces MAX_WEATHER_CACHE_ENTRIES capacity cap and evicts least recently used entry (LRU)', async () => {
+    mock.method(globalThis, 'fetch', async () => {
+      return new Response(JSON.stringify(sampleBmkgResponse), { status: 200 });
+    });
+
+    assert.equal(MAX_WEATHER_CACHE_ENTRIES, 5);
+
+    // Insert 5 distinct adm4 codes (filling cache to capacity: 1001, 1002, 1003, 1004, 1005)
+    for (let i = 1; i <= 5; i++) {
+      await getManggarForecast(`64.71.01.100${i}`);
+    }
+
+    let keys = getWeatherCacheKeysForTests();
+    assert.equal(keys.length, 5);
+    assert.equal(keys[0], '64.71.01.1001');
+
+    // Access 1001 again (cache hit) — this must bump 1001 to most-recently-used, leaving 1002 as the least recently used
+    await getManggarForecast('64.71.01.1001');
+    keys = getWeatherCacheKeysForTests();
+    assert.equal(keys[0], '64.71.01.1002', '1002 should now be the least recently used entry');
+    assert.equal(
+      keys[keys.length - 1],
+      '64.71.01.1001',
+      '1001 should now be the most recently used entry',
+    );
+
+    // Insert 6th adm4 code: must evict the least recently used entry ('64.71.01.1002'), keeping 1001 cached
+    await getManggarForecast('64.71.01.1006');
+
+    keys = getWeatherCacheKeysForTests();
+    assert.equal(keys.length, 5, 'Map size must not exceed MAX_WEATHER_CACHE_ENTRIES');
+    assert.equal(
+      keys.includes('64.71.01.1002'),
+      false,
+      'Least recently used entry 1002 must have been evicted',
+    );
+    assert.ok(
+      keys.includes('64.71.01.1001'),
+      'Frequently/recently accessed entry 1001 must remain cached',
+    );
+    assert.ok(keys.includes('64.71.01.1006'), 'New entry 1006 must be present');
   });
 });

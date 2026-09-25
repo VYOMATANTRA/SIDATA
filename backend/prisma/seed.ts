@@ -1,5 +1,10 @@
 import prisma from '../src/utils/prisma.js';
-import { AUDIT_RETENTION_KEYS } from '../src/services/settings.service.js';
+import {
+  AUDIT_RETENTION_KEYS,
+  PUBLIC_SETTING_KEYS,
+  DEFAULT_PUBLIC_SETTINGS,
+} from '../src/services/settings.service.js';
+import { DEFAULT_CONTENT_BLOCKS } from '../src/services/contentBlocks.service.js';
 
 async function main() {
   console.log('Memulai proses seeding...');
@@ -17,6 +22,14 @@ async function main() {
     update: {},
     create: {
       name: 'admin',
+    },
+  });
+
+  const roleEditor = await prisma.role.upsert({
+    where: { name: 'editor' },
+    update: {},
+    create: {
+      name: 'editor',
     },
   });
 
@@ -131,8 +144,53 @@ async function main() {
     });
   }
 
+  // Seed default public settings (portal identity, contact, spatial config)
+  const publicSeedMap: Record<string, string> = {
+    [PUBLIC_SETTING_KEYS.appName]: DEFAULT_PUBLIC_SETTINGS.appName,
+    [PUBLIC_SETTING_KEYS.institutionName]: DEFAULT_PUBLIC_SETTINGS.institutionName,
+    [PUBLIC_SETTING_KEYS.tagline]: DEFAULT_PUBLIC_SETTINGS.tagline,
+    [PUBLIC_SETTING_KEYS.administrativeArea]: DEFAULT_PUBLIC_SETTINGS.administrativeArea,
+    [PUBLIC_SETTING_KEYS.contactPhone]: DEFAULT_PUBLIC_SETTINGS.contactPhone,
+    [PUBLIC_SETTING_KEYS.contactWhatsapp]: DEFAULT_PUBLIC_SETTINGS.contactWhatsapp,
+    [PUBLIC_SETTING_KEYS.contactEmail]: DEFAULT_PUBLIC_SETTINGS.contactEmail,
+    [PUBLIC_SETTING_KEYS.contactAddress]: DEFAULT_PUBLIC_SETTINGS.contactAddress,
+    [PUBLIC_SETTING_KEYS.defaultCoordinates]: JSON.stringify(
+      DEFAULT_PUBLIC_SETTINGS.defaultCoordinates,
+    ),
+    [PUBLIC_SETTING_KEYS.weatherAdm4]: DEFAULT_PUBLIC_SETTINGS.weatherAdm4,
+  };
+
+  for (const [key, value] of Object.entries(publicSeedMap)) {
+    await prisma.systemSetting.upsert({
+      where: { key },
+      update: {},
+      create: { key, value },
+    });
+  }
+
+  // Seed default content blocks (Hero, Sambutan Lurah, Highlights) per docs/SPEC.md §7 & §8
+  for (const block of DEFAULT_CONTENT_BLOCKS) {
+    await prisma.contentBlock.upsert({
+      where: { slug: block.slug },
+      update: {},
+      create: {
+        slug: block.slug,
+        type: block.type,
+        title: block.title,
+        body: block.body,
+        metadata: block.metadata,
+      },
+    });
+  }
+
   console.log('seeding selesai');
-  console.log({ roleUser, roleAdmin, sampleRt: [rt1.rtNumber, rt2.rtNumber, rt3.rtNumber] });
+  console.log({
+    roleUser,
+    roleEditor,
+    roleAdmin,
+    sampleRt: [rt1.rtNumber, rt2.rtNumber, rt3.rtNumber],
+    seededBlocks: DEFAULT_CONTENT_BLOCKS.map((b) => b.slug),
+  });
 }
 
 main()

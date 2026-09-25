@@ -38,6 +38,7 @@ model User {
   AuditLogsAsActor       AuditLog[]      @relation("AuditLogActor")
   AuditLogsAcknowledged  AuditLog[]      @relation("AuditLogAcknowledgedBy")
   SystemSettingsUpdated  SystemSetting[] @relation("SystemSettingUpdatedBy")
+  ContentBlocksUpdated   ContentBlock[]  @relation("ContentBlockUpdatedBy")
 
   @@index([auth_provider, provider_id])
   @@map("users")
@@ -159,11 +160,38 @@ model AuditLog {
 /// to want a home for its own settings here too.
 model SystemSetting {
   key   String @id @map("setting_key")
-  value String
+  value String @db.Text
 
   updatedById String?
   updatedBy   User?   @relation("SystemSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   updatedAt   DateTime @updatedAt
 
   @@map("system_settings")
+}
+
+enum ContentBlockType {
+  hero
+  sambutan_lurah
+  highlight
+  prose
+}
+
+model ContentBlock {
+  id          String           @id @default(uuid())
+  sectionId   String?          @map("section_id")
+  type        ContentBlockType @map("block_type")
+  slug        String           @unique
+  title       String?
+  body        String           @db.Text
+  metadata    Json?
+  sortOrder   Int?             @map("sort_order")
+
+  updatedById String?          @map("updated_by_id")
+  updatedBy   User?            @relation("ContentBlockUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  @@index([type])
+  @@index([sectionId, sortOrder])
+  @@map("content_blocks")
 }
