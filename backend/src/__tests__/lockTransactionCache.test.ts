@@ -170,6 +170,54 @@ describe('utils/lockTransactionCache VersionedTtlCache', () => {
     assert.deepEqual(res4, { key: 'fetched' });
     assert.equal(fetchCount, 3);
   });
+
+  it('set() returns false and suppresses writing to cache when skipCache is true', () => {
+    const dummyClient = { name: 'db' };
+    const cache = new VersionedTtlCache<string>({
+      ttlMs: 5000,
+      baseClient: dummyClient,
+    });
+
+    const v = cache.getVersion();
+    const writeResult = cache.set('hello', v, dummyClient, true);
+
+    assert.equal(writeResult, false);
+    assert.equal(cache.get(dummyClient), null);
+    assert.equal(cache.has(dummyClient), false);
+  });
+
+  it('getOrFetch with skipCache: true does not populate cold cache or overwrite warm cache on baseClient', async () => {
+    const dummyClient = { name: 'db' };
+    const cache = new VersionedTtlCache<{ key: string }>({
+      ttlMs: 5000,
+      baseClient: dummyClient,
+    });
+
+    let fetchCount = 0;
+    const fetcher = async () => {
+      fetchCount++;
+      return { key: `fetch-${fetchCount}` };
+    };
+
+    // 1. Cold cache call with skipCache: true returns fresh data without repopulating cache
+    const fresh1 = await cache.getOrFetch(fetcher, dummyClient, { skipCache: true });
+    assert.deepEqual(fresh1, { key: 'fetch-1' });
+    assert.equal(fetchCount, 1);
+    assert.equal(cache.get(dummyClient), null);
+    assert.equal(cache.has(dummyClient), false);
+
+    // 2. Normal call populates cache
+    const warm = await cache.getOrFetch(fetcher, dummyClient);
+    assert.deepEqual(warm, { key: 'fetch-2' });
+    assert.equal(fetchCount, 2);
+    assert.deepEqual(cache.get(dummyClient), { key: 'fetch-2' });
+
+    // 3. SkipCache: true call returns fresh data without overwriting warm cache
+    const fresh3 = await cache.getOrFetch(fetcher, dummyClient, { skipCache: true });
+    assert.deepEqual(fresh3, { key: 'fetch-3' });
+    assert.equal(fetchCount, 3);
+    assert.deepEqual(cache.get(dummyClient), { key: 'fetch-2' });
+  });
 });
 
 describe('utils/lockTransactionCache executeLockedTransaction', () => {

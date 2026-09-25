@@ -90,10 +90,17 @@ export class VersionedTtlCache<T> implements CacheInvalidator {
    * Stores data in cache conditionally.
    *
    * Guarded by:
+   * - !skipCache (skips caching if skipCache is true)
    * - client === baseClient (never caches uncommitted transaction or third-party client writes)
    * - this.version === versionAtStart (anti-TOCTOU: discards stale data if invalidated while in-flight)
    */
-  set(data: T, versionAtStart: number, client: unknown = this.baseClient): boolean {
+  set(
+    data: T,
+    versionAtStart: number,
+    client: unknown = this.baseClient,
+    skipCache = false,
+  ): boolean {
+    if (skipCache) return false;
     if (client !== this.baseClient) return false;
     if (this.version !== versionAtStart) return false;
 
@@ -160,7 +167,7 @@ export class VersionedTtlCache<T> implements CacheInvalidator {
     const versionAtStart = this.version;
     const executeFetch = async (): Promise<T> => {
       const fresh = await fetcher(effectiveClient);
-      this.set(fresh, versionAtStart, effectiveClient);
+      this.set(fresh, versionAtStart, effectiveClient, options?.skipCache);
       return fresh;
     };
 
