@@ -233,17 +233,19 @@ export const getAllContentBlocks = async (
       orderBy: [{ sectionId: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
 
-    return rows.map(formatContentBlock);
+    const formatted = rows.map(formatContentBlock);
+
+    // Warm per-slug caches on the cache-miss path only
+    if (client === prisma) {
+      for (const b of formatted) {
+        getSlugCache(b.slug).setCommitted(b);
+      }
+    }
+
+    return formatted;
   }, client);
 
-  // If this read hit/populated the base client shared cache, warm the per-slug caches
-  if (client === prisma) {
-    for (const b of blocks) {
-      getSlugCache(b.slug).setCommitted(b);
-    }
-  }
-
-  return structuredClone(blocks);
+  return blocks;
 };
 
 export const getContentBlockBySlug = async (

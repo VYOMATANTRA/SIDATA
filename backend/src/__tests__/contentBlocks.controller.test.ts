@@ -476,6 +476,81 @@ describe('contentBlocks.controller getContentBlockBySlugHandler', () => {
       invalidateContentBlocksCache();
     }
   });
+
+  it('warms per-slug cache on collection cache miss and skips refetching/redundant warming on cache hit', async () => {
+    invalidateContentBlocksCache();
+    const originalFindMany = prisma.contentBlock.findMany;
+    const originalFindUnique = prisma.contentBlock.findUnique;
+
+    let findManyCalls = 0;
+    let findUniqueCalls = 0;
+
+    prisma.contentBlock.findMany = (async () => {
+      findManyCalls++;
+      return [
+        {
+          id: 'block-hero',
+          sectionId: null,
+          type: 'hero',
+          slug: 'test-warm-hero',
+          title: 'Warmed Title',
+          body: 'Warmed Body',
+          metadata: { key: 'value' },
+          sortOrder: 1,
+          updatedById: null,
+          createdAt: new Date('2026-09-01'),
+          updatedAt: new Date('2026-09-01'),
+        },
+      ];
+    }) as unknown as typeof prisma.contentBlock.findMany;
+
+    prisma.contentBlock.findUnique = (async () => {
+      findUniqueCalls++;
+      return null;
+    }) as unknown as typeof prisma.contentBlock.findUnique;
+
+    try {
+      // 1. Initial getAllContentBlocks() - cache miss -> queries DB and warms per-slug cache
+      const blocks1 = await getAllContentBlocks();
+      assert.equal(findManyCalls, 1);
+      assert.equal(blocks1.length, 1);
+      assert.equal(blocks1[0]?.title, 'Warmed Title');
+
+      // 2. Querying by slug should hit the warmed per-slug cache without querying findUnique
+      const blockBySlug = await getContentBlockBySlug('test-warm-hero');
+      assert.equal(findUniqueCalls, 0);
+      assert.equal(blockBySlug?.title, 'Warmed Title');
+
+      // 3. Second getAllContentBlocks() - cache hit -> should not query DB or re-run fetcher
+      const blocks2 = await getAllContentBlocks();
+      assert.equal(findManyCalls, 1);
+      assert.deepEqual(blocks2, blocks1);
+      assert.deepEqual(blocks2, [
+        {
+          id: 'block-hero',
+          sectionId: null,
+          type: 'hero',
+          slug: 'test-warm-hero',
+          title: 'Warmed Title',
+          body: 'Warmed Body',
+          metadata: { key: 'value' },
+          sortOrder: 1,
+          updatedAt: new Date('2026-09-01').toISOString(),
+        },
+      ]);
+
+      // Verify that caller mutations on blocks2 do not corrupt the cached data
+      blocks2[0]!.title = 'Mutated Title';
+      const blocks3 = await getAllContentBlocks();
+      assert.equal(blocks3[0]?.title, 'Warmed Title');
+      const slugBlockAfter = await getContentBlockBySlug('test-warm-hero');
+      assert.equal(slugBlockAfter?.title, 'Warmed Title');
+    } finally {
+      prisma.contentBlock.findMany = originalFindMany;
+      prisma.contentBlock.findUnique = originalFindUnique;
+      invalidateContentBlocksCache();
+    }
+  });
 });
 
 /* =========================================================================
