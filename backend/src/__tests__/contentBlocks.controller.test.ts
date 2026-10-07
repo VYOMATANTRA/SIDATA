@@ -1438,4 +1438,81 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
       invalidateContentBlocksCache();
     }
   });
+
+  it('does not overwrite cache or call update/audit when update payload is identical (no-op)', async () => {
+    invalidateContentBlocksCache();
+    const originalTransaction = prisma.$transaction;
+
+    const existingBlock = {
+      id: 'uuid-hero-noop',
+      sectionId: null,
+      type: 'hero',
+      slug: 'landing-hero',
+      title: 'Judul Sama',
+      body: 'Konten Sama',
+      metadata: { badge: 'Tetap' },
+      sortOrder: null,
+      updatedById: null,
+      createdAt: new Date('2026-09-01'),
+      updatedAt: new Date('2026-09-01'),
+    };
+
+    let updateCalled = false;
+    let auditCreated = false;
+
+    prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+      const mockTx = {
+        $queryRaw: async () => [],
+        contentBlock: {
+          findUnique: async () => existingBlock,
+          update: async () => {
+            updateCalled = true;
+            return existingBlock;
+          },
+        },
+        auditLog: {
+          create: async () => {
+            auditCreated = true;
+          },
+        },
+      };
+      return fn(mockTx as unknown as typeof prisma);
+    }) as unknown as typeof prisma.$transaction;
+
+    // Spy on setCommitted of target slug cache
+    const slugCache = getSlugCache('landing-hero');
+    let setCommittedCalled = false;
+    const originalSetCommitted = slugCache.setCommitted.bind(slugCache);
+    slugCache.setCommitted = ((data: unknown) => {
+      setCommittedCalled = true;
+      return originalSetCommitted(data as never);
+    }) as typeof slugCache.setCommitted;
+
+    try {
+      const res = fakeRes();
+      const req = makeReq({
+        params: { slug: 'landing-hero' },
+        body: {
+          title: 'Judul Sama',
+          body: 'Konten Sama',
+          metadata: { badge: 'Tetap' },
+        },
+      });
+
+      await updateContentBlockHandler(req, res as unknown as Response);
+
+      assert.equal(res.status, 200);
+      assert.equal(updateCalled, false, 'DB update must not be called on no-op');
+      assert.equal(auditCreated, false, 'Audit log must not be created on no-op');
+      assert.equal(
+        setCommittedCalled,
+        false,
+        'setCommitted must not be called when didChange is false',
+      );
+    } finally {
+      slugCache.setCommitted = originalSetCommitted;
+      prisma.$transaction = originalTransaction;
+      invalidateContentBlocksCache();
+    }
+  });
 });

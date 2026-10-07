@@ -351,7 +351,8 @@ export const updateContentBlock = async (
     client,
     lockQuery,
     cache: [contentBlocksCache, targetSlugCache],
-    onCommit: (committedBlock) => {
+    onCommit: (committedBlock, didChange) => {
+      if (!didChange) return;
       targetSlugCache.setCommitted(committedBlock);
     },
     execute: async (tx) => {
