@@ -229,16 +229,45 @@ export const getAllContentBlocks = async (
   client: { contentBlock: Pick<typeof prisma.contentBlock, 'findMany'> } = prisma,
 ): Promise<ContentBlockDto[]> => {
   const blocks = await contentBlocksCache.getOrFetch(async (db) => {
+    const listVersionAtStart = contentBlocksCache.getVersion();
+    const slugVersionsAtStart = new Map<string, number>();
+
+    if (client === prisma) {
+      for (const [slug, cache] of slugCacheMap.entries()) {
+        slugVersionsAtStart.set(slug, cache.getVersion());
+      }
+    }
+
     const rows = await db.contentBlock.findMany({
       orderBy: [{ sectionId: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
 
     const formatted = rows.map(formatContentBlock);
 
-    // Warm per-slug caches on the cache-miss path only
-    if (client === prisma) {
+    // Warm per-slug caches on the cache-miss path only if no concurrent invalidations occurred
+    if (client === prisma && contentBlocksCache.getVersion() === listVersionAtStart) {
       for (const b of formatted) {
-        getSlugCache(b.slug).setCommitted(b);
+        const normalizedSlug = b.slug.trim().toLowerCase();
+        const slugCache = getSlugCache(normalizedSlug);
+
+        // Skip warming if per-slug cache entry is already newer or equal
+        if (slugCache.has(prisma)) {
+          const cached = slugCache.get(prisma);
+          if (cached) {
+            const cachedTime = Date.parse(cached.updatedAt);
+            const incomingTime = Date.parse(b.updatedAt);
+            if (
+              !Number.isNaN(cachedTime) &&
+              !Number.isNaN(incomingTime) &&
+              cachedTime >= incomingTime
+            ) {
+              continue;
+            }
+          }
+        }
+
+        const expectedVersion = slugVersionsAtStart.get(normalizedSlug) ?? 0;
+        slugCache.set(b, expectedVersion, prisma);
       }
     }
 

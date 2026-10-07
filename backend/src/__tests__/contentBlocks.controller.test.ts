@@ -9,6 +9,7 @@ import {
 import {
   getAllContentBlocks,
   getContentBlockBySlug,
+  getSlugCache,
   invalidateContentBlocksCache,
   contentBlocksCache,
 } from '../services/contentBlocks.service.js';
@@ -548,6 +549,182 @@ describe('contentBlocks.controller getContentBlockBySlugHandler', () => {
     } finally {
       prisma.contentBlock.findMany = originalFindMany;
       prisma.contentBlock.findUnique = originalFindUnique;
+      invalidateContentBlocksCache();
+    }
+  });
+
+  it('does not overwrite freshly edited slug cache when slow findMany finishes after concurrent mutation', async () => {
+    invalidateContentBlocksCache();
+    const originalFindMany = prisma.contentBlock.findMany;
+    const originalFindUnique = prisma.contentBlock.findUnique;
+
+    let resolveFindMany!: (val: unknown) => void;
+    const findManyPromise = new Promise((resolve) => {
+      resolveFindMany = resolve;
+    });
+
+    prisma.contentBlock.findMany = (() =>
+      findManyPromise) as unknown as typeof prisma.contentBlock.findMany;
+
+    try {
+      // 1. Kick off getAllContentBlocks - in-flight list fetch starts
+      const listPromise = getAllContentBlocks();
+
+      // 2. Concurrently simulate PATCH committing new data for 'test-race-hero':
+      // The PATCH invalidates contentBlocksCache and targetSlugCache, then calls setCommitted with new data.
+      contentBlocksCache.invalidate();
+      const targetSlugCache = getSlugCache('test-race-hero');
+      targetSlugCache.invalidate();
+      targetSlugCache.setCommitted({
+        id: 'block-race',
+        sectionId: null,
+        type: 'hero',
+        slug: 'test-race-hero',
+        title: 'Freshly Committed Title',
+        body: 'Freshly Committed Body',
+        metadata: { badge: 'Fresh' },
+        sortOrder: 1,
+        updatedAt: new Date('2026-09-02T12:00:00.000Z').toISOString(),
+      });
+
+      // 3. Complete the slow findMany with stale pre-edit data
+      resolveFindMany([
+        {
+          id: 'block-race',
+          sectionId: null,
+          type: 'hero',
+          slug: 'test-race-hero',
+          title: 'Stale Pre-Edit Title',
+          body: 'Stale Pre-Edit Body',
+          metadata: { badge: 'Stale' },
+          sortOrder: 1,
+          updatedById: null,
+          createdAt: new Date('2026-09-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-09-01T00:00:00.000Z'),
+        },
+      ]);
+
+      await listPromise;
+
+      // 4. Per-slug cache must retain the freshly committed data, NOT the stale findMany result
+      const cachedBlock = targetSlugCache.get(prisma);
+      assert.equal(cachedBlock?.title, 'Freshly Committed Title');
+
+      // Subsequent getContentBlockBySlug should hit cache with fresh data
+      prisma.contentBlock.findUnique = (async () => {
+        throw new Error('findUnique should not be called on cache hit');
+      }) as unknown as typeof prisma.contentBlock.findUnique;
+
+      const slugBlock = await getContentBlockBySlug('test-race-hero');
+      assert.equal(slugBlock?.title, 'Freshly Committed Title');
+    } finally {
+      prisma.contentBlock.findMany = originalFindMany;
+      prisma.contentBlock.findUnique = originalFindUnique;
+      invalidateContentBlocksCache();
+    }
+  });
+
+  it('skips warming per-slug cache if existing cached entry has equal or newer updatedAt', async () => {
+    invalidateContentBlocksCache();
+    const originalFindMany = prisma.contentBlock.findMany;
+
+    const targetSlugCache = getSlugCache('test-newer-hero');
+    targetSlugCache.setCommitted({
+      id: 'block-newer',
+      sectionId: null,
+      type: 'hero',
+      slug: 'test-newer-hero',
+      title: 'Already Newer Title',
+      body: 'Already Newer Body',
+      metadata: null,
+      sortOrder: 1,
+      updatedAt: new Date('2026-09-05T00:00:00.000Z').toISOString(),
+    });
+
+    prisma.contentBlock.findMany = (async () => [
+      {
+        id: 'block-newer',
+        sectionId: null,
+        type: 'hero',
+        slug: 'test-newer-hero',
+        title: 'Older List Title',
+        body: 'Older List Body',
+        metadata: null,
+        sortOrder: 1,
+        updatedById: null,
+        createdAt: new Date('2026-09-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-09-01T00:00:00.000Z'),
+      },
+    ]) as unknown as typeof prisma.contentBlock.findMany;
+
+    try {
+      await getAllContentBlocks();
+
+      const cached = targetSlugCache.get(prisma);
+      assert.equal(cached?.title, 'Already Newer Title');
+      assert.equal(cached?.updatedAt, new Date('2026-09-05T00:00:00.000Z').toISOString());
+    } finally {
+      prisma.contentBlock.findMany = originalFindMany;
+      invalidateContentBlocksCache();
+    }
+  });
+
+  it('does not resurrect invalidated slug cache if slug cache version changed during list fetch', async () => {
+    invalidateContentBlocksCache();
+    const originalFindMany = prisma.contentBlock.findMany;
+
+    let resolveFindMany!: (val: unknown) => void;
+    const findManyPromise = new Promise((resolve) => {
+      resolveFindMany = resolve;
+    });
+
+    prisma.contentBlock.findMany = (() =>
+      findManyPromise) as unknown as typeof prisma.contentBlock.findMany;
+
+    try {
+      // 1. Target slug cache starts warm
+      const targetSlugCache = getSlugCache('test-invalidated-hero');
+      targetSlugCache.setCommitted({
+        id: 'block-inv',
+        sectionId: null,
+        type: 'hero',
+        slug: 'test-invalidated-hero',
+        title: 'Initial Title',
+        body: 'Initial Body',
+        metadata: null,
+        sortOrder: 1,
+        updatedAt: new Date('2026-09-01T00:00:00.000Z').toISOString(),
+      });
+
+      // 2. Start getAllContentBlocks
+      const listPromise = getAllContentBlocks();
+
+      // 3. While in-flight, explicitly invalidate only the target slug cache
+      targetSlugCache.invalidate();
+
+      // 4. Resolve findMany with old data
+      resolveFindMany([
+        {
+          id: 'block-inv',
+          sectionId: null,
+          type: 'hero',
+          slug: 'test-invalidated-hero',
+          title: 'Initial Title',
+          body: 'Initial Body',
+          metadata: null,
+          sortOrder: 1,
+          updatedById: null,
+          createdAt: new Date('2026-09-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-09-01T00:00:00.000Z'),
+        },
+      ]);
+
+      await listPromise;
+
+      // 5. Target slug cache must remain invalidated (has === false)
+      assert.equal(targetSlugCache.has(prisma), false);
+    } finally {
+      prisma.contentBlock.findMany = originalFindMany;
       invalidateContentBlocksCache();
     }
   });

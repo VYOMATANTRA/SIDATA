@@ -117,6 +117,12 @@ export class VersionedTtlCache<T> implements CacheInvalidator {
   /**
    * Sets newly committed data directly post-transaction, warming the cache and
    * synchronizing last-known-good state immediately.
+   *
+   * NOTE: This performs an unconditional overwrite with no anti-TOCTOU version check.
+   * It is designed EXCLUSIVELY for post-commit write handlers (`onCommit`) where the caller
+   * holds authoritative, freshly committed data from a serialized mutating transaction.
+   * Do NOT use this method for speculative cache warming from unlocked background reads
+   * or list snapshots; use version-guarded `set()` instead.
    */
   setCommitted(data: T): void {
     const cloned = structuredClone(data);
