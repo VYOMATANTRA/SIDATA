@@ -19,6 +19,9 @@ Backend requires a `.env` file at the repository root (`DATABASE_URL`, `JWT_SECR
 fails fast if any are missing. Mutating auth requests must include an `x-csrf-token` header
 obtained from `GET /api/auth/csrf-token`.
 
+Two optional env vars tune the Google OAuth handshake: `OAUTH_STATE_TTL_SECONDS` and `OAUTH_PKCE_TTL_SECONDS` — TTL for the temporary
+`oauth_state`/`oauth_verifier` cookies, both defaulting to `300` seconds.
+
 ## Database
 
 The project uses **MySQL** exclusively. Do not introduce Postgres or MariaDB-specific code,
