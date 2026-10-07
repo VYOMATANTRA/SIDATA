@@ -38,6 +38,58 @@ describe('utils/lockTransactionCache VersionedTtlCache', () => {
     assert.equal(secondRetrieval.nested.value, 'initial');
   });
 
+  it('guarantees deep immutability isolation between input, get(), and getLastKnownGood()', () => {
+    const dummyClient = { name: 'db' };
+    const cache = new VersionedTtlCache<{ count: number; nested: { value: string } }>({
+      ttlMs: 5000,
+      baseClient: dummyClient,
+    });
+
+    // 1. Verify set(): input mutation does not leak
+    const inputObj = { count: 10, nested: { value: 'from-input' } };
+    cache.set(inputObj, cache.getVersion(), dummyClient);
+    inputObj.count = 999;
+    inputObj.nested.value = 'mutated-input';
+
+    const fromGet = cache.get(dummyClient)!;
+    const fromLkg = cache.getLastKnownGood({ count: 0, nested: { value: 'fallback' } });
+
+    assert.equal(fromGet.count, 10);
+    assert.equal(fromGet.nested.value, 'from-input');
+    assert.equal(fromLkg.count, 10);
+    assert.equal(fromLkg.nested.value, 'from-input');
+
+    // 2. Mutating fromGet does not affect getLastKnownGood or subsequent get
+    fromGet.count = 200;
+    fromGet.nested.value = 'mutated-get';
+    assert.equal(cache.getLastKnownGood({ count: 0, nested: { value: 'fallback' } }).count, 10);
+    assert.equal(cache.get(dummyClient)!.count, 10);
+
+    // 3. Mutating fromLkg does not affect get or subsequent getLastKnownGood
+    fromLkg.count = 300;
+    fromLkg.nested.value = 'mutated-lkg';
+    assert.equal(cache.get(dummyClient)!.count, 10);
+    assert.equal(cache.getLastKnownGood({ count: 0, nested: { value: 'fallback' } }).count, 10);
+
+    // 4. Verify setCommitted(): input mutation does not leak and preserves isolation
+    const committedInput = { count: 50, nested: { value: 'committed' } };
+    cache.setCommitted(committedInput);
+    committedInput.count = 888;
+    committedInput.nested.value = 'mutated-committed-input';
+
+    const comGet = cache.get(dummyClient)!;
+    const comLkg = cache.getLastKnownGood({ count: 0, nested: { value: 'fallback' } });
+
+    assert.equal(comGet.count, 50);
+    assert.equal(comGet.nested.value, 'committed');
+    assert.equal(comLkg.count, 50);
+    assert.equal(comLkg.nested.value, 'committed');
+
+    comGet.count = 777;
+    assert.equal(cache.getLastKnownGood({ count: 0, nested: { value: 'fallback' } }).count, 50);
+    assert.equal(cache.get(dummyClient)!.count, 50);
+  });
+
   it('bypasses cache when skipCache is true', () => {
     const dummyClient = { name: 'db' };
     const cache = new VersionedTtlCache<string>({

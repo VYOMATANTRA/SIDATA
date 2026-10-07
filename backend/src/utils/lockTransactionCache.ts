@@ -109,7 +109,7 @@ export class VersionedTtlCache<T> implements CacheInvalidator {
       data: cloned,
       expiresAt: Date.now() + this.ttlMs,
     };
-    this.lastKnownGood = structuredClone(cloned);
+    this.lastKnownGood = cloned;
     this.hasLastKnownGood = true;
     return true;
   }
@@ -130,7 +130,7 @@ export class VersionedTtlCache<T> implements CacheInvalidator {
       data: cloned,
       expiresAt: Date.now() + this.ttlMs,
     };
-    this.lastKnownGood = structuredClone(cloned);
+    this.lastKnownGood = cloned;
     this.hasLastKnownGood = true;
   }
 
