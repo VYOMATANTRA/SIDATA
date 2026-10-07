@@ -530,11 +530,15 @@ export const updatePublicSettings = async (params: {
     client: prisma,
     lockQuery,
     cache: publicSettingsCache,
-    onCommit: (committedAfter, didChange) => {
+    onCommit: async (committedAfter, didChange) => {
       if (!didChange) return;
-      publicSettingsCache.setCommitted(committedAfter);
       if (previousWeatherAdm4 && previousWeatherAdm4 !== committedAfter.weatherAdm4) {
         evictWeatherCache(previousWeatherAdm4);
+      }
+      try {
+        await getPublicSettings(prisma);
+      } catch {
+        // Safe fallback: cache remains invalidated if post-commit warm-up fetch fails
       }
     },
     execute: async (tx) => {

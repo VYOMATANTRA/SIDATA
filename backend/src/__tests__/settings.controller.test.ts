@@ -10,6 +10,8 @@ import {
 import {
   invalidatePublicSettingsCache,
   getFastPublicSettings,
+  getPublicSettings,
+  publicSettingsCache,
   DEFAULT_PUBLIC_SETTINGS,
   PUBLIC_SETTING_KEYS,
 } from '../services/settings.service.js';
@@ -1792,6 +1794,84 @@ describe('settings.controller updatePublicSettingsHandler', () => {
       };
       assert.equal(meta.changedFields.length, 10);
       assert.deepEqual(meta.after, payload);
+    } finally {
+      prisma.systemSetting.findMany = originalFindMany;
+      prisma.systemSetting.upsert = originalUpsert;
+      prisma.$transaction = originalTransaction;
+      prisma.$queryRaw = originalQueryRaw;
+      prisma.auditLog.create = originalAuditCreate;
+      invalidatePublicSettingsCache();
+    }
+  });
+
+  it('does not revert unrelated fields in cache under concurrent updates to disjoint keys', async () => {
+    invalidatePublicSettingsCache();
+    const originalFindMany = prisma.systemSetting.findMany;
+    const originalUpsert = prisma.systemSetting.upsert;
+    const originalTransaction = prisma.$transaction;
+    const originalQueryRaw = prisma.$queryRaw;
+    const originalAuditCreate = prisma.auditLog.create;
+
+    // Database state shared across transactions
+    const dbStore = new Map<string, string>([
+      [PUBLIC_SETTING_KEYS.appName, 'Initial App Name'],
+      [PUBLIC_SETTING_KEYS.weatherAdm4, '64.71.01.1001'],
+    ]);
+
+    prisma.systemSetting.findMany = (async () => {
+      return Array.from(dbStore.entries()).map(([key, value]) => ({ key, value }));
+    }) as unknown as typeof prisma.systemSetting.findMany;
+
+    prisma.systemSetting.upsert = (async (args: { create: { key: string; value: string } }) => {
+      dbStore.set(args.create.key, args.create.value);
+      return { ...args.create, updatedAt: new Date() };
+    }) as unknown as typeof prisma.systemSetting.upsert;
+
+    prisma.auditLog.create = (async () => ({
+      id: 'audit-disjoint',
+    })) as unknown as typeof prisma.auditLog.create;
+    prisma.$queryRaw = (async () => []) as unknown as typeof prisma.$queryRaw;
+
+    prisma.$transaction = (async (arg: unknown) => {
+      if (typeof arg === 'function') return (arg as (tx: typeof prisma) => unknown)(prisma);
+      throw new Error('expected interactive transaction');
+    }) as unknown as typeof prisma.$transaction;
+
+    try {
+      // 1. Initial state check
+      const initialSettings = await getPublicSettings();
+      assert.equal(initialSettings.appName, 'Initial App Name');
+      assert.equal(initialSettings.weatherAdm4, '64.71.01.1001');
+
+      // 2. Tx1 updates appName
+      const res1 = fakeRes();
+      await updatePublicSettingsHandler(
+        makeReq({ body: { appName: 'Concurrent Updated App' } }),
+        res1 as unknown as Response,
+      );
+      assert.equal(res1.status, 200);
+
+      // 3. Tx2 updates disjoint key weatherAdm4
+      const res2 = fakeRes();
+      await updatePublicSettingsHandler(
+        makeReq({ body: { weatherAdm4: '64.71.02.2002' } }),
+        res2 as unknown as Response,
+      );
+      assert.equal(res2.status, 200);
+
+      // 4. Cache must retain both appName and weatherAdm4 updates without reverting appName
+      const cached = publicSettingsCache.get(prisma);
+      assert.ok(cached !== null, 'Cache must be warm post-commit');
+      assert.equal(cached?.appName, 'Concurrent Updated App', 'appName must not be reverted');
+      assert.equal(cached?.weatherAdm4, '64.71.02.2002', 'weatherAdm4 must reflect latest update');
+
+      // 5. Subsequent read handler serves both fields correctly from cache
+      const getRes = fakeRes();
+      await getPublicSettingsHandler({} as Request, getRes as unknown as Response);
+      const served = (getRes.body as { settings: { appName: string; weatherAdm4: string } })
+        .settings;
+      assert.equal(served.appName, 'Concurrent Updated App');
+      assert.equal(served.weatherAdm4, '64.71.02.2002');
     } finally {
       prisma.systemSetting.findMany = originalFindMany;
       prisma.systemSetting.upsert = originalUpsert;
