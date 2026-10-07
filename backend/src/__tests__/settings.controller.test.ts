@@ -1318,6 +1318,127 @@ describe('settings.controller updatePublicSettingsHandler', () => {
     }
   });
 
+  it('returns 400 when weatherAdm4 is not found or rejected by BMKG API', async () => {
+    invalidatePublicSettingsCache();
+    const originalFindMany = prisma.systemSetting.findMany;
+    const originalFetch = globalThis.fetch;
+
+    prisma.systemSetting.findMany = (async () => [
+      { key: 'public.weather_adm4', value: '64.71.01.1001' },
+    ]) as unknown as typeof prisma.systemSetting.findMany;
+
+    globalThis.fetch = (async () => {
+      return new Response('Not Found', { status: 404 });
+    }) as unknown as typeof fetch;
+
+    try {
+      const res = fakeRes();
+      await updatePublicSettingsHandler(
+        makeReq({ body: { weatherAdm4: '64.71.99.9999' } }),
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.match(
+        String((res.body as { error: string }).error),
+        /Kode adm4 BMKG tidak valid atau tidak ditemukan di server BMKG/,
+      );
+    } finally {
+      prisma.systemSetting.findMany = originalFindMany;
+      globalThis.fetch = originalFetch;
+      invalidatePublicSettingsCache();
+    }
+  });
+
+  it('returns 400 when BMKG API is unreachable or times out during weatherAdm4 update', async () => {
+    invalidatePublicSettingsCache();
+    const originalFindMany = prisma.systemSetting.findMany;
+    const originalFetch = globalThis.fetch;
+
+    prisma.systemSetting.findMany = (async () => [
+      { key: 'public.weather_adm4', value: '64.71.01.1001' },
+    ]) as unknown as typeof prisma.systemSetting.findMany;
+
+    globalThis.fetch = (async () => {
+      throw new DOMException('The operation was aborted.', 'TimeoutError');
+    }) as unknown as typeof fetch;
+
+    try {
+      const res = fakeRes();
+      await updatePublicSettingsHandler(
+        makeReq({ body: { weatherAdm4: '64.71.99.8888' } }),
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.match(
+        String((res.body as { error: string }).error),
+        /Kode adm4 BMKG tidak valid atau tidak ditemukan di server BMKG/,
+      );
+    } finally {
+      prisma.systemSetting.findMany = originalFindMany;
+      globalThis.fetch = originalFetch;
+      invalidatePublicSettingsCache();
+    }
+  });
+
+  it('skips BMKG validation when weatherAdm4 is submitted with unchanged value', async () => {
+    invalidatePublicSettingsCache();
+    const originalFindMany = prisma.systemSetting.findMany;
+    const originalUpsert = prisma.systemSetting.upsert;
+    const originalTransaction = prisma.$transaction;
+    const originalQueryRaw = prisma.$queryRaw;
+    const originalAuditCreate = prisma.auditLog.create;
+    const originalFetch = globalThis.fetch;
+
+    const stored = new Map<string, string>([
+      [PUBLIC_SETTING_KEYS.weatherAdm4, '64.71.01.1001'],
+      [PUBLIC_SETTING_KEYS.appName, 'Old App'],
+    ]);
+
+    prisma.systemSetting.findMany = (async () => {
+      return Array.from(stored.entries()).map(([key, value]) => ({ key, value }));
+    }) as unknown as typeof prisma.systemSetting.findMany;
+    prisma.systemSetting.upsert = (async (args: { create: { key: string; value: string } }) => {
+      stored.set(args.create.key, args.create.value);
+      return { ...args.create, updatedAt: new Date() };
+    }) as unknown as typeof prisma.systemSetting.upsert;
+    prisma.auditLog.create = (async () => ({
+      id: 'audit-skip-bmkg',
+    })) as unknown as typeof prisma.auditLog.create;
+    prisma.$transaction = (async (arg: unknown) => {
+      if (typeof arg === 'function') return (arg as (tx: typeof prisma) => unknown)(prisma);
+      throw new Error('expected interactive transaction');
+    }) as unknown as typeof prisma.$transaction;
+    prisma.$queryRaw = (async () => []) as unknown as typeof prisma.$queryRaw;
+
+    let fetchCalled = false;
+    globalThis.fetch = (async () => {
+      fetchCalled = true;
+      throw new Error('fetch should not be called');
+    }) as unknown as typeof fetch;
+
+    try {
+      const res = fakeRes();
+      await updatePublicSettingsHandler(
+        makeReq({ body: { appName: 'New App', weatherAdm4: '64.71.01.1001' } }),
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 200);
+      assert.equal(
+        fetchCalled,
+        false,
+        'BMKG validation must be skipped when weatherAdm4 is unchanged',
+      );
+    } finally {
+      prisma.systemSetting.findMany = originalFindMany;
+      prisma.systemSetting.upsert = originalUpsert;
+      prisma.$transaction = originalTransaction;
+      prisma.$queryRaw = originalQueryRaw;
+      prisma.auditLog.create = originalAuditCreate;
+      globalThis.fetch = originalFetch;
+      invalidatePublicSettingsCache();
+    }
+  });
+
   // --- Auth & Error Handling ---
   it('returns 401 when actor is not authenticated', async () => {
     const res = fakeRes();
@@ -1789,6 +1910,17 @@ describe('settings.controller updatePublicSettingsHandler', () => {
     const originalTransaction = prisma.$transaction;
     const originalQueryRaw = prisma.$queryRaw;
     const originalAuditCreate = prisma.auditLog.create;
+    const originalFetch = globalThis.fetch;
+
+    globalThis.fetch = (async () => {
+      return new Response(
+        JSON.stringify({
+          lokasi: { desa: 'Manggar', lat: -1.2, lon: 116.9 },
+          data: [{ cuaca: [] }],
+        }),
+        { status: 200 },
+      );
+    }) as unknown as typeof fetch;
 
     const upserted = new Map<string, string>();
     prisma.systemSetting.findMany =
@@ -1855,6 +1987,7 @@ describe('settings.controller updatePublicSettingsHandler', () => {
       prisma.$transaction = originalTransaction;
       prisma.$queryRaw = originalQueryRaw;
       prisma.auditLog.create = originalAuditCreate;
+      globalThis.fetch = originalFetch;
       invalidatePublicSettingsCache();
     }
   });
@@ -1866,6 +1999,17 @@ describe('settings.controller updatePublicSettingsHandler', () => {
     const originalTransaction = prisma.$transaction;
     const originalQueryRaw = prisma.$queryRaw;
     const originalAuditCreate = prisma.auditLog.create;
+    const originalFetch = globalThis.fetch;
+
+    globalThis.fetch = (async () => {
+      return new Response(
+        JSON.stringify({
+          lokasi: { desa: 'Manggar', lat: -1.2, lon: 116.9 },
+          data: [{ cuaca: [] }],
+        }),
+        { status: 200 },
+      );
+    }) as unknown as typeof fetch;
 
     // Database state shared across transactions
     const dbStore = new Map<string, string>([
@@ -1933,6 +2077,7 @@ describe('settings.controller updatePublicSettingsHandler', () => {
       prisma.$transaction = originalTransaction;
       prisma.$queryRaw = originalQueryRaw;
       prisma.auditLog.create = originalAuditCreate;
+      globalThis.fetch = originalFetch;
       invalidatePublicSettingsCache();
     }
   });

@@ -14,6 +14,7 @@ import {
 } from '../utils/lockTransactionCache.js';
 import { hasFieldChanged } from '../utils/comparator.js';
 import { evictWeatherCache } from './weather.service.js';
+import { validateBmkgAdm4 } from '../utils/bmkg.js';
 
 export class SettingsServiceError extends Error {
   statusCode: number;
@@ -521,6 +522,20 @@ export const updatePublicSettings = async (params: {
   const updates = parsed.data;
   if (Object.keys(updates).length === 0) {
     throw new SettingsServiceError('Setidaknya satu bidang pengaturan harus dikirimkan.', 400);
+  }
+
+  if (updates.weatherAdm4 !== undefined) {
+    const current = await getPublicSettings(prisma);
+    if (updates.weatherAdm4 !== current.weatherAdm4) {
+      try {
+        await validateBmkgAdm4(updates.weatherAdm4);
+      } catch {
+        throw new SettingsServiceError(
+          'Kode adm4 BMKG tidak valid atau tidak ditemukan di server BMKG.',
+          400,
+        );
+      }
+    }
   }
 
   const actorId = actor.id?.trim() ? actor.id.trim() : null;

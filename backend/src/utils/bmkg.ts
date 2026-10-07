@@ -37,3 +37,10 @@ export async function fetchBmkgForecast(adm4: string): Promise<BmkgResponse> {
   const json = await response.json();
   return bmkgResponseSchema.parse(json);
 }
+
+export async function validateBmkgAdm4(adm4: string): Promise<void> {
+  const response = await fetchBmkgForecast(adm4);
+  if (!response.data || response.data.length === 0) {
+    throw new Error('Kode adm4 BMKG tidak memiliki data prakiraan cuaca');
+  }
+}
