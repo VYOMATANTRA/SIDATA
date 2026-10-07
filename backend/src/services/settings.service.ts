@@ -143,6 +143,15 @@ export const updateAuditRetentionSettings = async (params: {
     await tx.$queryRaw`SELECT setting_key FROM system_settings WHERE setting_key IN (${AUDIT_RETENTION_KEYS.info}, ${AUDIT_RETENTION_KEYS.warning}, ${AUDIT_RETENTION_KEYS.critical}) FOR UPDATE`;
     const before = await getAuditRetentionSettings(tx);
 
+    // If no retention values actually changed, short-circuit: skip DB writes and audit log
+    if (
+      before.info === next.info &&
+      before.warning === next.warning &&
+      before.critical === next.critical
+    ) {
+      return next;
+    }
+
     // Sequential, not Promise.all: interactive transactions run on a single shared connection,
     // so concurrent queries against the same `tx` risk interleaving/closed-transaction errors.
     const upsertOne = (key: string, value: number) =>

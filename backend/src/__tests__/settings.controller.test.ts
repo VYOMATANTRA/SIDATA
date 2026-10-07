@@ -452,6 +452,61 @@ describe('settings.controller updateAuditRetention', () => {
       prisma.auditLog.create = originalAuditCreate;
     }
   });
+
+  it('returns current retention settings without writing audit log or upserting rows when values are unchanged (no-op)', async () => {
+    const originalFindMany = prisma.systemSetting.findMany;
+    const originalUpsert = prisma.systemSetting.upsert;
+    const originalTransaction = prisma.$transaction;
+    const originalQueryRaw = prisma.$queryRaw;
+    const originalAuditCreate = prisma.auditLog.create;
+
+    prisma.systemSetting.findMany = (async () => [
+      { key: 'audit.retention_info_days', value: '7' },
+      { key: 'audit.retention_warning_days', value: '30' },
+      { key: 'audit.retention_critical_days', value: '0' },
+    ]) as unknown as typeof prisma.systemSetting.findMany;
+
+    let upsertCalled = false;
+    prisma.systemSetting.upsert = (async () => {
+      upsertCalled = true;
+      return { key: 'mock', value: 'mock', updatedAt: new Date() };
+    }) as unknown as typeof prisma.systemSetting.upsert;
+
+    let auditCreated = false;
+    prisma.auditLog.create = (async () => {
+      auditCreated = true;
+      return { id: 'audit-noop' };
+    }) as unknown as typeof prisma.auditLog.create;
+
+    prisma.$transaction = (async (arg: unknown) => {
+      if (typeof arg === 'function') return (arg as (tx: typeof prisma) => unknown)(prisma);
+      throw new Error('expected interactive transaction');
+    }) as unknown as typeof prisma.$transaction;
+    prisma.$queryRaw = (async () => []) as unknown as typeof prisma.$queryRaw;
+
+    try {
+      const res = fakeRes();
+      await updateAuditRetention(
+        makeReq({ body: { info: 7, warning: 30, critical: 0 } }),
+        res as unknown as Response,
+      );
+
+      assert.equal(res.status, 200);
+      assert.deepEqual((res.body as { retention: unknown }).retention, {
+        info: 7,
+        warning: 30,
+        critical: 0,
+      });
+      assert.equal(upsertCalled, false, 'No DB upsert should be performed on retention no-op');
+      assert.equal(auditCreated, false, 'No audit log should be written on retention no-op');
+    } finally {
+      prisma.systemSetting.findMany = originalFindMany;
+      prisma.systemSetting.upsert = originalUpsert;
+      prisma.$transaction = originalTransaction;
+      prisma.$queryRaw = originalQueryRaw;
+      prisma.auditLog.create = originalAuditCreate;
+    }
+  });
 });
 
 /* =========================================================================
