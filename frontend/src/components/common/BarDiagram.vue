@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 
 export interface BarDiagramItem {
+  id?: string | number;
   label: string;
   value: number;
   formattedValue?: string;
@@ -89,20 +90,20 @@ function getPercentage(value: number): number {
 
 <template>
   <div
-    class="rounded-card border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs transition-shadow"
+    class="rounded-card border border-slate-200/80 bg-white p-5 shadow-xs transition-shadow sm:p-6"
     data-test="bar-diagram-card"
   >
     <!-- Header: Icon & Diagram Title -->
     <div class="mb-5 flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
-      <div class="flex items-center gap-3 min-w-0">
+      <div class="flex min-w-0 items-center gap-3">
         <!-- Default Report/Chart Icon or Slot -->
         <slot name="icon">
           <div
-            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-btn bg-brand-navy/5 text-brand-navy"
+            class="rounded-btn bg-brand-navy/5 text-brand-navy flex h-10 w-10 shrink-0 items-center justify-center"
             aria-hidden="true"
           >
             <svg
-              class="h-6 w-6 text-brand-navy"
+              class="text-brand-navy h-6 w-6"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -124,7 +125,7 @@ function getPercentage(value: number): number {
 
         <!-- Diagram Title -->
         <h3
-          class="text-base font-bold tracking-tight text-slate-900 sm:text-lg min-w-0 truncate"
+          class="min-w-0 truncate text-base font-bold tracking-tight text-slate-900 sm:text-lg"
           data-test="diagram-title"
         >
           {{ title }}
@@ -137,7 +138,7 @@ function getPercentage(value: number): number {
 
     <!-- Loading Skeleton State -->
     <div v-if="loading" class="space-y-4 py-2" data-test="loading-skeleton">
-      <div v-for="n in 4" :key="n" class="space-y-2 animate-pulse">
+      <div v-for="n in 4" :key="n" class="animate-pulse space-y-2">
         <div class="flex justify-between">
           <div class="h-4 w-28 rounded-md bg-slate-200" />
           <div class="h-4 w-10 rounded-md bg-slate-200" />
@@ -161,21 +162,18 @@ function getPercentage(value: number): number {
     <div v-else class="space-y-4 sm:space-y-5" data-test="bars-container">
       <div
         v-for="(item, index) in items"
-        :key="item.label || index"
+        :key="item.id ?? index"
         class="space-y-1.5"
         data-test="bar-item"
       >
         <!-- Label & Value Header -->
         <div class="flex items-center justify-between text-xs sm:text-sm">
-          <span
-            class="font-medium text-brand-navy min-w-0 truncate pr-2"
-            data-test="bar-label"
-          >
+          <span class="text-brand-navy min-w-0 truncate pr-2 font-medium" data-test="bar-label">
             {{ item.label }}
           </span>
           <span
             v-if="showValues"
-            class="shrink-0 font-bold text-brand-navy tabular-nums"
+            class="text-brand-navy shrink-0 font-bold tabular-nums"
             data-test="bar-value"
           >
             {{ getDisplayValue(item) }}
@@ -184,9 +182,9 @@ function getPercentage(value: number): number {
 
         <!-- Pill Progress Bar Track -->
         <div
-          class="relative h-3.5 sm:h-4 w-full overflow-hidden rounded-full transition-colors"
+          class="relative h-3.5 w-full overflow-hidden rounded-full transition-colors sm:h-4"
           :class="trackColorClass"
-          role="progressbar"
+          role="meter"
           :aria-valuenow="item.value"
           :aria-valuemin="0"
           :aria-valuemax="effectiveMax"

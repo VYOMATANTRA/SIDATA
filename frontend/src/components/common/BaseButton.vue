@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, type Component } from 'vue';
+import { computeLinkRel } from '../../utils/link.js';
 
 export interface ButtonProps {
   variant?: 'primary' | 'secondary' | 'micro';
@@ -37,24 +38,7 @@ const emit = defineEmits<{
 
 const isDisabled = computed(() => props.disabled || props.state === 'disabled');
 
-const isExternal = computed(() => {
-  if (props.target === '_blank') return true;
-  if (
-    props.href &&
-    (props.href.startsWith('http://') ||
-      props.href.startsWith('https://') ||
-      props.href.startsWith('//'))
-  ) {
-    return true;
-  }
-  return false;
-});
-
-const computedRel = computed(() => {
-  if (props.rel) return props.rel;
-  if (isExternal.value) return 'noopener noreferrer';
-  return undefined;
-});
+const computedRel = computed(() => computeLinkRel(props.href, props.target, props.rel));
 
 const baseClasses =
   'inline-flex items-center justify-center font-sans font-medium transition-colors duration-150 select-none text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy focus-visible:ring-offset-2';

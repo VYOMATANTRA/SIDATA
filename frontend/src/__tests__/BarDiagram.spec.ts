@@ -93,9 +93,7 @@ describe('BarDiagram.vue', () => {
     const wrapper = mount(BarDiagram, {
       props: {
         title: 'Test Override',
-        items: [
-          { label: 'Custom', value: 100, formattedValue: 'Khusus: 100 Orang' },
-        ],
+        items: [{ label: 'Custom', value: 100, formattedValue: 'Khusus: 100 Orang' }],
       },
     });
 
@@ -168,7 +166,7 @@ describe('BarDiagram.vue', () => {
     expect(wrapper.find('[data-test="bars-container"]').exists()).toBe(false);
   });
 
-  it('conforms to accessibility standards with progressbar attributes', () => {
+  it('conforms to accessibility standards with meter attributes', () => {
     const wrapper = mount(BarDiagram, {
       props: {
         title: 'A11y Test',
@@ -177,11 +175,26 @@ describe('BarDiagram.vue', () => {
       },
     });
 
-    const progressbar = wrapper.find('[role="progressbar"]');
-    expect(progressbar.exists()).toBe(true);
-    expect(progressbar.attributes('aria-valuenow')).toBe('3420');
-    expect(progressbar.attributes('aria-valuemin')).toBe('0');
-    expect(progressbar.attributes('aria-valuemax')).toBe('3420');
-    expect(progressbar.attributes('aria-label')).toBe('Tamat SD: 3.420 jiwa');
+    const meter = wrapper.find('[role="meter"]');
+    expect(meter.exists()).toBe(true);
+    expect(meter.attributes('aria-valuenow')).toBe('3420');
+    expect(meter.attributes('aria-valuemin')).toBe('0');
+    expect(meter.attributes('aria-valuemax')).toBe('3420');
+    expect(meter.attributes('aria-label')).toBe('Tamat SD: 3.420 jiwa');
+  });
+
+  it('renders duplicate labels without key collision', () => {
+    const wrapper = mount(BarDiagram, {
+      props: {
+        title: 'Collision Test',
+        items: [
+          { id: 'item-1', label: 'Sama', value: 100 },
+          { id: 'item-2', label: 'Sama', value: 200 },
+        ],
+      },
+    });
+
+    const bars = wrapper.findAll('[data-test="bar-item"]');
+    expect(bars).toHaveLength(2);
   });
 });

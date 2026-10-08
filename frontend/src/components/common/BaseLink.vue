@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, type Component } from 'vue';
 import { RouterLink, type RouteLocationRaw } from 'vue-router';
+import { computeLinkRel } from '../../utils/link.js';
 
 export interface LinkProps {
   href?: string;
@@ -43,18 +44,42 @@ const hasValidHref = computed(() => {
 
 const isAnchor = computed(() => !props.to && hasValidHref.value);
 
-const isExternal = computed(() => {
-  if (props.target === '_blank') return true;
-  if (props.href && (props.href.startsWith('http://') || props.href.startsWith('https://'))) {
-    return true;
-  }
-  return false;
+const computedRel = computed(() => computeLinkRel(props.href, props.target, props.rel));
+
+const rootComponent = computed(() => {
+  if (isRouterLink.value && props.to) return RouterLink;
+  if (isAnchor.value && props.href) return 'a';
+  return 'button';
 });
 
-const computedRel = computed(() => {
-  if (props.rel) return props.rel;
-  if (isExternal.value) return 'noopener noreferrer';
-  return undefined;
+const rootProps = computed(() => {
+  if (isRouterLink.value && props.to) {
+    return {
+      to: props.to,
+      target: props.target,
+      rel: computedRel.value,
+    };
+  }
+  if (isAnchor.value && props.href) {
+    return {
+      href: props.href,
+      target: props.target,
+      rel: computedRel.value,
+    };
+  }
+  return {
+    type: 'button',
+    disabled: true,
+    'aria-disabled': 'true',
+    tabindex: -1,
+  };
+});
+
+const rootClasses = computed(() => {
+  if (props.disabled || (!isRouterLink.value && !isAnchor.value)) {
+    return 'group pointer-events-none inline-flex cursor-not-allowed items-center rounded-xs no-underline opacity-50 select-none focus-visible:outline-none';
+  }
+  return 'group focus-visible:ring-brand-indigo inline-flex cursor-pointer items-center rounded-xs no-underline select-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none';
 });
 
 const sizeClasses = computed(() => {
@@ -92,13 +117,10 @@ const stateClasses = computed(() => {
 </script>
 
 <template>
-  <RouterLink
-    v-if="isRouterLink && to"
-    :to="to"
-    :target="target"
-    :rel="computedRel"
-    class="group focus-visible:ring-brand-indigo inline-flex cursor-pointer items-center rounded-xs no-underline select-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
-    :class="[sizeClasses, colorClasses, stateClasses]"
+  <component
+    :is="rootComponent"
+    v-bind="rootProps"
+    :class="[rootClasses, sizeClasses, colorClasses, stateClasses]"
   >
     <!-- Left Icon (Slot or Prop) -->
     <span
@@ -137,100 +159,5 @@ const stateClasses = computed(() => {
         <span v-else-if="withArrow" class="leading-none font-bold select-none">→</span>
       </slot>
     </span>
-  </RouterLink>
-
-  <a
-    v-else-if="isAnchor && href"
-    :href="href"
-    :target="target"
-    :rel="computedRel"
-    class="group focus-visible:ring-brand-indigo inline-flex cursor-pointer items-center rounded-xs no-underline select-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
-    :class="[sizeClasses, colorClasses, stateClasses]"
-  >
-    <!-- Left Icon (Slot or Prop) -->
-    <span
-      v-if="$slots.leftIcon || leftIcon"
-      class="inline-flex shrink-0 items-center justify-center no-underline"
-      data-test="left-icon"
-    >
-      <slot name="leftIcon">
-        <component
-          :is="leftIcon"
-          v-if="typeof leftIcon === 'object' || typeof leftIcon === 'function'"
-          class="h-4 w-4 shrink-0"
-        />
-        <span v-else>{{ leftIcon }}</span>
-      </slot>
-    </span>
-
-    <!-- Text Label -->
-    <span class="inline-block" data-test="link-label">
-      <slot>{{ label }}</slot>
-    </span>
-
-    <!-- Right Icon / Arrow -->
-    <span
-      v-if="$slots.rightIcon || rightIcon || withArrow"
-      class="inline-flex shrink-0 items-center justify-center no-underline transition-transform duration-150 group-hover:translate-x-0.5"
-      data-test="right-icon"
-    >
-      <slot name="rightIcon">
-        <component
-          :is="rightIcon"
-          v-if="typeof rightIcon === 'object' || typeof rightIcon === 'function'"
-          class="h-4 w-4 shrink-0"
-        />
-        <span v-else-if="rightIcon">{{ rightIcon }}</span>
-        <span v-else-if="withArrow" class="leading-none font-bold select-none">→</span>
-      </slot>
-    </span>
-  </a>
-
-  <button
-    v-else
-    type="button"
-    disabled
-    aria-disabled="true"
-    tabindex="-1"
-    class="group pointer-events-none inline-flex cursor-not-allowed items-center rounded-xs no-underline opacity-50 select-none focus-visible:outline-none"
-    :class="[sizeClasses, colorClasses, stateClasses]"
-  >
-    <!-- Left Icon (Slot or Prop) -->
-    <span
-      v-if="$slots.leftIcon || leftIcon"
-      class="inline-flex shrink-0 items-center justify-center no-underline"
-      data-test="left-icon"
-    >
-      <slot name="leftIcon">
-        <component
-          :is="leftIcon"
-          v-if="typeof leftIcon === 'object' || typeof leftIcon === 'function'"
-          class="h-4 w-4 shrink-0"
-        />
-        <span v-else>{{ leftIcon }}</span>
-      </slot>
-    </span>
-
-    <!-- Text Label -->
-    <span class="inline-block" data-test="link-label">
-      <slot>{{ label }}</slot>
-    </span>
-
-    <!-- Right Icon / Arrow -->
-    <span
-      v-if="$slots.rightIcon || rightIcon || withArrow"
-      class="inline-flex shrink-0 items-center justify-center no-underline"
-      data-test="right-icon"
-    >
-      <slot name="rightIcon">
-        <component
-          :is="rightIcon"
-          v-if="typeof rightIcon === 'object' || typeof rightIcon === 'function'"
-          class="h-4 w-4 shrink-0"
-        />
-        <span v-else-if="rightIcon">{{ rightIcon }}</span>
-        <span v-else-if="withArrow" class="leading-none font-bold select-none">→</span>
-      </slot>
-    </span>
-  </button>
+  </component>
 </template>

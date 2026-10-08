@@ -166,4 +166,16 @@ describe('BaseLink.vue', () => {
     expect(wrapper.text()).toContain('Custom Slot Content');
     expect(wrapper.text()).not.toContain('→');
   });
+
+  it('assigns noopener noreferrer on external and protocol-relative links', () => {
+    const ext = mount(BaseLink, {
+      props: { href: 'https://example.com', label: 'External' },
+    });
+    expect(ext.attributes('rel')).toBe('noopener noreferrer');
+
+    const proto = mount(BaseLink, {
+      props: { href: '//cdn.example.com', label: 'Proto' },
+    });
+    expect(proto.attributes('rel')).toBe('noopener noreferrer');
+  });
 });
