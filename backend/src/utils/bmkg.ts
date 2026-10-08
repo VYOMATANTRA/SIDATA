@@ -26,9 +26,23 @@ const bmkgResponseSchema = z.object({
 export type BmkgForecastEntry = z.infer<typeof forecastEntrySchema>;
 export type BmkgResponse = z.infer<typeof bmkgResponseSchema>;
 
-export async function fetchBmkgForecast(adm4: string): Promise<BmkgResponse> {
-  const url = `${BMKG_BASE_URL}?adm4=${encodeURIComponent(adm4)}`;
-  const response = await fetch(url, { signal: AbortSignal.timeout(WEATHER_FETCH_TIMEOUT_MS) });
+export interface BmkgFetchOptions {
+  baseUrl?: string;
+  timeoutMs?: number;
+}
+
+export async function fetchBmkgForecast(
+  adm4: string,
+  options?: BmkgFetchOptions,
+): Promise<BmkgResponse> {
+  const baseUrl = options?.baseUrl?.trim() || BMKG_BASE_URL;
+  const timeoutMs =
+    typeof options?.timeoutMs === 'number' && options.timeoutMs > 0
+      ? options.timeoutMs
+      : WEATHER_FETCH_TIMEOUT_MS;
+
+  const url = `${baseUrl}?adm4=${encodeURIComponent(adm4)}`;
+  const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
 
   if (!response.ok) {
     throw new Error(`BMKG API merespons dengan status ${response.status}`);
@@ -38,8 +52,8 @@ export async function fetchBmkgForecast(adm4: string): Promise<BmkgResponse> {
   return bmkgResponseSchema.parse(json);
 }
 
-export async function validateBmkgAdm4(adm4: string): Promise<void> {
-  const response = await fetchBmkgForecast(adm4);
+export async function validateBmkgAdm4(adm4: string, options?: BmkgFetchOptions): Promise<void> {
+  const response = await fetchBmkgForecast(adm4, options);
   if (!response.data || response.data.length === 0) {
     throw new Error('Kode adm4 BMKG tidak memiliki data prakiraan cuaca');
   }
