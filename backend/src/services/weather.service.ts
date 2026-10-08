@@ -1,6 +1,7 @@
 import { fetchBmkgForecast, type BmkgForecastEntry } from '../utils/bmkg.js';
 import { WEATHER_ADM4, WEATHER_CACHE_TTL_MS, WEATHER_STALE_RETRY_MS } from '../configs/index.js';
 import { KeyedLruCache } from '../utils/keyedCache.js';
+import { getFastWeatherConfigSettings } from './settings.service.js';
 
 export interface WeatherForecastEntry {
   datetime: string;
@@ -37,8 +38,11 @@ function mapEntry(entry: BmkgForecastEntry): WeatherForecastEntry {
   };
 }
 
-async function fetchFresh(adm4: string = WEATHER_ADM4): Promise<WeatherForecastResult> {
-  const bmkgResponse = await fetchBmkgForecast(adm4);
+async function fetchFresh(
+  adm4: string = WEATHER_ADM4,
+  options?: { baseUrl?: string; timeoutMs?: number },
+): Promise<WeatherForecastResult> {
+  const bmkgResponse = await fetchBmkgForecast(adm4, options);
   const firstLocation = bmkgResponse.data[0];
 
   if (!firstLocation) {
@@ -58,9 +62,24 @@ async function fetchFresh(adm4: string = WEATHER_ADM4): Promise<WeatherForecastR
 }
 
 async function refresh(adm4: string = WEATHER_ADM4): Promise<WeatherForecastResult> {
+  let cacheTtlMs = WEATHER_CACHE_TTL_MS;
+  let staleRetryMs = WEATHER_STALE_RETRY_MS;
+  let baseUrl: string | undefined;
+  let timeoutMs: number | undefined;
+
   try {
-    const result = await fetchFresh(adm4);
-    weatherCacheMap.set(adm4, { result, expiresAt: Date.now() + WEATHER_CACHE_TTL_MS });
+    const config = await getFastWeatherConfigSettings({ timeoutMs: 150 });
+    cacheTtlMs = config.cacheTtlMs;
+    staleRetryMs = config.staleRetryMs;
+    baseUrl = config.bmkgBaseUrl;
+    timeoutMs = config.fetchTimeoutMs;
+  } catch {
+    // Fall back safely to module defaults
+  }
+
+  try {
+    const result = await fetchFresh(adm4, { baseUrl, timeoutMs });
+    weatherCacheMap.set(adm4, { result, expiresAt: Date.now() + cacheTtlMs });
     return result;
   } catch (error) {
     const existing = weatherCacheMap.get(adm4);
@@ -68,7 +87,7 @@ async function refresh(adm4: string = WEATHER_ADM4): Promise<WeatherForecastResu
       const staleResult = { ...existing.result, stale: true };
       weatherCacheMap.set(adm4, {
         result: staleResult,
-        expiresAt: Date.now() + WEATHER_STALE_RETRY_MS,
+        expiresAt: Date.now() + staleRetryMs,
       });
       return staleResult;
     }

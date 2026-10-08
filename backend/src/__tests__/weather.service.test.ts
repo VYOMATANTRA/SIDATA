@@ -8,6 +8,10 @@ import {
   getWeatherCacheKeysForTests,
   MAX_WEATHER_CACHE_ENTRIES,
 } from '../services/weather.service.js';
+import {
+  weatherConfigCache,
+  DEFAULT_WEATHER_CONFIG_SETTINGS,
+} from '../services/settings.service.js';
 
 const sampleBmkgResponse = {
   lokasi: { desa: 'Manggar', lat: -1.2251283, lon: 116.9438184 },
@@ -40,6 +44,8 @@ function mockFetchOnce() {
 describe('getManggarForecast', () => {
   beforeEach(() => {
     resetWeatherCache();
+    weatherConfigCache.invalidate();
+    weatherConfigCache.set(DEFAULT_WEATHER_CONFIG_SETTINGS, weatherConfigCache.getVersion());
     mock.restoreAll();
   });
 
@@ -296,5 +302,32 @@ describe('getManggarForecast', () => {
       'Frequently/recently accessed entry 1001 must remain cached',
     );
     assert.ok(keys.includes('64.71.01.1006'), 'New entry 1006 must be present');
+  });
+
+  it('respects dynamic operational weather settings from getWeatherConfigSettings', async () => {
+    let calledUrl: string | undefined;
+
+    mock.method(globalThis, 'fetch', async (url: string) => {
+      calledUrl = url;
+      return new Response(JSON.stringify(sampleBmkgResponse), { status: 200 });
+    });
+
+    weatherConfigCache.set(
+      {
+        bmkgBaseUrl: 'https://custom-bmkg.test/api/cuaca',
+        cacheTtlMs: 120_000,
+        staleRetryMs: 30_000,
+        fetchTimeoutMs: 7_500,
+        adm4: '64.71.01.1001',
+      },
+      weatherConfigCache.getVersion(),
+    );
+
+    const result = await getManggarForecast('64.71.01.1001');
+    assert.equal(result.location.desa, 'Manggar');
+    assert.ok(
+      calledUrl?.startsWith('https://custom-bmkg.test/api/cuaca?adm4='),
+      `Expected custom base URL, got: ${calledUrl}`,
+    );
   });
 });
