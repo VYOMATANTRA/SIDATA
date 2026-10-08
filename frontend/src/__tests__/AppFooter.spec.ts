@@ -103,10 +103,11 @@ describe('AppFooter.vue', () => {
     expect(wrapper.text()).toContain('Publikasi');
     expect(wrapper.text()).toContain('Peta');
     expect(wrapper.text()).toContain('Permintaan Data');
+    expect(wrapper.text()).toContain('Ketua RT');
 
     expect(wrapper.text()).toContain('Cerita');
     expect(wrapper.text()).toContain('Demografi Kependudukan');
-    expect(wrapper.text()).toContain('Persampahan');
+    expect(wrapper.text()).toContain('Persampahan & Bank Sampah Unit');
 
     expect(wrapper.text()).toContain('Tentang');
     expect(wrapper.text()).toContain('Program Desa/Kelurahan Cantik');

@@ -8,9 +8,7 @@ function createMockRouter() {
     history: createMemoryHistory(),
     routes: [
       { path: '/', component: { template: '<div>Home</div>' } },
-      { path: '/mockup/button', component: { template: '<div>Buttons</div>' } },
-      { path: '/mockup/link', component: { template: '<div>Links</div>' } },
-      { path: '/mockup/navbar', component: { template: '<div>Navbar</div>' } },
+      { path: '/:pathMatch(.*)*', component: { template: '<div>Page</div>' } },
     ],
   });
 }
@@ -119,24 +117,32 @@ describe('AppNavbar.vue', () => {
       global: {
         plugins: [router],
       },
+      attachTo: document.body,
     });
 
     const hamburger = wrapper.find('[data-test="hamburger-btn"]');
     expect(hamburger.attributes('aria-expanded')).toBe('false');
-    expect(wrapper.find('[data-test="nav-menu-drawer"]').exists()).toBe(false);
+    expect(hamburger.attributes('aria-label')).toBe('Buka menu navigasi');
+    expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(false);
+
+    // Verify drawer is placed inside <nav> landmark
+    expect(wrapper.find('nav').find('[data-test="nav-menu-drawer"]').exists()).toBe(true);
 
     // Open menu
     await hamburger.trigger('click');
     expect(hamburger.attributes('aria-expanded')).toBe('true');
-    expect(wrapper.find('[data-test="nav-menu-drawer"]').exists()).toBe(true);
+    expect(hamburger.attributes('aria-label')).toBe('Tutup menu navigasi');
+    expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(true);
     expect(wrapper.emitted('toggleMenu')).toBeTruthy();
     expect(wrapper.emitted('toggleMenu')![0]).toEqual([true]);
 
     // Close menu
     await hamburger.trigger('click');
     expect(hamburger.attributes('aria-expanded')).toBe('false');
-    expect(wrapper.find('[data-test="nav-menu-drawer"]').exists()).toBe(false);
+    expect(hamburger.attributes('aria-label')).toBe('Buka menu navigasi');
+    expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(false);
     expect(wrapper.emitted('toggleMenu')![1]).toEqual([false]);
+    wrapper.unmount();
   });
 
   it('closes mobile menu when Escape key is pressed', async () => {
@@ -153,13 +159,13 @@ describe('AppNavbar.vue', () => {
 
     // Open menu
     await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
-    expect(wrapper.find('[data-test="nav-menu-drawer"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(true);
 
     // Press Escape
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     await wrapper.vm.$nextTick();
 
-    expect(wrapper.find('[data-test="nav-menu-drawer"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(false);
     wrapper.unmount();
   });
 });

@@ -55,10 +55,11 @@ async function handleLogout() {
 
       <div class="pt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
         <router-link
-          to="/mockup/button"
+          v-if="authStore.user?.role?.toLowerCase() === 'admin'"
+          to="/users"
           class="px-5 py-2.5 bg-brand-navy hover:bg-brand-navy-deep text-white font-medium text-sm rounded-btn transition-all shadow-md cursor-pointer flex items-center gap-2"
         >
-          <span>❖ Lihat Mockup Button</span>
+          <span>Kelola Pengguna</span>
         </router-link>
 
         <button

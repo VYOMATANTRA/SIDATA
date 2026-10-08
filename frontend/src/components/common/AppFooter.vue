@@ -30,6 +30,7 @@ const resourceLinks = [
   { label: 'Publikasi', to: '/publikasi' },
   { label: 'Peta', to: '/peta' },
   { label: 'Permintaan Data', to: '/permintaan-data' },
+  { label: 'Ketua RT', to: '/ketua-rt' },
 ];
 
 // Story & Statistics Links (Cerita)
@@ -41,7 +42,7 @@ const storyLinks = [
   { label: 'Ekonomi & Ketertiban', to: '/cerita/ekonomi' },
   { label: 'Geografis & Tata Ruang', to: '/cerita/geografis' },
   { label: 'Infrastruktur & Perumahan', to: '/cerita/infrastruktur' },
-  { label: 'Persampahan', to: '/cerita/persampahan' },
+  { label: 'Persampahan & Bank Sampah Unit', to: '/cerita/persampahan' },
 ];
 
 // About Links (Tentang)
