@@ -181,7 +181,7 @@ model ContentBlock {
   sectionId   String?          @map("section_id")
   type        ContentBlockType @map("block_type")
   slug        String           @unique
-  title       String?
+  title       String?          @db.VarChar(255)
   body        String           @db.Text
   metadata    Json?
   sortOrder   Int?             @map("sort_order")

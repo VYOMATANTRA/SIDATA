@@ -25,7 +25,13 @@ const authorTitle = computed(() => {
 const photoUrl = computed(() => {
   const metaPhoto = sambutan.value.metadata?.photoUrl;
   if (typeof metaPhoto === 'string' && metaPhoto.trim()) {
-    return metaPhoto.trim();
+    const trimmed = metaPhoto.trim();
+    if (
+      (trimmed.startsWith('/') && !trimmed.startsWith('//')) ||
+      /^https:\/\/[^/]+/i.test(trimmed)
+    ) {
+      return trimmed;
+    }
   }
   return null;
 });

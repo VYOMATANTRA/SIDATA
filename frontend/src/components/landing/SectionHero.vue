@@ -27,7 +27,14 @@ const ctaText = computed(() => {
 const ctaLink = computed(() => {
   const metaLink = hero.value.metadata?.ctaLink;
   if (typeof metaLink === 'string' && metaLink.trim()) {
-    return metaLink.trim();
+    const trimmed = metaLink.trim();
+    if (
+      trimmed.startsWith('#') ||
+      (trimmed.startsWith('/') && !trimmed.startsWith('//')) ||
+      /^https:\/\/[^/]+/i.test(trimmed)
+    ) {
+      return trimmed;
+    }
   }
   return '#potensi';
 });

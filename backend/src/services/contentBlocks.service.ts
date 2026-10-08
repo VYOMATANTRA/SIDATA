@@ -113,6 +113,120 @@ function hasPrototypePollution(val: unknown, depth = 0): boolean {
   return false;
 }
 
+function hasControlCharacters(str: string): boolean {
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    if ((code >= 0 && code <= 31) || code === 127) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function isSafeCtaLink(val: string): boolean {
+  if (typeof val !== 'string') return false;
+  const trimmed = val.trim();
+  if (!trimmed || trimmed.length > 500) return false;
+  if (hasControlCharacters(trimmed)) return false;
+  if (trimmed.startsWith('//')) return false;
+  if (trimmed.startsWith('#') || trimmed.startsWith('/')) return true;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+export function isSafePhotoUrl(val: string): boolean {
+  if (typeof val !== 'string') return false;
+  const trimmed = val.trim();
+  if (!trimmed) return true;
+  if (trimmed.length > 500) return false;
+  if (hasControlCharacters(trimmed)) return false;
+  if (trimmed.startsWith('//')) return false;
+  if (trimmed.startsWith('/')) return true;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+export const heroMetadataSchema = z
+  .object({
+    badge: z.string().trim().max(100, 'Badge maksimal 100 karakter').optional(),
+    ctaText: z.string().trim().max(50, 'Teks CTA maksimal 50 karakter').optional(),
+    ctaLink: z
+      .string()
+      .trim()
+      .max(500, 'Link CTA maksimal 500 karakter')
+      .refine(
+        isSafeCtaLink,
+        'Link CTA harus berupa path relatif (dimulai dengan / atau #) atau URL HTTPS yang valid',
+      )
+      .optional(),
+  })
+  .passthrough();
+
+export const sambutanLurahMetadataSchema = z
+  .object({
+    authorName: z.string().trim().max(150, 'Nama author maksimal 150 karakter').optional(),
+    authorTitle: z.string().trim().max(150, 'Jabatan author maksimal 150 karakter').optional(),
+    photoUrl: z
+      .string()
+      .trim()
+      .max(500, 'URL foto maksimal 500 karakter')
+      .refine(
+        isSafePhotoUrl,
+        'URL foto harus berupa path relatif (dimulai dengan /) atau URL HTTPS yang valid',
+      )
+      .or(z.literal(''))
+      .nullable()
+      .optional(),
+  })
+  .passthrough();
+
+export const highlightMetadataSchema = z
+  .object({
+    items: z
+      .array(
+        z
+          .object({
+            title: z.string().trim().max(100, 'Judul highlight maksimal 100 karakter'),
+            desc: z.string().trim().max(500, 'Deskripsi highlight maksimal 500 karakter'),
+          })
+          .passthrough(),
+      )
+      .max(10, 'Maksimal 10 item highlight')
+      .optional(),
+  })
+  .passthrough();
+
+export function validateBlockMetadata(slug: string, metadata: unknown): void {
+  if (metadata === undefined || metadata === null) return;
+  if (typeof metadata !== 'object' || Array.isArray(metadata)) {
+    throw new ContentBlockServiceError('Metadata harus berupa objek JSON', 400);
+  }
+
+  let result: z.SafeParseReturnType<unknown, unknown>;
+  if (slug === 'landing-hero') {
+    result = heroMetadataSchema.safeParse(metadata);
+  } else if (slug === 'landing-sambutan-lurah') {
+    result = sambutanLurahMetadataSchema.safeParse(metadata);
+  } else if (slug === 'landing-highlights') {
+    result = highlightMetadataSchema.safeParse(metadata);
+  } else {
+    return;
+  }
+
+  if (!result.success) {
+    const errorMsg = result.error.issues.map((i) => i.message).join(', ');
+    throw new ContentBlockServiceError(`Validasi metadata gagal: ${errorMsg}`, 400);
+  }
+}
+
 export const updateContentBlockSchema = z
   .object({
     title: z.string().trim().max(255, 'Judul maksimal 255 karakter').nullable().optional(),
@@ -335,6 +449,10 @@ export const updateContentBlock = async (
   }
 
   const input = parsed.data;
+
+  if (input.metadata !== undefined && input.metadata !== null) {
+    validateBlockMetadata(normalizedSlug, input.metadata);
+  }
 
   // Sanitize title: whitespace only or empty string becomes null
   const sanitizedTitle =

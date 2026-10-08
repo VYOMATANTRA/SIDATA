@@ -1515,4 +1515,234 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
       invalidateContentBlocksCache();
     }
   });
+
+  it('accepts title up to 255 characters and rejects title exceeding 255 characters', async () => {
+    invalidateContentBlocksCache();
+    const originalTransaction = prisma.$transaction;
+
+    const existingBlock = {
+      id: 'block-title-boundary',
+      sectionId: null,
+      type: 'hero',
+      slug: 'landing-hero',
+      title: 'Short Title',
+      body: 'Valid Body',
+      metadata: null,
+      sortOrder: null,
+      updatedById: null,
+      createdAt: new Date('2026-09-01'),
+      updatedAt: new Date('2026-09-01'),
+    };
+
+    let savedTitle: string | null | undefined;
+
+    prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+      const mockTx = {
+        $queryRaw: async () => [],
+        contentBlock: {
+          findUnique: async () => existingBlock,
+          update: async (args: { data: { title?: string } }) => {
+            savedTitle = args.data.title;
+            return { ...existingBlock, title: savedTitle };
+          },
+        },
+        auditLog: {
+          create: async () => ({ id: 'audit-1' }),
+        },
+      };
+      return fn(mockTx as unknown as typeof prisma);
+    }) as unknown as typeof prisma.$transaction;
+
+    try {
+      // 1. Exactly 255 characters: must be accepted (200)
+      const title255 = 'A'.repeat(255);
+      const res1 = fakeRes();
+      await updateContentBlockHandler(
+        makeReq({ params: { slug: 'landing-hero' }, body: { title: title255 } }),
+        res1 as unknown as Response,
+      );
+      assert.equal(res1.status, 200);
+      assert.equal(savedTitle, title255);
+
+      // 2. 256 characters: must be rejected with 400
+      const title256 = 'A'.repeat(256);
+      const res2 = fakeRes();
+      await updateContentBlockHandler(
+        makeReq({ params: { slug: 'landing-hero' }, body: { title: title256 } }),
+        res2 as unknown as Response,
+      );
+      assert.equal(res2.status, 400);
+      assert.match(String((res2.body as { error: string }).error), /maksimal 255 karakter/i);
+    } finally {
+      prisma.$transaction = originalTransaction;
+      invalidateContentBlocksCache();
+    }
+  });
+
+  it('rejects stored XSS payloads and dangerous schemes in ctaLink for landing-hero', async () => {
+    invalidateContentBlocksCache();
+    const dangerousLinks = [
+      'javascript:alert(document.cookie)',
+      'JAVASCRIPT:alert(1)',
+      'javascript:void(0)',
+      'data:text/html,<script>alert(1)</script>',
+      'vbscript:msgbox(1)',
+      '//attacker.com/evil',
+      'http://insecure.com/page',
+      'https://valid.com\r\njavascript:alert(1)',
+      'https://valid.com\t/path',
+    ];
+
+    for (const dangerous of dangerousLinks) {
+      const res = fakeRes();
+      await updateContentBlockHandler(
+        makeReq({
+          params: { slug: 'landing-hero' },
+          body: { metadata: { ctaLink: dangerous } },
+        }),
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400, `Expected 400 for dangerous ctaLink: ${dangerous}`);
+      assert.match(String((res.body as { error: string }).error), /Validasi metadata gagal/i);
+    }
+
+    // Safe links must pass validation
+    const originalTransaction = prisma.$transaction;
+    prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+      const mockTx = {
+        $queryRaw: async () => [],
+        contentBlock: {
+          findUnique: async () => ({
+            id: 'block-hero',
+            sectionId: null,
+            type: 'hero',
+            slug: 'landing-hero',
+            title: 'Hero Title',
+            body: 'Hero Body',
+            metadata: null,
+            sortOrder: null,
+            updatedById: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }),
+          update: async (args: { data: Record<string, unknown> }) => ({
+            id: 'block-hero',
+            sectionId: null,
+            type: 'hero',
+            slug: 'landing-hero',
+            title: 'Hero Title',
+            body: 'Hero Body',
+            metadata: null,
+            sortOrder: null,
+            updatedById: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            ...args.data,
+          }),
+        },
+        auditLog: { create: async () => ({ id: 'audit-1' }) },
+      };
+      return fn(mockTx as unknown as typeof prisma);
+    }) as unknown as typeof prisma.$transaction;
+
+    try {
+      for (const safe of ['#potensi', '/layanan', 'https://kelurahan-manggar.balikpapan.go.id']) {
+        const res = fakeRes();
+        await updateContentBlockHandler(
+          makeReq({
+            params: { slug: 'landing-hero' },
+            body: { metadata: { ctaLink: safe } },
+          }),
+          res as unknown as Response,
+        );
+        assert.equal(res.status, 200, `Expected 200 for safe ctaLink: ${safe}`);
+      }
+    } finally {
+      prisma.$transaction = originalTransaction;
+      invalidateContentBlocksCache();
+    }
+  });
+
+  it('rejects dangerous URLs in photoUrl for landing-sambutan-lurah and accepts safe ones', async () => {
+    invalidateContentBlocksCache();
+    const dangerousPhotos = [
+      'javascript:alert(1)',
+      'data:image/svg+xml;utf8,<svg onload=alert(1)>',
+      'http://insecure.com/photo.jpg',
+      '//evil.com/photo.jpg',
+    ];
+
+    for (const dangerous of dangerousPhotos) {
+      const res = fakeRes();
+      await updateContentBlockHandler(
+        makeReq({
+          params: { slug: 'landing-sambutan-lurah' },
+          body: { metadata: { photoUrl: dangerous } },
+        }),
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400, `Expected 400 for dangerous photoUrl: ${dangerous}`);
+      assert.match(String((res.body as { error: string }).error), /Validasi metadata gagal/i);
+    }
+
+    const originalTransaction = prisma.$transaction;
+    prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+      const mockTx = {
+        $queryRaw: async () => [],
+        contentBlock: {
+          findUnique: async () => ({
+            id: 'block-sambutan',
+            sectionId: null,
+            type: 'sambutan_lurah',
+            slug: 'landing-sambutan-lurah',
+            title: 'Sambutan Lurah',
+            body: 'Sambutan Body',
+            metadata: null,
+            sortOrder: null,
+            updatedById: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }),
+          update: async (args: { data: Record<string, unknown> }) => ({
+            id: 'block-sambutan',
+            sectionId: null,
+            type: 'sambutan_lurah',
+            slug: 'landing-sambutan-lurah',
+            title: 'Sambutan Lurah',
+            body: 'Sambutan Body',
+            metadata: null,
+            sortOrder: null,
+            updatedById: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            ...args.data,
+          }),
+        },
+        auditLog: { create: async () => ({ id: 'audit-1' }) },
+      };
+      return fn(mockTx as unknown as typeof prisma);
+    }) as unknown as typeof prisma.$transaction;
+
+    try {
+      for (const safe of [
+        '/images/lurah.jpg',
+        'https://cdn.balikpapan.go.id/lurah.jpg',
+        '',
+        null,
+      ]) {
+        const res = fakeRes();
+        await updateContentBlockHandler(
+          makeReq({
+            params: { slug: 'landing-sambutan-lurah' },
+            body: { metadata: { photoUrl: safe } },
+          }),
+          res as unknown as Response,
+        );
+        assert.equal(res.status, 200, `Expected 200 for safe photoUrl: ${safe}`);
+      }
+    } finally {
+      prisma.$transaction = originalTransaction;
+      invalidateContentBlocksCache();
+    }
+  });
 });

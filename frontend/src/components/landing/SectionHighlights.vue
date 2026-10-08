@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useContentBlocksStore } from '../../stores/contentBlocks.store';
+import {
+  DEFAULT_HIGHLIGHTS_BLOCK,
+  useContentBlocksStore,
+} from '../../stores/contentBlocks.store';
 
 interface HighlightItem {
   title: string;
@@ -27,20 +30,7 @@ const items = computed<HighlightItem[]>(() => {
       return valid;
     }
   }
-  return [
-    {
-      title: 'Bank Sampah Mandiri',
-      desc: 'Jaringan unit pengolahan dan pemilahan sampah warga terdistribusi di kawasan RT.',
-    },
-    {
-      title: 'Sektor Pesisir & Kelautan',
-      desc: 'Sentra ekonomi nelayan tangkap, budidaya pesisir, dan destinasi wisata bahari.',
-    },
-    {
-      title: 'Partisipasi Warga 100 RT',
-      desc: 'Keterpaduan koordinasi 100 Ketua RT dalam penyampaian data dan pelayanan warga.',
-    },
-  ];
+  return (DEFAULT_HIGHLIGHTS_BLOCK.metadata?.items as HighlightItem[]) || [];
 });
 </script>
 
@@ -57,10 +47,10 @@ const items = computed<HighlightItem[]>(() => {
           id="highlights-title"
           class="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl"
         >
-          {{ highlights.title || 'Potensi Unggulan Wilayah' }}
+          {{ highlights.title || DEFAULT_HIGHLIGHTS_BLOCK.title }}
         </h2>
         <p class="text-base leading-relaxed text-slate-600 sm:text-lg">
-          {{ highlights.body }}
+          {{ highlights.body || DEFAULT_HIGHLIGHTS_BLOCK.body }}
         </p>
       </div>
 
