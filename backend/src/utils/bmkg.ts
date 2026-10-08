@@ -42,7 +42,10 @@ export async function fetchBmkgForecast(
       : WEATHER_FETCH_TIMEOUT_MS;
 
   const url = `${baseUrl}?adm4=${encodeURIComponent(adm4)}`;
-  const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+  const response = await fetch(url, {
+    signal: AbortSignal.timeout(timeoutMs),
+    redirect: 'error',
+  });
 
   if (!response.ok) {
     throw new Error(`BMKG API merespons dengan status ${response.status}`);

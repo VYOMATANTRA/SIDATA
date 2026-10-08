@@ -1701,14 +1701,14 @@ describe('settings.controller updatePublicSettingsHandler', () => {
       );
     }) as unknown as typeof fetch;
 
-    // Warm weather cache with default adm4 ('64.71.01.1001')
-    await getManggarForecast('64.71.01.1001');
-    assert.ok(getWeatherCacheKeysForTests().includes('64.71.01.1001'));
-
     const stored = new Map<string, string>([['public.weather_adm4', '64.71.01.1001']]);
     prisma.systemSetting.findMany = (async () => {
       return Array.from(stored.entries()).map(([key, value]) => ({ key, value }));
     }) as unknown as typeof prisma.systemSetting.findMany;
+    const originalCreateMany = prisma.systemSetting.createMany;
+    prisma.systemSetting.createMany = (async () => ({
+      count: 0,
+    })) as unknown as typeof prisma.systemSetting.createMany;
     prisma.systemSetting.upsert = (async (args: { create: { key: string; value: string } }) => {
       stored.set(args.create.key, args.create.value);
       return { ...args.create, updatedAt: new Date() };
@@ -1721,6 +1721,10 @@ describe('settings.controller updatePublicSettingsHandler', () => {
       throw new Error('expected interactive transaction');
     }) as unknown as typeof prisma.$transaction;
     prisma.$queryRaw = (async () => []) as unknown as typeof prisma.$queryRaw;
+
+    // Warm weather cache with default adm4 ('64.71.01.1001')
+    await getManggarForecast('64.71.01.1001');
+    assert.ok(getWeatherCacheKeysForTests().includes('64.71.01.1001'));
 
     try {
       // 1. Update unrelated setting (appName): weather cache for 64.71.01.1001 MUST NOT be evicted
@@ -1758,6 +1762,7 @@ describe('settings.controller updatePublicSettingsHandler', () => {
     } finally {
       prisma.systemSetting.findMany = originalFindMany;
       prisma.systemSetting.upsert = originalUpsert;
+      prisma.systemSetting.createMany = originalCreateMany;
       prisma.$transaction = originalTransaction;
       prisma.$queryRaw = originalQueryRaw;
       prisma.auditLog.create = originalAuditCreate;
@@ -2149,7 +2154,6 @@ describe('settings.controller getWeatherConfigHandler', () => {
       { key: WEATHER_CONFIG_KEYS.cacheTtlMs, value: '1800000' },
       { key: WEATHER_CONFIG_KEYS.staleRetryMs, value: '60000' },
       { key: WEATHER_CONFIG_KEYS.fetchTimeoutMs, value: '5000' },
-      { key: WEATHER_CONFIG_KEYS.adm4, value: '64.71.02.1002' },
     ]) as unknown as typeof prisma.systemSetting.findMany;
 
     try {
@@ -2163,7 +2167,6 @@ describe('settings.controller getWeatherConfigHandler', () => {
           cacheTtlMs: 1800000,
           staleRetryMs: 60000,
           fetchTimeoutMs: 5000,
-          adm4: '64.71.02.1002',
         },
       });
     } finally {
@@ -2201,6 +2204,16 @@ describe('settings.controller updateWeatherConfigHandler', () => {
     assert.match(String((res.body as { error: string }).error), /tidak valid|tidak dikenali/i);
   });
 
+  it('rejects adm4 on weather-config because it is exclusively authored via public settings', async () => {
+    const res = fakeRes();
+    await updateWeatherConfigHandler(
+      makeReq({ body: { adm4: '64.71.01.1001' } }),
+      res as unknown as Response,
+    );
+    assert.equal(res.status, 400);
+    assert.match(String((res.body as { error: string }).error), /tidak dikenali: "adm4"/i);
+  });
+
   it('returns 400 when bmkgBaseUrl has invalid URL format or non-http/https protocol', async () => {
     for (const url of ['ftp://api.bmkg.go.id', 'not-a-url', 'javascript:alert(1)']) {
       const res = fakeRes();
@@ -2212,15 +2225,17 @@ describe('settings.controller updateWeatherConfigHandler', () => {
     }
   });
 
-  it('returns 400 when bmkgBaseUrl contains user credentials or targets private/loopback host (SSRF guard)', async () => {
+  it('returns 400 when bmkgBaseUrl targets unapproved hosts, bracketed IPv6, private IPs, or carries credentials', async () => {
     const dangerousUrls = [
       'https://user:pass@api.bmkg.go.id/cuaca',
-      'http://localhost:3000/api',
-      'http://127.0.0.1:8080',
+      'http://[::1]:8080/api',
+      'http://[::ffff:127.0.0.1]/test',
       'http://169.254.169.254/latest/meta-data',
       'http://10.0.0.1/status',
       'http://192.168.1.1/admin',
       'http://172.20.0.5/internal',
+      'https://evil.nip.io/api',
+      'https://attacker.com/cuaca',
     ];
 
     for (const url of dangerousUrls) {
@@ -2232,7 +2247,7 @@ describe('settings.controller updateWeatherConfigHandler', () => {
       assert.equal(res.status, 400, `Expected 400 for dangerous URL: ${url}`);
       assert.match(
         String((res.body as { error: string }).error),
-        /tidak boleh mengarah ke alamat privat/i,
+        /host yang diizinkan|protokol HTTPS/i,
       );
     }
   });
@@ -2268,23 +2283,52 @@ describe('settings.controller updateWeatherConfigHandler', () => {
     );
   });
 
-  it('returns 400 when adm4 format is invalid', async () => {
-    const res = fakeRes();
-    await updateWeatherConfigHandler(
-      makeReq({ body: { adm4: '64.71.invalid' } }),
-      res as unknown as Response,
-    );
-    assert.equal(res.status, 400);
-    assert.match(String((res.body as { error: string }).error), /Format kode adm4/i);
+  it('re-evaluates cross-field invariant under lock and rolls back when partial update violates constraint', async () => {
+    invalidateWeatherConfigCache();
+    const originalFindMany = prisma.systemSetting.findMany;
+    const originalTransaction = prisma.$transaction;
+    const originalQueryRaw = prisma.$queryRaw;
+
+    // Persisted state has cacheTtlMs: 120000, staleRetryMs: 60000
+    prisma.systemSetting.findMany = (async () => [
+      { key: WEATHER_CONFIG_KEYS.cacheTtlMs, value: '120000' },
+      { key: WEATHER_CONFIG_KEYS.staleRetryMs, value: '60000' },
+    ]) as unknown as typeof prisma.systemSetting.findMany;
+
+    prisma.$transaction = (async (arg: unknown) => {
+      if (typeof arg === 'function') return (arg as (tx: typeof prisma) => unknown)(prisma);
+      throw new Error('expected interactive transaction');
+    }) as unknown as typeof prisma.$transaction;
+    prisma.$queryRaw = (async () => []) as unknown as typeof prisma.$queryRaw;
+
+    try {
+      // Partial update tries to set staleRetryMs to 180000 (> 120000)
+      const res = fakeRes();
+      await updateWeatherConfigHandler(
+        makeReq({ body: { staleRetryMs: 180_000 } }),
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.match(
+        String((res.body as { error: string }).error),
+        /Cache TTL tidak boleh lebih kecil/i,
+      );
+    } finally {
+      prisma.systemSetting.findMany = originalFindMany;
+      prisma.$transaction = originalTransaction;
+      prisma.$queryRaw = originalQueryRaw;
+      invalidateWeatherConfigCache();
+    }
   });
 
-  it('validates adm4 / endpoint pre-lock and returns 400 when BMKG rejects verification', async () => {
+  it('validates bmkgBaseUrl pre-lock and returns 400 when BMKG rejects verification', async () => {
     invalidateWeatherConfigCache();
     const originalFindMany = prisma.systemSetting.findMany;
     const originalFetch = globalThis.fetch;
 
     prisma.systemSetting.findMany = (async () => [
-      { key: WEATHER_CONFIG_KEYS.adm4, value: '64.71.01.1001' },
+      { key: 'public.weather_adm4', value: '64.71.01.1001' },
+      { key: WEATHER_CONFIG_KEYS.bmkgBaseUrl, value: 'https://api.bmkg.go.id/cuaca' },
     ]) as unknown as typeof prisma.systemSetting.findMany;
 
     globalThis.fetch = (async () => {
@@ -2294,14 +2338,11 @@ describe('settings.controller updateWeatherConfigHandler', () => {
     try {
       const res = fakeRes();
       await updateWeatherConfigHandler(
-        makeReq({ body: { adm4: '64.71.99.9999' } }),
+        makeReq({ body: { bmkgBaseUrl: 'https://api.bmkg.go.id/v2/cuaca' } }),
         res as unknown as Response,
       );
       assert.equal(res.status, 400);
-      assert.match(
-        String((res.body as { error: string }).error),
-        /Kode adm4 atau endpoint BMKG tidak valid/i,
-      );
+      assert.match(String((res.body as { error: string }).error), /Endpoint BMKG tidak valid/i);
     } finally {
       prisma.systemSetting.findMany = originalFindMany;
       globalThis.fetch = originalFetch;
@@ -2324,7 +2365,7 @@ describe('settings.controller updateWeatherConfigHandler', () => {
       [WEATHER_CONFIG_KEYS.cacheTtlMs, String(DEFAULT_WEATHER_CONFIG_SETTINGS.cacheTtlMs)],
       [WEATHER_CONFIG_KEYS.staleRetryMs, String(DEFAULT_WEATHER_CONFIG_SETTINGS.staleRetryMs)],
       [WEATHER_CONFIG_KEYS.fetchTimeoutMs, String(DEFAULT_WEATHER_CONFIG_SETTINGS.fetchTimeoutMs)],
-      [WEATHER_CONFIG_KEYS.adm4, DEFAULT_WEATHER_CONFIG_SETTINGS.adm4],
+      ['public.weather_adm4', '64.71.01.1001'],
     ]);
 
     prisma.systemSetting.findMany = (async () => {
@@ -2365,7 +2406,6 @@ describe('settings.controller updateWeatherConfigHandler', () => {
         cacheTtlMs: 1_800_000,
         staleRetryMs: 120_000,
         fetchTimeoutMs: 15_000,
-        adm4: '64.71.02.2002',
       };
 
       await updateWeatherConfigHandler(makeReq({ body: updates }), res as unknown as Response);
@@ -2376,7 +2416,6 @@ describe('settings.controller updateWeatherConfigHandler', () => {
       assert.equal(resBody.settings.cacheTtlMs, 1_800_000);
       assert.equal(resBody.settings.staleRetryMs, 120_000);
       assert.equal(resBody.settings.fetchTimeoutMs, 15_000);
-      assert.equal(resBody.settings.adm4, '64.71.02.2002');
 
       // Verify audit log
       assert.ok(auditCreated);
@@ -2387,7 +2426,6 @@ describe('settings.controller updateWeatherConfigHandler', () => {
       const inMemory = weatherConfigCache.get(prisma);
       assert.ok(inMemory);
       assert.equal(inMemory.bmkgBaseUrl, 'https://api.bmkg.go.id/v2/cuaca');
-      assert.equal(inMemory.adm4, '64.71.02.2002');
     } finally {
       prisma.systemSetting.findMany = originalFindMany;
       prisma.systemSetting.upsert = originalUpsert;
@@ -2413,7 +2451,6 @@ describe('settings.controller updateWeatherConfigHandler', () => {
       [WEATHER_CONFIG_KEYS.cacheTtlMs, '3600000'],
       [WEATHER_CONFIG_KEYS.staleRetryMs, '300000'],
       [WEATHER_CONFIG_KEYS.fetchTimeoutMs, '10000'],
-      [WEATHER_CONFIG_KEYS.adm4, '64.71.01.1001'],
     ]);
 
     prisma.systemSetting.findMany = (async () => {

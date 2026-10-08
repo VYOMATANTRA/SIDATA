@@ -237,51 +237,72 @@ export async function executeLockedTransaction<T, Tx = unknown>(
   options: ExecuteLockedTransactionOptions<T, Tx>,
 ): Promise<T> {
   const runner = (options.client ?? prisma) as TransactionRunner<Tx>;
+  const maxRetries = 2;
 
-  const txOutput = (await runner.$transaction(async (tx: Tx) => {
-    // 1. Acquire lock if specified
-    if (options.lockQuery) {
-      if (typeof options.lockQuery === 'function') {
-        await options.lockQuery(tx);
-      } else {
-        await (tx as { $queryRaw: (query: Prisma.Sql) => Promise<unknown> }).$queryRaw(
-          options.lockQuery,
-        );
-      }
-    }
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const txOutput = (await runner.$transaction(async (tx: Tx) => {
+        // 1. Acquire lock if specified
+        if (options.lockQuery) {
+          if (typeof options.lockQuery === 'function') {
+            await options.lockQuery(tx);
+          } else {
+            await (tx as { $queryRaw: (query: Prisma.Sql) => Promise<unknown> }).$queryRaw(
+              options.lockQuery,
+            );
+          }
+        }
 
-    // 2. Execute mutation logic
-    const opOutput = await options.execute(tx);
+        // 2. Execute mutation logic
+        const opOutput = await options.execute(tx);
 
-    let result: T;
-    let didChange = true;
+        let result: T;
+        let didChange = true;
 
-    if (isOperationResultWithChange<T>(opOutput)) {
-      result = opOutput.result;
-      didChange = opOutput.didChange;
-    } else {
-      result = opOutput as T;
-    }
+        if (isOperationResultWithChange<T>(opOutput)) {
+          result = opOutput.result;
+          didChange = opOutput.didChange;
+        } else {
+          result = opOutput as T;
+        }
 
-    return { result, didChange };
-  })) as OperationResultWithChange<T>;
+        return { result, didChange };
+      })) as OperationResultWithChange<T>;
 
-  // 3. Post-commit cache invalidation & callbacks
-  if (txOutput.didChange) {
-    if (Array.isArray(options.cache)) {
-      for (const c of options.cache) {
-        if (c && typeof c.invalidate === 'function') {
-          c.invalidate();
+      // 3. Post-commit cache invalidation & callbacks
+      if (txOutput.didChange) {
+        if (Array.isArray(options.cache)) {
+          for (const c of options.cache) {
+            if (c && typeof c.invalidate === 'function') {
+              c.invalidate();
+            }
+          }
+        } else if (options.cache && typeof options.cache.invalidate === 'function') {
+          options.cache.invalidate();
         }
       }
-    } else if (options.cache && typeof options.cache.invalidate === 'function') {
-      options.cache.invalidate();
+
+      if (options.onCommit) {
+        await options.onCommit(txOutput.result, txOutput.didChange);
+      }
+
+      return txOutput.result;
+    } catch (error) {
+      const isDeadlock =
+        error &&
+        typeof error === 'object' &&
+        (('code' in error && error.code === 'P2034') ||
+          ('message' in error &&
+            typeof error.message === 'string' &&
+            /deadlock|1213/i.test(error.message)));
+
+      if (isDeadlock && attempt < maxRetries) {
+        const delayMs = 50 * (attempt + 1) + Math.floor(Math.random() * 50);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        continue;
+      }
+      throw error;
     }
   }
-
-  if (options.onCommit) {
-    await options.onCommit(txOutput.result, txOutput.didChange);
-  }
-
-  return txOutput.result;
+  throw new Error('executeLockedTransaction: perulangan percobaan transaksi terlampaui');
 }

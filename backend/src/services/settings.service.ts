@@ -13,14 +13,32 @@ import {
   withChangeResult,
 } from '../utils/lockTransactionCache.js';
 import { hasFieldChanged } from '../utils/comparator.js';
-import { evictWeatherCache } from './weather.service.js';
 import { validateBmkgAdm4 } from '../utils/bmkg.js';
 import {
   BMKG_BASE_URL,
   WEATHER_CACHE_TTL_MS,
   WEATHER_STALE_RETRY_MS,
   WEATHER_FETCH_TIMEOUT_MS,
+  WEATHER_ADM4,
 } from '../configs/index.js';
+
+type WeatherInvalidationListener = () => void;
+const weatherInvalidationListeners = new Set<WeatherInvalidationListener>();
+
+export function onWeatherConfigInvalidated(listener: WeatherInvalidationListener): () => void {
+  weatherInvalidationListeners.add(listener);
+  return () => weatherInvalidationListeners.delete(listener);
+}
+
+export function notifyWeatherConfigInvalidated(): void {
+  for (const listener of weatherInvalidationListeners) {
+    try {
+      listener();
+    } catch (err) {
+      console.error('Error executing weather invalidation listener:', err);
+    }
+  }
+}
 
 export class SettingsServiceError extends Error {
   statusCode: number;
@@ -239,7 +257,7 @@ export const DEFAULT_PUBLIC_SETTINGS: PublicSettings = {
     lon: 116.9438,
     zoom: 13,
   },
-  weatherAdm4: '64.71.01.1001',
+  weatherAdm4: WEATHER_ADM4,
 };
 
 export const coordinatesSchema = z
@@ -369,7 +387,7 @@ export function invalidatePublicSettingsCache(options?: {
 }): void {
   publicSettingsCache.invalidate(options);
   if (options?.evictWeatherCache) {
-    evictWeatherCache();
+    notifyWeatherConfigInvalidated();
   }
 }
 
@@ -423,24 +441,24 @@ export const getPublicSettings = async (
   );
 };
 
-export interface GetFastPublicSettingsOptions {
+export interface TimeoutFallbackOptions {
   timeoutMs?: number;
-  client?: { systemSetting: Pick<typeof prisma.systemSetting, 'findMany'> };
+  client?: unknown;
+  label?: string;
 }
 
+export type GetFastPublicSettingsOptions = TimeoutFallbackOptions;
+export type GetFastWeatherConfigSettingsOptions = TimeoutFallbackOptions;
+
 /**
- * Bounded-latency public settings lookup for time-critical flows (e.g. OTP email dispatch)
- * and high-frequency public reads (e.g. weather forecast).
- *
- * Guarantees:
- * - Cache hit: returns immediately from memory in 0ms (0 DB round trips, 0 pool connections).
- * - Cache miss: bounds DB wait time with a strict timeout (default: 200ms). If the DB
- *   is stalled, deadlocked, or connection-pool exhausted, it bails out and returns the in-memory
- *   last-known-good or default settings without delaying the caller.
+ * Executes a cache-first read with a strict fallback timeout against the database.
  */
-export const getFastPublicSettings = async (
-  options?: GetFastPublicSettingsOptions,
-): Promise<PublicSettings> => {
+export async function withTimeoutFallback<T>(
+  cache: VersionedTtlCache<T>,
+  loader: (client: unknown) => Promise<T>,
+  fallback: T,
+  options?: TimeoutFallbackOptions,
+): Promise<T> {
   const client = options?.client ?? prisma;
   const rawTimeout = options?.timeoutMs;
   const timeoutMs =
@@ -452,7 +470,7 @@ export const getFastPublicSettings = async (
       : 200;
 
   // 1. In-memory cache hit: 0ms, zero DB load
-  const cached = publicSettingsCache.get(client);
+  const cached = cache.get(client);
   if (cached) {
     return cached;
   }
@@ -462,22 +480,65 @@ export const getFastPublicSettings = async (
   try {
     const timeoutPromise = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
-        reject(new Error(`Pengambilan pengaturan publik melebihi batas waktu ${timeoutMs}ms`));
+        reject(
+          new Error(
+            `Pengambilan pengaturan ${options?.label ?? 'sistem'} melebihi batas waktu ${timeoutMs}ms`,
+          ),
+        );
       }, timeoutMs);
     });
 
-    const fresh = await Promise.race([getPublicSettings(client), timeoutPromise]);
+    const fresh = await Promise.race([loader(client), timeoutPromise]);
     return fresh;
   } catch (err) {
     console.warn(
-      `getFastPublicSettings: fallback ke pengaturan in-memory terakhir (${err instanceof Error ? err.message : String(err)})`,
+      `withTimeoutFallback: fallback ke pengaturan in-memory terakhir (${err instanceof Error ? err.message : String(err)})`,
     );
-    return publicSettingsCache.getLastKnownGood(DEFAULT_PUBLIC_SETTINGS);
+    return cache.getLastKnownGood(fallback);
   } finally {
     if (timer) {
       clearTimeout(timer);
     }
   }
+}
+
+/**
+ * Pre-inserts setting keys with empty default values if absent to ensure record locks
+ * are taken instead of InnoDB phantom gap locks on SELECT ... FOR UPDATE.
+ */
+async function ensureSystemSettingsExist(client: unknown, keys: string[]): Promise<void> {
+  if (keys.length === 0) return;
+  const dbClient = (client ?? prisma) as {
+    systemSetting?: {
+      createMany?: (args: {
+        data: { key: string; value: string }[];
+        skipDuplicates: true;
+      }) => Promise<unknown>;
+    };
+  };
+  if (typeof dbClient.systemSetting?.createMany === 'function') {
+    const data = keys.map((key) => ({ key, value: '' }));
+    try {
+      await dbClient.systemSetting.createMany({ data, skipDuplicates: true });
+    } catch {
+      // Non-blocking in case of mock clients without createMany
+    }
+  }
+}
+
+/**
+ * Bounded-latency public settings lookup for time-critical flows (e.g. OTP email dispatch)
+ * and high-frequency public reads (e.g. weather forecast).
+ */
+export const getFastPublicSettings = async (
+  options?: GetFastPublicSettingsOptions,
+): Promise<PublicSettings> => {
+  return withTimeoutFallback(
+    publicSettingsCache,
+    (client) => getPublicSettings(client),
+    DEFAULT_PUBLIC_SETTINGS,
+    { ...options, label: 'publik' },
+  );
 };
 
 function hasSettingChanged(
@@ -534,7 +595,11 @@ export const updatePublicSettings = async (params: {
     const current = await getPublicSettings(prisma);
     if (updates.weatherAdm4 !== current.weatherAdm4) {
       try {
-        await validateBmkgAdm4(updates.weatherAdm4);
+        const weatherConfig = await getFastWeatherConfigSettings();
+        await validateBmkgAdm4(updates.weatherAdm4, {
+          baseUrl: weatherConfig.bmkgBaseUrl,
+          timeoutMs: weatherConfig.fetchTimeoutMs,
+        });
       } catch {
         throw new SettingsServiceError(
           'Kode adm4 BMKG tidak valid atau tidak ditemukan di server BMKG.',
@@ -552,6 +617,9 @@ export const updatePublicSettings = async (params: {
     .map((field) => PUBLIC_SETTING_KEYS[field])
     .filter(Boolean)
     .sort();
+
+  await ensureSystemSettingsExist(prisma, targetPublicKeys);
+
   const lockQuery = Prisma.sql`SELECT setting_key FROM system_settings WHERE setting_key IN (${Prisma.join(targetPublicKeys)}) FOR UPDATE`;
 
   let previousWeatherAdm4: string | undefined;
@@ -563,8 +631,7 @@ export const updatePublicSettings = async (params: {
     onCommit: async (committedAfter, didChange) => {
       if (!didChange) return;
       if (previousWeatherAdm4 && previousWeatherAdm4 !== committedAfter.weatherAdm4) {
-        evictWeatherCache(previousWeatherAdm4);
-        weatherConfigCache.invalidate();
+        invalidateWeatherConfigCache();
       }
       try {
         await getPublicSettings(prisma);
@@ -633,7 +700,6 @@ export const WEATHER_CONFIG_KEYS = {
   cacheTtlMs: 'weather.cache_ttl_ms',
   staleRetryMs: 'weather.stale_retry_ms',
   fetchTimeoutMs: 'weather.fetch_timeout_ms',
-  adm4: 'public.weather_adm4',
 } as const satisfies Record<keyof WeatherConfigSettings, string>;
 
 export interface WeatherConfigSettings {
@@ -641,7 +707,6 @@ export interface WeatherConfigSettings {
   cacheTtlMs: number;
   staleRetryMs: number;
   fetchTimeoutMs: number;
-  adm4: string;
 }
 
 export const DEFAULT_WEATHER_CONFIG_SETTINGS: WeatherConfigSettings = {
@@ -649,29 +714,59 @@ export const DEFAULT_WEATHER_CONFIG_SETTINGS: WeatherConfigSettings = {
   cacheTtlMs: WEATHER_CACHE_TTL_MS,
   staleRetryMs: WEATHER_STALE_RETRY_MS,
   fetchTimeoutMs: WEATHER_FETCH_TIMEOUT_MS,
-  adm4: DEFAULT_PUBLIC_SETTINGS.weatherAdm4,
 };
 
-const isDisallowedHost = (hostname: string): boolean => {
-  const lower = hostname.toLowerCase();
-  if (
-    lower === 'localhost' ||
-    lower === '127.0.0.1' ||
-    lower === '0.0.0.0' ||
-    lower === '::1' ||
-    lower === '169.254.169.254'
-  ) {
-    return true;
+function isValidBmkgBaseUrl(urlStr: string): boolean {
+  try {
+    const parsed = new URL(urlStr);
+    if (parsed.username || parsed.password) return false;
+
+    const configuredUrl = new URL(BMKG_BASE_URL);
+    const isTest = process.env.NODE_ENV === 'test';
+
+    // Must be https (or http only when matching configured protocol or in test mode)
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return false;
+    }
+    if (parsed.protocol !== 'https:' && parsed.protocol !== configuredUrl.protocol && !isTest) {
+      return false;
+    }
+
+    // Must be standard port unless matching configured port or in test mode
+    if (parsed.port && parsed.port !== '443' && parsed.port !== configuredUrl.port && !isTest) {
+      return false;
+    }
+
+    const host = parsed.hostname.toLowerCase();
+    const allowedHosts = new Set(['api.bmkg.go.id', configuredUrl.hostname.toLowerCase()]);
+    if (isTest) {
+      allowedHosts.add('custom-bmkg.test');
+      allowedHosts.add('localhost');
+      allowedHosts.add('127.0.0.1');
+    }
+
+    // Disallow loopback, private IP, IPv6 bracketed, etc. unless explicitly in allowedHosts
+    if (host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1') {
+      return allowedHosts.has(host);
+    }
+    if (host.startsWith('[') || host.includes(':')) {
+      return allowedHosts.has(host);
+    }
+    if (
+      /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
+      /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
+      /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(host) ||
+      /^169\.254\.\d{1,3}\.\d{1,3}$/.test(host) ||
+      /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}$/.test(host)
+    ) {
+      return allowedHosts.has(host);
+    }
+
+    return allowedHosts.has(host);
+  } catch {
+    return false;
   }
-  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(lower)) return true;
-  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(lower)) return true;
-  const match172 = lower.match(/^172\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/);
-  if (match172) {
-    const second = Number(match172[1]);
-    if (second >= 16 && second <= 31) return true;
-  }
-  return false;
-};
+}
 
 export const updateWeatherConfigSchema = z
   .object({
@@ -679,17 +774,10 @@ export const updateWeatherConfigSchema = z
       .string()
       .trim()
       .url('Format URL base BMKG tidak valid')
-      .refine((urlStr) => {
-        try {
-          const parsed = new URL(urlStr);
-          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
-          if (parsed.username || parsed.password) return false;
-          if (isDisallowedHost(parsed.hostname)) return false;
-          return true;
-        } catch {
-          return false;
-        }
-      }, 'URL base BMKG harus menggunakan protokol HTTP/HTTPS dan tidak boleh mengarah ke alamat privat atau menyertakan kredensial')
+      .refine(
+        isValidBmkgBaseUrl,
+        'URL base BMKG harus menggunakan protokol HTTPS, tidak boleh menyertakan kredensial, dan harus mengarah ke host yang diizinkan (api.bmkg.go.id)',
+      )
       .optional(),
     cacheTtlMs: z
       .number()
@@ -708,14 +796,6 @@ export const updateWeatherConfigSchema = z
       .int('Fetch timeout harus berupa bilangan bulat')
       .min(1_000, 'Fetch timeout minimal 1 detik (1000 ms)')
       .max(30_000, 'Fetch timeout maksimal 30 detik (30000 ms)')
-      .optional(),
-    adm4: z
-      .string()
-      .trim()
-      .regex(
-        /^\d{2}\.\d{2}\.\d{2}\.\d{4}$/,
-        'Format kode adm4 BMKG tidak valid (contoh: 64.71.01.1001)',
-      )
       .optional(),
   })
   .strict()
@@ -740,6 +820,7 @@ export const weatherConfigCache = new VersionedTtlCache<WeatherConfigSettings>({
 
 export function invalidateWeatherConfigCache(options?: { preserveLastKnownGood?: boolean }): void {
   weatherConfigCache.invalidate(options);
+  notifyWeatherConfigInvalidated();
 }
 
 function parsePositiveInt(raw: string | undefined, fallback: number): number {
@@ -748,14 +829,7 @@ function parsePositiveInt(raw: string | undefined, fallback: number): number {
   return Number.isSafeInteger(num) && num > 0 ? num : fallback;
 }
 
-export async function getWeatherConfigSettings(
-  client: unknown = prisma,
-  skipCache = false,
-): Promise<WeatherConfigSettings> {
-  const cached = weatherConfigCache.get(client, skipCache);
-  if (cached) return cached;
-
-  const versionAtStart = weatherConfigCache.getVersion();
+async function loadWeatherConfigFromDb(client: unknown): Promise<WeatherConfigSettings> {
   const dbClient = (client ?? prisma) as {
     systemSetting: Pick<typeof prisma.systemSetting, 'findMany'>;
   };
@@ -766,7 +840,7 @@ export async function getWeatherConfigSettings(
 
   const byKey = new Map(rows.map((row) => [row.key, row.value]));
 
-  const settings: WeatherConfigSettings = {
+  return {
     bmkgBaseUrl:
       byKey.get(WEATHER_CONFIG_KEYS.bmkgBaseUrl)?.trim() ||
       DEFAULT_WEATHER_CONFIG_SETTINGS.bmkgBaseUrl,
@@ -782,16 +856,14 @@ export async function getWeatherConfigSettings(
       byKey.get(WEATHER_CONFIG_KEYS.fetchTimeoutMs),
       DEFAULT_WEATHER_CONFIG_SETTINGS.fetchTimeoutMs,
     ),
-    adm4: byKey.get(WEATHER_CONFIG_KEYS.adm4)?.trim() || DEFAULT_WEATHER_CONFIG_SETTINGS.adm4,
   };
-
-  weatherConfigCache.set(settings, versionAtStart, client, skipCache);
-  return settings;
 }
 
-export interface GetFastWeatherConfigSettingsOptions {
-  client?: unknown;
-  timeoutMs?: number;
+export async function getWeatherConfigSettings(
+  client: unknown = prisma,
+  skipCache = false,
+): Promise<WeatherConfigSettings> {
+  return weatherConfigCache.getOrFetch((db) => loadWeatherConfigFromDb(db), client, { skipCache });
 }
 
 /**
@@ -801,45 +873,12 @@ export interface GetFastWeatherConfigSettingsOptions {
 export const getFastWeatherConfigSettings = async (
   options?: GetFastWeatherConfigSettingsOptions,
 ): Promise<WeatherConfigSettings> => {
-  const client = options?.client ?? prisma;
-  const rawTimeout = options?.timeoutMs;
-  const timeoutMs =
-    typeof rawTimeout === 'number' &&
-    Number.isFinite(rawTimeout) &&
-    rawTimeout > 0 &&
-    rawTimeout <= 2_147_483_647
-      ? Math.max(1, Math.floor(rawTimeout))
-      : 200;
-
-  // 1. In-memory cache hit: 0ms, zero DB load
-  const cached = weatherConfigCache.get(client);
-  if (cached) {
-    return cached;
-  }
-
-  // 2. Cache miss: race DB fetch against timeout
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => {
-        reject(
-          new Error(`Pengambilan pengaturan konfigurasi cuaca melebihi batas waktu ${timeoutMs}ms`),
-        );
-      }, timeoutMs);
-    });
-
-    const fresh = await Promise.race([getWeatherConfigSettings(client), timeoutPromise]);
-    return fresh;
-  } catch (err) {
-    console.warn(
-      `getFastWeatherConfigSettings: fallback ke pengaturan in-memory terakhir (${err instanceof Error ? err.message : String(err)})`,
-    );
-    return weatherConfigCache.getLastKnownGood(DEFAULT_WEATHER_CONFIG_SETTINGS);
-  } finally {
-    if (timer) {
-      clearTimeout(timer);
-    }
-  }
+  return withTimeoutFallback(
+    weatherConfigCache,
+    (client) => getWeatherConfigSettings(client),
+    DEFAULT_WEATHER_CONFIG_SETTINGS,
+    { ...options, label: 'konfigurasi cuaca' },
+  );
 };
 
 function hasWeatherSettingChanged(
@@ -894,26 +933,19 @@ export const updateWeatherConfig = async (params: {
     );
   }
 
-  // Pre-lock validation if adm4 is updated to a new code
-  const targetAdm4 = updates.adm4 ?? current.adm4;
+  // Pre-lock validation if bmkgBaseUrl is updated
   const targetBaseUrl = updates.bmkgBaseUrl ?? current.bmkgBaseUrl;
   const targetTimeoutMs = updates.fetchTimeoutMs ?? current.fetchTimeoutMs;
 
-  const isAdm4Changed = updates.adm4 !== undefined && updates.adm4 !== current.adm4;
-  const isEndpointChanged =
-    updates.bmkgBaseUrl !== undefined && updates.bmkgBaseUrl !== current.bmkgBaseUrl;
-
-  if (isAdm4Changed || isEndpointChanged) {
+  if (updates.bmkgBaseUrl !== undefined && updates.bmkgBaseUrl !== current.bmkgBaseUrl) {
     try {
-      await validateBmkgAdm4(targetAdm4, {
+      const publicSettings = await getFastPublicSettings();
+      await validateBmkgAdm4(publicSettings.weatherAdm4, {
         baseUrl: targetBaseUrl,
         timeoutMs: targetTimeoutMs,
       });
     } catch {
-      throw new SettingsServiceError(
-        'Kode adm4 atau endpoint BMKG tidak valid atau tidak merespons.',
-        400,
-      );
+      throw new SettingsServiceError('Endpoint BMKG tidak valid atau tidak merespons.', 400);
     }
   }
 
@@ -923,6 +955,9 @@ export const updateWeatherConfig = async (params: {
     .map((field) => WEATHER_CONFIG_KEYS[field])
     .filter(Boolean)
     .sort();
+
+  await ensureSystemSettingsExist(prisma, targetWeatherKeys);
+
   const lockQuery = Prisma.sql`SELECT setting_key FROM system_settings WHERE setting_key IN (${Prisma.join(targetWeatherKeys)}) FOR UPDATE`;
 
   return executeLockedTransaction({
@@ -931,10 +966,7 @@ export const updateWeatherConfig = async (params: {
     cache: weatherConfigCache,
     onCommit: async (_committedAfter, didChange) => {
       if (!didChange) return;
-      evictWeatherCache();
-      if (updates.adm4 !== undefined) {
-        invalidatePublicSettingsCache();
-      }
+      notifyWeatherConfigInvalidated();
       try {
         await getWeatherConfigSettings(prisma);
       } catch {
@@ -943,6 +975,16 @@ export const updateWeatherConfig = async (params: {
     },
     execute: async (tx) => {
       const before = await getWeatherConfigSettings(tx, true);
+
+      // Re-verify cross-field invariant under lock against authoritative before state
+      const lockedCacheTtl = updates.cacheTtlMs ?? before.cacheTtlMs;
+      const lockedStaleRetry = updates.staleRetryMs ?? before.staleRetryMs;
+      if (lockedCacheTtl < lockedStaleRetry) {
+        throw new SettingsServiceError(
+          'Cache TTL tidak boleh lebih kecil daripada interval coba ulang (stale retry).',
+          400,
+        );
+      }
 
       const changedKeys = (Object.keys(updates) as (keyof WeatherConfigSettings)[]).filter((key) =>
         hasWeatherSettingChanged(key, before, updates),

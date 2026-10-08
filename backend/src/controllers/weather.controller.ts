@@ -5,15 +5,11 @@ import { WEATHER_ADM4 } from '../configs/index.js';
 
 export const getForecast = async (req: Request, res: Response): Promise<Response> => {
   try {
-    let adm4 = WEATHER_ADM4;
-    try {
-      const settings = await getFastPublicSettings({ timeoutMs: 150 });
-      if (typeof settings.weatherAdm4 === 'string' && settings.weatherAdm4.trim()) {
-        adm4 = settings.weatherAdm4.trim();
-      }
-    } catch {
-      // Non-blocking: fallback to default WEATHER_ADM4
-    }
+    const settings = await getFastPublicSettings({ timeoutMs: 150 });
+    const adm4 =
+      typeof settings.weatherAdm4 === 'string' && settings.weatherAdm4.trim()
+        ? settings.weatherAdm4.trim()
+        : WEATHER_ADM4;
 
     const result = await getManggarForecast(adm4);
     return res.status(200).json(result);

@@ -1,7 +1,7 @@
 import { fetchBmkgForecast, type BmkgForecastEntry } from '../utils/bmkg.js';
 import { WEATHER_ADM4, WEATHER_CACHE_TTL_MS, WEATHER_STALE_RETRY_MS } from '../configs/index.js';
 import { KeyedLruCache } from '../utils/keyedCache.js';
-import { getFastWeatherConfigSettings } from './settings.service.js';
+import { getFastWeatherConfigSettings, onWeatherConfigInvalidated } from './settings.service.js';
 
 export interface WeatherForecastEntry {
   datetime: string;
@@ -21,11 +21,23 @@ export interface WeatherForecastResult {
 
 export const MAX_WEATHER_CACHE_ENTRIES = 5;
 
+let globalGeneration = 0;
+const cacheGenerationMap = new Map<string, number>();
+
+function getGeneration(key: string): number {
+  return (cacheGenerationMap.get(key) ?? 0) + globalGeneration;
+}
+
 const weatherCacheMap = new KeyedLruCache<
   string,
   { result: WeatherForecastResult; expiresAt: number }
 >(MAX_WEATHER_CACHE_ENTRIES);
 const inFlightMap = new Map<string, Promise<WeatherForecastResult>>();
+
+// Subscribe to settings changes to evict cache automatically without circular imports
+onWeatherConfigInvalidated(() => {
+  evictWeatherCache();
+});
 
 function mapEntry(entry: BmkgForecastEntry): WeatherForecastEntry {
   return {
@@ -61,7 +73,10 @@ async function fetchFresh(
   };
 }
 
-async function refresh(adm4: string = WEATHER_ADM4): Promise<WeatherForecastResult> {
+async function refresh(
+  adm4: string = WEATHER_ADM4,
+  startGen: number = getGeneration(adm4),
+): Promise<WeatherForecastResult> {
   let cacheTtlMs = WEATHER_CACHE_TTL_MS;
   let staleRetryMs = WEATHER_STALE_RETRY_MS;
   let baseUrl: string | undefined;
@@ -79,11 +94,13 @@ async function refresh(adm4: string = WEATHER_ADM4): Promise<WeatherForecastResu
 
   try {
     const result = await fetchFresh(adm4, { baseUrl, timeoutMs });
-    weatherCacheMap.set(adm4, { result, expiresAt: Date.now() + cacheTtlMs });
+    if (getGeneration(adm4) === startGen) {
+      weatherCacheMap.set(adm4, { result, expiresAt: Date.now() + cacheTtlMs });
+    }
     return result;
   } catch (error) {
     const existing = weatherCacheMap.get(adm4);
-    if (existing) {
+    if (existing && getGeneration(adm4) === startGen) {
       const staleResult = { ...existing.result, stale: true };
       weatherCacheMap.set(adm4, {
         result: staleResult,
@@ -107,10 +124,14 @@ export async function getManggarForecast(
   // Concurrent callers for the same adm4 share a single in-flight refresh.
   let pending = inFlightMap.get(normalizedAdm4);
   if (!pending) {
-    pending = refresh(normalizedAdm4).finally(() => {
-      inFlightMap.delete(normalizedAdm4);
+    const currentGen = getGeneration(normalizedAdm4);
+    const inFlightPromise = refresh(normalizedAdm4, currentGen).finally(() => {
+      if (inFlightMap.get(normalizedAdm4) === inFlightPromise) {
+        inFlightMap.delete(normalizedAdm4);
+      }
     });
-    inFlightMap.set(normalizedAdm4, pending);
+    inFlightMap.set(normalizedAdm4, inFlightPromise);
+    pending = inFlightPromise;
   }
 
   return pending;
@@ -123,9 +144,12 @@ export async function getManggarForecast(
 export function evictWeatherCache(adm4?: string): void {
   const trimmed = typeof adm4 === 'string' ? adm4.trim() : '';
   if (trimmed) {
+    cacheGenerationMap.set(trimmed, (cacheGenerationMap.get(trimmed) ?? 0) + 1);
     weatherCacheMap.delete(trimmed);
     inFlightMap.delete(trimmed);
   } else {
+    globalGeneration++;
+    cacheGenerationMap.clear();
     weatherCacheMap.clear();
     inFlightMap.clear();
   }

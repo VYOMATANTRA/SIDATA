@@ -318,7 +318,6 @@ describe('getManggarForecast', () => {
         cacheTtlMs: 120_000,
         staleRetryMs: 30_000,
         fetchTimeoutMs: 7_500,
-        adm4: '64.71.01.1001',
       },
       weatherConfigCache.getVersion(),
     );
@@ -329,5 +328,41 @@ describe('getManggarForecast', () => {
       calledUrl?.startsWith('https://custom-bmkg.test/api/cuaca?adm4='),
       `Expected custom base URL, got: ${calledUrl}`,
     );
+  });
+
+  it('prevents in-flight refresh race condition from repopulating evicted cache or removing newer in-flight promise', async () => {
+    let resolveFirstFetch!: (val: Response) => void;
+    const firstFetchPromise = new Promise<Response>((resolve) => {
+      resolveFirstFetch = resolve;
+    });
+
+    let fetchCount = 0;
+    mock.method(globalThis, 'fetch', async () => {
+      fetchCount++;
+      if (fetchCount === 1) {
+        return firstFetchPromise;
+      }
+      return new Response(JSON.stringify(sampleBmkgResponse), { status: 200 });
+    });
+
+    // 1. Start initial refresh (slow in-flight)
+    const initialPromise = getManggarForecast('64.71.01.1001');
+
+    // 2. Mid-flight eviction occurs
+    evictWeatherCache('64.71.01.1001');
+    assert.equal(getWeatherCacheKeysForTests().includes('64.71.01.1001'), false);
+
+    // 3. Second request arrives while first is still pending
+    const secondPromise = getManggarForecast('64.71.01.1001');
+    assert.notEqual(initialPromise, secondPromise, 'Must create a new promise after eviction');
+
+    // 4. First fetch resolves after eviction
+    resolveFirstFetch(new Response(JSON.stringify(sampleBmkgResponse), { status: 200 }));
+    await initialPromise;
+
+    // Second fetch completes
+    const secondResult = await secondPromise;
+    assert.equal(secondResult.location.desa, 'Manggar');
+    assert.ok(fetchCount >= 2, 'Second fetch must be initiated after eviction');
   });
 });
