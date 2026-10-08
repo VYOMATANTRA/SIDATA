@@ -210,14 +210,16 @@ export function validateBlockMetadata(slug: string, metadata: unknown): void {
     throw new ContentBlockServiceError('Metadata harus berupa objek JSON', 400);
   }
 
-  let result: z.SafeParseReturnType<unknown, unknown>;
-  if (slug === 'landing-hero') {
-    result = heroMetadataSchema.safeParse(metadata);
-  } else if (slug === 'landing-sambutan-lurah') {
-    result = sambutanLurahMetadataSchema.safeParse(metadata);
-  } else if (slug === 'landing-highlights') {
-    result = highlightMetadataSchema.safeParse(metadata);
-  } else {
+  const result =
+    slug === 'landing-hero'
+      ? heroMetadataSchema.safeParse(metadata)
+      : slug === 'landing-sambutan-lurah'
+        ? sambutanLurahMetadataSchema.safeParse(metadata)
+        : slug === 'landing-highlights'
+          ? highlightMetadataSchema.safeParse(metadata)
+          : null;
+
+  if (!result) {
     return;
   }
 

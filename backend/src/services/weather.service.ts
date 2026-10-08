@@ -1,4 +1,4 @@
-import { fetchBmkgForecast, type BmkgForecastEntry } from '../utils/bmkg.js';
+import { fetchBmkgForecast, type BmkgForecastEntry, type BmkgFetchOptions } from '../utils/bmkg.js';
 import { WEATHER_ADM4, WEATHER_CACHE_TTL_MS, WEATHER_STALE_RETRY_MS } from '../configs/index.js';
 import { KeyedLruCache } from '../utils/keyedCache.js';
 import { getFastWeatherConfigSettings, onWeatherConfigInvalidated } from './settings.service.js';
@@ -52,7 +52,7 @@ function mapEntry(entry: BmkgForecastEntry): WeatherForecastEntry {
 
 async function fetchFresh(
   adm4: string = WEATHER_ADM4,
-  options?: { baseUrl?: string; timeoutMs?: number },
+  options?: BmkgFetchOptions,
 ): Promise<WeatherForecastResult> {
   const bmkgResponse = await fetchBmkgForecast(adm4, options);
   const firstLocation = bmkgResponse.data[0];

@@ -27,8 +27,8 @@ export type BmkgForecastEntry = z.infer<typeof forecastEntrySchema>;
 export type BmkgResponse = z.infer<typeof bmkgResponseSchema>;
 
 export interface BmkgFetchOptions {
-  baseUrl?: string;
-  timeoutMs?: number;
+  baseUrl?: string | undefined;
+  timeoutMs?: number | undefined;
 }
 
 export async function fetchBmkgForecast(

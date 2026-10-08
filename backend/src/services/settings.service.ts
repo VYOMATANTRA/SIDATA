@@ -391,8 +391,12 @@ export function invalidatePublicSettingsCache(options?: {
   }
 }
 
+export type PublicSettingsDbClient = {
+  systemSetting: Pick<typeof prisma.systemSetting, 'findMany'>;
+};
+
 export const getPublicSettings = async (
-  client: { systemSetting: Pick<typeof prisma.systemSetting, 'findMany'> } = prisma,
+  client: PublicSettingsDbClient = prisma,
   skipCache = false,
 ): Promise<PublicSettings> => {
   return publicSettingsCache.getOrFetch(
@@ -535,7 +539,7 @@ export const getFastPublicSettings = async (
 ): Promise<PublicSettings> => {
   return withTimeoutFallback(
     publicSettingsCache,
-    (client) => getPublicSettings(client),
+    (client) => getPublicSettings((client ?? prisma) as PublicSettingsDbClient),
     DEFAULT_PUBLIC_SETTINGS,
     { ...options, label: 'publik' },
   );
