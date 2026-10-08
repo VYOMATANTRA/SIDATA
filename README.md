@@ -73,14 +73,14 @@ Fill in `.env` with at least:
 | `GOOGLE_CALLBACK_URL`           | Google OAuth2 Callback URL, e.g. `http://localhost:3000/api/auth/google/callback`                    |
 | `GOOGLE_OAUTH_SUCCESS_REDIRECT` | Frontend URL for successful OAuth redirect, e.g. `http://localhost:5173/auth/callback`              |
 | `GOOGLE_OAUTH_FAILURE_REDIRECT` | Frontend URL for failed OAuth redirect, e.g. `http://localhost:5173/login?error=oauth_failed`       |
-| `OAUTH_STATE_TTL_SECONDS`       | _(optional)_ TTL for the temporary oauth_state cookie, defaults to `300`                             |
-| `OAUTH_PKCE_TTL_SECONDS`         | _(optional)_ TTL for the temporary oauth_verifier cookie, defaults to `300`                          |
+| `OAUTH_STATE_TTL_SECONDS`       | _(optional)_ TTL for the temporary `oauth_state` cookie, defaults to `300`                             |
+| `OAUTH_PKCE_TTL_SECONDS`         | _(optional)_ TTL for the temporary `oauth_verifier` cookie, defaults to `300`                          |
 | `TURNSTILE_SECRET`               | Cloudflare Turnstile anti-bot secret key (`1x0000000000000000000000000000000AA` for local testing)   |
 | `RESEND_API_KEY`                 | Resend API key for transactional emails                                                              |
 | `EMAIL_FROM`                     | Sender identity for transactional emails, e.g. `"SIDATA Kelurahan Manggar <onboarding@resend.dev>"`  |
 | `PORT`                           | _(optional)_ Backend port, defaults to `3000`                                                        |
 
-The server validates these at boot and fails fast if any are missing.
+The server validates required variables at boot and fails fast if any are missing. Optional variables fall back to documented defaults.
 
 The auth API issues CSRF tokens from `GET /api/auth/csrf-token`. Include the returned token in the `x-csrf-token` header on mutating auth requests.
 
