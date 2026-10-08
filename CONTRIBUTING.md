@@ -19,8 +19,7 @@ Backend requires a `.env` file at the repository root (`DATABASE_URL`, `JWT_SECR
 fails fast if any are missing. Mutating auth requests must include an `x-csrf-token` header
 obtained from `GET /api/auth/csrf-token`.
 
-Two optional env vars tune the Google OAuth handshake: `OAUTH_STATE_TTL_SECONDS` and `OAUTH_PKCE_TTL_SECONDS` — TTL for the temporary
-`oauth_state`/`oauth_verifier` cookies, both defaulting to `300` seconds.
+Two optional env vars control the Google OAuth cookie lifetimes: `OAUTH_STATE_TTL_SECONDS` and `OAUTH_PKCE_TTL_SECONDS` — TTL for the temporary `oauth_state`/`oauth_verifier` cookies (the OAuth handshake window), both defaulting to `300` seconds. Keep these two values identical to prevent asymmetric expiration triggering state-mismatch critical security audit alerts.
 
 ## Database
 

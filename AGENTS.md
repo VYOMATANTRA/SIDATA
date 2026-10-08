@@ -13,7 +13,7 @@ Work from the appropriate directory:
 
 Backend requires a `.env` file at the repository root — `DATABASE_URL` (MySQL, `localhost` for local dev or `mysql` under Docker Compose), `JWT_SECRET`, `JWT_REFRESH_SECRET`, `CSRF_SECRET`, `COOKIE_ENCRYPTION_KEY`, `CORS_ORIGIN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`, `GOOGLE_OAUTH_SUCCESS_REDIRECT`, `GOOGLE_OAUTH_FAILURE_REDIRECT`, `TURNSTILE_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM` (`PORT` defaults to 3000). See `.env.example`. The server validates these at boot and fails fast if any are missing.
 
-Two optional env vars control the Google OAuth cookie lifetimes: `OAUTH_STATE_TTL_SECONDS` and `OAUTH_PKCE_TTL_SECONDS` — TTL for the temporary `oauth_state`/`oauth_verifier` cookies (the OAuth handshake window), both defaulting to `300` seconds.
+Two optional env vars control the Google OAuth cookie lifetimes: `OAUTH_STATE_TTL_SECONDS` and `OAUTH_PKCE_TTL_SECONDS` — TTL for the temporary `oauth_state`/`oauth_verifier` cookies (the OAuth handshake window), both defaulting to `300` seconds. Both values should match in practice; setting state TTL shorter than verifier TTL risks false-positive `critical` audit logs (`AUTH_OAUTH_STATE_MISMATCH`) on late callbacks.
 
 Two more env vars are optional but matter for the audit trail (see the Audit Trail subsection below): `TRUST_PROXY` (Express `trust proxy` setting — set this behind any reverse proxy, or `req.ip` on every audit log row/rate-limiter bucket/CSRF session key resolves to the proxy, not the client) and `AUDIT_ADMIN_DATABASE_URL` (a privileged DB connection used only by `backend/scripts/`, never by the running server).
 
