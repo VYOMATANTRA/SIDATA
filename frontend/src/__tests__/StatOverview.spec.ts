@@ -4,12 +4,20 @@ import StatOverview from '@/components/common/StatOverview.vue';
 import type { StatItem } from '@/components/common/StatCard.vue';
 
 describe('StatOverview.vue', () => {
-  it('renders section title, description, default StatCard, and action button matching Figma spec', () => {
+  it('renders section title, description, StatCard items, and action button matching Figma spec', () => {
+    const sampleStats: StatItem[] = [
+      { icon: 'person', value: '53.098', label: 'Penduduk' },
+      { icon: 'house', value: '100', label: 'Rukun Tetangga' },
+      { icon: 'density', value: '2 jiwa/km²', label: 'Kepadatan Penduduk' },
+      { icon: 'ratio', value: '1,06 : 1', label: 'Rasio Laki-laki & Perempuan' },
+    ];
+
     const wrapper = mount(StatOverview, {
       props: {
         title: 'Statistics Type',
         description:
           'Here, you’ll explain what will user found when looking for this statistics type.',
+        stats: sampleStats,
       },
       global: {
         stubs: {
@@ -40,6 +48,20 @@ describe('StatOverview.vue', () => {
     const button = wrapper.find('[data-test="stat-overview-button"]');
     expect(button.exists()).toBe(true);
     expect(button.text()).toContain('Lihat selengkapnya');
+  });
+
+  it('renders empty StatCard state when stats prop is omitted', () => {
+    const wrapper = mount(StatOverview, {
+      props: {
+        title: 'Omitted Stats Overview',
+      },
+      global: {
+        stubs: { RouterLink: true },
+      },
+    });
+
+    expect(wrapper.find('[data-test="stat-list"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="stat-empty"]').exists()).toBe(true);
   });
 
   it('renders custom stats items when provided', () => {

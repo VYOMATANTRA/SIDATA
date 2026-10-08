@@ -3,28 +3,15 @@ import { mount } from '@vue/test-utils';
 import StatCard from '@/components/common/StatCard.vue';
 
 describe('StatCard.vue', () => {
-  it('renders default Kelurahan Manggar statistics when no props are passed', () => {
+  it('renders empty state when no props are passed', () => {
     const wrapper = mount(StatCard);
 
     expect(wrapper.find('[data-test="stat-card"]').exists()).toBe(true);
-
-    const values = wrapper.findAll('[data-test="stat-value"]');
-    const labels = wrapper.findAll('[data-test="stat-label"]');
-
-    expect(values).toHaveLength(4);
-    expect(labels).toHaveLength(4);
-
-    expect(values[0]?.text()).toBe('53.098');
-    expect(labels[0]?.text()).toBe('Penduduk');
-
-    expect(values[1]?.text()).toBe('100');
-    expect(labels[1]?.text()).toBe('Rukun Tetangga');
-
-    expect(values[2]?.text()).toBe('2 jiwa/km²');
-    expect(labels[2]?.text()).toBe('Kepadatan Penduduk');
-
-    expect(values[3]?.text()).toBe('1,06 : 1');
-    expect(labels[3]?.text()).toBe('Rasio Laki-laki & Perempuan');
+    expect(wrapper.find('[data-test="stat-list"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="stat-empty"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="stat-empty"]').text()).toContain(
+      'Tidak ada data statistik yang ditampilkan.',
+    );
   });
 
   it('renders custom items array dynamically', () => {
@@ -66,7 +53,17 @@ describe('StatCard.vue', () => {
   });
 
   it('implements semantic description list markup (dl, dt, dd) per accessibility guidelines', () => {
-    const wrapper = mount(StatCard);
+    const sampleStats = [
+      { icon: 'person', value: '53.098', label: 'Penduduk' },
+      { icon: 'house', value: '100', label: 'Rukun Tetangga' },
+      { icon: 'density', value: '2 jiwa/km²', label: 'Kepadatan Penduduk' },
+      { icon: 'ratio', value: '1,06 : 1', label: 'Rasio Laki-laki & Perempuan' },
+    ];
+    const wrapper = mount(StatCard, {
+      props: {
+        items: sampleStats,
+      },
+    });
 
     // dl description list container
     const dl = wrapper.find('dl[data-test="stat-list"]');
@@ -128,6 +125,10 @@ describe('StatCard.vue', () => {
 
   it('renders custom icon slot', () => {
     const wrapper = mount(StatCard, {
+      props: {
+        value: '100',
+        label: 'Rukun Tetangga',
+      },
       slots: {
         icon: '<span class="custom-icon">🌟</span>',
       },

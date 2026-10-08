@@ -15,7 +15,7 @@ export interface StatItem {
 }
 
 export interface StatCardProps {
-  /** List of statistics to display in the card. If omitted, default Manggar stats are shown */
+  /** List of statistics to display in the card. If omitted, empty state is shown */
   items?: StatItem[];
   /** Single item shorthand: figure value */
   value?: string | number;
@@ -36,30 +36,6 @@ const props = withDefaults(defineProps<StatCardProps>(), {
   title: 'Statistik Wilayah Kelurahan Manggar',
 });
 
-// Default 4 Key Statistics matching Figma design for Kelurahan Manggar
-const defaultStats: StatItem[] = [
-  {
-    icon: 'person',
-    value: '53.098',
-    label: 'Penduduk',
-  },
-  {
-    icon: 'house',
-    value: '100',
-    label: 'Rukun Tetangga',
-  },
-  {
-    icon: 'density',
-    value: '2 jiwa/km²',
-    label: 'Kepadatan Penduduk',
-  },
-  {
-    icon: 'ratio',
-    value: '1,06 : 1',
-    label: 'Rasio Laki-laki & Perempuan',
-  },
-];
-
 // Computed list of items (supports both array prop or single-item shorthand)
 const displayedItems = computed<StatItem[]>(() => {
   if (props.items !== undefined) {
@@ -74,7 +50,7 @@ const displayedItems = computed<StatItem[]>(() => {
       },
     ];
   }
-  return defaultStats;
+  return [];
 });
 
 // Variant styling classes

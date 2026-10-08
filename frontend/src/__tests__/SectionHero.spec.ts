@@ -68,7 +68,7 @@ describe('SectionHero.vue', () => {
     expect(wrapper.find('.test-partner').text()).toBe('BPS & ITK');
   });
 
-  it('applies light variant styling when variant="light"', () => {
+  it('applies light variant styling when variant="light" without dark background image or overlay', () => {
     const wrapper = mount(SectionHero, {
       props: {
         variant: 'light',
@@ -78,9 +78,22 @@ describe('SectionHero.vue', () => {
     const section = wrapper.find('[data-test="section-hero"]');
     expect(section.classes()).toContain('bg-slate-50');
     expect(section.classes()).toContain('text-slate-900');
+    expect(section.attributes('style')).toBeFalsy();
+
+    const highlight = wrapper.find('.font-bold');
+    expect(highlight.classes()).toContain('text-slate-900');
   });
 
-  it('applies dark gradient background overlay by default', () => {
+  it('applies default hero background image and dark gradient overlay for default dark variant', () => {
+    const wrapper = mount(SectionHero);
+
+    const section = wrapper.find('[data-test="section-hero"]');
+    const style = section.attributes('style');
+    expect(style).toContain('linear-gradient');
+    expect(style).toContain('background_laman_depan_kelurahan.png');
+  });
+
+  it('applies dark gradient background overlay when custom backgroundImage is passed', () => {
     const wrapper = mount(SectionHero, {
       props: {
         backgroundImage: '/test-hero-bg.png',
@@ -92,5 +105,17 @@ describe('SectionHero.vue', () => {
     const style = section.attributes('style');
     expect(style).toContain('linear-gradient');
     expect(style).toContain('/test-hero-bg.png');
+  });
+
+  it('does not apply background image to navy and glass variants by default', () => {
+    const navyWrapper = mount(SectionHero, {
+      props: { variant: 'navy' },
+    });
+    expect(navyWrapper.find('[data-test="section-hero"]').attributes('style')).toBeFalsy();
+
+    const glassWrapper = mount(SectionHero, {
+      props: { variant: 'glass' },
+    });
+    expect(glassWrapper.find('[data-test="section-hero"]').attributes('style')).toBeFalsy();
   });
 });

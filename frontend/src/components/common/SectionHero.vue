@@ -18,7 +18,7 @@ export interface SectionHeroProps {
   align?: 'left' | 'center';
   /** Visual container variant: 'dark' (default) | 'glass' | 'navy' | 'light' | 'transparent' */
   variant?: 'dark' | 'glass' | 'navy' | 'light' | 'transparent';
-  /** Background image URL (defaults to landing page background asset) */
+  /** Background image URL (defaults to landing page background asset for 'dark' variant) */
   backgroundImage?: string;
   /** Whether to show the dark gradient overlay over background image (default: true) */
   showOverlay?: boolean;
@@ -39,10 +39,10 @@ const props = withDefaults(defineProps<SectionHeroProps>(), {
   headingTag: 'h1',
   align: 'left',
   variant: 'dark',
-  backgroundImage: defaultHeroBg,
+  backgroundImage: undefined,
   showOverlay: true,
   maxWidthClass: 'max-w-2xl',
-  eyebrowClass: 'text-sm sm:text-base font-medium text-slate-200/90 normal-case tracking-normal',
+  eyebrowClass: undefined,
   minHeightClass: 'min-h-[480px] sm:min-h-[560px]',
 });
 
@@ -50,19 +50,32 @@ const theme = computed<'dark' | 'light'>(() => {
   return props.variant === 'light' ? 'light' : 'dark';
 });
 
+const computedEyebrowClass = computed(() => {
+  if (props.eyebrowClass !== undefined) {
+    return props.eyebrowClass;
+  }
+  return props.variant === 'light'
+    ? 'text-sm sm:text-base font-medium text-slate-600 normal-case tracking-normal'
+    : 'text-sm sm:text-base font-medium text-slate-200/90 normal-case tracking-normal';
+});
+
 const backgroundStyle = computed(() => {
-  if (props.variant === 'transparent' || !props.backgroundImage) {
+  if (props.variant === 'transparent') {
     return {};
   }
-  if (props.showOverlay) {
+  const image = props.backgroundImage || (props.variant === 'dark' ? defaultHeroBg : undefined);
+  if (!image) {
+    return {};
+  }
+  if (props.showOverlay && props.variant !== 'light') {
     return {
-      backgroundImage: `linear-gradient(rgba(10, 35, 83, 0.84), rgba(0, 27, 72, 0.90)), url(${props.backgroundImage})`,
+      backgroundImage: `linear-gradient(rgba(10, 35, 83, 0.84), rgba(0, 27, 72, 0.90)), url(${image})`,
       backgroundSize: 'cover',
       backgroundPosition: 'center',
     };
   }
   return {
-    backgroundImage: `url(${props.backgroundImage})`,
+    backgroundImage: `url(${image})`,
     backgroundSize: 'cover',
     backgroundPosition: 'center',
   };
@@ -106,7 +119,7 @@ const backgroundStyle = computed(() => {
         :theme="theme"
         :align="align"
         :max-width-class="maxWidthClass"
-        :eyebrow-class="eyebrowClass"
+        :eyebrow-class="computedEyebrowClass"
         data-test="hero-section-text-area"
       >
         <template v-if="$slots.eyebrow" #eyebrow>
@@ -119,7 +132,11 @@ const backgroundStyle = computed(() => {
         <!-- Custom or highlighted description -->
         <slot name="description">
           <slot>
-            <span v-if="descriptionHighlight" class="font-bold text-white">
+            <span
+              v-if="descriptionHighlight"
+              class="font-bold"
+              :class="variant === 'light' ? 'text-slate-900' : 'text-white'"
+            >
               {{ descriptionHighlight }} —
             </span>
             <span>{{ description }}</span>
