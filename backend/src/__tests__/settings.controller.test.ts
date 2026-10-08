@@ -6,6 +6,8 @@ import {
   updateAuditRetention,
   getPublicSettingsHandler,
   updatePublicSettingsHandler,
+  getWeatherConfigHandler,
+  updateWeatherConfigHandler,
 } from '../controllers/settings.controller.js';
 import {
   invalidatePublicSettingsCache,
@@ -14,6 +16,11 @@ import {
   publicSettingsCache,
   DEFAULT_PUBLIC_SETTINGS,
   PUBLIC_SETTING_KEYS,
+  WEATHER_CONFIG_KEYS,
+  DEFAULT_WEATHER_CONFIG_SETTINGS,
+  invalidateWeatherConfigCache,
+  weatherConfigCache,
+  type WeatherConfigSettings,
 } from '../services/settings.service.js';
 import {
   getManggarForecast,
@@ -1729,6 +1736,9 @@ describe('settings.controller updatePublicSettingsHandler', () => {
       );
 
       // 2. Update weatherAdm4 to a new code ('64.71.02.2002'): old code ('64.71.01.1001') MUST be evicted
+      weatherConfigCache.set(DEFAULT_WEATHER_CONFIG_SETTINGS, weatherConfigCache.getVersion());
+      assert.ok(weatherConfigCache.get(prisma) !== null);
+
       const res2 = fakeRes();
       await updatePublicSettingsHandler(
         makeReq({ body: { weatherAdm4: '64.71.02.2002' } }),
@@ -1740,6 +1750,11 @@ describe('settings.controller updatePublicSettingsHandler', () => {
         false,
         'Old weatherAdm4 must be evicted from weather cache upon setting change',
       );
+      assert.equal(
+        weatherConfigCache.get(prisma),
+        null,
+        'weatherConfigCache must be invalidated when weatherAdm4 changes in public settings',
+      );
     } finally {
       prisma.systemSetting.findMany = originalFindMany;
       prisma.systemSetting.upsert = originalUpsert;
@@ -1749,6 +1764,7 @@ describe('settings.controller updatePublicSettingsHandler', () => {
       globalThis.fetch = originalFetch;
       resetWeatherCache();
       invalidatePublicSettingsCache();
+      invalidateWeatherConfigCache();
     }
   });
 
@@ -2079,6 +2095,372 @@ describe('settings.controller updatePublicSettingsHandler', () => {
       prisma.auditLog.create = originalAuditCreate;
       globalThis.fetch = originalFetch;
       invalidatePublicSettingsCache();
+    }
+  });
+});
+
+/* =========================================================================
+ * 3. OPERATIONAL WEATHER SETTINGS: GET & PATCH
+ * ========================================================================= */
+
+describe('settings.controller getWeatherConfigHandler', () => {
+  it('returns 500 when database query throws an unhandled error', async () => {
+    invalidateWeatherConfigCache();
+    const originalFindMany = prisma.systemSetting.findMany;
+    prisma.systemSetting.findMany = (async () => {
+      throw new Error('Database connection lost');
+    }) as unknown as typeof prisma.systemSetting.findMany;
+
+    try {
+      const res = fakeRes();
+      await getWeatherConfigHandler(makeReq(), res as unknown as Response);
+
+      assert.equal(res.status, 500);
+      assert.deepEqual(res.body, { error: 'Terjadi kesalahan internal server' });
+    } finally {
+      prisma.systemSetting.findMany = originalFindMany;
+      invalidateWeatherConfigCache();
+    }
+  });
+
+  it('defaults every setting when no settings rows exist', async () => {
+    invalidateWeatherConfigCache();
+    const originalFindMany = prisma.systemSetting.findMany;
+    prisma.systemSetting.findMany =
+      (async () => []) as unknown as typeof prisma.systemSetting.findMany;
+
+    try {
+      const res = fakeRes();
+      await getWeatherConfigHandler(makeReq(), res as unknown as Response);
+
+      assert.equal(res.status, 200);
+      assert.deepEqual(res.body, { settings: DEFAULT_WEATHER_CONFIG_SETTINGS });
+    } finally {
+      prisma.systemSetting.findMany = originalFindMany;
+      invalidateWeatherConfigCache();
+    }
+  });
+
+  it('returns persisted weather config settings from database', async () => {
+    invalidateWeatherConfigCache();
+    const originalFindMany = prisma.systemSetting.findMany;
+    prisma.systemSetting.findMany = (async () => [
+      { key: WEATHER_CONFIG_KEYS.bmkgBaseUrl, value: 'https://staging.bmkg.go.id/cuaca' },
+      { key: WEATHER_CONFIG_KEYS.cacheTtlMs, value: '1800000' },
+      { key: WEATHER_CONFIG_KEYS.staleRetryMs, value: '60000' },
+      { key: WEATHER_CONFIG_KEYS.fetchTimeoutMs, value: '5000' },
+      { key: WEATHER_CONFIG_KEYS.adm4, value: '64.71.02.1002' },
+    ]) as unknown as typeof prisma.systemSetting.findMany;
+
+    try {
+      const res = fakeRes();
+      await getWeatherConfigHandler(makeReq(), res as unknown as Response);
+
+      assert.equal(res.status, 200);
+      assert.deepEqual(res.body, {
+        settings: {
+          bmkgBaseUrl: 'https://staging.bmkg.go.id/cuaca',
+          cacheTtlMs: 1800000,
+          staleRetryMs: 60000,
+          fetchTimeoutMs: 5000,
+          adm4: '64.71.02.1002',
+        },
+      });
+    } finally {
+      prisma.systemSetting.findMany = originalFindMany;
+      invalidateWeatherConfigCache();
+    }
+  });
+});
+
+describe('settings.controller updateWeatherConfigHandler', () => {
+  it('returns 401 when actor is not authenticated', async () => {
+    const res = fakeRes();
+    await updateWeatherConfigHandler(
+      makeReq({ user: undefined } as unknown as Partial<AuthRequest>),
+      res as unknown as Response,
+    );
+    assert.equal(res.status, 401);
+  });
+
+  it('returns 400 when payload is empty or invalid shape', async () => {
+    for (const body of [null, 'invalid', [], {}]) {
+      const res = fakeRes();
+      await updateWeatherConfigHandler(makeReq({ body }), res as unknown as Response);
+      assert.equal(res.status, 400);
+    }
+  });
+
+  it('returns 400 when unrecognized fields are provided (strict schema check)', async () => {
+    const res = fakeRes();
+    await updateWeatherConfigHandler(
+      makeReq({ body: { unknownField: 'foo' } }),
+      res as unknown as Response,
+    );
+    assert.equal(res.status, 400);
+    assert.match(String((res.body as { error: string }).error), /tidak valid|tidak dikenali/i);
+  });
+
+  it('returns 400 when bmkgBaseUrl has invalid URL format or non-http/https protocol', async () => {
+    for (const url of ['ftp://api.bmkg.go.id', 'not-a-url', 'javascript:alert(1)']) {
+      const res = fakeRes();
+      await updateWeatherConfigHandler(
+        makeReq({ body: { bmkgBaseUrl: url } }),
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+    }
+  });
+
+  it('returns 400 when bmkgBaseUrl contains user credentials or targets private/loopback host (SSRF guard)', async () => {
+    const dangerousUrls = [
+      'https://user:pass@api.bmkg.go.id/cuaca',
+      'http://localhost:3000/api',
+      'http://127.0.0.1:8080',
+      'http://169.254.169.254/latest/meta-data',
+      'http://10.0.0.1/status',
+      'http://192.168.1.1/admin',
+      'http://172.20.0.5/internal',
+    ];
+
+    for (const url of dangerousUrls) {
+      const res = fakeRes();
+      await updateWeatherConfigHandler(
+        makeReq({ body: { bmkgBaseUrl: url } }),
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400, `Expected 400 for dangerous URL: ${url}`);
+      assert.match(
+        String((res.body as { error: string }).error),
+        /tidak boleh mengarah ke alamat privat/i,
+      );
+    }
+  });
+
+  it('returns 400 when numeric knobs are out of bounds or non-integer', async () => {
+    const invalidKnobs = [
+      { cacheTtlMs: 50_000 }, // < 60_000
+      { cacheTtlMs: 90_000_000 }, // > 86_400_000
+      { cacheTtlMs: 120_000.5 }, // float
+      { staleRetryMs: 5_000 }, // < 10_000
+      { staleRetryMs: 2_000_000 }, // > 1_800_000
+      { fetchTimeoutMs: 500 }, // < 1_000
+      { fetchTimeoutMs: 40_000 }, // > 30_000
+    ];
+
+    for (const body of invalidKnobs) {
+      const res = fakeRes();
+      await updateWeatherConfigHandler(makeReq({ body }), res as unknown as Response);
+      assert.equal(res.status, 400, `Expected 400 for ${JSON.stringify(body)}`);
+    }
+  });
+
+  it('returns 400 when cacheTtlMs is less than staleRetryMs', async () => {
+    const res = fakeRes();
+    await updateWeatherConfigHandler(
+      makeReq({ body: { cacheTtlMs: 60_000, staleRetryMs: 120_000 } }),
+      res as unknown as Response,
+    );
+    assert.equal(res.status, 400);
+    assert.match(
+      String((res.body as { error: string }).error),
+      /Cache TTL tidak boleh lebih kecil/i,
+    );
+  });
+
+  it('returns 400 when adm4 format is invalid', async () => {
+    const res = fakeRes();
+    await updateWeatherConfigHandler(
+      makeReq({ body: { adm4: '64.71.invalid' } }),
+      res as unknown as Response,
+    );
+    assert.equal(res.status, 400);
+    assert.match(String((res.body as { error: string }).error), /Format kode adm4/i);
+  });
+
+  it('validates adm4 / endpoint pre-lock and returns 400 when BMKG rejects verification', async () => {
+    invalidateWeatherConfigCache();
+    const originalFindMany = prisma.systemSetting.findMany;
+    const originalFetch = globalThis.fetch;
+
+    prisma.systemSetting.findMany = (async () => [
+      { key: WEATHER_CONFIG_KEYS.adm4, value: '64.71.01.1001' },
+    ]) as unknown as typeof prisma.systemSetting.findMany;
+
+    globalThis.fetch = (async () => {
+      return new Response('Not Found', { status: 404 });
+    }) as unknown as typeof fetch;
+
+    try {
+      const res = fakeRes();
+      await updateWeatherConfigHandler(
+        makeReq({ body: { adm4: '64.71.99.9999' } }),
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+      assert.match(
+        String((res.body as { error: string }).error),
+        /Kode adm4 atau endpoint BMKG tidak valid/i,
+      );
+    } finally {
+      prisma.systemSetting.findMany = originalFindMany;
+      globalThis.fetch = originalFetch;
+      invalidateWeatherConfigCache();
+    }
+  });
+
+  it('successfully updates weather config, writes audit log, and evicts weather cache', async () => {
+    invalidateWeatherConfigCache();
+    resetWeatherCache();
+    const originalFindMany = prisma.systemSetting.findMany;
+    const originalUpsert = prisma.systemSetting.upsert;
+    const originalTransaction = prisma.$transaction;
+    const originalQueryRaw = prisma.$queryRaw;
+    const originalAuditCreate = prisma.auditLog.create;
+    const originalFetch = globalThis.fetch;
+
+    const dbStore = new Map<string, string>([
+      [WEATHER_CONFIG_KEYS.bmkgBaseUrl, DEFAULT_WEATHER_CONFIG_SETTINGS.bmkgBaseUrl],
+      [WEATHER_CONFIG_KEYS.cacheTtlMs, String(DEFAULT_WEATHER_CONFIG_SETTINGS.cacheTtlMs)],
+      [WEATHER_CONFIG_KEYS.staleRetryMs, String(DEFAULT_WEATHER_CONFIG_SETTINGS.staleRetryMs)],
+      [WEATHER_CONFIG_KEYS.fetchTimeoutMs, String(DEFAULT_WEATHER_CONFIG_SETTINGS.fetchTimeoutMs)],
+      [WEATHER_CONFIG_KEYS.adm4, DEFAULT_WEATHER_CONFIG_SETTINGS.adm4],
+    ]);
+
+    prisma.systemSetting.findMany = (async () => {
+      return Array.from(dbStore.entries()).map(([key, value]) => ({ key, value }));
+    }) as unknown as typeof prisma.systemSetting.findMany;
+
+    prisma.systemSetting.upsert = (async (args: { create: { key: string; value: string } }) => {
+      dbStore.set(args.create.key, args.create.value);
+      return { ...args.create, updatedAt: new Date() };
+    }) as unknown as typeof prisma.systemSetting.upsert;
+
+    let auditCreated: Record<string, unknown> | undefined;
+    prisma.auditLog.create = (async (args: { data: Record<string, unknown> }) => {
+      auditCreated = args.data;
+      return { id: 'audit-weather-config', ...args.data };
+    }) as unknown as typeof prisma.auditLog.create;
+
+    prisma.$transaction = (async (arg: unknown) => {
+      if (typeof arg === 'function') return (arg as (tx: typeof prisma) => unknown)(prisma);
+      throw new Error('expected interactive transaction');
+    }) as unknown as typeof prisma.$transaction;
+    prisma.$queryRaw = (async () => []) as unknown as typeof prisma.$queryRaw;
+
+    globalThis.fetch = (async () => {
+      return new Response(
+        JSON.stringify({
+          lokasi: { desa: 'Manggar', lat: -1.2, lon: 116.9 },
+          data: [{ cuaca: [] }],
+        }),
+        { status: 200 },
+      );
+    }) as unknown as typeof fetch;
+
+    try {
+      const res = fakeRes();
+      const updates = {
+        bmkgBaseUrl: 'https://api.bmkg.go.id/v2/cuaca',
+        cacheTtlMs: 1_800_000,
+        staleRetryMs: 120_000,
+        fetchTimeoutMs: 15_000,
+        adm4: '64.71.02.2002',
+      };
+
+      await updateWeatherConfigHandler(makeReq({ body: updates }), res as unknown as Response);
+
+      assert.equal(res.status, 200);
+      const resBody = res.body as { settings: WeatherConfigSettings; message: string };
+      assert.equal(resBody.settings.bmkgBaseUrl, 'https://api.bmkg.go.id/v2/cuaca');
+      assert.equal(resBody.settings.cacheTtlMs, 1_800_000);
+      assert.equal(resBody.settings.staleRetryMs, 120_000);
+      assert.equal(resBody.settings.fetchTimeoutMs, 15_000);
+      assert.equal(resBody.settings.adm4, '64.71.02.2002');
+
+      // Verify audit log
+      assert.ok(auditCreated);
+      assert.equal(auditCreated.action, 'settings.weather_updated');
+      assert.equal(auditCreated.severity, 'info');
+
+      // Verify cache updated in-memory
+      const inMemory = weatherConfigCache.get(prisma);
+      assert.ok(inMemory);
+      assert.equal(inMemory.bmkgBaseUrl, 'https://api.bmkg.go.id/v2/cuaca');
+      assert.equal(inMemory.adm4, '64.71.02.2002');
+    } finally {
+      prisma.systemSetting.findMany = originalFindMany;
+      prisma.systemSetting.upsert = originalUpsert;
+      prisma.$transaction = originalTransaction;
+      prisma.$queryRaw = originalQueryRaw;
+      prisma.auditLog.create = originalAuditCreate;
+      globalThis.fetch = originalFetch;
+      invalidateWeatherConfigCache();
+      resetWeatherCache();
+    }
+  });
+
+  it('returns current settings without writing audit log or upserting rows when no fields changed (no-op)', async () => {
+    invalidateWeatherConfigCache();
+    const originalFindMany = prisma.systemSetting.findMany;
+    const originalUpsert = prisma.systemSetting.upsert;
+    const originalTransaction = prisma.$transaction;
+    const originalQueryRaw = prisma.$queryRaw;
+    const originalAuditCreate = prisma.auditLog.create;
+
+    const dbStore = new Map<string, string>([
+      [WEATHER_CONFIG_KEYS.bmkgBaseUrl, 'https://api.bmkg.go.id/publik/prakiraan-cuaca'],
+      [WEATHER_CONFIG_KEYS.cacheTtlMs, '3600000'],
+      [WEATHER_CONFIG_KEYS.staleRetryMs, '300000'],
+      [WEATHER_CONFIG_KEYS.fetchTimeoutMs, '10000'],
+      [WEATHER_CONFIG_KEYS.adm4, '64.71.01.1001'],
+    ]);
+
+    prisma.systemSetting.findMany = (async () => {
+      return Array.from(dbStore.entries()).map(([key, value]) => ({ key, value }));
+    }) as unknown as typeof prisma.systemSetting.findMany;
+
+    let upsertCalled = false;
+    prisma.systemSetting.upsert = (async () => {
+      upsertCalled = true;
+      return {} as never;
+    }) as unknown as typeof prisma.systemSetting.upsert;
+
+    let auditCalled = false;
+    prisma.auditLog.create = (async () => {
+      auditCalled = true;
+      return {} as never;
+    }) as unknown as typeof prisma.auditLog.create;
+
+    prisma.$transaction = (async (arg: unknown) => {
+      if (typeof arg === 'function') return (arg as (tx: typeof prisma) => unknown)(prisma);
+      throw new Error('expected interactive transaction');
+    }) as unknown as typeof prisma.$transaction;
+    prisma.$queryRaw = (async () => []) as unknown as typeof prisma.$queryRaw;
+
+    try {
+      const res = fakeRes();
+      // Send same values
+      await updateWeatherConfigHandler(
+        makeReq({
+          body: {
+            bmkgBaseUrl: 'https://api.bmkg.go.id/publik/prakiraan-cuaca',
+            cacheTtlMs: 3600000,
+          },
+        }),
+        res as unknown as Response,
+      );
+
+      assert.equal(res.status, 200);
+      assert.equal(upsertCalled, false, 'No-op must skip upsert');
+      assert.equal(auditCalled, false, 'No-op must skip audit log');
+    } finally {
+      prisma.systemSetting.findMany = originalFindMany;
+      prisma.systemSetting.upsert = originalUpsert;
+      prisma.$transaction = originalTransaction;
+      prisma.$queryRaw = originalQueryRaw;
+      prisma.auditLog.create = originalAuditCreate;
+      invalidateWeatherConfigCache();
     }
   });
 });

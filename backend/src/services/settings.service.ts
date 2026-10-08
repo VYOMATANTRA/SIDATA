@@ -15,6 +15,12 @@ import {
 import { hasFieldChanged } from '../utils/comparator.js';
 import { evictWeatherCache } from './weather.service.js';
 import { validateBmkgAdm4 } from '../utils/bmkg.js';
+import {
+  BMKG_BASE_URL,
+  WEATHER_CACHE_TTL_MS,
+  WEATHER_STALE_RETRY_MS,
+  WEATHER_FETCH_TIMEOUT_MS,
+} from '../configs/index.js';
 
 export class SettingsServiceError extends Error {
   statusCode: number;
@@ -558,6 +564,7 @@ export const updatePublicSettings = async (params: {
       if (!didChange) return;
       if (previousWeatherAdm4 && previousWeatherAdm4 !== committedAfter.weatherAdm4) {
         evictWeatherCache(previousWeatherAdm4);
+        weatherConfigCache.invalidate();
       }
       try {
         await getPublicSettings(prisma);
@@ -605,6 +612,370 @@ export const updatePublicSettings = async (params: {
             type: 'system_setting',
             id: 'public_settings',
             label: 'Pengaturan Profil Publik',
+          },
+          metadata: { before, after, changedFields: changedKeys },
+          context,
+        },
+        tx,
+      );
+
+      return after;
+    },
+  });
+};
+
+/* =========================================================================
+ * 3. OPERATIONAL WEATHER SETTINGS
+ * ========================================================================= */
+
+export const WEATHER_CONFIG_KEYS = {
+  bmkgBaseUrl: 'weather.bmkg_base_url',
+  cacheTtlMs: 'weather.cache_ttl_ms',
+  staleRetryMs: 'weather.stale_retry_ms',
+  fetchTimeoutMs: 'weather.fetch_timeout_ms',
+  adm4: 'public.weather_adm4',
+} as const satisfies Record<keyof WeatherConfigSettings, string>;
+
+export interface WeatherConfigSettings {
+  bmkgBaseUrl: string;
+  cacheTtlMs: number;
+  staleRetryMs: number;
+  fetchTimeoutMs: number;
+  adm4: string;
+}
+
+export const DEFAULT_WEATHER_CONFIG_SETTINGS: WeatherConfigSettings = {
+  bmkgBaseUrl: BMKG_BASE_URL,
+  cacheTtlMs: WEATHER_CACHE_TTL_MS,
+  staleRetryMs: WEATHER_STALE_RETRY_MS,
+  fetchTimeoutMs: WEATHER_FETCH_TIMEOUT_MS,
+  adm4: DEFAULT_PUBLIC_SETTINGS.weatherAdm4,
+};
+
+const isDisallowedHost = (hostname: string): boolean => {
+  const lower = hostname.toLowerCase();
+  if (
+    lower === 'localhost' ||
+    lower === '127.0.0.1' ||
+    lower === '0.0.0.0' ||
+    lower === '::1' ||
+    lower === '169.254.169.254'
+  ) {
+    return true;
+  }
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(lower)) return true;
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(lower)) return true;
+  const match172 = lower.match(/^172\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/);
+  if (match172) {
+    const second = Number(match172[1]);
+    if (second >= 16 && second <= 31) return true;
+  }
+  return false;
+};
+
+export const updateWeatherConfigSchema = z
+  .object({
+    bmkgBaseUrl: z
+      .string()
+      .trim()
+      .url('Format URL base BMKG tidak valid')
+      .refine((urlStr) => {
+        try {
+          const parsed = new URL(urlStr);
+          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+          if (parsed.username || parsed.password) return false;
+          if (isDisallowedHost(parsed.hostname)) return false;
+          return true;
+        } catch {
+          return false;
+        }
+      }, 'URL base BMKG harus menggunakan protokol HTTP/HTTPS dan tidak boleh mengarah ke alamat privat atau menyertakan kredensial')
+      .optional(),
+    cacheTtlMs: z
+      .number()
+      .int('Cache TTL harus berupa bilangan bulat')
+      .min(60_000, 'Cache TTL minimal 1 menit (60000 ms)')
+      .max(86_400_000, 'Cache TTL maksimal 24 jam (86400000 ms)')
+      .optional(),
+    staleRetryMs: z
+      .number()
+      .int('Stale retry interval harus berupa bilangan bulat')
+      .min(10_000, 'Stale retry interval minimal 10 detik (10000 ms)')
+      .max(1_800_000, 'Stale retry interval maksimal 30 menit (1800000 ms)')
+      .optional(),
+    fetchTimeoutMs: z
+      .number()
+      .int('Fetch timeout harus berupa bilangan bulat')
+      .min(1_000, 'Fetch timeout minimal 1 detik (1000 ms)')
+      .max(30_000, 'Fetch timeout maksimal 30 detik (30000 ms)')
+      .optional(),
+    adm4: z
+      .string()
+      .trim()
+      .regex(
+        /^\d{2}\.\d{2}\.\d{2}\.\d{4}$/,
+        'Format kode adm4 BMKG tidak valid (contoh: 64.71.01.1001)',
+      )
+      .optional(),
+  })
+  .strict()
+  .refine(
+    (data) => {
+      if (data.cacheTtlMs !== undefined && data.staleRetryMs !== undefined) {
+        return data.cacheTtlMs >= data.staleRetryMs;
+      }
+      return true;
+    },
+    {
+      message: 'Cache TTL tidak boleh lebih kecil daripada interval coba ulang (stale retry)',
+      path: ['cacheTtlMs'],
+    },
+  );
+
+const WEATHER_CONFIG_CACHE_TTL_MS = 15 * 60 * 1000;
+export const weatherConfigCache = new VersionedTtlCache<WeatherConfigSettings>({
+  ttlMs: WEATHER_CONFIG_CACHE_TTL_MS,
+  baseClient: prisma,
+});
+
+export function invalidateWeatherConfigCache(options?: { preserveLastKnownGood?: boolean }): void {
+  weatherConfigCache.invalidate(options);
+}
+
+function parsePositiveInt(raw: string | undefined, fallback: number): number {
+  if (!raw) return fallback;
+  const num = Number(raw);
+  return Number.isSafeInteger(num) && num > 0 ? num : fallback;
+}
+
+export async function getWeatherConfigSettings(
+  client: unknown = prisma,
+  skipCache = false,
+): Promise<WeatherConfigSettings> {
+  const cached = weatherConfigCache.get(client, skipCache);
+  if (cached) return cached;
+
+  const versionAtStart = weatherConfigCache.getVersion();
+  const dbClient = (client ?? prisma) as {
+    systemSetting: Pick<typeof prisma.systemSetting, 'findMany'>;
+  };
+
+  const rows = await dbClient.systemSetting.findMany({
+    where: { key: { in: Object.values(WEATHER_CONFIG_KEYS) } },
+  });
+
+  const byKey = new Map(rows.map((row) => [row.key, row.value]));
+
+  const settings: WeatherConfigSettings = {
+    bmkgBaseUrl:
+      byKey.get(WEATHER_CONFIG_KEYS.bmkgBaseUrl)?.trim() ||
+      DEFAULT_WEATHER_CONFIG_SETTINGS.bmkgBaseUrl,
+    cacheTtlMs: parsePositiveInt(
+      byKey.get(WEATHER_CONFIG_KEYS.cacheTtlMs),
+      DEFAULT_WEATHER_CONFIG_SETTINGS.cacheTtlMs,
+    ),
+    staleRetryMs: parsePositiveInt(
+      byKey.get(WEATHER_CONFIG_KEYS.staleRetryMs),
+      DEFAULT_WEATHER_CONFIG_SETTINGS.staleRetryMs,
+    ),
+    fetchTimeoutMs: parsePositiveInt(
+      byKey.get(WEATHER_CONFIG_KEYS.fetchTimeoutMs),
+      DEFAULT_WEATHER_CONFIG_SETTINGS.fetchTimeoutMs,
+    ),
+    adm4: byKey.get(WEATHER_CONFIG_KEYS.adm4)?.trim() || DEFAULT_WEATHER_CONFIG_SETTINGS.adm4,
+  };
+
+  weatherConfigCache.set(settings, versionAtStart, client, skipCache);
+  return settings;
+}
+
+export interface GetFastWeatherConfigSettingsOptions {
+  client?: unknown;
+  timeoutMs?: number;
+}
+
+/**
+ * Bounded-latency weather config settings lookup for time-critical flows
+ * and high-frequency public reads.
+ */
+export const getFastWeatherConfigSettings = async (
+  options?: GetFastWeatherConfigSettingsOptions,
+): Promise<WeatherConfigSettings> => {
+  const client = options?.client ?? prisma;
+  const rawTimeout = options?.timeoutMs;
+  const timeoutMs =
+    typeof rawTimeout === 'number' &&
+    Number.isFinite(rawTimeout) &&
+    rawTimeout > 0 &&
+    rawTimeout <= 2_147_483_647
+      ? Math.max(1, Math.floor(rawTimeout))
+      : 200;
+
+  // 1. In-memory cache hit: 0ms, zero DB load
+  const cached = weatherConfigCache.get(client);
+  if (cached) {
+    return cached;
+  }
+
+  // 2. Cache miss: race DB fetch against timeout
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(
+          new Error(`Pengambilan pengaturan konfigurasi cuaca melebihi batas waktu ${timeoutMs}ms`),
+        );
+      }, timeoutMs);
+    });
+
+    const fresh = await Promise.race([getWeatherConfigSettings(client), timeoutPromise]);
+    return fresh;
+  } catch (err) {
+    console.warn(
+      `getFastWeatherConfigSettings: fallback ke pengaturan in-memory terakhir (${err instanceof Error ? err.message : String(err)})`,
+    );
+    return weatherConfigCache.getLastKnownGood(DEFAULT_WEATHER_CONFIG_SETTINGS);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+};
+
+function hasWeatherSettingChanged(
+  field: keyof WeatherConfigSettings,
+  before: WeatherConfigSettings,
+  updates: { [K in keyof WeatherConfigSettings]?: WeatherConfigSettings[K] | undefined },
+): boolean {
+  const newVal = updates[field];
+  if (newVal === undefined) return false;
+  return hasFieldChanged(before[field], newVal);
+}
+
+export const updateWeatherConfig = async (params: {
+  payload: unknown;
+  actor: AuditActor;
+  context?: AuditRequestContext | undefined;
+}): Promise<WeatherConfigSettings> => {
+  const { payload, actor, context } = params;
+
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+    throw new SettingsServiceError('Payload pengaturan cuaca tidak valid.', 400);
+  }
+
+  const parsed = updateWeatherConfigSchema.safeParse(payload);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    let message = issue?.message ?? 'Validasi pengaturan cuaca gagal.';
+    if (issue?.code === 'unrecognized_keys') {
+      const keys = (issue as { keys?: string[] }).keys?.map((k) => `"${k}"`).join(', ') ?? '';
+      message = `Terdapat bidang pengaturan cuaca yang tidak dikenali: ${keys}`;
+    }
+    throw new SettingsServiceError(message, 400);
+  }
+
+  const updates = parsed.data;
+  if (Object.keys(updates).length === 0) {
+    throw new SettingsServiceError(
+      'Setidaknya satu bidang pengaturan cuaca harus dikirimkan.',
+      400,
+    );
+  }
+
+  const current = await getWeatherConfigSettings(prisma);
+
+  // Validate cross-field invariant against current settings if only one is updated
+  const finalCacheTtl = updates.cacheTtlMs ?? current.cacheTtlMs;
+  const finalStaleRetry = updates.staleRetryMs ?? current.staleRetryMs;
+  if (finalCacheTtl < finalStaleRetry) {
+    throw new SettingsServiceError(
+      'Cache TTL tidak boleh lebih kecil daripada interval coba ulang (stale retry).',
+      400,
+    );
+  }
+
+  // Pre-lock validation if adm4 is updated to a new code
+  const targetAdm4 = updates.adm4 ?? current.adm4;
+  const targetBaseUrl = updates.bmkgBaseUrl ?? current.bmkgBaseUrl;
+  const targetTimeoutMs = updates.fetchTimeoutMs ?? current.fetchTimeoutMs;
+
+  const isAdm4Changed = updates.adm4 !== undefined && updates.adm4 !== current.adm4;
+  const isEndpointChanged =
+    updates.bmkgBaseUrl !== undefined && updates.bmkgBaseUrl !== current.bmkgBaseUrl;
+
+  if (isAdm4Changed || isEndpointChanged) {
+    try {
+      await validateBmkgAdm4(targetAdm4, {
+        baseUrl: targetBaseUrl,
+        timeoutMs: targetTimeoutMs,
+      });
+    } catch {
+      throw new SettingsServiceError(
+        'Kode adm4 atau endpoint BMKG tidak valid atau tidak merespons.',
+        400,
+      );
+    }
+  }
+
+  const actorId = actor.id?.trim() ? actor.id.trim() : null;
+
+  const targetWeatherKeys = (Object.keys(updates) as (keyof typeof WEATHER_CONFIG_KEYS)[])
+    .map((field) => WEATHER_CONFIG_KEYS[field])
+    .filter(Boolean)
+    .sort();
+  const lockQuery = Prisma.sql`SELECT setting_key FROM system_settings WHERE setting_key IN (${Prisma.join(targetWeatherKeys)}) FOR UPDATE`;
+
+  return executeLockedTransaction({
+    client: prisma,
+    lockQuery,
+    cache: weatherConfigCache,
+    onCommit: async (_committedAfter, didChange) => {
+      if (!didChange) return;
+      evictWeatherCache();
+      if (updates.adm4 !== undefined) {
+        invalidatePublicSettingsCache();
+      }
+      try {
+        await getWeatherConfigSettings(prisma);
+      } catch {
+        // Safe fallback
+      }
+    },
+    execute: async (tx) => {
+      const before = await getWeatherConfigSettings(tx, true);
+
+      const changedKeys = (Object.keys(updates) as (keyof WeatherConfigSettings)[]).filter((key) =>
+        hasWeatherSettingChanged(key, before, updates),
+      );
+
+      if (changedKeys.length === 0) {
+        return withChangeResult(before, false);
+      }
+
+      for (const key of changedKeys) {
+        const val = updates[key]!;
+        const dbKey = WEATHER_CONFIG_KEYS[key];
+        const serialized = String(val);
+        await tx.systemSetting.upsert({
+          where: { key: dbKey },
+          update: { value: serialized, updatedById: actorId },
+          create: { key: dbKey, value: serialized, updatedById: actorId },
+        });
+      }
+
+      const after: WeatherConfigSettings = { ...before };
+      for (const key of changedKeys) {
+        (after as Record<keyof WeatherConfigSettings, unknown>)[key] = updates[key];
+      }
+
+      await buildAuditLog(
+        {
+          action: AUDIT_ACTIONS.SETTINGS_WEATHER_UPDATED,
+          actor,
+          target: {
+            type: 'system_setting',
+            id: 'weather_config',
+            label: 'Pengaturan Operasional Cuaca',
           },
           metadata: { before, after, changedFields: changedKeys },
           context,
