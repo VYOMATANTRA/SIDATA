@@ -6,6 +6,7 @@ import {
   getPages,
   getPageBySlug,
   createPage,
+  deletePage,
   PageServiceError,
   PAGE_SLUG_PATTERN,
 } from '../services/pages.service.js';
@@ -66,6 +67,39 @@ export const createPageHandler = async (
     }
     console.error(
       'Error saat menambahkan halaman:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
+    return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
+  }
+};
+
+export const deletePageHandler = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<Response | void> => {
+  try {
+    const actor = extractRequestActor(req);
+    if (!actor) {
+      return res.status(401).json({ error: 'Akses ditolak. Pengguna belum terautentikasi.' });
+    }
+
+    const { slug } = req.params;
+    if (typeof slug !== 'string' || !PAGE_SLUG_PATTERN.test(slug)) {
+      return res.status(400).json({ error: 'Slug halaman tidak valid' });
+    }
+
+    const deleted = await deletePage(slug, actor, extractRequestContext(req));
+
+    return res.status(200).json({
+      message: 'Halaman berhasil dihapus',
+      page: deleted,
+    });
+  } catch (error) {
+    if (error instanceof PageServiceError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    console.error(
+      'Error saat menghapus halaman:',
       error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
     );
     return res.status(500).json({ error: 'Terjadi kesalahan internal server' });

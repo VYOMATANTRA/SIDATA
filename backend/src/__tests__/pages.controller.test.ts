@@ -5,6 +5,7 @@ import {
   listPages,
   getPage,
   createPageHandler,
+  deletePageHandler,
   PAGE_SLUG_PATTERN,
 } from '../controllers/pages.controller.js';
 import prisma from '../utils/prisma.js';
@@ -74,6 +75,8 @@ const expectedPageDto = (slug = 'kependudukan') => ({
 describe('pages.controller', () => {
   let originalFindMany: typeof prisma.page.findMany;
   let originalFindUnique: typeof prisma.page.findUnique;
+  let originalTransaction: typeof prisma.$transaction;
+  let originalContentBlockCount: typeof prisma.contentBlock.count;
   let originalConsoleError: typeof console.error;
   let findManyCalls: unknown[][];
   let findUniqueCalls: unknown[][];
@@ -96,6 +99,8 @@ describe('pages.controller', () => {
   beforeEach(() => {
     originalFindMany = prisma.page.findMany;
     originalFindUnique = prisma.page.findUnique;
+    originalTransaction = prisma.$transaction;
+    originalContentBlockCount = prisma.contentBlock.count;
     originalConsoleError = console.error;
     findManyCalls = [];
     findUniqueCalls = [];
@@ -115,6 +120,8 @@ describe('pages.controller', () => {
   afterEach(() => {
     prisma.page.findMany = originalFindMany;
     prisma.page.findUnique = originalFindUnique;
+    prisma.$transaction = originalTransaction;
+    prisma.contentBlock.count = originalContentBlockCount;
     console.error = originalConsoleError;
   });
 
@@ -557,6 +564,98 @@ describe('pages.controller', () => {
           title: 'Kependudukan',
           sortOrder: 0,
           chapterCount: 0,
+        },
+      });
+    });
+  });
+
+  describe('deletePageHandler', () => {
+    it('returns 401 when req.user is missing', async () => {
+      const res = fakeRes();
+      await deletePageHandler({ params: { slug: 'kependudukan' } } as never, res);
+      assert.equal(res.status, 401);
+    });
+
+    it('returns 400 when req.params.slug is missing or invalid', async () => {
+      for (const badSlug of ['', 'Kependudukan', 'a_b', 'bad\\slug']) {
+        const res = fakeRes();
+        await deletePageHandler(
+          { params: { slug: badSlug }, user: { id: 'u1', role: 'editor' } } as never,
+          res,
+        );
+        assert.equal(res.status, 400);
+      }
+    });
+
+    it('returns 404 when service throws 404 Not Found', async () => {
+      stubFindUnique(async () => null);
+      const res = fakeRes();
+      await deletePageHandler(
+        { params: { slug: 'tidak-ada' }, user: { id: 'u1', role: 'editor' } } as never,
+        res,
+      );
+      assert.equal(res.status, 404);
+      assert.deepStrictEqual(res.body, { error: 'Halaman tidak ditemukan' });
+    });
+
+    it('returns 409 when service throws 409 Conflict', async () => {
+      stubFindUnique(async () => pageRow('kependudukan'));
+      prisma.contentBlock.count = (async () => 1) as unknown as typeof prisma.contentBlock.count;
+      const res = fakeRes();
+      await deletePageHandler(
+        { params: { slug: 'kependudukan' }, user: { id: 'u1', role: 'editor' } } as never,
+        res,
+      );
+      assert.equal(res.status, 409);
+    });
+
+    it('returns 500 without leaking error details when unhandled exception occurs', async () => {
+      stubFindUnique(async () => {
+        throw new Error('db failure');
+      });
+      const res = fakeRes();
+      await deletePageHandler(
+        { params: { slug: 'kependudukan' }, user: { id: 'u1', role: 'editor' } } as never,
+        res,
+      );
+      assert.equal(res.status, 500);
+      assert.deepStrictEqual(res.body, INTERNAL_ERROR);
+    });
+
+    it('returns 200 with deleted page on valid request (Happy Path)', async () => {
+      stubFindUnique(async () => pageRow('kependudukan'));
+      prisma.contentBlock.count = (async () => 0) as unknown as typeof prisma.contentBlock.count;
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            delete: async () => pageRow('kependudukan'),
+          },
+          auditLog: {
+            create: async () => ({ id: 'audit-del-1' }),
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      const res = fakeRes();
+      await deletePageHandler(
+        {
+          params: { slug: 'kependudukan' },
+          user: { id: 'u1', email: 'editor@manggar.go.id', role: 'editor' },
+          ip: '127.0.0.1',
+          get: () => 'test-agent',
+        } as never,
+        res,
+      );
+
+      assert.equal(res.status, 200);
+      assert.deepStrictEqual(res.body, {
+        message: 'Halaman berhasil dihapus',
+        page: {
+          id: 'page-1',
+          slug: 'kependudukan',
+          title: 'Kependudukan',
+          sortOrder: 0,
         },
       });
     });

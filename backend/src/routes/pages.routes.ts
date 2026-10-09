@@ -1,5 +1,10 @@
 import { Router } from 'express';
-import { listPages, getPage, createPageHandler } from '../controllers/pages.controller.js';
+import {
+  listPages,
+  getPage,
+  createPageHandler,
+  deletePageHandler,
+} from '../controllers/pages.controller.js';
 import { verifyToken } from '../middlewares/auth.middleware.js';
 import { requireEditorOrAdmin } from '../middlewares/role.middleware.js';
 import {
@@ -22,6 +27,14 @@ router.post(
   requireEditorOrAdmin,
   pagesWriteLimiter,
   createPageHandler,
+);
+router.delete(
+  '/:slug',
+  apiLimiter,
+  verifyToken,
+  requireEditorOrAdmin,
+  pagesWriteLimiter,
+  deletePageHandler,
 );
 
 export default router;

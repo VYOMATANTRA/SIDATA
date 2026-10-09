@@ -306,3 +306,102 @@ export const createPage = async (
     throw err;
   }
 };
+
+export interface DeletedPageDTO {
+  id: string;
+  slug: string;
+  title: string;
+  sortOrder: number;
+}
+
+export const deletePage = async (
+  rawSlug: string,
+  actor: AuditActor,
+  reqContext: AuditRequestContext,
+  client = prisma,
+): Promise<DeletedPageDTO> => {
+  if (
+    typeof rawSlug !== 'string' ||
+    !PAGE_SLUG_PATTERN.test(rawSlug) ||
+    rawSlug.length > 100 ||
+    rawSlug.includes('\\') ||
+    /%5c/i.test(rawSlug)
+  ) {
+    throw new PageServiceError(
+      'Slug halaman tidak valid. Gunakan format kebab-case (maksimal 100 karakter).',
+      400,
+    );
+  }
+
+  const slug = rawSlug.trim().toLowerCase();
+
+  const existingPage = await client.page.findUnique({
+    where: { slug },
+  });
+  if (!existingPage) {
+    throw new PageServiceError('Halaman tidak ditemukan', 404);
+  }
+
+  const attachedBlocksCount = await client.contentBlock.count({
+    where: {
+      section: {
+        chapter: {
+          pageId: existingPage.id,
+        },
+      },
+    },
+  });
+  if (attachedBlocksCount > 0) {
+    throw new PageServiceError(
+      'Halaman tidak dapat dihapus karena masih memiliki data terkait (blok konten)',
+      409,
+    );
+  }
+
+  try {
+    return await client.$transaction(async (tx) => {
+      const deleted = await tx.page.delete({
+        where: { id: existingPage.id },
+      });
+
+      await buildAuditLog(
+        {
+          action: AUDIT_ACTIONS.PAGE_DELETED,
+          actor,
+          target: {
+            type: 'page',
+            id: deleted.id,
+            label: deleted.title,
+          },
+          metadata: {
+            slug: deleted.slug,
+            title: deleted.title,
+            sortOrder: deleted.sortOrder,
+          },
+          context: reqContext,
+        },
+        tx,
+      );
+
+      return {
+        id: deleted.id,
+        slug: deleted.slug,
+        title: deleted.title,
+        sortOrder: deleted.sortOrder,
+      };
+    });
+  } catch (err) {
+    if (err instanceof Error && 'code' in err) {
+      if (err.code === 'P2003') {
+        throw new PageServiceError(
+          'Halaman tidak dapat dihapus karena masih memiliki data terkait (blok konten)',
+          409,
+        );
+      }
+      if (err.code === 'P2025') {
+        throw new PageServiceError('Halaman tidak ditemukan', 404);
+      }
+    }
+    throw err;
+  }
+};
