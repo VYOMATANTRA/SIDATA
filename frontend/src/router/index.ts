@@ -42,6 +42,34 @@ const router = createRouter({
       component: () => import('../views/AuthCallbackView.vue'),
       meta: { title: 'Autentikasi' },
     },
+    {
+      path: '/tentang',
+      redirect: '/tentang/kelurahan-manggar',
+    },
+    {
+      path: '/tentang/kelurahan-manggar',
+      name: 'tentang-kelurahan-manggar',
+      component: () => import('../views/TentangKelurahanManggarView.vue'),
+      meta: { title: 'Tentang Kelurahan Manggar' },
+    },
+    {
+      path: '/tentang/desa-cantik',
+      name: 'tentang-desa-cantik',
+      component: () => import('../views/TentangDesaCantikView.vue'),
+      meta: { title: 'Program Desa Cantik' },
+    },
+    {
+      path: '/tentang/vyomatantra',
+      name: 'tentang-vyomatantra',
+      component: () => import('../views/TentangVyomatantraView.vue'),
+      meta: { title: 'Inovasi Sosial VYOMATANTRA' },
+    },
+    {
+      path: '/permintaan-data',
+      name: 'permintaan-data',
+      component: () => import('../views/PermintaanDataView.vue'),
+      meta: { title: 'Permintaan Data' },
+    },
   ],
 });
 
