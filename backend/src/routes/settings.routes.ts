@@ -12,18 +12,21 @@ import { requireAdmin } from '../middlewares/role.middleware.js';
 import {
   apiLimiter,
   userManagementReadLimiter,
-  userManagementWriteLimiter,
+  settingsWriteLimiter,
 } from '../middlewares/rateLimit.middleware.js';
 
 const router = Router();
 
+// Mutations: apiLimiter throttles unauthenticated traffic before verifyToken; settingsWriteLimiter (keyed by
+// user id) runs only after authentication and role checks so anonymous requests cannot drain admin quota.
 // Public portal profile and contact settings (unauthenticated, rate-limited)
 router.get('/public', apiLimiter, getPublicSettingsHandler);
 router.patch(
   '/public',
-  userManagementWriteLimiter,
+  apiLimiter,
   verifyToken,
   requireAdmin,
+  settingsWriteLimiter,
   updatePublicSettingsHandler,
 );
 
@@ -37,9 +40,10 @@ router.get(
 );
 router.patch(
   '/audit-retention',
-  userManagementWriteLimiter,
+  apiLimiter,
   verifyToken,
   requireAdmin,
+  settingsWriteLimiter,
   updateAuditRetention,
 );
 
@@ -53,9 +57,10 @@ router.get(
 );
 router.patch(
   '/weather-config',
-  userManagementWriteLimiter,
+  apiLimiter,
   verifyToken,
   requireAdmin,
+  settingsWriteLimiter,
   updateWeatherConfigHandler,
 );
 
