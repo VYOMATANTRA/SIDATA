@@ -2,16 +2,24 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import contentBlocksRouter from '../routes/contentBlocks.routes.js';
 import {
+  apiLimiter,
   userManagementWriteLimiter,
   contentBlocksWriteLimiter,
 } from '../middlewares/rateLimit.middleware.js';
 import { verifyToken } from '../middlewares/auth.middleware.js';
 import { requireEditorOrAdmin } from '../middlewares/role.middleware.js';
 
+interface RouteStackLayer {
+  route?: {
+    path?: string;
+    methods?: Record<string, boolean>;
+    stack: Array<{ handle: unknown }>;
+  };
+}
+
 describe('contentBlocks.routes rate limiter isolation and ordering', () => {
-  const patchLayer = contentBlocksRouter.stack.find(
-    (layer) => layer.route && layer.route.methods.patch,
-  );
+  const routerLayers = contentBlocksRouter.stack as unknown as RouteStackLayer[];
+  const patchLayer = routerLayers.find((layer) => layer.route && layer.route.methods?.patch);
 
   it('ensures PATCH /:slug route is registered', () => {
     assert.ok(patchLayer, 'PATCH /:slug route layer must exist');
@@ -58,6 +66,20 @@ describe('contentBlocks.routes rate limiter isolation and ordering', () => {
     );
   });
 
+  it('places apiLimiter before verifyToken to protect against unthrottled DoS and satisfy CodeQL', () => {
+    assert.ok(patchLayer?.route);
+    const handles = patchLayer.route.stack.map((s) => s.handle);
+
+    const apiLimiterIndex = handles.indexOf(apiLimiter as never);
+    const verifyTokenIndex = handles.indexOf(verifyToken as never);
+
+    assert.ok(apiLimiterIndex !== -1, 'apiLimiter must be present at route entry');
+    assert.ok(
+      apiLimiterIndex < verifyTokenIndex,
+      'apiLimiter must run before verifyToken to rate-limit unauthenticated traffic',
+    );
+  });
+
   it('unauthenticated request is stopped by verifyToken before reaching contentBlocksWriteLimiter', async () => {
     assert.ok(patchLayer?.route);
     const handles = patchLayer.route.stack.map((s) => s.handle);
@@ -78,9 +100,15 @@ describe('contentBlocks.routes rate limiter isolation and ordering', () => {
     };
 
     let nextCalled = false;
-    await (handles[0] as (r: unknown, s: unknown, n: () => void) => Promise<void>)(req, res, () => {
-      nextCalled = true;
-    });
+    const verifyTokenHandle = handles.find((h) => h === (verifyToken as never));
+    assert.ok(verifyTokenHandle, 'verifyToken handler must exist in stack');
+    await (verifyTokenHandle as (r: unknown, s: unknown, n: () => void) => Promise<void>)(
+      req,
+      res,
+      () => {
+        nextCalled = true;
+      },
+    );
 
     assert.equal(nextCalled, false, 'verifyToken must not call next() without valid credentials');
     assert.equal(statusCode, 401, 'verifyToken must return 401 Unauthorized');

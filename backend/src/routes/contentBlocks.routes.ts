@@ -14,9 +14,10 @@ const router = Router();
 router.get('/', apiLimiter, getContentBlocksHandler);
 router.get('/:slug', apiLimiter, getContentBlockBySlugHandler);
 
-// Mutation: Editor or Admin only (token verified, role checked, rate-limited)
+// Mutation: Editor or Admin only (rate-limited, token verified, role checked, user-rate-limited)
 router.patch(
   '/:slug',
+  apiLimiter,
   verifyToken,
   requireEditorOrAdmin,
   contentBlocksWriteLimiter,
