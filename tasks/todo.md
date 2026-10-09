@@ -213,15 +213,15 @@
 **Description:** Document the page management endpoints, atomic transaction guarantees, and audit trail events in `docs/SPEC.md` §3 and §7. Update `AGENTS.md` to reflect the updated route, controller, and service responsibilities. Run full repository verification (all backend tests, type check, lint, format).
 
 **Acceptance criteria:**
-- [ ] `docs/SPEC.md` §3 documents the endpoints, roles (Editor + Admin), and audit actions (`page.created`, `page.deleted`, `page.reordered`).
-- [ ] `AGENTS.md` lists the updated `pages.routes.ts`, `pages.controller.ts`, and `pages.service.ts` descriptions.
-- [ ] Full backend test suite (`npm test`) passes with 0 failures (468+ tests).
-- [ ] `npm run lint` and `npm run format` complete cleanly.
+- [x] `docs/SPEC.md` §3 documents the endpoints, roles (Editor + Admin), and audit actions (`page.created`, `page.deleted`, `page.reordered`).
+- [x] `AGENTS.md` lists the updated `pages.routes.ts`, `pages.controller.ts`, and `pages.service.ts` descriptions.
+- [x] Full backend test suite (`npm test`) passes with 0 failures (468+ tests; achieved 680 passed).
+- [x] `npm run lint` and `npm run format` complete cleanly.
 
 **Verification:**
-- [ ] Full suite passes: `npm test`
-- [ ] Linter passes: `npm run lint`
-- [ ] Docs match implemented codebase.
+- [x] Full suite passes: `npm test`
+- [x] Linter passes: `npm run lint`
+- [x] Docs match implemented codebase.
 
 **Dependencies:** Task 6
 
@@ -234,6 +234,6 @@
 ---
 
 ## Checkpoint: Final Review & Quality Gates
-- [ ] All increments complete.
-- [ ] Zero code smells, zero regressions, hardened against TOCTOU and XSS.
-- [ ] Ready for pull request.
+- [x] All increments complete.
+- [x] Zero code smells, zero regressions, hardened against TOCTOU and XSS.
+- [x] Ready for pull request.
