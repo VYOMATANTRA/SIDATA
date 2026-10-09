@@ -77,4 +77,5 @@ FLUSH PRIVILEGES;
 -- script runs, `prisma migrate deploy` must use the privileged URL (prisma.config.ts reads
 -- DATABASE_URL):
 --   DATABASE_URL="$AUDIT_ADMIN_DATABASE_URL" npx prisma migrate deploy
+-- (Compose: set RUN_MIGRATIONS=0 on `backend`, migrate via the audit-pruner service — see README.)
 -- Then re-run this script if the migration added a table.

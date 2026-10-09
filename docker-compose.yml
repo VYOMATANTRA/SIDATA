@@ -18,7 +18,6 @@ x-backend-env: &backend-env
   RESEND_API_KEY: ${RESEND_API_KEY}
   EMAIL_FROM: ${EMAIL_FROM}
   TRUST_PROXY: ${TRUST_PROXY}
-  AUDIT_ADMIN_DATABASE_URL: ${AUDIT_ADMIN_DATABASE_URL}
 
 services:
   mysql:
@@ -50,7 +49,7 @@ services:
       start_period: 20s
 
   backend:
-    command: sh -c "npm ci && npx prisma generate && npx prisma migrate deploy && npx tsx prisma/seed.ts && npx tsx watch src/index.ts"
+    command: sh -c "npm ci && npx prisma generate && if [ \"$${RUN_MIGRATIONS:-1}\" = 1 ]; then npx prisma migrate deploy; fi && npx tsx prisma/seed.ts && npx tsx watch src/index.ts"
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -58,7 +57,9 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-    environment: *backend-env
+    environment:
+      <<: *backend-env
+      RUN_MIGRATIONS: ${RUN_MIGRATIONS:-1}
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
     volumes:
@@ -80,14 +81,24 @@ services:
         condition: service_healthy
     environment:
       <<: *backend-env
+      # Privileged connection lives only in this service, never in `backend`. DATABASE_URL is
+      # overridden with it so `docker compose --profile ops run --rm audit-pruner npx prisma
+      # migrate deploy` migrates as the privileged user once the grants script is applied.
+      DATABASE_URL: ${AUDIT_ADMIN_DATABASE_URL}
+      AUDIT_ADMIN_DATABASE_URL: ${AUDIT_ADMIN_DATABASE_URL}
       AUDIT_PRUNE_SCHEDULE: ${AUDIT_PRUNE_SCHEDULE:-0 3 * * *}
     command:
       - sh
       - -c
       - |
+        if [ -z "$$AUDIT_ADMIN_DATABASE_URL" ]; then
+          echo "AUDIT_ADMIN_DATABASE_URL is not set; refusing to start audit-pruner" >&2
+          exit 1
+        fi
         npx prisma generate
+        umask 077
         export -p > /app/.cron-env
-        echo "$$AUDIT_PRUNE_SCHEDULE . /app/.cron-env; cd /app && npx tsx scripts/prune-audit-logs.ts" > /etc/crontabs/root
+        echo "$$AUDIT_PRUNE_SCHEDULE . /app/.cron-env; cd /app && npx tsx scripts/prune-audit-logs.ts >/proc/1/fd/1 2>/proc/1/fd/2" > /etc/crontabs/root
         exec crond -f -l 8
 
   frontend:

@@ -125,8 +125,11 @@ Checklist for a new environment (Docker on a VPS). Background: [`AGENTS.md`](AGE
 
 1. Create a second, privileged MySQL user (full rights on the database) and set
    `AUDIT_ADMIN_DATABASE_URL` to it. This is separate from `DATABASE_URL`, the app's runtime user.
-2. Run migrations as the privileged user:
+2. Run migrations as the privileged user. Under Compose:
+   `docker compose --profile ops run --rm audit-pruner npx prisma migrate deploy`; outside Compose:
    `DATABASE_URL="$AUDIT_ADMIN_DATABASE_URL" npx prisma migrate deploy` (from `backend/`).
+   Also set `RUN_MIGRATIONS=0` for the `backend` service from here on — it runs `migrate deploy` at
+   start by default, which the restricted app user can no longer do after step 3.
 3. **Apply the audit-log grants once per environment.** Substitute `<APP_DB_USER>`, `<APP_DB_HOST>`
    and `<DB_NAME>` in `backend/scripts/grants/audit-logs-grants.sql`, run it as a MySQL user with
    `GRANT` privileges (e.g. root), then run the verification queries at the bottom of the file.
@@ -137,7 +140,7 @@ Checklist for a new environment (Docker on a VPS). Background: [`AGENTS.md`](AGE
      `AUDIT_PRUNE_SCHEDULE`, default daily at 03:00), or
    - host cron, from `backend/`:
      `0 3 * * * cd /path/to/SIDATA/backend && npx tsx scripts/prune-audit-logs.ts >> /var/log/sidata-prune.log 2>&1`
-     (needs `AUDIT_ADMIN_DATABASE_URL` in the environment or the root `.env`).
+     (needs `AUDIT_ADMIN_DATABASE_URL` and the other required backend variables in the root `.env`, and `npx` on cron's `PATH`).
 5. If behind a reverse proxy, set `TRUST_PROXY`.
 
 ## Available Scripts
