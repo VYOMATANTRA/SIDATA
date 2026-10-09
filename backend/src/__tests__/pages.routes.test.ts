@@ -10,6 +10,7 @@ import {
   getPage,
   createPageHandler,
   deletePageHandler,
+  reorderPagesHandler,
 } from '../controllers/pages.controller.js';
 import { verifyToken } from '../middlewares/auth.middleware.js';
 import { requireEditorOrAdmin } from '../middlewares/role.middleware.js';
@@ -35,7 +36,7 @@ const routeLayers = (router: Router) =>
 
 describe('pages.routes', () => {
   describe('router definition', () => {
-    it('default-exports a router with routes: GET /, POST /, GET /:slug, and DELETE /:slug', async () => {
+    it('default-exports a router with routes: GET /, PUT /reorder, GET /:slug, POST /, and DELETE /:slug', async () => {
       const router = await loadRouter();
       const routes = routeLayers(router).map((l) => ({
         path: l.route!.path,
@@ -46,10 +47,24 @@ describe('pages.routes', () => {
 
       assert.deepStrictEqual(routes, [
         { path: '/', methods: ['get'] },
+        { path: '/reorder', methods: ['put'] },
         { path: '/:slug', methods: ['get'] },
         { path: '/', methods: ['post'] },
         { path: '/:slug', methods: ['delete'] },
       ]);
+    });
+
+    it('registers /reorder BEFORE /:slug routes to eliminate Express parameter shadowing', async () => {
+      const router = await loadRouter();
+      const layers = routeLayers(router);
+      const reorderIndex = layers.findIndex((l) => l.route?.path === '/reorder');
+      const slugIndex = layers.findIndex((l) => l.route?.path === '/:slug');
+      assert.ok(reorderIndex !== -1, 'PUT /reorder route must exist');
+      assert.ok(slugIndex !== -1, 'GET /:slug route must exist');
+      assert.ok(
+        reorderIndex < slugIndex,
+        'PUT /reorder must precede /:slug in router stack to avoid shadowing',
+      );
     });
 
     it('exports pagesLimiter and pagesWriteLimiter from rate-limit middleware', () => {
@@ -93,6 +108,21 @@ describe('pages.routes', () => {
       assert.deepStrictEqual(
         postRoot.route!.stack.map((s) => s.handle),
         [apiLimiter, verifyToken, requireEditorOrAdmin, pagesWriteLimiter, createPageHandler],
+      );
+    });
+
+    it('puts apiLimiter, verifyToken, requireEditorOrAdmin, pagesWriteLimiter, then reorderPagesHandler on PUT /reorder', async () => {
+      const router = await loadRouter();
+      const apiLimiter = (rateLimit as Record<string, unknown>).apiLimiter;
+      const pagesWriteLimiter = (rateLimit as Record<string, unknown>).pagesWriteLimiter;
+
+      const putReorder = routeLayers(router).find(
+        (l) => l.route?.path === '/reorder' && l.route?.methods['put'],
+      );
+      assert.ok(putReorder);
+      assert.deepStrictEqual(
+        putReorder.route!.stack.map((s) => s.handle),
+        [apiLimiter, verifyToken, requireEditorOrAdmin, pagesWriteLimiter, reorderPagesHandler],
       );
     });
 
@@ -217,6 +247,16 @@ describe('pages.routes', () => {
     it('DELETE /api/pages/:slug rejects unauthenticated request (403 or 401)', async () => {
       const response = await fetch(`${baseUrl}/api/pages/kependudukan`, {
         method: 'DELETE',
+      });
+
+      assert.ok(response.status === 401 || response.status === 403);
+    });
+
+    it('PUT /api/pages/reorder rejects unauthenticated request (403 or 401)', async () => {
+      const response = await fetch(`${baseUrl}/api/pages/reorder`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: [{ id: 'p1', sortOrder: 1 }] }),
       });
 
       assert.ok(response.status === 401 || response.status === 403);

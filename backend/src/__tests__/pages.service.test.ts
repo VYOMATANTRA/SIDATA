@@ -5,6 +5,7 @@ import {
   getPageBySlug,
   createPage,
   deletePage,
+  reorderPages,
   PageServiceError,
 } from '../services/pages.service.js';
 import type { AuditActor, AuditRequestContext } from '../services/audit.service.js';
@@ -81,6 +82,7 @@ describe('pages.service', () => {
   let originalTransaction: typeof prisma.$transaction;
   let originalContentBlockCount: typeof prisma.contentBlock.count;
   let originalPageDelete: typeof prisma.page.delete;
+  let originalPageUpdate: typeof prisma.page.update;
   let findManyCalls: unknown[][];
   let findUniqueCalls: unknown[][];
 
@@ -104,6 +106,7 @@ describe('pages.service', () => {
     originalTransaction = prisma.$transaction;
     originalContentBlockCount = prisma.contentBlock.count;
     originalPageDelete = prisma.page.delete;
+    originalPageUpdate = prisma.page.update;
     findManyCalls = [];
     findUniqueCalls = [];
     // Fail loudly if a test hits a method it did not stub.
@@ -121,6 +124,7 @@ describe('pages.service', () => {
     prisma.$transaction = originalTransaction;
     prisma.contentBlock.count = originalContentBlockCount;
     prisma.page.delete = originalPageDelete;
+    prisma.page.update = originalPageUpdate;
   });
 
   describe('getPages', () => {
@@ -965,6 +969,278 @@ describe('pages.service', () => {
       assert.ok(auditLogData);
       assert.equal((auditLogData as { action: string }).action, 'page.deleted');
       assert.equal((auditLogData as { severity: string }).severity, 'warning');
+      assert.equal((auditLogData as { actorId: string }).actorId, 'user-1');
+    });
+  });
+
+  describe('reorderPages', () => {
+    const actor: AuditActor = { id: 'user-1', email: 'editor@manggar.go.id', role: 'editor' };
+    const context: AuditRequestContext = { ipAddress: '127.0.0.1', userAgent: 'test-agent' };
+
+    it('rejects payload with prototype pollution (__proto__) (400)', async () => {
+      const polluted = JSON.parse('{"__proto__": {"admin": true}}');
+      await assert.rejects(
+        reorderPages(polluted, actor, context),
+        (err: unknown) => err instanceof PageServiceError && err.statusCode === 400,
+      );
+    });
+
+    it('rejects null, non-object, and non-array payload (400)', async () => {
+      for (const bad of [null, undefined, 'bad', 123, true]) {
+        await assert.rejects(
+          reorderPages(bad, actor, context),
+          (err: unknown) => err instanceof PageServiceError && err.statusCode === 400,
+        );
+      }
+    });
+
+    it('rejects empty items array (400)', async () => {
+      for (const bad of [[], { items: [] }]) {
+        await assert.rejects(
+          reorderPages(bad, actor, context),
+          (err: unknown) =>
+            err instanceof PageServiceError &&
+            err.statusCode === 400 &&
+            err.message.includes('kosong'),
+        );
+      }
+    });
+
+    it('rejects non-array items property (400)', async () => {
+      await assert.rejects(
+        reorderPages({ items: 'not-an-array' }, actor, context),
+        (err: unknown) => err instanceof PageServiceError && err.statusCode === 400,
+      );
+    });
+
+    it('rejects item missing id or sortOrder (400)', async () => {
+      const badItems = [
+        [{ sortOrder: 0 }],
+        [{ id: '' }],
+        [{ id: '   ', sortOrder: 0 }],
+        [{ id: 'p1' }],
+      ];
+      for (const items of badItems) {
+        await assert.rejects(
+          reorderPages(items, actor, context),
+          (err: unknown) => err instanceof PageServiceError && err.statusCode === 400,
+        );
+      }
+    });
+
+    it('rejects negative or non-integer sortOrder (400)', async () => {
+      for (const sortOrder of [-1, 1.5, NaN, Infinity, '1']) {
+        await assert.rejects(
+          reorderPages([{ id: 'p1', sortOrder }], actor, context),
+          (err: unknown) => err instanceof PageServiceError && err.statusCode === 400,
+        );
+      }
+    });
+
+    it('rejects duplicate page IDs in reorder payload (400)', async () => {
+      const duplicatePayload = [
+        { id: 'p1', sortOrder: 0 },
+        { id: 'p1', sortOrder: 1 },
+      ];
+      await assert.rejects(
+        reorderPages(duplicatePayload, actor, context),
+        (err: unknown) =>
+          err instanceof PageServiceError &&
+          err.statusCode === 400 &&
+          err.message.includes('duplikat'),
+      );
+    });
+
+    it('throws 404 when one or more page IDs do not exist in the database', async () => {
+      stubFindMany(async () => [summaryRow({ id: 'p1', sortOrder: 0 })]);
+
+      const payload = [
+        { id: 'p1', sortOrder: 1 },
+        { id: 'p-not-exist', sortOrder: 0 },
+      ];
+
+      await assert.rejects(
+        reorderPages(payload, actor, context),
+        (err: unknown) =>
+          err instanceof PageServiceError &&
+          err.statusCode === 404 &&
+          err.message.includes('tidak ditemukan'),
+      );
+    });
+
+    it('catches Prisma P2025 record vanishing race condition and converts to 404 Not Found', async () => {
+      stubFindMany(async () => [
+        summaryRow({ id: 'p1', sortOrder: 0 }),
+        summaryRow({ id: 'p2', sortOrder: 1 }),
+      ]);
+
+      const p2025 = new Error('Record to update not found.');
+      (p2025 as unknown as { code: string }).code = 'P2025';
+
+      prisma.$transaction = (async () => {
+        throw p2025;
+      }) as unknown as typeof prisma.$transaction;
+
+      const payload = [
+        { id: 'p1', sortOrder: 1 },
+        { id: 'p2', sortOrder: 0 },
+      ];
+
+      await assert.rejects(
+        reorderPages(payload, actor, context),
+        (err: unknown) =>
+          err instanceof PageServiceError &&
+          err.statusCode === 404 &&
+          err.message.includes('tidak ditemukan'),
+      );
+    });
+
+    it('performs no-op: returns 200 without DB updates or audit log if requested order matches existing order exactly', async () => {
+      stubFindMany(async () => [
+        summaryRow({ id: 'p1', sortOrder: 0 }),
+        summaryRow({ id: 'p2', sortOrder: 1 }),
+      ]);
+
+      let transactionCalled = false;
+      prisma.$transaction = (async () => {
+        transactionCalled = true;
+      }) as unknown as typeof prisma.$transaction;
+
+      const payload = [
+        { id: 'p1', sortOrder: 0 },
+        { id: 'p2', sortOrder: 1 },
+      ];
+
+      const result = await reorderPages(payload, actor, context);
+      assert.equal(transactionCalled, false, 'Transaction must not run when order is unchanged');
+      assert.equal(result.length, 2);
+    });
+
+    it('executes database updates in deterministic order (id ascending) to prevent InnoDB deadlocks (1213)', async () => {
+      stubFindMany(async () => [
+        summaryRow({ id: 'p-zebra', sortOrder: 0 }),
+        summaryRow({ id: 'p-alpha', sortOrder: 1 }),
+      ]);
+
+      const updatedIdsOrder: string[] = [];
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            update: async (args: { where: { id: string } }) => {
+              updatedIdsOrder.push(args.where.id);
+              return summaryRow({ id: args.where.id });
+            },
+            findMany: async () => [
+              summaryRow({ id: 'p-alpha', sortOrder: 0 }),
+              summaryRow({ id: 'p-zebra', sortOrder: 1 }),
+            ],
+          },
+          auditLog: {
+            create: async () => ({ id: 'audit-reorder-1' }),
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      // Request submitted in reverse ID order: zebra first, then alpha
+      const payload = [
+        { id: 'p-zebra', sortOrder: 1 },
+        { id: 'p-alpha', sortOrder: 0 },
+      ];
+
+      await reorderPages(payload, actor, context);
+
+      // Lock acquisition order must be strictly deterministic: alpha then zebra
+      assert.deepStrictEqual(
+        updatedIdsOrder,
+        ['p-alpha', 'p-zebra'],
+        'Updates in transaction must be ordered by id ascending to prevent cycle lock deadlocks',
+      );
+    });
+
+    it('rolls back transaction and makes zero updates if any page update fails or audit write fails', async () => {
+      stubFindMany(async () => [
+        summaryRow({ id: 'p1', sortOrder: 0 }),
+        summaryRow({ id: 'p2', sortOrder: 1 }),
+      ]);
+
+      const auditBoom = new Error('Audit storage failure');
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            update: async () => summaryRow({ id: 'p1', sortOrder: 1 }),
+          },
+          auditLog: {
+            create: async () => {
+              throw auditBoom;
+            },
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      const payload = [
+        { id: 'p1', sortOrder: 1 },
+        { id: 'p2', sortOrder: 0 },
+      ];
+
+      await assert.rejects(
+        reorderPages(payload, actor, context),
+        (err: unknown) => err === auditBoom,
+      );
+    });
+
+    it('successfully reorders pages, updates DB, and writes info audit log in tx (Happy Path)', async () => {
+      stubFindMany(async () => [
+        summaryRow({ id: 'p1', sortOrder: 0, _count: { chapters: 2 } }),
+        summaryRow({ id: 'p2', sortOrder: 1, _count: { chapters: 4 } }),
+      ]);
+
+      const updatedCalls: Array<{ where: { id: string }; data: { sortOrder: number } }> = [];
+      let auditLogData: unknown = null;
+
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            update: async (args: { where: { id: string }; data: { sortOrder: number } }) => {
+              updatedCalls.push(args);
+              return summaryRow({ id: args.where.id, sortOrder: args.data.sortOrder });
+            },
+            findMany: async () => [
+              summaryRow({ id: 'p2', sortOrder: 0, _count: { chapters: 4 } }),
+              summaryRow({ id: 'p1', sortOrder: 1, _count: { chapters: 2 } }),
+            ],
+          },
+          auditLog: {
+            create: async (args: { data: Record<string, unknown> }) => {
+              auditLogData = args.data;
+              return { id: 'audit-reorder-success' };
+            },
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      const payload = [
+        { id: 'p1', sortOrder: 1 },
+        { id: 'p2', sortOrder: 0 },
+      ];
+
+      const result = await reorderPages(payload, actor, context);
+
+      assert.equal(result.length, 2);
+      assert.deepStrictEqual(
+        result.map((p) => p.id),
+        ['p2', 'p1'],
+      );
+      assert.deepStrictEqual(
+        result.map((p) => p.sortOrder),
+        [0, 1],
+      );
+      assert.equal(updatedCalls.length, 2);
+      assert.ok(auditLogData);
+      assert.equal((auditLogData as { action: string }).action, 'page.reordered');
+      assert.equal((auditLogData as { severity: string }).severity, 'info');
       assert.equal((auditLogData as { actorId: string }).actorId, 'user-1');
     });
   });

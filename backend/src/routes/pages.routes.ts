@@ -4,6 +4,7 @@ import {
   getPage,
   createPageHandler,
   deletePageHandler,
+  reorderPagesHandler,
 } from '../controllers/pages.controller.js';
 import { verifyToken } from '../middlewares/auth.middleware.js';
 import { requireEditorOrAdmin } from '../middlewares/role.middleware.js';
@@ -17,6 +18,17 @@ const router = Router();
 
 // Public reads
 router.get('/', pagesLimiter, listPages);
+
+// Reorder must be mounted before /:slug to eliminate Express parameter shadowing
+router.put(
+  '/reorder',
+  apiLimiter,
+  verifyToken,
+  requireEditorOrAdmin,
+  pagesWriteLimiter,
+  reorderPagesHandler,
+);
+
 router.get('/:slug', pagesLimiter, getPage);
 
 // Mutation: Editor or Admin only (rate-limited, token verified, role checked, user-rate-limited)
