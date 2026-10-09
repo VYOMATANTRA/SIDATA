@@ -1,10 +1,61 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
-import SectionHero from '@/components/common/SectionHero.vue';
+import { createPinia, setActivePinia } from 'pinia';
+import LandingSectionHero from '../components/landing/SectionHero.vue';
+import CommonSectionHero from '@/components/common/SectionHero.vue';
+import { useContentBlocksStore, DEFAULT_HERO_BLOCK } from '../stores/contentBlocks.store';
 
-describe('SectionHero.vue', () => {
+describe('SectionHero ctaLink security', () => {
+  it('falls back to #potensi when ctaLink contains backslash bypasses (/\\x, /%5cx, /\\t/x)', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const store = useContentBlocksStore(pinia);
+
+    const malicious = ['/\\evil.com', '/\\x', '/%5cx', '/%5Cx', '/%5cevil.com', '/\\t/x'];
+
+    for (const link of malicious) {
+      store.blocks['landing-hero'] = {
+        ...DEFAULT_HERO_BLOCK,
+        metadata: { ctaLink: link },
+      };
+      const wrapper = mount(LandingSectionHero, {
+        global: {
+          plugins: [pinia],
+          stubs: { 'router-link': true },
+        },
+      });
+      const cta = wrapper.find('a.inline-flex');
+      expect(cta.attributes('href')).toBe('#potensi');
+    }
+  });
+
+  it('accepts safe relative paths, anchors, and HTTPS URLs for ctaLink', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const store = useContentBlocksStore(pinia);
+
+    const safeLinks = ['#potensi', '/layanan', 'https://kelurahan-manggar.balikpapan.go.id'];
+
+    for (const link of safeLinks) {
+      store.blocks['landing-hero'] = {
+        ...DEFAULT_HERO_BLOCK,
+        metadata: { ctaLink: link },
+      };
+      const wrapper = mount(LandingSectionHero, {
+        global: {
+          plugins: [pinia],
+          stubs: { 'router-link': true },
+        },
+      });
+      const cta = wrapper.find('a.inline-flex');
+      expect(cta.attributes('href')).toBe(link);
+    }
+  });
+});
+
+describe('Common SectionHero.vue', () => {
   it('renders default hero title, eyebrow, and description with SIDATA highlight matching Figma spec', () => {
-    const wrapper = mount(SectionHero);
+    const wrapper = mount(CommonSectionHero);
 
     // Check SectionTextArea wrapper
     const textArea = wrapper.find('[data-test="hero-section-text-area"]');
@@ -29,7 +80,7 @@ describe('SectionHero.vue', () => {
   });
 
   it('renders customized props for title, eyebrow, and description', () => {
-    const wrapper = mount(SectionHero, {
+    const wrapper = mount(CommonSectionHero, {
       props: {
         eyebrow: 'Inovasi Statistik Terpadu',
         title: 'Portal Satu Data Manggar',
@@ -51,7 +102,7 @@ describe('SectionHero.vue', () => {
   });
 
   it('supports custom slots for content, actions, and partner badges', () => {
-    const wrapper = mount(SectionHero, {
+    const wrapper = mount(CommonSectionHero, {
       slots: {
         eyebrow: '<span class="test-eyebrow">Tag Kustom</span>',
         title: '<h1 class="test-title">Judul Kustom</h1>',
@@ -69,7 +120,7 @@ describe('SectionHero.vue', () => {
   });
 
   it('applies light variant styling when variant="light" without dark background image or overlay', () => {
-    const wrapper = mount(SectionHero, {
+    const wrapper = mount(CommonSectionHero, {
       props: {
         variant: 'light',
       },
@@ -85,7 +136,7 @@ describe('SectionHero.vue', () => {
   });
 
   it('applies default hero background image and dark gradient overlay for default dark variant', () => {
-    const wrapper = mount(SectionHero);
+    const wrapper = mount(CommonSectionHero);
 
     const section = wrapper.find('[data-test="section-hero"]');
     const style = section.attributes('style');
@@ -94,7 +145,7 @@ describe('SectionHero.vue', () => {
   });
 
   it('applies dark gradient background overlay when custom backgroundImage is passed', () => {
-    const wrapper = mount(SectionHero, {
+    const wrapper = mount(CommonSectionHero, {
       props: {
         backgroundImage: '/test-hero-bg.png',
         showOverlay: true,
@@ -108,12 +159,12 @@ describe('SectionHero.vue', () => {
   });
 
   it('does not apply background image to navy and glass variants by default', () => {
-    const navyWrapper = mount(SectionHero, {
+    const navyWrapper = mount(CommonSectionHero, {
       props: { variant: 'navy' },
     });
     expect(navyWrapper.find('[data-test="section-hero"]').attributes('style')).toBeFalsy();
 
-    const glassWrapper = mount(SectionHero, {
+    const glassWrapper = mount(CommonSectionHero, {
       props: { variant: 'glass' },
     });
     expect(glassWrapper.find('[data-test="section-hero"]').attributes('style')).toBeFalsy();

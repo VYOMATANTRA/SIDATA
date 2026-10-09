@@ -25,13 +25,13 @@ describe('router auth guard retry behavior', () => {
           ok: true,
           json: async () => ({
             accessToken: 'new-token',
-            user: { id: '1', email: 'user@example.com', role: 'user' },
+            user: { id: '1', email: 'admin@example.com', role: 'admin' },
           }),
         } as Response;
       });
 
       // First navigation to a guarded route: refresh fails transiently, bounced to /login.
-      await router.push('/');
+      await router.push('/users');
       expect(router.currentRoute.value.name).toBe('login');
       expect(authStore.isAuthenticated).toBe(false);
       expect(authStore.isInitialized).toBe(true);
@@ -40,8 +40,8 @@ describe('router auth guard retry behavior', () => {
       // failure was transient). Before the fix, the router guard never called initAuth()
       // again because isInitialized was already permanently true.
       refreshShouldSucceed = true;
-      await router.push('/');
-      expect(router.currentRoute.value.name).toBe('home');
+      await router.push('/users');
+      expect(router.currentRoute.value.name).toBe('user-management');
       expect(authStore.isAuthenticated).toBe(true);
     },
   );

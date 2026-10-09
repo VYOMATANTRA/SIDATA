@@ -1,5 +1,12 @@
 import prisma from '../src/utils/prisma.js';
-import { AUDIT_RETENTION_KEYS } from '../src/services/settings.service.js';
+import {
+  AUDIT_RETENTION_KEYS,
+  PUBLIC_SETTING_KEYS,
+  DEFAULT_PUBLIC_SETTINGS,
+  WEATHER_CONFIG_KEYS,
+  DEFAULT_WEATHER_CONFIG_SETTINGS,
+} from '../src/services/settings.service.js';
+import { DEFAULT_CONTENT_BLOCKS } from '../src/services/contentBlocks.service.js';
 import { CERITA_PAGES } from './ceritaPages.js';
 
 async function main() {
@@ -18,6 +25,14 @@ async function main() {
     update: {},
     create: {
       name: 'admin',
+    },
+  });
+
+  const roleEditor = await prisma.role.upsert({
+    where: { name: 'editor' },
+    update: {},
+    create: {
+      name: 'editor',
     },
   });
 
@@ -132,6 +147,61 @@ async function main() {
     });
   }
 
+  // Seed default public settings (portal identity, contact, spatial config)
+  const publicSeedMap: Record<string, string> = {
+    [PUBLIC_SETTING_KEYS.appName]: DEFAULT_PUBLIC_SETTINGS.appName,
+    [PUBLIC_SETTING_KEYS.institutionName]: DEFAULT_PUBLIC_SETTINGS.institutionName,
+    [PUBLIC_SETTING_KEYS.tagline]: DEFAULT_PUBLIC_SETTINGS.tagline,
+    [PUBLIC_SETTING_KEYS.administrativeArea]: DEFAULT_PUBLIC_SETTINGS.administrativeArea,
+    [PUBLIC_SETTING_KEYS.contactPhone]: DEFAULT_PUBLIC_SETTINGS.contactPhone,
+    [PUBLIC_SETTING_KEYS.contactWhatsapp]: DEFAULT_PUBLIC_SETTINGS.contactWhatsapp,
+    [PUBLIC_SETTING_KEYS.contactEmail]: DEFAULT_PUBLIC_SETTINGS.contactEmail,
+    [PUBLIC_SETTING_KEYS.contactAddress]: DEFAULT_PUBLIC_SETTINGS.contactAddress,
+    [PUBLIC_SETTING_KEYS.defaultCoordinates]: JSON.stringify(
+      DEFAULT_PUBLIC_SETTINGS.defaultCoordinates,
+    ),
+    [PUBLIC_SETTING_KEYS.weatherAdm4]: DEFAULT_PUBLIC_SETTINGS.weatherAdm4,
+  };
+
+  for (const [key, value] of Object.entries(publicSeedMap)) {
+    await prisma.systemSetting.upsert({
+      where: { key },
+      update: {},
+      create: { key, value },
+    });
+  }
+
+  // Seed default operational weather settings (tuning knobs & API base URL)
+  const weatherSeedMap: Record<string, string> = {
+    [WEATHER_CONFIG_KEYS.bmkgBaseUrl]: DEFAULT_WEATHER_CONFIG_SETTINGS.bmkgBaseUrl,
+    [WEATHER_CONFIG_KEYS.cacheTtlMs]: String(DEFAULT_WEATHER_CONFIG_SETTINGS.cacheTtlMs),
+    [WEATHER_CONFIG_KEYS.staleRetryMs]: String(DEFAULT_WEATHER_CONFIG_SETTINGS.staleRetryMs),
+    [WEATHER_CONFIG_KEYS.fetchTimeoutMs]: String(DEFAULT_WEATHER_CONFIG_SETTINGS.fetchTimeoutMs),
+  };
+
+  for (const [key, value] of Object.entries(weatherSeedMap)) {
+    await prisma.systemSetting.upsert({
+      where: { key },
+      update: {},
+      create: { key, value },
+    });
+  }
+
+  // Seed default content blocks (Hero, Sambutan Lurah, Highlights) per docs/SPEC.md §7 & §8
+  for (const block of DEFAULT_CONTENT_BLOCKS) {
+    await prisma.contentBlock.upsert({
+      where: { slug: block.slug },
+      update: {},
+      create: {
+        slug: block.slug,
+        type: block.type,
+        title: block.title,
+        body: block.body,
+        metadata: block.metadata,
+      },
+    });
+  }
+
   // Cerita pages and their chapters (docs/SPEC.md §2). `update: {}` keeps re-runs from
   // clobbering titles or ordering an editor has since changed. Sections are not seeded — they
   // arrive with the content work that attaches indicators/prose to them.
@@ -158,7 +228,13 @@ async function main() {
   }
 
   console.log('seeding selesai');
-  console.log({ roleUser, roleAdmin, sampleRt: [rt1.rtNumber, rt2.rtNumber, rt3.rtNumber] });
+  console.log({
+    roleUser,
+    roleEditor,
+    roleAdmin,
+    sampleRt: [rt1.rtNumber, rt2.rtNumber, rt3.rtNumber],
+    seededBlocks: DEFAULT_CONTENT_BLOCKS.map((b) => b.slug),
+  });
 }
 
 main()

@@ -11,6 +11,7 @@ import mapsRoutes from './routes/maps.routes.js';
 import pagesRoutes from './routes/pages.routes.js';
 import auditRoutes from './routes/audit.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
+import contentBlocksRoutes from './routes/contentBlocks.routes.js';
 import { doubleCsrfProtection, invalidCsrfTokenError } from './middlewares/csrf.middleware.js';
 
 const app = express();
@@ -45,6 +46,7 @@ app.use('/api/maps', mapsRoutes);
 app.use('/api/pages', pagesRoutes);
 app.use('/api/audit-logs', auditRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/content-blocks', contentBlocksRoutes);
 
 app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (err === invalidCsrfTokenError) {

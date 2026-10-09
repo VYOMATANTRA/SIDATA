@@ -127,8 +127,8 @@ at Level A per §1) but picking one convention avoids an inconsistent site.
 This is an honest list of where the current code does not yet meet the rules above. It exists so
 the gap between policy and reality is visible, not hidden by the fact that this document exists.
 
-1. No routed view has a `<main>` landmark (`App.vue` is a bare `<RouterView />`). No skip link
-   exists; `sr-only` styling is unused anywhere in the frontend.
+1. Routed views other than `HomeView.vue` lack a `<main>` landmark (`App.vue` is a bare
+   `<RouterView />`) and skip links.
 2. The three modals in `UserManagement.vue` and `OtpVerificationModal.vue` have no `role="dialog"`,
    `aria-modal`, `aria-labelledby`, focus trap, Escape handling, or focus restore.
 3. Form labels across `LoginView.vue`, `RegisterView.vue`, `SetupPassword.vue`, and
