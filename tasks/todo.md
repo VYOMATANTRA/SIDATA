@@ -152,15 +152,15 @@
 **Description:** Write failing unit tests for `PUT /api/pages/reorder` covering failure modes, route collision/shadowing, deadlocks, and atomicity constraints **before** writing the success path. Cover route precedence (ensure `/reorder` does not match `GET /:slug`), unauthenticated (401), unauthorized (403), validation failures (empty array 400, non-array 400, duplicate IDs 400, negative/float sortOrder 400), non-existent page ID or concurrent deletion P2025 (404), deterministic lock ordering (`id` ascending) to eliminate InnoDB deadlocks (1213), no-op detection (same order returns 200 without DB updates or audit log), and single-transaction rollback (simulating failure on the N-th page or audit log ensuring 0 pages updated in DB).
 
 **Acceptance criteria:**
-- [ ] Test fails for route shadowing (ensuring `/reorder` reaches reorder handler, not `/:slug`).
-- [ ] Test fails for 401 unauthenticated and 403 regular user.
-- [ ] Test fails for 400 on empty items, duplicate IDs, or negative/non-integer sortOrder.
-- [ ] Test fails for 404 when any page ID does not exist or vanishes concurrently (P2025).
-- [ ] Test fails for no-op detection (verifying unchanged order triggers 0 updates and 0 audit rows).
-- [ ] Test fails for transaction rollback when partial failure or audit failure occurs (proving atomicity).
+- [x] Test fails for route shadowing (ensuring `/reorder` reaches reorder handler, not `/:slug`).
+- [x] Test fails for 401 unauthenticated and 403 regular user.
+- [x] Test fails for 400 on empty items, duplicate IDs, or negative/non-integer sortOrder.
+- [x] Test fails for 404 when any page ID does not exist or vanishes concurrently (P2025).
+- [x] Test fails for no-op detection (verifying unchanged order triggers 0 updates and 0 audit rows).
+- [x] Test fails for transaction rollback when partial failure or audit failure occurs (proving atomicity).
 
 **Verification:**
-- [ ] Tests fail as expected (RED): `npx tsx --test src/__tests__/pages.service.test.ts src/__tests__/pages.controller.test.ts src/__tests__/pages.routes.test.ts`
+- [x] Tests fail as expected (RED): `npx tsx --test src/__tests__/pages.service.test.ts src/__tests__/pages.controller.test.ts src/__tests__/pages.routes.test.ts`
 
 **Dependencies:** Task 4
 
@@ -178,15 +178,15 @@
 **Description:** Write the happy path test (200 OK with updated page list, verified DB sort orders, and `page.reordered` audit log), then implement `reorderPages` in `pages.service.ts` using a single `prisma.$transaction` with deterministic lock ordering (`id` asc) and no-op detection, implement `reorderPagesHandler` in `pages.controller.ts`, and mount `PUT /reorder` **before** `/:slug` in `pages.routes.ts`.
 
 **Acceptance criteria:**
-- [ ] `reorderPages` updates all pages in deterministic ID order and writes `page.reordered` audit log inside a single transaction.
-- [ ] Detects no-op and returns immediately without DB writes or audit rows.
-- [ ] `PUT /reorder` is registered before `/:slug` routes to prevent Express route collision.
-- [ ] Route uses middleware chain: `apiLimiter` -> `verifyToken` -> `requireEditorOrAdmin` -> `pagesWriteLimiter`.
-- [ ] All tests from Task 5 and Task 6 pass (GREEN).
+- [x] `reorderPages` updates all pages in deterministic ID order and writes `page.reordered` audit log inside a single transaction.
+- [x] Detects no-op and returns immediately without DB writes or audit rows.
+- [x] `PUT /reorder` is registered before `/:slug` routes to prevent Express route collision.
+- [x] Route uses middleware chain: `apiLimiter` -> `verifyToken` -> `requireEditorOrAdmin` -> `pagesWriteLimiter`.
+- [x] All tests from Task 5 and Task 6 pass (GREEN).
 
 **Verification:**
-- [ ] Tests pass: `npx tsx --test src/__tests__/pages.*.test.ts`
-- [ ] Linter passes: `npm run lint`
+- [x] Tests pass: `npx tsx --test src/__tests__/pages.*.test.ts`
+- [x] Linter passes: `npm run lint`
 
 **Dependencies:** Task 5
 
@@ -203,8 +203,8 @@
 ---
 
 ## Checkpoint: Reorder Pages Slice Complete
-- [ ] All three mutation endpoints (Add, Remove, Reorder) fully implemented and passing.
-- [ ] Concurrency, TOCTOU, XSS, and atomicity verified.
+- [x] All three mutation endpoints (Add, Remove, Reorder) fully implemented and passing.
+- [x] Concurrency, TOCTOU, XSS, and atomicity verified.
 
 ---
 

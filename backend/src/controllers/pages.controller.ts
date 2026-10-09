@@ -7,6 +7,7 @@ import {
   getPageBySlug,
   createPage,
   deletePage,
+  reorderPages,
   PageServiceError,
   PAGE_SLUG_PATTERN,
 } from '../services/pages.service.js';
@@ -100,6 +101,38 @@ export const deletePageHandler = async (
     }
     console.error(
       'Error saat menghapus halaman:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
+    return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
+  }
+};
+
+export const reorderPagesHandler = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<Response | void> => {
+  try {
+    const actor = extractRequestActor(req);
+    if (!actor) {
+      return res.status(401).json({ error: 'Akses ditolak. Pengguna belum terautentikasi.' });
+    }
+
+    if (!req.body || (typeof req.body !== 'object' && !Array.isArray(req.body))) {
+      return res.status(400).json({ error: 'Payload reorder harus berupa JSON array atau objek' });
+    }
+
+    const pages = await reorderPages(req.body, actor, extractRequestContext(req));
+
+    return res.status(200).json({
+      message: 'Urutan halaman berhasil diperbarui',
+      pages,
+    });
+  } catch (error) {
+    if (error instanceof PageServiceError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    console.error(
+      'Error saat mengubah urutan halaman:',
       error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
     );
     return res.status(500).json({ error: 'Terjadi kesalahan internal server' });

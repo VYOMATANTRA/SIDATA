@@ -405,3 +405,153 @@ export const deletePage = async (
     throw err;
   }
 };
+
+export interface ReorderPageItemDTO {
+  id: string;
+  sortOrder: number;
+}
+
+export const reorderPages = async (
+  rawInput: unknown,
+  actor: AuditActor,
+  reqContext: AuditRequestContext,
+  client = prisma,
+): Promise<PageSummaryDTO[]> => {
+  if (hasPrototypePollution(rawInput)) {
+    throw new PageServiceError('Payload tidak valid', 400);
+  }
+
+  let items: unknown[];
+  if (Array.isArray(rawInput)) {
+    items = rawInput;
+  } else if (
+    rawInput &&
+    typeof rawInput === 'object' &&
+    'items' in rawInput &&
+    Array.isArray((rawInput as { items: unknown }).items)
+  ) {
+    items = (rawInput as { items: unknown[] }).items;
+  } else {
+    throw new PageServiceError(
+      'Payload reorder harus berupa array atau objek dengan properti items',
+      400,
+    );
+  }
+
+  if (items.length === 0) {
+    throw new PageServiceError('Daftar urutan halaman tidak boleh kosong', 400);
+  }
+
+  const validatedItems: ReorderPageItemDTO[] = [];
+  const seenIds = new Set<string>();
+
+  for (const item of items) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new PageServiceError('Setiap item urutan halaman harus berupa objek', 400);
+    }
+    const itemObj = item as Record<string, unknown>;
+    if (typeof itemObj.id !== 'string') {
+      throw new PageServiceError('ID halaman harus berupa string', 400);
+    }
+    const trimmedId = itemObj.id.trim();
+    if (!trimmedId) {
+      throw new PageServiceError('ID halaman tidak boleh kosong', 400);
+    }
+
+    if (
+      typeof itemObj.sortOrder !== 'number' ||
+      !Number.isInteger(itemObj.sortOrder) ||
+      itemObj.sortOrder < 0
+    ) {
+      throw new PageServiceError('Urutan (sortOrder) harus berupa bilangan bulat non-negatif', 400);
+    }
+
+    if (seenIds.has(trimmedId)) {
+      throw new PageServiceError('ID halaman tidak boleh duplikat', 400);
+    }
+    seenIds.add(trimmedId);
+
+    validatedItems.push({
+      id: trimmedId,
+      sortOrder: itemObj.sortOrder,
+    });
+  }
+
+  const existingPages = await client.page.findMany({
+    where: { id: { in: Array.from(seenIds) } },
+  });
+
+  if (existingPages.length !== seenIds.size) {
+    throw new PageServiceError('Satu atau lebih halaman tidak ditemukan', 404);
+  }
+
+  const existingMap = new Map(existingPages.map((p) => [p.id, p]));
+
+  // Find items whose sortOrder actually changed
+  const changedItems = validatedItems.filter(
+    (item) => existingMap.get(item.id)!.sortOrder !== item.sortOrder,
+  );
+
+  // No-op detection: if none of the sortOrder values changed, return current list without DB writes or audit log
+  if (changedItems.length === 0) {
+    const pages = await client.page.findMany({
+      orderBy: SORT_ORDER,
+      include: { _count: { select: { chapters: true } } },
+    });
+    return pages.map((page) => ({
+      id: page.id,
+      slug: page.slug,
+      title: page.title,
+      sortOrder: page.sortOrder,
+      chapterCount: page._count.chapters,
+    }));
+  }
+
+  // Deterministic lock acquisition order: sort changed items by ID ascending to prevent InnoDB deadlocks (errno 1213)
+  const sortedChanges = [...changedItems].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+  try {
+    return await client.$transaction(async (tx) => {
+      for (const item of sortedChanges) {
+        await tx.page.update({
+          where: { id: item.id },
+          data: { sortOrder: item.sortOrder },
+        });
+      }
+
+      await buildAuditLog(
+        {
+          action: AUDIT_ACTIONS.PAGE_REORDERED,
+          actor,
+          target: {
+            type: 'page',
+            label: 'Cerita Pages',
+          },
+          metadata: {
+            items: validatedItems.map((it) => ({ id: it.id, sortOrder: it.sortOrder })),
+          },
+          context: reqContext,
+        },
+        tx,
+      );
+
+      const pages = await tx.page.findMany({
+        orderBy: SORT_ORDER,
+        include: { _count: { select: { chapters: true } } },
+      });
+
+      return pages.map((page) => ({
+        id: page.id,
+        slug: page.slug,
+        title: page.title,
+        sortOrder: page.sortOrder,
+        chapterCount: page._count.chapters,
+      }));
+    });
+  } catch (err) {
+    if (err instanceof Error && 'code' in err && err.code === 'P2025') {
+      throw new PageServiceError('Satu atau lebih halaman tidak ditemukan', 404);
+    }
+    throw err;
+  }
+};
