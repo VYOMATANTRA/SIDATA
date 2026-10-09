@@ -229,6 +229,41 @@ export interface ExecuteLockedTransactionOptions<T, Tx = unknown> {
   execute: (tx: Tx) => Promise<LockedOperationOutput<T>>;
 }
 
+function isDeadlockError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+
+  const err = error as {
+    code?: unknown;
+    errno?: unknown;
+    cause?: unknown;
+    meta?: unknown;
+  };
+
+  // Prisma deadlock error code
+  if (err.code === 'P2034') return true;
+
+  // MySQL driver errno 1213 or code ER_LOCK_DEADLOCK
+  if (err.errno === 1213 || err.code === 1213 || err.code === 'ER_LOCK_DEADLOCK') return true;
+
+  // Nested driver error in cause
+  if (err.cause && typeof err.cause === 'object') {
+    const cause = err.cause as { errno?: unknown; code?: unknown };
+    if (cause.errno === 1213 || cause.code === 1213 || cause.code === 'ER_LOCK_DEADLOCK') {
+      return true;
+    }
+  }
+
+  // Nested driver error in Prisma meta
+  if (err.meta && typeof err.meta === 'object') {
+    const meta = err.meta as { errno?: unknown; code?: unknown };
+    if (meta.errno === 1213 || meta.code === 1213 || meta.code === 'ER_LOCK_DEADLOCK') {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /**
  * Coordinates row-level pessimistic locking (`SELECT ... FOR UPDATE`), transaction isolation,
  * and post-commit cache invalidation for CMS and settings data.
@@ -239,9 +274,11 @@ export async function executeLockedTransaction<T, Tx = unknown>(
   const runner = (options.client ?? prisma) as TransactionRunner<Tx>;
   const maxRetries = 2;
 
+  let txOutput: OperationResultWithChange<T> | undefined;
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const txOutput = (await runner.$transaction(async (tx: Tx) => {
+      txOutput = (await runner.$transaction(async (tx: Tx) => {
         // 1. Acquire lock if specified
         if (options.lockQuery) {
           if (typeof options.lockQuery === 'function') {
@@ -269,32 +306,9 @@ export async function executeLockedTransaction<T, Tx = unknown>(
         return { result, didChange };
       })) as OperationResultWithChange<T>;
 
-      // 3. Post-commit cache invalidation & callbacks
-      if (txOutput.didChange) {
-        if (Array.isArray(options.cache)) {
-          for (const c of options.cache) {
-            if (c && typeof c.invalidate === 'function') {
-              c.invalidate();
-            }
-          }
-        } else if (options.cache && typeof options.cache.invalidate === 'function') {
-          options.cache.invalidate();
-        }
-      }
-
-      if (options.onCommit) {
-        await options.onCommit(txOutput.result, txOutput.didChange);
-      }
-
-      return txOutput.result;
+      break;
     } catch (error) {
-      const isDeadlock =
-        error &&
-        typeof error === 'object' &&
-        (('code' in error && error.code === 'P2034') ||
-          ('message' in error &&
-            typeof error.message === 'string' &&
-            /deadlock|1213/i.test(error.message)));
+      const isDeadlock = isDeadlockError(error);
 
       if (isDeadlock && attempt < maxRetries) {
         const delayMs = 50 * (attempt + 1) + Math.floor(Math.random() * 50);
@@ -304,5 +318,27 @@ export async function executeLockedTransaction<T, Tx = unknown>(
       throw error;
     }
   }
-  throw new Error('executeLockedTransaction: perulangan percobaan transaksi terlampaui');
+
+  if (!txOutput) {
+    throw new Error('executeLockedTransaction: perulangan percobaan transaksi terlampaui');
+  }
+
+  // 3. Post-commit cache invalidation & callbacks
+  if (txOutput.didChange) {
+    if (Array.isArray(options.cache)) {
+      for (const c of options.cache) {
+        if (c && typeof c.invalidate === 'function') {
+          c.invalidate();
+        }
+      }
+    } else if (options.cache && typeof options.cache.invalidate === 'function') {
+      options.cache.invalidate();
+    }
+  }
+
+  if (options.onCommit) {
+    await options.onCommit(txOutput.result, txOutput.didChange);
+  }
+
+  return txOutput.result;
 }

@@ -921,4 +921,87 @@ describe('utils/lockTransactionCache boundary conditions & sanity checks', () =>
     });
     assert.equal(singleCacheInvalidated, true);
   });
+
+  it('does NOT retry transaction when onCommit throws an error containing "deadlock" or "1213"', async () => {
+    let executeCount = 0;
+    const mockClient = {
+      $transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
+        return fn({});
+      },
+    };
+
+    await assert.rejects(async () => {
+      await executeLockedTransaction({
+        client: mockClient,
+        execute: async () => {
+          executeCount++;
+          return 'mutation-done';
+        },
+        onCommit: async () => {
+          throw new Error(
+            'Post-commit webhook failed: deadlock detected on downstream service (errno 1213)',
+          );
+        },
+      });
+    }, /Post-commit webhook failed/);
+
+    assert.equal(
+      executeCount,
+      1,
+      'execute must run exactly once and not be retried when onCommit throws',
+    );
+  });
+
+  it('does NOT treat application errors containing "deadlock" or "1213" in message text as database deadlocks', async () => {
+    let executeCount = 0;
+    const mockClient = {
+      $transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
+        return fn({});
+      },
+    };
+
+    await assert.rejects(async () => {
+      await executeLockedTransaction({
+        client: mockClient,
+        execute: async () => {
+          executeCount++;
+          throw new Error('Validation failed: NIK 1213 is invalid and deadlock-prone');
+        },
+      });
+    }, /NIK 1213 is invalid/);
+
+    assert.equal(
+      executeCount,
+      1,
+      'execute must not retry on non-driver application errors matching regex text',
+    );
+  });
+
+  it('retries on legitimate Prisma P2034 or MySQL errno 1213 driver deadlock errors and succeeds on retry', async () => {
+    let attempt = 0;
+    const mockClient = {
+      $transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
+        attempt++;
+        if (attempt === 1) {
+          const deadlockErr = new Error('Transaction deadlock');
+          (deadlockErr as unknown as { code: string }).code = 'P2034';
+          throw deadlockErr;
+        }
+        return fn({});
+      },
+    };
+
+    let executeCount = 0;
+    const result = await executeLockedTransaction({
+      client: mockClient,
+      execute: async () => {
+        executeCount++;
+        return 'success-after-deadlock';
+      },
+    });
+
+    assert.equal(result, 'success-after-deadlock');
+    assert.equal(executeCount, 1);
+    assert.equal(attempt, 2);
+  });
 });
