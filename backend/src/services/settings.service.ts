@@ -507,8 +507,47 @@ export async function withTimeoutFallback<T>(
 }
 
 /**
- * Pre-inserts setting keys with empty default values if absent to ensure record locks
- * are taken instead of InnoDB phantom gap locks on SELECT ... FOR UPDATE.
+ * Resolves the serialized default value for a given system setting key.
+ */
+function getDefaultSettingSerializedValue(key: string): string {
+  switch (key) {
+    case PUBLIC_SETTING_KEYS.appName:
+      return DEFAULT_PUBLIC_SETTINGS.appName;
+    case PUBLIC_SETTING_KEYS.institutionName:
+      return DEFAULT_PUBLIC_SETTINGS.institutionName;
+    case PUBLIC_SETTING_KEYS.tagline:
+      return DEFAULT_PUBLIC_SETTINGS.tagline;
+    case PUBLIC_SETTING_KEYS.administrativeArea:
+      return DEFAULT_PUBLIC_SETTINGS.administrativeArea;
+    case PUBLIC_SETTING_KEYS.contactPhone:
+      return DEFAULT_PUBLIC_SETTINGS.contactPhone;
+    case PUBLIC_SETTING_KEYS.contactWhatsapp:
+      return DEFAULT_PUBLIC_SETTINGS.contactWhatsapp;
+    case PUBLIC_SETTING_KEYS.contactEmail:
+      return DEFAULT_PUBLIC_SETTINGS.contactEmail;
+    case PUBLIC_SETTING_KEYS.contactAddress:
+      return DEFAULT_PUBLIC_SETTINGS.contactAddress;
+    case PUBLIC_SETTING_KEYS.defaultCoordinates:
+      return JSON.stringify(DEFAULT_PUBLIC_SETTINGS.defaultCoordinates);
+    case PUBLIC_SETTING_KEYS.weatherAdm4:
+      return DEFAULT_PUBLIC_SETTINGS.weatherAdm4;
+    case WEATHER_CONFIG_KEYS.bmkgBaseUrl:
+      return DEFAULT_WEATHER_CONFIG_SETTINGS.bmkgBaseUrl;
+    case WEATHER_CONFIG_KEYS.cacheTtlMs:
+      return String(DEFAULT_WEATHER_CONFIG_SETTINGS.cacheTtlMs);
+    case WEATHER_CONFIG_KEYS.staleRetryMs:
+      return String(DEFAULT_WEATHER_CONFIG_SETTINGS.staleRetryMs);
+    case WEATHER_CONFIG_KEYS.fetchTimeoutMs:
+      return String(DEFAULT_WEATHER_CONFIG_SETTINGS.fetchTimeoutMs);
+    default:
+      return '';
+  }
+}
+
+/**
+ * Pre-inserts setting keys with default values if absent to ensure record locks
+ * are taken instead of InnoDB phantom gap locks on SELECT ... FOR UPDATE,
+ * preventing blank rows from persisting if the subsequent transaction rolls back.
  */
 async function ensureSystemSettingsExist(client: unknown, keys: string[]): Promise<void> {
   if (keys.length === 0) return;
@@ -521,7 +560,7 @@ async function ensureSystemSettingsExist(client: unknown, keys: string[]): Promi
     };
   };
   if (typeof dbClient.systemSetting?.createMany === 'function') {
-    const data = keys.map((key) => ({ key, value: '' }));
+    const data = keys.map((key) => ({ key, value: getDefaultSettingSerializedValue(key) }));
     try {
       await dbClient.systemSetting.createMany({ data, skipDuplicates: true });
     } catch {

@@ -2102,6 +2102,59 @@ describe('settings.controller updatePublicSettingsHandler', () => {
       invalidatePublicSettingsCache();
     }
   });
+
+  it('pre-inserted default rows in ensureSystemSettingsExist preserve default settings when update transaction fails and rolls back', async () => {
+    invalidatePublicSettingsCache();
+    const originalFindMany = prisma.systemSetting.findMany;
+    const originalCreateMany = prisma.systemSetting.createMany;
+    const originalTransaction = prisma.$transaction;
+
+    const stored = new Map<string, string>();
+    prisma.systemSetting.findMany = (async () => {
+      return Array.from(stored.entries()).map(([key, value]) => ({ key, value }));
+    }) as unknown as typeof prisma.systemSetting.findMany;
+
+    prisma.systemSetting.createMany = (async (args: { data: { key: string; value: string }[] }) => {
+      for (const item of args.data) {
+        if (!stored.has(item.key)) {
+          stored.set(item.key, item.value);
+        }
+      }
+      return { count: args.data.length };
+    }) as unknown as typeof prisma.systemSetting.createMany;
+
+    // Simulate transaction failure / rollback after pre-insertion
+    prisma.$transaction = (async () => {
+      throw new Error('Transaction execution failed and rolled back');
+    }) as unknown as typeof prisma.$transaction;
+
+    try {
+      const res = fakeRes();
+      await updatePublicSettingsHandler(
+        makeReq({
+          body: {
+            contactPhone: '(0542) 746123',
+            tagline: 'Sistem Informasi Data Terpadu Kelurahan Manggar',
+          },
+        }),
+        res as unknown as Response,
+      );
+
+      assert.equal(res.status, 500);
+
+      // Verify that after rollback, the pre-inserted rows retained default values,
+      // not empty strings that would mask the defaults via nullish coalescing (??)
+      invalidatePublicSettingsCache();
+      const current = await getPublicSettings(prisma, true);
+      assert.equal(current.contactPhone, DEFAULT_PUBLIC_SETTINGS.contactPhone);
+      assert.equal(current.tagline, DEFAULT_PUBLIC_SETTINGS.tagline);
+    } finally {
+      prisma.systemSetting.findMany = originalFindMany;
+      prisma.systemSetting.createMany = originalCreateMany;
+      prisma.$transaction = originalTransaction;
+      invalidatePublicSettingsCache();
+    }
+  });
 });
 
 /* =========================================================================
