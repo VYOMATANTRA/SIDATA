@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it, beforeEach, afterEach } from 'node:test';
-import { getPages, getPageBySlug } from '../services/pages.service.js';
+import {
+  getPages,
+  getPageBySlug,
+  createPage,
+  PageServiceError,
+} from '../services/pages.service.js';
+import type { AuditActor, AuditRequestContext } from '../services/audit.service.js';
 import prisma from '../utils/prisma.js';
 
 const EXPECTED_FIND_MANY_ARGS = {
@@ -71,6 +77,7 @@ const detailRow = (overrides: Record<string, unknown> = {}) => ({
 describe('pages.service', () => {
   let originalFindMany: typeof prisma.page.findMany;
   let originalFindUnique: typeof prisma.page.findUnique;
+  let originalTransaction: typeof prisma.$transaction;
   let findManyCalls: unknown[][];
   let findUniqueCalls: unknown[][];
 
@@ -91,6 +98,7 @@ describe('pages.service', () => {
   beforeEach(() => {
     originalFindMany = prisma.page.findMany;
     originalFindUnique = prisma.page.findUnique;
+    originalTransaction = prisma.$transaction;
     findManyCalls = [];
     findUniqueCalls = [];
     // Fail loudly if a test hits a method it did not stub.
@@ -105,6 +113,7 @@ describe('pages.service', () => {
   afterEach(() => {
     prisma.page.findMany = originalFindMany;
     prisma.page.findUnique = originalFindUnique;
+    prisma.$transaction = originalTransaction;
   });
 
   describe('getPages', () => {
@@ -532,6 +541,267 @@ describe('pages.service', () => {
 
       await assert.rejects(getPageBySlug('kependudukan'), (err) => err === boom);
       assert.equal(findUniqueCalls.length, 1);
+    });
+  });
+
+  describe('createPage', () => {
+    const actor: AuditActor = { id: 'user-1', email: 'editor@manggar.go.id', role: 'editor' };
+    const context: AuditRequestContext = { ipAddress: '127.0.0.1', userAgent: 'test-agent' };
+
+    it('rejects empty title string (400)', async () => {
+      await assert.rejects(
+        createPage({ title: '' }, actor, context),
+        (err: unknown) => err instanceof PageServiceError && err.statusCode === 400,
+      );
+    });
+
+    it('rejects whitespace-only title (400)', async () => {
+      await assert.rejects(
+        createPage({ title: '   ' }, actor, context),
+        (err: unknown) => err instanceof PageServiceError && err.statusCode === 400,
+      );
+    });
+
+    it('rejects title containing HTML script tag (XSS defense) (400)', async () => {
+      await assert.rejects(
+        createPage({ title: '<script>alert("xss")</script>' }, actor, context),
+        (err: unknown) =>
+          err instanceof PageServiceError &&
+          err.statusCode === 400 &&
+          err.message.includes('tag HTML'),
+      );
+    });
+
+    it('rejects title containing HTML formatting tag (XSS defense) (400)', async () => {
+      await assert.rejects(
+        createPage({ title: 'Profil <b>Kelurahan</b>' }, actor, context),
+        (err: unknown) =>
+          err instanceof PageServiceError &&
+          err.statusCode === 400 &&
+          err.message.includes('tag HTML'),
+      );
+    });
+
+    it('rejects title containing control characters (400)', async () => {
+      await assert.rejects(
+        createPage({ title: 'Profil\x00Kelurahan' }, actor, context),
+        (err: unknown) => err instanceof PageServiceError && err.statusCode === 400,
+      );
+    });
+
+    it('rejects title exceeding 255 characters (400)', async () => {
+      await assert.rejects(
+        createPage({ title: 'a'.repeat(256) }, actor, context),
+        (err: unknown) => err instanceof PageServiceError && err.statusCode === 400,
+      );
+    });
+
+    it('rejects payload with prototype pollution (__proto__) (400)', async () => {
+      const malicious = JSON.parse('{"title":"Test","__proto__":{"polluted":true}}');
+      await assert.rejects(
+        createPage(malicious, actor, context),
+        (err: unknown) => err instanceof PageServiceError && err.statusCode === 400,
+      );
+    });
+
+    it('rejects invalid slug format (uppercase, special chars, backslash) (400)', async () => {
+      for (const badSlug of ['Kependudukan', 'a_b', 'a/b', 'a\\b', 'a%20b', '../x']) {
+        await assert.rejects(
+          createPage({ title: 'Valid Title', slug: badSlug }, actor, context),
+          (err: unknown) => err instanceof PageServiceError && err.statusCode === 400,
+        );
+      }
+    });
+
+    it('rejects reserved slug keyword "reorder" (400)', async () => {
+      await assert.rejects(
+        createPage({ title: 'Reorder Page', slug: 'reorder' }, actor, context),
+        (err: unknown) =>
+          err instanceof PageServiceError &&
+          err.statusCode === 400 &&
+          err.message.includes('kata kunci terproteksi'),
+      );
+    });
+
+    it('rejects reserved slug keyword "admin" (400)', async () => {
+      await assert.rejects(
+        createPage({ title: 'Admin Page', slug: 'admin' }, actor, context),
+        (err: unknown) =>
+          err instanceof PageServiceError &&
+          err.statusCode === 400 &&
+          err.message.includes('kata kunci terproteksi'),
+      );
+    });
+
+    it('rejects negative sortOrder (400)', async () => {
+      await assert.rejects(
+        createPage({ title: 'Valid Title', sortOrder: -1 }, actor, context),
+        (err: unknown) => err instanceof PageServiceError && err.statusCode === 400,
+      );
+    });
+
+    it('rejects non-integer sortOrder (400)', async () => {
+      await assert.rejects(
+        createPage({ title: 'Valid Title', sortOrder: 1.5 }, actor, context),
+        (err: unknown) => err instanceof PageServiceError && err.statusCode === 400,
+      );
+    });
+
+    it('throws 409 Conflict when page with slug already exists', async () => {
+      stubFindUnique(async () => summaryRow());
+
+      await assert.rejects(
+        createPage({ title: 'Kependudukan', slug: 'kependudukan' }, actor, context),
+        (err: unknown) =>
+          err instanceof PageServiceError &&
+          err.statusCode === 409 &&
+          err.message.includes('sudah digunakan'),
+      );
+    });
+
+    it('catches Prisma P2002 race condition on slug and converts to 409 Conflict', async () => {
+      stubFindUnique(async () => null);
+      const p2002 = new Error('Unique constraint failed on the fields: (`slug`)');
+      (p2002 as unknown as { code: string }).code = 'P2002';
+
+      prisma.$transaction = (async () => {
+        throw p2002;
+      }) as unknown as typeof prisma.$transaction;
+
+      await assert.rejects(
+        createPage({ title: 'Kependudukan', slug: 'kependudukan' }, actor, context),
+        (err: unknown) =>
+          err instanceof PageServiceError &&
+          err.statusCode === 409 &&
+          err.message.includes('sudah digunakan'),
+      );
+    });
+
+    it('rolls back and throws error when audit log creation fails inside transaction', async () => {
+      stubFindUnique(async () => null);
+      const auditBoom = new Error('Audit service unavailable');
+
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            create: async () => summaryRow({ id: 'p-new', slug: 'new-page' }),
+            aggregate: async () => ({ _max: { sortOrder: 5 } }),
+          },
+          auditLog: {
+            create: async () => {
+              throw auditBoom;
+            },
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      await assert.rejects(
+        createPage({ title: 'New Page', slug: 'new-page' }, actor, context),
+        (err: unknown) => err === auditBoom,
+      );
+    });
+
+    it('successfully creates page with explicit slug and sortOrder, writing audit log in tx (Happy Path)', async () => {
+      stubFindUnique(async () => null);
+      let createdRowData: unknown = null;
+      let auditLogData: unknown = null;
+
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            create: async (args: { data: Record<string, unknown> }) => {
+              createdRowData = args.data;
+              return summaryRow({
+                id: 'p-new',
+                slug: args.data.slug,
+                title: args.data.title,
+                sortOrder: args.data.sortOrder,
+              });
+            },
+          },
+          auditLog: {
+            create: async (args: { data: Record<string, unknown> }) => {
+              auditLogData = args.data;
+              return { id: 'audit-1' };
+            },
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      const page = await createPage(
+        { title: 'Inovasi Desa', slug: 'inovasi-desa', sortOrder: 9 },
+        actor,
+        context,
+      );
+
+      assert.deepStrictEqual(page, {
+        id: 'p-new',
+        slug: 'inovasi-desa',
+        title: 'Inovasi Desa',
+        sortOrder: 9,
+        chapterCount: 0,
+      });
+      assert.deepStrictEqual(createdRowData, {
+        title: 'Inovasi Desa',
+        slug: 'inovasi-desa',
+        sortOrder: 9,
+      });
+      assert.ok(auditLogData);
+      assert.equal((auditLogData as { action: string }).action, 'page.created');
+      assert.equal((auditLogData as { severity: string }).severity, 'info');
+      assert.equal((auditLogData as { actorId: string }).actorId, 'user-1');
+    });
+
+    it('auto-derives slug from title when slug is omitted (Happy Path)', async () => {
+      stubFindUnique(async () => null);
+      let createdSlug: string | undefined;
+
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            create: async (args: { data: { slug: string; title: string; sortOrder: number } }) => {
+              createdSlug = args.data.slug;
+              return summaryRow({ id: 'p-new', ...args.data });
+            },
+            aggregate: async () => ({ _max: { sortOrder: 7 } }),
+          },
+          auditLog: {
+            create: async () => ({ id: 'audit-1' }),
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      const page = await createPage({ title: 'Profil Wilayah Manggar' }, actor, context);
+      assert.equal(page.slug, 'profil-wilayah-manggar');
+      assert.equal(createdSlug, 'profil-wilayah-manggar');
+    });
+
+    it('auto-assigns sortOrder to (max + 1) when sortOrder is omitted (Happy Path)', async () => {
+      stubFindUnique(async () => null);
+      let assignedSortOrder: number | undefined;
+
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            create: async (args: { data: { slug: string; title: string; sortOrder: number } }) => {
+              assignedSortOrder = args.data.sortOrder;
+              return summaryRow({ id: 'p-new', ...args.data });
+            },
+            aggregate: async () => ({ _max: { sortOrder: 7 } }),
+          },
+          auditLog: {
+            create: async () => ({ id: 'audit-1' }),
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      const page = await createPage({ title: 'Halaman Baru' }, actor, context);
+      assert.equal(page.sortOrder, 8);
+      assert.equal(assignedSortOrder, 8);
     });
   });
 });
