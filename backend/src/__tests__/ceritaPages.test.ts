@@ -129,11 +129,16 @@ describe('CERITA_PAGES seed data', () => {
     }
   });
 
-  it('numbers Pemerintahan chapters exactly 2.1 through 2.6 in order', () => {
+  it('numbers Pemerintahan chapters 2.1 through 2.5 in order, leaving Sosial Kemasyarakatan unnumbered', () => {
+    // SPEC §2 numbers 2.1–2.5 only; Sosial Kemasyarakatan is hosted from the source doc's §4.5,
+    // so giving it a 2.x number would misattribute it.
     assert.deepStrictEqual(
       pageBySlug('pemerintahan-dan-kelembagaan').chapters.map((c) => c.number),
-      ['2.1', '2.2', '2.3', '2.4', '2.5', '2.6'],
+      ['2.1', '2.2', '2.3', '2.4', '2.5', undefined],
     );
+    const sosial = pageBySlug('pemerintahan-dan-kelembagaan').chapters.at(-1);
+    assert.equal(sosial?.slug, 'sosial-kemasyarakatan');
+    assert.equal('number' in sosial!, false);
   });
 
   it('includes Pemerintahan Kelurahan as chapter 2.3 (Ketua RT page link target)', () => {
@@ -161,9 +166,10 @@ describe('CERITA_PAGES seed data', () => {
     }
   });
 
-  it('numbers every chapter on numbered pages', () => {
+  it('numbers every chapter on numbered pages except Sosial Kemasyarakatan', () => {
     for (const slug of NUMBERED_PAGES) {
       for (const chapter of pageBySlug(slug).chapters) {
+        if (chapter.slug === 'sosial-kemasyarakatan') continue;
         assert.equal(typeof chapter.number, 'string', `${slug}/${chapter.slug}`);
       }
     }

@@ -58,7 +58,7 @@ Notes:
 - Widget Cuaca is not editorial content (no CRUD, not passed through editor/admin, directly from BMKG's public API).
 - Chapters are seeded (`backend/prisma/ceritaPages.ts`) from the table above; sections are not —
   they are created with the content that attaches to them. Two choices go beyond what the table
-  states: Sosial Kemasyarakatan is chapter 2.6 of Pemerintahan & Kelembagaan, and Persampahan &
+  states: Sosial Kemasyarakatan is the last, unnumbered chapter of Pemerintahan & Kelembagaan, and Persampahan &
   Bank Sampah Unit starts with Bank Sampah Unit, Program Eco Boba and Booklet Eco Boba chapters.
   Seeding never overwrites titles or ordering an editor has since changed.
 - `GET /api/pages` and `GET /api/pages/:slug` expose the hierarchy publicly (page → chapters →

@@ -6,7 +6,8 @@
  * set where SPEC.md §2 numbers the chapters (Pemerintahan, Infrastruktur).
  *
  * Not spelled out in SPEC.md §2, so best-guess and open to editor revision:
- * - Pemerintahan chapter 2.6 (Sosial Kemasyarakatan): §2 only says the page "also hosts" it.
+ * - Pemerintahan chapter Sosial Kemasyarakatan: §2 only says the page "also hosts" it (source doc
+ *   §4.5), so it's appended last and deliberately left unnumbered rather than called 2.6.
  * - Persampahan chapters: §2 describes the page's content but lists no chapters.
  */
 export interface CeritaChapterSeed {
@@ -92,7 +93,7 @@ export const CERITA_PAGES: readonly CeritaPageSeed[] = [
         number: '2.5',
         title: 'Pertanggungjawaban dan Pembinaan',
       },
-      { slug: 'sosial-kemasyarakatan', number: '2.6', title: 'Sosial Kemasyarakatan' },
+      { slug: 'sosial-kemasyarakatan', title: 'Sosial Kemasyarakatan' },
     ],
   },
   {
