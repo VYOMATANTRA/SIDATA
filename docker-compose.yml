@@ -1,3 +1,25 @@
+x-backend-env: &backend-env
+  NODE_ENV: ${NODE_ENV}
+  PORT: ${BACKEND_PORT}
+  DATABASE_URL: ${DATABASE_URL}
+  JWT_SECRET: ${JWT_SECRET}
+  JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+  CSRF_SECRET: ${CSRF_SECRET}
+  COOKIE_ENCRYPTION_KEY: ${COOKIE_ENCRYPTION_KEY}
+  CORS_ORIGIN: ${CORS_ORIGIN}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+  GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL}
+  GOOGLE_OAUTH_SUCCESS_REDIRECT: ${GOOGLE_OAUTH_SUCCESS_REDIRECT}
+  GOOGLE_OAUTH_FAILURE_REDIRECT: ${GOOGLE_OAUTH_FAILURE_REDIRECT}
+  OAUTH_STATE_TTL_SECONDS: ${OAUTH_STATE_TTL_SECONDS:-300}
+  OAUTH_PKCE_TTL_SECONDS: ${OAUTH_PKCE_TTL_SECONDS:-300}
+  TURNSTILE_SECRET: ${TURNSTILE_SECRET}
+  RESEND_API_KEY: ${RESEND_API_KEY}
+  EMAIL_FROM: ${EMAIL_FROM}
+  TRUST_PROXY: ${TRUST_PROXY}
+  AUDIT_ADMIN_DATABASE_URL: ${AUDIT_ADMIN_DATABASE_URL}
+
 services:
   mysql:
     image: mysql:8.4
@@ -36,32 +58,37 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-    environment:
-      NODE_ENV: ${NODE_ENV}
-      PORT: ${BACKEND_PORT}
-      DATABASE_URL: ${DATABASE_URL}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
-      CSRF_SECRET: ${CSRF_SECRET}
-      COOKIE_ENCRYPTION_KEY: ${COOKIE_ENCRYPTION_KEY}
-      CORS_ORIGIN: ${CORS_ORIGIN}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL}
-      GOOGLE_OAUTH_SUCCESS_REDIRECT: ${GOOGLE_OAUTH_SUCCESS_REDIRECT}
-      GOOGLE_OAUTH_FAILURE_REDIRECT: ${GOOGLE_OAUTH_FAILURE_REDIRECT}
-      OAUTH_STATE_TTL_SECONDS: ${OAUTH_STATE_TTL_SECONDS:-300}
-      OAUTH_PKCE_TTL_SECONDS: ${OAUTH_PKCE_TTL_SECONDS:-300}
-      TURNSTILE_SECRET: ${TURNSTILE_SECRET}
-      RESEND_API_KEY: ${RESEND_API_KEY}
-      EMAIL_FROM: ${EMAIL_FROM}
-      TRUST_PROXY: ${TRUST_PROXY}
-      AUDIT_ADMIN_DATABASE_URL: ${AUDIT_ADMIN_DATABASE_URL}
+    environment: *backend-env
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
     volumes:
       - ./backend:/app
       - backend_node_modules:/app/node_modules
+
+  # Scheduled audit_logs retention pruning (docs/SPEC.md §3). Opt-in: only starts with
+  # `docker compose --profile ops up -d audit-pruner`, since it needs AUDIT_ADMIN_DATABASE_URL
+  # (a privileged MySQL user, not the app's) to be set.
+  audit-pruner:
+    profiles: ["ops"]
+    restart: unless-stopped
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    working_dir: /app
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      <<: *backend-env
+      AUDIT_PRUNE_SCHEDULE: ${AUDIT_PRUNE_SCHEDULE:-0 3 * * *}
+    command:
+      - sh
+      - -c
+      - |
+        npx prisma generate
+        export -p > /app/.cron-env
+        echo "$$AUDIT_PRUNE_SCHEDULE . /app/.cron-env; cd /app && npx tsx scripts/prune-audit-logs.ts" > /etc/crontabs/root
+        exec crond -f -l 8
 
   frontend:
     build:
