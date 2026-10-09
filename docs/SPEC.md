@@ -56,6 +56,13 @@ Notes:
 - Ketua RT is presented as a single table (100 rows, one per RT), not one page per RT — see
   `rt_leaders` in §7 for the schema and §8 for where it lives.
 - Widget Cuaca is not editorial content (no CRUD, not passed through editor/admin, directly from BMKG's public API).
+- Chapters are seeded (`backend/prisma/ceritaPages.ts`) from the table above; sections are not —
+  they are created with the content that attaches to them. Two choices go beyond what the table
+  states: Sosial Kemasyarakatan is chapter 2.6 of Pemerintahan & Kelembagaan, and Persampahan &
+  Bank Sampah Unit starts with Bank Sampah Unit, Program Eco Boba and Booklet Eco Boba chapters.
+  Seeding never overwrites titles or ordering an editor has since changed.
+- `GET /api/pages` and `GET /api/pages/:slug` expose the hierarchy publicly (page → chapters →
+  sections, each ordered by `sort_order`).
 
 ## 3. Roles
 
@@ -173,9 +180,10 @@ from the tables below.)
 
 This section expresses design intent in raw-DDL vocabulary (`ENUM`, `CHECK`, snake_case table
 names). 3 of these tables (`spatial_points`, `spatial_point_rt`, `rt_leaders`) are implemented
-in `backend/prisma/schema.prisma` (migration `20260819000000_add_spatial_and_rt_tables`); the remaining
-7 tables (`pages`, `chapters`, `sections`, `indicators`, `indicator_tables`, `indicator_table_rows`,
-`content_blocks`) remain pending implementation. Translate into Prisma models with `@@map` when implementing.
+in `backend/prisma/schema.prisma` (migration `20260819000000_add_spatial_and_rt_tables`), and 3 more
+(`pages`, `chapters`, `sections`) in migration `20261009000000_add_content_hierarchy`; the remaining
+4 tables (`indicators`, `indicator_tables`, `indicator_table_rows`, `content_blocks`) remain pending
+implementation. Translate into Prisma models with `@@map` when implementing.
 
 | Table                                       | Purpose / key design notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
