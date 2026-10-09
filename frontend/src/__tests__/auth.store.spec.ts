@@ -1,10 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useAuthStore } from '../stores/auth'
 
 describe('auth store', () => {
   beforeEach(() => {
+    sessionStorage.clear()
     setActivePinia(createPinia())
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('setAuth stores the user/token and marks the store initialized', () => {
@@ -42,7 +47,7 @@ describe('auth store', () => {
         }),
       } as Response
     })
-    globalThis.fetch = fetchMock
+    vi.stubGlobal('fetch', fetchMock)
 
     const store = useAuthStore()
     const result = await store.initAuth()
@@ -56,13 +61,16 @@ describe('auth store', () => {
   })
 
   it('initAuth clears auth state when the refresh request fails', async () => {
-    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
-      const url = String(input)
-      if (url.includes('csrf-token')) {
-        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
-      }
-      return { ok: false, status: 500, json: async () => ({}) } as Response
-    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input)
+        if (url.includes('csrf-token')) {
+          return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+        }
+        return { ok: false, status: 500, json: async () => ({}) } as Response
+      }),
+    )
 
     const store = useAuthStore()
     const result = await store.initAuth()
@@ -88,7 +96,7 @@ describe('auth store', () => {
         }),
       } as Response
     })
-    globalThis.fetch = fetchMock
+    vi.stubGlobal('fetch', fetchMock)
 
     const store = useAuthStore()
     const [a, b] = await Promise.all([store.initAuth(), store.initAuth()])
@@ -100,14 +108,17 @@ describe('auth store', () => {
 
   it('does not retry initAuth after a definitive 401 (refresh denied)', async () => {
     let refreshCalls = 0
-    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
-      const url = String(input)
-      if (url.includes('csrf-token')) {
-        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
-      }
-      refreshCalls++
-      return { ok: false, status: 401, json: async () => ({}) } as Response
-    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input)
+        if (url.includes('csrf-token')) {
+          return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+        }
+        refreshCalls++
+        return { ok: false, status: 401, json: async () => ({}) } as Response
+      }),
+    )
 
     const store = useAuthStore()
     await store.initAuth()
@@ -118,14 +129,17 @@ describe('auth store', () => {
 
   it('does retry initAuth after a transient 500 (not latched)', async () => {
     let refreshCalls = 0
-    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
-      const url = String(input)
-      if (url.includes('csrf-token')) {
-        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
-      }
-      refreshCalls++
-      return { ok: false, status: 500, json: async () => ({}) } as Response
-    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input)
+        if (url.includes('csrf-token')) {
+          return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+        }
+        refreshCalls++
+        return { ok: false, status: 500, json: async () => ({}) } as Response
+      }),
+    )
 
     const store = useAuthStore()
     await store.initAuth()
@@ -136,14 +150,17 @@ describe('auth store', () => {
 
   it('clearAuth resets the refresh-denied latch so initAuth can retry again', async () => {
     let refreshCalls = 0
-    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
-      const url = String(input)
-      if (url.includes('csrf-token')) {
-        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
-      }
-      refreshCalls++
-      return { ok: false, status: 403, json: async () => ({}) } as Response
-    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input)
+        if (url.includes('csrf-token')) {
+          return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+        }
+        refreshCalls++
+        return { ok: false, status: 403, json: async () => ({}) } as Response
+      }),
+    )
 
     const store = useAuthStore()
     await store.initAuth()
@@ -154,13 +171,16 @@ describe('auth store', () => {
   })
 
   it('initAuth failure preserves setupToken and mustChangePassword when user is in password setup flow', async () => {
-    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
-      const url = String(input)
-      if (url.includes('csrf-token')) {
-        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
-      }
-      return { ok: false, status: 401, json: async () => ({}) } as Response
-    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input)
+        if (url.includes('csrf-token')) {
+          return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+        }
+        return { ok: false, status: 401, json: async () => ({}) } as Response
+      }),
+    )
 
     const store = useAuthStore()
     store.setSetupAuth('valid-setup-token')
@@ -212,5 +232,151 @@ describe('auth store', () => {
     expect(store.setupToken).toBeNull()
     expect(store.mustChangePassword).toBe(false)
     expect(sessionStorage.getItem('sidata_setup_token')).toBeNull()
+  })
+
+  it('starts unauthenticated with no admin rights and no setup flow', () => {
+    const store = useAuthStore()
+
+    expect(store.user).toBeNull()
+    expect(store.accessToken).toBeNull()
+    expect(store.isAuthenticated).toBe(false)
+    expect(store.isAdmin).toBe(false)
+    expect(store.isInitialized).toBe(false)
+    expect(store.setupToken).toBeNull()
+    expect(store.mustChangePassword).toBe(false)
+  })
+
+  it('isAdmin is true for admin role case-insensitively, false otherwise', () => {
+    const store = useAuthStore()
+
+    store.setAuth({ id: '1', email: 'a@example.com', role: 'admin' }, 't')
+    expect(store.isAdmin).toBe(true)
+
+    store.setAuth({ id: '1', email: 'a@example.com', role: 'ADMIN' }, 't')
+    expect(store.isAdmin).toBe(true)
+
+    store.setAuth({ id: '1', email: 'a@example.com', role: 'user' }, 't')
+    expect(store.isAdmin).toBe(false)
+
+    store.clearAuth()
+    expect(store.isAdmin).toBe(false)
+  })
+
+  it('clearAuth keeps setupToken when keepSetup is true', () => {
+    const store = useAuthStore()
+    store.setSetupAuth('keep-me')
+
+    store.clearAuth(true)
+
+    expect(store.user).toBeNull()
+    expect(store.accessToken).toBeNull()
+    expect(store.setupToken).toBe('keep-me')
+    expect(store.mustChangePassword).toBe(true)
+    expect(sessionStorage.getItem('sidata_setup_token')).toBe('keep-me')
+  })
+
+  it('initAuth short-circuits when already authenticated without fetching', async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const store = useAuthStore()
+    store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'cached-token')
+
+    const result = await store.initAuth()
+
+    expect(result).toBe(true)
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(store.accessToken).toBe('cached-token')
+  })
+
+  it('does not retry initAuth after a definitive 403 (refresh denied)', async () => {
+    let refreshCalls = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input)
+        if (url.includes('csrf-token')) {
+          return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+        }
+        refreshCalls++
+        return { ok: false, status: 403, json: async () => ({}) } as Response
+      }),
+    )
+
+    const store = useAuthStore()
+    const first = await store.initAuth()
+    const second = await store.initAuth()
+
+    expect(first).toBe(false)
+    expect(second).toBe(false)
+    expect(refreshCalls).toBe(1)
+  })
+
+  it('retries initAuth after a network error (not latched as denied)', async () => {
+    let refreshCalls = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input)
+        if (url.includes('csrf-token')) {
+          return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+        }
+        refreshCalls++
+        throw new Error('network down')
+      }),
+    )
+
+    const store = useAuthStore()
+    const first = await store.initAuth()
+    const second = await store.initAuth()
+
+    expect(first).toBe(false)
+    expect(second).toBe(false)
+    expect(refreshCalls).toBe(2)
+    expect(store.isInitialized).toBe(true)
+    expect(store.isAuthenticated).toBe(false)
+  })
+
+  it('initAuth returns false and clears auth when refresh succeeds without accessToken', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input)
+        if (url.includes('csrf-token')) {
+          return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+        }
+        return { ok: true, json: async () => ({}) } as Response
+      }),
+    )
+
+    const store = useAuthStore()
+    const result = await store.initAuth()
+
+    expect(result).toBe(false)
+    expect(store.isAuthenticated).toBe(false)
+    expect(store.isInitialized).toBe(true)
+  })
+
+  it('initAuth falls back to an empty user object when response has no user', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input)
+        if (url.includes('csrf-token')) {
+          return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+        }
+        return {
+          ok: true,
+          json: async () => ({ accessToken: 'token-without-user' }),
+        } as Response
+      }),
+    )
+
+    const store = useAuthStore()
+    const result = await store.initAuth()
+
+    expect(result).toBe(true)
+    expect(store.accessToken).toBe('token-without-user')
+    expect(store.user).toEqual({ id: '', email: '', role: '' })
   })
 })
