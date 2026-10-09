@@ -4,7 +4,7 @@ import { getPages, getPageBySlug } from '../services/pages.service.js';
 import prisma from '../utils/prisma.js';
 
 const EXPECTED_FIND_MANY_ARGS = {
-  orderBy: { sortOrder: 'asc' },
+  orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
   include: { _count: { select: { chapters: true } } },
 };
 
@@ -12,8 +12,8 @@ const expectedFindUniqueArgs = (slug: string) => ({
   where: { slug },
   include: {
     chapters: {
-      orderBy: { sortOrder: 'asc' },
-      include: { sections: { orderBy: { sortOrder: 'asc' } } },
+      orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+      include: { sections: { orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }] } },
     },
   },
 });

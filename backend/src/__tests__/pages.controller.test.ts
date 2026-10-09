@@ -320,8 +320,8 @@ describe('pages.controller', () => {
         where: { slug: 'kependudukan' },
         include: {
           chapters: {
-            orderBy: { sortOrder: 'asc' },
-            include: { sections: { orderBy: { sortOrder: 'asc' } } },
+            orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+            include: { sections: { orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }] } },
           },
         },
       });

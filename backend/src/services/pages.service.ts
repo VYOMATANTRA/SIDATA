@@ -1,5 +1,8 @@
 import prisma from '../utils/prisma.js';
 
+// sort_order isn't unique, so ties break on id to keep sibling order stable between requests.
+const SORT_ORDER = [{ sortOrder: 'asc' as const }, { id: 'asc' as const }];
+
 export interface SectionDTO {
   id: string;
   slug: string;
@@ -36,7 +39,7 @@ export interface PageDetailDTO {
 
 export const getPages = async (): Promise<PageSummaryDTO[]> => {
   const pages = await prisma.page.findMany({
-    orderBy: { sortOrder: 'asc' },
+    orderBy: SORT_ORDER,
     include: { _count: { select: { chapters: true } } },
   });
 
@@ -54,8 +57,8 @@ export const getPageBySlug = async (slug: string): Promise<PageDetailDTO | null>
     where: { slug },
     include: {
       chapters: {
-        orderBy: { sortOrder: 'asc' },
-        include: { sections: { orderBy: { sortOrder: 'asc' } } },
+        orderBy: SORT_ORDER,
+        include: { sections: { orderBy: SORT_ORDER } },
       },
     },
   });
