@@ -12,6 +12,8 @@ import {
   getSlugCache,
   invalidateContentBlocksCache,
   contentBlocksCache,
+  isSafeCtaLink,
+  isSafePhotoUrl,
 } from '../services/contentBlocks.service.js';
 import prisma from '../utils/prisma.js';
 import type { AuthRequest } from '../middlewares/auth.middleware.js';
@@ -1588,6 +1590,11 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
       'data:text/html,<script>alert(1)</script>',
       'vbscript:msgbox(1)',
       '//attacker.com/evil',
+      '/\\evil.com',
+      '/\\x',
+      '/%5cx',
+      '/%5Ce',
+      '/\\t/x',
       'http://insecure.com/page',
       'https://valid.com\r\njavascript:alert(1)',
       'https://valid.com\t/path',
@@ -1670,6 +1677,11 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
       'data:image/svg+xml;utf8,<svg onload=alert(1)>',
       'http://insecure.com/photo.jpg',
       '//evil.com/photo.jpg',
+      '/\\evil.com/photo.jpg',
+      '/\\x',
+      '/%5cx.jpg',
+      '/%5Ce.jpg',
+      '/\\t/x',
     ];
 
     for (const dangerous of dangerousPhotos) {
@@ -1744,5 +1756,21 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
       prisma.$transaction = originalTransaction;
       invalidateContentBlocksCache();
     }
+  });
+
+  it('isSafeCtaLink and isSafePhotoUrl reject protocol-relative backslash bypasses (/\\x, /%5cx, /\\t/x)', () => {
+    const malicious = ['/\\evil.com', '/\\x', '/%5cx', '/%5Cx', '/%5cevil.com', '/\\t/x'];
+
+    for (const link of malicious) {
+      assert.equal(isSafeCtaLink(link), false, `isSafeCtaLink must reject: ${link}`);
+      assert.equal(isSafePhotoUrl(link), false, `isSafePhotoUrl must reject: ${link}`);
+    }
+
+    assert.equal(isSafeCtaLink('#potensi'), true);
+    assert.equal(isSafeCtaLink('/layanan'), true);
+    assert.equal(isSafeCtaLink('https://kelurahan-manggar.balikpapan.go.id'), true);
+
+    assert.equal(isSafePhotoUrl('/images/lurah.jpg'), true);
+    assert.equal(isSafePhotoUrl('https://cdn.balikpapan.go.id/lurah.jpg'), true);
   });
 });

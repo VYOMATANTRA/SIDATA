@@ -28,12 +28,31 @@ const ctaLink = computed(() => {
   const metaLink = hero.value.metadata?.ctaLink;
   if (typeof metaLink === 'string' && metaLink.trim()) {
     const trimmed = metaLink.trim();
-    if (
-      trimmed.startsWith('#') ||
-      (trimmed.startsWith('/') && !trimmed.startsWith('//')) ||
-      /^https:\/\/[^/]+/i.test(trimmed)
-    ) {
+    if (trimmed.includes('\\') || /%5c/i.test(trimmed)) {
+      return '#potensi';
+    }
+    if (trimmed.startsWith('#')) {
       return trimmed;
+    }
+    if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
+      try {
+        const parsed = new URL(trimmed, 'https://placeholder.invalid');
+        if (parsed.origin === 'https://placeholder.invalid' && parsed.protocol === 'https:') {
+          return trimmed;
+        }
+      } catch {
+        return '#potensi';
+      }
+    }
+    if (/^https:\/\/[^/]+/i.test(trimmed)) {
+      try {
+        const parsed = new URL(trimmed);
+        if (parsed.protocol === 'https:') {
+          return trimmed;
+        }
+      } catch {
+        return '#potensi';
+      }
     }
   }
   return '#potensi';

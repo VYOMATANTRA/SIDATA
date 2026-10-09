@@ -128,8 +128,17 @@ export function isSafeCtaLink(val: string): boolean {
   const trimmed = val.trim();
   if (!trimmed || trimmed.length > 500) return false;
   if (hasControlCharacters(trimmed)) return false;
+  if (trimmed.includes('\\') || /%5c/i.test(trimmed)) return false;
   if (trimmed.startsWith('//')) return false;
-  if (trimmed.startsWith('#') || trimmed.startsWith('/')) return true;
+  if (trimmed.startsWith('#')) return true;
+  if (trimmed.startsWith('/')) {
+    try {
+      const parsed = new URL(trimmed, 'https://placeholder.invalid');
+      return parsed.origin === 'https://placeholder.invalid' && parsed.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }
   try {
     const parsed = new URL(trimmed);
     return parsed.protocol === 'https:';
@@ -144,8 +153,16 @@ export function isSafePhotoUrl(val: string): boolean {
   if (!trimmed) return true;
   if (trimmed.length > 500) return false;
   if (hasControlCharacters(trimmed)) return false;
+  if (trimmed.includes('\\') || /%5c/i.test(trimmed)) return false;
   if (trimmed.startsWith('//')) return false;
-  if (trimmed.startsWith('/')) return true;
+  if (trimmed.startsWith('/')) {
+    try {
+      const parsed = new URL(trimmed, 'https://placeholder.invalid');
+      return parsed.origin === 'https://placeholder.invalid' && parsed.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }
   try {
     const parsed = new URL(trimmed);
     return parsed.protocol === 'https:';
