@@ -5,7 +5,9 @@ import type { Server } from 'node:http';
 import type { Router } from 'express';
 import app from '../app.js';
 import prisma from '../utils/prisma.js';
-import { listPages, getPage } from '../controllers/pages.controller.js';
+import { listPages, getPage, createPageHandler } from '../controllers/pages.controller.js';
+import { verifyToken } from '../middlewares/auth.middleware.js';
+import { requireEditorOrAdmin } from '../middlewares/role.middleware.js';
 import * as rateLimit from '../middlewares/rateLimit.middleware.js';
 
 // Router internals (router.stack / layer.route) are the Express 5 `router` package's public-ish
@@ -28,7 +30,7 @@ const routeLayers = (router: Router) =>
 
 describe('pages.routes', () => {
   describe('router definition', () => {
-    it('default-exports a router with exactly two routes: GET / and GET /:slug', async () => {
+    it('default-exports a router with routes: GET /, POST /, and GET /:slug', async () => {
       const router = await loadRouter();
       const routes = routeLayers(router).map((l) => ({
         path: l.route!.path,
@@ -40,35 +42,51 @@ describe('pages.routes', () => {
       assert.deepStrictEqual(routes, [
         { path: '/', methods: ['get'] },
         { path: '/:slug', methods: ['get'] },
+        { path: '/', methods: ['post'] },
       ]);
     });
 
-    it('registers no mutating methods', async () => {
-      const router = await loadRouter();
-      for (const layer of routeLayers(router)) {
-        for (const method of ['post', 'put', 'patch', 'delete']) {
-          assert.notEqual(layer.route!.methods[method], true, `${method} ${layer.route!.path}`);
-        }
-      }
-    });
-
-    it('exports pagesLimiter from the rate-limit middleware', () => {
+    it('exports pagesLimiter and pagesWriteLimiter from rate-limit middleware', () => {
       const limiter = (rateLimit as Record<string, unknown>).pagesLimiter;
       assert.equal(typeof limiter, 'function');
+      const writeLimiter = (rateLimit as Record<string, unknown>).pagesWriteLimiter;
+      assert.equal(typeof writeLimiter, 'function');
     });
 
-    it('puts pagesLimiter first, then the controller, on both routes', async () => {
+    it('puts pagesLimiter first, then the controller, on public read routes', async () => {
       const router = await loadRouter();
       const limiter = (rateLimit as Record<string, unknown>).pagesLimiter;
-      const byPath = new Map(routeLayers(router).map((l) => [l.route!.path, l.route!.stack]));
-
+      const getRoot = routeLayers(router).find(
+        (l) => l.route?.path === '/' && l.route?.methods['get'],
+      );
+      assert.ok(getRoot);
       assert.deepStrictEqual(
-        byPath.get('/')?.map((s) => s.handle),
+        getRoot.route!.stack.map((s) => s.handle),
         [limiter, listPages],
       );
+
+      const getSlug = routeLayers(router).find(
+        (l) => l.route?.path === '/:slug' && l.route?.methods['get'],
+      );
+      assert.ok(getSlug);
       assert.deepStrictEqual(
-        byPath.get('/:slug')?.map((s) => s.handle),
+        getSlug.route!.stack.map((s) => s.handle),
         [limiter, getPage],
+      );
+    });
+
+    it('puts apiLimiter, verifyToken, requireEditorOrAdmin, pagesWriteLimiter, then createPageHandler on POST /', async () => {
+      const router = await loadRouter();
+      const apiLimiter = (rateLimit as Record<string, unknown>).apiLimiter;
+      const pagesWriteLimiter = (rateLimit as Record<string, unknown>).pagesWriteLimiter;
+
+      const postRoot = routeLayers(router).find(
+        (l) => l.route?.path === '/' && l.route?.methods['post'],
+      );
+      assert.ok(postRoot);
+      assert.deepStrictEqual(
+        postRoot.route!.stack.map((s) => s.handle),
+        [apiLimiter, verifyToken, requireEditorOrAdmin, pagesWriteLimiter, createPageHandler],
       );
     });
   });
@@ -163,6 +181,16 @@ describe('pages.routes', () => {
 
       assert.equal(response.status, 400);
       assert.equal(findUniqueCalls.length, 0);
+    });
+
+    it('POST /api/pages rejects unauthenticated request (403 or 401)', async () => {
+      const response = await fetch(`${baseUrl}/api/pages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Unauthorized' }),
+      });
+
+      assert.ok(response.status === 401 || response.status === 403);
     });
   });
 });

@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import type { Request } from 'express';
-import { listPages, getPage, PAGE_SLUG_PATTERN } from '../controllers/pages.controller.js';
+import {
+  listPages,
+  getPage,
+  createPageHandler,
+  PAGE_SLUG_PATTERN,
+} from '../controllers/pages.controller.js';
 import prisma from '../utils/prisma.js';
 import { CERITA_PAGES } from '../../prisma/ceritaPages.js';
 import { fakeRes } from './helpers/fakeRes.js';
@@ -463,6 +468,96 @@ describe('pages.controller', () => {
         assert.equal(args.where.slug.length, 10_000);
         assert.equal(res.status, 404);
         assert.deepStrictEqual(res.body, NOT_FOUND);
+      });
+    });
+  });
+
+  describe('createPageHandler', () => {
+    it('returns 400 when body is not an object or null', async () => {
+      const res = fakeRes();
+      await createPageHandler({ body: null, user: { id: 'u1', role: 'editor' } } as never, res);
+      assert.equal(res.status, 400);
+    });
+
+    it('returns 400 when title is missing or empty', async () => {
+      const res = fakeRes();
+      await createPageHandler(
+        { body: { title: '   ' }, user: { id: 'u1', role: 'editor' } } as never,
+        res,
+      );
+      assert.equal(res.status, 400);
+    });
+
+    it('returns 401 when req.user is missing', async () => {
+      const res = fakeRes();
+      await createPageHandler({ body: { title: 'Valid' } } as never, res);
+      assert.equal(res.status, 401);
+    });
+
+    it('returns 409 when service throws 409 Conflict', async () => {
+      stubFindUnique(async () => pageRow());
+      const res = fakeRes();
+      await createPageHandler(
+        {
+          body: { title: 'Kependudukan', slug: 'kependudukan' },
+          user: { id: 'u1', role: 'editor' },
+        } as never,
+        res,
+      );
+      assert.equal(res.status, 409);
+    });
+
+    it('returns 500 without leaking error details when unhandled exception occurs', async () => {
+      stubFindUnique(async () => {
+        throw new Error('db failure');
+      });
+      const res = fakeRes();
+      await createPageHandler(
+        {
+          body: { title: 'New Page', slug: 'new-page' },
+          user: { id: 'u1', role: 'editor' },
+        } as never,
+        res,
+      );
+      assert.equal(res.status, 500);
+      assert.deepStrictEqual(res.body, INTERNAL_ERROR);
+    });
+
+    it('returns 201 with created page on valid input (Happy Path)', async () => {
+      stubFindUnique(async () => null);
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            create: async () => pageRow('inovasi-desa'),
+            aggregate: async () => ({ _max: { sortOrder: 7 } }),
+          },
+          auditLog: {
+            create: async () => ({ id: 'audit-1' }),
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      const res = fakeRes();
+      await createPageHandler(
+        {
+          body: { title: 'Inovasi Desa' },
+          user: { id: 'u1', email: 'editor@manggar.go.id', role: 'editor' },
+          ip: '127.0.0.1',
+          get: () => 'test-agent',
+        } as never,
+        res,
+      );
+
+      assert.equal(res.status, 201);
+      assert.deepStrictEqual(res.body, {
+        page: {
+          id: 'page-1',
+          slug: 'inovasi-desa',
+          title: 'Kependudukan',
+          sortOrder: 0,
+          chapterCount: 0,
+        },
       });
     });
   });

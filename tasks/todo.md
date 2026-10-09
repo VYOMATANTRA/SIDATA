@@ -34,14 +34,14 @@
 **Description:** Write failing unit tests for `POST /api/pages` covering security boundaries, XSS protection, TOCTOU races, and edge cases **before** writing the success path. Cover unauthenticated access (401), unauthorized role (403 for `user`), stored XSS in title (`<script>`, HTML tags, control characters), prototype pollution (`__proto__`), invalid slug regex, slug length > 100, backslashes (`\`), reserved slug keyword (`"reorder"`), slug TOCTOU race condition (trapping Prisma `P2002` to return 409 Conflict), and transaction rollback if the audit log insertion throws.
 
 **Acceptance criteria:**
-- [ ] Test fails for 401 unauthenticated request and 403 regular `user` role.
-- [ ] Test fails for 400 on HTML tags in title (`/<[a-z][\s\S]*>/i`), control characters, or prototype pollution.
-- [ ] Test fails for 400 on empty title, invalid slug regex, backslashes, or reserved slug `"reorder"`.
-- [ ] Test fails for 409 on duplicate slug (including Prisma `P2002` concurrent insert race).
-- [ ] Test fails for transaction rollback when audit write fails (ensuring no orphan page inserted).
+- [x] Test fails for 401 unauthenticated request and 403 regular `user` role.
+- [x] Test fails for 400 on HTML tags in title (`/<[a-z][\s\S]*>/i`), control characters, or prototype pollution.
+- [x] Test fails for 400 on empty title, invalid slug regex, backslashes, or reserved slug `"reorder"`.
+- [x] Test fails for 409 on duplicate slug (including Prisma `P2002` concurrent insert race).
+- [x] Test fails for transaction rollback when audit write fails (ensuring no orphan page inserted).
 
 **Verification:**
-- [ ] Tests fail as expected (RED): `npx tsx --test src/__tests__/pages.service.test.ts src/__tests__/pages.controller.test.ts src/__tests__/pages.routes.test.ts`
+- [x] Tests fail as expected (RED): `npx tsx --test src/__tests__/pages.service.test.ts src/__tests__/pages.controller.test.ts`
 
 **Dependencies:** Task 0
 
@@ -59,14 +59,14 @@
 **Description:** Write the happy path test (201 Created with `{ page }`, explicit slug, auto-derived slug, auto-defaulted `sortOrder = max + 1`, and audit log written) then implement the minimal service logic in `createPage`, controller handler `createPageHandler`, and route wiring in `pages.routes.ts`. Implement input sanitization and P2002 conflict mapping.
 
 **Acceptance criteria:**
-- [ ] `createPage` executes page creation and `page.created` audit log in a single transaction.
-- [ ] `createPageHandler` returns 201 with created `PageSummaryDTO` on success.
-- [ ] `POST /` route uses middleware chain: `apiLimiter` -> `verifyToken` -> `requireEditorOrAdmin` -> `pagesWriteLimiter`.
-- [ ] All tests from Task 1 and Task 2 pass (GREEN).
+- [x] `createPage` executes page creation and `page.created` audit log in a single transaction.
+- [x] `createPageHandler` returns 201 with created `PageSummaryDTO` on success.
+- [x] `POST /` route uses middleware chain: `apiLimiter` -> `verifyToken` -> `requireEditorOrAdmin` -> `pagesWriteLimiter`.
+- [x] All tests from Task 1 and Task 2 pass (GREEN).
 
 **Verification:**
-- [ ] Tests pass: `npx tsx --test src/__tests__/pages.*.test.ts`
-- [ ] Linter passes: `npm run lint`
+- [x] Tests pass: `npx tsx --test src/__tests__/pages.*.test.ts`
+- [x] Linter passes: `npm run lint`
 
 **Dependencies:** Task 1
 
@@ -83,8 +83,8 @@
 ---
 
 ## Checkpoint: Add Page Slice Complete
-- [ ] `POST /api/pages` slice fully tested and functional.
-- [ ] All previous read tests and new add-page tests pass.
+- [x] `POST /api/pages` slice fully tested and functional.
+- [x] All previous read tests and new add-page tests pass.
 
 ---
 
