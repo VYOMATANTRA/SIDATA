@@ -365,4 +365,38 @@ describe('getManggarForecast', () => {
     assert.equal(secondResult.location.desa, 'Manggar');
     assert.ok(fetchCount >= 2, 'Second fetch must be initiated after eviction');
   });
+
+  it('prevents generation counter collision when per-key eviction is followed by global eviction during slow refresh', async () => {
+    let resolveSlowFetch!: (val: Response) => void;
+    const slowFetchPromise = new Promise<Response>((resolve) => {
+      resolveSlowFetch = resolve;
+    });
+
+    mock.method(globalThis, 'fetch', async () => {
+      return slowFetchPromise;
+    });
+
+    // 1. Evict per-key first so perKey generation for 64.71.01.1001 becomes 1 (global = 0)
+    evictWeatherCache('64.71.01.1001');
+
+    // 2. Start slow refresh for 64.71.01.1001 -> startGen = 1 + 0 = 1
+    const refreshPromise = getManggarForecast('64.71.01.1001');
+
+    // 3. Trigger global eviction
+    // In buggy code: globalGeneration becomes 1 and cacheGenerationMap is cleared,
+    // so key's generation resets to 0 + 1 = 1 (collision with startGen!)
+    evictWeatherCache();
+
+    // 4. Resolve the slow fetch
+    resolveSlowFetch(new Response(JSON.stringify(sampleBmkgResponse), { status: 200 }));
+    await refreshPromise;
+
+    // 5. The cache must NOT be populated by the stale refresh that was started before global eviction
+    assert.equal(
+      getWeatherCacheKeysForTests().includes('64.71.01.1001'),
+      false,
+      'Cache must remain empty and not be repopulated after global eviction',
+    );
+    assert.equal(getWeatherCacheKeysForTests().length, 0);
+  });
 });

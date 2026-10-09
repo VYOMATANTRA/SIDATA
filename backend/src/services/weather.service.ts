@@ -149,7 +149,6 @@ export function evictWeatherCache(adm4?: string): void {
     inFlightMap.delete(trimmed);
   } else {
     globalGeneration++;
-    cacheGenerationMap.clear();
     weatherCacheMap.clear();
     inFlightMap.clear();
   }
