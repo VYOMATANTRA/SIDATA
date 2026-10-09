@@ -25,6 +25,7 @@ export const weatherLimiter = createLimiter(300);
 export const mapsPointsLimiter = createLimiter(300);
 export const mapsRtLeadersLimiter = createLimiter(300);
 export const mapsSummaryLimiter = createLimiter(300);
+export const pagesLimiter = createLimiter(300);
 
 // Session-maintenance endpoints (csrf-token, refresh, logout, me) are hit on every SPA
 // navigation while unauthenticated (see router/index.ts's beforeEach), not just on deliberate

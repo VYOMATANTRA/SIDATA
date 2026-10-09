@@ -8,6 +8,7 @@ import usersRoutes from './routes/users.routes.js';
 import profileRoutes from './routes/profile.routes.js';
 import weatherRoutes from './routes/weather.routes.js';
 import mapsRoutes from './routes/maps.routes.js';
+import pagesRoutes from './routes/pages.routes.js';
 import auditRoutes from './routes/audit.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
 import { doubleCsrfProtection, invalidCsrfTokenError } from './middlewares/csrf.middleware.js';
@@ -41,6 +42,7 @@ app.use('/api/users', usersRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/weather', weatherRoutes);
 app.use('/api/maps', mapsRoutes);
+app.use('/api/pages', pagesRoutes);
 app.use('/api/audit-logs', auditRoutes);
 app.use('/api/settings', settingsRoutes);
 
