@@ -191,7 +191,60 @@ model ContentBlock {
   createdAt   DateTime         @default(now()) @map("created_at")
   updatedAt   DateTime         @updatedAt @map("updated_at")
 
+  section Section? @relation(fields: [sectionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
   @@index([type])
   @@index([sectionId, sortOrder])
   @@map("content_blocks")
+}
+
+/// Content hierarchy (SPEC.md §2, §7): Page → Chapter → Section. A chapter may hold one or
+/// more sections; there is no 1:1 constraint between them.
+model Page {
+  id        String   @id @default(uuid())
+  slug      String   @unique
+  title     String   @db.VarChar(255)
+  sortOrder Int      @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  chapters Chapter[]
+
+  @@index([sortOrder])
+  @@map("pages")
+}
+
+model Chapter {
+  id        String   @id @default(uuid())
+  pageId    String   @map("page_id")
+  slug      String
+  number    String?  @db.VarChar(16)
+  title     String   @db.VarChar(255)
+  sortOrder Int      @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  page     Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  sections Section[]
+
+  @@unique([pageId, slug])
+  @@index([pageId, sortOrder])
+  @@map("chapters")
+}
+
+model Section {
+  id        String   @id @default(uuid())
+  chapterId String   @map("chapter_id")
+  slug      String
+  title     String?  @db.VarChar(255)
+  sortOrder Int      @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  chapter       Chapter        @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  contentBlocks ContentBlock[]
+
+  @@unique([chapterId, slug])
+  @@index([chapterId, sortOrder])
+  @@map("sections")
 }

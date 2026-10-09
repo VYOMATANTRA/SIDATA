@@ -7,6 +7,7 @@ import {
   DEFAULT_WEATHER_CONFIG_SETTINGS,
 } from '../src/services/settings.service.js';
 import { DEFAULT_CONTENT_BLOCKS } from '../src/services/contentBlocks.service.js';
+import { CERITA_PAGES } from './ceritaPages.js';
 
 async function main() {
   console.log('Memulai proses seeding...');
@@ -199,6 +200,31 @@ async function main() {
         metadata: block.metadata,
       },
     });
+  }
+
+  // Cerita pages and their chapters (docs/SPEC.md §2). `update: {}` keeps re-runs from
+  // clobbering titles or ordering an editor has since changed. Sections are not seeded — they
+  // arrive with the content work that attaches indicators/prose to them.
+  for (const [pageIndex, page] of CERITA_PAGES.entries()) {
+    const seededPage = await prisma.page.upsert({
+      where: { slug: page.slug },
+      update: {},
+      create: { slug: page.slug, title: page.title, sortOrder: pageIndex },
+    });
+
+    for (const [chapterIndex, chapter] of page.chapters.entries()) {
+      await prisma.chapter.upsert({
+        where: { pageId_slug: { pageId: seededPage.id, slug: chapter.slug } },
+        update: {},
+        create: {
+          pageId: seededPage.id,
+          slug: chapter.slug,
+          number: chapter.number ?? null,
+          title: chapter.title,
+          sortOrder: chapterIndex,
+        },
+      });
+    }
   }
 
   console.log('seeding selesai');
