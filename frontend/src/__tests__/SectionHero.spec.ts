@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import SectionHero from '../components/landing/SectionHero.vue';
+import LandingSectionHero from '../components/landing/SectionHero.vue';
+import CommonSectionHero from '@/components/common/SectionHero.vue';
 import { useContentBlocksStore, DEFAULT_HERO_BLOCK } from '../stores/contentBlocks.store';
 
 describe('SectionHero ctaLink security', () => {
@@ -17,7 +18,7 @@ describe('SectionHero ctaLink security', () => {
         ...DEFAULT_HERO_BLOCK,
         metadata: { ctaLink: link },
       };
-      const wrapper = mount(SectionHero, {
+      const wrapper = mount(LandingSectionHero, {
         global: {
           plugins: [pinia],
           stubs: { 'router-link': true },
@@ -40,7 +41,7 @@ describe('SectionHero ctaLink security', () => {
         ...DEFAULT_HERO_BLOCK,
         metadata: { ctaLink: link },
       };
-      const wrapper = mount(SectionHero, {
+      const wrapper = mount(LandingSectionHero, {
         global: {
           plugins: [pinia],
           stubs: { 'router-link': true },
@@ -49,11 +50,12 @@ describe('SectionHero ctaLink security', () => {
       const cta = wrapper.find('a.inline-flex');
       expect(cta.attributes('href')).toBe(link);
     }
-import SectionHero from '@/components/common/SectionHero.vue';
+  });
+});
 
-describe('SectionHero.vue', () => {
+describe('Common SectionHero.vue', () => {
   it('renders default hero title, eyebrow, and description with SIDATA highlight matching Figma spec', () => {
-    const wrapper = mount(SectionHero);
+    const wrapper = mount(CommonSectionHero);
 
     // Check SectionTextArea wrapper
     const textArea = wrapper.find('[data-test="hero-section-text-area"]');
@@ -78,7 +80,7 @@ describe('SectionHero.vue', () => {
   });
 
   it('renders customized props for title, eyebrow, and description', () => {
-    const wrapper = mount(SectionHero, {
+    const wrapper = mount(CommonSectionHero, {
       props: {
         eyebrow: 'Inovasi Statistik Terpadu',
         title: 'Portal Satu Data Manggar',
@@ -100,7 +102,7 @@ describe('SectionHero.vue', () => {
   });
 
   it('supports custom slots for content, actions, and partner badges', () => {
-    const wrapper = mount(SectionHero, {
+    const wrapper = mount(CommonSectionHero, {
       slots: {
         eyebrow: '<span class="test-eyebrow">Tag Kustom</span>',
         title: '<h1 class="test-title">Judul Kustom</h1>',
@@ -118,7 +120,7 @@ describe('SectionHero.vue', () => {
   });
 
   it('applies light variant styling when variant="light" without dark background image or overlay', () => {
-    const wrapper = mount(SectionHero, {
+    const wrapper = mount(CommonSectionHero, {
       props: {
         variant: 'light',
       },
@@ -134,7 +136,7 @@ describe('SectionHero.vue', () => {
   });
 
   it('applies default hero background image and dark gradient overlay for default dark variant', () => {
-    const wrapper = mount(SectionHero);
+    const wrapper = mount(CommonSectionHero);
 
     const section = wrapper.find('[data-test="section-hero"]');
     const style = section.attributes('style');
@@ -143,7 +145,7 @@ describe('SectionHero.vue', () => {
   });
 
   it('applies dark gradient background overlay when custom backgroundImage is passed', () => {
-    const wrapper = mount(SectionHero, {
+    const wrapper = mount(CommonSectionHero, {
       props: {
         backgroundImage: '/test-hero-bg.png',
         showOverlay: true,
@@ -157,12 +159,12 @@ describe('SectionHero.vue', () => {
   });
 
   it('does not apply background image to navy and glass variants by default', () => {
-    const navyWrapper = mount(SectionHero, {
+    const navyWrapper = mount(CommonSectionHero, {
       props: { variant: 'navy' },
     });
     expect(navyWrapper.find('[data-test="section-hero"]').attributes('style')).toBeFalsy();
 
-    const glassWrapper = mount(SectionHero, {
+    const glassWrapper = mount(CommonSectionHero, {
       props: { variant: 'glass' },
     });
     expect(glassWrapper.find('[data-test="section-hero"]').attributes('style')).toBeFalsy();

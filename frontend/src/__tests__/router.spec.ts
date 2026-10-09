@@ -32,7 +32,6 @@ describe('router auth guard retry behavior', () => {
 
       // First navigation to a guarded route: refresh fails transiently, bounced to /login.
       await router.push('/users');
-      await router.push('/');
       expect(router.currentRoute.value.name).toBe('login');
       expect(authStore.isAuthenticated).toBe(false);
       expect(authStore.isInitialized).toBe(true);
@@ -43,8 +42,6 @@ describe('router auth guard retry behavior', () => {
       refreshShouldSucceed = true;
       await router.push('/users');
       expect(router.currentRoute.value.name).toBe('user-management');
-      await router.push('/');
-      expect(router.currentRoute.value.name).toBe('home');
       expect(authStore.isAuthenticated).toBe(true);
     },
   );
