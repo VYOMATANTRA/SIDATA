@@ -44,12 +44,20 @@ export const GOOGLE_OAUTH_FAILURE_REDIRECT = requireEnv('GOOGLE_OAUTH_FAILURE_RE
 
 // TTL for the temporary oauth_state/oauth_verifier cookies (the OAuth handshake window).
 // Optional — defaults to 300 seconds.
-export const OAUTH_STATE_TTL_SECONDS = process.env.OAUTH_STATE_TTL_SECONDS
-  ? Number(process.env.OAUTH_STATE_TTL_SECONDS)
-  : 300;
-export const OAUTH_PKCE_TTL_SECONDS = process.env.OAUTH_PKCE_TTL_SECONDS
-  ? Number(process.env.OAUTH_PKCE_TTL_SECONDS)
-  : 300;
+function parseOptionalTtl(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw || raw.trim() === '') return fallback;
+  const parsed = Number(raw.trim());
+  if (Number.isNaN(parsed) || parsed <= 0 || !Number.isFinite(parsed)) {
+    throw new Error(
+      `Invalid environment variable ${name}: expected a positive number of seconds, received "${raw}".`,
+    );
+  }
+  return parsed;
+}
+
+export const OAUTH_STATE_TTL_SECONDS = parseOptionalTtl('OAUTH_STATE_TTL_SECONDS', 300);
+export const OAUTH_PKCE_TTL_SECONDS = parseOptionalTtl('OAUTH_PKCE_TTL_SECONDS', 300);
 
 // Cloudflare Turnstile Configuration
 export const TURNSTILE_SECRET = requireEnv('TURNSTILE_SECRET');

@@ -15,6 +15,8 @@ function mountHomeView() {
       { path: '/', component: HomeView },
       { path: '/login', component: { template: '<div>login</div>' } },
       { path: '/users', component: { template: '<div>users</div>' } },
+      { path: '/mockup/button', component: { template: '<div>mockup button</div>' } },
+      { path: '/buttons', component: { template: '<div>buttons</div>' } },
     ],
   });
 

@@ -13,6 +13,7 @@ function mountLoginView() {
     history: createMemoryHistory(),
     routes: [
       { path: '/login', component: LoginView },
+      { path: '/register', component: { template: '<div>register</div>' } },
       { path: '/', component: { template: '<div>home</div>' } },
     ],
   })

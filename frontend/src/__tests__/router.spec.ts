@@ -32,6 +32,7 @@ describe('router auth guard retry behavior', () => {
 
       // First navigation to a guarded route: refresh fails transiently, bounced to /login.
       await router.push('/users');
+      await router.push('/');
       expect(router.currentRoute.value.name).toBe('login');
       expect(authStore.isAuthenticated).toBe(false);
       expect(authStore.isInitialized).toBe(true);
@@ -42,6 +43,8 @@ describe('router auth guard retry behavior', () => {
       refreshShouldSucceed = true;
       await router.push('/users');
       expect(router.currentRoute.value.name).toBe('user-management');
+      await router.push('/');
+      expect(router.currentRoute.value.name).toBe('home');
       expect(authStore.isAuthenticated).toBe(true);
     },
   );
@@ -70,5 +73,55 @@ describe('router auth guard retry behavior', () => {
 
     await router.push('/setup-password');
     expect(router.currentRoute.value.name).toBe('setup-password');
+  });
+
+  it('navigates to public routes /login, /register, and /auth/callback', async () => {
+    sessionStorage.clear();
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore(pinia);
+    authStore.clearAuth();
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async () => {
+      return { ok: false, status: 401, json: async () => ({}) } as Response;
+    });
+
+    await router.push('/login');
+    expect(router.currentRoute.value.path).toBe('/login');
+    expect(router.currentRoute.value.name).toBe('login');
+
+    await router.push('/register');
+    expect(router.currentRoute.value.path).toBe('/register');
+    expect(router.currentRoute.value.name).toBe('register');
+
+    await router.push('/auth/callback');
+    expect(router.currentRoute.value.path).toBe('/auth/callback');
+    expect(router.currentRoute.value.name).toBe('auth-callback');
+  });
+
+  it('protects /users route with authentication and admin role guards', async () => {
+    sessionStorage.clear();
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore(pinia);
+    authStore.clearAuth();
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async () => {
+      return { ok: false, status: 401, json: async () => ({}) } as Response;
+    });
+
+    // Unauthenticated -> redirected to login
+    await router.push('/users');
+    expect(router.currentRoute.value.name).toBe('login');
+
+    // Authenticated non-admin -> redirected to home
+    authStore.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'valid-token');
+    await router.push('/users');
+    expect(router.currentRoute.value.name).toBe('home');
+
+    // Authenticated admin -> allowed to access user-management
+    authStore.setAuth({ id: '2', email: 'admin@example.com', role: 'admin' }, 'valid-token');
+    await router.push('/users');
+    expect(router.currentRoute.value.name).toBe('user-management');
   });
 });
