@@ -93,14 +93,14 @@
 **Description:** Write failing unit tests for `DELETE /api/pages/:slug` covering failure modes, security boundaries, and relational integrity constraints **before** writing the success path. Cover unauthenticated access (401), unauthorized role (403), invalid slug format (400), non-existent page (404), relational conflict when sections have attached `content_blocks` (trapping Prisma `P2003` / MySQL errno 1451 `ON DELETE RESTRICT` to return 409 Conflict), and transaction rollback on audit write failure.
 
 **Acceptance criteria:**
-- [ ] Test fails for 401 unauthenticated and 403 regular user.
-- [ ] Test fails for 400 on malformed slug.
-- [ ] Test fails for 404 when page does not exist.
-- [ ] Test fails for 409 Conflict when page contains sections with attached `content_blocks` (relational integrity / P2003).
-- [ ] Test fails for transaction rollback when audit log write fails.
+- [x] Test fails for 401 unauthenticated and 403 regular user.
+- [x] Test fails for 400 on malformed slug.
+- [x] Test fails for 404 when page does not exist.
+- [x] Test fails for 409 Conflict when page contains sections with attached `content_blocks` (relational integrity / P2003).
+- [x] Test fails for transaction rollback when audit log write fails.
 
 **Verification:**
-- [ ] Tests fail as expected (RED): `npx tsx --test src/__tests__/pages.service.test.ts src/__tests__/pages.controller.test.ts src/__tests__/pages.routes.test.ts`
+- [x] Tests fail as expected (RED): `npx tsx --test src/__tests__/pages.service.test.ts src/__tests__/pages.controller.test.ts src/__tests__/pages.routes.test.ts`
 
 **Dependencies:** Task 2
 
@@ -118,14 +118,14 @@
 **Description:** Write the happy path test (200 OK with `{ message, page }`, cascaded empty chapters/sections, and `page.deleted` warning audit log written), then implement `deletePage` in `pages.service.ts`, `deletePageHandler` in `pages.controller.ts`, and wire `DELETE /:slug` in `pages.routes.ts`. Refactor error catching so Prisma `P2003` foreign key restriction cleanly maps to 409 Conflict with an Indonesian message.
 
 **Acceptance criteria:**
-- [ ] `deletePage` safely removes page, cascades empty chapters/sections, catches `P2003` to throw 409, and records `page.deleted` (severity: `warning`) in the transaction.
-- [ ] `deletePageHandler` returns 200 with deleted page info.
-- [ ] `DELETE /:slug` uses middleware chain: `apiLimiter` -> `verifyToken` -> `requireEditorOrAdmin` -> `pagesWriteLimiter`.
-- [ ] All tests from Task 3 and Task 4 pass (GREEN).
+- [x] `deletePage` safely removes page, cascades empty chapters/sections, catches `P2003` to throw 409, and records `page.deleted` (severity: `warning`) in the transaction.
+- [x] `deletePageHandler` returns 200 with deleted page info.
+- [x] `DELETE /:slug` uses middleware chain: `apiLimiter` -> `verifyToken` -> `requireEditorOrAdmin` -> `pagesWriteLimiter`.
+- [x] All tests from Task 3 and Task 4 pass (GREEN).
 
 **Verification:**
-- [ ] Tests pass: `npx tsx --test src/__tests__/pages.*.test.ts`
-- [ ] Linter passes: `npm run lint`
+- [x] Tests pass: `npx tsx --test src/__tests__/pages.*.test.ts`
+- [x] Linter passes: `npm run lint`
 
 **Dependencies:** Task 3
 
@@ -142,8 +142,8 @@
 ---
 
 ## Checkpoint: Remove Page Slice Complete
-- [ ] `DELETE /api/pages/:slug` slice fully tested and functional.
-- [ ] Both Add and Remove slices pass all tests.
+- [x] `DELETE /api/pages/:slug` slice fully tested and functional.
+- [x] Both Add and Remove slices pass all tests.
 
 ---
 

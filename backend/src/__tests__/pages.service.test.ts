@@ -4,6 +4,7 @@ import {
   getPages,
   getPageBySlug,
   createPage,
+  deletePage,
   PageServiceError,
 } from '../services/pages.service.js';
 import type { AuditActor, AuditRequestContext } from '../services/audit.service.js';
@@ -78,6 +79,8 @@ describe('pages.service', () => {
   let originalFindMany: typeof prisma.page.findMany;
   let originalFindUnique: typeof prisma.page.findUnique;
   let originalTransaction: typeof prisma.$transaction;
+  let originalContentBlockCount: typeof prisma.contentBlock.count;
+  let originalPageDelete: typeof prisma.page.delete;
   let findManyCalls: unknown[][];
   let findUniqueCalls: unknown[][];
 
@@ -99,6 +102,8 @@ describe('pages.service', () => {
     originalFindMany = prisma.page.findMany;
     originalFindUnique = prisma.page.findUnique;
     originalTransaction = prisma.$transaction;
+    originalContentBlockCount = prisma.contentBlock.count;
+    originalPageDelete = prisma.page.delete;
     findManyCalls = [];
     findUniqueCalls = [];
     // Fail loudly if a test hits a method it did not stub.
@@ -114,6 +119,8 @@ describe('pages.service', () => {
     prisma.page.findMany = originalFindMany;
     prisma.page.findUnique = originalFindUnique;
     prisma.$transaction = originalTransaction;
+    prisma.contentBlock.count = originalContentBlockCount;
+    prisma.page.delete = originalPageDelete;
   });
 
   describe('getPages', () => {
@@ -802,6 +809,163 @@ describe('pages.service', () => {
       const page = await createPage({ title: 'Halaman Baru' }, actor, context);
       assert.equal(page.sortOrder, 8);
       assert.equal(assignedSortOrder, 8);
+    });
+  });
+
+  describe('deletePage', () => {
+    const actor: AuditActor = { id: 'user-1', email: 'editor@manggar.go.id', role: 'editor' };
+    const context: AuditRequestContext = { ipAddress: '127.0.0.1', userAgent: 'test-agent' };
+
+    it('rejects invalid slug format (uppercase, special chars, whitespace, empty, backslash) (400)', async () => {
+      for (const badSlug of ['', '   ', 'Kependudukan', 'a_b', 'a/b', 'a\\b', '-a', 'a-']) {
+        await assert.rejects(
+          deletePage(badSlug, actor, context),
+          (err: unknown) =>
+            err instanceof PageServiceError &&
+            err.statusCode === 400 &&
+            err.message.includes('Slug'),
+        );
+      }
+    });
+
+    it('throws 404 Not Found when page does not exist', async () => {
+      stubFindUnique(async () => null);
+
+      await assert.rejects(
+        deletePage('halaman-tiada', actor, context),
+        (err: unknown) =>
+          err instanceof PageServiceError &&
+          err.statusCode === 404 &&
+          err.message.includes('tidak ditemukan'),
+      );
+    });
+
+    it('throws 409 Conflict when page contains sections with attached content_blocks', async () => {
+      stubFindUnique(async () => summaryRow({ id: 'p-1', slug: 'kependudukan' }));
+      prisma.contentBlock.count = (async () => 3) as unknown as typeof prisma.contentBlock.count;
+
+      await assert.rejects(
+        deletePage('kependudukan', actor, context),
+        (err: unknown) =>
+          err instanceof PageServiceError &&
+          err.statusCode === 409 &&
+          err.message.includes('tidak dapat dihapus') &&
+          err.message.includes('blok konten'),
+      );
+    });
+
+    it('catches Prisma P2003 foreign key restriction race condition and converts to 409 Conflict', async () => {
+      stubFindUnique(async () => summaryRow({ id: 'p-1', slug: 'kependudukan' }));
+      prisma.contentBlock.count = (async () => 0) as unknown as typeof prisma.contentBlock.count;
+
+      const p2003 = new Error('Foreign key constraint failed on the field: (`section_id`)');
+      (p2003 as unknown as { code: string }).code = 'P2003';
+
+      prisma.$transaction = (async () => {
+        throw p2003;
+      }) as unknown as typeof prisma.$transaction;
+
+      await assert.rejects(
+        deletePage('kependudukan', actor, context),
+        (err: unknown) =>
+          err instanceof PageServiceError &&
+          err.statusCode === 409 &&
+          err.message.includes('tidak dapat dihapus') &&
+          err.message.includes('blok konten'),
+      );
+    });
+
+    it('catches Prisma P2025 record not found race condition and converts to 404 Not Found', async () => {
+      stubFindUnique(async () => summaryRow({ id: 'p-1', slug: 'kependudukan' }));
+      prisma.contentBlock.count = (async () => 0) as unknown as typeof prisma.contentBlock.count;
+
+      const p2025 = new Error('Record to delete does not exist.');
+      (p2025 as unknown as { code: string }).code = 'P2025';
+
+      prisma.$transaction = (async () => {
+        throw p2025;
+      }) as unknown as typeof prisma.$transaction;
+
+      await assert.rejects(
+        deletePage('kependudukan', actor, context),
+        (err: unknown) =>
+          err instanceof PageServiceError &&
+          err.statusCode === 404 &&
+          err.message.includes('tidak ditemukan'),
+      );
+    });
+
+    it('rolls back and throws error when audit log creation fails inside transaction', async () => {
+      stubFindUnique(async () => summaryRow({ id: 'p-1', slug: 'kependudukan' }));
+      prisma.contentBlock.count = (async () => 0) as unknown as typeof prisma.contentBlock.count;
+
+      const auditBoom = new Error('Audit service unavailable');
+
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            delete: async () => summaryRow({ id: 'p-1', slug: 'kependudukan' }),
+          },
+          auditLog: {
+            create: async () => {
+              throw auditBoom;
+            },
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      await assert.rejects(
+        deletePage('kependudukan', actor, context),
+        (err: unknown) => err === auditBoom,
+      );
+    });
+
+    it('successfully deletes page, cascades empty chapters/sections, writes warning audit log in tx (Happy Path)', async () => {
+      stubFindUnique(async () =>
+        summaryRow({ id: 'p-1', slug: 'kependudukan', title: 'Kependudukan', sortOrder: 0 }),
+      );
+      prisma.contentBlock.count = (async () => 0) as unknown as typeof prisma.contentBlock.count;
+
+      let deletedWhere: unknown = null;
+      let auditLogData: unknown = null;
+
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            delete: async (args: { where: { id: string } }) => {
+              deletedWhere = args.where;
+              return summaryRow({
+                id: 'p-1',
+                slug: 'kependudukan',
+                title: 'Kependudukan',
+                sortOrder: 0,
+              });
+            },
+          },
+          auditLog: {
+            create: async (args: { data: Record<string, unknown> }) => {
+              auditLogData = args.data;
+              return { id: 'audit-del-1' };
+            },
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      const result = await deletePage('kependudukan', actor, context);
+
+      assert.deepStrictEqual(result, {
+        id: 'p-1',
+        slug: 'kependudukan',
+        title: 'Kependudukan',
+        sortOrder: 0,
+      });
+      assert.deepStrictEqual(deletedWhere, { id: 'p-1' });
+      assert.ok(auditLogData);
+      assert.equal((auditLogData as { action: string }).action, 'page.deleted');
+      assert.equal((auditLogData as { severity: string }).severity, 'warning');
+      assert.equal((auditLogData as { actorId: string }).actorId, 'user-1');
     });
   });
 });

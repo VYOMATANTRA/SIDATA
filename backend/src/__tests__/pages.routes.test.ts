@@ -5,7 +5,12 @@ import type { Server } from 'node:http';
 import type { Router } from 'express';
 import app from '../app.js';
 import prisma from '../utils/prisma.js';
-import { listPages, getPage, createPageHandler } from '../controllers/pages.controller.js';
+import {
+  listPages,
+  getPage,
+  createPageHandler,
+  deletePageHandler,
+} from '../controllers/pages.controller.js';
 import { verifyToken } from '../middlewares/auth.middleware.js';
 import { requireEditorOrAdmin } from '../middlewares/role.middleware.js';
 import * as rateLimit from '../middlewares/rateLimit.middleware.js';
@@ -30,7 +35,7 @@ const routeLayers = (router: Router) =>
 
 describe('pages.routes', () => {
   describe('router definition', () => {
-    it('default-exports a router with routes: GET /, POST /, and GET /:slug', async () => {
+    it('default-exports a router with routes: GET /, POST /, GET /:slug, and DELETE /:slug', async () => {
       const router = await loadRouter();
       const routes = routeLayers(router).map((l) => ({
         path: l.route!.path,
@@ -43,6 +48,7 @@ describe('pages.routes', () => {
         { path: '/', methods: ['get'] },
         { path: '/:slug', methods: ['get'] },
         { path: '/', methods: ['post'] },
+        { path: '/:slug', methods: ['delete'] },
       ]);
     });
 
@@ -87,6 +93,21 @@ describe('pages.routes', () => {
       assert.deepStrictEqual(
         postRoot.route!.stack.map((s) => s.handle),
         [apiLimiter, verifyToken, requireEditorOrAdmin, pagesWriteLimiter, createPageHandler],
+      );
+    });
+
+    it('puts apiLimiter, verifyToken, requireEditorOrAdmin, pagesWriteLimiter, then deletePageHandler on DELETE /:slug', async () => {
+      const router = await loadRouter();
+      const apiLimiter = (rateLimit as Record<string, unknown>).apiLimiter;
+      const pagesWriteLimiter = (rateLimit as Record<string, unknown>).pagesWriteLimiter;
+
+      const deleteSlug = routeLayers(router).find(
+        (l) => l.route?.path === '/:slug' && l.route?.methods['delete'],
+      );
+      assert.ok(deleteSlug);
+      assert.deepStrictEqual(
+        deleteSlug.route!.stack.map((s) => s.handle),
+        [apiLimiter, verifyToken, requireEditorOrAdmin, pagesWriteLimiter, deletePageHandler],
       );
     });
   });
@@ -188,6 +209,14 @@ describe('pages.routes', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: 'Unauthorized' }),
+      });
+
+      assert.ok(response.status === 401 || response.status === 403);
+    });
+
+    it('DELETE /api/pages/:slug rejects unauthenticated request (403 or 401)', async () => {
+      const response = await fetch(`${baseUrl}/api/pages/kependudukan`, {
+        method: 'DELETE',
       });
 
       assert.ok(response.status === 401 || response.status === 403);
