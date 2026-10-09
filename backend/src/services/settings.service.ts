@@ -759,34 +759,50 @@ export const DEFAULT_WEATHER_CONFIG_SETTINGS: WeatherConfigSettings = {
   fetchTimeoutMs: WEATHER_FETCH_TIMEOUT_MS,
 };
 
-function isValidBmkgBaseUrl(urlStr: string): boolean {
+export const DEFAULT_ALLOWED_BMKG_HOSTS: readonly string[] = Object.freeze(['api.bmkg.go.id']);
+
+export const DEFAULT_ALLOWED_BMKG_PROTOCOLS: readonly string[] = Object.freeze(['https:']);
+
+export interface BmkgUrlValidationOptions {
+  allowedHosts?: Iterable<string>;
+  allowedProtocols?: Iterable<string>;
+  allowedPorts?: Iterable<string>;
+}
+
+let testAllowedBmkgRules: BmkgUrlValidationOptions | null = null;
+
+export function setAllowedBmkgUrlRulesForTesting(rules: BmkgUrlValidationOptions | null): void {
+  testAllowedBmkgRules = rules;
+}
+
+export function isValidBmkgBaseUrl(urlStr: string, options?: BmkgUrlValidationOptions): boolean {
   try {
     const parsed = new URL(urlStr);
     if (parsed.username || parsed.password) return false;
 
     const configuredUrl = new URL(BMKG_BASE_URL);
-    const isTest = process.env.NODE_ENV === 'test';
+    const effectiveOptions = options ?? testAllowedBmkgRules ?? {};
 
-    // Must be https (or http only when matching configured protocol or in test mode)
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    const allowedProtocols = effectiveOptions.allowedProtocols
+      ? new Set(Array.from(effectiveOptions.allowedProtocols).map((p) => p.toLowerCase()))
+      : new Set(['https:', configuredUrl.protocol.toLowerCase()]);
+
+    if (!allowedProtocols.has(parsed.protocol.toLowerCase())) {
       return false;
     }
-    if (parsed.protocol !== 'https:' && parsed.protocol !== configuredUrl.protocol && !isTest) {
-      return false;
-    }
 
-    // Must be standard port unless matching configured port or in test mode
-    if (parsed.port && parsed.port !== '443' && parsed.port !== configuredUrl.port && !isTest) {
+    const allowedPorts = effectiveOptions.allowedPorts
+      ? new Set(Array.from(effectiveOptions.allowedPorts).map(String))
+      : new Set(['', '443', configuredUrl.port]);
+
+    if (parsed.port && !allowedPorts.has(parsed.port)) {
       return false;
     }
 
     const host = parsed.hostname.toLowerCase();
-    const allowedHosts = new Set(['api.bmkg.go.id', configuredUrl.hostname.toLowerCase()]);
-    if (isTest) {
-      allowedHosts.add('custom-bmkg.test');
-      allowedHosts.add('localhost');
-      allowedHosts.add('127.0.0.1');
-    }
+    const allowedHosts = effectiveOptions.allowedHosts
+      ? new Set(Array.from(effectiveOptions.allowedHosts).map((h) => h.toLowerCase()))
+      : new Set([DEFAULT_ALLOWED_BMKG_HOSTS[0], configuredUrl.hostname.toLowerCase()]);
 
     // Disallow loopback, private IP, IPv6 bracketed, etc. unless explicitly in allowedHosts
     if (host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1') {

@@ -18,6 +18,10 @@ import {
   PUBLIC_SETTING_KEYS,
   WEATHER_CONFIG_KEYS,
   DEFAULT_WEATHER_CONFIG_SETTINGS,
+  DEFAULT_ALLOWED_BMKG_HOSTS,
+  DEFAULT_ALLOWED_BMKG_PROTOCOLS,
+  isValidBmkgBaseUrl,
+  setAllowedBmkgUrlRulesForTesting,
   invalidateWeatherConfigCache,
   weatherConfigCache,
   type WeatherConfigSettings,
@@ -2289,6 +2293,15 @@ describe('settings.controller updateWeatherConfigHandler', () => {
       'http://172.20.0.5/internal',
       'https://evil.nip.io/api',
       'https://attacker.com/cuaca',
+      'http://localhost:8080/api',
+      'http://localhost/api',
+      'http://127.0.0.1:3000/api',
+      'http://127.0.0.1/api',
+      'https://localhost/api',
+      'https://127.0.0.1/api',
+      'https://custom-bmkg.test/api',
+      'http://api.bmkg.go.id/cuaca',
+      'https://api.bmkg.go.id:8443/cuaca',
     ];
 
     for (const url of dangerousUrls) {
@@ -2303,6 +2316,64 @@ describe('settings.controller updateWeatherConfigHandler', () => {
         /host yang diizinkan|protokol HTTPS/i,
       );
     }
+  });
+
+  it('strictly validates BMKG base URL without test-environment shortcuts', () => {
+    assert.deepEqual(Array.from(DEFAULT_ALLOWED_BMKG_HOSTS), ['api.bmkg.go.id']);
+    assert.deepEqual(Array.from(DEFAULT_ALLOWED_BMKG_PROTOCOLS), ['https:']);
+
+    // Loopback endpoints must be rejected by default
+    assert.equal(isValidBmkgBaseUrl('http://localhost/cuaca'), false);
+    assert.equal(isValidBmkgBaseUrl('http://localhost:8080/cuaca'), false);
+    assert.equal(isValidBmkgBaseUrl('http://127.0.0.1/cuaca'), false);
+    assert.equal(isValidBmkgBaseUrl('http://127.0.0.1:3000/cuaca'), false);
+    assert.equal(isValidBmkgBaseUrl('https://localhost/cuaca'), false);
+    assert.equal(isValidBmkgBaseUrl('https://127.0.0.1/cuaca'), false);
+    assert.equal(isValidBmkgBaseUrl('https://custom-bmkg.test/cuaca'), false);
+
+    // Non-HTTPS or non-443 ports must be rejected by default
+    assert.equal(isValidBmkgBaseUrl('http://api.bmkg.go.id/cuaca'), false);
+    assert.equal(isValidBmkgBaseUrl('https://api.bmkg.go.id:8443/cuaca'), false);
+
+    // Credentials, non-urls, whitespace, control characters
+    assert.equal(isValidBmkgBaseUrl('https://user:pass@api.bmkg.go.id/cuaca'), false);
+    assert.equal(isValidBmkgBaseUrl('not-a-url'), false);
+    assert.equal(isValidBmkgBaseUrl(''), false);
+
+    // Valid production BMKG URL passes
+    assert.equal(isValidBmkgBaseUrl('https://api.bmkg.go.id/publik/prakiraan-cuaca'), true);
+    assert.equal(isValidBmkgBaseUrl('https://API.BMKG.GO.ID/publik/prakiraan-cuaca'), true);
+
+    // Injection via direct parameter options
+    assert.equal(
+      isValidBmkgBaseUrl('https://custom-bmkg.test/cuaca', {
+        allowedHosts: ['custom-bmkg.test'],
+      }),
+      true,
+    );
+    assert.equal(
+      isValidBmkgBaseUrl('http://localhost:8080/cuaca', {
+        allowedHosts: ['localhost'],
+        allowedProtocols: ['http:'],
+        allowedPorts: ['8080'],
+      }),
+      true,
+    );
+
+    // Injection via setAllowedBmkgUrlRulesForTesting
+    try {
+      setAllowedBmkgUrlRulesForTesting({
+        allowedHosts: ['mock.bmkg.internal'],
+        allowedProtocols: ['https:'],
+      });
+      assert.equal(isValidBmkgBaseUrl('https://mock.bmkg.internal/data'), true);
+      assert.equal(isValidBmkgBaseUrl('https://custom-bmkg.test/cuaca'), false);
+    } finally {
+      setAllowedBmkgUrlRulesForTesting(null);
+    }
+
+    // After reset, test host is rejected again
+    assert.equal(isValidBmkgBaseUrl('https://mock.bmkg.internal/data'), false);
   });
 
   it('returns 400 when numeric knobs are out of bounds or non-integer', async () => {
