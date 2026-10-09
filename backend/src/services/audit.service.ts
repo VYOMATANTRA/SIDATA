@@ -54,6 +54,9 @@ export const AUDIT_ACTIONS = {
   SETTINGS_PUBLIC_UPDATED: defineAction('settings.public_updated', 'info'),
   SETTINGS_WEATHER_UPDATED: defineAction('settings.weather_updated', 'info'),
   CONTENT_BLOCK_UPDATED: defineAction('content_block.updated', 'info'),
+  PAGE_CREATED: defineAction('page.created', 'info'),
+  PAGE_DELETED: defineAction('page.deleted', 'warning'),
+  PAGE_REORDERED: defineAction('page.reordered', 'info'),
   AUDIT_PRUNED: defineAction('audit.pruned', 'info'),
 } as const satisfies Record<string, AuditActionDef>;
 
