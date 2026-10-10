@@ -64,7 +64,8 @@ export const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const DECIMAL_RE = /^-?\d{1,14}(\.\d{1,4})?$/;
 
 const DEFAULT_PAGE_SIZE = 50;
-const MAX_PAGE_SIZE = 200;
+export const MAX_LIST_PAGE = 10_000;
+export const MAX_LIST_PAGE_SIZE = 200;
 
 function decimalToString(value: unknown): string {
   if (typeof value === 'string') return value;
@@ -329,15 +330,18 @@ function normalizeListFilters(filters: IndicatorListFilters): {
   page: number;
   pageSize: number;
 } {
+  // Second layer of defense (the controller already rejects out-of-range input with
+  // 400): cap here so a direct programmatic caller can never produce a skip that
+  // overflows what Prisma/MySQL accept.
   const page =
     typeof filters.page === 'number' && Number.isFinite(filters.page) && filters.page > 0
-      ? Math.floor(filters.page)
+      ? Math.min(Math.floor(filters.page), MAX_LIST_PAGE)
       : 1;
   const pageSize =
     typeof filters.pageSize === 'number' &&
     Number.isFinite(filters.pageSize) &&
     filters.pageSize > 0
-      ? Math.min(Math.floor(filters.pageSize), MAX_PAGE_SIZE)
+      ? Math.min(Math.floor(filters.pageSize), MAX_LIST_PAGE_SIZE)
       : DEFAULT_PAGE_SIZE;
   return {
     ...(filters.sectionId ? { sectionId: filters.sectionId } : {}),

@@ -145,6 +145,106 @@ describe('indicators.controller listIndicatorsHandler', () => {
 
     assert.equal(res.status, 500);
   });
+
+  it('returns 400 for out-of-range page without touching the database', async () => {
+    let dbCalls = 0;
+    indicatorImpl['findMany'] = async () => {
+      dbCalls++;
+      return [];
+    };
+    indicatorImpl['count'] = async () => {
+      dbCalls++;
+      return 0;
+    };
+
+    // The reported repro: page=1e20 used to produce a skip MySQL rejects (500).
+    for (const page of ['1e20', 'abc', '1.5', '0', '-3', '10001', '']) {
+      const res = fakeRes();
+      await listIndicatorsHandler(
+        { query: { page } } as unknown as Request,
+        res as unknown as Response,
+      );
+
+      assert.equal(res.status, 400, `page=${JSON.stringify(page)} must be rejected`);
+    }
+    assert.equal(dbCalls, 0);
+  });
+
+  it('returns 400 for invalid pageSize without touching the database', async () => {
+    let dbCalls = 0;
+    indicatorImpl['findMany'] = async () => {
+      dbCalls++;
+      return [];
+    };
+    indicatorImpl['count'] = async () => {
+      dbCalls++;
+      return 0;
+    };
+
+    for (const pageSize of ['0', '201', '1000', 'sepuluh', '10.5', '']) {
+      const res = fakeRes();
+      await listIndicatorsHandler(
+        { query: { pageSize } } as unknown as Request,
+        res as unknown as Response,
+      );
+
+      assert.equal(res.status, 400, `pageSize=${JSON.stringify(pageSize)} must be rejected`);
+    }
+    assert.equal(dbCalls, 0);
+  });
+
+  it('returns 400 for malformed sectionId and includeStale', async () => {
+    let dbCalls = 0;
+    indicatorImpl['findMany'] = async () => {
+      dbCalls++;
+      return [];
+    };
+    indicatorImpl['count'] = async () => {
+      dbCalls++;
+      return 0;
+    };
+
+    const badQueries = [
+      { sectionId: 'x'.repeat(192) },
+      { sectionId: ['a', 'b'] },
+      { includeStale: 'maybe' },
+      { includeStale: '0' },
+      { page: ['1'] },
+    ];
+
+    for (const query of badQueries) {
+      const res = fakeRes();
+      await listIndicatorsHandler(
+        { query: query as unknown as Request['query'] } as unknown as Request,
+        res as unknown as Response,
+      );
+
+      assert.equal(res.status, 400, `${JSON.stringify(query)} must be rejected`);
+    }
+    assert.equal(dbCalls, 0);
+  });
+
+  it('passes valid pagination and filters through to the service', async () => {
+    let seenArgs: AnyRecord | null = null;
+    indicatorImpl['findMany'] = async (...args: never[]) => {
+      seenArgs = args[0] as unknown as AnyRecord;
+      return [indicatorRow()];
+    };
+    indicatorImpl['count'] = async () => 1;
+
+    const res = fakeRes();
+    await listIndicatorsHandler(
+      {
+        query: { page: '2', pageSize: '10', sectionId: 'sec-1', includeStale: 'false' },
+      } as unknown as Request,
+      res as unknown as Response,
+    );
+
+    assert.equal(res.status, 200);
+    assert.deepStrictEqual(seenArgs!['where'], { sectionId: 'sec-1', isStale: false });
+    assert.equal(seenArgs!['skip'], 10);
+    assert.equal(seenArgs!['take'], 10);
+  });
 });
 
 describe('indicators.controller getIndicatorHandler', () => {

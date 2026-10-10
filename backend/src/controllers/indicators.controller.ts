@@ -9,16 +9,61 @@ import {
   createIndicator,
   updateIndicator,
   deleteIndicator,
+  MAX_LIST_PAGE,
+  MAX_LIST_PAGE_SIZE,
 } from '../services/indicators.service.js';
 
+const MAX_SECTION_ID_LENGTH = 191;
+
+function parseBoundedInt(raw: unknown, name: string, min: number, max: number): number | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== 'string') {
+    throw new IndicatorServiceError(`Parameter ${name} tidak valid.`, 400);
+  }
+  const trimmed = raw.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    throw new IndicatorServiceError(`Parameter ${name} harus berupa bilangan bulat.`, 400);
+  }
+  const value = Number(trimmed);
+  if (!Number.isSafeInteger(value) || value < min || value > max) {
+    throw new IndicatorServiceError(
+      `Parameter ${name} harus berada di antara ${min} dan ${max}.`,
+      400,
+    );
+  }
+  return value;
+}
+
 function parseListQuery(query: Request['query']) {
-  const sectionId =
-    typeof query['sectionId'] === 'string' && query['sectionId'].trim() !== ''
-      ? query['sectionId'].trim()
-      : undefined;
-  const includeStale = query['includeStale'] === 'false' ? false : true;
-  const page = typeof query['page'] === 'string' ? Number(query['page']) : undefined;
-  const pageSize = typeof query['pageSize'] === 'string' ? Number(query['pageSize']) : undefined;
+  const rawSectionId = query['sectionId'];
+  let sectionId: string | undefined;
+  if (rawSectionId !== undefined) {
+    if (typeof rawSectionId !== 'string') {
+      throw new IndicatorServiceError('Parameter sectionId tidak valid.', 400);
+    }
+    const trimmed = rawSectionId.trim();
+    if (trimmed !== '') {
+      if (trimmed.length > MAX_SECTION_ID_LENGTH) {
+        throw new IndicatorServiceError(
+          `Parameter sectionId terlalu panjang (maksimal ${MAX_SECTION_ID_LENGTH} karakter).`,
+          400,
+        );
+      }
+      sectionId = trimmed;
+    }
+  }
+
+  const rawIncludeStale = query['includeStale'];
+  let includeStale = true;
+  if (rawIncludeStale !== undefined) {
+    if (rawIncludeStale !== 'true' && rawIncludeStale !== 'false') {
+      throw new IndicatorServiceError(`Parameter includeStale harus 'true' atau 'false'.`, 400);
+    }
+    includeStale = rawIncludeStale === 'true';
+  }
+
+  const page = parseBoundedInt(query['page'], 'page', 1, MAX_LIST_PAGE);
+  const pageSize = parseBoundedInt(query['pageSize'], 'pageSize', 1, MAX_LIST_PAGE_SIZE);
   return {
     ...(sectionId ? { sectionId } : {}),
     includeStale,
@@ -35,6 +80,9 @@ export const listIndicatorsHandler = async (
     const result = await listIndicators(parseListQuery(req.query));
     return res.status(200).json(result);
   } catch (error) {
+    if (error instanceof IndicatorServiceError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
     console.error(
       'Error saat mengambil daftar indikator:',
       error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
