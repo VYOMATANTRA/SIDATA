@@ -243,8 +243,37 @@ model Section {
 
   chapter       Chapter        @relation(fields: [chapterId], references: [id], onDelete: Cascade)
   contentBlocks ContentBlock[]
+  indicators    Indicator[]
 
   @@unique([chapterId, slug])
   @@index([chapterId, sortOrder])
   @@map("sections")
+}
+
+/// Scalar figures (SPEC.md §2, §5, §7): one row per figure, attached to a section.
+/// `valuePrevious`/`periodPrevious` are nullable — a null `valuePrevious` mechanically gates
+/// the tier-1 computed-comparison prose builder off (SPEC.md §5). `isStale` flags the June 2024
+/// Potensi fields, which have no tahun-lalu pairing at all (SPEC.md §6).
+model Indicator {
+  id                   String   @id @default(uuid())
+  sectionId            String   @map("section_id")
+  slug                 String   @unique
+  label                String   @db.Text
+  unit                 String?  @db.VarChar(32)
+  valueCurrent         Decimal  @map("value_current") @db.Decimal(18, 4)
+  valuePrevious        Decimal? @map("value_previous") @db.Decimal(18, 4)
+  periodCurrent        String   @map("period_current") @db.VarChar(64)
+  periodPrevious       String?  @map("period_previous") @db.VarChar(64)
+  isComputedComparison Boolean  @default(false) @map("is_computed_comparison")
+  isStale              Boolean  @default(false) @map("is_stale")
+  source               String?  @db.Text
+  hedgeNote            String?  @map("hedge_note") @db.Text
+  sortOrder            Int      @default(0) @map("sort_order")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  section Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@index([sectionId, sortOrder])
+  @@map("indicators")
 }
