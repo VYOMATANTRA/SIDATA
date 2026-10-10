@@ -246,6 +246,11 @@ describe('indicatorTables.controller mutations', () => {
     };
     rowImpl['delete'] = async () => cellRow();
     rowImpl['count'] = async () => 1;
+    rowImpl['aggregate'] = async () => ({
+      _sum: { male: null, female: null, total: null },
+      _count: { _all: 0 },
+      _max: { sortOrder: null },
+    });
     rowImpl['findUnique'] = async (...args: never[]) => {
       const { where } = args[0] as unknown as { where: AnyRecord };
       if ((where as AnyRecord)['tableId_rowKey']) return null;
