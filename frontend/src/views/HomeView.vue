@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { getCsrfToken } from '../utils/csrf';
 import { useAuthStore } from '../stores/auth';
 import { useSettingsStore } from '../stores/settings.store';
 import { useContentBlocksStore } from '../stores/contentBlocks.store';
@@ -22,29 +21,19 @@ onMounted(async () => {
 });
 
 async function handleLogout() {
+  if (isLoggingOut.value) return;
   isLoggingOut.value = true;
   logoutError.value = '';
 
   try {
-    const csrfToken = await getCsrfToken();
+    const result = await authStore.logout();
 
-    const response = await fetch('/api/auth/logout', {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'x-csrf-token': csrfToken,
-      },
-    });
-
-    if (!response.ok) {
-      logoutError.value = 'Gagal keluar dari sesi. Silakan coba lagi.';
+    if (!result.success) {
+      logoutError.value = result.error || 'Gagal keluar dari sesi. Silakan coba lagi.';
       return;
     }
 
-    authStore.clearAuth();
     router.push('/login');
-  } catch {
-    logoutError.value = 'Terjadi kesalahan jaringan saat keluar. Silakan coba lagi.';
   } finally {
     isLoggingOut.value = false;
   }
