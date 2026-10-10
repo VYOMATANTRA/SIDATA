@@ -236,13 +236,31 @@ describe('indicators.service createIndicator', () => {
 
   it('accepts numeric valueCurrent and serializes values as strings', async () => {
     const result = await createIndicator(
-      validPayload({ valueCurrent: 125000, valuePrevious: 119500.25 }),
+      validPayload({ valueCurrent: 125000, valuePrevious: 119500.25, periodPrevious: '2024' }),
       ACTOR,
       CONTEXT,
     );
 
     assert.equal(result.valueCurrent, '125000');
     assert.equal(result.valuePrevious, '119500.25');
+  });
+
+  it('rejects orphaned previous pairs on non-computed indicators with 400', async () => {
+    await assertServiceError(
+      createIndicator(validPayload({ valuePrevious: '100', periodPrevious: null }), ACTOR, CONTEXT),
+      400,
+      'berpasangan',
+    );
+    await assertServiceError(
+      createIndicator(
+        validPayload({ valuePrevious: null, periodPrevious: '2024' }),
+        ACTOR,
+        CONTEXT,
+      ),
+      400,
+      'berpasangan',
+    );
+    assert.equal(txCalls.length, 0);
   });
 
   it('rejects is_computed_comparison=true without a paired previous value', async () => {
@@ -315,7 +333,7 @@ describe('indicators.service createIndicator', () => {
     };
 
     const result = await createIndicator(
-      validPayload({ valueCurrent: ' 12 ', valuePrevious: '012.50' }),
+      validPayload({ valueCurrent: ' 12 ', valuePrevious: '012.50', periodPrevious: '2024' }),
       ACTOR,
       CONTEXT,
     );
@@ -457,6 +475,23 @@ describe('indicators.service updateIndicator', () => {
 
     assert.equal(result.valuePrevious, null);
     assert.equal(updatedData!['valuePrevious'], null);
+  });
+
+  it('rejects updates that would orphan the previous pair with 400', async () => {
+    indicatorImpl['findUnique'] = async () =>
+      existing({ isComputedComparison: false, valuePrevious: null, periodPrevious: null });
+
+    await assertServiceError(
+      updateIndicator('ind-1', { valuePrevious: '100' }, ACTOR, CONTEXT),
+      400,
+      'berpasangan',
+    );
+    await assertServiceError(
+      updateIndicator('ind-1', { periodPrevious: '2024' }, ACTOR, CONTEXT),
+      400,
+      'berpasangan',
+    );
+    assert.equal(auditRows.length, 0);
   });
 
   it('rejects enabling computed comparison without a pair, or clearing the pair on one', async () => {
