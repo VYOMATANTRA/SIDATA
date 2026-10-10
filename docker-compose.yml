@@ -67,7 +67,7 @@ services:
       - backend_node_modules:/app/node_modules
 
   # Scheduled audit_logs retention pruning (docs/SPEC.md §3). Opt-in: only starts with
-  # `docker compose --profile ops up -d audit-pruner`, since it needs AUDIT_ADMIN_DATABASE_URL
+  # `docker compose --profile ops up -d --build audit-pruner`, since it needs AUDIT_ADMIN_DATABASE_URL
   # (a privileged MySQL user, not the app's) to be set.
   audit-pruner:
     profiles: ["ops"]
@@ -82,7 +82,7 @@ services:
     environment:
       <<: *backend-env
       # Privileged connection lives only in this service, never in `backend`. DATABASE_URL is
-      # overridden with it so `docker compose --profile ops run --rm audit-pruner npx prisma
+      # overridden with it so `docker compose --profile ops run --rm --build audit-pruner npx prisma
       # migrate deploy` migrates as the privileged user once the grants script is applied.
       DATABASE_URL: ${AUDIT_ADMIN_DATABASE_URL}
       AUDIT_ADMIN_DATABASE_URL: ${AUDIT_ADMIN_DATABASE_URL}
