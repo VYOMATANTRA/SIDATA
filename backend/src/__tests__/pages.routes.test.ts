@@ -15,6 +15,7 @@ import {
 import { verifyToken } from '../middlewares/auth.middleware.js';
 import { requireEditorOrAdmin } from '../middlewares/role.middleware.js';
 import * as rateLimit from '../middlewares/rateLimit.middleware.js';
+import { generateAccessToken } from '../utils/jwt.js';
 
 // Router internals (router.stack / layer.route) are the Express 5 `router` package's public-ish
 // shape; kept to the minimum needed: path, methods, and the handler chain.
@@ -147,7 +148,15 @@ describe('pages.routes', () => {
     let baseUrl: string;
     let originalFindMany: typeof prisma.page.findMany;
     let originalFindUnique: typeof prisma.page.findUnique;
+    let originalUserFindUnique: typeof prisma.user.findUnique;
     let findUniqueCalls: unknown[][];
+
+    const getCsrf = async (): Promise<{ token: string; cookie: string }> => {
+      const res = await fetch(`${baseUrl}/api/auth/csrf-token`);
+      const cookie = res.headers.get('set-cookie') ?? '';
+      const data = (await res.json()) as { csrfToken: string };
+      return { token: data.csrfToken, cookie };
+    };
 
     before(async () => {
       server = app.listen(0, '127.0.0.1');
@@ -157,6 +166,9 @@ describe('pages.routes', () => {
     });
 
     after(async () => {
+      if ('closeAllConnections' in server && typeof server.closeAllConnections === 'function') {
+        server.closeAllConnections();
+      }
       await new Promise<void>((resolve, reject) =>
         server.close((err) => (err ? reject(err) : resolve())),
       );
@@ -165,6 +177,7 @@ describe('pages.routes', () => {
     beforeEach(() => {
       originalFindMany = prisma.page.findMany;
       originalFindUnique = prisma.page.findUnique;
+      originalUserFindUnique = prisma.user.findUnique;
       findUniqueCalls = [];
       prisma.page.findMany = (async () => [
         {
@@ -181,11 +194,23 @@ describe('pages.routes', () => {
         findUniqueCalls.push(args);
         return null;
       }) as unknown as typeof prisma.page.findUnique;
+      prisma.user.findUnique = (async (args: { where: { id?: string } }) => {
+        if (args?.where?.id) {
+          return {
+            id: args.where.id,
+            email: 'user@manggar.go.id',
+            role: { name: 'user' },
+            deletedAt: null,
+          };
+        }
+        return null;
+      }) as unknown as typeof prisma.user.findUnique;
     });
 
     afterEach(() => {
       prisma.page.findMany = originalFindMany;
       prisma.page.findUnique = originalFindUnique;
+      prisma.user.findUnique = originalUserFindUnique;
     });
 
     it('GET /api/pages returns 200 with the list body', async () => {
@@ -234,32 +259,85 @@ describe('pages.routes', () => {
       assert.equal(findUniqueCalls.length, 0);
     });
 
-    it('POST /api/pages rejects unauthenticated request (403 or 401)', async () => {
+    it('mutating routes without CSRF token are stopped by CSRF middleware with 403', async () => {
       const response = await fetch(`${baseUrl}/api/pages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'No CSRF' }),
+      });
+
+      assert.equal(response.status, 403);
+      assert.deepStrictEqual(await response.json(), { error: 'CSRF token tidak valid' });
+    });
+
+    it('POST /api/pages with valid CSRF rejects unauthenticated request with exact 401', async () => {
+      const csrf = await getCsrf();
+      const response = await fetch(`${baseUrl}/api/pages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrf.token,
+          cookie: csrf.cookie,
+        },
         body: JSON.stringify({ title: 'Unauthorized' }),
       });
 
-      assert.ok(response.status === 401 || response.status === 403);
+      assert.equal(response.status, 401);
+      assert.deepStrictEqual(await response.json(), { error: 'Akses ditolak.' });
     });
 
-    it('DELETE /api/pages/:slug rejects unauthenticated request (403 or 401)', async () => {
+    it('DELETE /api/pages/:slug with valid CSRF rejects unauthenticated request with exact 401', async () => {
+      const csrf = await getCsrf();
       const response = await fetch(`${baseUrl}/api/pages/kependudukan`, {
         method: 'DELETE',
+        headers: {
+          'x-csrf-token': csrf.token,
+          cookie: csrf.cookie,
+        },
       });
 
-      assert.ok(response.status === 401 || response.status === 403);
+      assert.equal(response.status, 401);
+      assert.deepStrictEqual(await response.json(), { error: 'Akses ditolak.' });
     });
 
-    it('PUT /api/pages/reorder rejects unauthenticated request (403 or 401)', async () => {
+    it('PUT /api/pages/reorder with valid CSRF rejects unauthenticated request with exact 401', async () => {
+      const csrf = await getCsrf();
       const response = await fetch(`${baseUrl}/api/pages/reorder`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrf.token,
+          cookie: csrf.cookie,
+        },
         body: JSON.stringify({ items: [{ id: 'p1', sortOrder: 1 }] }),
       });
 
-      assert.ok(response.status === 401 || response.status === 403);
+      assert.equal(response.status, 401);
+      assert.deepStrictEqual(await response.json(), { error: 'Akses ditolak.' });
+    });
+
+    it('POST /api/pages with valid CSRF rejects unauthorized user role with exact 403', async () => {
+      const csrf = await getCsrf();
+      const userToken = generateAccessToken({
+        id: 'u-user',
+        email: 'user@manggar.go.id',
+        role: 'user',
+      });
+      const response = await fetch(`${baseUrl}/api/pages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrf.token,
+          cookie: csrf.cookie,
+          Authorization: `Bearer ${userToken}`,
+        },
+        body: JSON.stringify({ title: 'Forbidden' }),
+      });
+
+      assert.equal(response.status, 403);
+      assert.deepStrictEqual(await response.json(), {
+        error: 'Akses ditolak. Membutuhkan hak akses Editor atau Admin.',
+      });
     });
   });
 });
