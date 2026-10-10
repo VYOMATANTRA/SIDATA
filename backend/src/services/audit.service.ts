@@ -57,6 +57,12 @@ export const AUDIT_ACTIONS = {
   INDICATOR_CREATED: defineAction('indicator.created', 'info'),
   INDICATOR_UPDATED: defineAction('indicator.updated', 'info'),
   INDICATOR_DELETED: defineAction('indicator.deleted', 'warning'),
+  INDICATOR_TABLE_CREATED: defineAction('indicator_table.created', 'info'),
+  INDICATOR_TABLE_UPDATED: defineAction('indicator_table.updated', 'info'),
+  INDICATOR_TABLE_DELETED: defineAction('indicator_table.deleted', 'warning'),
+  INDICATOR_TABLE_ROW_CREATED: defineAction('indicator_table_row.created', 'info'),
+  INDICATOR_TABLE_ROW_UPDATED: defineAction('indicator_table_row.updated', 'info'),
+  INDICATOR_TABLE_ROW_DELETED: defineAction('indicator_table_row.deleted', 'warning'),
   AUDIT_PRUNED: defineAction('audit.pruned', 'info'),
 } as const satisfies Record<string, AuditActionDef>;
 

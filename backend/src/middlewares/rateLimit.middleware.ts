@@ -64,6 +64,11 @@ export const contentBlocksWriteLimiter = createUserKeyedLimiter(100);
 // separate from contentBlocksWriteLimiter so indicator edits and prose edits do not drain each other)
 export const indicatorsWriteLimiter = createUserKeyedLimiter(100);
 
+// Indicator tables CMS write operations rate limiter (dedicated 100 req/15min bucket keyed by
+// user ID, separate from indicatorsWriteLimiter so matrix-table edits and scalar-figure edits
+// do not drain each other)
+export const indicatorTablesWriteLimiter = createUserKeyedLimiter(100);
+
 // Settings write operations rate limiter (dedicated 100 req/15min bucket keyed by admin user ID,
 // separate from userManagementWriteLimiter so settings edits and user management do not drain each other)
 export const settingsWriteLimiter = createUserKeyedLimiter(100);
