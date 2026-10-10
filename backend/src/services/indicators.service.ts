@@ -510,7 +510,18 @@ export const updateIndicator = async (
         }
 
         if (input.sectionId !== undefined) {
-          const section = await tx.section.findUnique({ where: { id: input.sectionId.trim() } });
+          const nextSectionId = input.sectionId.trim();
+          if (nextSectionId !== existing.sectionId) {
+            // Lock the destination section (same pattern as createIndicator): without
+            // this, a concurrent section delete slipping between the existence check
+            // and the UPDATE below surfaces as an unmapped P2003 FK violation (500).
+            // (Staying on the same section needs no extra lock — the indicator row
+            // lock we already hold blocks a cascading parent delete until commit.)
+            await tx.$queryRaw(
+              Prisma.sql`SELECT id FROM sections WHERE id = ${nextSectionId} FOR UPDATE`,
+            );
+          }
+          const section = await tx.section.findUnique({ where: { id: nextSectionId } });
           if (!section) {
             throw new IndicatorServiceError('Section tidak ditemukan.', 404);
           }
@@ -639,6 +650,12 @@ export const updateIndicator = async (
     }
     if (isPrismaKnownError(error, 'P2025')) {
       throw new IndicatorServiceError('Indikator tidak ditemukan.', 404);
+    }
+    // Defensive: the destination section is locked before the UPDATE, but a delete
+    // racing ahead of the lock still lands here as an FK violation — report it as a
+    // missing section (404), not a 500.
+    if (isPrismaKnownError(error, 'P2003')) {
+      throw new IndicatorServiceError('Section tidak ditemukan.', 404);
     }
     throw error;
   } finally {

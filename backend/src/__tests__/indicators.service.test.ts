@@ -54,6 +54,12 @@ const p2002 = () =>
     clientVersion: 'test',
   });
 
+const p2003 = () =>
+  new Prisma.PrismaClientKnownRequestError('Foreign key constraint failed', {
+    code: 'P2003',
+    clientVersion: 'test',
+  });
+
 // ---------------------------------------------------------------------------
 // Stub harness: prisma.$transaction runs the callback against an in-memory tx
 // stub, so mutation+audit atomicity is observable without a database.
@@ -437,6 +443,30 @@ describe('indicators.service updateIndicator', () => {
       updateIndicator('ind-1', { sortOrder: 3000000000 }, ACTOR, CONTEXT),
       400,
       'Urutan',
+    );
+    assert.equal(auditRows.length, 0);
+  });
+
+  it('locks the destination section when moving, but not when staying', async () => {
+    // Move to sec-2: indicator lock + destination section lock.
+    await updateIndicator('ind-1', { sectionId: 'sec-2', label: 'Pindah' }, ACTOR, CONTEXT);
+    assert.equal(queryRawCalls.length, 2);
+
+    // Same section: only the indicator lock, no extra destination lock.
+    queryRawCalls.length = 0;
+    await updateIndicator('ind-1', { sectionId: 'sec-1', label: 'Tetap' }, ACTOR, CONTEXT);
+    assert.equal(queryRawCalls.length, 1);
+  });
+
+  it('maps a destination-section delete racing the update (P2003) to 404', async () => {
+    indicatorImpl['update'] = async () => {
+      throw p2003();
+    };
+
+    await assertServiceError(
+      updateIndicator('ind-1', { sectionId: 'sec-2', label: 'Pindah' }, ACTOR, CONTEXT),
+      404,
+      'Section',
     );
     assert.equal(auditRows.length, 0);
   });
