@@ -786,10 +786,66 @@ describe('pages.service', () => {
         slug: 'inovasi-desa',
         sortOrder: 9,
       });
-      assert.ok(auditLogData);
-      assert.equal((auditLogData as { action: string }).action, 'page.created');
-      assert.equal((auditLogData as { severity: string }).severity, 'info');
-      assert.equal((auditLogData as { actorId: string }).actorId, 'user-1');
+      assert.deepStrictEqual(auditLogData, {
+        action: 'page.created',
+        severity: 'info',
+        outcome: 'success',
+        actorId: 'user-1',
+        actorEmail: 'editor@manggar.go.id',
+        actorRole: 'editor',
+        targetType: 'page',
+        targetId: 'p-new',
+        targetLabel: 'Inovasi Desa',
+        ipAddress: '127.0.0.1',
+        userAgent: 'test-agent',
+        metadata: {
+          slug: 'inovasi-desa',
+          title: 'Inovasi Desa',
+          sortOrder: 9,
+        },
+      });
+    });
+
+    it('creates page and writes audit log with null context fields when context is omitted', async () => {
+      stubFindUnique(async () => null);
+      let auditLogData: unknown = null;
+
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            create: async (args: { data: Record<string, unknown> }) =>
+              summaryRow({ id: 'p-new', ...args.data }),
+          },
+          auditLog: {
+            create: async (args: { data: Record<string, unknown> }) => {
+              auditLogData = args.data;
+              return { id: 'audit-1' };
+            },
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      await createPage({ title: 'Inovasi Desa', slug: 'inovasi-desa', sortOrder: 9 }, actor);
+
+      assert.deepStrictEqual(auditLogData, {
+        action: 'page.created',
+        severity: 'info',
+        outcome: 'success',
+        actorId: 'user-1',
+        actorEmail: 'editor@manggar.go.id',
+        actorRole: 'editor',
+        targetType: 'page',
+        targetId: 'p-new',
+        targetLabel: 'Inovasi Desa',
+        ipAddress: null,
+        userAgent: null,
+        metadata: {
+          slug: 'inovasi-desa',
+          title: 'Inovasi Desa',
+          sortOrder: 9,
+        },
+      });
     });
 
     it('auto-derives slug from title when slug is omitted (Happy Path)', async () => {
@@ -993,10 +1049,79 @@ describe('pages.service', () => {
         sortOrder: 0,
       });
       assert.deepStrictEqual(deletedWhere, { id: 'p-1' });
-      assert.ok(auditLogData);
-      assert.equal((auditLogData as { action: string }).action, 'page.deleted');
-      assert.equal((auditLogData as { severity: string }).severity, 'warning');
-      assert.equal((auditLogData as { actorId: string }).actorId, 'user-1');
+      assert.deepStrictEqual(auditLogData, {
+        action: 'page.deleted',
+        severity: 'warning',
+        outcome: 'success',
+        actorId: 'user-1',
+        actorEmail: 'editor@manggar.go.id',
+        actorRole: 'editor',
+        targetType: 'page',
+        targetId: 'p-1',
+        targetLabel: 'Kependudukan',
+        ipAddress: '127.0.0.1',
+        userAgent: 'test-agent',
+        metadata: {
+          slug: 'kependudukan',
+          title: 'Kependudukan',
+          sortOrder: 0,
+        },
+      });
+    });
+
+    it('deletes page and writes warning audit log with null context fields when context is omitted', async () => {
+      stubFindUnique(async () =>
+        summaryRow({
+          id: 'p-1',
+          slug: 'kependudukan',
+          title: 'Kependudukan',
+          sortOrder: 0,
+        }),
+      );
+      prisma.contentBlock.count = (async () => 0) as unknown as typeof prisma.contentBlock.count;
+
+      let auditLogData: unknown = null;
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            delete: async () =>
+              summaryRow({
+                id: 'p-1',
+                slug: 'kependudukan',
+                title: 'Kependudukan',
+                sortOrder: 0,
+              }),
+          },
+          auditLog: {
+            create: async (args: { data: Record<string, unknown> }) => {
+              auditLogData = args.data;
+              return { id: 'audit-del-1' };
+            },
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      await deletePage('kependudukan', actor);
+
+      assert.deepStrictEqual(auditLogData, {
+        action: 'page.deleted',
+        severity: 'warning',
+        outcome: 'success',
+        actorId: 'user-1',
+        actorEmail: 'editor@manggar.go.id',
+        actorRole: 'editor',
+        targetType: 'page',
+        targetId: 'p-1',
+        targetLabel: 'Kependudukan',
+        ipAddress: null,
+        userAgent: null,
+        metadata: {
+          slug: 'kependudukan',
+          title: 'Kependudukan',
+          sortOrder: 0,
+        },
+      });
     });
   });
 
@@ -1318,10 +1443,80 @@ describe('pages.service', () => {
         [0, 1],
       );
       assert.equal(updatedCalls.length, 2);
-      assert.ok(auditLogData);
-      assert.equal((auditLogData as { action: string }).action, 'page.reordered');
-      assert.equal((auditLogData as { severity: string }).severity, 'info');
-      assert.equal((auditLogData as { actorId: string }).actorId, 'user-1');
+      assert.deepStrictEqual(auditLogData, {
+        action: 'page.reordered',
+        severity: 'info',
+        outcome: 'success',
+        actorId: 'user-1',
+        actorEmail: 'editor@manggar.go.id',
+        actorRole: 'editor',
+        targetType: 'page',
+        targetId: null,
+        targetLabel: 'Cerita Pages',
+        ipAddress: '127.0.0.1',
+        userAgent: 'test-agent',
+        metadata: {
+          items: [
+            { id: 'p1', sortOrder: 1 },
+            { id: 'p2', sortOrder: 0 },
+          ],
+        },
+      });
+    });
+
+    it('reorders pages and writes info audit log with null context fields when context is omitted', async () => {
+      stubFindMany(async () => [
+        summaryRow({ id: 'p1', sortOrder: 0, _count: { chapters: 2 } }),
+        summaryRow({ id: 'p2', sortOrder: 1, _count: { chapters: 4 } }),
+      ]);
+
+      let auditLogData: unknown = null;
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            update: async (args: { where: { id: string }; data: { sortOrder: number } }) =>
+              summaryRow({ id: args.where.id, sortOrder: args.data.sortOrder }),
+            findMany: async () => [
+              summaryRow({ id: 'p2', sortOrder: 0, _count: { chapters: 4 } }),
+              summaryRow({ id: 'p1', sortOrder: 1, _count: { chapters: 2 } }),
+            ],
+          },
+          auditLog: {
+            create: async (args: { data: Record<string, unknown> }) => {
+              auditLogData = args.data;
+              return { id: 'audit-reorder-success' };
+            },
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      const payload = [
+        { id: 'p1', sortOrder: 1 },
+        { id: 'p2', sortOrder: 0 },
+      ];
+
+      await reorderPages(payload, actor);
+
+      assert.deepStrictEqual(auditLogData, {
+        action: 'page.reordered',
+        severity: 'info',
+        outcome: 'success',
+        actorId: 'user-1',
+        actorEmail: 'editor@manggar.go.id',
+        actorRole: 'editor',
+        targetType: 'page',
+        targetId: null,
+        targetLabel: 'Cerita Pages',
+        ipAddress: null,
+        userAgent: null,
+        metadata: {
+          items: [
+            { id: 'p1', sortOrder: 1 },
+            { id: 'p2', sortOrder: 0 },
+          ],
+        },
+      });
     });
   });
 });
