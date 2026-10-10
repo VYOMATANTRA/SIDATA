@@ -351,6 +351,32 @@ describe('indicators.service createIndicator', () => {
     assert.equal(result.valuePrevious, '12.5');
   });
 
+  it('invalidates list caches and warms the per-id cache on successful create', async () => {
+    let findManyCount = 0;
+    indicatorImpl['findMany'] = async () => {
+      findManyCount++;
+      return [indicatorRow({ id: 'ind-new' })];
+    };
+    indicatorImpl['count'] = async () => 1;
+
+    await listIndicators({});
+    assert.equal(findManyCount, 1);
+
+    const created = await createIndicator(validPayload(), ACTOR, CONTEXT);
+    assert.equal(created.id, 'ind-new');
+
+    // List cache was flushed by the commit…
+    await listIndicators({});
+    assert.equal(findManyCount, 2);
+
+    // …while the new row itself was warmed: no DB hit on immediate re-read.
+    indicatorImpl['findUnique'] = async () => {
+      throw new Error('must be served from warmed cache');
+    };
+    const reread = await getIndicatorById('ind-new');
+    assert.equal(reread?.slug, 'jumlah-penduduk');
+  });
+
   it('writes the indicator.created audit row inside the same transaction', async () => {
     const result = await createIndicator(validPayload(), ACTOR, CONTEXT);
 
@@ -569,6 +595,49 @@ describe('indicators.service updateIndicator', () => {
     assert.equal(auditRows.length, 0);
   });
 
+  it('warms the per-id cache on successful update (no DB hit on immediate re-read)', async () => {
+    const updated = await updateIndicator('ind-1', { label: 'Penduduk Anyar' }, ACTOR, CONTEXT);
+    assert.equal(updated.label, 'Penduduk Anyar');
+
+    indicatorImpl['findUnique'] = async () => {
+      throw new Error('must be served from warmed cache');
+    };
+    const reread = await getIndicatorById('ind-1');
+    assert.equal(reread?.label, 'Penduduk Anyar');
+  });
+
+  it('leaves list caches intact on no-op updates', async () => {
+    let findManyCount = 0;
+    indicatorImpl['findMany'] = async () => {
+      findManyCount++;
+      return [indicatorRow()];
+    };
+    indicatorImpl['count'] = async () => 1;
+
+    await listIndicators({});
+    assert.equal(findManyCount, 1);
+
+    await updateIndicator('ind-1', { label: 'Jumlah Penduduk' }, ACTOR, CONTEXT);
+    await listIndicators({});
+    assert.equal(findManyCount, 1);
+  });
+
+  it('leaves list caches intact on failed updates', async () => {
+    let findManyCount = 0;
+    indicatorImpl['findMany'] = async () => {
+      findManyCount++;
+      return [indicatorRow()];
+    };
+    indicatorImpl['count'] = async () => 1;
+    indicatorImpl['findUnique'] = async () => null;
+
+    await listIndicators({});
+    assert.equal(findManyCount, 1);
+
+    await assertServiceError(updateIndicator('missing', { label: 'x' }, ACTOR, CONTEXT), 404);
+    await listIndicators({});
+    assert.equal(findManyCount, 1);
+  });
   it('writes indicator.updated with a changes diff on real edits', async () => {
     const result = await updateIndicator('ind-1', { label: 'Penduduk Anyar' }, ACTOR, CONTEXT);
 
@@ -603,6 +672,30 @@ describe('indicators.service deleteIndicator', () => {
 
     await assertServiceError(deleteIndicator('missing', ACTOR, CONTEXT), 404);
     assert.equal(auditRows.length, 0);
+  });
+
+  it('invalidates list caches and drops the per-id entry on delete', async () => {
+    let findManyCount = 0;
+    let rowGone = false;
+    indicatorImpl['findUnique'] = async () => (rowGone ? null : indicatorRow());
+    indicatorImpl['findMany'] = async () => {
+      findManyCount++;
+      return rowGone ? [] : [indicatorRow()];
+    };
+    indicatorImpl['count'] = async () => (rowGone ? 0 : 1);
+
+    await listIndicators({});
+    assert.equal((await getIndicatorById('ind-1'))?.id, 'ind-1');
+    assert.equal(findManyCount, 1);
+
+    await deleteIndicator('ind-1', ACTOR, CONTEXT);
+
+    rowGone = true;
+    const relisted = await listIndicators({});
+    assert.equal(findManyCount, 2);
+    assert.equal(relisted.total, 0);
+    // Per-id slot was dropped: the re-read goes to the DB and observes the miss.
+    assert.equal(await getIndicatorById('ind-1'), null);
   });
 
   it('deletes and writes an indicator.deleted warning audit with the before snapshot', async () => {
