@@ -11,6 +11,7 @@ import {
   VersionedTtlCache,
   executeLockedTransaction,
   withChangeResult,
+  type CacheInvalidator,
 } from '../utils/lockTransactionCache.js';
 import { hasFieldChanged, stableJsonStringify } from '../utils/comparator.js';
 import { KeyedLruCache } from '../utils/keyedCache.js';
@@ -256,6 +257,20 @@ const getByIdCache = (id: string): VersionedTtlCache<IndicatorDto | null> =>
     () => new VersionedTtlCache<IndicatorDto | null>({ ttlMs: CACHE_TTL_MS, baseClient: prisma }),
   );
 
+/**
+ * Adapter so the keyed list caches can ride executeLockedTransaction's `cache` option,
+ * which invalidates only on a committed change — unlike the old unconditional
+ * invalidate-in-finally, this keeps caches intact across no-op updates and failures.
+ */
+const listCachesInvalidator: CacheInvalidator = {
+  invalidate: () => {
+    for (const cache of indicatorListCache.values()) {
+      cache.invalidate();
+    }
+    indicatorListCache.clear();
+  },
+};
+
 export const invalidateIndicatorsCache = (id?: string): void => {
   if (id) {
     indicatorByIdCache.get(id)?.invalidate();
@@ -419,7 +434,10 @@ export const createIndicator = async (
     return await executeLockedTransaction({
       client,
       lockQuery,
-      cache: [],
+      cache: [listCachesInvalidator],
+      onCommit: (committed) => {
+        getByIdCache(committed.id).setCommitted(committed);
+      },
       execute: async (tx) => {
         const section = await tx.section.findUnique({ where: { id: sectionId } });
         if (!section) {
@@ -464,8 +482,6 @@ export const createIndicator = async (
       throw new IndicatorServiceError(`Slug '${input.slug}' sudah digunakan indikator lain.`, 409);
     }
     throw error;
-  } finally {
-    invalidateIndicatorsCache();
   }
 };
 
@@ -498,10 +514,11 @@ export const updateIndicator = async (
     return await executeLockedTransaction({
       client,
       lockQuery,
-      cache: [],
+      cache: [listCachesInvalidator],
       onCommit: (committed, didChange) => {
         if (!didChange) return;
         targetCache.setCommitted(committed);
+        missingIndicatorIds.delete(committed.id);
       },
       execute: async (tx) => {
         const existing = await tx.indicator.findUnique({ where: { id: normalizedId } });
@@ -658,8 +675,6 @@ export const updateIndicator = async (
       throw new IndicatorServiceError('Section tidak ditemukan.', 404);
     }
     throw error;
-  } finally {
-    invalidateIndicatorsCache(normalizedId);
   }
 };
 
@@ -680,7 +695,11 @@ export const deleteIndicator = async (
     return await executeLockedTransaction({
       client,
       lockQuery,
-      cache: [],
+      cache: [listCachesInvalidator],
+      onCommit: (committed) => {
+        indicatorByIdCache.delete(committed.id);
+        missingIndicatorIds.delete(committed.id);
+      },
       execute: async (tx) => {
         const existing = await tx.indicator.findUnique({ where: { id: normalizedId } });
         if (!existing) {
@@ -715,7 +734,5 @@ export const deleteIndicator = async (
       throw new IndicatorServiceError('Indikator tidak ditemukan.', 404);
     }
     throw error;
-  } finally {
-    invalidateIndicatorsCache(normalizedId);
   }
 };
