@@ -280,6 +280,27 @@ describe('indicators.service createIndicator', () => {
     );
   });
 
+  it('canonicalizes padded/non-canonical decimal strings before storage', async () => {
+    let createdData: AnyRecord | null = null;
+    indicatorImpl['create'] = async (...args: never[]) => {
+      const { data } = args[0] as unknown as { data: AnyRecord };
+      createdData = data;
+      return indicatorRow({ ...data, id: 'ind-new' });
+    };
+
+    const result = await createIndicator(
+      validPayload({ valueCurrent: ' 12 ', valuePrevious: '012.50' }),
+      ACTOR,
+      CONTEXT,
+    );
+
+    // Stored values are canonical — Prisma never sees the raw padded form (which it rejects).
+    assert.equal(createdData!['valueCurrent'], '12');
+    assert.equal(createdData!['valuePrevious'], '12.5');
+    assert.equal(result.valueCurrent, '12');
+    assert.equal(result.valuePrevious, '12.5');
+  });
+
   it('writes the indicator.created audit row inside the same transaction', async () => {
     const result = await createIndicator(validPayload(), ACTOR, CONTEXT);
 
@@ -419,6 +440,24 @@ describe('indicators.service updateIndicator', () => {
       400,
       'value_previous',
     );
+    assert.equal(auditRows.length, 0);
+  });
+
+  it('treats value-identical non-canonical PATCHes as no-ops (no bogus audit diff)', async () => {
+    indicatorImpl['findUnique'] = async () =>
+      existing({ valueCurrent: '12.5', valuePrevious: '3.25' });
+
+    for (const payload of [
+      { valueCurrent: '12.50', valuePrevious: '03.250' },
+      { valueCurrent: ' 12.5 ', valuePrevious: '3.2500' },
+    ]) {
+      const result = await updateIndicator('ind-1', payload, ACTOR, CONTEXT);
+
+      assert.equal(result.valueCurrent, '12.5');
+      assert.equal(result.valuePrevious, '3.25');
+    }
+
+    assert.equal(txIndicatorCalls['update']?.length ?? 0, 0);
     assert.equal(auditRows.length, 0);
   });
 

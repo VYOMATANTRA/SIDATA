@@ -79,19 +79,31 @@ function toIsoString(value: unknown): string {
   return String(value);
 }
 
-/** Accepts a finite number or a decimal string that fits Decimal(18,4). */
-const decimalInput = z.union([z.number(), z.string()]).refine(
-  (val) => {
-    if (typeof val === 'number') {
-      return Number.isFinite(val) && DECIMAL_RE.test(String(val));
-    }
-    return DECIMAL_RE.test(val.trim());
-  },
-  {
-    message:
-      'Nilai harus berupa angka desimal yang valid (maksimal 14 digit bulat, 4 digit desimal)',
-  },
-);
+/**
+ * Accepts a finite number or a decimal string that fits Decimal(18,4), and outputs a
+ * canonical string (trimmed, no leading zeros, no trailing fractional zeros) via
+ * Prisma.Decimal. Canonicalization matters because the DB normalises decimals the same
+ * way: without it, `" 12 "` would pass validation but explode inside Prisma (500), and a
+ * PATCH of `"12.50"` over a stored 12.5 would register as a change and write a bogus
+ * `indicator.updated` audit diff.
+ */
+const decimalInput = z
+  .union([z.number(), z.string()])
+  .refine(
+    (val) => {
+      if (typeof val === 'number') {
+        return Number.isFinite(val) && DECIMAL_RE.test(String(val));
+      }
+      return DECIMAL_RE.test(val.trim());
+    },
+    {
+      message:
+        'Nilai harus berupa angka desimal yang valid (maksimal 14 digit bulat, 4 digit desimal)',
+    },
+  )
+  .transform((val) =>
+    new Prisma.Decimal(typeof val === 'number' ? String(val) : val.trim()).toString(),
+  );
 
 const nullableText = (max: number) => z.string().trim().max(max).nullable().optional();
 
