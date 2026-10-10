@@ -46,6 +46,13 @@ GRANT ALL PRIVILEGES ON `<DB_NAME>`.`refresh_tokens` TO '<APP_DB_USER>'@'<APP_DB
 GRANT ALL PRIVILEGES ON `<DB_NAME>`.`email_otps` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
 GRANT ALL PRIVILEGES ON `<DB_NAME>`.`system_settings` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
 GRANT ALL PRIVILEGES ON `<DB_NAME>`.`indicators` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
+GRANT ALL PRIVILEGES ON `<DB_NAME>`.`spatial_points` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
+GRANT ALL PRIVILEGES ON `<DB_NAME>`.`spatial_point_rt` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
+GRANT ALL PRIVILEGES ON `<DB_NAME>`.`rt_leaders` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
+GRANT ALL PRIVILEGES ON `<DB_NAME>`.`content_blocks` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
+GRANT ALL PRIVILEGES ON `<DB_NAME>`.`pages` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
+GRANT ALL PRIVILEGES ON `<DB_NAME>`.`chapters` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
+GRANT ALL PRIVILEGES ON `<DB_NAME>`.`sections` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
 
 -- 3. Restricted access to audit_logs: read everything, insert new rows, and update only the two
 --    acknowledge columns (MySQL supports column-scoped UPDATE grants). No DELETE, no
@@ -67,3 +74,9 @@ FLUSH PRIVILEGES;
 -- The pruning script (backend/scripts/prune-audit-logs.ts) and Prisma migrations both need
 -- full DML/DDL rights and must run as a DIFFERENT, privileged MySQL user — set via
 -- AUDIT_ADMIN_DATABASE_URL — never as the app user this script just restricted.
+-- The app user is deliberately NOT granted `_prisma_migrations` or CREATE/ALTER, so after this
+-- script runs, `prisma migrate deploy` must use the privileged URL (prisma.config.ts reads
+-- DATABASE_URL):
+--   DATABASE_URL="$AUDIT_ADMIN_DATABASE_URL" npx prisma migrate deploy
+-- (Compose: set RUN_MIGRATIONS=0 on `backend`, migrate via the audit-pruner service — see README.)
+-- Then re-run this script if the migration added a table.
