@@ -536,7 +536,11 @@ describe('pages.controller', () => {
       prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
         const fakeTx = {
           page: {
-            create: async () => pageRow('inovasi-desa'),
+            create: async (args: { data: { slug: string; title: string; sortOrder: number } }) => ({
+              ...pageRow(args.data.slug),
+              title: args.data.title,
+              sortOrder: args.data.sortOrder,
+            }),
             aggregate: async () => ({ _max: { sortOrder: 7 } }),
           },
           auditLog: {
@@ -552,7 +556,7 @@ describe('pages.controller', () => {
           body: { title: 'Inovasi Desa' },
           user: { id: 'u1', email: 'editor@manggar.go.id', role: 'editor' },
           ip: '127.0.0.1',
-          get: () => 'test-agent',
+          headers: { 'user-agent': 'test-agent' },
         } as never,
         res,
       );
@@ -562,8 +566,8 @@ describe('pages.controller', () => {
         page: {
           id: 'page-1',
           slug: 'inovasi-desa',
-          title: 'Kependudukan',
-          sortOrder: 0,
+          title: 'Inovasi Desa',
+          sortOrder: 8,
           chapterCount: 0,
         },
       });
