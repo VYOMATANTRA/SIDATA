@@ -244,6 +244,7 @@ model Section {
   chapter       Chapter        @relation(fields: [chapterId], references: [id], onDelete: Cascade)
   contentBlocks ContentBlock[]
   indicators    Indicator[]
+  indicatorTables IndicatorTable[]
 
   @@unique([chapterId, slug])
   @@index([chapterId, sortOrder])
@@ -276,4 +277,55 @@ model Indicator {
 
   @@index([sectionId, sortOrder])
   @@map("indicators")
+}
+
+/// Matrix/table-shaped figures (SPEC.md §4, §6, §7): the 4 fixed-shape tables — age pyramid,
+/// 17-group ethnicity, religion×sex, occupation. Opsi A (wide): one row per logical group with
+/// nullable INT cells (`male`/`female` for sex-split kinds, `total` for single-value kinds).
+/// Cells stay queryable/computable via SQL SUM(); `total` for sex-split rows is derived on read
+/// (`male + female`), never stored alongside them. Single `period` — these are June 2024 Potensi
+/// point-in-time snapshots with no tahun-lalu pairing (SPEC.md §6), unlike `indicators`.
+enum IndicatorTableKind {
+  age_pyramid
+  ethnicity
+  religion_by_sex
+  occupation
+}
+
+model IndicatorTable {
+  id        String            @id @default(uuid())
+  sectionId String            @map("section_id")
+  slug      String            @unique
+  title     String            @db.VarChar(255)
+  kind      IndicatorTableKind
+  period    String            @db.VarChar(64)
+  source    String?           @db.Text
+  sortOrder Int               @default(0) @map("sort_order")
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  section Section             @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  rows    IndicatorTableRow[]
+
+  @@index([sectionId, sortOrder])
+  @@map("indicator_tables")
+}
+
+model IndicatorTableRow {
+  id      String @id @default(uuid())
+  tableId String @map("table_id")
+  rowKey  String @map("row_key") @db.VarChar(64)
+  label   String @db.VarChar(255)
+  male    Int?
+  female  Int?
+  total   Int?
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  table IndicatorTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  @@unique([tableId, rowKey])
+  @@index([tableId, sortOrder])
+  @@map("indicator_table_rows")
 }
