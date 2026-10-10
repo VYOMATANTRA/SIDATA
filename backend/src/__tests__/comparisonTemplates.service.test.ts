@@ -448,7 +448,7 @@ describe('comparisonTemplates.service createComparisonTemplate', () => {
         [123],
         [null],
         ['k'.repeat(129)],
-        Array.from({ length: 51 }, (_, i) => `key-${i}`),
+        Array.from({ length: 401 }, (_, i) => `key-${i}`),
       ]) {
         await assertServiceError(
           createComparisonTemplate(validPayload({ acknowledgedWarnings }), ACTOR, CONTEXT),
@@ -458,10 +458,10 @@ describe('comparisonTemplates.service createComparisonTemplate', () => {
       assert.equal(txCalls.length, 0);
     });
 
-    it('accepts acknowledgedWarnings at its limits (50 keys, 128 characters each)', async () => {
+    it('accepts acknowledgedWarnings at its limits (400 keys, 128 characters each)', async () => {
       const result = await createComparisonTemplate(
         validPayload({
-          acknowledgedWarnings: Array.from({ length: 50 }, (_, i) => `${i}`.padEnd(128, 'k')),
+          acknowledgedWarnings: Array.from({ length: 400 }, (_, i) => `${i}`.padEnd(128, 'k')),
         }),
         ACTOR,
         CONTEXT,
@@ -710,6 +710,22 @@ describe('comparisonTemplates.service createComparisonTemplate', () => {
         (r) => r['action'] === 'comparison_template.keyword_warning_overridden',
       )!;
       assert.equal((override['metadata'] as { overrides: unknown[] }).overrides.length, 2);
+    });
+
+    it('can save a maximum-length body in which every word is flagged (every occurrence needs a key)', async () => {
+      const body = `{trend}${' naik'.repeat(398)}`; // 1997 characters, 398 flagged occurrences
+      assert.equal(findTrendKeywords(body).length, 398);
+
+      await createComparisonTemplate(
+        validPayload({ body, acknowledgedWarnings: keysFor(body) }),
+        ACTOR,
+        CONTEXT,
+      );
+
+      const override = auditRows.find(
+        (r) => r['action'] === 'comparison_template.keyword_warning_overridden',
+      )!;
+      assert.equal((override['metadata'] as { overrides: unknown[] }).overrides.length, 398);
     });
 
     it('checks structure before keywords: a malformed flagged body is a 400, not a 422', async () => {

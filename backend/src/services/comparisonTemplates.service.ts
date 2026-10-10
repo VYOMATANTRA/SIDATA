@@ -88,6 +88,15 @@ function toDto(row: TemplateRow): ComparisonTemplateDto {
 
 const TEXT_FIELDS = ['slug', 'label', 'body', 'trendNaik', 'trendTurun', 'trendTetap'] as const;
 
+const MAX_BODY_LENGTH = 2000;
+
+/**
+ * Every flagged occurrence needs its own key, so the cap must admit as many as a maximum-length
+ * body can hold. The shortest keyword is 4 characters and two matches need a separator, so a
+ * match takes at least 5 characters of body.
+ */
+const MAX_ACKNOWLEDGED_WARNINGS = Math.ceil(MAX_BODY_LENGTH / 5);
+
 const templateFields = {
   slug: z
     .string()
@@ -97,7 +106,11 @@ const templateFields = {
     .max(100, 'Slug maksimal 100 karakter')
     .regex(SLUG_REGEX, 'Format slug tidak valid. Gunakan format kebab-case.'),
   label: z.string().trim().min(1, 'Label wajib diisi').max(255, 'Label maksimal 255 karakter'),
-  body: z.string().trim().min(1, 'Body wajib diisi').max(2000, 'Body maksimal 2000 karakter'),
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Body wajib diisi')
+    .max(MAX_BODY_LENGTH, `Body maksimal ${MAX_BODY_LENGTH} karakter`),
   trendNaik: z
     .string()
     .trim()
@@ -119,7 +132,10 @@ const templateFields = {
 // and never counted as an edit.
 const acknowledgedWarnings = z
   .array(z.string().max(128, 'Kunci peringatan maksimal 128 karakter'))
-  .max(50, 'acknowledgedWarnings maksimal 50 kunci')
+  .max(
+    MAX_ACKNOWLEDGED_WARNINGS,
+    `acknowledgedWarnings maksimal ${MAX_ACKNOWLEDGED_WARNINGS} kunci`,
+  )
   .optional();
 
 export const createComparisonTemplateSchema = z
