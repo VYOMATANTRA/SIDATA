@@ -658,6 +658,18 @@ describe('pages.service', () => {
       );
     });
 
+    it('rejects sortOrder exceeding MySQL signed 32-bit INT max (400)', async () => {
+      for (const sortOrder of [2_147_483_648, 3_000_000_000, Number.MAX_SAFE_INTEGER]) {
+        await assert.rejects(
+          createPage({ title: 'Valid Title', sortOrder }, actor, context),
+          (err: unknown) =>
+            err instanceof PageServiceError &&
+            err.statusCode === 400 &&
+            err.message.includes('2147483647'),
+        );
+      }
+    });
+
     it('throws 409 Conflict when page with slug already exists', async () => {
       stubFindUnique(async () => summaryRow());
 
@@ -1033,6 +1045,18 @@ describe('pages.service', () => {
         await assert.rejects(
           reorderPages([{ id: 'p1', sortOrder }], actor, context),
           (err: unknown) => err instanceof PageServiceError && err.statusCode === 400,
+        );
+      }
+    });
+
+    it('rejects sortOrder exceeding MySQL signed 32-bit INT max in reorder payload (400)', async () => {
+      for (const sortOrder of [2_147_483_648, 3_000_000_000, Number.MAX_SAFE_INTEGER]) {
+        await assert.rejects(
+          reorderPages([{ id: 'p1', sortOrder }], actor, context),
+          (err: unknown) =>
+            err instanceof PageServiceError &&
+            err.statusCode === 400 &&
+            err.message.includes('2147483647'),
         );
       }
     });

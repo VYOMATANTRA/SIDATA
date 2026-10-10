@@ -28,6 +28,7 @@ export const RESERVED_PAGE_SLUGS = new Set([
   'null',
   'undefined',
 ]);
+export const MAX_PAGE_SORT_ORDER = 2_147_483_647;
 
 function hasControlCharacters(str: string): boolean {
   for (let i = 0; i < str.length; i++) {
@@ -240,9 +241,13 @@ export const createPage = async (
     if (
       typeof input.sortOrder !== 'number' ||
       !Number.isInteger(input.sortOrder) ||
-      input.sortOrder < 0
+      input.sortOrder < 0 ||
+      input.sortOrder > MAX_PAGE_SORT_ORDER
     ) {
-      throw new PageServiceError('Urutan (sortOrder) harus berupa bilangan bulat non-negatif', 400);
+      throw new PageServiceError(
+        'Urutan (sortOrder) harus berupa bilangan bulat antara 0 dan 2147483647',
+        400,
+      );
     }
     sortOrder = input.sortOrder;
   }
@@ -461,9 +466,13 @@ export const reorderPages = async (
     if (
       typeof itemObj.sortOrder !== 'number' ||
       !Number.isInteger(itemObj.sortOrder) ||
-      itemObj.sortOrder < 0
+      itemObj.sortOrder < 0 ||
+      itemObj.sortOrder > MAX_PAGE_SORT_ORDER
     ) {
-      throw new PageServiceError('Urutan (sortOrder) harus berupa bilangan bulat non-negatif', 400);
+      throw new PageServiceError(
+        'Urutan (sortOrder) harus berupa bilangan bulat antara 0 dan 2147483647',
+        400,
+      );
     }
 
     if (seenIds.has(trimmedId)) {
