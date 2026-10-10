@@ -137,10 +137,12 @@ const baseFields = {
   isStale: z.boolean().optional(),
   source: nullableText(2000),
   hedgeNote: nullableText(2000),
+  // Signed 32-bit INT column: without the upper bound, e.g. 3000000000 passes
+  // validation and MySQL rejects it as a non-IndicatorServiceError → 500.
   sortOrder: z
     .number()
-    .refine((v) => Number.isInteger(v) && v >= 0, {
-      message: 'Urutan harus berupa bilangan bulat non-negatif',
+    .refine((v) => Number.isInteger(v) && v >= 0 && v <= 2147483647, {
+      message: 'Urutan harus berupa bilangan bulat antara 0 dan 2147483647',
     })
     .optional(),
 };
