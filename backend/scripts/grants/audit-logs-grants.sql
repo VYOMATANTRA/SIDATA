@@ -45,6 +45,7 @@ GRANT ALL PRIVILEGES ON `<DB_NAME>`.`users` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
 GRANT ALL PRIVILEGES ON `<DB_NAME>`.`refresh_tokens` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
 GRANT ALL PRIVILEGES ON `<DB_NAME>`.`email_otps` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
 GRANT ALL PRIVILEGES ON `<DB_NAME>`.`system_settings` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
+GRANT ALL PRIVILEGES ON `<DB_NAME>`.`indicators` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
 
 -- 3. Restricted access to audit_logs: read everything, insert new rows, and update only the two
 --    acknowledge columns (MySQL supports column-scoped UPDATE grants). No DELETE, no
