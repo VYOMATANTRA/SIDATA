@@ -129,6 +129,7 @@ beforeEach(() => {
 
   sectionImpl['findUnique'] = async () => ({ id: 'sec-1' });
   tableImpl['findUnique'] = async () => tableRow();
+  tableImpl['aggregate'] = async () => ({ _max: { sortOrder: null } });
   rowImpl['findMany'] = async () => [cellRow()];
   rowImpl['aggregate'] = async () => ({
     _sum: { male: 120, female: 115, total: null },

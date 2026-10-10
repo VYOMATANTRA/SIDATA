@@ -186,6 +186,7 @@ async function assertServiceError(
 describe('indicatorTables.service createIndicatorTable', () => {
   beforeEach(() => {
     sectionImpl['findUnique'] = async () => ({ id: 'sec-1' });
+    tableImpl['aggregate'] = async () => ({ _max: { sortOrder: null } });
     tableImpl['create'] = async (...args: never[]) => {
       const { data, include } = args[0] as unknown as { data: AnyRecord; include: AnyRecord };
       assert.ok(include);
@@ -370,6 +371,76 @@ describe('indicatorTables.service createIndicatorTable', () => {
       nested.map((r) => r['sortOrder']),
       [0, 1, 10],
     );
+  });
+
+  it('rejects duplicate final sortOrders in nested rows with 400', async () => {
+    // Two explicit zeros (e.g. a form defaulting every row to 0).
+    await assertServiceError(
+      createIndicatorTable(
+        tablePayload({
+          rows: [
+            { rowKey: 'a', label: 'A', male: 1, female: 1, sortOrder: 0 },
+            { rowKey: 'b', label: 'B', male: 2, female: 2, sortOrder: 0 },
+          ],
+        }),
+        ACTOR,
+        CONTEXT,
+      ),
+      400,
+      'duplikat',
+    );
+    // Explicit value colliding with the other row's index default (index 1 → 1).
+    await assertServiceError(
+      createIndicatorTable(
+        tablePayload({
+          rows: [
+            { rowKey: 'a', label: 'A', male: 1, female: 1, sortOrder: 1 },
+            { rowKey: 'b', label: 'B', male: 2, female: 2 },
+          ],
+        }),
+        ACTOR,
+        CONTEXT,
+      ),
+      400,
+      'duplikat',
+    );
+    assert.equal(txCalls.length, 0);
+  });
+
+  it('appends an omitted table sortOrder after MAX(sort_order) in the section', async () => {
+    tableImpl['aggregate'] = async () => ({ _max: { sortOrder: 4 } });
+    let createdData: AnyRecord | null = null;
+    const prevCreate = tableImpl['create']!;
+    tableImpl['create'] = async (...args: never[]) => {
+      const { data } = args[0] as unknown as { data: AnyRecord };
+      createdData = data;
+      return prevCreate(...args);
+    };
+
+    const result = await createIndicatorTable(tablePayload(), ACTOR, CONTEXT);
+
+    assert.equal(createdData!['sortOrder'], 5);
+    assert.equal(result.sortOrder, 5);
+  });
+
+  it('starts the first table in a section at 0 and respects explicit table sortOrder', async () => {
+    let aggregateCalls = 0;
+    tableImpl['aggregate'] = async () => {
+      aggregateCalls++;
+      return { _max: { sortOrder: null } };
+    };
+
+    const first = await createIndicatorTable(tablePayload(), ACTOR, CONTEXT);
+    assert.equal(first.sortOrder, 0);
+    assert.equal(aggregateCalls, 1);
+
+    const explicit = await createIndicatorTable(
+      tablePayload({ slug: 'lain', sortOrder: 7 }),
+      ACTOR,
+      CONTEXT,
+    );
+    assert.equal(explicit.sortOrder, 7);
+    assert.equal(aggregateCalls, 1);
   });
 
   it('warms the per-id and per-slug caches on successful create', async () => {
@@ -751,6 +822,18 @@ describe('indicatorTables.service reads', () => {
     assert.equal(result?.rows.length, 1);
     assert.equal(result?.rows[0]!.total, 235);
     assert.deepStrictEqual(result?.totals, { rowCount: 1, male: 120, female: 115, total: 235 });
+  });
+
+  it('reads rows with a deterministic (sortOrder, rowKey) order', async () => {
+    let seenArgs: AnyRecord | null = null;
+    rowImpl['findMany'] = async (...args: never[]) => {
+      seenArgs = args[0] as unknown as AnyRecord;
+      return [cellRow()];
+    };
+
+    await getIndicatorTableBySlug('piramida-usia');
+
+    assert.deepStrictEqual(seenArgs!['orderBy'], [{ sortOrder: 'asc' }, { rowKey: 'asc' }]);
   });
 
   it('does not retain misses in the shared LRU caches', async () => {

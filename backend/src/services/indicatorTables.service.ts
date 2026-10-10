@@ -542,7 +542,9 @@ async function fetchTableDetail(
   const [rows, sums] = await Promise.all([
     db.indicatorTableRow.findMany({
       where: { tableId: table.id },
-      orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+      // rowKey is UNIQUE per table, so the tiebreak is a total deterministic order — never
+      // random-UUID order, even if two rows ever share a sortOrder.
+      orderBy: [{ sortOrder: 'asc' }, { rowKey: 'asc' }],
       take: MAX_ROWS_PER_TABLE,
     }),
     db.indicatorTableRow.aggregate({
@@ -663,6 +665,7 @@ export const createIndicatorTable = async (
     assertRowCells(input.kind, row);
   }
   const seenKeys = new Set<string>();
+  const seenSortOrders = new Set<number>();
   for (const row of nestedRows) {
     if (seenKeys.has(row.rowKey)) {
       throw new IndicatorTableServiceError(
@@ -671,6 +674,16 @@ export const createIndicatorTable = async (
       );
     }
     seenKeys.add(row.rowKey);
+    // Duplicate sortOrders (e.g. a form sending explicit 0 for every row, or an explicit
+    // value colliding with another row's index default) would tie and fall back to an
+    // arbitrary order — reject loudly instead of scrambling silently.
+    if (seenSortOrders.has(row.sortOrder)) {
+      throw new IndicatorTableServiceError(
+        `sortOrder '${row.sortOrder}' duplikat dalam payload — setiap baris butuh urutan unik, atau kosongkan semuanya agar mengikuti urutan submit.`,
+        400,
+      );
+    }
+    seenSortOrders.add(row.sortOrder);
   }
 
   const sectionId = input.sectionId.trim();
@@ -690,6 +703,20 @@ export const createIndicatorTable = async (
           throw new IndicatorTableServiceError('Section tidak ditemukan.', 404);
         }
 
+        // Omitted table sortOrder appends after the last table in the section (same
+        // rationale as row appends: all-zero ties fall back to random-UUID order in the
+        // list). Computed here, inside the section-locked transaction, so concurrent
+        // creates serialize.
+        let tableSortOrder = input.sortOrder;
+        if (tableSortOrder === undefined) {
+          const maxAgg = (await tx.indicatorTable.aggregate({
+            where: { sectionId },
+            _max: { sortOrder: true },
+          })) as { _max: { sortOrder: number | null } };
+          tableSortOrder =
+            maxAgg._max.sortOrder === null ? 0 : Math.min(maxAgg._max.sortOrder + 1, 2147483647);
+        }
+
         const created = await tx.indicatorTable.create({
           data: {
             sectionId,
@@ -698,10 +725,10 @@ export const createIndicatorTable = async (
             kind: input.kind,
             period: input.period.trim(),
             source: sanitizeNullableText(input.source) ?? null,
-            sortOrder: input.sortOrder ?? 0,
+            sortOrder: tableSortOrder,
             rows: { create: nestedRows },
           },
-          include: { rows: { orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }] } },
+          include: { rows: { orderBy: [{ sortOrder: 'asc' }, { rowKey: 'asc' }] } },
         });
 
         const typed = created as unknown as TableRow & { rows: CellRow[] };
