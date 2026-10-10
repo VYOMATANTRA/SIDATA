@@ -521,6 +521,10 @@ export const updateIndicator = async (
       cache: [listCachesInvalidator],
       onCommit: (committed, didChange) => {
         if (!didChange) return;
+        // setCommitted() alone doesn't bump the cache version, so a GET whose DB read began
+        // before this commit could still pass set()'s version guard and overwrite the fresh
+        // row with stale data. Invalidate first to discard any in-flight read.
+        targetCache.invalidate();
         targetCache.setCommitted(committed);
         missingIndicatorIds.delete(committed.id);
       },
