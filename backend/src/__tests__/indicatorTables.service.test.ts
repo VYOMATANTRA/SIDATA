@@ -335,6 +335,43 @@ describe('indicatorTables.service createIndicatorTable', () => {
     assert.equal((audit['metadata'] as AnyRecord)['rowCount'], 2);
   });
 
+  it('defaults nested rows to submission order instead of all zero', async () => {
+    let createdData: AnyRecord | null = null;
+    tableImpl['create'] = async (...args: never[]) => {
+      const { data } = args[0] as unknown as { data: AnyRecord };
+      createdData = data;
+      const nested = ((data['rows'] as AnyRecord)['create'] as AnyRecord[]).map((r, i) => ({
+        ...cellRow(),
+        ...r,
+        id: `row-new-${i}`,
+        tableId: 'tbl-new',
+      }));
+      return tableRow({ ...data, id: 'tbl-new', rows: nested });
+    };
+
+    await createIndicatorTable(
+      tablePayload({
+        rows: [
+          { rowKey: 'b', label: 'B', male: 1, female: 1 },
+          { rowKey: 'a', label: 'A', male: 2, female: 2 },
+          { rowKey: 'c', label: 'C', male: 3, female: 3, sortOrder: 10 },
+        ],
+      }),
+      ACTOR,
+      CONTEXT,
+    );
+
+    const nested = (createdData!['rows'] as AnyRecord)['create'] as AnyRecord[];
+    assert.deepStrictEqual(
+      nested.map((r) => r['rowKey']),
+      ['b', 'a', 'c'],
+    );
+    assert.deepStrictEqual(
+      nested.map((r) => r['sortOrder']),
+      [0, 1, 10],
+    );
+  });
+
   it('warms the per-id and per-slug caches on successful create', async () => {
     const created = await createIndicatorTable(tablePayload(), ACTOR, CONTEXT);
 
@@ -466,6 +503,11 @@ describe('indicatorTables.service row mutations', () => {
       return { ...cellRow(), ...data };
     };
     rowImpl['delete'] = async () => cellRow();
+    rowImpl['aggregate'] = async () => ({
+      _sum: { male: null, female: null, total: null },
+      _count: { _all: 0 },
+      _max: { sortOrder: null },
+    });
   });
 
   it('create returns 404 when the parent table does not exist', async () => {
@@ -509,6 +551,57 @@ describe('indicatorTables.service row mutations', () => {
       409,
       'sudah dipakai',
     );
+  });
+
+  it('create appends an omitted sortOrder after MAX(sort_order)', async () => {
+    rowImpl['aggregate'] = async () => ({ _max: { sortOrder: 7 } });
+    let createdData: AnyRecord | null = null;
+    rowImpl['create'] = async (...args: never[]) => {
+      const { data } = args[0] as unknown as { data: AnyRecord };
+      createdData = data;
+      return cellRow({ ...data, id: 'row-new' });
+    };
+
+    const result = await createIndicatorTableRow(
+      'tbl-1',
+      { rowKey: '5-9', label: 'Usia 5-9', male: 1, female: 1 },
+      ACTOR,
+      CONTEXT,
+    );
+
+    assert.equal(createdData!['sortOrder'], 8);
+    assert.equal(result.sortOrder, 8);
+  });
+
+  it('create starts at 0 when the table has no rows yet', async () => {
+    rowImpl['aggregate'] = async () => ({ _max: { sortOrder: null } });
+
+    const result = await createIndicatorTableRow(
+      'tbl-1',
+      { rowKey: '5-9', label: 'Usia 5-9', male: 1, female: 1 },
+      ACTOR,
+      CONTEXT,
+    );
+
+    assert.equal(result.sortOrder, 0);
+  });
+
+  it('create respects an explicit sortOrder without querying MAX', async () => {
+    let aggregateCalls = 0;
+    rowImpl['aggregate'] = async () => {
+      aggregateCalls++;
+      return { _max: { sortOrder: 7 } };
+    };
+
+    const result = await createIndicatorTableRow(
+      'tbl-1',
+      { rowKey: '5-9', label: 'Usia 5-9', male: 1, female: 1, sortOrder: 3 },
+      ACTOR,
+      CONTEXT,
+    );
+
+    assert.equal(result.sortOrder, 3);
+    assert.equal(aggregateCalls, 0);
   });
 
   it('create writes the row.created audit and derives the total', async () => {
