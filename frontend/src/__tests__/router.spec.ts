@@ -194,6 +194,34 @@ describe('router auth guard retry behavior', () => {
       expect(authStore.isAuthenticated).toBe(false);
     });
 
+    // Edge Case 5: Route metadata contracts for / and /dashboard
+    it('declares correct route metadata contracts for / (public) and /dashboard (protected)', () => {
+      const homeRoute = router.getRoutes().find((r) => r.path === '/');
+      expect(homeRoute).toBeDefined();
+      expect(homeRoute?.meta.title).toBe('Beranda');
+      expect(homeRoute?.meta.requiresAuth).toBeFalsy();
+
+      const dashboardRoute = router.getRoutes().find((r) => r.path === '/dashboard');
+      expect(dashboardRoute).toBeDefined();
+      expect(dashboardRoute?.meta.title).toBe('Dasbor');
+      expect(dashboardRoute?.meta.requiresAuth).toBe(true);
+    });
+
+    // Edge Case 6: Authenticated editor role access to /dashboard
+    it('allows authenticated user with editor role to access /dashboard', async () => {
+      sessionStorage.clear();
+      const pinia = createPinia();
+      setActivePinia(pinia);
+      const authStore = useAuthStore(pinia);
+
+      authStore.setAuth({ id: '30', email: 'editor@manggar.go.id', role: 'editor' }, 'editor-token');
+      await router.push('/');
+      await router.push('/dashboard');
+
+      expect(router.currentRoute.value.path).toBe('/dashboard');
+      expect(router.currentRoute.value.name).toBe('dashboard');
+    });
+
     // Happy Path (Last): Authenticated regular user and admin user accessing /dashboard
     it('allows authenticated regular user and admin user to access /dashboard', async () => {
       sessionStorage.clear();

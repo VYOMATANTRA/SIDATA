@@ -241,6 +241,48 @@ describe('DashboardView (TDD: Edge Cases First, Happy Path Last)', () => {
     await vi.waitUntil(() => !authStore.isAuthenticated);
   });
 
+  // Edge Case 8: Unexpected exception thrown during logout
+  it('handles unexpected exceptions thrown during logout gracefully with error banner', async () => {
+    const { pinia, router } = setupDashboardView();
+    await router.push('/dashboard');
+    await router.isReady();
+
+    const authStore = useAuthStore(pinia);
+    authStore.setAuth({ id: '1', email: 'petugas@manggar.go.id', role: 'user' }, 'token');
+
+    vi.spyOn(authStore, 'logout').mockRejectedValue(new Error('Fatal unexpected crash'));
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    const logoutBtn = wrapper.find('button');
+    await logoutBtn.trigger('click');
+    await vi.waitUntil(() => wrapper.find('[role="alert"]').exists());
+
+    expect(wrapper.text()).toContain('Terjadi kesalahan tidak terduga saat keluar. Silakan coba lagi.');
+    expect(authStore.isAuthenticated).toBe(true);
+    expect(logoutBtn.attributes('disabled')).toBeUndefined();
+  });
+
+  // Edge Case 9: Return to public home link destination and accessibility
+  it('renders a navigation link back to the public home route with correct destination', async () => {
+    const { pinia, router } = setupDashboardView();
+    await router.push('/dashboard');
+    await router.isReady();
+
+    const authStore = useAuthStore(pinia);
+    authStore.setAuth({ id: '1', email: 'petugas@manggar.go.id', role: 'user' }, 'token');
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    const homeLink = wrapper.find('a[href="/"]');
+    expect(homeLink.exists()).toBe(true);
+    expect(homeLink.text()).toContain('Kembali ke Beranda Publik');
+  });
+
   // Happy Path (Last): Display user profile metadata when authenticated
   it('displays user email and role badge when present', async () => {
     const { pinia, router } = setupDashboardView();

@@ -78,6 +78,23 @@ describe('SectionHero ctaLink security', () => {
     expect(p.text().trim().length).toBeGreaterThan(0);
     expect(p.text()).toBe(DEFAULT_HERO_BLOCK.body);
   });
+
+  it('applies the official background_laman_depan_kelurahan image and dark navy gradient overlay', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+
+    const wrapper = mount(LandingSectionHero, {
+      global: {
+        plugins: [pinia],
+        stubs: { 'router-link': true },
+      },
+    });
+
+    const section = wrapper.find('section#hero');
+    const style = section.attributes('style');
+    expect(style).toContain('linear-gradient');
+    expect(style).toContain('background_laman_depan_kelurahan.png');
+  });
 });
 
 describe('Common SectionHero.vue', () => {

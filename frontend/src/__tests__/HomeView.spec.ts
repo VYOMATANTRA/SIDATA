@@ -313,6 +313,54 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
     expect(router.currentRoute.value.path).toBe('/login');
   });
 
+  // Edge Case 10: Resilient initial mount when public settings and content blocks reject
+  it('renders gracefully with default content when API calls for settings and blocks fail', async () => {
+    const { pinia, router } = setupHomeView();
+    await router.push('/');
+    await router.isReady();
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockRejectedValue(new Error('Backend offline'));
+
+    let wrapper: ReturnType<typeof mount> | undefined;
+    expect(() => {
+      wrapper = mount(HomeView, {
+        global: { plugins: [pinia, router] },
+      });
+    }).not.toThrow();
+
+    expect(wrapper!.find('main#main-content').exists()).toBe(true);
+    expect(wrapper!.find('h1').text().length).toBeGreaterThan(0);
+    expect(wrapper!.find('section#hero').exists()).toBe(true);
+    expect(wrapper!.find('section#cerita-preview').exists()).toBe(true);
+    expect(wrapper!.find('section#potensi').exists()).toBe(true);
+    expect(wrapper!.find('section#widget-cuaca').exists()).toBe(true);
+  });
+
+  // Edge Case 11: Skip link target integrity and action button anchors
+  it('ensures skip link and hero action anchors point to valid destinations', async () => {
+    const { pinia, router } = setupHomeView();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(HomeView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    // Skip link points to #main-content
+    const skipLink = wrapper.find('a[href="#main-content"]');
+    expect(skipLink.exists()).toBe(true);
+    expect(wrapper.find('#main-content').exists()).toBe(true);
+
+    // Hero CTA links to #potensi
+    const ctaLink = wrapper.find('section#hero a[href="#potensi"]');
+    expect(ctaLink.exists()).toBe(true);
+    expect(wrapper.find('#potensi').exists()).toBe(true);
+
+    // Officer login link points to /login
+    const officerLink = wrapper.find('section#hero a[href="/login"]');
+    expect(officerLink.exists()).toBe(true);
+  });
+
   // Happy Path (Last): Unauthenticated Public Visitor Navigation
   it('renders login link in AppNavbar actions for unauthenticated public visitors', async () => {
     const { pinia, router } = setupHomeView();
