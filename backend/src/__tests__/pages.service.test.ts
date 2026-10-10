@@ -615,6 +615,34 @@ describe('pages.service', () => {
       );
     });
 
+    it('rejects title containing Unicode bidirectional override (Trojan Source) or invisible formatting characters (400)', async () => {
+      const adversarialTitles = [
+        'Profil\u202EKelurahan', // Right-to-Left Override (RLO, Trojan Source)
+        'Profil\u200BDesa', // Zero-Width Space
+        'Profil\u200CDesa', // Zero-Width Non-Joiner
+        'Profil\u200DDesa', // Zero-Width Joiner
+        'Profil\u202ADesa', // Left-to-Right Embedding
+        'Profil\u202BDesa', // Right-to-Left Embedding
+        'Profil\u202CDesa', // Pop Directional Formatting
+        'Profil\u202DDesa', // Left-to-Right Override
+        'Profil\u2066Desa', // Left-to-Right Isolate
+        'Profil\u2067Desa', // Right-to-Left Isolate
+        'Profil\u2068Desa', // First Strong Isolate
+        'Profil\u2069Desa', // Pop Directional Isolate
+        'Profil\uFEFFDesa', // Byte Order Mark / Zero-Width No-Break Space
+      ];
+
+      for (const title of adversarialTitles) {
+        await assert.rejects(
+          createPage({ title }, actor, context),
+          (err: unknown) =>
+            err instanceof PageServiceError &&
+            err.statusCode === 400 &&
+            err.message.includes('karakter'),
+        );
+      }
+    });
+
     it('rejects title exceeding 255 characters (400)', async () => {
       await assert.rejects(
         createPage({ title: 'a'.repeat(256) }, actor, context),

@@ -30,6 +30,8 @@ export const RESERVED_PAGE_SLUGS = new Set([
 ]);
 export const MAX_PAGE_SORT_ORDER = 2_147_483_647;
 
+const INVISIBLE_OR_BIDI_REGEX = /[\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/u;
+
 function hasControlCharacters(str: string): boolean {
   for (let i = 0; i < str.length; i++) {
     const code = str.charCodeAt(i);
@@ -37,7 +39,7 @@ function hasControlCharacters(str: string): boolean {
       return true;
     }
   }
-  return false;
+  return INVISIBLE_OR_BIDI_REGEX.test(str);
 }
 
 function hasPrototypePollution(val: unknown, depth = 0): boolean {
