@@ -7,6 +7,7 @@ import {
   updateIndicator,
   deleteIndicator,
   invalidateIndicatorsCache,
+  indicatorByIdCache,
   IndicatorServiceError,
 } from '../services/indicators.service.js';
 import prisma from '../utils/prisma.js';
@@ -631,6 +632,34 @@ describe('indicators.service getIndicatorById', () => {
     indicatorImpl['findUnique'] = async () => null;
 
     assert.equal(await getIndicatorById('missing'), null);
+  });
+
+  it('does not retain misses in the shared per-id LRU', async () => {
+    let queryCount = 0;
+    indicatorImpl['findUnique'] = async () => {
+      queryCount++;
+      return null;
+    };
+
+    assert.equal(await getIndicatorById('ghost-1'), null);
+    // The just-allocated slot is dropped instead of caching the miss.
+    assert.equal(indicatorByIdCache.has('ghost-1'), false);
+
+    // A repeat miss is short-circuited by the negative set: no second DB hit.
+    assert.equal(await getIndicatorById('ghost-1'), null);
+    assert.equal(queryCount, 1);
+    assert.equal(indicatorByIdCache.has('ghost-1'), false);
+  });
+
+  it('forgets a miss after cache invalidation (row may have been created since)', async () => {
+    indicatorImpl['findUnique'] = async () => null;
+    assert.equal(await getIndicatorById('late-row'), null);
+
+    invalidateIndicatorsCache();
+    indicatorImpl['findUnique'] = async () => indicatorRow({ id: 'late-row' });
+
+    const result = await getIndicatorById('late-row');
+    assert.equal(result?.id, 'late-row');
   });
 
   it('maps a row to the exact DTO shape', async () => {
