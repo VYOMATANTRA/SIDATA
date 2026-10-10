@@ -81,10 +81,12 @@ describe('pages.service', () => {
   let originalFindUnique: typeof prisma.page.findUnique;
   let originalTransaction: typeof prisma.$transaction;
   let originalContentBlockCount: typeof prisma.contentBlock.count;
+  let originalPageCount: typeof prisma.page.count;
   let originalPageDelete: typeof prisma.page.delete;
   let originalPageUpdate: typeof prisma.page.update;
   let findManyCalls: unknown[][];
   let findUniqueCalls: unknown[][];
+  let pageCountCalls: unknown[][];
 
   const stubFindMany = (impl: () => Promise<unknown>) => {
     prisma.page.findMany = (async (...args: unknown[]) => {
@@ -100,15 +102,24 @@ describe('pages.service', () => {
     }) as unknown as typeof prisma.page.findUnique;
   };
 
+  const stubPageCount = (impl: () => Promise<number>) => {
+    prisma.page.count = (async (...args: unknown[]) => {
+      pageCountCalls.push(args);
+      return impl();
+    }) as unknown as typeof prisma.page.count;
+  };
+
   beforeEach(() => {
     originalFindMany = prisma.page.findMany;
     originalFindUnique = prisma.page.findUnique;
     originalTransaction = prisma.$transaction;
     originalContentBlockCount = prisma.contentBlock.count;
+    originalPageCount = prisma.page.count;
     originalPageDelete = prisma.page.delete;
     originalPageUpdate = prisma.page.update;
     findManyCalls = [];
     findUniqueCalls = [];
+    pageCountCalls = [];
     // Fail loudly if a test hits a method it did not stub.
     prisma.page.findMany = (async () => {
       throw new Error('unexpected prisma.page.findMany call');
@@ -116,6 +127,9 @@ describe('pages.service', () => {
     prisma.page.findUnique = (async () => {
       throw new Error('unexpected prisma.page.findUnique call');
     }) as unknown as typeof prisma.page.findUnique;
+    prisma.page.count = (async () => {
+      throw new Error('unexpected prisma.page.count call');
+    }) as unknown as typeof prisma.page.count;
   });
 
   afterEach(() => {
@@ -123,6 +137,7 @@ describe('pages.service', () => {
     prisma.page.findUnique = originalFindUnique;
     prisma.$transaction = originalTransaction;
     prisma.contentBlock.count = originalContentBlockCount;
+    prisma.page.count = originalPageCount;
     prisma.page.delete = originalPageDelete;
     prisma.page.update = originalPageUpdate;
   });
@@ -989,6 +1004,10 @@ describe('pages.service', () => {
     const actor: AuditActor = { id: 'user-1', email: 'editor@manggar.go.id', role: 'editor' };
     const context: AuditRequestContext = { ipAddress: '127.0.0.1', userAgent: 'test-agent' };
 
+    beforeEach(() => {
+      stubPageCount(async () => 2);
+    });
+
     it('rejects payload with prototype pollution (__proto__) (400)', async () => {
       const polluted = JSON.parse('{"__proto__": {"admin": true}}');
       await assert.rejects(
@@ -1072,6 +1091,43 @@ describe('pages.service', () => {
           err instanceof PageServiceError &&
           err.statusCode === 400 &&
           err.message.includes('duplikat'),
+      );
+    });
+
+    it('rejects duplicate sortOrder values in reorder payload (400)', async () => {
+      const duplicateSortOrderPayload = [
+        { id: 'p1', sortOrder: 1 },
+        { id: 'p2', sortOrder: 1 },
+      ];
+      await assert.rejects(
+        reorderPages(duplicateSortOrderPayload, actor, context),
+        (err: unknown) =>
+          err instanceof PageServiceError &&
+          err.statusCode === 400 &&
+          err.message.includes('sortOrder') &&
+          err.message.includes('duplikat'),
+      );
+    });
+
+    it('rejects partial reorder payload that does not include all pages in database (400)', async () => {
+      stubFindMany(async () => [
+        summaryRow({ id: 'p1', sortOrder: 0 }),
+        summaryRow({ id: 'p2', sortOrder: 1 }),
+      ]);
+      stubPageCount(async () => 5); // Database has 5 pages total, but payload only provides 2
+
+      const partialPayload = [
+        { id: 'p1', sortOrder: 0 },
+        { id: 'p2', sortOrder: 1 },
+      ];
+
+      await assert.rejects(
+        reorderPages(partialPayload, actor, context),
+        (err: unknown) =>
+          err instanceof PageServiceError &&
+          err.statusCode === 400 &&
+          err.message.includes('seluruh halaman') &&
+          err.message.includes('5'),
       );
     });
 

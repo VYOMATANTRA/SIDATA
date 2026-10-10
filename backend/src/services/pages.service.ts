@@ -449,6 +449,7 @@ export const reorderPages = async (
 
   const validatedItems: ReorderPageItemDTO[] = [];
   const seenIds = new Set<string>();
+  const seenSortOrders = new Set<number>();
 
   for (const item of items) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) {
@@ -480,6 +481,11 @@ export const reorderPages = async (
     }
     seenIds.add(trimmedId);
 
+    if (seenSortOrders.has(itemObj.sortOrder)) {
+      throw new PageServiceError('Nilai sortOrder tidak boleh duplikat', 400);
+    }
+    seenSortOrders.add(itemObj.sortOrder);
+
     validatedItems.push({
       id: trimmedId,
       sortOrder: itemObj.sortOrder,
@@ -492,6 +498,14 @@ export const reorderPages = async (
 
   if (existingPages.length !== seenIds.size) {
     throw new PageServiceError('Satu atau lebih halaman tidak ditemukan', 404);
+  }
+
+  const totalPagesCount = await client.page.count();
+  if (seenIds.size !== totalPagesCount) {
+    throw new PageServiceError(
+      `Daftar urutan halaman harus mencakup seluruh halaman (${totalPagesCount} halaman)`,
+      400,
+    );
   }
 
   const existingMap = new Map(existingPages.map((p) => [p.id, p]));
