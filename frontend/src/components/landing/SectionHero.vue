@@ -57,10 +57,27 @@ const ctaLink = computed(() => {
   }
   return '#potensi';
 });
+
+const titleText = computed(() => {
+  const title = hero.value.title;
+  if (typeof title === 'string' && title.trim()) {
+    return title.trim();
+  }
+  return settingsStore.tagline;
+});
+
+const bodyText = computed(() => {
+  const body = hero.value.body;
+  if (typeof body === 'string' && body.trim()) {
+    return body.trim();
+  }
+  return DEFAULT_HERO_BLOCK.body;
+});
 </script>
 
 <template>
-  <header
+  <section
+    id="hero"
     class="relative overflow-hidden border-b border-slate-700/60 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 px-4 py-16 text-white sm:px-6 md:py-24 lg:px-8"
     aria-labelledby="hero-title"
   >
@@ -86,14 +103,14 @@ const ctaLink = computed(() => {
         id="hero-title"
         class="text-3xl leading-tight font-extrabold tracking-tight text-white sm:text-4xl md:text-5xl lg:text-6xl"
       >
-        {{ hero.title || settingsStore.tagline }}
+        {{ titleText }}
       </h1>
 
       <!-- Institutional Narrative Body -->
       <p
         class="mx-auto max-w-3xl text-base leading-relaxed font-normal text-slate-300 sm:text-lg md:text-xl"
       >
-        {{ hero.body || DEFAULT_HERO_BLOCK.body }}
+        {{ bodyText }}
       </p>
 
       <!-- Action Button -->
@@ -128,5 +145,5 @@ const ctaLink = computed(() => {
         </router-link>
       </div>
     </div>
-  </header>
+  </section>
 </template>

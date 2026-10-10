@@ -7,28 +7,28 @@
   - [x] Update `frontend/src/__tests__/router.spec.ts` with tests for public `/` access and protected `/dashboard` redirection
   - [x] Create `frontend/src/__tests__/DashboardView.spec.ts` to test the dashboard view rendering and logout
 
-- [ ] **Task 2: Update `SectionHero.vue` Landmark Semantics**
-  - [ ] Update `frontend/src/components/landing/SectionHero.vue` root element to `<section id="hero" aria-labelledby="hero-title">` to ensure `<main>` remains the single top landmark
-  - [ ] Verify single `<h1>` tag in hero remains intact
+- [x] **Task 2: Update `SectionHero.vue` Landmark Semantics**
+  - [x] Update `frontend/src/components/landing/SectionHero.vue` root element to `<section id="hero" aria-labelledby="hero-title">` to ensure `<main>` remains the single top landmark
+  - [x] Verify single `<h1>` tag in hero remains intact
 
-- [ ] **Task 3: Assemble Landing Page in `HomeView.vue` (Spec §8 Order)**
-  - [ ] Integrate `<AppNavbar>` with skip link, `#actions` slot (login/logout/user management), and `#menu` slot
-  - [ ] Assemble sections inside `<main id="main-content">` in exact order:
-    - [ ] 1. `<SectionHero />`
-    - [ ] 2. `<SectionSambutanLurah />`
-    - [ ] 3. `<section id="cerita-preview">` with `<slot name="cerita-preview">` and accessible placeholder (`<h2>`)
-    - [ ] 4. `<SectionHighlights />` (`<h2>` and `<h3>` items)
-    - [ ] 5. `<section id="widget-cuaca">` with `<slot name="weather">` and accessible placeholder (`<h2>`)
-  - [ ] Integrate `<AppFooter />` component
-  - [ ] Retain logout logic and store calls
+- [x] **Task 3: Assemble Landing Page in `HomeView.vue` (Spec §8 Order)**
+  - [x] Integrate `<AppNavbar>` with skip link, `#actions` slot (login/logout/user management), and `#menu` slot
+  - [x] Assemble sections inside `<main id="main-content">` in exact order:
+    - [x] 1. `<SectionHero />`
+    - [x] 2. `<SectionSambutanLurah />`
+    - [x] 3. `<section id="cerita-preview">` with `<slot name="cerita-preview">` and accessible placeholder (`<h2>`)
+    - [x] 4. `<SectionHighlights />` (`<h2>` and `<h3>` items)
+    - [x] 5. `<section id="widget-cuaca">` with `<slot name="weather">` and accessible placeholder (`<h2>`)
+  - [x] Integrate `<AppFooter />` component
+  - [x] Retain logout logic and store calls
 
-- [ ] **Task 4: Update and Expand Unit Tests & Accessibility Assertions**
-  - [ ] Update `frontend/src/__tests__/HomeView.spec.ts` to assert:
-    - [ ] Landmark presence (`<nav>`, `<main#main-content>`, `<footer>`)
-    - [ ] Exactly one `<h1>` in hero
-    - [ ] Strict heading hierarchy (`<h1>` in Hero → `<h2>` in Sambutan Lurah → `<h2>` in Cerita preview → `<h2>` in Highlights → `<h3>` highlight cards → `<h2>` in Widget Cuaca)
-    - [ ] Presence of Cerita preview and Weather widget slots
-    - [ ] Authentication states (unauthenticated login button vs authenticated user badge and logout)
-  - [ ] Run full test suite (`npx vitest run`)
-  - [ ] Run type check (`npm run type-check`)
-  - [ ] Run linter (`npm run lint`)
+- [x] **Task 4: Update and Expand Unit Tests & Accessibility Assertions**
+  - [x] Update `frontend/src/__tests__/HomeView.spec.ts` to assert:
+    - [x] Landmark presence (`<nav>`, `<main#main-content>`, `<footer>`)
+    - [x] Exactly one `<h1>` in hero
+    - [x] Strict heading hierarchy (`<h1>` in Hero → `<h2>` in Sambutan Lurah → `<h2>` in Cerita preview → `<h2>` in Highlights → `<h3>` highlight cards → `<h2>` in Widget Cuaca)
+    - [x] Presence of Cerita preview and Weather widget slots
+    - [x] Authentication states (unauthenticated login button vs authenticated user badge and logout)
+  - [x] Run full test suite (`npx vitest run`)
+  - [x] Run type check (`npm run type-check`)
+  - [x] Run linter (`npm run lint`)

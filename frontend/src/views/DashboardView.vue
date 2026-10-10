@@ -22,7 +22,9 @@ async function handleLogout() {
       return;
     }
 
-    router.push('/login');
+    await router.push('/login');
+  } catch {
+    logoutError.value = 'Terjadi kesalahan tidak terduga saat keluar. Silakan coba lagi.';
   } finally {
     isLoggingOut.value = false;
   }
