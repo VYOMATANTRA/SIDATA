@@ -60,6 +60,10 @@ const createUserKeyedLimiter = (limit: number) =>
 // Content blocks CMS write operations rate limiter (dedicated 100 req/15min bucket keyed by user ID)
 export const contentBlocksWriteLimiter = createUserKeyedLimiter(100);
 
+// Indicators CMS write operations rate limiter (dedicated 100 req/15min bucket keyed by user ID,
+// separate from contentBlocksWriteLimiter so indicator edits and prose edits do not drain each other)
+export const indicatorsWriteLimiter = createUserKeyedLimiter(100);
+
 // Settings write operations rate limiter (dedicated 100 req/15min bucket keyed by admin user ID,
 // separate from userManagementWriteLimiter so settings edits and user management do not drain each other)
 export const settingsWriteLimiter = createUserKeyedLimiter(100);
