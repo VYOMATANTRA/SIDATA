@@ -193,6 +193,31 @@ describe('indicators.service createIndicator', () => {
     );
   });
 
+  it('rejects sortOrder outside the signed 32-bit INT range with 400', async () => {
+    await assertServiceError(
+      createIndicator(validPayload({ sortOrder: 3000000000 }), ACTOR, CONTEXT),
+      400,
+      'Urutan',
+    );
+    await assertServiceError(
+      createIndicator(validPayload({ sortOrder: -1 }), ACTOR, CONTEXT),
+      400,
+      'Urutan',
+    );
+    await assertServiceError(
+      createIndicator(validPayload({ sortOrder: 1.5 }), ACTOR, CONTEXT),
+      400,
+      'Urutan',
+    );
+    assert.equal(txCalls.length, 0);
+  });
+
+  it('accepts the maximum signed 32-bit INT sortOrder', async () => {
+    const result = await createIndicator(validPayload({ sortOrder: 2147483647 }), ACTOR, CONTEXT);
+
+    assert.equal(result.sortOrder, 2147483647);
+  });
+
   it('preserves null value_previous (tier-1 gate) instead of coercing it', async () => {
     let createdData: AnyRecord | null = null;
     indicatorImpl['create'] = async (...args: never[]) => {
@@ -386,6 +411,15 @@ describe('indicators.service updateIndicator', () => {
       409,
       'sudah digunakan',
     );
+  });
+
+  it('rejects out-of-range sortOrder on update with 400', async () => {
+    await assertServiceError(
+      updateIndicator('ind-1', { sortOrder: 3000000000 }, ACTOR, CONTEXT),
+      400,
+      'Urutan',
+    );
+    assert.equal(auditRows.length, 0);
   });
 
   it('leaves value_previous untouched on partial updates (no silent nulling)', async () => {
