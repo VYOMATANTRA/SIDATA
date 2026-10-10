@@ -373,8 +373,8 @@ export const createIndicator = async (
             slug: input.slug,
             label: input.label.trim(),
             unit: sanitizeNullableText(input.unit) ?? null,
-            valueCurrent: String(input.valueCurrent),
-            valuePrevious: valuePrevious === null ? null : String(valuePrevious),
+            valueCurrent: input.valueCurrent,
+            valuePrevious: valuePrevious === null ? null : valuePrevious,
             periodCurrent: input.periodCurrent.trim(),
             periodPrevious,
             isComputedComparison: isComputed,
@@ -496,12 +496,12 @@ export const updateIndicator = async (
         if (input.unit !== undefined)
           track('unit', existing.unit, sanitizeNullableText(input.unit as string | null) ?? null);
         if (input.valueCurrent !== undefined)
-          track('valueCurrent', decimalToString(existing.valueCurrent), String(input.valueCurrent));
+          track('valueCurrent', decimalToString(existing.valueCurrent), input.valueCurrent);
         if (input.valuePrevious !== undefined)
           track(
             'valuePrevious',
             existing.valuePrevious === null ? null : decimalToString(existing.valuePrevious),
-            nextValuePrevious === null ? null : String(nextValuePrevious),
+            nextValuePrevious === null ? null : nextValuePrevious,
           );
         if (input.periodCurrent !== undefined)
           track('periodCurrent', existing.periodCurrent, (input.periodCurrent as string).trim());
@@ -537,11 +537,9 @@ export const updateIndicator = async (
             ...(input.unit !== undefined
               ? { unit: sanitizeNullableText(input.unit as string | null) ?? null }
               : {}),
-            ...(input.valueCurrent !== undefined
-              ? { valueCurrent: String(input.valueCurrent) }
-              : {}),
+            ...(input.valueCurrent !== undefined ? { valueCurrent: input.valueCurrent } : {}),
             ...(input.valuePrevious !== undefined
-              ? { valuePrevious: nextValuePrevious === null ? null : String(nextValuePrevious) }
+              ? { valuePrevious: nextValuePrevious === null ? null : nextValuePrevious }
               : {}),
             ...(input.periodCurrent !== undefined
               ? { periodCurrent: (input.periodCurrent as string).trim() }
