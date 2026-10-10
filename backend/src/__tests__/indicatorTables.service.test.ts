@@ -503,6 +503,7 @@ describe('indicatorTables.service row mutations', () => {
       return { ...cellRow(), ...data };
     };
     rowImpl['delete'] = async () => cellRow();
+    rowImpl['count'] = async () => 0;
     rowImpl['aggregate'] = async () => ({
       _sum: { male: null, female: null, total: null },
       _count: { _all: 0 },
@@ -602,6 +603,33 @@ describe('indicatorTables.service row mutations', () => {
 
     assert.equal(result.sortOrder, 3);
     assert.equal(aggregateCalls, 0);
+  });
+
+  it('create rejects the 501st row with 409 and allows the 500th', async () => {
+    rowImpl['count'] = async () => 500;
+
+    await assertServiceError(
+      createIndicatorTableRow(
+        'tbl-1',
+        { rowKey: 'baru', label: 'Baru', male: 1, female: 1 },
+        ACTOR,
+        CONTEXT,
+      ),
+      409,
+      'batas 500 baris',
+    );
+    assert.equal(txRowCalls['create']?.length ?? 0, 0);
+    assert.equal(auditRows.length, 0);
+
+    rowImpl['count'] = async () => 499;
+    const result = await createIndicatorTableRow(
+      'tbl-1',
+      { rowKey: 'baru', label: 'Baru', male: 1, female: 1 },
+      ACTOR,
+      CONTEXT,
+    );
+    assert.equal(result.rowKey, 'baru');
+    assert.equal(txRowCalls['create']?.length ?? 0, 1);
   });
 
   it('create writes the row.created audit and derives the total', async () => {

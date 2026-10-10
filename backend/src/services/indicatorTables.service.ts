@@ -1006,6 +1006,20 @@ export const createIndicatorTableRow = async (
         }
         assertRowCells(table.kind, cells);
 
+        // The detail read caps rows at MAX_ROWS_PER_TABLE while totals aggregate over all of
+        // them — allowing a 501st row would desync displayed rows from the totals (and hide
+        // the extra row forever). Enforced here, inside the locked transaction, so the
+        // invariant rows.length === totals.rowCount always holds.
+        const existingRowCount = await tx.indicatorTableRow.count({
+          where: { tableId: normalizedTableId },
+        });
+        if (existingRowCount >= MAX_ROWS_PER_TABLE) {
+          throw new IndicatorTableServiceError(
+            `Tabel sudah mencapai batas ${MAX_ROWS_PER_TABLE} baris.`,
+            409,
+          );
+        }
+
         const rowKey = input.rowKey.trim();
         const clash = await tx.indicatorTableRow.findUnique({
           where: { tableId_rowKey: { tableId: normalizedTableId, rowKey } },
