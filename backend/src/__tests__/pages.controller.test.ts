@@ -78,9 +78,11 @@ describe('pages.controller', () => {
   let originalFindUnique: typeof prisma.page.findUnique;
   let originalTransaction: typeof prisma.$transaction;
   let originalContentBlockCount: typeof prisma.contentBlock.count;
+  let originalPageCount: typeof prisma.page.count;
   let originalConsoleError: typeof console.error;
   let findManyCalls: unknown[][];
   let findUniqueCalls: unknown[][];
+  let pageCountCalls: unknown[][];
   let consoleErrorCalls: unknown[][];
 
   const stubFindMany = (impl: () => Promise<unknown>) => {
@@ -97,14 +99,23 @@ describe('pages.controller', () => {
     }) as unknown as typeof prisma.page.findUnique;
   };
 
+  const stubPageCount = (impl: () => Promise<number>) => {
+    prisma.page.count = (async (...args: unknown[]) => {
+      pageCountCalls.push(args);
+      return impl();
+    }) as unknown as typeof prisma.page.count;
+  };
+
   beforeEach(() => {
     originalFindMany = prisma.page.findMany;
     originalFindUnique = prisma.page.findUnique;
     originalTransaction = prisma.$transaction;
     originalContentBlockCount = prisma.contentBlock.count;
+    originalPageCount = prisma.page.count;
     originalConsoleError = console.error;
     findManyCalls = [];
     findUniqueCalls = [];
+    pageCountCalls = [];
     consoleErrorCalls = [];
     console.error = (...args: unknown[]) => {
       consoleErrorCalls.push(args);
@@ -116,6 +127,9 @@ describe('pages.controller', () => {
     stubFindUnique(async () => {
       throw new Error('unexpected prisma.page.findUnique call');
     });
+    stubPageCount(async () => {
+      throw new Error('unexpected prisma.page.count call');
+    });
   });
 
   afterEach(() => {
@@ -123,6 +137,7 @@ describe('pages.controller', () => {
     prisma.page.findUnique = originalFindUnique;
     prisma.$transaction = originalTransaction;
     prisma.contentBlock.count = originalContentBlockCount;
+    prisma.page.count = originalPageCount;
     console.error = originalConsoleError;
   });
 
@@ -716,6 +731,7 @@ describe('pages.controller', () => {
         { id: 'p1', slug: 'p1', title: 'P1', sortOrder: 0, _count: { chapters: 2 } },
         { id: 'p2', slug: 'p2', title: 'P2', sortOrder: 1, _count: { chapters: 4 } },
       ]);
+      stubPageCount(async () => 2);
 
       prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
         const fakeTx = {
