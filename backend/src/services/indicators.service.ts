@@ -286,6 +286,14 @@ export const invalidateIndicatorsCache = (id?: string): void => {
   indicatorListCache.clear();
 };
 
+/**
+ * Lets other services (comparison templates) drop every cached indicator in the same
+ * post-commit step as their own write, because an indicator DTO embeds rendered template text.
+ */
+export const indicatorCachesInvalidator: CacheInvalidator = {
+  invalidate: () => invalidateIndicatorsCache(),
+};
+
 function formatIndicator(row: {
   id: string;
   sectionId: string;

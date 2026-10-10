@@ -57,6 +57,16 @@ export const AUDIT_ACTIONS = {
   INDICATOR_CREATED: defineAction('indicator.created', 'info'),
   INDICATOR_UPDATED: defineAction('indicator.updated', 'info'),
   INDICATOR_DELETED: defineAction('indicator.deleted', 'warning'),
+  COMPARISON_TEMPLATE_CREATED: defineAction('comparison_template.created', 'info'),
+  COMPARISON_TEMPLATE_UPDATED: defineAction('comparison_template.updated', 'info'),
+  COMPARISON_TEMPLATE_DELETED: defineAction('comparison_template.deleted', 'warning'),
+  // SPEC §5: an admin saved trend/superlative wording outside the {trend} slot after
+  // acknowledging the warning. Warning, not critical: it is a trail for after-the-fact
+  // tracing, not an event that needs an admin to acknowledge it.
+  COMPARISON_TEMPLATE_KEYWORD_WARNING_OVERRIDDEN: defineAction(
+    'comparison_template.keyword_warning_overridden',
+    'warning',
+  ),
   AUDIT_PRUNED: defineAction('audit.pruned', 'info'),
 } as const satisfies Record<string, AuditActionDef>;
 
