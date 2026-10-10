@@ -269,11 +269,38 @@ model Indicator {
   source               String?  @db.Text
   hedgeNote            String?  @map("hedge_note") @db.Text
   sortOrder            Int      @default(0) @map("sort_order")
+  // Tier-1 prose builder (SPEC §5): which admin-authored sentence template renders this
+  // indicator's naik/turun/tetap comparison. A DB CHECK (added by hand in the
+  // add_comparison_templates migration) only allows a non-null id on a paired, computed
+  // indicator. That CHECK is also why both FK actions below must be RESTRICT: MySQL
+  // (error 3823) forbids CASCADE/SET NULL on a column used in a CHECK.
+  comparisonTemplateId String?  @map("comparison_template_id")
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 
-  section Section @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  section            Section             @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  comparisonTemplate ComparisonTemplate? @relation(fields: [comparisonTemplateId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([sectionId, sortOrder])
+  @@index([comparisonTemplateId])
   @@map("indicators")
+}
+
+/// Admin-authored sentence structure for the tier-1 computed-comparison prose builder
+/// (SPEC §5). `body` holds exactly one `{trend}` slot; the trend_* columns are the only
+/// text substituted into it, chosen by comparing value_current to value_previous.
+model ComparisonTemplate {
+  id         String   @id @default(uuid())
+  slug       String   @unique @db.VarChar(100)
+  label      String   @db.VarChar(255)
+  body       String   @db.Text
+  trendNaik  String   @map("trend_naik") @db.Text
+  trendTurun String   @map("trend_turun") @db.Text
+  trendTetap String   @map("trend_tetap") @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  indicators Indicator[]
+
+  @@map("comparison_templates")
 }
