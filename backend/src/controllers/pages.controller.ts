@@ -1,7 +1,18 @@
 import type { Request, Response } from 'express';
-import { getPages, getPageBySlug } from '../services/pages.service.js';
+import type { AuthRequest } from '../middlewares/auth.middleware.js';
+import { extractRequestActor } from '../utils/actor.js';
+import { extractRequestContext } from '../utils/requestContext.js';
+import {
+  getPages,
+  getPageBySlug,
+  createPage,
+  deletePage,
+  reorderPages,
+  PageServiceError,
+  PAGE_SLUG_PATTERN,
+} from '../services/pages.service.js';
 
-export const PAGE_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+export { PAGE_SLUG_PATTERN };
 
 export const listPages = async (_req: Request, res: Response): Promise<Response> => {
   try {
@@ -28,6 +39,102 @@ export const getPage = async (req: Request, res: Response): Promise<Response> =>
     return res.status(200).json({ page });
   } catch (error) {
     console.error('Error saat mengambil detail halaman:', error);
+    return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
+  }
+};
+
+export const createPageHandler = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<Response | void> => {
+  try {
+    const actor = extractRequestActor(req);
+    if (!actor) {
+      return res.status(401).json({ error: 'Akses ditolak. Pengguna belum terautentikasi.' });
+    }
+
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+      return res.status(400).json({ error: 'Payload halaman harus berupa objek JSON' });
+    }
+
+    const created = await createPage(req.body, actor, extractRequestContext(req));
+
+    return res.status(201).json({
+      page: created,
+    });
+  } catch (error) {
+    if (error instanceof PageServiceError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    console.error(
+      'Error saat menambahkan halaman:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
+    return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
+  }
+};
+
+export const deletePageHandler = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<Response | void> => {
+  try {
+    const actor = extractRequestActor(req);
+    if (!actor) {
+      return res.status(401).json({ error: 'Akses ditolak. Pengguna belum terautentikasi.' });
+    }
+
+    const { slug } = req.params;
+    if (typeof slug !== 'string' || !PAGE_SLUG_PATTERN.test(slug)) {
+      return res.status(400).json({ error: 'Slug halaman tidak valid' });
+    }
+
+    const deleted = await deletePage(slug, actor, extractRequestContext(req));
+
+    return res.status(200).json({
+      message: 'Halaman berhasil dihapus',
+      page: deleted,
+    });
+  } catch (error) {
+    if (error instanceof PageServiceError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    console.error(
+      'Error saat menghapus halaman:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
+    return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
+  }
+};
+
+export const reorderPagesHandler = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<Response | void> => {
+  try {
+    const actor = extractRequestActor(req);
+    if (!actor) {
+      return res.status(401).json({ error: 'Akses ditolak. Pengguna belum terautentikasi.' });
+    }
+
+    if (!req.body || (typeof req.body !== 'object' && !Array.isArray(req.body))) {
+      return res.status(400).json({ error: 'Payload reorder harus berupa JSON array atau objek' });
+    }
+
+    const pages = await reorderPages(req.body, actor, extractRequestContext(req));
+
+    return res.status(200).json({
+      message: 'Urutan halaman berhasil diperbarui',
+      pages,
+    });
+  } catch (error) {
+    if (error instanceof PageServiceError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    console.error(
+      'Error saat mengubah urutan halaman:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
     return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
   }
 };
