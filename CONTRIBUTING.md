@@ -51,7 +51,9 @@ Run `npm run type-check` before `npm run build` to catch TypeScript issues early
 | Run server | `npx tsx src/index.ts` |
 
 After editing `backend/prisma/schema.prisma`, run `npx prisma migrate dev` to apply the change
-and regenerate the Prisma client.
+and regenerate the Prisma client. If the migration adds a table, also add its `GRANT` line to
+`backend/scripts/grants/audit-logs-grants.sql`, or the app loses access to it once that script is
+applied. See the [deployment checklist](README.md#deployment) for the grants and pruning steps.
 
 ## CI
 

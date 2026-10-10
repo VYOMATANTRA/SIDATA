@@ -15,7 +15,7 @@ Backend requires a `.env` file at the repository root — `DATABASE_URL` (MySQL,
 
 Two optional env vars control the Google OAuth cookie lifetimes: `OAUTH_STATE_TTL_SECONDS` and `OAUTH_PKCE_TTL_SECONDS` — TTL for the temporary `oauth_state`/`oauth_verifier` cookies (the OAuth handshake window), both defaulting to `300` seconds. Both values should match in practice; setting state TTL shorter than verifier TTL risks false-positive `critical` audit logs (`AUTH_OAUTH_STATE_MISMATCH`) on late callbacks.
 
-Two more env vars are optional but matter for the audit trail (see the Audit Trail subsection below): `TRUST_PROXY` (Express `trust proxy` setting — set this behind any reverse proxy, or `req.ip` on every audit log row/rate-limiter bucket/CSRF session key resolves to the proxy, not the client) and `AUDIT_ADMIN_DATABASE_URL` (a privileged DB connection used only by `backend/scripts/`, never by the running server).
+Two more env vars are optional but matter for the audit trail (see the Audit Trail subsection below): `TRUST_PROXY` (Express `trust proxy` setting — set this behind any reverse proxy, or `req.ip` on every audit log row/rate-limiter bucket/CSRF session key resolves to the proxy, not the client) and `AUDIT_ADMIN_DATABASE_URL` (a privileged DB connection used only by `backend/scripts/`, never by the running server). `AUDIT_PRUNE_SCHEDULE` (5-field cron expression, default `0 3 * * *`) sets when the opt-in `audit-pruner` Compose sidecar runs.
 
 ## Database
 
@@ -112,7 +112,7 @@ Key details:
 Every admin user-management action and security-relevant auth event writes an `audit_logs` row (see `docs/SPEC.md` §3 for the product-level rules — severity levels, retention policy, what must never appear in `metadata`). Two things make this more than "just another table":
 
 - **Tamper defense is two layers.** Layer 1 is app-level: the Prisma client singleton in `src/utils/prisma.ts` is `$extends`-wrapped so `auditLog.update`/`.delete`/`.deleteMany`/`.upsert` throw unless the write touches only `acknowledgedAt`/`acknowledgedById` (logic in `src/utils/auditLogGuard.ts`). This is a guardrail against careless app code, not a security boundary. Layer 2 is the one that actually holds: `backend/scripts/grants/audit-logs-grants.sql` strips the app's runtime DB user down to `SELECT`, `INSERT`, and column-scoped `UPDATE` on `audit_logs` — no `DELETE`, no unrestricted `UPDATE` — via MySQL grants. **Run that script once per environment**, or the app's DB user retains its default full rights on the table and layer 2 is absent.
-- **Retention pruning runs outside the app.** `backend/scripts/prune-audit-logs.ts` connects with `AUDIT_ADMIN_DATABASE_URL` — a separate, privileged DB connection, never the app's — because deleting rows is exactly what layer 2 just took away from the app user. Run it on a schedule (host cron, or a Docker sidecar). It reads the per-severity retention settings (`GET`/`PATCH /api/settings/audit-retention`, admin-only), never prunes an unacknowledged `critical` row regardless of age, and writes its own `audit.pruned` summary row.
+- **Retention pruning runs outside the app.** `backend/scripts/prune-audit-logs.ts` connects with `AUDIT_ADMIN_DATABASE_URL` — a separate, privileged DB connection, never the app's — because deleting rows is exactly what layer 2 just took away from the app user. Run it on a schedule: the opt-in `audit-pruner` Compose sidecar (`docker compose --profile ops up -d --build audit-pruner`, schedule via `AUDIT_PRUNE_SCHEDULE`) or a host cron entry — see the Deployment checklist in `README.md`, which also covers applying the grants script once per environment. It reads the per-severity retention settings (`GET`/`PATCH /api/settings/audit-retention`, admin-only), never prunes an unacknowledged `critical` row regardless of age, and writes its own `audit.pruned` summary row.
 
 ## Tech Stack Summary
 
@@ -141,7 +141,7 @@ Every admin user-management action and security-relevant auth event writes an `a
 
 **Fix linting before commit**: Run `npm run lint` to fix ESLint and Prettier issues in one pass.
 
-**Database schema changes**: Edit `backend/prisma/schema.prisma`, then run `npx prisma migrate dev` to apply and generate client.
+**Database schema changes**: Edit `backend/prisma/schema.prisma`, then run `npx prisma migrate dev` to apply and generate client. If the migration adds a table, also add its `GRANT` line to `backend/scripts/grants/audit-logs-grants.sql` — that script replaces the app user's blanket db-level grant with per-table grants, so a table missing from it becomes inaccessible to the app once the script is (re-)applied.
 
 **Add a route**: In `frontend/src/router/index.ts`, register a new route pointing to a component. Add the component in `frontend/src/` or a subdirectory.
 
