@@ -148,13 +148,25 @@ const baseFields = {
 };
 
 function assertPairing(isComputed: boolean, valuePrevious: unknown, periodPrevious: unknown): void {
-  if (isComputed && (valuePrevious === null || valuePrevious === undefined)) {
+  const hasValue = valuePrevious !== null && valuePrevious !== undefined;
+  const hasPeriod = periodPrevious !== null && periodPrevious !== undefined;
+  // SPEC.md §5/§7: value_previous gates the tier-1 comparison prose. An orphaned half of
+  // the pair (value without period or vice versa) would later render a comparison against
+  // an unlabeled period once the flag flips or a consumer keys on valuePrevious != null,
+  // so both must always be present together or absent together — computed or not.
+  if (hasValue !== hasPeriod) {
+    throw new IndicatorServiceError(
+      'value_previous dan period_previous harus diisi berpasangan (keduanya ada atau keduanya kosong).',
+      400,
+    );
+  }
+  if (isComputed && !hasValue) {
     throw new IndicatorServiceError(
       'Indikator perbandingan terkomputasi membutuhkan value_previous (nilai tahun lalu).',
       400,
     );
   }
-  if (isComputed && (periodPrevious === null || periodPrevious === undefined)) {
+  if (isComputed && !hasPeriod) {
     throw new IndicatorServiceError(
       'Indikator perbandingan terkomputasi membutuhkan period_previous (periode tahun lalu).',
       400,
