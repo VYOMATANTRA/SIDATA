@@ -195,9 +195,42 @@ const indicatorListCache = new KeyedLruCache<string, VersionedTtlCache<Indicator
   MAX_CACHE_ENTRIES,
 );
 
-const indicatorByIdCache = new KeyedLruCache<string, VersionedTtlCache<IndicatorDto | null>>(
+export const indicatorByIdCache = new KeyedLruCache<string, VersionedTtlCache<IndicatorDto | null>>(
   MAX_CACHE_ENTRIES,
 );
+
+/**
+ * Negative results (unknown ids) are deliberately NOT retained in the shared per-id LRU:
+ * the public GET /:id route is unauthenticated, so repeated lookups of random ids would
+ * otherwise occupy all 200 slots, evict legitimate cached indicators, and force every
+ * subsequent read back to the DB. Misses live in this separate small TTL set instead —
+ * enough to absorb a scan burst without hammering the database on every repeat.
+ */
+const NEGATIVE_TTL_MS = 10 * 1000; // 10 seconds
+const MAX_NEGATIVE_ENTRIES = 200;
+const missingIndicatorIds = new Map<string, number>();
+
+function isKnownMissing(id: string): boolean {
+  const expiresAt = missingIndicatorIds.get(id);
+  if (expiresAt === undefined) return false;
+  if (Date.now() >= expiresAt) {
+    missingIndicatorIds.delete(id);
+    return false;
+  }
+  return true;
+}
+
+function rememberMissing(id: string): void {
+  if (!missingIndicatorIds.has(id)) {
+    if (missingIndicatorIds.size >= MAX_NEGATIVE_ENTRIES) {
+      const oldest = missingIndicatorIds.keys().next().value;
+      if (oldest !== undefined) missingIndicatorIds.delete(oldest);
+    }
+  } else {
+    missingIndicatorIds.delete(id);
+  }
+  missingIndicatorIds.set(id, Date.now() + NEGATIVE_TTL_MS);
+}
 
 const getListCache = (key: string): VersionedTtlCache<IndicatorListResult> =>
   indicatorListCache.getOrCompute(
@@ -214,8 +247,10 @@ const getByIdCache = (id: string): VersionedTtlCache<IndicatorDto | null> =>
 export const invalidateIndicatorsCache = (id?: string): void => {
   if (id) {
     indicatorByIdCache.get(id)?.invalidate();
+    missingIndicatorIds.delete(id);
   } else {
     indicatorByIdCache.clear();
+    missingIndicatorIds.clear();
   }
   for (const cache of indicatorListCache.values()) {
     cache.invalidate();
@@ -327,11 +362,21 @@ export const getIndicatorById = async (
     return null;
   }
   const normalizedId = id.trim();
-  return getByIdCache(normalizedId).getOrFetch(async (db) => {
+  const useSharedCache = client === prisma;
+  if (useSharedCache && isKnownMissing(normalizedId)) {
+    return null;
+  }
+  const result = await getByIdCache(normalizedId).getOrFetch(async (db) => {
     const row = await db.indicator.findUnique({ where: { id: normalizedId } });
     if (!row) return null;
     return formatIndicator(row as Parameters<typeof formatIndicator>[0]);
   }, client);
+  if (result === null && useSharedCache) {
+    // Drop the just-allocated slot instead of retaining the miss in the shared LRU.
+    indicatorByIdCache.delete(normalizedId);
+    rememberMissing(normalizedId);
+  }
+  return result;
 };
 
 export const createIndicator = async (
