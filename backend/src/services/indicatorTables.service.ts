@@ -244,6 +244,30 @@ function assertRowCells(kind: string, cells: NormalizedCells, scope: string = 'B
   }
 }
 
+/**
+ * Omitted row sortOrder appends after the current last row (`MAX(sort_order) + 1`) instead of
+ * collapsing to 0, where the read path's UUID tiebreak would scatter it. Must run inside the
+ * caller's locked transaction so concurrent appends serialize on the parent table lock.
+ */
+async function resolveAppendSortOrder(
+  tx: {
+    indicatorTableRow: {
+      aggregate(args: unknown): Promise<unknown>;
+    };
+  },
+  tableId: string,
+  explicit: number | undefined,
+): Promise<number> {
+  if (explicit !== undefined) return explicit;
+  const agg = (await tx.indicatorTableRow.aggregate({
+    where: { tableId },
+    _max: { sortOrder: true },
+  })) as { _max: { sortOrder: number | null } };
+  const max = agg._max.sortOrder;
+  if (max === null) return 0;
+  return Math.min(max + 1, 2147483647);
+}
+
 const DEFAULT_PAGE_SIZE = 50;
 export const MAX_TABLE_LIST_PAGE = 10_000;
 export const MAX_TABLE_LIST_PAGE_SIZE = 200;
@@ -626,11 +650,14 @@ export const createIndicatorTable = async (
   }
   const input = parsed.data;
 
-  const nestedRows = (input.rows ?? []).map((r) => ({
+  // Rows omitting sortOrder inherit their submission order (array index) instead of all
+  // collapsing to 0 — with all-zero ties the read path's id tiebreak (random UUIDs) would
+  // return them scrambled relative to the submitted order.
+  const nestedRows = (input.rows ?? []).map((r, index) => ({
     rowKey: r.rowKey.trim(),
     label: r.label.trim(),
     ...normalizeCells(r),
-    sortOrder: r.sortOrder ?? 0,
+    sortOrder: r.sortOrder ?? index,
   }));
   for (const row of nestedRows) {
     assertRowCells(input.kind, row);
@@ -998,7 +1025,13 @@ export const createIndicatorTableRow = async (
             male: cells.male,
             female: cells.female,
             total: cells.total,
-            sortOrder: input.sortOrder ?? 0,
+            // Omitted sortOrder appends after the current last row instead of collapsing to
+            // 0 — computed inside this locked transaction so concurrent appends serialize.
+            sortOrder: await resolveAppendSortOrder(
+              tx as unknown as Parameters<typeof resolveAppendSortOrder>[0],
+              normalizedTableId,
+              input.sortOrder,
+            ),
           },
         })) as unknown as CellRow;
 
