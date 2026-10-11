@@ -70,6 +70,12 @@ const router = createRouter({
       component: () => import('../views/PermintaanDataView.vue'),
       meta: { title: 'Permintaan Data' },
     },
+    {
+      path: '/ketua-rt',
+      name: 'ketua-rt',
+      component: () => import('../views/KetuaRtView.vue'),
+      meta: { title: 'Ketua RT' },
+    },
   ],
 });
 
