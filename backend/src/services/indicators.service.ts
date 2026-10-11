@@ -15,6 +15,11 @@ import {
 } from '../utils/lockTransactionCache.js';
 import { hasFieldChanged, stableJsonStringify } from '../utils/comparator.js';
 import { KeyedLruCache } from '../utils/keyedCache.js';
+import {
+  renderComparison,
+  type ComparisonTemplateText,
+  type RenderedComparison,
+} from '../utils/comparisonProse.js';
 
 export class IndicatorServiceError extends Error {
   statusCode: number;
@@ -41,6 +46,10 @@ export interface IndicatorDto {
   source: string | null;
   hedgeNote: string | null;
   sortOrder: number;
+  /** Tier-1 prose template this indicator renders through (SPEC §5), or null. */
+  comparisonTemplateId: string | null;
+  /** Rendered from the template and the paired values; null when there is nothing honest to say. */
+  comparison: RenderedComparison | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -137,6 +146,13 @@ const baseFields = {
   periodPrevious: nullableText(64),
   isComputedComparison: z.boolean().optional(),
   isStale: z.boolean().optional(),
+  comparisonTemplateId: z
+    .string()
+    .trim()
+    .min(1, 'comparisonTemplateId tidak boleh kosong')
+    .max(191, 'comparisonTemplateId maksimal 191 karakter')
+    .nullable()
+    .optional(),
   source: nullableText(2000),
   hedgeNote: nullableText(2000),
   // Signed 32-bit INT column: without the upper bound, e.g. 3000000000 passes
@@ -176,6 +192,63 @@ function assertPairing(isComputed: boolean, valuePrevious: unknown, periodPrevio
   }
 }
 
+/**
+ * SPEC §5/§7: the tier-1 builder only applies to a genuinely paired indicator, so a template
+ * may be attached only when value_previous and period_previous are both present and the
+ * indicator is flagged computed. The `check_indicators_comparison_template_paired` CHECK
+ * enforces the same rule in the database; failing here first turns a would-be 500 into a 400
+ * that says what to fix. Run it on the merged (stored + patched) state, not the patch alone.
+ */
+function assertTemplateAttachable(
+  isComputed: boolean,
+  valuePrevious: unknown,
+  periodPrevious: unknown,
+): void {
+  const hint =
+    ' Lepaskan template (comparisonTemplateId: null) jika indikator ini bukan perbandingan berpasangan.';
+  if (
+    valuePrevious === null ||
+    valuePrevious === undefined ||
+    periodPrevious === null ||
+    periodPrevious === undefined
+  ) {
+    throw new IndicatorServiceError(
+      `Template perbandingan membutuhkan value_previous dan period_previous (nilai dan periode tahun lalu).${hint}`,
+      400,
+    );
+  }
+  if (!isComputed) {
+    throw new IndicatorServiceError(
+      `Template perbandingan hanya dapat dipakai pada indikator perbandingan terkomputasi (isComputedComparison: true).${hint}`,
+      400,
+    );
+  }
+}
+
+/**
+ * Locks the template row, then checks it exists. Template edits and deletes take the same lock,
+ * so a template cannot be deleted between this check and the indicator write that references
+ * it (the FK is RESTRICT, which would otherwise surface as an unmapped P2003).
+ */
+async function lockAndRequireTemplate(
+  tx: {
+    $queryRaw: typeof prisma.$queryRaw;
+    comparisonTemplate: Pick<typeof prisma.comparisonTemplate, 'findUnique'>;
+  },
+  templateId: string,
+): Promise<void> {
+  await tx.$queryRaw(
+    Prisma.sql`SELECT id FROM comparison_templates WHERE id = ${templateId} FOR UPDATE`,
+  );
+  const template = await tx.comparisonTemplate.findUnique({ where: { id: templateId } });
+  if (!template) {
+    throw new IndicatorServiceError('Template perbandingan tidak ditemukan.', 404);
+  }
+}
+
+/** Reads and writes return the related template so the DTO can render its comparison. */
+const WITH_TEMPLATE = { comparisonTemplate: true } as const;
+
 export const createIndicatorSchema = z.object(baseFields).strict();
 
 export const updateIndicatorSchema = z
@@ -190,6 +263,7 @@ export const updateIndicatorSchema = z
     periodPrevious: baseFields.periodPrevious.optional(),
     isComputedComparison: baseFields.isComputedComparison.optional(),
     isStale: baseFields.isStale.optional(),
+    comparisonTemplateId: baseFields.comparisonTemplateId.optional(),
     source: baseFields.source.optional(),
     hedgeNote: baseFields.hedgeNote.optional(),
     sortOrder: baseFields.sortOrder.optional(),
@@ -286,6 +360,14 @@ export const invalidateIndicatorsCache = (id?: string): void => {
   indicatorListCache.clear();
 };
 
+/**
+ * Lets other services (comparison templates) drop every cached indicator in the same
+ * post-commit step as their own write, because an indicator DTO embeds rendered template text.
+ */
+export const indicatorCachesInvalidator: CacheInvalidator = {
+  invalidate: () => invalidateIndicatorsCache(),
+};
+
 function formatIndicator(row: {
   id: string;
   sectionId: string;
@@ -301,17 +383,39 @@ function formatIndicator(row: {
   source: string | null;
   hedgeNote: string | null;
   sortOrder: number;
+  // Absent on rows that were not loaded with `include: { comparisonTemplate: true }`.
+  comparisonTemplateId?: string | null;
+  comparisonTemplate?: ComparisonTemplateText | null;
   createdAt: Date;
   updatedAt: Date;
 }): IndicatorDto {
+  const valueCurrent = decimalToString(row.valueCurrent);
+  const valuePrevious = row.valuePrevious === null ? null : decimalToString(row.valuePrevious);
+  // renderComparison refuses unpaired and non-computed rows itself; a missing relation (a
+  // dangling id, or a read that did not include it) simply means there is no comparison.
+  const comparison = row.comparisonTemplate
+    ? renderComparison(
+        {
+          label: row.label,
+          unit: row.unit,
+          valueCurrent,
+          valuePrevious,
+          periodCurrent: row.periodCurrent,
+          periodPrevious: row.periodPrevious,
+          isComputedComparison: row.isComputedComparison,
+        },
+        row.comparisonTemplate,
+      )
+    : null;
+
   return {
     id: row.id,
     sectionId: row.sectionId,
     slug: row.slug,
     label: row.label,
     unit: row.unit,
-    valueCurrent: decimalToString(row.valueCurrent),
-    valuePrevious: row.valuePrevious === null ? null : decimalToString(row.valuePrevious),
+    valueCurrent,
+    valuePrevious,
     periodCurrent: row.periodCurrent,
     periodPrevious: row.periodPrevious,
     isComputedComparison: row.isComputedComparison,
@@ -319,6 +423,8 @@ function formatIndicator(row: {
     source: row.source,
     hedgeNote: row.hedgeNote,
     sortOrder: row.sortOrder,
+    comparisonTemplateId: row.comparisonTemplateId ?? null,
+    comparison,
     createdAt: toIsoString(row.createdAt),
     updatedAt: toIsoString(row.updatedAt),
   };
@@ -373,6 +479,7 @@ export const listIndicators = async (
         orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
         skip: (normalized.page - 1) * normalized.pageSize,
         take: normalized.pageSize,
+        include: WITH_TEMPLATE,
       }),
       db.indicator.count({ where }),
     ]);
@@ -398,7 +505,10 @@ export const getIndicatorById = async (
     return null;
   }
   const result = await getByIdCache(normalizedId).getOrFetch(async (db) => {
-    const row = await db.indicator.findUnique({ where: { id: normalizedId } });
+    const row = await db.indicator.findUnique({
+      where: { id: normalizedId },
+      include: WITH_TEMPLATE,
+    });
     if (!row) return null;
     return formatIndicator(row as Parameters<typeof formatIndicator>[0]);
   }, client);
@@ -430,6 +540,8 @@ export const createIndicator = async (
   const periodPrevious = sanitizeNullableText(input.periodPrevious) ?? null;
   const isComputed = input.isComputedComparison ?? false;
   assertPairing(isComputed, valuePrevious, periodPrevious);
+  const templateId = input.comparisonTemplateId ?? null;
+  if (templateId !== null) assertTemplateAttachable(isComputed, valuePrevious, periodPrevious);
 
   const sectionId = input.sectionId.trim();
   const lockQuery = Prisma.sql`SELECT id FROM sections WHERE id = ${sectionId} FOR UPDATE`;
@@ -447,8 +559,10 @@ export const createIndicator = async (
         if (!section) {
           throw new IndicatorServiceError('Section tidak ditemukan.', 404);
         }
+        if (templateId !== null) await lockAndRequireTemplate(tx, templateId);
 
         const row = await tx.indicator.create({
+          include: WITH_TEMPLATE,
           data: {
             sectionId,
             slug: input.slug,
@@ -463,6 +577,7 @@ export const createIndicator = async (
             source: sanitizeNullableText(input.source) ?? null,
             hedgeNote: sanitizeNullableText(input.hedgeNote) ?? null,
             sortOrder: input.sortOrder ?? 0,
+            ...(templateId !== null ? { comparisonTemplateId: templateId } : {}),
           },
         });
 
@@ -471,7 +586,12 @@ export const createIndicator = async (
             action: AUDIT_ACTIONS.INDICATOR_CREATED,
             actor,
             target: { type: 'indicator', id: row.id, label: row.slug },
-            metadata: { slug: row.slug, label: row.label, sectionId },
+            metadata: {
+              slug: row.slug,
+              label: row.label,
+              sectionId,
+              ...(templateId !== null ? { comparisonTemplateId: templateId } : {}),
+            },
             context: reqContext,
           },
           tx,
@@ -529,7 +649,10 @@ export const updateIndicator = async (
         missingIndicatorIds.delete(committed.id);
       },
       execute: async (tx) => {
-        const existing = await tx.indicator.findUnique({ where: { id: normalizedId } });
+        const existing = await tx.indicator.findUnique({
+          where: { id: normalizedId },
+          include: WITH_TEMPLATE,
+        });
         if (!existing) {
           throw new IndicatorServiceError('Indikator tidak ditemukan.', 404);
         }
@@ -576,6 +699,20 @@ export const updateIndicator = async (
             : existing.isComputedComparison;
         assertPairing(nextComputed, nextValuePrevious, nextPeriodPrevious);
 
+        // Checked on the merged state, so it also stops a patch from clearing the pair or the
+        // computed flag out from under a template that is still attached.
+        const currentTemplateId = existing.comparisonTemplateId ?? null;
+        const nextTemplateId =
+          input.comparisonTemplateId !== undefined
+            ? (input.comparisonTemplateId ?? null)
+            : currentTemplateId;
+        if (nextTemplateId !== null) {
+          assertTemplateAttachable(nextComputed, nextValuePrevious, nextPeriodPrevious);
+        }
+        if (nextTemplateId !== null && nextTemplateId !== currentTemplateId) {
+          await lockAndRequireTemplate(tx, nextTemplateId);
+        }
+
         const changes: Record<string, { before: unknown; after: unknown }> = {};
         const track = (field: string, before: unknown, after: unknown) => {
           if (hasFieldChanged(before, after)) {
@@ -605,6 +742,8 @@ export const updateIndicator = async (
         if (input.isComputedComparison !== undefined)
           track('isComputedComparison', existing.isComputedComparison, nextComputed);
         if (input.isStale !== undefined) track('isStale', existing.isStale, input.isStale);
+        if (input.comparisonTemplateId !== undefined)
+          track('comparisonTemplateId', currentTemplateId, nextTemplateId);
         if (input.source !== undefined)
           track(
             'source',
@@ -625,6 +764,7 @@ export const updateIndicator = async (
 
         const updated = await tx.indicator.update({
           where: { id: normalizedId },
+          include: WITH_TEMPLATE,
           data: {
             ...(input.sectionId !== undefined ? { sectionId: input.sectionId.trim() } : {}),
             ...(input.slug !== undefined ? { slug: input.slug } : {}),
@@ -644,6 +784,9 @@ export const updateIndicator = async (
               ? { isComputedComparison: nextComputed }
               : {}),
             ...(input.isStale !== undefined ? { isStale: input.isStale } : {}),
+            ...(input.comparisonTemplateId !== undefined
+              ? { comparisonTemplateId: nextTemplateId }
+              : {}),
             ...(input.source !== undefined
               ? { source: sanitizeNullableText(input.source as string | null) ?? null }
               : {}),
@@ -709,7 +852,10 @@ export const deleteIndicator = async (
         missingIndicatorIds.delete(committed.id);
       },
       execute: async (tx) => {
-        const existing = await tx.indicator.findUnique({ where: { id: normalizedId } });
+        const existing = await tx.indicator.findUnique({
+          where: { id: normalizedId },
+          include: WITH_TEMPLATE,
+        });
         if (!existing) {
           throw new IndicatorServiceError('Indikator tidak ditemukan.', 404);
         }

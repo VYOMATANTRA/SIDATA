@@ -12,6 +12,12 @@ import { invalidateIndicatorsCache } from '../services/indicators.service.js';
 import prisma from '../utils/prisma.js';
 import type { AuthRequest } from '../middlewares/auth.middleware.js';
 import { fakeRes } from './helpers/fakeRes.js';
+import {
+  TEMPLATE_ROW,
+  NAIK_TEXT,
+  honoringInclude,
+  findAnyTemplate,
+} from './helpers/comparisonFixtures.js';
 
 type AnyRecord = Record<string, unknown>;
 type AsyncFn = (...args: never[]) => Promise<unknown>;
@@ -63,6 +69,7 @@ function makeReq(overrides: AnyRecord = {}): AuthRequest {
 
 let indicatorImpl: Record<string, AsyncFn>;
 let sectionImpl: Record<string, AsyncFn>;
+let templateImpl: Record<string, AsyncFn>;
 let originals: Array<{ target: AnyRecord; key: string; fn: unknown }>;
 
 function stubMethod(target: AnyRecord, key: string, fn: AsyncFn) {
@@ -73,6 +80,7 @@ function stubMethod(target: AnyRecord, key: string, fn: AsyncFn) {
 beforeEach(() => {
   indicatorImpl = {};
   sectionImpl = {};
+  templateImpl = { findUnique: async (...args: never[]) => findAnyTemplate(args[0]) };
   originals = [];
   invalidateIndicatorsCache();
 
@@ -80,6 +88,9 @@ beforeEach(() => {
     $queryRaw: (async () => []) as AsyncFn,
     section: {
       findUnique: (async (...args: never[]) => sectionImpl['findUnique']!(...args)) as AsyncFn,
+    },
+    comparisonTemplate: {
+      findUnique: (async (...args: never[]) => templateImpl['findUnique']!(...args)) as AsyncFn,
     },
     indicator: new Proxy(
       {},
@@ -471,5 +482,126 @@ describe('indicators.controller deleteIndicatorHandler', () => {
     await deleteIndicatorHandler(makeReq({ params: { id: 'ind-1' } }), res as unknown as Response);
 
     assert.equal(res.status, 500);
+  });
+});
+
+describe('indicators.controller tier-1 comparison templates', () => {
+  const attachedRow = (overrides: AnyRecord = {}) =>
+    indicatorRow({ comparisonTemplateId: 'tpl-1', comparisonTemplate: TEMPLATE_ROW, ...overrides });
+
+  it('POST returns 400 when a template is attached to an indicator with null value_previous', async () => {
+    let created = 0;
+    indicatorImpl['create'] = async () => {
+      created++;
+      return indicatorRow();
+    };
+
+    const res = fakeRes();
+    await createIndicatorHandler(
+      makeReq({ body: validBody({ valuePrevious: null, comparisonTemplateId: 'tpl-1' }) }),
+      res as unknown as Response,
+    );
+
+    assert.equal(res.status, 400);
+    assert.match(String((res.body as AnyRecord)['error']), /value_previous/);
+    assert.equal(created, 0);
+  });
+
+  it('POST returns 404 for an unknown template id', async () => {
+    templateImpl['findUnique'] = async () => null;
+    let created = 0;
+    indicatorImpl['create'] = async () => {
+      created++;
+      return indicatorRow();
+    };
+
+    const res = fakeRes();
+    await createIndicatorHandler(
+      makeReq({
+        body: validBody({
+          isComputedComparison: true,
+          valuePrevious: '120000',
+          periodPrevious: '2024',
+          comparisonTemplateId: 'tpl-missing',
+        }),
+      }),
+      res as unknown as Response,
+    );
+
+    assert.equal(res.status, 404);
+    assert.equal(created, 0);
+  });
+
+  it('GET /:id returns the rendered comparison', async () => {
+    indicatorImpl['findUnique'] = async (...args: never[]) =>
+      honoringInclude(attachedRow(), args[0]);
+
+    const res = fakeRes();
+    await getIndicatorHandler(
+      { params: { id: 'ind-1' } } as unknown as Request,
+      res as unknown as Response,
+    );
+
+    assert.equal(res.status, 200);
+    const indicator = (res.body as AnyRecord)['indicator'] as AnyRecord;
+    assert.equal(indicator['comparisonTemplateId'], 'tpl-1');
+    assert.deepEqual(indicator['comparison'], { trend: 'naik', text: NAIK_TEXT });
+  });
+
+  it('GET /:id returns comparison: null for an indicator without a template', async () => {
+    indicatorImpl['findUnique'] = async (...args: never[]) =>
+      honoringInclude(indicatorRow({ comparisonTemplateId: null }), args[0]);
+
+    const res = fakeRes();
+    await getIndicatorHandler(
+      { params: { id: 'ind-1' } } as unknown as Request,
+      res as unknown as Response,
+    );
+
+    const indicator = (res.body as AnyRecord)['indicator'] as AnyRecord;
+    assert.equal(indicator['comparison'], null);
+    assert.equal(indicator['comparisonTemplateId'], null);
+  });
+
+  it('PATCH attaches a template and returns 200 with the rendered comparison', async () => {
+    const stored = indicatorRow({ comparisonTemplateId: null });
+    indicatorImpl['findUnique'] = async (...args: never[]) => honoringInclude(stored, args[0]);
+    indicatorImpl['update'] = async (...args: never[]) => {
+      const { data } = args[0] as unknown as { data: AnyRecord };
+      return honoringInclude({ ...stored, ...data }, args[0]);
+    };
+
+    const res = fakeRes();
+    await updateIndicatorHandler(
+      makeReq({ params: { id: 'ind-1' }, body: { comparisonTemplateId: 'tpl-1' } }),
+      res as unknown as Response,
+    );
+
+    assert.equal(res.status, 200);
+    const indicator = (res.body as AnyRecord)['indicator'] as AnyRecord;
+    assert.equal(indicator['comparisonTemplateId'], 'tpl-1');
+    assert.deepEqual(indicator['comparison'], { trend: 'naik', text: NAIK_TEXT });
+  });
+
+  it('PATCH returns 400 when clearing the pair would orphan the attached template', async () => {
+    const stored = attachedRow();
+    indicatorImpl['findUnique'] = async (...args: never[]) => honoringInclude(stored, args[0]);
+    let updated = 0;
+    indicatorImpl['update'] = async () => {
+      updated++;
+      return stored;
+    };
+
+    const res = fakeRes();
+    await updateIndicatorHandler(
+      makeReq({
+        params: { id: 'ind-1' },
+        body: { valuePrevious: null, periodPrevious: null, isComputedComparison: false },
+      }),
+      res as unknown as Response,
+    );
+
+    assert.equal(res.status, 400);
+    assert.equal(updated, 0);
   });
 });

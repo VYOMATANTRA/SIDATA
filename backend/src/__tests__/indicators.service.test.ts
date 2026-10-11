@@ -12,6 +12,13 @@ import {
 } from '../services/indicators.service.js';
 import prisma from '../utils/prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
+import {
+  TEMPLATE_ROW,
+  NAIK_TEXT,
+  TURUN_TEXT,
+  honoringInclude,
+  findAnyTemplate,
+} from './helpers/comparisonFixtures.js';
 
 type AnyRecord = Record<string, unknown>;
 type AsyncFn = (...args: never[]) => Promise<unknown>;
@@ -48,6 +55,10 @@ const indicatorRow = (overrides: AnyRecord = {}) => ({
   ...overrides,
 });
 
+/** A row as Prisma returns it for `include: { comparisonTemplate: true }`. */
+const attachedRow = (overrides: AnyRecord = {}) =>
+  indicatorRow({ comparisonTemplateId: 'tpl-1', comparisonTemplate: TEMPLATE_ROW, ...overrides });
+
 const p2002 = () =>
   new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
     code: 'P2002',
@@ -66,6 +77,7 @@ const p2003 = () =>
 // ---------------------------------------------------------------------------
 let indicatorImpl: Record<string, AsyncFn>;
 let sectionImpl: Record<string, AsyncFn>;
+let templateImpl: Record<string, AsyncFn>;
 let auditRows: AnyRecord[];
 let txCalls: unknown[][];
 let queryRawCalls: unknown[][];
@@ -80,6 +92,9 @@ function stubMethod(target: AnyRecord, key: string, fn: AsyncFn) {
 beforeEach(() => {
   indicatorImpl = {};
   sectionImpl = {};
+  // By default every template id resolves, so pre-existing tests that never touch templates
+  // are unaffected; tests for the missing-template case override findUnique.
+  templateImpl = { findUnique: async (...args: never[]) => findAnyTemplate(args[0]) };
   auditRows = [];
   txCalls = [];
   queryRawCalls = [];
@@ -94,6 +109,9 @@ beforeEach(() => {
     }) as AsyncFn,
     section: {
       findUnique: (async (...args: never[]) => sectionImpl['findUnique']!(...args)) as AsyncFn,
+    },
+    comparisonTemplate: {
+      findUnique: (async (...args: never[]) => templateImpl['findUnique']!(...args)) as AsyncFn,
     },
     indicator: new Proxy(
       {},
@@ -840,8 +858,444 @@ describe('indicators.service getIndicatorById', () => {
       source: 'Prodeskel',
       hedgeNote: null,
       sortOrder: 0,
+      // Legacy rows (and rows with no template attached) carry no comparison at all.
+      comparisonTemplateId: null,
+      comparison: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-02T00:00:00.000Z',
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tier-1 computed-comparison prose builder (SPEC §5): an indicator may reference an
+// admin-authored comparison template, and its DTO then carries the rendered comparison.
+// ---------------------------------------------------------------------------
+const templateLock = () =>
+  queryRawCalls
+    .map((call) => call[0] as { sql: string; values: unknown[] })
+    .filter((q) => /comparison_templates/.test(q.sql));
+
+describe('indicators.service tier-1 comparison templates', () => {
+  describe('createIndicator', () => {
+    let createdData: AnyRecord | null;
+
+    const attachPayload = (overrides: AnyRecord = {}) =>
+      validPayload({
+        // NAIK_TEXT is rendered with the unit, so the request must carry it: the stub writes
+        // whatever the service sends, exactly as the database would.
+        unit: 'jiwa',
+        isComputedComparison: true,
+        valuePrevious: '120000',
+        periodPrevious: '2024',
+        comparisonTemplateId: 'tpl-1',
+        ...overrides,
+      });
+
+    beforeEach(() => {
+      createdData = null;
+      sectionImpl['findUnique'] = async () => ({ id: 'sec-1' });
+      indicatorImpl['create'] = async (...args: never[]) => {
+        const { data } = args[0] as unknown as { data: AnyRecord };
+        createdData = data;
+        return honoringInclude(
+          indicatorRow({ comparisonTemplateId: null, ...data, id: 'ind-new' }),
+          args[0],
+        );
+      };
+    });
+
+    it('attaches a template to a computed, paired indicator and renders the comparison', async () => {
+      const result = await createIndicator(attachPayload(), ACTOR, CONTEXT);
+
+      assert.equal(createdData!['comparisonTemplateId'], 'tpl-1');
+      assert.equal(result.comparisonTemplateId, 'tpl-1');
+      assert.deepEqual(result.comparison, { trend: 'naik', text: NAIK_TEXT });
+    });
+
+    it('locks the template row FOR UPDATE so a concurrent template delete cannot slip in', async () => {
+      await createIndicator(attachPayload(), ACTOR, CONTEXT);
+
+      assert.equal(queryRawCalls.length, 2); // parent section + template
+      const locks = templateLock();
+      assert.equal(locks.length, 1);
+      assert.match(locks[0]!.sql, /FOR UPDATE/);
+      assert.deepEqual(locks[0]!.values, ['tpl-1']);
+    });
+
+    it('takes no template lock when no template is attached', async () => {
+      await createIndicator(validPayload(), ACTOR, CONTEXT);
+
+      assert.equal(queryRawCalls.length, 1);
+      assert.equal(templateLock().length, 0);
+    });
+
+    describe('refuses indicators that are not genuinely paired (acceptance criterion)', () => {
+      const cases: Array<[string, AnyRecord, string]> = [
+        [
+          'no previous value or period at all',
+          validPayload({ comparisonTemplateId: 'tpl-1' }),
+          'value_previous',
+        ],
+        [
+          'computed but value_previous is null',
+          validPayload({
+            isComputedComparison: true,
+            valuePrevious: null,
+            comparisonTemplateId: 'tpl-1',
+          }),
+          'value_previous',
+        ],
+        [
+          'a full pair that is not flagged computed',
+          validPayload({
+            valuePrevious: '120000',
+            periodPrevious: '2024',
+            comparisonTemplateId: 'tpl-1',
+          }),
+          'terkomputasi',
+        ],
+        [
+          'computed with value_previous but no period_previous',
+          validPayload({
+            isComputedComparison: true,
+            valuePrevious: '120000',
+            periodPrevious: null,
+            comparisonTemplateId: 'tpl-1',
+          }),
+          'period_previous',
+        ],
+      ];
+
+      for (const [name, payload, messagePart] of cases) {
+        it(`400: ${name}`, async () => {
+          await assertServiceError(createIndicator(payload, ACTOR, CONTEXT), 400, messagePart);
+
+          assert.equal(txCalls.length, 0);
+          assert.equal(createdData, null);
+          assert.equal(auditRows.length, 0);
+        });
+      }
+    });
+
+    it('returns 404 for an unknown template and writes nothing', async () => {
+      templateImpl['findUnique'] = async () => null;
+
+      await assertServiceError(createIndicator(attachPayload(), ACTOR, CONTEXT), 404, 'Template');
+
+      assert.equal(createdData, null);
+      assert.equal(auditRows.length, 0);
+    });
+
+    it('accepts comparisonTemplateId: null and omits any comparison', async () => {
+      const result = await createIndicator(
+        attachPayload({ comparisonTemplateId: null }),
+        ACTOR,
+        CONTEXT,
+      );
+
+      assert.equal(result.comparisonTemplateId, null);
+      assert.equal(result.comparison, null);
+      assert.equal(queryRawCalls.length, 1);
+    });
+
+    it('rejects malformed comparisonTemplateId values with 400', async () => {
+      for (const value of ['', '   ', 5, false, {}, [], 'x'.repeat(192)]) {
+        await assertServiceError(
+          createIndicator(attachPayload({ comparisonTemplateId: value }), ACTOR, CONTEXT),
+          400,
+        );
+      }
+      assert.equal(txCalls.length, 0);
+    });
+
+    it('trims the template id', async () => {
+      await createIndicator(attachPayload({ comparisonTemplateId: '  tpl-1  ' }), ACTOR, CONTEXT);
+
+      assert.equal(createdData!['comparisonTemplateId'], 'tpl-1');
+    });
+  });
+
+  describe('updateIndicator', () => {
+    let storedRow: AnyRecord;
+    let updatedData: AnyRecord | null;
+
+    beforeEach(() => {
+      storedRow = indicatorRow({ comparisonTemplateId: null });
+      updatedData = null;
+      sectionImpl['findUnique'] = async () => ({ id: 'sec-1' });
+      indicatorImpl['findUnique'] = async (...args: never[]) => honoringInclude(storedRow, args[0]);
+      indicatorImpl['update'] = async (...args: never[]) => {
+        const { data } = args[0] as unknown as { data: AnyRecord };
+        updatedData = data;
+        return honoringInclude({ ...storedRow, ...data }, args[0]);
+      };
+    });
+
+    const patch = (payload: AnyRecord) => updateIndicator('ind-1', payload, ACTOR, CONTEXT);
+    const changesOf = () =>
+      (
+        auditRows[0]!['metadata'] as {
+          changes: Record<string, { before: unknown; after: unknown }>;
+        }
+      ).changes;
+
+    describe('attaching', () => {
+      it('attaches to a computed, paired indicator, renders it and records the change', async () => {
+        const result = await patch({ comparisonTemplateId: 'tpl-1' });
+
+        assert.equal(updatedData!['comparisonTemplateId'], 'tpl-1');
+        assert.equal(result.comparisonTemplateId, 'tpl-1');
+        assert.deepEqual(result.comparison, { trend: 'naik', text: NAIK_TEXT });
+        assert.equal(auditRows.length, 1);
+        assert.equal(auditRows[0]!['action'], 'indicator.updated');
+        assert.deepEqual(changesOf()['comparisonTemplateId'], { before: null, after: 'tpl-1' });
+      });
+
+      it('refuses an indicator whose stored value_previous is null (acceptance criterion)', async () => {
+        storedRow = indicatorRow({
+          comparisonTemplateId: null,
+          isComputedComparison: false,
+          valuePrevious: null,
+          periodPrevious: null,
+        });
+
+        await assertServiceError(patch({ comparisonTemplateId: 'tpl-1' }), 400, 'value_previous');
+
+        assert.equal(updatedData, null);
+        assert.equal(auditRows.length, 0);
+      });
+
+      it('refuses an indicator that has a pair but is not flagged computed', async () => {
+        storedRow = indicatorRow({ comparisonTemplateId: null, isComputedComparison: false });
+
+        await assertServiceError(patch({ comparisonTemplateId: 'tpl-1' }), 400, 'terkomputasi');
+
+        assert.equal(updatedData, null);
+      });
+
+      it('allows attaching in the same request that makes the indicator paired and computed', async () => {
+        storedRow = indicatorRow({
+          comparisonTemplateId: null,
+          isComputedComparison: false,
+          valuePrevious: null,
+          periodPrevious: null,
+        });
+
+        const result = await patch({
+          isComputedComparison: true,
+          valuePrevious: '120000',
+          periodPrevious: '2024',
+          comparisonTemplateId: 'tpl-1',
+        });
+
+        assert.deepEqual(result.comparison, { trend: 'naik', text: NAIK_TEXT });
+      });
+
+      it('returns 404 for an unknown template and writes nothing', async () => {
+        templateImpl['findUnique'] = async () => null;
+
+        await assertServiceError(patch({ comparisonTemplateId: 'tpl-missing' }), 404, 'Template');
+
+        assert.equal(updatedData, null);
+        assert.equal(auditRows.length, 0);
+      });
+
+      it('rejects malformed comparisonTemplateId values with 400', async () => {
+        for (const value of ['', '   ', 5, false, 'x'.repeat(192)]) {
+          await assertServiceError(patch({ comparisonTemplateId: value }), 400);
+        }
+        assert.equal(txCalls.length, 0);
+      });
+    });
+
+    describe('while a template is attached', () => {
+      beforeEach(() => {
+        storedRow = attachedRow();
+      });
+
+      it('refuses to clear the pair or the computed flag (each would orphan the template)', async () => {
+        for (const payload of [
+          { isComputedComparison: false },
+          { valuePrevious: null },
+          { periodPrevious: null },
+          { valuePrevious: null, periodPrevious: null, isComputedComparison: false },
+        ]) {
+          await assertServiceError(patch(payload), 400);
+        }
+
+        assert.equal(updatedData, null);
+        assert.equal(auditRows.length, 0);
+      });
+
+      it('allows clearing the pair when the same request detaches the template', async () => {
+        const result = await patch({
+          valuePrevious: null,
+          periodPrevious: null,
+          isComputedComparison: false,
+          comparisonTemplateId: null,
+        });
+
+        assert.equal(updatedData!['comparisonTemplateId'], null);
+        assert.equal(result.valuePrevious, null);
+        assert.equal(result.comparisonTemplateId, null);
+        assert.equal(result.comparison, null);
+        assert.deepEqual(changesOf()['comparisonTemplateId'], { before: 'tpl-1', after: null });
+      });
+
+      it('re-renders when valueCurrent changes the direction', async () => {
+        const turun = await patch({ valueCurrent: '115000' });
+        assert.deepEqual(turun.comparison, { trend: 'turun', text: TURUN_TEXT });
+
+        const tetap = await patch({ valueCurrent: '120000' });
+        assert.deepEqual(tetap.comparison, {
+          trend: 'tetap',
+          text: 'Berdasarkan data 2025, Jumlah Penduduk tercatat 120.000 jiwa, tidak berubah dibandingkan 2024.',
+        });
+      });
+
+      it('detaches with comparisonTemplateId: null, recording before/after and taking no template lock', async () => {
+        const result = await patch({ comparisonTemplateId: null });
+
+        assert.equal(result.comparisonTemplateId, null);
+        assert.equal(result.comparison, null);
+        assert.deepEqual(changesOf()['comparisonTemplateId'], { before: 'tpl-1', after: null });
+        assert.equal(queryRawCalls.length, 1);
+        assert.equal(templateLock().length, 0);
+      });
+
+      it('switches to another template, locking the new one', async () => {
+        const result = await patch({ comparisonTemplateId: 'tpl-2' });
+
+        assert.equal(result.comparisonTemplateId, 'tpl-2');
+        assert.deepEqual(changesOf()['comparisonTemplateId'], { before: 'tpl-1', after: 'tpl-2' });
+        const locks = templateLock();
+        assert.equal(locks.length, 1);
+        assert.deepEqual(locks[0]!.values, ['tpl-2']);
+      });
+
+      it('takes no template lock when the template is unchanged', async () => {
+        await patch({ comparisonTemplateId: 'tpl-1', label: 'Penduduk Baru' });
+
+        assert.equal(queryRawCalls.length, 1);
+        assert.equal(templateLock().length, 0);
+      });
+
+      it('leaves the template alone on unrelated edits', async () => {
+        const result = await patch({ label: 'Penduduk Baru' });
+
+        assert.equal('comparisonTemplateId' in updatedData!, false);
+        assert.equal(queryRawCalls.length, 1);
+        assert.equal(result.comparisonTemplateId, 'tpl-1');
+        assert.match(result.comparison!.text, /Penduduk Baru/);
+      });
+
+      it('treats re-sending the same template id as a no-op that still reports the comparison', async () => {
+        const result = await patch({ comparisonTemplateId: 'tpl-1' });
+
+        assert.equal(txIndicatorCalls['update']?.length ?? 0, 0);
+        assert.equal(auditRows.length, 0);
+        assert.deepEqual(result.comparison, { trend: 'naik', text: NAIK_TEXT });
+      });
+    });
+
+    it('still maps a racing destination-section delete (P2003) to a Section 404', async () => {
+      indicatorImpl['update'] = async () => {
+        throw p2003();
+      };
+
+      await assertServiceError(patch({ sectionId: 'sec-2', label: 'Pindah' }), 404, 'Section');
+    });
+  });
+
+  describe('reads', () => {
+    it('asks the database for the related template on list and get', async () => {
+      let listArgs: AnyRecord | null = null;
+      let getArgs: AnyRecord | null = null;
+      indicatorImpl['findMany'] = async (...args: never[]) => {
+        listArgs = args[0] as unknown as AnyRecord;
+        return [];
+      };
+      indicatorImpl['count'] = async () => 0;
+      indicatorImpl['findUnique'] = async (...args: never[]) => {
+        getArgs = args[0] as unknown as AnyRecord;
+        return null;
+      };
+
+      await listIndicators({});
+      await getIndicatorById('ind-1');
+
+      assert.deepEqual(listArgs!['include'], { comparisonTemplate: true });
+      assert.deepEqual(getArgs!['include'], { comparisonTemplate: true });
+    });
+
+    it('renders the comparison per row in a list and leaves unattached rows null', async () => {
+      indicatorImpl['findMany'] = async (...args: never[]) => [
+        honoringInclude(attachedRow(), args[0]),
+        honoringInclude(
+          indicatorRow({ id: 'ind-2', slug: 'lain', comparisonTemplateId: null }),
+          args[0],
+        ),
+      ];
+      indicatorImpl['count'] = async () => 2;
+
+      const { indicators } = await listIndicators({});
+
+      assert.deepEqual(indicators[0]!.comparison, { trend: 'naik', text: NAIK_TEXT });
+      assert.equal(indicators[0]!.comparisonTemplateId, 'tpl-1');
+      assert.equal(indicators[1]!.comparison, null);
+      assert.equal(indicators[1]!.comparisonTemplateId, null);
+    });
+
+    it('renders the comparison on get', async () => {
+      indicatorImpl['findUnique'] = async (...args: never[]) =>
+        honoringInclude(attachedRow(), args[0]);
+
+      const result = await getIndicatorById('ind-1');
+
+      assert.deepEqual(result?.comparison, { trend: 'naik', text: NAIK_TEXT });
+    });
+
+    it('never renders an unpaired row even if a template is somehow attached (CHECK bypassed)', async () => {
+      indicatorImpl['findUnique'] = async (...args: never[]) =>
+        honoringInclude(attachedRow({ valuePrevious: null, periodPrevious: null }), args[0]);
+
+      const result = await getIndicatorById('ind-1');
+
+      assert.equal(result?.comparison, null);
+      assert.equal(result?.comparisonTemplateId, 'tpl-1'); // still visible, so an editor can fix it
+    });
+
+    it('never renders a row that is not flagged computed', async () => {
+      indicatorImpl['findUnique'] = async (...args: never[]) =>
+        honoringInclude(attachedRow({ isComputedComparison: false }), args[0]);
+
+      assert.equal((await getIndicatorById('ind-1'))?.comparison, null);
+    });
+
+    it('treats a dangling template id (relation missing) as no comparison, without throwing', async () => {
+      indicatorImpl['findUnique'] = async () =>
+        indicatorRow({ comparisonTemplateId: 'tpl-gone', comparisonTemplate: null });
+
+      const result = await getIndicatorById('ind-1');
+
+      assert.equal(result?.comparison, null);
+      assert.equal(result?.comparisonTemplateId, 'tpl-gone');
+    });
+  });
+
+  describe('deleteIndicator', () => {
+    it('deletes an indicator with an attached template and snapshots its comparison in the audit row', async () => {
+      indicatorImpl['findUnique'] = async (...args: never[]) =>
+        honoringInclude(attachedRow(), args[0]);
+      indicatorImpl['delete'] = async () => attachedRow();
+
+      const result = await deleteIndicator('ind-1', ACTOR, CONTEXT);
+
+      assert.deepEqual(result.comparison, { trend: 'naik', text: NAIK_TEXT });
+      const before = (auditRows[0]!['metadata'] as { before: AnyRecord }).before;
+      assert.equal(before['comparisonTemplateId'], 'tpl-1');
+      assert.deepEqual(before['comparison'], { trend: 'naik', text: NAIK_TEXT });
     });
   });
 });
