@@ -14,6 +14,7 @@ import settingsRoutes from './routes/settings.routes.js';
 import contentBlocksRoutes from './routes/contentBlocks.routes.js';
 import indicatorsRoutes from './routes/indicators.routes.js';
 import comparisonTemplatesRoutes from './routes/comparisonTemplates.routes.js';
+import indicatorTablesRoutes from './routes/indicatorTables.routes.js';
 import { doubleCsrfProtection, invalidCsrfTokenError } from './middlewares/csrf.middleware.js';
 
 const app = express();
@@ -51,6 +52,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/content-blocks', contentBlocksRoutes);
 app.use('/api/indicators', indicatorsRoutes);
 app.use('/api/comparison-templates', comparisonTemplatesRoutes);
+app.use('/api/indicator-tables', indicatorTablesRoutes);
 
 app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (err === invalidCsrfTokenError) {
