@@ -9,10 +9,8 @@ import {
   deletePage,
   reorderPages,
   PageServiceError,
-  PAGE_SLUG_PATTERN,
+  isValidPageSlug,
 } from '../services/pages.service.js';
-
-export { PAGE_SLUG_PATTERN };
 
 export const listPages = async (_req: Request, res: Response): Promise<Response> => {
   try {
@@ -27,7 +25,7 @@ export const listPages = async (_req: Request, res: Response): Promise<Response>
 export const getPage = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { slug } = req.params;
-    if (typeof slug !== 'string' || !PAGE_SLUG_PATTERN.test(slug)) {
+    if (!isValidPageSlug(slug)) {
       return res.status(400).json({ error: 'Slug halaman tidak valid' });
     }
 
@@ -85,11 +83,7 @@ export const deletePageHandler = async (
     }
 
     const { slug } = req.params;
-    if (typeof slug !== 'string' || !PAGE_SLUG_PATTERN.test(slug)) {
-      return res.status(400).json({ error: 'Slug halaman tidak valid' });
-    }
-
-    const deleted = await deletePage(slug, actor, extractRequestContext(req));
+    const deleted = await deletePage(slug as string, actor, extractRequestContext(req));
 
     return res.status(200).json({
       message: 'Halaman berhasil dihapus',

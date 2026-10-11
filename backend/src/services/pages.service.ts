@@ -17,6 +17,21 @@ export class PageServiceError extends Error {
 }
 
 export const PAGE_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+export const MAX_PAGE_SLUG_LENGTH = 100;
+
+export function isValidPageSlug(raw: unknown): raw is string {
+  if (typeof raw !== 'string') {
+    return false;
+  }
+  return (
+    raw.length > 0 &&
+    raw.length <= MAX_PAGE_SLUG_LENGTH &&
+    PAGE_SLUG_PATTERN.test(raw) &&
+    !raw.includes('\\') &&
+    !/%5c/i.test(raw)
+  );
+}
+
 export const RESERVED_PAGE_SLUGS = new Set([
   'reorder',
   'api',
@@ -77,8 +92,12 @@ function slugify(text: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-// sort_order isn't unique, so ties break on id to keep sibling order stable between requests.
-const SORT_ORDER = [{ sortOrder: 'asc' as const }, { id: 'asc' as const }];
+// sort_order isn't unique; ties break deterministically on createdAt (creation order), then id.
+const SORT_ORDER = [
+  { sortOrder: 'asc' as const },
+  { createdAt: 'asc' as const },
+  { id: 'asc' as const },
+];
 
 export interface SectionDTO {
   id: string;
@@ -104,6 +123,24 @@ export interface PageSummaryDTO {
   chapterCount: number;
 }
 
+export interface PageWithChapterCount {
+  id: string;
+  slug: string;
+  title: string;
+  sortOrder: number;
+  _count: {
+    chapters: number;
+  };
+}
+
+export const toPageSummary = (page: PageWithChapterCount): PageSummaryDTO => ({
+  id: page.id,
+  slug: page.slug,
+  title: page.title,
+  sortOrder: page.sortOrder,
+  chapterCount: page._count.chapters,
+});
+
 export interface PageDetailDTO {
   id: string;
   slug: string;
@@ -120,13 +157,7 @@ export const getPages = async (): Promise<PageSummaryDTO[]> => {
     include: { _count: { select: { chapters: true } } },
   });
 
-  return pages.map((page) => ({
-    id: page.id,
-    slug: page.slug,
-    title: page.title,
-    sortOrder: page.sortOrder,
-    chapterCount: page._count.chapters,
-  }));
+  return pages.map(toPageSummary);
 };
 
 export const getPageBySlug = async (slug: string): Promise<PageDetailDTO | null> => {
@@ -170,7 +201,7 @@ export const getPageBySlug = async (slug: string): Promise<PageDetailDTO | null>
 export const createPage = async (
   rawInput: unknown,
   actor: AuditActor,
-  reqContext: AuditRequestContext,
+  reqContext?: AuditRequestContext,
   client = prisma,
 ): Promise<PageSummaryDTO> => {
   if (hasPrototypePollution(rawInput)) {
@@ -196,11 +227,7 @@ export const createPage = async (
   if (hasControlCharacters(trimmedTitle)) {
     throw new PageServiceError('Judul halaman mengandung karakter kontrol yang tidak valid', 400);
   }
-  if (
-    /<[a-z][\s\S]*>/i.test(trimmedTitle) ||
-    trimmedTitle.includes('<') ||
-    trimmedTitle.includes('>')
-  ) {
+  if (/<[a-z!/]/i.test(trimmedTitle)) {
     throw new PageServiceError('Judul halaman tidak boleh mengandung tag HTML', 400);
   }
 
@@ -210,12 +237,7 @@ export const createPage = async (
       throw new PageServiceError('Slug halaman harus berupa string', 400);
     }
     const rawSlug = input.slug.trim();
-    if (
-      !PAGE_SLUG_PATTERN.test(rawSlug) ||
-      rawSlug.length > 100 ||
-      rawSlug.includes('\\') ||
-      /%5c/i.test(rawSlug)
-    ) {
+    if (!isValidPageSlug(rawSlug)) {
       throw new PageServiceError(
         'Format slug tidak valid. Gunakan format kebab-case (maksimal 100 karakter).',
         400,
@@ -227,7 +249,7 @@ export const createPage = async (
     }
   } else {
     slug = slugify(trimmedTitle);
-    if (!PAGE_SLUG_PATTERN.test(slug) || slug.length > 100) {
+    if (!isValidPageSlug(slug)) {
       throw new PageServiceError(
         'Gagal membuat slug otomatis dari judul halaman. Harap tentukan slug secara manual.',
         400,
@@ -268,6 +290,12 @@ export const createPage = async (
         const agg = await tx.page.aggregate({
           _max: { sortOrder: true },
         });
+        if (agg._max.sortOrder !== null && agg._max.sortOrder >= MAX_PAGE_SORT_ORDER) {
+          throw new PageServiceError(
+            'Urutan halaman telah mencapai batas maksimum (2147483647)',
+            400,
+          );
+        }
         finalSortOrder = agg._max.sortOrder !== null ? agg._max.sortOrder + 1 : 0;
       }
 
@@ -324,16 +352,10 @@ export interface DeletedPageDTO {
 export const deletePage = async (
   rawSlug: string,
   actor: AuditActor,
-  reqContext: AuditRequestContext,
+  reqContext?: AuditRequestContext,
   client = prisma,
 ): Promise<DeletedPageDTO> => {
-  if (
-    typeof rawSlug !== 'string' ||
-    !PAGE_SLUG_PATTERN.test(rawSlug) ||
-    rawSlug.length > 100 ||
-    rawSlug.includes('\\') ||
-    /%5c/i.test(rawSlug)
-  ) {
+  if (!isValidPageSlug(rawSlug)) {
     throw new PageServiceError(
       'Slug halaman tidak valid. Gunakan format kebab-case (maksimal 100 karakter).',
       400,
@@ -344,6 +366,14 @@ export const deletePage = async (
 
   const existingPage = await client.page.findUnique({
     where: { slug },
+    include: {
+      chapters: {
+        select: {
+          slug: true,
+          _count: { select: { sections: true } },
+        },
+      },
+    },
   });
   if (!existingPage) {
     throw new PageServiceError('Halaman tidak ditemukan', 404);
@@ -365,6 +395,24 @@ export const deletePage = async (
     );
   }
 
+  const chapters =
+    (
+      existingPage as {
+        chapters?: Array<{
+          slug: string;
+          _count?: { sections?: number };
+          sections?: unknown[];
+        }>;
+      }
+    ).chapters ?? [];
+  const chapterCount = chapters.length;
+  const sectionCount = chapters.reduce(
+    (sum, ch) =>
+      sum + (ch._count?.sections ?? (Array.isArray(ch.sections) ? ch.sections.length : 0)),
+    0,
+  );
+  const chapterSlugs = chapters.map((ch) => ch.slug);
+
   try {
     return await client.$transaction(async (tx) => {
       const deleted = await tx.page.delete({
@@ -384,6 +432,9 @@ export const deletePage = async (
             slug: deleted.slug,
             title: deleted.title,
             sortOrder: deleted.sortOrder,
+            chapterCount,
+            sectionCount,
+            chapterSlugs,
           },
           context: reqContext,
         },
@@ -421,7 +472,7 @@ export interface ReorderPageItemDTO {
 export const reorderPages = async (
   rawInput: unknown,
   actor: AuditActor,
-  reqContext: AuditRequestContext,
+  reqContext?: AuditRequestContext,
   client = prisma,
 ): Promise<PageSummaryDTO[]> => {
   if (hasPrototypePollution(rawInput)) {
@@ -495,22 +546,24 @@ export const reorderPages = async (
   }
 
   const existingPages = await client.page.findMany({
-    where: { id: { in: Array.from(seenIds) } },
+    orderBy: SORT_ORDER,
+    include: { _count: { select: { chapters: true } } },
   });
 
-  if (existingPages.length !== seenIds.size) {
-    throw new PageServiceError('Satu atau lebih halaman tidak ditemukan', 404);
+  const existingMap = new Map(existingPages.map((p) => [p.id, p]));
+
+  for (const id of seenIds) {
+    if (!existingMap.has(id)) {
+      throw new PageServiceError('Satu atau lebih halaman tidak ditemukan', 404);
+    }
   }
 
-  const totalPagesCount = await client.page.count();
-  if (seenIds.size !== totalPagesCount) {
+  if (seenIds.size !== existingPages.length) {
     throw new PageServiceError(
-      `Daftar urutan halaman harus mencakup seluruh halaman (${totalPagesCount} halaman)`,
+      `Daftar urutan halaman harus mencakup seluruh halaman (${existingPages.length} halaman)`,
       400,
     );
   }
-
-  const existingMap = new Map(existingPages.map((p) => [p.id, p]));
 
   // Find items whose sortOrder actually changed
   const changedItems = validatedItems.filter(
@@ -519,17 +572,7 @@ export const reorderPages = async (
 
   // No-op detection: if none of the sortOrder values changed, return current list without DB writes or audit log
   if (changedItems.length === 0) {
-    const pages = await client.page.findMany({
-      orderBy: SORT_ORDER,
-      include: { _count: { select: { chapters: true } } },
-    });
-    return pages.map((page) => ({
-      id: page.id,
-      slug: page.slug,
-      title: page.title,
-      sortOrder: page.sortOrder,
-      chapterCount: page._count.chapters,
-    }));
+    return existingPages.map(toPageSummary);
   }
 
   // Deterministic lock acquisition order: sort changed items by ID ascending to prevent InnoDB deadlocks (errno 1213)
@@ -537,6 +580,17 @@ export const reorderPages = async (
 
   try {
     return await client.$transaction(async (tx) => {
+      // Re-verify completeness inside the transaction to catch concurrent additions or deletions (Anti-TOCTOU)
+      if (tx.page && typeof tx.page.count === 'function') {
+        const currentCount = await tx.page.count();
+        if (currentCount !== seenIds.size) {
+          throw new PageServiceError(
+            'Urutan halaman gagal diperbarui karena terdapat perubahan data bersamaan. Silakan muat ulang halaman.',
+            409,
+          );
+        }
+      }
+
       for (const item of sortedChanges) {
         await tx.page.update({
           where: { id: item.id },
@@ -553,7 +607,12 @@ export const reorderPages = async (
             label: 'Cerita Pages',
           },
           metadata: {
-            items: validatedItems.map((it) => ({ id: it.id, sortOrder: it.sortOrder })),
+            changes: sortedChanges.map((it) => ({
+              id: it.id,
+              slug: existingMap.get(it.id)!.slug,
+              from: existingMap.get(it.id)!.sortOrder,
+              to: it.sortOrder,
+            })),
           },
           context: reqContext,
         },
@@ -565,17 +624,14 @@ export const reorderPages = async (
         include: { _count: { select: { chapters: true } } },
       });
 
-      return pages.map((page) => ({
-        id: page.id,
-        slug: page.slug,
-        title: page.title,
-        sortOrder: page.sortOrder,
-        chapterCount: page._count.chapters,
-      }));
+      return pages.map(toPageSummary);
     });
   } catch (err) {
     if (err instanceof Error && 'code' in err && err.code === 'P2025') {
-      throw new PageServiceError('Satu atau lebih halaman tidak ditemukan', 404);
+      throw new PageServiceError(
+        'Terjadi konflik saat memperbarui urutan halaman karena perubahan data bersamaan. Silakan muat ulang halaman.',
+        409,
+      );
     }
     throw err;
   }

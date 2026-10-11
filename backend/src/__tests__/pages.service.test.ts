@@ -7,12 +7,15 @@ import {
   deletePage,
   reorderPages,
   PageServiceError,
+  MAX_PAGE_SORT_ORDER,
+  toPageSummary,
+  isValidPageSlug,
 } from '../services/pages.service.js';
 import type { AuditActor, AuditRequestContext } from '../services/audit.service.js';
 import prisma from '../utils/prisma.js';
 
 const EXPECTED_FIND_MANY_ARGS = {
-  orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+  orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
   include: { _count: { select: { chapters: true } } },
 };
 
@@ -20,8 +23,12 @@ const expectedFindUniqueArgs = (slug: string) => ({
   where: { slug },
   include: {
     chapters: {
-      orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
-      include: { sections: { orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }] } },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+      include: {
+        sections: {
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+        },
+      },
     },
   },
 });
@@ -151,6 +158,18 @@ describe('pages.service', () => {
       assert.equal(findManyCalls.length, 1);
       assert.equal(findManyCalls[0]!.length, 1);
       assert.deepStrictEqual(findManyCalls[0]![0], EXPECTED_FIND_MANY_ARGS);
+    });
+
+    it('orders pages with secondary sort on createdAt to deterministically break sortOrder ties before id', async () => {
+      stubFindMany(async () => []);
+
+      await getPages();
+
+      assert.deepStrictEqual((findManyCalls[0]![0] as { orderBy: unknown }).orderBy, [
+        { sortOrder: 'asc' },
+        { createdAt: 'asc' },
+        { id: 'asc' },
+      ]);
     });
 
     it('never calls findUnique', async () => {
@@ -608,6 +627,44 @@ describe('pages.service', () => {
       );
     });
 
+    it('allows legitimate demographic titles containing bare angle brackets but rejects HTML tags', async () => {
+      // 1. Rejects adversarial HTML tags
+      for (const malicious of [
+        'Profil </title>',
+        'Profil <!-- comment -->',
+        'Profil <img src=x onerror=alert(1)>',
+      ]) {
+        await assert.rejects(
+          createPage({ title: malicious }, actor, context),
+          (err: unknown) =>
+            err instanceof PageServiceError &&
+            err.statusCode === 400 &&
+            err.message.includes('tag HTML'),
+        );
+      }
+
+      // 2. Accepts legitimate demographic titles with bare angle brackets
+      stubFindUnique(async () => null);
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            create: async (args: { data: { title: string; slug: string; sortOrder: number } }) =>
+              summaryRow({ id: 'p-new', ...args.data }),
+            aggregate: async () => ({ _max: { sortOrder: 0 } }),
+          },
+          auditLog: {
+            create: async () => ({ id: 'audit-1' }),
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      for (const validTitle of ['Usia > 60 tahun', 'Balita <5 tahun', 'Penduduk < 18 Tahun']) {
+        const page = await createPage({ title: validTitle }, actor, context);
+        assert.equal(page.title, validTitle);
+      }
+    });
+
     it('rejects title containing control characters (400)', async () => {
       await assert.rejects(
         createPage({ title: 'Profil\x00Kelurahan' }, actor, context),
@@ -925,6 +982,38 @@ describe('pages.service', () => {
       assert.equal(page.sortOrder, 8);
       assert.equal(assignedSortOrder, 8);
     });
+
+    it('throws 400 PageServiceError when auto-assigned sortOrder exceeds MAX_PAGE_SORT_ORDER (INT overflow defense)', async () => {
+      stubFindUnique(async () => null);
+
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            create: async (args: { data: { sortOrder: number } }) => {
+              if (args.data.sortOrder > MAX_PAGE_SORT_ORDER) {
+                const dbOverflowErr = new Error('Value out of range for column sort_order');
+                (dbOverflowErr as unknown as { code: string }).code = 'ER_WARN_DATA_OUT_OF_RANGE';
+                throw dbOverflowErr;
+              }
+              return summaryRow({ id: 'p-new', ...args.data });
+            },
+            aggregate: async () => ({ _max: { sortOrder: MAX_PAGE_SORT_ORDER } }),
+          },
+          auditLog: {
+            create: async () => ({ id: 'audit-1' }),
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      await assert.rejects(
+        createPage({ title: 'Halaman Melebihi Batas' }, actor, context),
+        (err: unknown) =>
+          err instanceof PageServiceError &&
+          err.statusCode === 400 &&
+          err.message.includes('2147483647'),
+      );
+    });
   });
 
   describe('deletePage', () => {
@@ -1093,6 +1182,9 @@ describe('pages.service', () => {
           slug: 'kependudukan',
           title: 'Kependudukan',
           sortOrder: 0,
+          chapterCount: 0,
+          sectionCount: 0,
+          chapterSlugs: [],
         },
       });
     });
@@ -1148,7 +1240,52 @@ describe('pages.service', () => {
           slug: 'kependudukan',
           title: 'Kependudukan',
           sortOrder: 0,
+          chapterCount: 0,
+          sectionCount: 0,
+          chapterSlugs: [],
         },
+      });
+    });
+
+    it('records cascaded chapterCount, sectionCount, and chapterSlugs in audit log metadata when deleting page with chapters', async () => {
+      stubFindUnique(async () => ({
+        id: 'p-1',
+        slug: 'kependudukan',
+        title: 'Kependudukan',
+        sortOrder: 0,
+        chapters: [
+          { slug: 'demografi', _count: { sections: 2 } },
+          { slug: 'ketenagakerjaan', _count: { sections: 1 } },
+        ],
+      }));
+      prisma.contentBlock.count = (async () => 0) as unknown as typeof prisma.contentBlock.count;
+
+      let auditLogData: { metadata?: Record<string, unknown> } | null = null;
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            delete: async () => summaryRow({ id: 'p-1', slug: 'kependudukan' }),
+          },
+          auditLog: {
+            create: async (args: { data: Record<string, unknown> }) => {
+              auditLogData = args.data;
+              return { id: 'audit-del-1' };
+            },
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      await deletePage('kependudukan', actor, context);
+
+      assert.ok(auditLogData);
+      assert.deepStrictEqual((auditLogData as unknown as { metadata: unknown }).metadata, {
+        slug: 'kependudukan',
+        title: 'Kependudukan',
+        sortOrder: 0,
+        chapterCount: 2,
+        sectionCount: 3,
+        chapterSlugs: ['demografi', 'ketenagakerjaan'],
       });
     });
   });
@@ -1266,8 +1403,10 @@ describe('pages.service', () => {
       stubFindMany(async () => [
         summaryRow({ id: 'p1', sortOrder: 0 }),
         summaryRow({ id: 'p2', sortOrder: 1 }),
+        summaryRow({ id: 'p3', sortOrder: 2 }),
+        summaryRow({ id: 'p4', sortOrder: 3 }),
+        summaryRow({ id: 'p5', sortOrder: 4 }),
       ]);
-      stubPageCount(async () => 5); // Database has 5 pages total, but payload only provides 2
 
       const partialPayload = [
         { id: 'p1', sortOrder: 0 },
@@ -1301,7 +1440,7 @@ describe('pages.service', () => {
       );
     });
 
-    it('catches Prisma P2025 record vanishing race condition and converts to 404 Not Found', async () => {
+    it('catches Prisma P2025 record vanishing race condition and converts to 409 Conflict', async () => {
       stubFindMany(async () => [
         summaryRow({ id: 'p1', sortOrder: 0 }),
         summaryRow({ id: 'p2', sortOrder: 1 }),
@@ -1323,8 +1462,42 @@ describe('pages.service', () => {
         reorderPages(payload, actor, context),
         (err: unknown) =>
           err instanceof PageServiceError &&
-          err.statusCode === 404 &&
-          err.message.includes('tidak ditemukan'),
+          err.statusCode === 409 &&
+          err.message.includes('konflik'),
+      );
+    });
+
+    it('throws 409 Conflict when concurrent page creation or deletion occurs before transaction writes', async () => {
+      stubFindMany(async () => [
+        summaryRow({ id: 'p1', sortOrder: 0 }),
+        summaryRow({ id: 'p2', sortOrder: 1 }),
+      ]);
+
+      // Inside transaction, page count changed from 2 to 3 (another user created a page concurrently)
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            count: async () => 3,
+            update: async () => summaryRow(),
+          },
+          auditLog: {
+            create: async () => ({ id: 'audit-1' }),
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      const payload = [
+        { id: 'p1', sortOrder: 1 },
+        { id: 'p2', sortOrder: 0 },
+      ];
+
+      await assert.rejects(
+        reorderPages(payload, actor, context),
+        (err: unknown) =>
+          err instanceof PageServiceError &&
+          err.statusCode === 409 &&
+          err.message.includes('bersamaan'),
       );
     });
 
@@ -1347,6 +1520,33 @@ describe('pages.service', () => {
       const result = await reorderPages(payload, actor, context);
       assert.equal(transactionCalled, false, 'Transaction must not run when order is unchanged');
       assert.equal(result.length, 2);
+    });
+
+    it('executes a single findMany query with _count.chapters and zero count queries before writing or on no-op', async () => {
+      stubFindMany(async () => [
+        summaryRow({ id: 'p1', sortOrder: 0, _count: { chapters: 2 } }),
+        summaryRow({ id: 'p2', sortOrder: 1, _count: { chapters: 3 } }),
+      ]);
+
+      const payload = [
+        { id: 'p1', sortOrder: 0 },
+        { id: 'p2', sortOrder: 1 },
+      ];
+
+      const result = await reorderPages(payload, actor, context);
+
+      assert.equal(result.length, 2);
+      assert.equal(
+        findManyCalls.length,
+        1,
+        'Must execute exactly 1 findMany query before writing/on no-op',
+      );
+      assert.equal(pageCountCalls.length, 0, 'Must not execute page.count() outside transaction');
+      assert.deepStrictEqual(
+        findManyCalls[0]![0],
+        EXPECTED_FIND_MANY_ARGS,
+        'findMany query must fetch all pages with SORT_ORDER and _count.chapters',
+      );
     });
 
     it('executes database updates in deterministic order (id ascending) to prevent InnoDB deadlocks (1213)', async () => {
@@ -1425,8 +1625,8 @@ describe('pages.service', () => {
 
     it('successfully reorders pages, updates DB, and writes info audit log in tx (Happy Path)', async () => {
       stubFindMany(async () => [
-        summaryRow({ id: 'p1', sortOrder: 0, _count: { chapters: 2 } }),
-        summaryRow({ id: 'p2', sortOrder: 1, _count: { chapters: 4 } }),
+        summaryRow({ id: 'p1', slug: 'kependudukan', sortOrder: 0, _count: { chapters: 2 } }),
+        summaryRow({ id: 'p2', slug: 'kesehatan', sortOrder: 1, _count: { chapters: 4 } }),
       ]);
 
       const updatedCalls: Array<{ where: { id: string }; data: { sortOrder: number } }> = [];
@@ -1484,9 +1684,9 @@ describe('pages.service', () => {
         ipAddress: '127.0.0.1',
         userAgent: 'test-agent',
         metadata: {
-          items: [
-            { id: 'p1', sortOrder: 1 },
-            { id: 'p2', sortOrder: 0 },
+          changes: [
+            { id: 'p1', slug: 'kependudukan', from: 0, to: 1 },
+            { id: 'p2', slug: 'kesehatan', from: 1, to: 0 },
           ],
         },
       });
@@ -1494,8 +1694,8 @@ describe('pages.service', () => {
 
     it('reorders pages and writes info audit log with null context fields when context is omitted', async () => {
       stubFindMany(async () => [
-        summaryRow({ id: 'p1', sortOrder: 0, _count: { chapters: 2 } }),
-        summaryRow({ id: 'p2', sortOrder: 1, _count: { chapters: 4 } }),
+        summaryRow({ id: 'p1', slug: 'kependudukan', sortOrder: 0, _count: { chapters: 2 } }),
+        summaryRow({ id: 'p2', slug: 'kesehatan', sortOrder: 1, _count: { chapters: 4 } }),
       ]);
 
       let auditLogData: unknown = null;
@@ -1539,12 +1739,129 @@ describe('pages.service', () => {
         ipAddress: null,
         userAgent: null,
         metadata: {
-          items: [
-            { id: 'p1', sortOrder: 1 },
-            { id: 'p2', sortOrder: 0 },
+          changes: [
+            { id: 'p1', slug: 'kependudukan', from: 0, to: 1 },
+            { id: 'p2', slug: 'kesehatan', from: 1, to: 0 },
           ],
         },
       });
+    });
+
+    it('records only changed pages with id, slug, from, and to in audit log metadata on reorder', async () => {
+      stubFindMany(async () => [
+        summaryRow({ id: 'p1', slug: 'kependudukan', sortOrder: 0 }),
+        summaryRow({ id: 'p2', slug: 'kesehatan', sortOrder: 1 }),
+        summaryRow({ id: 'p3', slug: 'pendidikan', sortOrder: 2 }),
+      ]);
+      stubPageCount(async () => 3);
+
+      let auditLogData: unknown = null;
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            count: async () => 3,
+            update: async () => summaryRow(),
+            findMany: async () => [
+              summaryRow({ id: 'p2', sortOrder: 0 }),
+              summaryRow({ id: 'p1', sortOrder: 1 }),
+              summaryRow({ id: 'p3', sortOrder: 2 }),
+            ],
+          },
+          auditLog: {
+            create: async (args: { data: Record<string, unknown> }) => {
+              auditLogData = args.data;
+              return { id: 'audit-reorder-1' };
+            },
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      // Only p1 and p2 swap; p3 remains at sortOrder 2
+      const payload = [
+        { id: 'p1', sortOrder: 1 },
+        { id: 'p2', sortOrder: 0 },
+        { id: 'p3', sortOrder: 2 },
+      ];
+
+      await reorderPages(payload, actor, context);
+
+      assert.ok(auditLogData);
+      assert.deepStrictEqual((auditLogData as unknown as { metadata: unknown }).metadata, {
+        changes: [
+          { id: 'p1', slug: 'kependudukan', from: 0, to: 1 },
+          { id: 'p2', slug: 'kesehatan', from: 1, to: 0 },
+        ],
+      });
+    });
+  });
+
+  describe('toPageSummary', () => {
+    it('maps page row with chapter count to PageSummaryDTO and omits internal fields', () => {
+      const pageInput = {
+        id: 'page-xyz',
+        slug: 'profil-desa',
+        title: 'Profil Desa',
+        sortOrder: 4,
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        updatedAt: new Date('2026-01-02T00:00:00Z'),
+        extraSecretField: 'should-not-exist',
+        _count: {
+          chapters: 5,
+        },
+      };
+
+      const dto = toPageSummary(pageInput as never);
+
+      assert.deepStrictEqual(dto, {
+        id: 'page-xyz',
+        slug: 'profil-desa',
+        title: 'Profil Desa',
+        sortOrder: 4,
+        chapterCount: 5,
+      });
+      assert.equal('createdAt' in dto, false);
+      assert.equal('_count' in dto, false);
+      assert.equal('extraSecretField' in dto, false);
+    });
+  });
+
+  describe('isValidPageSlug', () => {
+    it('returns true for valid kebab-case slugs', () => {
+      for (const validSlug of ['kependudukan', 'a', '1', 'a-1', 'profil-desa-2026']) {
+        assert.equal(isValidPageSlug(validSlug), true);
+      }
+    });
+
+    it('returns false for non-string, null, or undefined', () => {
+      for (const nonString of [null, undefined, 123, {}, []]) {
+        assert.equal(isValidPageSlug(nonString), false);
+      }
+    });
+
+    it('returns false for slugs exceeding 100 characters', () => {
+      const maxSlug = 'a'.repeat(100);
+      const tooLongSlug = 'a'.repeat(101);
+      assert.equal(isValidPageSlug(maxSlug), true);
+      assert.equal(isValidPageSlug(tooLongSlug), false);
+    });
+
+    it('returns false for invalid formatting, uppercase, whitespace, and path traversal', () => {
+      for (const invalidSlug of [
+        '',
+        '   ',
+        'Kependudukan',
+        'a_b',
+        'a/b',
+        'a\\b',
+        'a%5cb',
+        '-a',
+        'a-',
+        'a--b',
+        '../x',
+      ]) {
+        assert.equal(isValidPageSlug(invalidSlug), false);
+      }
     });
   });
 });

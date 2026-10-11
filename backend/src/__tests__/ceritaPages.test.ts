@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, it } from 'node:test';
 import { CERITA_PAGES } from '../../prisma/ceritaPages.js';
 
@@ -210,6 +212,44 @@ describe('CERITA_PAGES seed data', () => {
     assert.deepStrictEqual(
       CERITA_PAGES.map((_, i) => i),
       [0, 1, 2, 3, 4, 5, 6, 7],
+    );
+  });
+});
+
+describe('SPEC.md and repository hygiene for Cerita Page Management', () => {
+  it('does not contain working/planning notes in tasks/ directory', () => {
+    const repoRoot = path.resolve(import.meta.dirname, '../../../');
+    assert.equal(
+      fs.existsSync(path.join(repoRoot, 'tasks/plan.md')),
+      false,
+      'tasks/plan.md must be removed from repo',
+    );
+    assert.equal(
+      fs.existsSync(path.join(repoRoot, 'tasks/todo.md')),
+      false,
+      'tasks/todo.md must be removed from repo',
+    );
+  });
+
+  it('SPEC.md records decisions and rules, omitting implementation rationale and mechanisms', () => {
+    const specPath = path.resolve(import.meta.dirname, '../../../docs/SPEC.md');
+    const specContent = fs.readFileSync(specPath, 'utf8');
+
+    assert.equal(specContent.includes('errno 1213'), false, 'SPEC must not mention errno 1213');
+    assert.equal(
+      specContent.includes('InnoDB cyclic deadlocks'),
+      false,
+      'SPEC must not mention InnoDB deadlocks',
+    );
+    assert.equal(
+      specContent.includes('multi-editor office NAT IP lockouts'),
+      false,
+      'SPEC must not mention office NAT IP rationale',
+    );
+    assert.equal(
+      specContent.includes('parameter shadowing'),
+      false,
+      'SPEC must not mention route parameter shadowing mechanism',
     );
   });
 });

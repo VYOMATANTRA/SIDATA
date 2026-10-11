@@ -7,8 +7,9 @@ import {
   createPageHandler,
   deletePageHandler,
   reorderPagesHandler,
-  PAGE_SLUG_PATTERN,
 } from '../controllers/pages.controller.js';
+import * as pagesControllerModule from '../controllers/pages.controller.js';
+import { PAGE_SLUG_PATTERN } from '../services/pages.service.js';
 import prisma from '../utils/prisma.js';
 import { CERITA_PAGES } from '../../prisma/ceritaPages.js';
 import { fakeRes } from './helpers/fakeRes.js';
@@ -139,6 +140,14 @@ describe('pages.controller', () => {
     prisma.contentBlock.count = originalContentBlockCount;
     prisma.page.count = originalPageCount;
     console.error = originalConsoleError;
+  });
+
+  it('does not re-export PAGE_SLUG_PATTERN from pages.controller', () => {
+    assert.equal(
+      'PAGE_SLUG_PATTERN' in pagesControllerModule,
+      false,
+      'pages.controller must not re-export PAGE_SLUG_PATTERN',
+    );
   });
 
   describe('PAGE_SLUG_PATTERN', () => {
@@ -348,8 +357,12 @@ describe('pages.controller', () => {
         where: { slug: 'kependudukan' },
         include: {
           chapters: {
-            orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
-            include: { sections: { orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }] } },
+            orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+            include: {
+              sections: {
+                orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+              },
+            },
           },
         },
       });
@@ -451,6 +464,15 @@ describe('pages.controller', () => {
         assert.deepStrictEqual(res.body, INVALID_SLUG);
         assert.equal(findUniqueCalls.length, 0);
       });
+
+      it('rejects a slug exceeding 100 characters with 400 (anti-drift with service)', async () => {
+        const res = fakeRes();
+        await getPage(reqWithSlug('a'.repeat(101)), res);
+
+        assert.equal(res.status, 400);
+        assert.deepStrictEqual(res.body, INVALID_SLUG);
+        assert.equal(findUniqueCalls.length, 0);
+      });
     });
 
     describe('valid slugs reach prisma with the exact param', () => {
@@ -478,8 +500,8 @@ describe('pages.controller', () => {
         });
       }
 
-      it('passes a 10_000-char slug (valid by pattern) through untouched', async () => {
-        const slug = 'a'.repeat(10_000);
+      it('passes a 100-char slug (valid boundary) through untouched', async () => {
+        const slug = 'a'.repeat(100);
         stubFindUnique(async () => null);
         const res = fakeRes();
 
@@ -488,7 +510,7 @@ describe('pages.controller', () => {
         assert.equal(findUniqueCalls.length, 1);
         const args = findUniqueCalls[0]![0] as { where: { slug: string } };
         assert.equal(args.where.slug, slug);
-        assert.equal(args.where.slug.length, 10_000);
+        assert.equal(args.where.slug.length, 100);
         assert.equal(res.status, 404);
         assert.deepStrictEqual(res.body, NOT_FOUND);
       });
