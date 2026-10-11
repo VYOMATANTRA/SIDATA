@@ -37,6 +37,12 @@ const router = createRouter({
       meta: { requiresAuth: true, requiresAdmin: true, title: 'Manajemen Pengguna' },
     },
     {
+      path: '/dashboard',
+      name: 'dashboard',
+      component: () => import('../views/DashboardView.vue'),
+      meta: { requiresAuth: true, title: 'Dasbor' },
+    },
+    {
       path: '/auth/callback',
       name: 'auth-callback',
       component: () => import('../views/AuthCallbackView.vue'),

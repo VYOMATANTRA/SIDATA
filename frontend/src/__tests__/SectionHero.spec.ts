@@ -51,6 +51,50 @@ describe('SectionHero ctaLink security', () => {
       expect(cta.attributes('href')).toBe(link);
     }
   });
+
+  it('falls back to settingsStore tagline and DEFAULT_HERO_BLOCK body when title and body are empty or whitespace-only', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const store = useContentBlocksStore(pinia);
+
+    store.blocks['landing-hero'] = {
+      ...DEFAULT_HERO_BLOCK,
+      title: '   ',
+      body: '   ',
+    };
+
+    const wrapper = mount(LandingSectionHero, {
+      global: {
+        plugins: [pinia],
+        stubs: { 'router-link': true },
+      },
+    });
+
+    const h1 = wrapper.find('h1');
+    expect(h1.text().trim().length).toBeGreaterThan(0);
+    expect(h1.text()).toBe('Sistem Informasi Data Terpadu Kelurahan Manggar');
+
+    const p = wrapper.find('p');
+    expect(p.text().trim().length).toBeGreaterThan(0);
+    expect(p.text()).toBe(DEFAULT_HERO_BLOCK.body);
+  });
+
+  it('applies the official background_laman_depan_kelurahan image and dark navy gradient overlay', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+
+    const wrapper = mount(LandingSectionHero, {
+      global: {
+        plugins: [pinia],
+        stubs: { 'router-link': true },
+      },
+    });
+
+    const section = wrapper.find('section#hero');
+    const style = section.attributes('style');
+    expect(style).toContain('linear-gradient');
+    expect(style).toContain('background_laman_depan_kelurahan.png');
+  });
 });
 
 describe('Common SectionHero.vue', () => {

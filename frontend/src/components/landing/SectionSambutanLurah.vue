@@ -39,49 +39,51 @@ const photoUrl = computed(() => {
 
 <template>
   <section
-    class="border-b border-slate-200/80 bg-slate-50 px-4 py-16 sm:px-6 sm:py-20 lg:px-8"
+    class="border-b border-slate-700/60 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 px-4 py-16 text-white sm:px-6 sm:py-20 lg:px-8"
     aria-labelledby="sambutan-title"
   >
     <div class="mx-auto max-w-4xl">
       <div
-        class="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm sm:p-10 md:p-12"
+        class="relative overflow-hidden rounded-2xl border border-white/10 bg-[#232528]/90 p-6 text-white shadow-xl sm:p-10 md:p-12"
       >
-        <!-- Decorative quote icon -->
-        <div
-          class="pointer-events-none absolute -top-4 -right-4 flex h-28 w-28 items-center justify-center text-slate-100 select-none"
-          aria-hidden="true"
-        >
-          <svg fill="currentColor" viewBox="0 0 24 24" class="h-full w-full opacity-60">
-            <path
-              d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"
-            />
-          </svg>
-        </div>
-
-        <div class="relative space-y-6">
+        <!-- Top Area: Heading & Quote Body -->
+        <div class="relative space-y-4">
           <div class="flex items-center gap-3">
-            <span class="h-6 w-1.5 rounded-full bg-emerald-600" aria-hidden="true"></span>
+            <span class="h-6 w-1.5 rounded-full bg-brand-cyan" aria-hidden="true"></span>
             <h2
               id="sambutan-title"
-              class="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl"
+              class="text-xl font-bold tracking-tight text-white sm:text-2xl"
             >
               {{ sambutan.title || 'Sambutan Kepala Kelurahan' }}
             </h2>
           </div>
 
-          <!-- Message Body -->
+          <!-- Message Body in Public Sans -->
           <div
-            class="text-base leading-relaxed font-normal whitespace-pre-line text-slate-700 sm:text-lg"
+            class="text-base leading-relaxed font-normal whitespace-pre-line text-slate-200/95 sm:text-lg"
           >
             {{ sambutan.body || DEFAULT_SAMBUTAN_BLOCK.body }}
           </div>
+        </div>
 
-          <!-- Lurah Identity Card -->
-          <div class="flex items-center gap-4 border-t border-slate-100 pt-6">
-            <!-- Photo or Avatar -->
+        <!-- Bottom Area: Split layout with Author info (left) and Portrait/Placeholder (right) -->
+        <div
+          class="relative mt-8 flex flex-col-reverse items-start justify-between gap-6 border-t border-white/10 pt-6 sm:mt-10 sm:flex-row sm:items-center sm:gap-8"
+        >
+          <!-- Author Details -->
+          <div class="space-y-1">
+            <p class="text-base font-bold text-white sm:text-lg">{{ authorName }}</p>
+            <p class="text-sm font-medium text-slate-300">{{ authorTitle }}</p>
+          </div>
+
+          <!-- Portrait Photo or Initials Avatar Placeholder -->
+          <div
+            class="flex shrink-0 items-center justify-center"
+            data-test="portrait-container"
+          >
             <div
               v-if="photoUrl"
-              class="h-14 w-14 flex-shrink-0 overflow-hidden rounded-full border-2 border-emerald-500 shadow-sm sm:h-16 sm:w-16"
+              class="h-16 w-16 overflow-hidden rounded-full border-2 border-brand-cyan/60 shadow-md sm:h-20 sm:w-20"
             >
               <img
                 :src="photoUrl"
@@ -91,15 +93,10 @@ const photoUrl = computed(() => {
             </div>
             <div
               v-else
-              class="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full border border-emerald-200 bg-emerald-100 text-lg font-bold text-emerald-800 sm:h-16 sm:w-16 sm:text-xl"
+              class="flex h-16 w-16 items-center justify-center rounded-full border border-white/20 bg-white/10 text-lg font-bold text-white shadow-inner sm:h-20 sm:w-20"
               aria-hidden="true"
             >
               LM
-            </div>
-
-            <div>
-              <p class="text-base font-bold text-slate-900 sm:text-lg">{{ authorName }}</p>
-              <p class="text-sm font-medium text-slate-500">{{ authorTitle }}</p>
             </div>
           </div>
         </div>
