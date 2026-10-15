@@ -1,10 +1,18 @@
 <script setup lang="ts">
+import { computed, onMounted } from 'vue';
 import TentangPageLayout from '../components/tentang/TentangPageLayout.vue';
 import TentangBreadcrumb from '../components/tentang/TentangBreadcrumb.vue';
 import TentangHeroPanel from '../components/tentang/TentangHeroPanel.vue';
 import TentangNotice from '../components/tentang/TentangNotice.vue';
 import TentangStepList, { type StepItem } from '../components/tentang/TentangStepList.vue';
 import TentangFeatureBand from '../components/tentang/TentangFeatureBand.vue';
+import { useSettingsStore } from '../stores/settings.store';
+
+const settingsStore = useSettingsStore();
+
+onMounted(() => {
+  void settingsStore.fetchPublicSettings();
+});
 
 const steps: StepItem[] = [
   {
@@ -75,7 +83,7 @@ const slaRules: SlaItem[] = [
   {
     stage: 'Penyampaian Tanggapan Tertulis PPID',
     duration: 'Maksimal 10 Hari Kerja',
-    regulation: 'Pasal 22 ayat (7) UU No. 14 Tahun 2008 tentang KIP',
+    regulation: 'Pasal 22 ayat (7) UU No. 14 Tahun 2008 tentang Keterbukaan Informasi Publik',
   },
   {
     stage: 'Perpanjangan Waktu Tanggapan (Opsional)',
@@ -94,9 +102,6 @@ const slaRules: SlaItem[] = [
   },
 ];
 
-// Taksonomi kelas informasi publik menurut UU KIP — dipinjam dari portal PPID Kota
-// Balikpapan agar pemohon tahu apa yang rutin terbit, apa yang serta-merta, dan apa
-// yang harus diminta. Halaman ini tetap penunjuk eksternal (SPEC §1), bukan penyedia dokumen.
 const informationClasses = [
   {
     title: 'Informasi Berkala',
@@ -121,14 +126,12 @@ const escalationPath = [
   { title: 'Sengketa', note: 'Diselesaikan melalui Komisi Informasi' },
 ];
 
-const serviceDesk = [
+const serviceDesk = computed(() => [
   {
     title: 'Alamat Kantor',
     lines: [
-      'Kantor Kelurahan Manggar',
-      'Jl. Mulawarman No. 1, RT 39',
-      'Kecamatan Balikpapan Timur',
-      'Kota Balikpapan, 76116',
+      settingsStore.institutionName,
+      settingsStore.contactAddress,
     ],
   },
   {
@@ -142,12 +145,12 @@ const serviceDesk = [
   {
     title: 'Kontak Resmi',
     lines: [
-      'Telepon: (0542) 772158',
-      'WhatsApp/SMS PPID: 0811 5440542',
-      'Email: kelurahan.manggar@balikpapan.go.id',
+      `Telepon: ${settingsStore.contactPhone}`,
+      `WhatsApp/SMS PPID: ${settingsStore.contactWhatsapp}`,
+      `Email: ${settingsStore.contactEmail}`,
     ],
   },
-];
+]);
 </script>
 
 <template>
@@ -159,20 +162,19 @@ const serviceDesk = [
       subtitle="Panduan mengajukan permohonan informasi publik ke PPID Kota Balikpapan sesuai UU No. 14 Tahun 2008."
     />
 
-    <TentangNotice heading="Pemberitahuan Batasan Layanan Portal (SPEC §1 & §9)">
+    <TentangNotice heading="Batasan Layanan Portal Informasi">
       <p>
         Portal <strong>SIDATA</strong> menyajikan profil data terbuka kelurahan dan
         <strong>tidak menyimpan dokumen resmi PPID</strong>, seperti transparansi keuangan, RKA, atau
         berkas administratif internal.
       </p>
       <p>
-        Laman ini berfungsi sebagai <strong>penunjuk eksternal (external pointer)</strong> resmi yang
-        menjelaskan tata cara dan alur pengajuan permohonan informasi ke PPID Pemerintah Kota
-        Balikpapan.
+        Laman panduan ini membantu Anda memahami tata cara dan alur pengajuan permohonan informasi publik secara resmi kepada
+        <strong>Pejabat Pengelola Informasi dan Dokumentasi (PPID) Pemerintah Kota Balikpapan</strong>.
       </p>
     </TentangNotice>
 
-    <!-- Jenis informasi publik — dipinjam dari taksonomi UU KIP di portal PPID -->
+    <!-- Jenis informasi publik -->
     <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="jenis-title">
       <div class="mx-auto max-w-5xl">
         <h2 id="jenis-title" class="text-lg font-bold text-brand-navy">Jenis Informasi Publik</h2>
@@ -184,7 +186,7 @@ const serviceDesk = [
           <dl
             class="grid grid-cols-1 divide-y divide-gray-200 sm:grid-cols-3 sm:divide-x sm:divide-y-0"
           >
-            <div v-for="(item, index) in informationClasses" :key="index" class="p-5">
+            <div v-for="item in informationClasses" :key="item.title" class="p-5">
               <dt class="text-base font-bold text-brand-navy">{{ item.title }}</dt>
               <dd class="mt-1 text-base leading-relaxed text-gray-800">
                 {{ item.description }}
@@ -215,7 +217,7 @@ const serviceDesk = [
       </div>
     </section>
 
-    <!-- Jalur eskalasi — dipinjam dari alur keberatan/sengketa portal PPID -->
+    <!-- Jalur eskalasi -->
     <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="eskalasi-title">
       <div class="mx-auto max-w-5xl">
         <h2 id="eskalasi-title" class="text-lg font-bold text-brand-navy">
@@ -228,7 +230,7 @@ const serviceDesk = [
         <ol class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <li
             v-for="(stage, index) in escalationPath"
-            :key="index"
+            :key="stage.title"
             class="rounded-btn border border-gray-300 bg-white p-5"
           >
             <span
@@ -280,7 +282,7 @@ const serviceDesk = [
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-200 bg-white">
-              <tr v-for="(rule, idx) in slaRules" :key="idx" class="transition-colors">
+              <tr v-for="rule in slaRules" :key="rule.stage" class="transition-colors">
                 <th scope="row" class="px-4 py-4 align-top font-semibold text-brand-navy sm:px-6">
                   {{ rule.stage }}
                 </th>
@@ -297,7 +299,7 @@ const serviceDesk = [
       </div>
     </section>
 
-    <!-- Ajukan permohonan — satu tindakan utama, tautan dalam ke formulir resmi -->
+    <!-- Ajukan permohonan -->
     <TentangFeatureBand heading="Ajukan Permohonan Informasi">
       <p class="mt-2 max-w-3xl text-base text-brand-navy/90">
         Pendaftaran, pengisian formulir daring, dan pelacakan status permohonan dilakukan di portal
@@ -342,7 +344,7 @@ const serviceDesk = [
           <dl
             class="grid grid-cols-1 divide-y divide-gray-200 sm:grid-cols-3 sm:divide-x sm:divide-y-0"
           >
-            <div v-for="(desk, index) in serviceDesk" :key="index" class="p-5">
+            <div v-for="desk in serviceDesk" :key="desk.title" class="p-5">
               <dt class="text-base font-bold text-brand-navy">{{ desk.title }}</dt>
               <dd class="mt-2 space-y-1 text-base leading-relaxed text-gray-800">
                 <p v-for="(line, lineIdx) in desk.lines" :key="lineIdx">{{ line }}</p>

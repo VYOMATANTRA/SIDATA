@@ -128,4 +128,18 @@ describe('TentangVyomatantraView accessibility and content', () => {
     expect(rosterSection.text()).toContain('Anggota Tim VYOMATANTRA');
     expect(rosterSection.text()).toContain('TODO');
   });
+
+  it('renders accurate photo caption for kelurahan building', async () => {
+    const { pinia, router } = mountView();
+    await router.push('/tentang/vyomatantra');
+    await router.isReady();
+
+    const wrapper = mount(TentangVyomatantraView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    expect(wrapper.text()).toContain(
+      'Kantor Kelurahan Manggar, Balikpapan Timur — lokasi koordinasi kegiatan program Desa Cantik',
+    );
+  });
 });

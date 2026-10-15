@@ -56,17 +56,17 @@ const collaborationLogos = [
       <template #figure>
         <TentangFigureCard
           :image="heroImage"
-          caption="Foto bareng BPS"
+          caption="Kantor Kelurahan Manggar, Balikpapan Timur"
           source="Tim Inovasi Sosial VYOMATANTRA"
         />
       </template>
     </TentangHeroPanel>
 
-    <!-- Catatan batasan portal per SPEC.md §1 -->
+    <!-- Catatan batasan portal -->
     <section class="border-b border-gray-200 bg-white px-4 py-4 sm:px-6" aria-labelledby="scope-title">
       <div class="mx-auto max-w-5xl">
         <h2 id="scope-title" class="text-base font-bold text-brand-navy">
-          Catatan Batasan Portal (SPEC §1)
+          Catatan Batasan Portal
         </h2>
         <p class="mt-1 text-base leading-relaxed text-gray-800">
           Situs web <strong>SIDATA</strong> adalah salah satu luaran inovasi terpadu yang mendukung
@@ -138,7 +138,7 @@ const collaborationLogos = [
         <div class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
           <TentangInfoCard
             v-for="(pillar, idx) in pillars"
-            :key="idx"
+            :key="pillar.title"
             :heading="pillar.title"
             :badge="String(idx + 1)"
             icon="chart"

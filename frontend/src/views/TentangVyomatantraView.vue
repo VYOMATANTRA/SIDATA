@@ -104,7 +104,7 @@ const teamMembers: TeamMember[] = [
       <template #figure>
         <TentangFigureCard
           :image="heroImage"
-          caption="Kegiatan lapangan Tim VYOMATANTRA di Kelurahan Manggar"
+          caption="Kantor Kelurahan Manggar, Balikpapan Timur — lokasi koordinasi kegiatan program Desa Cantik"
           source="Tim Inovasi Sosial VYOMATANTRA"
         />
       </template>
@@ -140,8 +140,8 @@ const teamMembers: TeamMember[] = [
     <TentangFeatureBand heading="Inisiatif Unggulan di Kelurahan Manggar">
       <div class="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-3">
         <TentangResourceCard
-          v-for="(item, idx) in initiatives"
-          :key="idx"
+          v-for="item in initiatives"
+          :key="item.title"
           :title="item.title"
           icon="leaf"
         >
@@ -207,8 +207,8 @@ const teamMembers: TeamMember[] = [
 
         <div class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
           <TentangTeamCard
-            v-for="(partner, idx) in partners"
-            :key="idx"
+            v-for="partner in partners"
+            :key="partner.title"
             :title="partner.title"
             :role="partner.role"
             :meta="partner.meta"

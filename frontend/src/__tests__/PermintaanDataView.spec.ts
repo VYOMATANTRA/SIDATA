@@ -46,7 +46,7 @@ describe('PermintaanDataView accessibility and content', () => {
     expect(h1List[0]?.text()).toContain('Permintaan Data & Informasi Publik');
   });
 
-  it('displays strict scope notice clarifying external pointer nature per SPEC §1 and §9', async () => {
+  it('displays clean scope notice without internal developer references', async () => {
     const { pinia, router } = mountView();
     await router.push('/permintaan-data');
     await router.isReady();
@@ -55,10 +55,10 @@ describe('PermintaanDataView accessibility and content', () => {
       global: { plugins: [pinia, router] },
     });
 
-    // Scope notice per SPEC §1 & §9
-    expect(wrapper.text()).toContain('Pemberitahuan Batasan Layanan Portal (SPEC §1 & §9)');
+    expect(wrapper.text()).toContain('Batasan Layanan Portal Informasi');
     expect(wrapper.text()).toContain('tidak menyimpan dokumen resmi PPID');
-    expect(wrapper.text()).toContain('penunjuk eksternal (external pointer)');
+    expect(wrapper.text()).not.toContain('SPEC §');
+    expect(wrapper.text()).not.toContain('external pointer');
   });
 
   it('renders procedural steps in a semantic ordered list <ol>', async () => {
@@ -80,7 +80,7 @@ describe('PermintaanDataView accessibility and content', () => {
     expect(wrapper.text()).toContain('Ajukan Permohonan Resmi ke PPID Kota Balikpapan');
   });
 
-  it('renders SLA service standards in a semantic accessible table', async () => {
+  it('renders SLA service standards in a semantic accessible table with exact citation', async () => {
     const { pinia, router } = mountView();
     await router.push('/permintaan-data');
     await router.isReady();
@@ -101,6 +101,9 @@ describe('PermintaanDataView accessibility and content', () => {
 
     expect(wrapper.text()).toContain('Maksimal 10 Hari Kerja');
     expect(wrapper.text()).toContain('Bebas Biaya (Gratis)');
+    expect(wrapper.text()).toContain(
+      'Pasal 22 ayat (7) UU No. 14 Tahun 2008 tentang Keterbukaan Informasi Publik',
+    );
   });
 
   it('renders external Balikpapan PPID link with accessible security attributes', async () => {
@@ -191,5 +194,19 @@ describe('PermintaanDataView accessibility and content', () => {
 
     // Permintaan Data is not part of the Tentang hub
     expect(breadcrumb.text()).not.toContain('Tentang');
+  });
+
+  it('binds contact information dynamically from settings store', async () => {
+    const { pinia, router } = mountView();
+    await router.push('/permintaan-data');
+    await router.isReady();
+
+    const wrapper = mount(PermintaanDataView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    expect(wrapper.text()).toContain('Telepon:');
+    expect(wrapper.text()).toContain('WhatsApp/SMS PPID:');
+    expect(wrapper.text()).toContain('Email:');
   });
 });
