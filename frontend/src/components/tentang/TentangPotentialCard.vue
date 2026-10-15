@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import TentangIcon from './TentangIcon.vue';
+import TentangIcon, { type TentangIconName } from './TentangIcon.vue';
 
 withDefaults(
   defineProps<{
     title: string;
     description: string;
-    icon?: string;
+    icon?: TentangIconName;
   }>(),
   { icon: 'chart' },
 );

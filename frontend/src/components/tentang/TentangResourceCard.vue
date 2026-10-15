@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import TentangIcon from './TentangIcon.vue';
+import TentangIcon, { type TentangIconName } from './TentangIcon.vue';
 
 withDefaults(
   defineProps<{
     title: string;
-    icon?: string;
+    icon?: TentangIconName;
     /** Label of the trailing pill. When present the pill renders as a placeholder. */
     ctaLabel?: string;
   }>(),
