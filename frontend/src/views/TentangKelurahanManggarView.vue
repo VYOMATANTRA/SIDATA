@@ -10,13 +10,14 @@ import TentangFeatureBand from '../components/tentang/TentangFeatureBand.vue';
 import TentangResourceCard from '../components/tentang/TentangResourceCard.vue';
 import StatCard from '../components/common/StatCard.vue';
 import { useIndicatorsStore } from '../stores/indicators.store';
+import type { TentangIconName } from '../components/tentang/TentangIcon.vue';
 import heroImage from '@/assets/img/background_laman_depan_kelurahan.png';
 import lurahPhoto from '@/assets/img/lurah_placeholder_sample.png';
 
 interface PotentialItem {
   title: string;
   description: string;
-  icon: 'coast' | 'people' | 'leaf' | 'chart';
+  icon: TentangIconName;
 }
 
 const potentials: PotentialItem[] = [
@@ -94,26 +95,28 @@ const sotkMembers: SotkItem[] = [
   },
 ];
 
-// "Sekilas Manggar" reads the live population indicator so the figure never
-// drifts from the published data; the mock value is the fallback only.
 const POPULATION_INDICATOR_SLUG = 'jumlah-penduduk';
-const POPULATION_FALLBACK = { value: '12.458', unit: 'jiwa' };
 
 const indicatorsStore = useIndicatorsStore();
 onMounted(() => {
-  void indicatorsStore.fetchIndicators();
+  void indicatorsStore.fetchBySlug(POPULATION_INDICATOR_SLUG);
 });
 
-const population = computed<{ value: string; unit: string }>(() => {
-  const indicator = indicatorsStore.findBySlug(POPULATION_INDICATOR_SLUG);
+const populationIndicator = computed(() => {
+  return indicatorsStore.findBySlug(POPULATION_INDICATOR_SLUG);
+});
 
-  if (!indicator) {
-    return POPULATION_FALLBACK;
-  }
-
+const formattedPopulation = computed(() => {
+  const indicator = populationIndicator.value;
+  if (!indicator) return null;
+  const num = Number(indicator.valueCurrent);
+  if (!Number.isFinite(num)) return null;
   return {
-    value: new Intl.NumberFormat('id-ID').format(Number(indicator.valueCurrent)),
+    value: new Intl.NumberFormat('id-ID').format(num),
     unit: indicator.unit ?? 'jiwa',
+    caption: `Total Penduduk Kelurahan Manggar (data ${indicator.periodCurrent})`,
+    subcaption: `Berdasarkan data ${indicator.periodCurrent}`,
+    hedgeNote: indicator.hedgeNote,
   };
 });
 
@@ -125,10 +128,10 @@ const wilayahStats = [
 ];
 
 const batasWilayah = [
-  { arah: 'Sebelah Utara', wilayah: 'Kelurahan Karang Joang & Manggar Baru' },
-  { arah: 'Sebelah Timur', wilayah: 'Selat Makassar' },
-  { arah: 'Sebelah Selatan', wilayah: 'Kelurahan Manggar Baru' },
-  { arah: 'Sebelah Barat', wilayah: 'Kelurahan Lamaru & Sepinggan' },
+  { arah: 'Sebelah Utara', wilayah: 'Kelurahan Karang Joang' },
+  { arah: 'Sebelah Timur', wilayah: 'Kelurahan Manggar Baru' },
+  { arah: 'Sebelah Selatan', wilayah: 'Selat Makassar' },
+  { arah: 'Sebelah Barat', wilayah: 'Kelurahan Sepinggan dan Sepinggan Baru' },
 ];
 </script>
 
@@ -143,19 +146,55 @@ const batasWilayah = [
       :image="heroImage"
     />
 
+    <!-- 1. Loading state: skeleton pulse to prevent layout shift & false-empty flash -->
+    <section
+      v-if="indicatorsStore.isLoading && !formattedPopulation"
+      class="bg-white px-4 py-10 sm:px-6 sm:py-12"
+      aria-label="Memuat data kependudukan"
+    >
+      <div class="mx-auto max-w-5xl animate-pulse">
+        <div class="h-4 w-32 rounded bg-gray-200"></div>
+        <div class="mt-4 h-8 w-48 rounded bg-gray-200"></div>
+        <div class="mt-3 h-4 w-64 rounded bg-gray-200"></div>
+      </div>
+    </section>
+
+    <!-- 2. Loaded state: Stat hero with exact period snapshot & hedge note -->
     <TentangStatHero
+      v-else-if="formattedPopulation"
       label="Sekilas Manggar"
-      :value="population.value"
-      :unit="population.unit"
-      caption="Total Penduduk Kelurahan Manggar"
+      :value="formattedPopulation.value"
+      :unit="formattedPopulation.unit"
+      :caption="formattedPopulation.caption"
+      :subcaption="formattedPopulation.subcaption"
+      :hedge-note="formattedPopulation.hedgeNote"
     />
+
+    <!-- 3. Error / missing state: explicit data-unavailable card -->
+    <section
+      v-else
+      class="bg-white px-4 py-10 sm:px-6 sm:py-12"
+      aria-labelledby="empty-pop-title"
+    >
+      <div class="mx-auto max-w-5xl">
+        <p id="empty-pop-title" class="text-sm font-semibold tracking-[0.25em] text-brand-navy uppercase">
+          Sekilas Manggar
+        </p>
+        <div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-6 text-gray-600">
+          <p class="font-medium text-gray-800">Data Belum Tersedia</p>
+          <p class="mt-1 text-sm text-gray-500">
+            Informasi agregat jumlah penduduk terkini belum dipublikasikan atau gagal dimuat.
+          </p>
+        </div>
+      </div>
+    </section>
 
     <!-- Potensi Manggar -->
     <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="potensi-title">
       <div class="mx-auto max-w-5xl">
         <h2 id="potensi-title" class="text-lg font-bold text-brand-navy">Potensi Manggar</h2>
         <ul class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <li v-for="(item, index) in potentials" :key="index">
+          <li v-for="item in potentials" :key="item.title">
             <TentangPotentialCard
               :title="item.title"
               :description="item.description"
@@ -168,7 +207,7 @@ const batasWilayah = [
           <TentangPublicationCard
             title="Manggar Dalam Angka"
             description="Data & informasi statistik Kelurahan Manggar."
-            cta-label="Lihat Publikasi"
+            cta-label="Segera Hadir"
           />
         </div>
       </div>
@@ -275,7 +314,7 @@ const batasWilayah = [
         <div class="mt-6 rounded-btn border border-brand-navy/20 bg-white p-5">
           <h3 class="text-base font-bold text-brand-navy">Batas-Batas Wilayah Administratif:</h3>
           <ul class="mt-3 grid grid-cols-1 gap-3 text-base text-gray-800 sm:grid-cols-2">
-            <li v-for="(item, index) in batasWilayah" :key="index" class="flex items-center gap-2">
+            <li v-for="item in batasWilayah" :key="item.arah" class="flex items-center gap-2">
               <span class="font-medium text-brand-navy">{{ item.arah }}:</span>
               <span>{{ item.wilayah }}</span>
             </li>
