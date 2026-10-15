@@ -102,4 +102,30 @@ describe('TentangVyomatantraView accessibility and content', () => {
     // The card body stays on the navy-deep token, not a slate utility
     expect(wrapper.text()).toContain('Data Tepat, Aksi Hebat');
   });
+
+  it('renders 8 team member roster cards with TODO markers for future definitive roles', async () => {
+    const { pinia, router } = mountView();
+    await router.push('/tentang/vyomatantra');
+    await router.isReady();
+
+    const wrapper = mount(TentangVyomatantraView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    const rosterSection = wrapper.find('section[aria-labelledby="tim-pelaksana-title"]');
+    expect(rosterSection.exists()).toBe(true);
+    expect(rosterSection.find('h2#tim-pelaksana-title').text()).toContain(
+      'Tim Pelaksana VYOMATANTRA',
+    );
+
+    // Assert 8 cards
+    const rosterCards = rosterSection.findAll('article');
+    expect(rosterCards.length).toBe(8);
+
+    for (let i = 1; i <= 8; i++) {
+      expect(rosterSection.text()).toContain(`Nama Anggota ${i}`);
+    }
+    expect(rosterSection.text()).toContain('Anggota Tim VYOMATANTRA');
+    expect(rosterSection.text()).toContain('TODO');
+  });
 });

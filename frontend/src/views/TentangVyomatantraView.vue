@@ -66,6 +66,31 @@ const partners = [
     meta: 'Kelurahan Manggar, Balikpapan Timur & Kampus ITK Balikpapan',
   },
 ];
+
+interface TeamMember {
+  title: string;
+  role: string;
+  meta?: string;
+}
+
+const teamMembers: TeamMember[] = [
+  // TODO: Konfirmasi nama dan peran definitif anggota 1
+  { title: 'Nama Anggota 1', role: 'Anggota Tim VYOMATANTRA' },
+  // TODO: Konfirmasi nama dan peran definitif anggota 2
+  { title: 'Nama Anggota 2', role: 'Anggota Tim VYOMATANTRA' },
+  // TODO: Konfirmasi nama dan peran definitif anggota 3
+  { title: 'Nama Anggota 3', role: 'Anggota Tim VYOMATANTRA' },
+  // TODO: Konfirmasi nama dan peran definitif anggota 4
+  { title: 'Nama Anggota 4', role: 'Anggota Tim VYOMATANTRA' },
+  // TODO: Konfirmasi nama dan peran definitif anggota 5
+  { title: 'Nama Anggota 5', role: 'Anggota Tim VYOMATANTRA' },
+  // TODO: Konfirmasi nama dan peran definitif anggota 6
+  { title: 'Nama Anggota 6', role: 'Anggota Tim VYOMATANTRA' },
+  // TODO: Konfirmasi nama dan peran definitif anggota 7
+  { title: 'Nama Anggota 7', role: 'Anggota Tim VYOMATANTRA' },
+  // TODO: Konfirmasi nama dan peran definitif anggota 8
+  { title: 'Nama Anggota 8', role: 'Anggota Tim VYOMATANTRA' },
+];
 </script>
 
 <template>
@@ -194,6 +219,34 @@ const partners = [
           * Komposisi tim pelaksana dan publikasi ilmiah luaran program didokumentasikan dalam
           laporan resmi program pengabdian masyarakat.
           <!-- TODO: Konfirmasi susunan nama lengkap tim pelaksana mahasiswa dan dosen pembimbing VYOMATANTRA -->
+        </p>
+      </div>
+    </section>
+
+    <!-- Tim Pelaksana VYOMATANTRA -->
+    <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="tim-pelaksana-title">
+      <div class="mx-auto max-w-5xl">
+        <h2 id="tim-pelaksana-title" class="text-lg font-bold text-brand-navy">
+          Tim Pelaksana VYOMATANTRA
+        </h2>
+        <p class="mt-2 max-w-3xl text-base text-gray-700">
+          Civitas akademika Institut Teknologi Kalimantan (ITK) yang mendedikasikan keahlian dalam
+          perancangan dan implementasi program inovasi sosial di Kelurahan Manggar.
+        </p>
+
+        <div class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <TentangTeamCard
+            v-for="(member, idx) in teamMembers"
+            :key="idx"
+            :title="member.title"
+            :role="member.role"
+            :meta="member.meta"
+          />
+        </div>
+
+        <p class="mt-5 text-sm text-gray-600 italic">
+          * Catatan (TODO): Susunan nama lengkap dan peran definitif 8 anggota tim pelaksana
+          didokumentasikan dalam laporan resmi program pengabdian masyarakat.
         </p>
       </div>
     </section>
