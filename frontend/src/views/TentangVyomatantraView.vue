@@ -241,6 +241,7 @@ const teamMembers: TeamMember[] = [
             :title="member.title"
             :role="member.role"
             :meta="member.meta"
+            :show-placeholder="true"
           />
         </div>
 
