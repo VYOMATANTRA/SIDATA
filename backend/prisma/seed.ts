@@ -9,6 +9,7 @@ import {
 import { DEFAULT_CONTENT_BLOCKS } from '../src/services/contentBlocks.service.js';
 import { DEFAULT_COMPARISON_TEMPLATES } from '../src/services/comparisonTemplates.service.js';
 import { CERITA_PAGES } from './ceritaPages.js';
+import { RT_LEADERS_DATA } from './rtLeadersData.js';
 
 async function main() {
   console.log('Memulai proses seeding...');
@@ -37,72 +38,67 @@ async function main() {
     },
   });
 
-  // Seed sample RT Leaders (RT 01 - RT 03)
-  const rt1 = await prisma.rtLeader.upsert({
-    where: { rtNumber: 1 },
-    update: {},
-    create: {
-      rtNumber: 1,
-      name: 'Bambang Supriyanto',
-      phone: '081234567801',
-      phoneIsWhatsapp: true,
-      alamat: 'Jl. Mulawarman No. 12, RT 01, Manggar',
-    },
-  });
-
-  const rt2 = await prisma.rtLeader.upsert({
-    where: { rtNumber: 2 },
-    update: {},
-    create: {
-      rtNumber: 2,
-      name: 'Hj. Siti Aminah',
-      phone: '081234567802',
-      phoneIsWhatsapp: true,
-      alamat: 'Jl. Pemuda RT 02, Manggar',
-    },
-  });
-
-  const rt3 = await prisma.rtLeader.upsert({
-    where: { rtNumber: 3 },
-    update: {},
-    create: {
-      rtNumber: 3,
-      name: 'Ahmad Dahlan',
-      phone: '081234567803',
-      phoneIsWhatsapp: false,
-      alamat: 'Jl. Pantai Manggar RT 03',
-    },
-  });
-
-  // Seed sample Spatial Points (Ketua RT points + Bank Sampah Unit)
-  const pointRt1 = await prisma.spatialPoint.upsert({
+  // Clean up legacy sample RT point 1 if present
+  await prisma.spatialPoint.deleteMany({
     where: { id: '00000000-0000-0000-0000-000000000001' },
-    update: {},
-    create: {
-      id: '00000000-0000-0000-0000-000000000001',
-      name: 'Pos RT 01 Kelurahan Manggar',
-      type: 'ketua_rt',
-      latitude: -1.2235,
-      longitude: 116.9521,
-      metadata: {
-        keterangan: 'Posyandu dan Sekretariat RT 01',
-      },
-    },
   });
 
-  await prisma.spatialPointRt.upsert({
-    where: {
-      pointId_rtNumber: {
-        pointId: pointRt1.id,
-        rtNumber: 1,
+  // Seed all 100 RT Leaders and their 1:1 Spatial Points
+  for (const rt of RT_LEADERS_DATA) {
+    await prisma.rtLeader.upsert({
+      where: { rtNumber: rt.rtNumber },
+      update: {
+        name: rt.name,
+        phone: rt.phone,
+        phoneIsWhatsapp: rt.phoneIsWhatsapp,
+        alamat: rt.alamat,
       },
-    },
-    update: {},
-    create: {
-      pointId: pointRt1.id,
-      rtNumber: 1,
-    },
-  });
+      create: {
+        rtNumber: rt.rtNumber,
+        name: rt.name,
+        phone: rt.phone,
+        phoneIsWhatsapp: rt.phoneIsWhatsapp,
+        alamat: rt.alamat,
+      },
+    });
+
+    const pointId = `00000000-0000-0000-0001-${String(rt.rtNumber).padStart(12, '0')}`;
+    const point = await prisma.spatialPoint.upsert({
+      where: { id: pointId },
+      update: {
+        name: `Pos RT ${String(rt.rtNumber).padStart(2, '0')} Kelurahan Manggar`,
+        latitude: rt.latitude,
+        longitude: rt.longitude,
+        metadata: {
+          keterangan: `Ketua RT ${rt.rtNumber}: ${rt.name}`,
+        },
+      },
+      create: {
+        id: pointId,
+        name: `Pos RT ${String(rt.rtNumber).padStart(2, '0')} Kelurahan Manggar`,
+        type: 'ketua_rt',
+        latitude: rt.latitude,
+        longitude: rt.longitude,
+        metadata: {
+          keterangan: `Ketua RT ${rt.rtNumber}: ${rt.name}`,
+        },
+      },
+    });
+
+    await prisma.spatialPointRt.upsert({
+      where: {
+        pointId_rtNumber: {
+          pointId: point.id,
+          rtNumber: rt.rtNumber,
+        },
+      },
+      update: {},
+      create: {
+        pointId: point.id,
+        rtNumber: rt.rtNumber,
+      },
+    });
+  }
 
   const pointBankSampah = await prisma.spatialPoint.upsert({
     where: { id: '00000000-0000-0000-0000-000000000002' },
@@ -251,7 +247,7 @@ async function main() {
     roleUser,
     roleEditor,
     roleAdmin,
-    sampleRt: [rt1.rtNumber, rt2.rtNumber, rt3.rtNumber],
+    totalRtLeaders: RT_LEADERS_DATA.length,
     seededBlocks: DEFAULT_CONTENT_BLOCKS.map((b) => b.slug),
     seededComparisonTemplates: DEFAULT_COMPARISON_TEMPLATES.map((t) => t.slug),
   });
