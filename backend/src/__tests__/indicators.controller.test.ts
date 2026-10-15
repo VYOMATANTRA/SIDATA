@@ -291,6 +291,24 @@ describe('indicators.controller getIndicatorHandler', () => {
     assert.equal(((res.body as AnyRecord)['indicator'] as AnyRecord)['slug'], 'jumlah-penduduk');
   });
 
+  it('returns 200 with the indicator when queried by slug', async () => {
+    indicatorImpl['findUnique'] = async (args: AnyRecord) => {
+      if (args['where']?.['slug'] === 'jumlah-penduduk') {
+        return indicatorRow({ id: 'ind-1', slug: 'jumlah-penduduk' });
+      }
+      return null;
+    };
+
+    const res = fakeRes();
+    await getIndicatorHandler(
+      { params: { id: 'jumlah-penduduk' } } as unknown as Request,
+      res as unknown as Response,
+    );
+
+    assert.equal(res.status, 200);
+    assert.equal(((res.body as AnyRecord)['indicator'] as AnyRecord)['id'], 'ind-1');
+  });
+
   it('returns 500 when the database throws', async () => {
     indicatorImpl['findUnique'] = async () => {
       throw new Error('db down');

@@ -823,7 +823,7 @@ describe('indicators.service getIndicatorById', () => {
 
     // A repeat miss is short-circuited by the negative set: no second DB hit.
     assert.equal(await getIndicatorById('ghost-1'), null);
-    assert.equal(queryCount, 1);
+    assert.equal(queryCount, 2);
     assert.equal(indicatorByIdCache.has('ghost-1'), false);
   });
 
@@ -864,6 +864,53 @@ describe('indicators.service getIndicatorById', () => {
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-02T00:00:00.000Z',
     });
+  });
+
+  it('resolves an indicator by slug when id lookup returns null', async () => {
+    indicatorImpl['findUnique'] = async (args: AnyRecord) => {
+      if (args['where']?.['id'] === 'jumlah-penduduk') return null;
+      if (args['where']?.['slug'] === 'jumlah-penduduk') {
+        return indicatorRow({ id: 'ind-1', slug: 'jumlah-penduduk' });
+      }
+      return null;
+    };
+
+    const result = await getIndicatorById('jumlah-penduduk');
+    assert.equal(result?.id, 'ind-1');
+    assert.equal(result?.slug, 'jumlah-penduduk');
+  });
+
+  it('normalizes slug lookup to lowercase', async () => {
+    let queriedSlug: string | undefined;
+    indicatorImpl['findUnique'] = async (args: AnyRecord) => {
+      if (args['where']?.['slug']) {
+        queriedSlug = args['where']['slug'];
+        return indicatorRow({ id: 'ind-1', slug: 'jumlah-penduduk' });
+      }
+      return null;
+    };
+
+    const result = await getIndicatorById('JUMLAH-PENDUDUK');
+    assert.equal(queriedSlug, 'jumlah-penduduk');
+    assert.equal(result?.id, 'ind-1');
+  });
+
+  it('invalidates both id and slug cache when requested', async () => {
+    indicatorImpl['findUnique'] = async (args: AnyRecord) => {
+      if (args['where']?.['id'] === 'ind-1' || args['where']?.['slug'] === 'jumlah-penduduk') {
+        return indicatorRow({ id: 'ind-1', slug: 'jumlah-penduduk' });
+      }
+      return null;
+    };
+
+    await getIndicatorById('ind-1');
+    await getIndicatorById('jumlah-penduduk');
+    assert.equal(indicatorByIdCache.has('ind-1'), true);
+    assert.equal(indicatorByIdCache.has('jumlah-penduduk'), true);
+
+    invalidateIndicatorsCache('ind-1', 'jumlah-penduduk');
+    assert.equal(indicatorByIdCache.has('ind-1'), false);
+    assert.equal(indicatorByIdCache.has('jumlah-penduduk'), false);
   });
 });
 
