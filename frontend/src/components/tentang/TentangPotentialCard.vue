@@ -12,7 +12,7 @@ withDefaults(
 </script>
 
 <template>
-  <article class="rounded-btn bg-brand-cyan p-5">
+  <article class="flex h-full w-full flex-col rounded-btn bg-brand-cyan p-5">
     <span
       class="flex h-12 w-12 items-center justify-center rounded-full bg-brand-navy text-white"
       aria-hidden="true"

@@ -193,17 +193,18 @@ const batasWilayah = [
     <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="potensi-title">
       <div class="mx-auto max-w-5xl">
         <h2 id="potensi-title" class="text-lg font-bold text-brand-navy">Potensi Manggar</h2>
-        <ul class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <li v-for="item in potentials" :key="item.title">
+        <ul class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:auto-rows-fr">
+          <li v-for="item in potentials" :key="item.title" class="flex">
             <TentangPotentialCard
               :title="item.title"
               :description="item.description"
               :icon="item.icon"
+              class="w-full"
             />
           </li>
         </ul>
 
-        <div class="mt-6">
+        <div class="mt-4">
           <TentangPublicationCard
             title="Manggar Dalam Angka"
             description="Data & informasi statistik Kelurahan Manggar."

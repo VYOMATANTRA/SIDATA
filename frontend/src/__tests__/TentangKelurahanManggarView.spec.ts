@@ -135,6 +135,20 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(wrapper.text()).toContain('Kependudukan');
     expect(wrapper.text()).toContain('Lingkungan');
     expect(wrapper.text()).toContain('Data & Statistik');
+
+    const potensiSection = wrapper.find('section[aria-labelledby="potensi-title"]');
+    const gridUl = potensiSection.find('ul');
+    expect(gridUl.classes()).toContain('sm:auto-rows-fr');
+
+    const gridItems = gridUl.findAll('li');
+    expect(gridItems.length).toBe(4);
+    for (const li of gridItems) {
+      expect(li.classes()).toContain('flex');
+      const article = li.find('article');
+      expect(article.classes()).toContain('h-full');
+      expect(article.classes()).toContain('w-full');
+      expect(article.classes()).toContain('flex');
+    }
   });
 
   it('renders the publication card with a non-interactive Segera Hadir badge', async () => {
