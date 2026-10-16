@@ -3,6 +3,10 @@ import { computed } from 'vue';
 import { DEFAULT_HERO_BLOCK, useContentBlocksStore } from '../../stores/contentBlocks.store';
 import { useSettingsStore } from '../../stores/settings.store';
 import defaultHeroBg from '@/assets/img/background_laman_depan_kelurahan.png';
+import logoDesaCantik from '@/assets/img/logo_desa_cantik.png';
+import logoBps from '@/assets/img/logo_bps.png';
+import logoItk from '@/assets/img/logo_itk.png';
+import logoVyomatantra from '@/assets/img/logo_vyomatantra.png';
 
 const contentBlocksStore = useContentBlocksStore();
 const settingsStore = useSettingsStore();
@@ -93,12 +97,27 @@ const backgroundStyle = computed(() => {
     data-test="section-hero"
   >
     <div class="relative z-10 mx-auto flex w-full max-w-5xl flex-col space-y-6 sm:space-y-8">
+      <!-- Partner Collaboration Logos Pill Lockup matching Figma -->
+      <div class="flex flex-wrap items-center gap-3">
+        <div
+          class="inline-flex items-center gap-3.5 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 backdrop-blur-xs"
+        >
+          <img :src="logoDesaCantik" alt="Logo Program Desa Cantik" class="h-4.5 w-auto object-contain" />
+          <span class="h-3 w-px bg-white/25" aria-hidden="true" />
+          <img :src="logoBps" alt="Logo Badan Pusat Statistik" class="h-4.5 w-auto object-contain" />
+          <span class="h-3 w-px bg-white/25" aria-hidden="true" />
+          <img :src="logoItk" alt="Logo Institut Teknologi Kalimantan" class="h-4.5 w-auto object-contain" />
+          <span class="h-3 w-px bg-white/25" aria-hidden="true" />
+          <img :src="logoVyomatantra" alt="Logo Tim Inovasi Sosial VYOMATANTRA" class="h-4 w-auto object-contain" />
+        </div>
+      </div>
+
       <!-- Institutional Eyebrow Badge matching Figma -->
       <div class="flex items-center gap-2">
         <span
           class="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-xs font-medium tracking-wide text-white backdrop-blur-xs sm:text-sm"
         >
-          <span class="h-2 w-2 rounded-full bg-emerald-400" aria-hidden="true"></span>
+          <span class="h-2 w-2 rounded-full bg-brand-cyan" aria-hidden="true"></span>
           <span>{{ badgeText }}</span>
           <span class="font-normal text-slate-300">|</span>
           <span class="text-slate-200">{{ settingsStore.administrativeArea }}</span>
@@ -118,11 +137,11 @@ const backgroundStyle = computed(() => {
         </p>
       </div>
 
-      <!-- Action Buttons matching Figma rounded-btn and brand-navy -->
+      <!-- Action Buttons matching Figma rounded-btn and brand tokens -->
       <div class="flex flex-wrap items-center gap-3 pt-2 sm:gap-4" data-test="hero-actions">
         <a
           :href="ctaLink"
-          class="inline-flex items-center justify-center gap-2 rounded-btn bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-950/40 transition-colors hover:bg-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400 sm:text-base"
+          class="inline-flex items-center justify-center gap-2 rounded-btn bg-brand-cyan px-6 py-3 text-sm font-semibold text-brand-navy shadow-lg shadow-black/30 transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cyan sm:text-base"
         >
           <span>{{ ctaText }}</span>
           <svg
@@ -144,7 +163,7 @@ const backgroundStyle = computed(() => {
 
         <router-link
           to="/login"
-          class="inline-flex items-center justify-center rounded-btn border border-white/20 bg-brand-navy-overlay px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-brand-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:text-base"
+          class="inline-flex items-center justify-center rounded-btn border border-white/20 bg-brand-navy-overlay px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-white hover:text-brand-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:text-base"
         >
           Akses Petugas & Editor
         </router-link>

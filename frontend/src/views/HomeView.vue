@@ -9,6 +9,7 @@ import AppFooter from '../components/common/AppFooter.vue';
 import SectionHero from '../components/landing/SectionHero.vue';
 import SectionSambutanLurah from '../components/landing/SectionSambutanLurah.vue';
 import SectionHighlights from '../components/landing/SectionHighlights.vue';
+import StatOverview from '../components/common/StatOverview.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -45,11 +46,11 @@ async function handleLogout() {
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col bg-slate-50 selection:bg-emerald-500 selection:text-white">
+  <div class="flex min-h-screen flex-col bg-slate-50 selection:bg-brand-cyan selection:text-brand-navy">
     <!-- Skip to Content Link per docs/ACCESSIBILITY.md §3 (2.4.1) -->
     <a
       href="#main-content"
-      class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-xl focus:bg-emerald-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
+      class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-btn focus:bg-brand-navy focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cyan"
     >
       Lewati ke konten utama
     </a>
@@ -65,7 +66,7 @@ async function handleLogout() {
         <template v-if="authStore.isAuthenticated">
           <div class="hidden flex-col text-right sm:flex">
             <span class="text-xs font-semibold text-slate-100">{{ authStore.user?.email }}</span>
-            <span class="text-[11px] font-medium tracking-wider text-emerald-300 uppercase">
+            <span class="text-[11px] font-medium tracking-wider text-brand-cyan uppercase">
               Peran: {{ authStore.user?.role }}
             </span>
           </div>
@@ -73,7 +74,7 @@ async function handleLogout() {
           <router-link
             v-if="authStore.isAdmin"
             to="/users"
-            class="rounded-lg bg-white/10 px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-emerald-400 sm:text-sm"
+            class="rounded-btn bg-white/10 px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-brand-cyan sm:text-sm"
           >
             Manajemen Pengguna
           </router-link>
@@ -83,7 +84,7 @@ async function handleLogout() {
             @click="handleLogout"
             :disabled="isLoggingOut"
             data-test="logout-btn"
-            class="cursor-pointer rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-emerald-500 focus-visible:outline-2 focus-visible:outline-emerald-400 disabled:opacity-50 sm:text-sm"
+            class="cursor-pointer rounded-btn border border-white/20 bg-white/10 px-3.5 py-1.5 text-xs font-medium text-white shadow-xs transition-colors hover:bg-white hover:text-brand-navy focus-visible:outline-2 focus-visible:outline-brand-cyan disabled:opacity-50 sm:text-sm"
           >
             <span v-if="isLoggingOut">Memproses...</span>
             <span v-else>Keluar (Logout)</span>
@@ -93,7 +94,7 @@ async function handleLogout() {
         <template v-else>
           <router-link
             to="/login"
-            class="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow-md shadow-emerald-950/20 transition-all hover:bg-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400 sm:text-sm"
+            class="rounded-btn bg-brand-cyan px-4 py-2 text-xs font-semibold text-brand-navy shadow-md shadow-black/20 transition-all hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cyan sm:text-sm"
           >
             Masuk (Login)
           </router-link>
@@ -138,7 +139,7 @@ async function handleLogout() {
           <template v-if="authStore.isAuthenticated">
             <div class="mb-3 space-y-0.5">
               <p class="text-xs font-semibold text-slate-200">{{ authStore.user?.email }}</p>
-              <p class="text-[11px] font-medium tracking-wider text-emerald-400 uppercase">
+              <p class="text-[11px] font-medium tracking-wider text-brand-cyan uppercase">
                 Peran: {{ authStore.user?.role }}
               </p>
             </div>
@@ -147,7 +148,7 @@ async function handleLogout() {
                 v-if="authStore.isAdmin"
                 to="/users"
                 data-test="mobile-admin-link"
-                class="block rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20"
+                class="block rounded-btn bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20"
                 @click="close"
               >
                 Manajemen Pengguna
@@ -157,7 +158,7 @@ async function handleLogout() {
                 @click="() => { close(); handleLogout(); }"
                 :disabled="isLoggingOut"
                 data-test="mobile-logout-btn"
-                class="w-full rounded-lg bg-emerald-600 px-4 py-2 text-left text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-50"
+                class="w-full rounded-btn border border-white/20 bg-white/10 px-4 py-2 text-left text-sm font-medium text-white transition-colors hover:bg-white hover:text-brand-navy disabled:opacity-50"
               >
                 <span v-if="isLoggingOut">Memproses...</span>
                 <span v-else>Keluar (Logout)</span>
@@ -168,7 +169,7 @@ async function handleLogout() {
             <router-link
               to="/login"
               data-test="mobile-login-link"
-              class="block w-full rounded-lg bg-emerald-500 px-4 py-2 text-center text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400"
+              class="block w-full rounded-btn bg-brand-cyan px-4 py-2 text-center text-sm font-semibold text-brand-navy transition-colors hover:bg-white"
               @click="close"
             >
               Masuk (Login)
@@ -215,22 +216,25 @@ async function handleLogout() {
             </p>
           </div>
 
-          <!-- Cerita Preview Slot (separate issue will provide cards) -->
+          <!-- Cerita Preview Slot (Figma StatOverview demographic slice) -->
           <slot name="cerita-preview">
-            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              <div
-                v-for="(card, idx) in [
-                  { title: 'Kependudukan', desc: 'Struktur demografi & piramida usia' },
-                  { title: 'Pendidikan', desc: 'Rasio guru-murid & lembaga belajar' },
-                  { title: 'Kesehatan', desc: 'Cakupan imunisasi & sanitasi warga' },
-                  { title: 'Bank Sampah', desc: 'Inovasi unit daur ulang & lingkungan' },
+            <div class="mx-auto flex w-full max-w-4xl justify-center">
+              <StatOverview
+                title="Demografi Penduduk"
+                description="Komposisi dan kepadatan penduduk, keluarga, persebaran rasio jenis kelamin, umur, pendidikan, dan lainnya"
+                :stats="[
+                  { icon: 'person', value: '53.098', label: 'Penduduk' },
+                  { icon: 'house', value: '100', label: 'Rukun Tetangga' },
+                  { icon: 'density', value: '2 jiwa/km²', label: 'Kepadatan Penduduk' },
+                  { icon: 'ratio', value: '1,06 : 1', label: 'Rasio Laki-laki & Perempuan' },
                 ]"
-                :key="idx"
-                class="rounded-xl border border-slate-200/90 bg-slate-50 p-5 text-left shadow-xs transition-colors hover:border-emerald-300 hover:bg-emerald-50/30"
-              >
-                <h3 class="text-base font-bold text-slate-900">{{ card.title }}</h3>
-                <p class="mt-1 text-xs text-slate-500">{{ card.desc }}</p>
-              </div>
+                card-title="Ringkasan Statistik Kependudukan Kelurahan Manggar"
+                card-variant="dark"
+                heading-tag="h3"
+                button-label="Lihat Selengkapnya"
+                to="/cerita/demografi"
+                align="center"
+              />
             </div>
           </slot>
         </div>
@@ -262,10 +266,29 @@ async function handleLogout() {
           <!-- Weather Widget Slot (separate issue will provide live BMKG integration) -->
           <slot name="weather">
             <div
-              class="mx-auto max-w-xl rounded-2xl border border-slate-200/90 bg-white p-6 text-center shadow-xs"
+              class="mx-auto max-w-xl rounded-card border border-slate-200/90 bg-white p-8 text-center shadow-xs"
             >
-              <p class="text-sm font-medium text-slate-500">
+              <div
+                class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-brand-navy/10 text-brand-navy"
+                aria-hidden="true"
+              >
+                <svg
+                  class="h-6 w-6"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+                </svg>
+              </div>
+              <p class="text-sm font-medium text-slate-700">
                 Data prakiraan cuaca operasional BMKG akan ditampilkan di sini.
+              </p>
+              <p class="mt-1 text-xs text-slate-400">
+                Pembaruan berkala suhu, kelembapan, dan kecepatan angin Balikpapan Timur
               </p>
             </div>
           </slot>
