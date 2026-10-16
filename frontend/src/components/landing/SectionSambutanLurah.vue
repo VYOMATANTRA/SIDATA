@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { DEFAULT_SAMBUTAN_BLOCK, useContentBlocksStore } from '../../stores/contentBlocks.store';
 import HugeQuote from '../common/HugeQuote.vue';
+import defaultLurahPhoto from '@/assets/img/lurah_placeholder_sample.png';
 
 const contentBlocksStore = useContentBlocksStore();
 
@@ -24,23 +25,32 @@ const authorTitle = computed(() => {
 });
 
 const photoUrl = computed(() => {
-  const metaPhoto = sambutan.value.metadata?.photoUrl;
-  if (typeof metaPhoto === 'string' && metaPhoto.trim()) {
-    const trimmed = metaPhoto.trim();
-    if (
-      (trimmed.startsWith('/') && !trimmed.startsWith('//')) ||
-      /^https:\/\/[^/]+/i.test(trimmed)
-    ) {
-      return trimmed;
-    }
+  const meta = sambutan.value.metadata;
+  // If metadata is explicitly null or authorName/photoUrl not specified in dynamic store, use defaultLurahPhoto
+  if (!meta) {
+    return null;
   }
-  return null;
+  if ('photoUrl' in meta) {
+    const rawPhoto = meta.photoUrl;
+    if (typeof rawPhoto === 'string' && rawPhoto.trim()) {
+      const trimmed = rawPhoto.trim();
+      if (
+        (trimmed.startsWith('/') && !trimmed.startsWith('//')) ||
+        /^https:\/\/[^/]+/i.test(trimmed)
+      ) {
+        return trimmed;
+      }
+      return null;
+    }
+    return null;
+  }
+  return defaultLurahPhoto;
 });
 </script>
 
 <template>
   <div
-    class="border-b border-white/10 bg-gradient-to-b from-brand-navy to-brand-navy-deep px-4 py-16 text-white sm:px-6 sm:py-20 lg:px-8"
+    class="border-b border-white/10 bg-gradient-to-b from-brand-navy to-brand-navy-deep px-4 pt-12 pb-8 text-white sm:px-6 sm:pt-16 sm:pb-12 lg:px-8"
   >
     <div class="mx-auto flex max-w-4xl justify-center">
       <HugeQuote
@@ -52,7 +62,7 @@ const photoUrl = computed(() => {
         :author-name="authorName"
         :author-position="authorTitle"
         :image-src="photoUrl || undefined"
-        variant="dark"
+        variant="transparent"
         heading-tag="h2"
       />
     </div>

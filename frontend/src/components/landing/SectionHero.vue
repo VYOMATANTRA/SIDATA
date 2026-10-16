@@ -91,7 +91,7 @@ const backgroundStyle = computed(() => {
 <template>
   <section
     id="hero"
-    class="relative flex min-h-[480px] w-full flex-col justify-center overflow-hidden px-6 py-14 text-white transition-all sm:min-h-[560px] sm:px-12 sm:py-20 md:py-24"
+    class="relative flex min-h-[520px] w-full flex-col justify-center overflow-hidden px-5 py-16 text-white transition-all sm:min-h-[580px] sm:px-12 sm:py-20 md:py-24"
     :style="backgroundStyle"
     aria-labelledby="hero-title"
     data-test="section-hero"
@@ -100,15 +100,15 @@ const backgroundStyle = computed(() => {
       <!-- Partner Collaboration Logos Pill Lockup matching Figma -->
       <div class="flex flex-wrap items-center gap-3">
         <div
-          class="inline-flex items-center gap-3.5 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 backdrop-blur-xs"
+          class="inline-flex items-center gap-3 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 backdrop-blur-xs sm:gap-3.5 sm:px-4"
         >
-          <img :src="logoDesaCantik" alt="Logo Program Desa Cantik" class="h-4.5 w-auto object-contain" />
+          <img :src="logoDesaCantik" alt="Logo Program Desa Cantik" class="h-4 w-auto object-contain sm:h-4.5" />
           <span class="h-3 w-px bg-white/25" aria-hidden="true" />
-          <img :src="logoBps" alt="Logo Badan Pusat Statistik" class="h-4.5 w-auto object-contain" />
+          <img :src="logoBps" alt="Logo Badan Pusat Statistik" class="h-4 w-auto object-contain sm:h-4.5" />
           <span class="h-3 w-px bg-white/25" aria-hidden="true" />
-          <img :src="logoItk" alt="Logo Institut Teknologi Kalimantan" class="h-4.5 w-auto object-contain" />
+          <img :src="logoItk" alt="Logo Institut Teknologi Kalimantan" class="h-4 w-auto object-contain sm:h-4.5" />
           <span class="h-3 w-px bg-white/25" aria-hidden="true" />
-          <img :src="logoVyomatantra" alt="Logo Tim Inovasi Sosial VYOMATANTRA" class="h-4 w-auto object-contain" />
+          <img :src="logoVyomatantra" alt="Logo Tim Inovasi Sosial VYOMATANTRA" class="h-3.5 w-auto object-contain sm:h-4" />
         </div>
       </div>
 
@@ -128,11 +128,11 @@ const backgroundStyle = computed(() => {
       <div class="space-y-4">
         <h1
           id="hero-title"
-          class="min-w-0 text-2xl font-bold leading-tight tracking-tight text-white sm:text-3xl md:text-4xl lg:text-5xl"
+          class="min-w-0 text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl md:text-5xl"
         >
           {{ titleText }}
         </h1>
-        <p class="max-w-3xl text-base leading-relaxed text-slate-200/95 sm:text-lg">
+        <p class="max-w-3xl text-sm leading-relaxed text-slate-200/95 sm:text-base md:text-lg">
           {{ bodyText }}
         </p>
       </div>
