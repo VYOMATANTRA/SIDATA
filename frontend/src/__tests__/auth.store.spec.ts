@@ -379,4 +379,129 @@ describe('auth store', () => {
     expect(store.accessToken).toBe('token-without-user')
     expect(store.user).toEqual({ id: '', email: '', role: '' })
   })
+
+  describe('in-flight initAuth race condition & logout', () => {
+    it('does not re-authenticate user if clearAuth occurs while initAuth is in-flight', async () => {
+      let resolveRefresh: (res: Response) => void
+      const refreshPromise = new Promise<Response>((resolve) => {
+        resolveRefresh = resolve
+      })
+
+      vi.stubGlobal(
+        'fetch',
+        vi.fn<typeof fetch>().mockImplementation(async (input) => {
+          const url = String(input)
+          if (url.includes('csrf-token')) {
+            return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+          }
+          return refreshPromise
+        }),
+      )
+
+      const store = useAuthStore()
+      // Start initAuth
+      const initAuthPromise = store.initAuth()
+
+      // User explicitly calls clearAuth before network resolves
+      store.clearAuth()
+      expect(store.isAuthenticated).toBe(false)
+
+      // Network now resolves successfully
+      resolveRefresh!({
+        ok: true,
+        json: async () => ({
+          accessToken: 'stale-token',
+          user: { id: '99', email: 'stale@example.com', role: 'user' },
+        }),
+      } as Response)
+
+      const result = await initAuthPromise
+      expect(result).toBe(false)
+      expect(store.isAuthenticated).toBe(false)
+      expect(store.accessToken).toBeNull()
+      expect(store.user).toBeNull()
+    })
+
+    it('logout revokes session, clears state, and suppresses immediate auto-refresh', async () => {
+      let logoutCalled = false
+      vi.stubGlobal(
+        'fetch',
+        vi.fn<typeof fetch>().mockImplementation(async (input) => {
+          const url = String(input)
+          if (url.includes('csrf-token')) {
+            return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+          }
+          if (url.includes('/api/auth/logout')) {
+            logoutCalled = true
+            return { ok: true, json: async () => ({}) } as Response
+          }
+          return { ok: true, json: async () => ({}) } as Response
+        }),
+      )
+
+      const store = useAuthStore()
+      store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'valid-token')
+
+      const res = await store.logout()
+      expect(res.success).toBe(true)
+      expect(logoutCalled).toBe(true)
+      expect(store.isAuthenticated).toBe(false)
+      expect(store.refreshDenied).toBe(true)
+
+      // Subsequent initAuth is suppressed without sending network request
+      const initRes = await store.initAuth()
+      expect(initRes).toBe(false)
+    })
+
+    it('logout handles CSRF failure gracefully without sending logout request', async () => {
+      let logoutCalled = false
+      vi.stubGlobal(
+        'fetch',
+        vi.fn<typeof fetch>().mockImplementation(async (input) => {
+          const url = String(input)
+          if (url.includes('csrf-token')) {
+            return { ok: false, status: 403, json: async () => ({}) } as Response
+          }
+          if (url.includes('/api/auth/logout')) {
+            logoutCalled = true
+            return { ok: true, json: async () => ({}) } as Response
+          }
+          return { ok: true, json: async () => ({}) } as Response
+        }),
+      )
+
+      const store = useAuthStore()
+      store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'valid-token')
+
+      const res = await store.logout()
+      expect(res.success).toBe(false)
+      expect(logoutCalled).toBe(false)
+      expect(res.error).toContain('Gagal memvalidasi token keamanan')
+      expect(store.isAuthenticated).toBe(true)
+    })
+
+    it('logout handles server 500 rejection gracefully', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn<typeof fetch>().mockImplementation(async (input) => {
+          const url = String(input)
+          if (url.includes('csrf-token')) {
+            return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+          }
+          if (url.includes('/api/auth/logout')) {
+            return { ok: false, status: 500, json: async () => ({}) } as Response
+          }
+          return { ok: true, json: async () => ({}) } as Response
+        }),
+      )
+
+      const store = useAuthStore()
+      store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'valid-token')
+
+      const res = await store.logout()
+      expect(res.success).toBe(false)
+      expect(res.error).toContain('Gagal keluar dari sesi')
+      expect(store.isAuthenticated).toBe(true)
+    })
+  })
 })

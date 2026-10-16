@@ -52,13 +52,19 @@ export const useAuthStore = defineStore('auth', () => {
   // firing on rapid navigations) instead of each firing its own csrf-token + refresh pair.
   let inFlight: Promise<boolean> | null = null
 
+  // Monotonically increasing generation counter to invalidate in-flight silent refreshes
+  // when an explicit logout or clearAuth occurs while a request is pending.
+  let authEpoch = 0
+
   const isAuthenticated = computed(() => !!accessToken.value)
   const isAdmin = computed(() => user.value?.role?.toLowerCase() === 'admin')
 
   function setAuth(newUser: UserProfile, token: string) {
+    authEpoch++
     user.value = newUser
     accessToken.value = token
     isInitialized.value = true
+    refreshDenied.value = false
     setupToken.value = null
     mustChangePassword.value = false
     removeStoredSetupToken()
@@ -71,6 +77,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function clearAuth(keepSetup = false) {
+    authEpoch++
     user.value = null
     accessToken.value = null
     isInitialized.value = true
@@ -83,8 +90,13 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function performInitAuth(): Promise<boolean> {
+    const currentEpoch = ++authEpoch
     try {
       const csrfToken = await getCsrfToken()
+      if (currentEpoch !== authEpoch) {
+        return false
+      }
+
       const res = await fetch('/api/auth/refresh', {
         method: 'POST',
         credentials: 'include',
@@ -92,6 +104,10 @@ export const useAuthStore = defineStore('auth', () => {
           'x-csrf-token': csrfToken,
         },
       })
+
+      if (currentEpoch !== authEpoch) {
+        return false
+      }
 
       if (!res.ok) {
         clearAuth(mustChangePassword.value)
@@ -102,6 +118,10 @@ export const useAuthStore = defineStore('auth', () => {
       }
 
       const data = await res.json()
+      if (currentEpoch !== authEpoch) {
+        return false
+      }
+
       if (data.accessToken) {
         setAuth(data.user || { id: '', email: '', role: '' }, data.accessToken)
         return true
@@ -110,10 +130,14 @@ export const useAuthStore = defineStore('auth', () => {
       clearAuth(mustChangePassword.value)
       return false
     } catch {
-      clearAuth(mustChangePassword.value)
+      if (currentEpoch === authEpoch) {
+        clearAuth(mustChangePassword.value)
+      }
       return false
     } finally {
-      isInitialized.value = true
+      if (currentEpoch === authEpoch) {
+        isInitialized.value = true
+      }
     }
   }
 
@@ -139,6 +163,46 @@ export const useAuthStore = defineStore('auth', () => {
     return inFlight
   }
 
+  /**
+   * Performs explicit user logout: revokes server session, clears memory tokens,
+   * invalidates in-flight refresh requests, and suppresses immediate auto-refresh.
+   */
+  async function logout(): Promise<{ success: boolean; error?: string }> {
+    try {
+      const csrfToken = await getCsrfToken()
+      if (!csrfToken) {
+        return {
+          success: false,
+          error: 'Gagal memvalidasi token keamanan (CSRF). Silakan coba lagi.',
+        }
+      }
+
+      const res = await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'x-csrf-token': csrfToken,
+        },
+      })
+
+      if (!res.ok) {
+        return {
+          success: false,
+          error: 'Gagal keluar dari sesi. Silakan coba lagi.',
+        }
+      }
+
+      clearAuth()
+      refreshDenied.value = true
+      return { success: true }
+    } catch {
+      return {
+        success: false,
+        error: 'Terjadi kesalahan jaringan saat keluar. Silakan coba lagi.',
+      }
+    }
+  }
+
   return {
     user,
     accessToken,
@@ -147,9 +211,11 @@ export const useAuthStore = defineStore('auth', () => {
     isAdmin,
     setupToken,
     mustChangePassword,
+    refreshDenied,
     setAuth,
     setSetupAuth,
     clearAuth,
     initAuth,
+    logout,
   }
 })

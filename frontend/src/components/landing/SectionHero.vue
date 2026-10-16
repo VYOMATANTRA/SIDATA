@@ -2,6 +2,11 @@
 import { computed } from 'vue';
 import { DEFAULT_HERO_BLOCK, useContentBlocksStore } from '../../stores/contentBlocks.store';
 import { useSettingsStore } from '../../stores/settings.store';
+import defaultHeroBg from '@/assets/img/background_laman_depan_kelurahan.png';
+import logoDesaCantik from '@/assets/img/logo_desa_cantik.png';
+import logoBps from '@/assets/img/logo_bps.png';
+import logoItk from '@/assets/img/logo_itk.png';
+import logoVyomatantra from '@/assets/img/logo_vyomatantra.png';
 
 const contentBlocksStore = useContentBlocksStore();
 const settingsStore = useSettingsStore();
@@ -57,50 +62,86 @@ const ctaLink = computed(() => {
   }
   return '#potensi';
 });
+
+const titleText = computed(() => {
+  const title = hero.value.title;
+  if (typeof title === 'string' && title.trim()) {
+    return title.trim();
+  }
+  return settingsStore.tagline || 'Sistem Informasi Data Terpadu Kelurahan';
+});
+
+const bodyText = computed(() => {
+  const body = hero.value.body;
+  if (typeof body === 'string' && body.trim()) {
+    return body.trim();
+  }
+  return DEFAULT_HERO_BLOCK.body;
+});
+
+const backgroundStyle = computed(() => {
+  return {
+    backgroundImage: `linear-gradient(rgba(10, 35, 83, 0.84), rgba(0, 27, 72, 0.90)), url(${defaultHeroBg})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+  };
+});
 </script>
 
 <template>
-  <header
-    class="relative overflow-hidden border-b border-slate-700/60 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 px-4 py-16 text-white sm:px-6 md:py-24 lg:px-8"
+  <section
+    id="hero"
+    class="relative flex min-h-[520px] w-full flex-col justify-center overflow-hidden px-5 py-16 text-white transition-all sm:min-h-[580px] sm:px-12 sm:py-20 md:py-24"
+    :style="backgroundStyle"
     aria-labelledby="hero-title"
+    data-test="section-hero"
   >
-    <!-- Background subtle mesh accents -->
-    <div
-      class="pointer-events-none absolute inset-0 bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:16px_16px] opacity-10"
-      aria-hidden="true"
-    ></div>
-
-    <div class="relative mx-auto max-w-5xl space-y-6 text-center">
-      <!-- Institutional Badge -->
-      <div
-        class="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-1.5 text-xs font-medium text-emerald-300 sm:text-sm"
-      >
-        <span class="h-2 w-2 animate-pulse rounded-full bg-emerald-400" aria-hidden="true"></span>
-        <span>{{ badgeText }}</span>
-        <span class="font-normal text-slate-400">|</span>
-        <span class="text-slate-300">{{ settingsStore.administrativeArea }}</span>
+    <div class="relative z-10 mx-auto flex w-full max-w-5xl flex-col space-y-6 sm:space-y-8">
+      <!-- Partner Collaboration Logos Pill Lockup matching Figma -->
+      <div class="flex flex-wrap items-center gap-3">
+        <div
+          class="inline-flex items-center gap-3 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 backdrop-blur-xs sm:gap-3.5 sm:px-4"
+        >
+          <img :src="logoDesaCantik" alt="Logo Program Desa Cantik" class="h-4 w-auto object-contain sm:h-4.5" />
+          <span class="h-3 w-px bg-white/25" aria-hidden="true" />
+          <img :src="logoBps" alt="Logo Badan Pusat Statistik" class="h-4 w-auto object-contain sm:h-4.5" />
+          <span class="h-3 w-px bg-white/25" aria-hidden="true" />
+          <img :src="logoItk" alt="Logo Institut Teknologi Kalimantan" class="h-4 w-auto object-contain sm:h-4.5" />
+          <span class="h-3 w-px bg-white/25" aria-hidden="true" />
+          <img :src="logoVyomatantra" alt="Logo Tim Inovasi Sosial VYOMATANTRA" class="h-3.5 w-auto object-contain sm:h-4" />
+        </div>
       </div>
 
-      <!-- Main Headline (Single h1 for the routed view per WCAG & docs/ACCESSIBILITY.md) -->
-      <h1
-        id="hero-title"
-        class="text-3xl leading-tight font-extrabold tracking-tight text-white sm:text-4xl md:text-5xl lg:text-6xl"
-      >
-        {{ hero.title || settingsStore.tagline }}
-      </h1>
+      <!-- Institutional Eyebrow Badge matching Figma -->
+      <div class="flex items-center gap-2">
+        <span
+          class="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-xs font-medium tracking-wide text-white backdrop-blur-xs sm:text-sm"
+        >
+          <span class="h-2 w-2 rounded-full bg-brand-cyan" aria-hidden="true"></span>
+          <span>{{ badgeText }}</span>
+          <span class="font-normal text-slate-300">|</span>
+          <span class="text-slate-200">{{ settingsStore.administrativeArea }}</span>
+        </span>
+      </div>
 
-      <!-- Institutional Narrative Body -->
-      <p
-        class="mx-auto max-w-3xl text-base leading-relaxed font-normal text-slate-300 sm:text-lg md:text-xl"
-      >
-        {{ hero.body || DEFAULT_HERO_BLOCK.body }}
-      </p>
+      <!-- Main Headline & Description using Figma typography -->
+      <div class="space-y-4">
+        <h1
+          id="hero-title"
+          class="min-w-0 text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl md:text-5xl"
+        >
+          {{ titleText }}
+        </h1>
+        <p class="max-w-3xl text-sm leading-relaxed text-slate-200/95 sm:text-base md:text-lg">
+          {{ bodyText }}
+        </p>
+      </div>
 
-      <!-- Action Button -->
-      <div class="flex flex-wrap items-center justify-center gap-4 pt-4">
+      <!-- Action Buttons matching Figma rounded-btn and brand tokens -->
+      <div class="flex flex-wrap items-center gap-3 pt-2 sm:gap-4" data-test="hero-actions">
         <a
           :href="ctaLink"
-          class="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-950/40 transition-colors hover:bg-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400 sm:text-base"
+          class="inline-flex items-center justify-center gap-2 rounded-btn bg-brand-cyan px-6 py-3 text-sm font-semibold text-brand-navy shadow-lg shadow-black/30 transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cyan sm:text-base"
         >
           <span>{{ ctaText }}</span>
           <svg
@@ -122,11 +163,11 @@ const ctaLink = computed(() => {
 
         <router-link
           to="/login"
-          class="inline-flex items-center justify-center rounded-xl border border-slate-700 bg-slate-800/80 px-6 py-3 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-700/80 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 sm:text-base"
+          class="inline-flex items-center justify-center rounded-btn border border-white/20 bg-brand-navy-overlay px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-white hover:text-brand-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:text-base"
         >
           Akses Petugas & Editor
         </router-link>
       </div>
     </div>
-  </header>
+  </section>
 </template>
