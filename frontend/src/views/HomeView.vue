@@ -10,6 +10,7 @@ import SectionHero from '../components/landing/SectionHero.vue';
 import SectionSambutanLurah from '../components/landing/SectionSambutanLurah.vue';
 import SectionHighlights from '../components/landing/SectionHighlights.vue';
 import StatOverview from '../components/common/StatOverview.vue';
+import defaultHeroBg from '@/assets/img/background_laman_depan_kelurahan.png';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -200,44 +201,182 @@ async function handleLogout() {
       <section
         id="cerita-preview"
         aria-labelledby="cerita-preview-title"
-        class="border-b border-slate-200/80 bg-white px-4 py-16 sm:px-6 sm:py-20 lg:px-8"
+        class="border-b border-white/10 bg-slate-950"
       >
-        <div class="mx-auto max-w-6xl space-y-8">
-          <div class="mx-auto max-w-3xl space-y-3 text-center">
-            <h2
-              id="cerita-preview-title"
-              class="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl"
-            >
-              Cerita & Data Wilayah
-            </h2>
-            <p class="text-base leading-relaxed text-slate-600 sm:text-lg">
-              Eksplorasi ringkasan data kependudukan, pendidikan, kesehatan, dan potensi lingkungan
-              Kelurahan Manggar.
-            </p>
-          </div>
+        <h2 id="cerita-preview-title" class="sr-only">Cerita & Data Wilayah</h2>
 
-          <!-- Cerita Preview Slot (Figma StatOverview demographic slice) -->
-          <slot name="cerita-preview">
-            <div class="mx-auto flex w-full max-w-4xl justify-center">
-              <StatOverview
-                title="Demografi Penduduk"
-                description="Komposisi dan kepadatan penduduk, keluarga, persebaran rasio jenis kelamin, umur, pendidikan, dan lainnya"
-                :stats="[
-                  { icon: 'person', value: '53.098', label: 'Penduduk' },
-                  { icon: 'house', value: '100', label: 'Rukun Tetangga' },
-                  { icon: 'density', value: '2 jiwa/km²', label: 'Kepadatan Penduduk' },
-                  { icon: 'ratio', value: '1,06 : 1', label: 'Rasio Laki-laki & Perempuan' },
-                ]"
-                card-title="Ringkasan Statistik Kependudukan Kelurahan Manggar"
-                card-variant="dark"
-                heading-tag="h3"
-                button-label="Lihat Selengkapnya"
-                to="/cerita/demografi"
-                align="center"
-              />
-            </div>
-          </slot>
-        </div>
+        <!-- Cerita Preview Slot (Figma StatOverview 8 category sections) -->
+        <slot name="cerita-preview">
+          <div class="flex w-full flex-col divide-y divide-white/10">
+            <!-- 1. Demografi Penduduk -->
+            <StatOverview
+              title="Demografi Penduduk"
+              description="Komposisi dan kepadatan penduduk, keluarga, persebaran rasio jenis kelamin, umur, pendidikan, dan lainnya"
+              :stats="[
+                { icon: 'person', value: '53.098', label: 'Penduduk' },
+                { icon: 'house', value: '100', label: 'Rukun Tetangga' },
+                { icon: 'density', value: '2 jiwa/km²', label: 'Kepadatan Penduduk' },
+                { icon: 'ratio', value: '1,06 : 1', label: 'Rasio Laki-laki & Perempuan' },
+              ]"
+              card-title="Ringkasan Statistik Kependudukan Kelurahan Manggar"
+              card-variant="glass"
+              heading-tag="h3"
+              button-label="Lihat selengkapnya"
+              to="/cerita/demografi"
+              align="left"
+              :is-full-bleed="true"
+              :bg-image="defaultHeroBg"
+              bg-overlay="linear-gradient(180deg, rgba(8, 20, 42, 0.88) 0%, rgba(6, 15, 32, 0.96) 100%)"
+            />
+
+            <!-- 2. Pendidikan -->
+            <StatOverview
+              title="Pendidikan"
+              description="Data sarana prasarana sekolah, angka partisipasi sekolah, dan tingkat kelulusan jenjang pendidikan warga"
+              :stats="[
+                { icon: 'person', value: '14.210', label: 'Peserta Didik' },
+                { icon: 'house', value: '32', label: 'Satuan Pendidikan' },
+                { icon: 'density', value: '98,4%', label: 'Angka Melek Aksara' },
+                { icon: 'ratio', value: '1 : 22', label: 'Rasio Guru & Siswa' },
+              ]"
+              card-title="Ringkasan Statistik Pendidikan Kelurahan Manggar"
+              card-variant="glass"
+              heading-tag="h3"
+              button-label="Lihat selengkapnya"
+              to="/cerita/pendidikan"
+              align="left"
+              :is-full-bleed="true"
+              :bg-image="defaultHeroBg"
+              bg-overlay="linear-gradient(180deg, rgba(10, 24, 48, 0.88) 0%, rgba(7, 18, 38, 0.96) 100%)"
+            />
+
+            <!-- 3. Kesehatan -->
+            <StatOverview
+              title="Kesehatan"
+              description="Layanan posyandu, fasilitas kesehatan tingkat pertama, sebaran tenaga medis, dan derajat kesehatan balita"
+              :stats="[
+                { icon: 'house', value: '45', label: 'Posyandu Aktif' },
+                { icon: 'person', value: '3', label: 'Fasilitas Kesehatan' },
+                { icon: 'density', value: '94,2%', label: 'Cakupan Imunisasi' },
+                { icon: 'ratio', value: '12', label: 'Tenaga Kesehatan' },
+              ]"
+              card-title="Ringkasan Statistik Kesehatan Kelurahan Manggar"
+              card-variant="glass"
+              heading-tag="h3"
+              button-label="Lihat selengkapnya"
+              to="/cerita/kesehatan"
+              align="left"
+              :is-full-bleed="true"
+              :bg-image="defaultHeroBg"
+              bg-overlay="linear-gradient(180deg, rgba(12, 28, 54, 0.88) 0%, rgba(9, 21, 42, 0.96) 100%)"
+            />
+
+            <!-- 4. Ekonomi & Ketertiban -->
+            <StatOverview
+              title="Ekonomi & Ketertiban"
+              description="Potensi perekonomian maritim pesisir, sentra UMKM mandiri, ketertiban lingkungan, dan pos pengamanan wilayah"
+              :stats="[
+                { icon: 'house', value: '142', label: 'Unit Usaha Mikro' },
+                { icon: 'person', value: '4.820', label: 'Tenaga Kerja Pesisir' },
+                { icon: 'density', value: '98,8%', label: 'Indeks Lingkungan Aman' },
+                { icon: 'ratio', value: '100 RT', label: 'Pos Kamling Aktif' },
+              ]"
+              card-title="Ringkasan Statistik Ekonomi & Ketertiban Kelurahan Manggar"
+              card-variant="glass"
+              heading-tag="h3"
+              button-label="Lihat selengkapnya"
+              to="/cerita/ekonomi"
+              align="left"
+              :is-full-bleed="true"
+              :bg-image="defaultHeroBg"
+              bg-overlay="linear-gradient(180deg, rgba(10, 26, 50, 0.88) 0%, rgba(8, 20, 40, 0.96) 100%)"
+            />
+
+            <!-- 5. Pemerintahan & Kelembagaan -->
+            <StatOverview
+              title="Pemerintahan & Kelembagaan"
+              description="Struktur kelembagaan perangkat kelurahan, koordinasi 100 RT, LPM, PKK, dan lembaga kemasyarakatan kelurahan"
+              :stats="[
+                { icon: 'house', value: '100', label: 'Rukun Tetangga' },
+                { icon: 'person', value: '28', label: 'Aparatur Pemerintahan' },
+                { icon: 'density', value: '12', label: 'Lembaga Kemasyarakatan' },
+                { icon: 'ratio', value: '100%', label: 'Penyaluran Layanan Warga' },
+              ]"
+              card-title="Ringkasan Statistik Pemerintahan & Kelembagaan Kelurahan Manggar"
+              card-variant="glass"
+              heading-tag="h3"
+              button-label="Lihat selengkapnya"
+              to="/cerita/pemerintahan"
+              align="left"
+              :is-full-bleed="true"
+              :bg-image="defaultHeroBg"
+              bg-overlay="linear-gradient(180deg, rgba(14, 30, 58, 0.88) 0%, rgba(10, 22, 44, 0.96) 100%)"
+            />
+
+            <!-- 6. Geografis & Tata Ruang -->
+            <StatOverview
+              title="Geografis & Tata Ruang"
+              description="Luas wilayah administratif pesisir Balikpapan Timur, pemanfaatan tata guna lahan hijau, dan batas batas wilayah"
+              :stats="[
+                { icon: 'density', value: '35,4 km²', label: 'Luas Wilayah' },
+                { icon: 'house', value: '7', label: 'Kategori Zona Wilayah' },
+                { icon: 'person', value: '12 km', label: 'Garis Pantai Pesisir' },
+                { icon: 'ratio', value: '54%', label: 'Ruang Terbuka Hijau' },
+              ]"
+              card-title="Ringkasan Statistik Geografis & Tata Ruang Kelurahan Manggar"
+              card-variant="glass"
+              heading-tag="h3"
+              button-label="Lihat selengkapnya"
+              to="/cerita/geografis"
+              align="left"
+              :is-full-bleed="true"
+              :bg-image="defaultHeroBg"
+              bg-overlay="linear-gradient(180deg, rgba(11, 25, 52, 0.88) 0%, rgba(7, 19, 41, 0.96) 100%)"
+            />
+
+            <!-- 7. Infrastruktur & Perumahan -->
+            <StatOverview
+              title="Infrastruktur & Perumahan"
+              description="Cakupan sambungan air perpipaan PDAM, sanitasi layak, kualitas pemukiman, dan prasarana transportasi jalan"
+              :stats="[
+                { icon: 'house', value: '88,6%', label: 'Akses Air Bersih' },
+                { icon: 'person', value: '92,1%', label: 'Sanitasi Warga Layak' },
+                { icon: 'density', value: '64 km', label: 'Panjang Jalan Mantap' },
+                { icon: 'ratio', value: '14.890', label: 'Rumah Tinggal Terdata' },
+              ]"
+              card-title="Ringkasan Statistik Infrastruktur & Perumahan Kelurahan Manggar"
+              card-variant="glass"
+              heading-tag="h3"
+              button-label="Lihat selengkapnya"
+              to="/cerita/infrastruktur"
+              align="left"
+              :is-full-bleed="true"
+              :bg-image="defaultHeroBg"
+              bg-overlay="linear-gradient(180deg, rgba(9, 23, 49, 0.88) 0%, rgba(6, 17, 37, 0.96) 100%)"
+            />
+
+            <!-- 8. Persampahan -->
+            <StatOverview
+              title="Persampahan"
+              description="Pengelolaan persampahan berbasis masyarakat, inovasi Eco Boba, dan jaringan Bank Sampah Unit tingkat RT"
+              :stats="[
+                { icon: 'house', value: '18', label: 'Bank Sampah Unit' },
+                { icon: 'person', value: '1.450', label: 'Nasabah Terdaftar' },
+                { icon: 'density', value: '24,5 ton', label: 'Reduksi Sampah/Bulan' },
+                { icon: 'ratio', value: '3 RT', label: 'Percontohan Mandiri' },
+              ]"
+              card-title="Ringkasan Statistik Persampahan Kelurahan Manggar"
+              card-variant="glass"
+              heading-tag="h3"
+              button-label="Lihat selengkapnya"
+              to="/cerita/persampahan"
+              align="left"
+              :is-full-bleed="true"
+              :bg-image="defaultHeroBg"
+              bg-overlay="linear-gradient(180deg, rgba(8, 22, 46, 0.88) 0%, rgba(5, 16, 35, 0.96) 100%)"
+            />
+          </div>
+        </slot>
       </section>
 
       <!-- 4. Publikasi / Peta highlights (Spec §8 section 4) -->
