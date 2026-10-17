@@ -53,7 +53,7 @@ interface SotkItem {
 const sotkMembers: SotkItem[] = [
   {
     role: 'Lurah',
-    officialName: 'Dalam proses penetapan definitif', // TODO: Masukkan nama definitif Lurah Manggar
+    officialName: 'Munir Achmad, S.E.',
     duties:
       'Memimpin, mengatur, membina, dan mengawasi penyelenggaraan pemerintahan kelurahan serta pelaksanaan pelimpahan wewenang dari Walikota Balikpapan.',
     notes: 'Penanggung jawab utama kelurahan',
@@ -261,11 +261,11 @@ const batasWilayah = [
             </div>
             <!-- Name & Title below the photo -->
             <div class="mt-4 flex flex-col items-center text-center">
-              <h3 class="text-lg font-bold text-brand-navy">Lurah Kelurahan Manggar</h3>
-              <!-- TODO: Masukkan nama definitif dan NIP Lurah Manggar setelah SK resmi diperoleh -->
-              <p class="mt-0.5 text-sm text-gray-600">Pemerintah Kelurahan Manggar</p>
+              <h3 class="text-lg font-bold text-brand-navy">Munir Achmad, S.E.</h3>
+              <p class="mt-0.5 text-sm font-medium text-gray-700">Lurah Kelurahan Manggar</p>
+              <p class="text-xs text-gray-500">Pemerintah Kelurahan Manggar</p>
               <span
-                class="mt-2.5 inline-block rounded-[5px] bg-brand-cyan px-3 py-1 text-sm font-medium text-brand-navy"
+                class="mt-2.5 inline-block rounded-[5px] bg-brand-cyan px-3 py-1 text-xs font-semibold text-brand-navy"
               >
                 Kepala Kelurahan
               </span>

@@ -180,6 +180,7 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(lurahImg.exists()).toBe(true);
     expect(wrapper.text()).toContain('Pimpinan Kelurahan');
     expect(wrapper.text()).toContain('Lurah Kelurahan Manggar');
+    expect(wrapper.text()).toContain('Munir Achmad, S.E.');
   });
 
   it('renders SOTK table with proper accessibility attributes', async () => {

@@ -240,7 +240,7 @@ const variantClasses = computed(() => {
 
         <!-- Description Details (<dd>): Numeric or text stat value -->
         <dd
-          class="order-1 min-w-0 w-full text-base leading-tight font-bold tracking-tight sm:text-lg lg:text-xl"
+          class="order-1 min-w-0 w-full text-base leading-tight font-bold tracking-tight sm:text-lg lg:text-[19px]"
           :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
           data-test="stat-value"
         >
