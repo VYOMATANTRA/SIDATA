@@ -34,6 +34,7 @@ function getPrivilegedClient() {
       user: decodeURIComponent(url.username),
       password: decodeURIComponent(url.password),
       database: url.pathname.slice(1),
+      allowPublicKeyRetrieval: url.searchParams.get('allowPublicKeyRetrieval') !== 'false',
     }),
   });
 }
