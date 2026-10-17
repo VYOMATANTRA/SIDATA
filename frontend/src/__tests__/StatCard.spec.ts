@@ -164,4 +164,35 @@ describe('StatCard.vue', () => {
     expect(wrapper.find('.custom-empty-state').exists()).toBe(true);
     expect(wrapper.find('.custom-empty-state').text()).toBe('Data sedang dimuat...');
   });
+
+  it('applies responsive 2x2 grid layout classes on mobile for 4 items', () => {
+    const fourStats = [
+      { icon: 'house', value: '100', label: 'Rukun Tetangga terdaftar' },
+      { icon: 'density', value: 'Balikpapan Timur', label: 'Kecamatan, Kota Balikpapan' },
+      { icon: 'ratio', value: 'Pesisir & Dataran', label: 'Potensi pantai & pertanian' },
+      { icon: 'person', value: 'Desa Cantik', label: 'Kelurahan Cinta Statistik' },
+    ];
+    const wrapper = mount(StatCard, {
+      props: {
+        items: fourStats,
+      },
+    });
+
+    const dl = wrapper.find('[data-test="stat-list"]');
+    expect(dl.classes()).toContain('grid');
+    expect(dl.classes()).toContain('grid-cols-2');
+    expect(dl.classes()).toContain('md:grid-cols-4');
+  });
+
+  it('allows overriding list layout with custom listClass prop', () => {
+    const wrapper = mount(StatCard, {
+      props: {
+        items: [{ value: '10', label: 'Item 1' }],
+        listClass: 'custom-flex-container',
+      },
+    });
+
+    const dl = wrapper.find('[data-test="stat-list"]');
+    expect(dl.classes()).toContain('custom-flex-container');
+  });
 });
