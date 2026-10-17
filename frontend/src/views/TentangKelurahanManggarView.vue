@@ -216,7 +216,7 @@ const batasWilayah = [
 
     <!-- Rujukan data terpadu -->
     <TentangFeatureBand heading="Jelajahi Data Kelurahan Manggar">
-      <div class="mt-4 flex flex-col gap-5 sm:flex-row">
+      <div class="mt-4 flex flex-col gap-5 sm:flex-row items-stretch">
         <TentangResourceCard
           title="Peta Spasial RT dan Bank Sampah Unit"
           icon="map"

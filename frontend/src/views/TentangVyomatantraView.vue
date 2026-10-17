@@ -138,7 +138,7 @@ const teamMembers: TeamMember[] = [
     </div>
 
     <TentangFeatureBand heading="Inisiatif Unggulan di Kelurahan Manggar">
-      <div class="mt-4 flex flex-col gap-5 lg:flex-row">
+      <div class="mt-4 flex flex-col gap-5 lg:flex-row items-stretch">
         <TentangResourceCard
           v-for="item in initiatives"
           :key="item.title"
@@ -147,9 +147,11 @@ const teamMembers: TeamMember[] = [
           class="flex-1"
         >
           <p>{{ item.description }}</p>
-          <p class="mt-3 border-t border-white/70 pt-3 text-sm text-white">
-            <span class="font-bold">Dampak:</span> {{ item.impact }}
-          </p>
+          <template #footer>
+            <p class="text-sm text-white">
+              <span class="font-bold">Dampak:</span> {{ item.impact }}
+            </p>
+          </template>
         </TentangResourceCard>
       </div>
     </TentangFeatureBand>

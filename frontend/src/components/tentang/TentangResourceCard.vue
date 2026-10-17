@@ -13,7 +13,7 @@ withDefaults(
 </script>
 
 <template>
-  <article class="flex h-full flex-col rounded-btn bg-brand-navy-deep p-5">
+  <article class="flex flex-col rounded-btn bg-brand-navy-deep p-5">
     <div class="flex items-center gap-3">
       <span
         class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-indigo text-white"
@@ -28,15 +28,17 @@ withDefaults(
       <slot />
     </div>
 
-    <div v-if="ctaLabel" class="mt-4 border-t border-white/70 pt-4">
+    <div v-if="$slots.footer || ctaLabel" class="mt-4 border-t border-white/70 pt-4">
       <!-- TODO: ganti dengan BaseLink saat halaman Publikasi/Peta tersedia -->
-      <span
-        class="inline-flex items-center gap-2 rounded-[5px] bg-brand-cyan px-4 py-1.5 text-base text-brand-navy"
-      >
-        {{ ctaLabel }}
-        <span aria-hidden="true">&rarr;</span>
-      </span>
-      <span class="sr-only">(tautan belum tersedia)</span>
+      <slot name="footer">
+        <span
+          class="inline-flex items-center gap-2 rounded-[5px] bg-brand-cyan px-4 py-1.5 text-base text-brand-navy"
+        >
+          {{ ctaLabel }}
+          <span aria-hidden="true">&rarr;</span>
+        </span>
+        <span class="sr-only">(tautan belum tersedia)</span>
+      </slot>
     </div>
   </article>
 </template>

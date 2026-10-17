@@ -99,7 +99,7 @@ const collaborationLogos = [
     </div>
 
     <TentangFeatureBand heading="Dampak Nyata Program Kelurahan Cantik di Manggar">
-      <div class="mt-4 flex flex-col gap-5 md:flex-row">
+      <div class="mt-4 flex flex-col gap-5 md:flex-row items-stretch">
         <TentangResourceCard
           title="Manggar Dalam Angka 2026"
           icon="document"
