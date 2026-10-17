@@ -164,4 +164,38 @@ describe('StatCard.vue', () => {
     expect(wrapper.find('.custom-empty-state').exists()).toBe(true);
     expect(wrapper.find('.custom-empty-state').text()).toBe('Data sedang dimuat...');
   });
+
+  it('applies responsive 2x2 flexbox layout classes on mobile and tablet for 4 items', () => {
+    const fourStats = [
+      { icon: 'house', value: '100', label: 'Rukun Tetangga terdaftar' },
+      { icon: 'density', value: 'Balikpapan Timur', label: 'Kecamatan, Kota Balikpapan' },
+      { icon: 'ratio', value: 'Pesisir & Dataran', label: 'Potensi pantai & pertanian' },
+      { icon: 'person', value: 'Desa Cantik', label: 'Kelurahan Cinta Statistik' },
+    ];
+    const wrapper = mount(StatCard, {
+      props: {
+        items: fourStats,
+      },
+    });
+
+    const dl = wrapper.find('[data-test="stat-list"]');
+    expect(dl.classes()).toContain('flex');
+    expect(dl.classes()).toContain('flex-wrap');
+    expect(dl.classes()).toContain('lg:flex-nowrap');
+
+    const items = wrapper.findAll('[data-test="stat-item"]');
+    expect(items[0]?.classes()).toContain('w-[calc(50%-12px)]');
+  });
+
+  it('allows overriding list layout with custom listClass prop', () => {
+    const wrapper = mount(StatCard, {
+      props: {
+        items: [{ value: '10', label: 'Item 1' }],
+        listClass: 'custom-flex-container',
+      },
+    });
+
+    const dl = wrapper.find('[data-test="stat-list"]');
+    expect(dl.classes()).toContain('custom-flex-container');
+  });
 });
