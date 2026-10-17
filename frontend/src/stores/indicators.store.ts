@@ -7,10 +7,15 @@ export interface PublicIndicator {
   slug: string;
   label: string;
   unit: string | null;
-  valueCurrent: number;
-  valuePrevious: number | null;
+  valueCurrent: string;
+  valuePrevious: string | null;
   periodCurrent: string;
+  periodPrevious?: string | null;
+  isComputedComparison?: boolean;
   isStale: boolean;
+  source?: string | null;
+  hedgeNote?: string | null;
+  comparison?: string | null;
 }
 
 const INDICATORS_ENDPOINT = '/api/indicators?pageSize=200';
@@ -20,16 +25,17 @@ export const useIndicatorsStore = defineStore('indicators', () => {
   const isLoading = ref(false);
   const error = ref<string | null>(null);
 
-  let inFlight: Promise<void> | null = null;
+  let inFlightList: Promise<void> | null = null;
+  const inFlightBySlug = new Map<string, Promise<PublicIndicator | null>>();
 
   async function fetchIndicators(force = false): Promise<void> {
-    if (inFlight) return inFlight;
+    if (inFlightList) return inFlightList;
     if (!force && indicators.value.length > 0) return;
 
     isLoading.value = true;
     error.value = null;
 
-    inFlight = (async () => {
+    inFlightList = (async () => {
       try {
         const response = await fetch(INDICATORS_ENDPOINT);
         if (!response.ok) {
@@ -44,11 +50,55 @@ export const useIndicatorsStore = defineStore('indicators', () => {
         error.value = err instanceof Error ? err.message : 'Terjadi kesalahan jaringan';
       } finally {
         isLoading.value = false;
-        inFlight = null;
+        inFlightList = null;
       }
     })();
 
-    return inFlight;
+    return inFlightList;
+  }
+
+  async function fetchBySlug(slug: string): Promise<PublicIndicator | null> {
+    const existing = findBySlug(slug);
+    if (existing) return existing;
+
+    const existingPromise = inFlightBySlug.get(slug);
+    if (existingPromise) return existingPromise;
+
+    isLoading.value = true;
+    error.value = null;
+
+    const promise = (async () => {
+      try {
+        const response = await fetch(`/api/indicators/${encodeURIComponent(slug)}`);
+        if (!response.ok) {
+          throw new Error(`Gagal memuat indikator (status ${response.status})`);
+        }
+        const data = (await response.json()) as { indicator?: PublicIndicator };
+        if (
+          data.indicator &&
+          typeof data.indicator === 'object' &&
+          typeof data.indicator.slug === 'string'
+        ) {
+          const index = indicators.value.findIndex((item) => item.slug === data.indicator!.slug);
+          if (index !== -1) {
+            indicators.value[index] = data.indicator;
+          } else {
+            indicators.value.push(data.indicator);
+          }
+          return data.indicator;
+        }
+        throw new Error('Format data indikator tidak valid');
+      } catch (err) {
+        error.value = err instanceof Error ? err.message : 'Terjadi kesalahan jaringan';
+        return null;
+      } finally {
+        isLoading.value = false;
+        inFlightBySlug.delete(slug);
+      }
+    })();
+
+    inFlightBySlug.set(slug, promise);
+    return promise;
   }
 
   function findBySlug(slug: string): PublicIndicator | null {
@@ -60,6 +110,7 @@ export const useIndicatorsStore = defineStore('indicators', () => {
     isLoading,
     error,
     fetchIndicators,
+    fetchBySlug,
     findBySlug,
   };
 });

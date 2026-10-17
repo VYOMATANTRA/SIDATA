@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import TentangKelurahanManggarView from '../views/TentangKelurahanManggarView.vue';
+import { useIndicatorsStore } from '../stores/indicators.store';
 
 function mountView() {
   const pinia = createPinia();
@@ -68,8 +69,24 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(breadcrumb.exists()).toBe(true);
   });
 
-  it('shows the Sekilas Manggar population figure with the jiva unit', async () => {
+  it('shows the Sekilas Manggar population figure when indicator is available', async () => {
     const { pinia, router } = mountView();
+    const indicatorsStore = useIndicatorsStore();
+    indicatorsStore.indicators = [
+      {
+        id: 'ind-1',
+        sectionId: 'sec-1',
+        slug: 'jumlah-penduduk',
+        label: 'Jumlah Penduduk',
+        unit: 'jiwa',
+        valueCurrent: '125000',
+        valuePrevious: null,
+        periodCurrent: '2025',
+        isStale: false,
+        hedgeNote: 'Estimasi Semester I',
+      },
+    ];
+
     await router.push('/tentang/kelurahan-manggar');
     await router.isReady();
 
@@ -78,8 +95,30 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(wrapper.text()).toContain('Total Penduduk Kelurahan Manggar');
-    expect(wrapper.text()).toContain('12.458');
+    expect(wrapper.text()).toContain('Total Penduduk Kelurahan Manggar (data 2025)');
+    expect(wrapper.text()).toContain('Berdasarkan data 2025');
+    expect(wrapper.text()).toContain('125.000');
+    expect(wrapper.text()).toContain('jiwa');
+    expect(wrapper.text()).toContain('Estimasi Semester I');
+  });
+
+  it('renders "Data Belum Tersedia" empty state when population indicator is missing', async () => {
+    const { pinia, router } = mountView();
+    const indicatorsStore = useIndicatorsStore();
+    indicatorsStore.indicators = [];
+
+    await router.push('/tentang/kelurahan-manggar');
+    await router.isReady();
+
+    const wrapper = mount(TentangKelurahanManggarView, {
+      global: { plugins: [pinia, router] },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(wrapper.text()).toContain('Data Belum Tersedia');
+    expect(wrapper.text()).toContain(
+      'Informasi agregat jumlah penduduk terkini belum dipublikasikan atau gagal dimuat.',
+    );
   });
 
   it('renders the Potensi Manggar grid with the four potential cards', async () => {
@@ -96,9 +135,23 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(wrapper.text()).toContain('Kependudukan');
     expect(wrapper.text()).toContain('Lingkungan');
     expect(wrapper.text()).toContain('Data & Statistik');
+
+    const potensiSection = wrapper.find('section[aria-labelledby="potensi-title"]');
+    const gridUl = potensiSection.find('ul');
+    expect(gridUl.classes()).toContain('sm:auto-rows-fr');
+
+    const gridItems = gridUl.findAll('li');
+    expect(gridItems.length).toBe(4);
+    for (const li of gridItems) {
+      expect(li.classes()).toContain('flex');
+      const article = li.find('article');
+      expect(article.classes()).toContain('h-full');
+      expect(article.classes()).toContain('w-full');
+      expect(article.classes()).toContain('flex');
+    }
   });
 
-  it('renders the publication card with a disabled placeholder CTA', async () => {
+  it('renders the publication card with a non-interactive Segera Hadir badge', async () => {
     const { pinia, router } = mountView();
     await router.push('/tentang/kelurahan-manggar');
     await router.isReady();
@@ -108,9 +161,10 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     });
 
     expect(wrapper.text()).toContain('Manggar Dalam Angka');
-    const cta = wrapper.find('button[aria-disabled="true"]');
-    expect(cta.exists()).toBe(true);
-    expect(cta.text()).toContain('Lihat Publikasi');
+    const badge = wrapper.find('[data-test="publication-badge"]');
+    expect(badge.exists()).toBe(true);
+    expect(badge.text()).toContain('Segera Hadir');
+    expect(wrapper.find('button[aria-disabled="true"]').exists()).toBe(false);
   });
 
   it('renders Lurah profile with accessible photo alt text', async () => {
@@ -126,6 +180,7 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(lurahImg.exists()).toBe(true);
     expect(wrapper.text()).toContain('Pimpinan Kelurahan');
     expect(wrapper.text()).toContain('Lurah Kelurahan Manggar');
+    expect(wrapper.text()).toContain('Munir Achmad, S.E.');
   });
 
   it('renders SOTK table with proper accessibility attributes', async () => {
@@ -158,7 +213,7 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(wrapper.text()).toContain('Seksi Kesejahteraan Sosial');
   });
 
-  it('keeps the wilayah overview on the shared StatCard component', async () => {
+  it('keeps the wilayah overview on the shared StatCard component with official boundaries', async () => {
     const { pinia, router } = mountView();
     await router.push('/tentang/kelurahan-manggar');
     await router.isReady();
@@ -168,7 +223,9 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     });
 
     expect(wrapper.find('[data-test="stat-card"]').exists()).toBe(true);
-    expect(wrapper.text()).toContain('Kelurahan Karang Joang & Manggar Baru');
+    expect(wrapper.text()).toContain('Kelurahan Karang Joang');
+    expect(wrapper.text()).toContain('Kelurahan Manggar Baru');
     expect(wrapper.text()).toContain('Selat Makassar');
+    expect(wrapper.text()).toContain('Kelurahan Sepinggan dan Sepinggan Baru');
   });
 });
