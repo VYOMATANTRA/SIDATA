@@ -346,11 +346,18 @@ const listCachesInvalidator: CacheInvalidator = {
   },
 };
 
-export const invalidateIndicatorsCache = (id?: string): void => {
+export const invalidateIndicatorsCache = (id?: string, slug?: string): void => {
   if (id) {
     indicatorByIdCache.get(id)?.invalidate();
+    indicatorByIdCache.delete(id);
     missingIndicatorIds.delete(id);
-  } else {
+  }
+  if (slug) {
+    indicatorByIdCache.get(slug)?.invalidate();
+    indicatorByIdCache.delete(slug);
+    missingIndicatorIds.delete(slug);
+  }
+  if (!id && !slug) {
     indicatorByIdCache.clear();
     missingIndicatorIds.clear();
   }
@@ -505,10 +512,16 @@ export const getIndicatorById = async (
     return null;
   }
   const result = await getByIdCache(normalizedId).getOrFetch(async (db) => {
-    const row = await db.indicator.findUnique({
+    let row = await db.indicator.findUnique({
       where: { id: normalizedId },
       include: WITH_TEMPLATE,
     });
+    if (!row) {
+      row = await db.indicator.findUnique({
+        where: { slug: normalizedId.toLowerCase() },
+        include: WITH_TEMPLATE,
+      });
+    }
     if (!row) return null;
     return formatIndicator(row as Parameters<typeof formatIndicator>[0]);
   }, client);
@@ -553,6 +566,9 @@ export const createIndicator = async (
       cache: [listCachesInvalidator],
       onCommit: (committed) => {
         getByIdCache(committed.id).setCommitted(committed);
+        getByIdCache(committed.slug).setCommitted(committed);
+        missingIndicatorIds.delete(committed.id);
+        missingIndicatorIds.delete(committed.slug);
       },
       execute: async (tx) => {
         const section = await tx.section.findUnique({ where: { id: sectionId } });
@@ -633,6 +649,7 @@ export const updateIndicator = async (
 
   const lockQuery = Prisma.sql`SELECT id FROM indicators WHERE id = ${normalizedId} FOR UPDATE`;
   const targetCache = getByIdCache(normalizedId);
+  let oldSlug: string | undefined;
 
   try {
     return await executeLockedTransaction({
@@ -647,6 +664,16 @@ export const updateIndicator = async (
         targetCache.invalidate();
         targetCache.setCommitted(committed);
         missingIndicatorIds.delete(committed.id);
+
+        if (oldSlug && oldSlug !== committed.slug) {
+          indicatorByIdCache.get(oldSlug)?.invalidate();
+          indicatorByIdCache.delete(oldSlug);
+          missingIndicatorIds.delete(oldSlug);
+        }
+        const slugCache = getByIdCache(committed.slug);
+        slugCache.invalidate();
+        slugCache.setCommitted(committed);
+        missingIndicatorIds.delete(committed.slug);
       },
       execute: async (tx) => {
         const existing = await tx.indicator.findUnique({
@@ -656,6 +683,7 @@ export const updateIndicator = async (
         if (!existing) {
           throw new IndicatorServiceError('Indikator tidak ditemukan.', 404);
         }
+        oldSlug = existing.slug;
 
         if (input.sectionId !== undefined) {
           const nextSectionId = input.sectionId.trim();
@@ -848,8 +876,12 @@ export const deleteIndicator = async (
       lockQuery,
       cache: [listCachesInvalidator],
       onCommit: (committed) => {
+        indicatorByIdCache.get(committed.id)?.invalidate();
         indicatorByIdCache.delete(committed.id);
+        indicatorByIdCache.get(committed.slug)?.invalidate();
+        indicatorByIdCache.delete(committed.slug);
         missingIndicatorIds.delete(committed.id);
+        missingIndicatorIds.delete(committed.slug);
       },
       execute: async (tx) => {
         const existing = await tx.indicator.findUnique({

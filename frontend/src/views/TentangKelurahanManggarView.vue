@@ -10,13 +10,14 @@ import TentangFeatureBand from '../components/tentang/TentangFeatureBand.vue';
 import TentangResourceCard from '../components/tentang/TentangResourceCard.vue';
 import StatCard from '../components/common/StatCard.vue';
 import { useIndicatorsStore } from '../stores/indicators.store';
+import type { TentangIconName } from '../components/tentang/TentangIcon.vue';
 import heroImage from '@/assets/img/background_laman_depan_kelurahan.png';
 import lurahPhoto from '@/assets/img/lurah_placeholder_sample.png';
 
 interface PotentialItem {
   title: string;
   description: string;
-  icon: 'coast' | 'people' | 'leaf' | 'chart';
+  icon: TentangIconName;
 }
 
 const potentials: PotentialItem[] = [
@@ -52,68 +53,70 @@ interface SotkItem {
 const sotkMembers: SotkItem[] = [
   {
     role: 'Lurah',
-    officialName: 'Lurah Kelurahan Manggar', // TODO: Konfirmasi nama definitif Lurah Manggar
+    officialName: 'Munir Achmad, S.E.',
     duties:
       'Memimpin, mengatur, membina, dan mengawasi penyelenggaraan pemerintahan kelurahan serta pelaksanaan pelimpahan wewenang dari Walikota Balikpapan.',
     notes: 'Penanggung jawab utama kelurahan',
   },
   {
     role: 'Sekretaris Kelurahan',
-    officialName: 'Sekretaris Kelurahan', // TODO: Masukkan nama definitif Sekretaris Kelurahan
+    officialName: 'Dalam proses penetapan definitif', // TODO: Masukkan nama definitif Sekretaris Kelurahan
     duties:
       'Mengkoordinasikan perencanaan, ketatausahaan, kepegawaian, perlengkapan, keuangan, serta pelayanan administrasi internal kelurahan.',
     notes: 'Koordinator administrasi & aparatur',
   },
   {
     role: 'Seksi Pemerintahan',
-    officialName: 'Kepala Seksi Pemerintahan', // TODO: Masukkan nama definitif Kasi Pemerintahan
+    officialName: 'Dalam proses penetapan definitif', // TODO: Masukkan nama definitif Kasi Pemerintahan
     duties:
       'Menyelenggarakan urusan administrasi pemerintahan umum, kependudukan, pertanahan, serta pembinaan organisasi Rukun Tetangga (RT).',
     notes: 'Pembinaan 100 RT & kependudukan',
   },
   {
     role: 'Seksi Ketenteraman dan Ketertiban',
-    officialName: 'Kepala Seksi Trantib', // TODO: Masukkan nama definitif Kasi Trantib
+    officialName: 'Dalam proses penetapan definitif', // TODO: Masukkan nama definitif Kasi Trantib
     duties:
       'Memelihara ketenteraman, ketertiban umum, penegakan peraturan daerah, perlindungan masyarakat, dan koordinasi pencegahan bencana.',
     notes: 'Ketertiban umum & Linmas',
   },
   {
     role: 'Seksi Pemberdayaan Masyarakat',
-    officialName: 'Kepala Seksi Pemberdayaan Masyarakat', // TODO: Masukkan nama definitif Kasi PM
+    officialName: 'Dalam proses penetapan definitif', // TODO: Masukkan nama definitif Kasi PM
     duties:
       'Memfasilitasi pemberdayaan masyarakat, pembinaan kelembagaan kemasyarakatan (LPM, PKK, Karang Taruna), lingkungan hidup, dan UMKM.',
     notes: 'Pengembangan masyarakat & Bank Sampah',
   },
   {
     role: 'Seksi Kesejahteraan Sosial',
-    officialName: 'Kepala Seksi Kesejahteraan Sosial', // TODO: Masukkan nama definitif Kasi PM
+    officialName: 'Dalam proses penetapan definitif', // TODO: Masukkan nama definitif Kasi Kesos
     duties:
       'Mengelola pelayanan bantuan sosial, pemutakhiran data kemiskinan, pembinaan kesehatan, kepemudaan, dan keagamaan.',
     notes: 'Jaminan sosial & pelayanan warga',
   },
 ];
 
-// "Sekilas Manggar" reads the live population indicator so the figure never
-// drifts from the published data; the mock value is the fallback only.
 const POPULATION_INDICATOR_SLUG = 'jumlah-penduduk';
-const POPULATION_FALLBACK = { value: '12.458', unit: 'jiwa' };
 
 const indicatorsStore = useIndicatorsStore();
 onMounted(() => {
-  void indicatorsStore.fetchIndicators();
+  void indicatorsStore.fetchBySlug(POPULATION_INDICATOR_SLUG);
 });
 
-const population = computed<{ value: string; unit: string }>(() => {
-  const indicator = indicatorsStore.findBySlug(POPULATION_INDICATOR_SLUG);
+const populationIndicator = computed(() => {
+  return indicatorsStore.findBySlug(POPULATION_INDICATOR_SLUG);
+});
 
-  if (!indicator) {
-    return POPULATION_FALLBACK;
-  }
-
+const formattedPopulation = computed(() => {
+  const indicator = populationIndicator.value;
+  if (!indicator) return null;
+  const num = Number(indicator.valueCurrent);
+  if (!Number.isFinite(num)) return null;
   return {
-    value: new Intl.NumberFormat('id-ID').format(Number(indicator.valueCurrent)),
+    value: new Intl.NumberFormat('id-ID').format(num),
     unit: indicator.unit ?? 'jiwa',
+    caption: `Total Penduduk Kelurahan Manggar (data ${indicator.periodCurrent})`,
+    subcaption: `Berdasarkan data ${indicator.periodCurrent}`,
+    hedgeNote: indicator.hedgeNote,
   };
 });
 
@@ -125,10 +128,10 @@ const wilayahStats = [
 ];
 
 const batasWilayah = [
-  { arah: 'Sebelah Utara', wilayah: 'Kelurahan Karang Joang & Manggar Baru' },
-  { arah: 'Sebelah Timur', wilayah: 'Selat Makassar' },
-  { arah: 'Sebelah Selatan', wilayah: 'Kelurahan Manggar Baru' },
-  { arah: 'Sebelah Barat', wilayah: 'Kelurahan Lamaru & Sepinggan' },
+  { arah: 'Sebelah Utara', wilayah: 'Kelurahan Karang Joang' },
+  { arah: 'Sebelah Timur', wilayah: 'Kelurahan Manggar Baru' },
+  { arah: 'Sebelah Selatan', wilayah: 'Selat Makassar' },
+  { arah: 'Sebelah Barat', wilayah: 'Kelurahan Sepinggan dan Sepinggan Baru' },
 ];
 </script>
 
@@ -143,32 +146,69 @@ const batasWilayah = [
       :image="heroImage"
     />
 
+    <!-- 1. Loading state: skeleton pulse to prevent layout shift & false-empty flash -->
+    <section
+      v-if="indicatorsStore.isLoading && !formattedPopulation"
+      class="bg-white px-4 py-10 sm:px-6 sm:py-12"
+      aria-label="Memuat data kependudukan"
+    >
+      <div class="mx-auto max-w-5xl animate-pulse">
+        <div class="h-4 w-32 rounded bg-gray-200"></div>
+        <div class="mt-4 h-8 w-48 rounded bg-gray-200"></div>
+        <div class="mt-3 h-4 w-64 rounded bg-gray-200"></div>
+      </div>
+    </section>
+
+    <!-- 2. Loaded state: Stat hero with exact period snapshot & hedge note -->
     <TentangStatHero
+      v-else-if="formattedPopulation"
       label="Sekilas Manggar"
-      :value="population.value"
-      :unit="population.unit"
-      caption="Total Penduduk Kelurahan Manggar"
+      :value="formattedPopulation.value"
+      :unit="formattedPopulation.unit"
+      :caption="formattedPopulation.caption"
+      :subcaption="formattedPopulation.subcaption"
+      :hedge-note="formattedPopulation.hedgeNote"
     />
+
+    <!-- 3. Error / missing state: explicit data-unavailable card -->
+    <section
+      v-else
+      class="bg-white px-4 py-10 sm:px-6 sm:py-12"
+      aria-labelledby="empty-pop-title"
+    >
+      <div class="mx-auto max-w-5xl">
+        <p id="empty-pop-title" class="text-sm font-semibold tracking-[0.25em] text-brand-navy uppercase">
+          Sekilas Manggar
+        </p>
+        <div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-6 text-gray-600">
+          <p class="font-medium text-gray-800">Data Belum Tersedia</p>
+          <p class="mt-1 text-sm text-gray-500">
+            Informasi agregat jumlah penduduk terkini belum dipublikasikan atau gagal dimuat.
+          </p>
+        </div>
+      </div>
+    </section>
 
     <!-- Potensi Manggar -->
     <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="potensi-title">
       <div class="mx-auto max-w-5xl">
         <h2 id="potensi-title" class="text-lg font-bold text-brand-navy">Potensi Manggar</h2>
-        <ul class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <li v-for="(item, index) in potentials" :key="index">
+        <ul class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:auto-rows-fr">
+          <li v-for="item in potentials" :key="item.title" class="flex">
             <TentangPotentialCard
               :title="item.title"
               :description="item.description"
               :icon="item.icon"
+              class="w-full"
             />
           </li>
         </ul>
 
-        <div class="mt-6">
+        <div class="mt-4">
           <TentangPublicationCard
             title="Manggar Dalam Angka"
             description="Data & informasi statistik Kelurahan Manggar."
-            cta-label="Lihat Publikasi"
+            cta-label="Segera Hadir"
           />
         </div>
       </div>
@@ -176,17 +216,18 @@ const batasWilayah = [
 
     <!-- Rujukan data terpadu -->
     <TentangFeatureBand heading="Jelajahi Data Kelurahan Manggar">
-      <div class="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">
+      <div class="mt-4 flex flex-col gap-5 sm:flex-row items-stretch">
         <TentangResourceCard
           title="Peta Spasial RT dan Bank Sampah Unit"
           icon="map"
           cta-label="Peta Geospasial"
+          class="flex-1"
         >
           Plot titik koordinat rumah seluruh ketua RT dan sebaran lokasi penimbangan sampah aktif
           di Balikpapan Timur.
         </TentangResourceCard>
 
-        <TentangResourceCard title="Sistem SIDATA" icon="system">
+        <TentangResourceCard title="Sistem SIDATA" icon="system" class="flex-1">
           Platform pencarian agregat kependudukan real-time, monitoring per RT, dan sinkronisasi
           metadata secara berkala tanpa hambatan.
         </TentangResourceCard>
@@ -210,7 +251,7 @@ const batasWilayah = [
         <div
           class="mt-5 flex flex-col items-center gap-6 rounded-btn border border-gray-300 bg-white p-5 sm:flex-row sm:items-start sm:p-6"
         >
-          <div class="shrink-0 text-center">
+          <div class="flex shrink-0 flex-col items-center text-center sm:w-56">
             <div class="h-40 w-40 overflow-hidden rounded-full bg-brand-cyan sm:h-48 sm:w-48">
               <img
                 :src="lurahPhoto"
@@ -218,20 +259,20 @@ const batasWilayah = [
                 class="h-40 w-40 object-cover object-top sm:h-48 sm:w-48"
               />
             </div>
-            <span
-              class="mt-3 inline-block rounded-[5px] bg-brand-cyan px-3 py-1 text-sm font-medium text-brand-navy"
-            >
-              Kepala Kelurahan
-            </span>
+            <!-- Name & Title below the photo -->
+            <div class="mt-4 flex flex-col items-center text-center">
+              <h3 class="text-lg font-bold text-brand-navy">Munir Achmad, S.E.</h3>
+              <p class="mt-0.5 text-sm font-medium text-gray-700">Lurah Kelurahan Manggar</p>
+              <p class="text-xs text-gray-500">Pemerintah Kelurahan Manggar</p>
+              <span
+                class="mt-2.5 inline-block rounded-[5px] bg-brand-cyan px-3 py-1 text-xs font-semibold text-brand-navy"
+              >
+                Kepala Kelurahan
+              </span>
+            </div>
           </div>
 
-          <div class="space-y-4 text-left">
-            <div>
-              <h3 class="text-lg font-bold text-brand-navy">Lurah Kelurahan Manggar</h3>
-              <!-- TODO: Konfirmasi nama definitif Lurah Manggar -->
-              <p class="text-sm text-gray-600">NIP. 197XXXXXXXXXXXXXXX</p>
-            </div>
-
+          <div class="flex-1 space-y-4 text-left">
             <div class="space-y-3 text-base leading-relaxed text-gray-800">
               <p>
                 Sebagai garda terdepan pelayanan pemerintah daerah bagi masyarakat di wilayah
@@ -240,15 +281,15 @@ const batasWilayah = [
               </p>
               <p>
                 Melalui integrasi program
-                <strong>Kelurahan Cinta Statistik (Desa Cantik)</strong> serta peluncuran portal
-                <strong>SIDATA</strong>, kami berikhtiar membangun tata kelola berbasis data akurat
+                <strong class="font-semibold text-brand-navy">Kelurahan Cinta Statistik (Desa Cantik)</strong> serta peluncuran portal
+                <strong class="font-semibold text-brand-navy">SIDATA</strong>, kami berikhtiar membangun tata kelola berbasis data akurat
                 bersama 100 Rukun Tetangga (RT). Data yang tepat menjadi kompas kami dalam
                 merencanakan program sosial, penanganan lingkungan, serta pemulihan ekonomi
                 masyarakat yang berkelanjutan.
               </p>
             </div>
 
-            <div class="text-sm text-gray-600">
+            <div class="border-t border-gray-200 pt-3 text-sm text-gray-600">
               <p class="font-medium text-brand-navy">Masa Bakti Jabatan</p>
               <p>Periode Berjalan &mdash; Kelurahan Manggar, Balikpapan Timur</p>
               <!-- TODO: Perbarui informasi masa bakti jika telah tersedia surat keputusan resmi -->
@@ -274,8 +315,12 @@ const batasWilayah = [
 
         <div class="mt-6 rounded-btn border border-brand-navy/20 bg-white p-5">
           <h3 class="text-base font-bold text-brand-navy">Batas-Batas Wilayah Administratif:</h3>
-          <ul class="mt-3 grid grid-cols-1 gap-3 text-base text-gray-800 sm:grid-cols-2">
-            <li v-for="(item, index) in batasWilayah" :key="index" class="flex items-center gap-2">
+          <ul class="mt-3 flex flex-wrap gap-x-6 gap-y-3 text-base text-gray-800">
+            <li
+              v-for="item in batasWilayah"
+              :key="item.arah"
+              class="flex w-full items-center gap-2 sm:w-[calc(50%-12px)]"
+            >
               <span class="font-medium text-brand-navy">{{ item.arah }}:</span>
               <span>{{ item.wilayah }}</span>
             </li>
@@ -317,7 +362,7 @@ const batasWilayah = [
                   </span>
                 </th>
                 <td class="px-4 py-4 align-top text-gray-800 sm:px-6">
-                  <span class="font-medium">{{ member.officialName }}</span>
+                  <span class="text-sm italic text-gray-600">{{ member.officialName }}</span>
                 </td>
                 <td class="px-4 py-4 leading-relaxed text-gray-700 sm:px-6 align-top">
                   {{ member.duties }}

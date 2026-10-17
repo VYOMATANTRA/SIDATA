@@ -1,5 +1,13 @@
 <script setup lang="ts">
-export type TentangIconName = 'coast' | 'people' | 'leaf' | 'chart' | 'document' | 'map' | 'system' | 'info';
+export type TentangIconName =
+  | 'coast'
+  | 'people'
+  | 'leaf'
+  | 'chart'
+  | 'document'
+  | 'map'
+  | 'system'
+  | 'info';
 
 const ICON_PATHS: Record<TentangIconName, string[]> = {
   coast: [
@@ -22,7 +30,7 @@ const ICON_PATHS: Record<TentangIconName, string[]> = {
   info: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 8h.01', 'M11.5 12h1v4.5h1'],
 };
 
-withDefaults(defineProps<{ name?: TentangIconName | string }>(), { name: 'info' });
+withDefaults(defineProps<{ name?: TentangIconName }>(), { name: 'info' });
 </script>
 
 <template>
@@ -38,7 +46,7 @@ withDefaults(defineProps<{ name?: TentangIconName | string }>(), { name: 'info' 
     focusable="false"
   >
     <path
-      v-for="(path, index) in ICON_PATHS[name as TentangIconName] ?? ICON_PATHS.info"
+      v-for="(path, index) in ICON_PATHS[name] ?? ICON_PATHS.info"
       :key="index"
       :d="path"
     />

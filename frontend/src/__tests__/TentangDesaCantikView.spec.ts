@@ -59,7 +59,7 @@ describe('TentangDesaCantikView accessibility and content', () => {
     expect(wrapper.find('img[alt="Logo Badan Pusat Statistik (BPS)"]').exists()).toBe(true);
   });
 
-  it('includes scope notice clarifying relationship to BPS per SPEC §1', async () => {
+  it('includes scope notice clarifying relationship to BPS without internal SPEC leaks', async () => {
     const { pinia, router } = mountView();
     await router.push('/tentang/desa-cantik');
     await router.isReady();
@@ -68,9 +68,22 @@ describe('TentangDesaCantikView accessibility and content', () => {
       global: { plugins: [pinia, router] },
     });
 
-    // SPEC §1: SIDATA is an output tied to the program, branded separately, not the BPS program itself
-    expect(wrapper.text()).toContain('Catatan Batasan Portal (SPEC §1)');
+    expect(wrapper.text()).toContain('Catatan Batasan Portal');
+    expect(wrapper.text()).not.toContain('SPEC §');
     expect(wrapper.text()).toContain('bukan portal resmi milik Badan Pusat Statistik (BPS)');
+  });
+
+  it('renders accurate photo caption for kelurahan building', async () => {
+    const { pinia, router } = mountView();
+    await router.push('/tentang/desa-cantik');
+    await router.isReady();
+
+    const wrapper = mount(TentangDesaCantikView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    expect(wrapper.text()).toContain('Kantor Kelurahan Manggar, Balikpapan Timur');
+    expect(wrapper.text()).not.toContain('Foto bareng BPS');
   });
 
   it('renders external BPS portal link with accessible attributes', async () => {
