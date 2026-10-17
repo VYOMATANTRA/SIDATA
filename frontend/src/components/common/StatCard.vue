@@ -114,7 +114,7 @@ const variantClasses = computed(() => {
       <div
         v-for="(item, idx) in displayedItems"
         :key="idx"
-        class="flex w-full max-w-[200px] flex-col items-center text-center mx-auto"
+        class="flex w-full max-w-[260px] flex-col items-center text-center mx-auto sm:max-w-[300px] md:max-w-none"
         data-test="stat-item"
       >
         <!-- Icon Container -->
@@ -215,7 +215,7 @@ const variantClasses = computed(() => {
 
         <!-- Description Term (<dt>): Stat Label Description (precedes <dd> in DOM for screen readers) -->
         <dt
-          class="order-2 mt-1.5 w-full max-w-[150px] text-xs leading-snug whitespace-pre-line sm:max-w-[180px] sm:text-sm"
+          class="order-2 mt-1.5 w-full max-w-[160px] text-xs leading-snug whitespace-pre-line sm:max-w-[220px] sm:text-sm"
           :class="variant === 'light' ? 'font-medium text-slate-600' : 'font-normal text-slate-200'"
           data-test="stat-label"
         >
@@ -224,7 +224,7 @@ const variantClasses = computed(() => {
 
         <!-- Description Details (<dd>): Numeric or text stat value -->
         <dd
-          class="order-1 min-w-0 w-full text-lg leading-tight font-bold tracking-tight break-words sm:text-xl md:text-2xl"
+          class="order-1 min-w-0 w-full text-base leading-snug font-bold tracking-tight sm:text-base md:text-lg lg:text-xl"
           :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
           data-test="stat-value"
         >
