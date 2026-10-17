@@ -138,12 +138,13 @@ const teamMembers: TeamMember[] = [
     </div>
 
     <TentangFeatureBand heading="Inisiatif Unggulan di Kelurahan Manggar">
-      <div class="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-3">
+      <div class="mt-4 flex flex-col gap-5 lg:flex-row">
         <TentangResourceCard
           v-for="item in initiatives"
           :key="item.title"
           :title="item.title"
           icon="leaf"
+          class="flex-1"
         >
           <p>{{ item.description }}</p>
           <p class="mt-3 border-t border-white/70 pt-3 text-sm text-white">
@@ -164,7 +165,7 @@ const teamMembers: TeamMember[] = [
         </p>
 
         <div
-          class="mt-5 flex flex-col items-center gap-6 rounded-btn border border-gray-300 bg-white p-5 sm:p-6 md:flex-row md:items-start"
+          class="mt-5 flex flex-col items-center gap-6 rounded-btn border border-gray-300 bg-white p-5 sm:p-6 lg:flex-row lg:items-start"
         >
           <div class="flex shrink-0 items-center gap-4">
             <TentangLogoRow :logos="sdgsLogos" />
@@ -205,13 +206,14 @@ const teamMembers: TeamMember[] = [
           Lembaga pengusul inisiatif pengabdian masyarakat.
         </p>
 
-        <div class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <div class="mt-5 flex flex-col gap-5 lg:flex-row">
           <TentangTeamCard
             v-for="partner in partners"
             :key="partner.title"
             :title="partner.title"
             :role="partner.role"
             :meta="partner.meta"
+            class="flex-1"
           />
         </div>
 
