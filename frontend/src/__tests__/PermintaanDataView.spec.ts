@@ -213,4 +213,56 @@ describe('PermintaanDataView accessibility and content', () => {
     expect(wrapper.text()).toContain('WhatsApp/SMS PPID:');
     expect(wrapper.text()).toContain('Email:');
   });
+
+  it('renders the official Balikpapan PPID SOP documents with accessible download links', async () => {
+    const { pinia, router } = mountView();
+    await router.push('/permintaan-data');
+    await router.isReady();
+
+    const wrapper = mount(PermintaanDataView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    const sopSection = wrapper.find('section[aria-labelledby="sop-title"]');
+    expect(sopSection.exists()).toBe(true);
+    expect(sopSection.text()).toContain('Dokumen Standar Operasional Prosedur (SOP) & Regulasi Resmi');
+    expect(sopSection.text()).toContain('Nomor 490/365/M/DISKOMINFO');
+    expect(sopSection.text()).toContain('Nomor 490/378/M/DISKOMINFO');
+    expect(sopSection.text()).toContain('SOP Pengumpulan Data Statistik Sektoral');
+    expect(sopSection.text()).toContain('SOP Pengolahan Data Statistik Sektoral');
+    expect(sopSection.text()).toContain('Maklumat Pelayanan Informasi Publik');
+
+    const downloadLinks = sopSection.findAll('a[href$=".pdf"]');
+    expect(downloadLinks.length).toBeGreaterThanOrEqual(7);
+    for (const link of downloadLinks) {
+      expect(link.attributes('target')).toBe('_blank');
+      expect(link.attributes('rel')).toContain('noopener');
+      expect(link.attributes('rel')).toContain('noreferrer');
+      expect(link.text()).toContain('Tautan eksternal');
+    }
+  });
+
+  it('lists the official 7 statutory grounds for submitting an information objection', async () => {
+    const { pinia, router } = mountView();
+    await router.push('/permintaan-data');
+    await router.isReady();
+
+    const wrapper = mount(PermintaanDataView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    expect(wrapper.text()).toContain('7 Alasan Sah Pengajuan Keberatan');
+    expect(wrapper.text()).toContain('Permohonan informasi publik ditolak tanpa alasan yang sah');
+    expect(wrapper.text()).toContain('Informasi berkala tidak disediakan');
+    expect(wrapper.text()).toContain('Permintaan informasi tidak ditanggapi');
+    expect(wrapper.text()).toContain('Biaya yang dikenakan untuk perolehan salinan tidak wajar');
+
+    const keberatanPdfLink = wrapper.find(
+      'a[href="https://ppid.balikpapan.go.id/assets/content_pdf/1699149426486.pdf"]',
+    );
+    expect(keberatanPdfLink.exists()).toBe(true);
+    expect(keberatanPdfLink.attributes('target')).toBe('_blank');
+    expect(keberatanPdfLink.attributes('rel')).toContain('noopener');
+  });
 });
+
