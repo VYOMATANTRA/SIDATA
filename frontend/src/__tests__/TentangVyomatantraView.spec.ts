@@ -127,5 +127,27 @@ describe('TentangVyomatantraView accessibility and content', () => {
     }
     expect(rosterSection.text()).toContain('Anggota Tim VYOMATANTRA');
     expect(rosterSection.text()).toContain('TODO');
+
+    // Assert photo placeholders rendered for team members
+    const placeholders = rosterSection.findAll('[data-test="team-photo-placeholder"]');
+    expect(placeholders.length).toBe(8);
+
+    // Assert partner cards do not render personal photo placeholders
+    const partnerSection = wrapper.find('section[aria-labelledby="tim-title"]');
+    expect(partnerSection.findAll('[data-test="team-photo-placeholder"]').length).toBe(0);
+  });
+
+  it('renders accurate photo caption for kelurahan building', async () => {
+    const { pinia, router } = mountView();
+    await router.push('/tentang/vyomatantra');
+    await router.isReady();
+
+    const wrapper = mount(TentangVyomatantraView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    expect(wrapper.text()).toContain(
+      'Kantor Kelurahan Manggar, Balikpapan Timur — lokasi koordinasi kegiatan program Desa Cantik',
+    );
   });
 });
