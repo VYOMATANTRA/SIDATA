@@ -146,5 +146,17 @@ describe('useAuditRetentionStore', () => {
     expect(success).toBe(true);
     expect(store.retention).toEqual(updatedPolicy);
     expect(store.successMessage).toBe('Pengaturan retensi audit log berhasil diperbarui.');
+
+    // 3. Subsequent fetch resets successMessage to null
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        retention: updatedPolicy,
+      }),
+    } as Response);
+
+    await store.fetchRetention();
+    expect(store.successMessage).toBeNull();
   });
 });

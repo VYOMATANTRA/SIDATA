@@ -17,6 +17,8 @@ const form = ref<AuditRetentionPolicy>({
   critical: 0,
 });
 
+const isLoaded = ref(false);
+
 const isFormDirty = computed(() => {
   return (
     form.value.info !== store.retention.info ||
@@ -30,7 +32,7 @@ const validationError = computed(() => {
 });
 
 const isSubmitDisabled = computed(() => {
-  return store.isSaving || store.isLoading || validationError.value !== null;
+  return !isLoaded.value || store.isSaving || store.isLoading || validationError.value !== null;
 });
 
 function formatDurationLabel(days: number): string {
@@ -51,23 +53,34 @@ function syncFormFromStore() {
 watch(
   () => store.retention,
   () => {
-    syncFormFromStore();
+    if (isLoaded.value) {
+      syncFormFromStore();
+    }
   },
   { deep: true },
 );
 
+async function loadSettings() {
+  const ok = await store.fetchRetention();
+  if (ok) {
+    isLoaded.value = true;
+    syncFormFromStore();
+  }
+}
+
 onMounted(async () => {
-  await store.fetchRetention();
-  syncFormFromStore();
+  await loadSettings();
 });
 
 async function handleSubmit() {
-  if (validationError.value) return;
+  if (!isLoaded.value || validationError.value) return;
   await store.updateRetention({ ...form.value });
 }
 
 function handleReset() {
-  syncFormFromStore();
+  if (isLoaded.value) {
+    syncFormFromStore();
+  }
 }
 </script>
 
@@ -160,6 +173,19 @@ function handleReset() {
         <div class="flex-1">
           <p class="font-semibold text-rose-200">Terjadi Kesalahan</p>
           <p class="mt-0.5 leading-relaxed text-rose-300/90">{{ store.error }}</p>
+          <button
+            v-if="!isLoaded"
+            type="button"
+            data-test="retry-btn"
+            @click="loadSettings"
+            :disabled="store.isLoading"
+            class="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-900/60 hover:bg-rose-900 text-rose-200 text-xs font-medium rounded-lg border border-rose-700/50 transition disabled:opacity-50"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>{{ store.isLoading ? 'Memuat ulang...' : 'Coba Lagi' }}</span>
+          </button>
         </div>
       </div>
 

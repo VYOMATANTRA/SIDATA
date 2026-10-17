@@ -63,6 +63,7 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
   async function fetchRetention(): Promise<boolean> {
     isLoading.value = true;
     error.value = null;
+    successMessage.value = null;
 
     try {
       const res = await authFetch('/api/settings/audit-retention', {

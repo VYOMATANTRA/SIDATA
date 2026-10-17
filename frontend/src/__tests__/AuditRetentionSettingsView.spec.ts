@@ -189,6 +189,53 @@ describe('AuditRetentionSettingsView Client-Side Validation & Error Handling (No
     expect(serverAlert.exists()).toBe(true);
     expect(serverAlert.text()).toContain('Database transaction lock timeout');
   });
+
+  it('disables save button and displays load error with retry button when initial fetch fails (non-happy path)', async () => {
+    // Initial fetch fails
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: 'Gagal memuat pengaturan retensi audit dari server' }),
+    } as Response);
+
+    const router = createTestRouter();
+    const wrapper = mount(AuditRetentionSettingsView, {
+      global: { plugins: [router] },
+    });
+    await flushPromises();
+
+    // 1. Save button must be disabled when data is not loaded (prevents silent overwrites with defaults)
+    const submitBtn = wrapper.find('button[type="submit"]');
+    expect(submitBtn.attributes('disabled')).toBeDefined();
+
+    // 2. Server error banner and retry button are shown
+    const serverAlert = wrapper.find('[data-test="server-error-banner"]');
+    expect(serverAlert.exists()).toBe(true);
+    expect(serverAlert.text()).toContain('Gagal memuat pengaturan retensi audit dari server');
+
+    const retryBtn = wrapper.find('button[data-test="retry-btn"]');
+    expect(retryBtn.exists()).toBe(true);
+
+    // 3. Form cannot submit when triggered
+    const form = wrapper.find('form');
+    await form.trigger('submit.prevent');
+    await flushPromises();
+
+    // 4. Clicking Retry triggers re-fetch and enables form on success
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        retention: { info: 10, warning: 20, critical: 30 },
+      }),
+    } as Response);
+
+    await retryBtn.trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="server-error-banner"]').exists()).toBe(false);
+    expect((wrapper.find('input#retention-info').element as HTMLInputElement).value).toBe('10');
+  });
 });
 
 describe('AuditRetentionSettingsView Submission & Reset (Happy Path)', () => {
