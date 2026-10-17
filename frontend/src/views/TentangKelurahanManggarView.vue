@@ -216,17 +216,18 @@ const batasWilayah = [
 
     <!-- Rujukan data terpadu -->
     <TentangFeatureBand heading="Jelajahi Data Kelurahan Manggar">
-      <div class="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">
+      <div class="mt-4 flex flex-col gap-5 sm:flex-row">
         <TentangResourceCard
           title="Peta Spasial RT dan Bank Sampah Unit"
           icon="map"
           cta-label="Peta Geospasial"
+          class="flex-1"
         >
           Plot titik koordinat rumah seluruh ketua RT dan sebaran lokasi penimbangan sampah aktif
           di Balikpapan Timur.
         </TentangResourceCard>
 
-        <TentangResourceCard title="Sistem SIDATA" icon="system">
+        <TentangResourceCard title="Sistem SIDATA" icon="system" class="flex-1">
           Platform pencarian agregat kependudukan real-time, monitoring per RT, dan sinkronisasi
           metadata secara berkala tanpa hambatan.
         </TentangResourceCard>
@@ -314,8 +315,12 @@ const batasWilayah = [
 
         <div class="mt-6 rounded-btn border border-brand-navy/20 bg-white p-5">
           <h3 class="text-base font-bold text-brand-navy">Batas-Batas Wilayah Administratif:</h3>
-          <ul class="mt-3 grid grid-cols-1 gap-3 text-base text-gray-800 sm:grid-cols-2">
-            <li v-for="item in batasWilayah" :key="item.arah" class="flex items-center gap-2">
+          <ul class="mt-3 flex flex-wrap gap-x-6 gap-y-3 text-base text-gray-800">
+            <li
+              v-for="item in batasWilayah"
+              :key="item.arah"
+              class="flex w-full items-center gap-2 sm:w-[calc(50%-12px)]"
+            >
               <span class="font-medium text-brand-navy">{{ item.arah }}:</span>
               <span>{{ item.wilayah }}</span>
             </li>

@@ -55,23 +55,39 @@ const displayedItems = computed<StatItem[]>(() => {
   return [];
 });
 
-// Responsive layout container classes based on item count
+// Responsive flexbox layout container classes based on item count
 const listClasses = computed(() => {
   if (props.listClass) {
     return props.listClass;
   }
   const count = displayedItems.value.length;
   if (count === 4) {
-    // 2x2 symmetric grid on mobile & tablet for balanced whitespace and readability, transitioning to 4-col on desktop
-    return 'grid grid-cols-2 gap-x-6 gap-y-7 sm:gap-x-10 sm:gap-y-8 lg:grid-cols-4 lg:gap-x-8 text-center';
+    // 2x2 symmetric layout on mobile & tablet using flexbox, transitioning to 4-across on desktop
+    return 'flex flex-wrap items-start justify-center gap-x-6 gap-y-7 sm:gap-x-10 sm:gap-y-8 lg:flex-nowrap lg:justify-between lg:gap-x-8 text-center';
   }
   if (count === 3) {
-    return 'grid grid-cols-1 gap-y-6 sm:grid-cols-3 sm:gap-x-8 sm:gap-y-0 text-center max-w-3xl mx-auto';
+    return 'flex flex-wrap items-start justify-center gap-6 sm:flex-nowrap sm:gap-8 text-center max-w-3xl mx-auto';
   }
   if (count === 2) {
-    return 'grid grid-cols-2 gap-x-6 gap-y-6 sm:gap-x-10 md:gap-x-14 text-center max-w-lg mx-auto';
+    return 'flex flex-wrap items-start justify-center gap-x-6 gap-y-6 sm:gap-x-10 md:gap-x-14 text-center max-w-lg mx-auto';
   }
   return 'flex flex-wrap items-start justify-center gap-x-6 gap-y-6 text-center sm:gap-x-10 md:gap-x-14';
+});
+
+// Responsive flex item classes based on item count
+const itemClasses = computed(() => {
+  const count = displayedItems.value.length;
+  if (count === 4) {
+    // 2 items per row on mobile & tablet: (50% - half-gap), expanding to 4-across (flex-1) on desktop
+    return 'flex flex-col items-center text-center w-[calc(50%-12px)] sm:w-[calc(50%-20px)] lg:w-auto lg:flex-1 max-w-[260px] sm:max-w-[320px] lg:max-w-none mx-auto';
+  }
+  if (count === 3) {
+    return 'flex flex-col items-center text-center w-full sm:w-auto sm:flex-1 max-w-[260px] sm:max-w-none mx-auto';
+  }
+  if (count === 2) {
+    return 'flex flex-col items-center text-center w-[calc(50%-12px)] sm:w-[calc(50%-20px)] sm:flex-1 max-w-[260px] sm:max-w-none mx-auto';
+  }
+  return 'flex flex-col items-center text-center w-full max-w-[260px] sm:max-w-none flex-1 mx-auto';
 });
 
 // Variant styling classes
@@ -104,7 +120,7 @@ const variantClasses = computed(() => {
 
     <!--
       Semantic Description List (<dl>) adhering to docs/UI_STYLE_GUIDE.md & docs/ACCESSIBILITY.md
-      Layout: Responsive grid on mobile (e.g. 2x2 for 4 items) and flex/grid on desktop, preventing awkward 3+1 wrapping and horizontal text collisions.
+      Layout: Responsive flexbox on mobile & tablet (2x2 wrapped) and flex-nowrap on desktop (4 across), ensuring equal spacing and zero collisions.
     -->
     <dl
       v-if="displayedItems.length > 0"
@@ -114,7 +130,7 @@ const variantClasses = computed(() => {
       <div
         v-for="(item, idx) in displayedItems"
         :key="idx"
-        class="flex w-full max-w-[260px] flex-col items-center text-center mx-auto sm:max-w-[320px] lg:max-w-none"
+        :class="itemClasses"
         data-test="stat-item"
       >
         <!-- Icon Container -->
