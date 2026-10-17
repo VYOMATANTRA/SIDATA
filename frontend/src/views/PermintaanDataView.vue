@@ -78,7 +78,8 @@ const slaRules: SlaItem[] = [
   {
     stage: 'Verifikasi & Registrasi Berkas Permohonan',
     duration: '1 Hari Kerja',
-    regulation: 'Pemeriksaan kelengkapan dokumen identitas pemohon',
+    regulation:
+      'SOP Meja Layanan PPID Kota Balikpapan & Perki No. 1/2021 (Pasal 22 ayat (4)–(6) UU No. 14/2008)',
   },
   {
     stage: 'Penyampaian Tanggapan Tertulis PPID',
@@ -88,17 +89,20 @@ const slaRules: SlaItem[] = [
   {
     stage: 'Perpanjangan Waktu Tanggapan (Opsional)',
     duration: 'Maksimal 7 Hari Kerja',
-    regulation: 'Disertai surat pemberitahuan alasan perpanjangan waktu',
+    regulation:
+      'Pasal 22 ayat (8) UU No. 14 Tahun 2008 (disertai surat pemberitahuan alasan perpanjangan)',
   },
   {
     stage: 'Pengajuan Keberatan atas Tanggapan PPID',
     duration: 'Maksimal 30 Hari Kerja',
-    regulation: 'Diajukan kepada Atasan PPID Kota Balikpapan',
+    regulation:
+      'Pasal 36 ayat (1) UU No. 14 Tahun 2008 (diajukan tertulis kepada Atasan PPID Kota Balikpapan)',
   },
   {
     stage: 'Biaya Layanan Informasi Publik',
     duration: 'Bebas Biaya (Gratis)',
-    regulation: 'Biaya fotokopi / media simpan ditanggung mandiri bila salinan fisik',
+    regulation:
+      'SOP Layanan PPID Balikpapan & Prinsip Biaya Ringan Pasal 21 UU No. 14/2008 (biaya salinan fisik/media simpan mandiri)',
   },
 ];
 
@@ -296,6 +300,10 @@ const serviceDesk = computed(() => [
             </tbody>
           </table>
         </div>
+
+        <p class="mt-3 text-xs text-brand-navy/80">
+          * Standar waktu dan prosedur diselaraskan dengan UU No. 14 Tahun 2008 tentang Keterbukaan Informasi Publik, Peraturan Komisi Informasi No. 1 Tahun 2021, serta SOP Layanan Informasi PPID Pemerintah Kota Balikpapan.
+        </p>
       </div>
     </section>
 

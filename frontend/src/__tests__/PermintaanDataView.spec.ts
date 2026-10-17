@@ -104,6 +104,10 @@ describe('PermintaanDataView accessibility and content', () => {
     expect(wrapper.text()).toContain(
       'Pasal 22 ayat (7) UU No. 14 Tahun 2008 tentang Keterbukaan Informasi Publik',
     );
+    expect(wrapper.text()).toContain('Pasal 22 ayat (8) UU No. 14 Tahun 2008');
+    expect(wrapper.text()).toContain('Pasal 36 ayat (1) UU No. 14 Tahun 2008');
+    expect(wrapper.text()).toContain('SOP Layanan PPID Balikpapan');
+    expect(wrapper.text()).toContain('Pasal 21 UU No. 14/2008');
   });
 
   it('renders external Balikpapan PPID link with accessible security attributes', async () => {
