@@ -13,7 +13,7 @@ withDefaults(
 </script>
 
 <template>
-  <article class="rounded-btn bg-brand-navy-deep p-5">
+  <article class="flex h-full flex-col rounded-btn bg-brand-navy-deep p-5">
     <div class="flex items-center gap-3">
       <span
         class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-indigo text-white"
@@ -24,7 +24,7 @@ withDefaults(
       <h3 class="text-base font-bold text-white">{{ title }}</h3>
     </div>
 
-    <div class="mt-3 text-base leading-relaxed text-white">
+    <div class="mt-3 flex-1 text-base leading-relaxed text-white">
       <slot />
     </div>
 

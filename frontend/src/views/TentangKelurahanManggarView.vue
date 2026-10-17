@@ -53,42 +53,42 @@ interface SotkItem {
 const sotkMembers: SotkItem[] = [
   {
     role: 'Lurah',
-    officialName: 'Lurah Kelurahan Manggar', // TODO: Konfirmasi nama definitif Lurah Manggar
+    officialName: 'Dalam proses penetapan definitif', // TODO: Masukkan nama definitif Lurah Manggar
     duties:
       'Memimpin, mengatur, membina, dan mengawasi penyelenggaraan pemerintahan kelurahan serta pelaksanaan pelimpahan wewenang dari Walikota Balikpapan.',
     notes: 'Penanggung jawab utama kelurahan',
   },
   {
     role: 'Sekretaris Kelurahan',
-    officialName: 'Sekretaris Kelurahan', // TODO: Masukkan nama definitif Sekretaris Kelurahan
+    officialName: 'Dalam proses penetapan definitif', // TODO: Masukkan nama definitif Sekretaris Kelurahan
     duties:
       'Mengkoordinasikan perencanaan, ketatausahaan, kepegawaian, perlengkapan, keuangan, serta pelayanan administrasi internal kelurahan.',
     notes: 'Koordinator administrasi & aparatur',
   },
   {
     role: 'Seksi Pemerintahan',
-    officialName: 'Kepala Seksi Pemerintahan', // TODO: Masukkan nama definitif Kasi Pemerintahan
+    officialName: 'Dalam proses penetapan definitif', // TODO: Masukkan nama definitif Kasi Pemerintahan
     duties:
       'Menyelenggarakan urusan administrasi pemerintahan umum, kependudukan, pertanahan, serta pembinaan organisasi Rukun Tetangga (RT).',
     notes: 'Pembinaan 100 RT & kependudukan',
   },
   {
     role: 'Seksi Ketenteraman dan Ketertiban',
-    officialName: 'Kepala Seksi Trantib', // TODO: Masukkan nama definitif Kasi Trantib
+    officialName: 'Dalam proses penetapan definitif', // TODO: Masukkan nama definitif Kasi Trantib
     duties:
       'Memelihara ketenteraman, ketertiban umum, penegakan peraturan daerah, perlindungan masyarakat, dan koordinasi pencegahan bencana.',
     notes: 'Ketertiban umum & Linmas',
   },
   {
     role: 'Seksi Pemberdayaan Masyarakat',
-    officialName: 'Kepala Seksi Pemberdayaan Masyarakat', // TODO: Masukkan nama definitif Kasi PM
+    officialName: 'Dalam proses penetapan definitif', // TODO: Masukkan nama definitif Kasi PM
     duties:
       'Memfasilitasi pemberdayaan masyarakat, pembinaan kelembagaan kemasyarakatan (LPM, PKK, Karang Taruna), lingkungan hidup, dan UMKM.',
     notes: 'Pengembangan masyarakat & Bank Sampah',
   },
   {
     role: 'Seksi Kesejahteraan Sosial',
-    officialName: 'Kepala Seksi Kesejahteraan Sosial', // TODO: Masukkan nama definitif Kasi PM
+    officialName: 'Dalam proses penetapan definitif', // TODO: Masukkan nama definitif Kasi Kesos
     duties:
       'Mengelola pelayanan bantuan sosial, pemutakhiran data kemiskinan, pembinaan kesehatan, kepemudaan, dan keagamaan.',
     notes: 'Jaminan sosial & pelayanan warga',
@@ -268,8 +268,8 @@ const batasWilayah = [
           <div class="space-y-4 text-left">
             <div>
               <h3 class="text-lg font-bold text-brand-navy">Lurah Kelurahan Manggar</h3>
-              <!-- TODO: Konfirmasi nama definitif Lurah Manggar -->
-              <p class="text-sm text-gray-600">NIP. 197XXXXXXXXXXXXXXX</p>
+              <!-- TODO: Masukkan nama definitif dan NIP Lurah Manggar setelah SK resmi diperoleh -->
+              <p class="text-sm text-gray-600">Pemerintah Kelurahan Manggar, Balikpapan Timur</p>
             </div>
 
             <div class="space-y-3 text-base leading-relaxed text-gray-800">
@@ -357,7 +357,7 @@ const batasWilayah = [
                   </span>
                 </th>
                 <td class="px-4 py-4 align-top text-gray-800 sm:px-6">
-                  <span class="font-medium">{{ member.officialName }}</span>
+                  <span class="text-sm italic text-gray-600">{{ member.officialName }}</span>
                 </td>
                 <td class="px-4 py-4 leading-relaxed text-gray-700 sm:px-6 align-top">
                   {{ member.duties }}
