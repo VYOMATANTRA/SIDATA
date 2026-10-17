@@ -251,7 +251,7 @@ const batasWilayah = [
         <div
           class="mt-5 flex flex-col items-center gap-6 rounded-btn border border-gray-300 bg-white p-5 sm:flex-row sm:items-start sm:p-6"
         >
-          <div class="shrink-0 text-center">
+          <div class="flex shrink-0 flex-col items-center text-center sm:w-56">
             <div class="h-40 w-40 overflow-hidden rounded-full bg-brand-cyan sm:h-48 sm:w-48">
               <img
                 :src="lurahPhoto"
@@ -259,20 +259,20 @@ const batasWilayah = [
                 class="h-40 w-40 object-cover object-top sm:h-48 sm:w-48"
               />
             </div>
-            <span
-              class="mt-3 inline-block rounded-[5px] bg-brand-cyan px-3 py-1 text-sm font-medium text-brand-navy"
-            >
-              Kepala Kelurahan
-            </span>
-          </div>
-
-          <div class="space-y-4 text-left">
-            <div>
+            <!-- Name & Title below the photo -->
+            <div class="mt-4 flex flex-col items-center text-center">
               <h3 class="text-lg font-bold text-brand-navy">Lurah Kelurahan Manggar</h3>
               <!-- TODO: Masukkan nama definitif dan NIP Lurah Manggar setelah SK resmi diperoleh -->
-              <p class="text-sm text-gray-600">Pemerintah Kelurahan Manggar, Balikpapan Timur</p>
+              <p class="mt-0.5 text-sm text-gray-600">Pemerintah Kelurahan Manggar</p>
+              <span
+                class="mt-2.5 inline-block rounded-[5px] bg-brand-cyan px-3 py-1 text-sm font-medium text-brand-navy"
+              >
+                Kepala Kelurahan
+              </span>
             </div>
+          </div>
 
+          <div class="flex-1 space-y-4 text-left">
             <div class="space-y-3 text-base leading-relaxed text-gray-800">
               <p>
                 Sebagai garda terdepan pelayanan pemerintah daerah bagi masyarakat di wilayah
@@ -281,15 +281,15 @@ const batasWilayah = [
               </p>
               <p>
                 Melalui integrasi program
-                <strong>Kelurahan Cinta Statistik (Desa Cantik)</strong> serta peluncuran portal
-                <strong>SIDATA</strong>, kami berikhtiar membangun tata kelola berbasis data akurat
+                <strong class="font-semibold text-brand-navy">Kelurahan Cinta Statistik (Desa Cantik)</strong> serta peluncuran portal
+                <strong class="font-semibold text-brand-navy">SIDATA</strong>, kami berikhtiar membangun tata kelola berbasis data akurat
                 bersama 100 Rukun Tetangga (RT). Data yang tepat menjadi kompas kami dalam
                 merencanakan program sosial, penanganan lingkungan, serta pemulihan ekonomi
                 masyarakat yang berkelanjutan.
               </p>
             </div>
 
-            <div class="text-sm text-gray-600">
+            <div class="border-t border-gray-200 pt-3 text-sm text-gray-600">
               <p class="font-medium text-brand-navy">Masa Bakti Jabatan</p>
               <p>Periode Berjalan &mdash; Kelurahan Manggar, Balikpapan Timur</p>
               <!-- TODO: Perbarui informasi masa bakti jika telah tersedia surat keputusan resmi -->

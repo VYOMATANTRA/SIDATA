@@ -62,8 +62,8 @@ const listClasses = computed(() => {
   }
   const count = displayedItems.value.length;
   if (count === 4) {
-    // 2x2 symmetric layout on mobile & tablet using flexbox, transitioning to 4-across on desktop
-    return 'flex flex-wrap items-start justify-center gap-x-6 gap-y-7 sm:gap-x-10 sm:gap-y-8 lg:flex-nowrap lg:justify-between lg:gap-x-8 text-center';
+    // Symmetrical 2x2 layout on mobile & tablet, expanding to 4-across on desktop
+    return 'flex flex-wrap items-stretch justify-between gap-y-7 sm:gap-y-8 lg:flex-nowrap lg:gap-x-6 text-center';
   }
   if (count === 3) {
     return 'flex flex-wrap items-start justify-center gap-6 sm:flex-nowrap sm:gap-8 text-center max-w-3xl mx-auto';
@@ -78,16 +78,16 @@ const listClasses = computed(() => {
 const itemClasses = computed(() => {
   const count = displayedItems.value.length;
   if (count === 4) {
-    // 2 items per row on mobile & tablet: (50% - half-gap), expanding to 4-across (flex-1) on desktop
-    return 'flex flex-col items-center text-center w-[calc(50%-12px)] sm:w-[calc(50%-20px)] lg:w-auto lg:flex-1 max-w-[260px] sm:max-w-[320px] lg:max-w-none mx-auto';
+    // Exactly 2 items per row on mobile & tablet: w-[calc(50%-12px)] sm:w-[calc(50%-16px)] with flex-none shrink-0, expanding to 4-across (flex-1) on desktop (lg)
+    return 'flex flex-col items-center text-center flex-none shrink-0 w-[calc(50%-12px)] sm:w-[calc(50%-16px)] lg:w-auto lg:flex-1 lg:shrink';
   }
   if (count === 3) {
-    return 'flex flex-col items-center text-center w-full sm:w-auto sm:flex-1 max-w-[260px] sm:max-w-none mx-auto';
+    return 'flex flex-col items-center text-center w-full sm:w-auto sm:flex-1 mx-auto';
   }
   if (count === 2) {
-    return 'flex flex-col items-center text-center w-[calc(50%-12px)] sm:w-[calc(50%-20px)] sm:flex-1 max-w-[260px] sm:max-w-none mx-auto';
+    return 'flex flex-col items-center text-center w-[calc(50%-12px)] sm:w-[calc(50%-20px)] sm:flex-1 mx-auto';
   }
-  return 'flex flex-col items-center text-center w-full max-w-[260px] sm:max-w-none flex-1 mx-auto';
+  return 'flex flex-col items-center text-center w-full flex-1 mx-auto';
 });
 
 // Variant styling classes
@@ -231,7 +231,7 @@ const variantClasses = computed(() => {
 
         <!-- Description Term (<dt>): Stat Label Description (precedes <dd> in DOM for screen readers) -->
         <dt
-          class="order-2 mt-1.5 w-full max-w-[160px] text-xs leading-snug whitespace-pre-line sm:max-w-[220px] sm:text-sm lg:max-w-none"
+          class="order-2 mt-1.5 w-full max-w-[200px] text-xs leading-snug whitespace-pre-line sm:max-w-[260px] sm:text-sm lg:max-w-none"
           :class="variant === 'light' ? 'font-medium text-slate-600' : 'font-normal text-slate-200'"
           data-test="stat-label"
         >
