@@ -62,8 +62,8 @@ const listClasses = computed(() => {
   }
   const count = displayedItems.value.length;
   if (count === 4) {
-    // 2x2 symmetric grid on mobile to prevent horizontal collisions & 3+1 wrap, transitioning to 4-col on desktop
-    return 'grid grid-cols-2 gap-x-4 gap-y-7 sm:gap-x-8 md:grid-cols-4 md:gap-x-10 text-center';
+    // 2x2 symmetric grid on mobile & tablet for balanced whitespace and readability, transitioning to 4-col on desktop
+    return 'grid grid-cols-2 gap-x-6 gap-y-7 sm:gap-x-10 sm:gap-y-8 lg:grid-cols-4 lg:gap-x-8 text-center';
   }
   if (count === 3) {
     return 'grid grid-cols-1 gap-y-6 sm:grid-cols-3 sm:gap-x-8 sm:gap-y-0 text-center max-w-3xl mx-auto';
@@ -114,7 +114,7 @@ const variantClasses = computed(() => {
       <div
         v-for="(item, idx) in displayedItems"
         :key="idx"
-        class="flex w-full max-w-[260px] flex-col items-center text-center mx-auto sm:max-w-[300px] md:max-w-none"
+        class="flex w-full max-w-[260px] flex-col items-center text-center mx-auto sm:max-w-[320px] lg:max-w-none"
         data-test="stat-item"
       >
         <!-- Icon Container -->
@@ -215,7 +215,7 @@ const variantClasses = computed(() => {
 
         <!-- Description Term (<dt>): Stat Label Description (precedes <dd> in DOM for screen readers) -->
         <dt
-          class="order-2 mt-1.5 w-full max-w-[160px] text-xs leading-snug whitespace-pre-line sm:max-w-[220px] sm:text-sm"
+          class="order-2 mt-1.5 w-full max-w-[160px] text-xs leading-snug whitespace-pre-line sm:max-w-[220px] sm:text-sm lg:max-w-none"
           :class="variant === 'light' ? 'font-medium text-slate-600' : 'font-normal text-slate-200'"
           data-test="stat-label"
         >
@@ -224,7 +224,7 @@ const variantClasses = computed(() => {
 
         <!-- Description Details (<dd>): Numeric or text stat value -->
         <dd
-          class="order-1 min-w-0 w-full text-base leading-snug font-bold tracking-tight sm:text-base md:text-lg lg:text-xl"
+          class="order-1 min-w-0 w-full text-base leading-tight font-bold tracking-tight sm:text-lg lg:text-xl"
           :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
           data-test="stat-value"
         >

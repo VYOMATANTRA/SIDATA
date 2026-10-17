@@ -181,7 +181,7 @@ describe('StatCard.vue', () => {
     const dl = wrapper.find('[data-test="stat-list"]');
     expect(dl.classes()).toContain('grid');
     expect(dl.classes()).toContain('grid-cols-2');
-    expect(dl.classes()).toContain('md:grid-cols-4');
+    expect(dl.classes()).toContain('lg:grid-cols-4');
   });
 
   it('allows overriding list layout with custom listClass prop', () => {
