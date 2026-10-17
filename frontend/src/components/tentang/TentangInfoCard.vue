@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { useId } from 'vue';
-import TentangIcon from './TentangIcon.vue';
+import TentangIcon, { type TentangIconName } from './TentangIcon.vue';
 
 withDefaults(
   defineProps<{
     heading: string;
-    icon?: string;
+    icon?: TentangIconName;
     /** Optional short pill rendered next to the heading (e.g. a step number) */
     badge?: string;
   }>(),
