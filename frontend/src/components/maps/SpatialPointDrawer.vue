@@ -7,6 +7,7 @@ import BaseButton from '../common/BaseButton.vue';
 interface Props {
   point: SpatialPointDTO | null;
   leader?: RtLeaderDTO | null;
+  closeLabel?: string;
 }
 
 const props = defineProps<Props>();
@@ -17,9 +18,14 @@ const emit = defineEmits<{
 
 const closeButtonEl = ref<HTMLButtonElement | null>(null);
 let previouslyFocused: HTMLElement | null = null;
+let restoreFocusOnUnmount = false;
 
 function captureAndFocus() {
-  previouslyFocused = (document.activeElement as HTMLElement | null) ?? null;
+  const active = document.activeElement as HTMLElement | null;
+  if (!previouslyFocused || active?.closest('[data-test="peta-result"]')) {
+    previouslyFocused = active;
+  }
+  restoreFocusOnUnmount = true;
   void nextTick(() => closeButtonEl.value?.focus());
 }
 
@@ -34,9 +40,6 @@ watch(
   (point) => {
     if (point) {
       captureAndFocus();
-    } else if (previouslyFocused) {
-      previouslyFocused.focus();
-      previouslyFocused = null;
     }
   },
 );
@@ -56,6 +59,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown);
+  if (restoreFocusOnUnmount) {
+    const target = previouslyFocused;
+    void nextTick(() => target?.focus());
+  }
 });
 
 const typeBadge = computed(() => {
@@ -111,11 +118,11 @@ const metadataEntries = computed(() => {
 </script>
 
 <template>
-  <div
+  <section
     v-if="point"
     role="region"
     aria-label="Detail Titik Spasial"
-    class="w-full max-w-lg rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-xl backdrop-blur-md transition-all duration-300"
+    class="w-full min-w-0 flex-1 overflow-y-auto p-5"
   >
     <!-- Header: Type Badge & Close Button -->
     <div class="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
@@ -129,11 +136,11 @@ const metadataEntries = computed(() => {
       <button
         ref="closeButtonEl"
         type="button"
-        class="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-gray-100 text-sm text-gray-500 transition-colors hover:bg-gray-200 hover:text-brand-navy"
-        aria-label="Tutup"
+        class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-btn border border-gray-300 px-3 text-sm font-medium text-brand-navy transition-colors hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+        :aria-label="closeLabel ?? 'Tutup'"
         @click="emit('close')"
       >
-        ✕
+        <span>{{ closeLabel ?? 'Tutup' }}</span>
       </button>
     </div>
 
@@ -292,5 +299,5 @@ const metadataEntries = computed(() => {
         <span class="text-right font-medium text-slate-800">{{ String(val) }}</span>
       </div>
     </div>
-  </div>
+  </section>
 </template>

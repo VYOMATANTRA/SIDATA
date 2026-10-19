@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import TentangPageLayout from '../components/tentang/TentangPageLayout.vue';
 import TentangBreadcrumb from '../components/tentang/TentangBreadcrumb.vue';
 import TentangHeroPanel from '../components/tentang/TentangHeroPanel.vue';
 import InteractiveMap from '../components/maps/InteractiveMap.vue';
-import MapFilterBar from '../components/maps/MapFilterBar.vue';
 import MapSummaryDropdown from '../components/maps/MapSummaryDropdown.vue';
 import SpatialPointDrawer from '../components/maps/SpatialPointDrawer.vue';
 import { useMapsStore } from '../stores/maps';
@@ -18,6 +17,8 @@ onMounted(() => {
 });
 
 const search = ref('');
+const currentPage = ref(1);
+const PAGE_SIZE = 5;
 const userLocation = ref<{ latitude: number; longitude: number } | null>(null);
 const locationError = ref<string | null>(null);
 
@@ -48,7 +49,10 @@ const visiblePoints = computed<SpatialPointDTO[]>(() => {
     if (asRtNumber !== null && point.rts.includes(asRtNumber)) {
       return true;
     }
-    return point.name.toLowerCase().includes(term);
+    return (
+      point.name.toLowerCase().includes(term) ||
+      (point.rtLeader?.name.toLowerCase().includes(term) ?? false)
+    );
   });
 });
 
@@ -73,6 +77,28 @@ const nearbyPoints = computed(() =>
     .map((point) => ({ point, distanceKm: haversineKm(origin.value, point) }))
     .sort((a, b) => a.distanceKm - b.distanceKm),
 );
+
+const totalPages = computed(() => Math.max(1, Math.ceil(nearbyPoints.value.length / PAGE_SIZE)));
+const paginatedNearbyPoints = computed(() =>
+  nearbyPoints.value.slice((currentPage.value - 1) * PAGE_SIZE, currentPage.value * PAGE_SIZE),
+);
+const paginationStart = computed(() =>
+  nearbyPoints.value.length === 0 ? 0 : (currentPage.value - 1) * PAGE_SIZE + 1,
+);
+const paginationEnd = computed(() =>
+  Math.min(currentPage.value * PAGE_SIZE, nearbyPoints.value.length),
+);
+
+watch(
+  [search, () => mapsStore.activeTypeFilter, () => mapsStore.activeRtFilter, userLocation],
+  () => {
+    currentPage.value = 1;
+  },
+);
+
+watch(totalPages, (pages) => {
+  if (currentPage.value > pages) currentPage.value = pages;
+});
 
 function formatDistance(km: number): string {
   return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
@@ -114,33 +140,8 @@ function requestUserLocation() {
       <div class="mx-auto max-w-6xl">
         <h2 id="peta-title" class="text-lg font-bold text-brand-navy">Sebaran Titik Spasial</h2>
 
-        <div class="mt-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div class="w-full lg:max-w-sm">
-            <label for="peta-search" class="block text-base font-medium text-brand-navy">
-              Cari nama titik atau nomor RT
-            </label>
-            <input
-              id="peta-search"
-              v-model="search"
-              type="search"
-              name="peta-search"
-              placeholder="Contoh: Bank Sampah atau 30"
-              autocomplete="off"
-              class="mt-2 w-full rounded-btn border border-gray-400 bg-white px-4 py-2.5 text-base text-brand-navy placeholder:text-gray-500 focus-visible:border-brand-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
-              data-test="peta-search"
-            />
-          </div>
-
+        <div class="mt-4 flex justify-end">
           <MapSummaryDropdown :summary="mapsStore.summary" />
-        </div>
-
-        <div class="mt-3">
-          <MapFilterBar
-            :active-type="mapsStore.activeTypeFilter"
-            :active-rt="mapsStore.activeRtFilter"
-            @update:type="mapsStore.setTypeFilter"
-            @update:rt="mapsStore.setRtFilter"
-          />
         </div>
 
         <p class="mt-3 text-base text-gray-700" aria-live="polite" data-test="peta-count">
@@ -167,59 +168,104 @@ function requestUserLocation() {
           Memuat titik spasial&hellip;
         </p>
 
-        <div v-else class="mt-4 grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div v-else class="mt-4 grid items-stretch gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
           <InteractiveMap
             :points="visiblePoints"
             :selected-point-id="mapsStore.selectedPoint?.id ?? null"
             @select-point="mapsStore.selectPoint"
           />
 
-          <div class="flex flex-col gap-4">
-            <SpatialPointDrawer
-              v-if="mapsStore.selectedPoint"
-              :point="mapsStore.selectedPoint"
-              :leader="mapsStore.selectedLeader"
-              @close="mapsStore.clearSelection"
-            />
-
-            <!-- Nearby list is the default panel state; choosing a row swaps in the detail view -->
-            <section
-              v-else
-              class="rounded-btn border border-gray-300 bg-white p-5"
+          <section
+              class="flex max-h-[640px] flex-col overflow-hidden rounded-btn border border-gray-300 bg-white"
               aria-labelledby="terdekat-title"
             >
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <h3 id="terdekat-title" class="text-base font-bold text-brand-navy">
-                  Titik terdekat
-                </h3>
-                <button
-                  type="button"
-                  class="rounded-btn border-2 border-brand-navy bg-white px-3 py-2.5 text-sm font-medium text-brand-navy transition-colors hover:bg-brand-navy hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
-                  @click="requestUserLocation"
-                >
-                  Dekat saya
-                </button>
-              </div>
+              <div class="border-b border-gray-200 p-5 pb-4">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 id="terdekat-title" class="text-base font-bold text-brand-navy">Titik terdekat</h3>
+                    <p class="mt-1 text-sm text-gray-600">Jarak dihitung dari {{ originLabel }}.</p>
+                  </div>
+                  <button
+                    v-if="mapsStore.selectedPoint"
+                    type="button"
+                    class="min-h-11 rounded-btn border border-gray-300 px-3 py-2 text-sm font-medium text-brand-navy hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+                    @click="mapsStore.clearSelection"
+                  >
+                    Kembali ke hasil
+                  </button>
+                  <button
+                    v-else
+                    type="button"
+                    class="min-h-11 rounded-btn border border-brand-navy px-3 py-2 text-sm font-medium text-brand-navy transition-colors hover:bg-brand-navy hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy active:scale-[0.98]"
+                    @click="requestUserLocation"
+                  >
+                    Dekat saya
+                  </button>
+                </div>
 
-              <p class="mt-1 text-sm text-gray-600">Jarak dihitung dari {{ originLabel }}.</p>
+                <label for="peta-search" class="sr-only">Cari nama titik, nomor RT, atau nama ketua RT</label>
+                <input
+                  id="peta-search"
+                  v-model="search"
+                  type="search"
+                  name="peta-search"
+                  placeholder="Cari lokasi, nama, atau nomor RT"
+                  autocomplete="off"
+                  class="mt-4 min-h-11 w-full rounded-btn border border-gray-400 bg-white px-4 py-2.5 text-base text-brand-navy placeholder:text-gray-500 focus-visible:border-brand-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+                  data-test="peta-search"
+                />
+                <div class="mt-3 flex flex-wrap gap-2" role="group" aria-label="Filter kategori titik">
+                  <button
+                    v-for="filter in [
+                      { type: 'all', label: 'Semua' },
+                      { type: 'ketua_rt', label: 'Ketua RT' },
+                      { type: 'bank_sampah', label: 'Bank Sampah' },
+                      { type: 'fasilitas_umum', label: 'Fasilitas umum' },
+                    ] as const"
+                    :key="filter.type"
+                    type="button"
+                    class="min-h-11 rounded-btn border px-3 py-1.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy active:scale-[0.98]"
+                    :class="mapsStore.activeTypeFilter === filter.type ? 'border-brand-navy bg-brand-navy text-white' : 'border-gray-300 bg-white text-brand-navy hover:border-brand-navy'"
+                    :aria-pressed="mapsStore.activeTypeFilter === filter.type"
+                    @click="mapsStore.setTypeFilter(filter.type)"
+                  >
+                    {{ filter.label }}
+                  </button>
+                </div>
+                <p class="mt-3 text-sm text-gray-600" aria-live="polite" data-test="peta-list-count">
+                  {{ nearbyPoints.length }} lokasi ditemukan
+                </p>
+              </div>
 
               <p v-if="locationError" role="alert" class="mt-2 text-sm text-brand-navy">
                 {{ locationError }}
               </p>
 
-              <ol v-if="nearbyPoints.length > 0" class="mt-3 divide-y divide-gray-200">
-                <li v-for="item in nearbyPoints" :key="item.point.id">
+              <SpatialPointDrawer
+                v-if="mapsStore.selectedPoint"
+                class="min-h-0 flex-1 overflow-y-auto"
+                :point="mapsStore.selectedPoint"
+                :leader="mapsStore.selectedLeader"
+                close-label="Tutup detail"
+                @close="mapsStore.clearSelection"
+              />
+
+              <ol v-else-if="nearbyPoints.length > 0" class="min-h-0 flex-1 divide-y divide-gray-200 overflow-y-auto px-5">
+                <li v-for="item in paginatedNearbyPoints" :key="item.point.id">
                   <button
                     type="button"
-                    class="flex w-full cursor-pointer items-start justify-between gap-3 py-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+                    class="flex min-h-[68px] w-full cursor-pointer items-start justify-between gap-3 py-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+                    :aria-label="`Tampilkan ${item.point.name} pada peta`"
+                    data-test="peta-result"
                     @click="mapsStore.selectPoint(item.point)"
                   >
                     <span>
-                      <span class="block text-base font-medium text-brand-navy">
-                        {{ item.point.name }}
+                      <span class="block text-base font-semibold text-brand-navy">
+                        {{ item.point.type === 'ketua_rt' && item.point.rts[0] ? `RT ${item.point.rts[0]}` : item.point.name }}
                       </span>
                       <span class="block text-sm text-gray-600">
                         {{ TYPE_LABELS[item.point.type] }}
+                        <template v-if="item.point.rtLeader">&middot; {{ item.point.rtLeader.name }}</template>
                         <template v-if="item.point.rts.length > 0">
                           &middot; RT {{ item.point.rts.join(', ') }}
                         </template>
@@ -232,11 +278,39 @@ function requestUserLocation() {
                 </li>
               </ol>
 
-              <p v-else class="mt-3 text-base text-gray-800" data-test="peta-empty">
+              <p v-else-if="!mapsStore.selectedPoint" class="mt-3 text-base text-gray-800" data-test="peta-empty">
                 Tidak ada titik yang cocok dengan pencarian atau filter saat ini.
               </p>
-            </section>
-          </div>
+
+              <div v-if="!mapsStore.selectedPoint && nearbyPoints.length > PAGE_SIZE" class="flex items-center justify-between gap-2 border-t border-gray-200 px-5 py-3">
+                <p class="text-sm tabular-nums text-gray-600" data-test="peta-pagination-summary">
+                  {{ paginationStart }}–{{ paginationEnd }} dari {{ nearbyPoints.length }} lokasi
+                </p>
+                <nav aria-label="Halaman hasil peta" class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    class="min-h-11 min-w-11 rounded-btn border border-gray-300 px-3 text-sm font-medium text-brand-navy hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label="Halaman sebelumnya"
+                    data-test="peta-previous-page"
+                    :disabled="currentPage === 1"
+                    @click="currentPage -= 1"
+                  >
+                    Sebelumnya
+                  </button>
+                  <span class="text-sm tabular-nums text-gray-700" aria-current="page">{{ currentPage }} / {{ totalPages }}</span>
+                  <button
+                    type="button"
+                    class="min-h-11 min-w-11 rounded-btn border border-gray-300 px-3 text-sm font-medium text-brand-navy hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label="Halaman selanjutnya"
+                    data-test="peta-next-page"
+                    :disabled="currentPage === totalPages"
+                    @click="currentPage += 1"
+                  >
+                    Selanjutnya
+                  </button>
+                </nav>
+              </div>
+          </section>
         </div>
       </div>
     </section>

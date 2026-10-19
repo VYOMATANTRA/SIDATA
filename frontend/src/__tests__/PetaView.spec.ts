@@ -14,6 +14,13 @@ const POINTS: SpatialPointDTO[] = [
     longitude: 116.9521,
     metadata: null,
     rts: [1],
+    rtLeader: {
+      rtNumber: 1,
+      name: 'Suwarjo Manggar',
+      phone: '08125356695',
+      phoneIsWhatsapp: true,
+      alamat: null,
+    },
     createdAt: '2026-08-01T00:00:00Z',
     updatedAt: '2026-08-01T00:00:00Z',
   },
@@ -149,16 +156,16 @@ describe('PetaView accessibility, filtering, and point selection', () => {
     expect(wrapper.text()).toContain('Ringkasan Data');
   });
 
-  it('lists points nearest-first with a distance and a type label', async () => {
+  it('lists five points per page, nearest-first, with a distance and a type label', async () => {
     const wrapper = await mountReady();
 
     expect(wrapper.text()).toContain('Titik terdekat');
     expect(wrapper.text()).toContain('Jarak dihitung dari pusat kelurahan.');
 
-    const rows = wrapper.findAll('ol li button');
+    const rows = wrapper.findAll('[data-test="peta-result"]');
     expect(rows.length).toBe(3);
     // Point 1 sits exactly on the origin, so it must sort first
-    expect(rows[0]?.text()).toContain('Pos Ketua RT 01');
+    expect(rows[0]?.text()).toContain('RT 1');
     expect(rows[0]?.text()).toContain('0 m');
     // A multi-RT Bank Sampah shows its whole coverage
     expect(rows[1]?.text()).toContain('Bank Sampah Melati');
@@ -172,12 +179,12 @@ describe('PetaView accessibility, filtering, and point selection', () => {
     expect(wrapper.find('label[for="peta-search"]').exists()).toBe(true);
 
     await search.setValue('melati');
-    expect(wrapper.findAll('ol li button').length).toBe(1);
+    expect(wrapper.findAll('[data-test="peta-result"]').length).toBe(1);
     expect(wrapper.find('[data-test="peta-count"]').text()).toBe('Menampilkan 1 dari 3 titik.');
 
     await search.setValue('72');
-    expect(wrapper.findAll('ol li button').length).toBe(1);
-    expect(wrapper.findAll('ol li button')[0]?.text()).toContain('Bank Sampah Melati');
+    expect(wrapper.findAll('[data-test="peta-result"]').length).toBe(1);
+    expect(wrapper.find('[data-test="peta-result"]').text()).toContain('Bank Sampah Melati');
 
     await search.setValue('tidak ada');
     expect(wrapper.find('[data-test="peta-empty"]').exists()).toBe(true);
@@ -186,10 +193,54 @@ describe('PetaView accessibility, filtering, and point selection', () => {
     );
   });
 
+  it('searches the RT leader name and paginates list results without removing map points', async () => {
+    const wrapper = await mountReady();
+    const search = wrapper.find('[data-test="peta-search"]');
+
+    await search.setValue('suwarjo');
+    expect(wrapper.findAll('[data-test="peta-result"]')).toHaveLength(1);
+    expect(wrapper.find('[data-test="peta-result"]').text()).toContain('Suwarjo Manggar');
+
+    await search.setValue('');
+    expect(wrapper.findAll('[data-test="peta-result"]')).toHaveLength(3);
+    expect(wrapper.find('[data-test="map-stub"]').exists()).toBe(true);
+  });
+
+  it('resets list pagination after a query changes', async () => {
+    const manyPoints = Array.from({ length: 12 }, (_, index) => ({
+      ...POINTS[0]!,
+      id: `rt-${index + 1}`,
+      name: `Pos Ketua RT ${index + 1}`,
+      rts: [index + 1],
+      latitude: -1.2235 + index * 0.001,
+    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input);
+        if (url.includes('/api/maps/summary')) return { ok: true, json: async () => SUMMARY } as Response;
+        if (url.includes('/api/maps/points')) return { ok: true, json: async () => ({ points: manyPoints, total: manyPoints.length }) } as Response;
+        return { ok: false, status: 404, json: async () => ({}) } as Response;
+      }),
+    );
+
+    const wrapper = await mountReady();
+    expect(wrapper.findAll('[data-test="peta-result"]')).toHaveLength(5);
+    expect(wrapper.find('[data-test="peta-pagination-summary"]').text()).toContain('1–5 dari 12');
+
+    await wrapper.find('[data-test="peta-next-page"]').trigger('click');
+    expect(wrapper.findAll('[data-test="peta-result"]')).toHaveLength(5);
+    expect(wrapper.find('[data-test="peta-pagination-summary"]').text()).toContain('6–10 dari 12');
+
+    await wrapper.find('[data-test="peta-search"]').setValue('RT');
+    expect(wrapper.findAll('[data-test="peta-result"]')).toHaveLength(5);
+    expect(wrapper.find('[data-test="peta-pagination-summary"]').text()).toContain('1–5 dari 12');
+  });
+
   it('swaps the nearby list for the detail view and links to the Ketua RT page', async () => {
     const wrapper = await mountReady();
 
-    await wrapper.findAll('ol li button')[0]?.trigger('click');
+    await wrapper.findAll('[data-test="peta-result"]')[0]?.trigger('click');
     await flushPromises();
 
     // Detail view replaces the list
@@ -202,7 +253,7 @@ describe('PetaView accessibility, filtering, and point selection', () => {
     expect(ketuaRtLink.text()).toContain('Lihat seluruh daftar Ketua RT');
 
     // Closing returns to the list
-    await wrapper.find('button[aria-label="Tutup"]').trigger('click');
+    await wrapper.findAll('button').find((button) => button.text().trim() === 'Kembali ke hasil')?.trigger('click');
     await flushPromises();
     expect(wrapper.text()).toContain('Titik terdekat');
   });

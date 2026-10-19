@@ -12,6 +12,7 @@ export const useMapsStore = defineStore('maps', () => {
   const activeRtFilter = ref<number | null>(null);
   const isLoading = ref(false);
   const error = ref<string | null>(null);
+  let selectionRequest = 0;
 
   const filteredPoints = computed(() => {
     return points.value.filter((point) => {
@@ -46,6 +47,7 @@ export const useMapsStore = defineStore('maps', () => {
   }
 
   async function selectPoint(point: SpatialPointDTO | null) {
+    const requestId = ++selectionRequest;
     selectedPoint.value = point;
     selectedLeader.value = null;
 
@@ -53,7 +55,8 @@ export const useMapsStore = defineStore('maps', () => {
       const primaryRt = point.rts[0];
       if (typeof primaryRt === 'number') {
         try {
-          selectedLeader.value = await fetchRtLeaderByRt(primaryRt);
+          const leader = await fetchRtLeaderByRt(primaryRt);
+          if (requestId === selectionRequest) selectedLeader.value = leader;
         } catch {
           // If RT leader lookup fails, proceed with available point info
         }
@@ -70,6 +73,7 @@ export const useMapsStore = defineStore('maps', () => {
   }
 
   function clearSelection() {
+    selectionRequest += 1;
     selectedPoint.value = null;
     selectedLeader.value = null;
   }
