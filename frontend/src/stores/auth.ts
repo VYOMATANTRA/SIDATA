@@ -54,6 +54,12 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => !!accessToken.value)
   const isAdmin = computed(() => user.value?.role?.toLowerCase() === 'admin')
+  const isEditor = computed(() => user.value?.role?.toLowerCase() === 'editor')
+  /**
+   * Content editing is Editor or Admin (SPEC §3). Mirrors the backend's
+   * `requireEditorOrAdmin` guard so the UI does not offer actions the API would reject.
+   */
+  const canEditData = computed(() => isAdmin.value || isEditor.value)
 
   function setAuth(newUser: UserProfile, token: string) {
     user.value = newUser
@@ -145,6 +151,8 @@ export const useAuthStore = defineStore('auth', () => {
     isInitialized,
     isAuthenticated,
     isAdmin,
+    isEditor,
+    canEditData,
     setupToken,
     mustChangePassword,
     setAuth,

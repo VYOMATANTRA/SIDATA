@@ -37,6 +37,12 @@ const router = createRouter({
       meta: { requiresAuth: true, requiresAdmin: true, title: 'Manajemen Pengguna' },
     },
     {
+      path: '/data',
+      name: 'data-management',
+      component: () => import('../views/DataManagementView.vue'),
+      meta: { requiresAuth: true, requiresEditor: true, title: 'Data' },
+    },
+    {
       path: '/auth/callback',
       name: 'auth-callback',
       component: () => import('../views/AuthCallbackView.vue'),
@@ -73,6 +79,10 @@ router.beforeEach(async (to) => {
   }
 
   if (to.meta.requiresAdmin && !authStore.isAdmin) {
+    return { name: 'home' };
+  }
+
+  if (to.meta.requiresEditor && !authStore.canEditData) {
     return { name: 'home' };
   }
 
