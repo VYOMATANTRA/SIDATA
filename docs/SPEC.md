@@ -135,6 +135,15 @@ Hybrid model:
   for these.
 - **Prose** — field-by-field forms (tier-1 builder or tier-2 free text; see §5).
 
+The frontend surface for the first two is a single `/data` view (editor/admin only, no CMS
+sidebar shell): a searchable, type-filterable card list of every scalar indicator and matrix
+table, each opening an accessible edit dialog. It is edit-only — an indicator or table must
+attach to a `section`, and no section-management surface exists, so create/delete are not in the
+UI rather than shipped as forms that cannot submit. "Import From" from the wireframe is not
+built, consistent with the scope above. Enabling the previous-year pair is what sets
+`is_computed_comparison`; clearing the pair detaches any tier-1 template in the same request, as
+§5 requires.
+
 ## 5. Prose Rules
 
 Two tiers, by design intent:
