@@ -415,7 +415,7 @@ const serviceDesk = computed(() => [
             <caption class="sr-only">
               Tabel Standar Waktu Layanan Informasi Publik dan Ketentuan Biaya Permohonan
             </caption>
-            <thead class="bg-brand-navy text-xs font-semibold tracking-wider text-white uppercase">
+            <thead class="bg-brand-navy text-sm sm:text-base font-semibold text-white">
               <tr>
                 <th scope="col" class="px-4 py-3.5 sm:px-6">Tahapan / Jenis Layanan</th>
                 <th scope="col" class="px-4 py-3.5 sm:px-6">Jangka Waktu Maksimal</th>

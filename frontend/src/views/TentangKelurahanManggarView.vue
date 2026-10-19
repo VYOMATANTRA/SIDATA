@@ -345,7 +345,7 @@ const batasWilayah = [
               Daftar Struktur Organisasi dan Tata Kerja Kelurahan Manggar beserta tugas pokok dan
               fungsi
             </caption>
-            <thead class="bg-brand-navy text-xs font-semibold tracking-wider text-white uppercase">
+            <thead class="bg-brand-navy text-sm sm:text-base font-semibold text-white">
               <tr>
                 <th scope="col" class="px-4 py-3.5 sm:px-6">Jabatan / Satuan Tugas</th>
                 <th scope="col" class="px-4 py-3.5 sm:px-6">Nama Pejabat / Pelaksana</th>
