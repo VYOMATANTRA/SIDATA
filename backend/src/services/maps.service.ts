@@ -1,5 +1,15 @@
 import prisma from '../utils/prisma.js';
 import type { SpatialPointType } from '../../generated/prisma/client.js';
+import { Prisma } from '../../generated/prisma/client.js';
+import { z } from 'zod';
+import {
+  buildAuditLog,
+  AUDIT_ACTIONS,
+  type AuditActor,
+  type AuditRequestContext,
+} from './audit.service.js';
+import { executeLockedTransaction, withChangeResult } from '../utils/lockTransactionCache.js';
+import { hasFieldChanged } from '../utils/comparator.js';
 
 export const ALL_SPATIAL_POINT_TYPES: readonly SpatialPointType[] = [
   'ketua_rt',
@@ -673,3 +683,913 @@ export async function getMapSummary(): Promise<MapSummaryDTO> {
     rtLeadersWithIntegrityConflicts,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Write paths (SPEC.md §7) — editor/admin-only via routes, CSRF-protected, audited.
+// Each mutation runs inside a locked transaction together with its audit row; a failed
+// audit write surfaces as a failed request rather than a silent mutation (§3).
+// ---------------------------------------------------------------------------
+
+export class MapsServiceError extends Error {
+  statusCode: number;
+
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.name = 'MapsServiceError';
+    this.statusCode = statusCode;
+  }
+}
+
+/** SPEC §7: RT numbers are strictly the 1–100 range (matches the seeded rt_leaders rows). */
+export const MIN_RT_NUMBER = 1;
+export const MAX_RT_NUMBER = 100;
+
+export interface SpatialPointCoverageDTO {
+  id: string;
+  pointId: string;
+  rtNumber: number;
+  createdAt: string;
+}
+
+/**
+ * RT leader write response. Mirrors RtLeaderDTO minus `coordinates`/`integrityWarning` — the
+ * write path only owns the leader row; coordinate resolution is read-path territory and the
+ * client can re-fetch `GET /api/maps/rt-leaders/:rtNumber` for the joined view.
+ */
+export interface RtLeaderWriteDTO {
+  rtNumber: number;
+  name: string;
+  phone: string;
+  phoneIsWhatsapp: boolean;
+  alamat: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- Validation schemas (zod) -----------------------------------------------
+
+const rtNumberField = z
+  .number()
+  .refine((v) => Number.isInteger(v), { message: 'Nomor RT harus berupa bilangan bulat' })
+  .min(MIN_RT_NUMBER, { message: `Nomor RT harus antara ${MIN_RT_NUMBER} dan ${MAX_RT_NUMBER}` })
+  .max(MAX_RT_NUMBER, { message: `Nomor RT harus antara ${MIN_RT_NUMBER} dan ${MAX_RT_NUMBER}` });
+
+const spatialPointTypeField = z.enum(
+  ALL_SPATIAL_POINT_TYPES as unknown as [SpatialPointType, ...SpatialPointType[]],
+  { message: 'Tipe titik tidak valid' },
+);
+
+const nameField = z
+  .string()
+  .trim()
+  .min(1, 'Nama wajib diisi')
+  .max(191, 'Nama maksimal 191 karakter');
+
+const latitudeField = z.number().refine((v) => v >= -90 && v <= 90, {
+  message: 'Latitude harus antara -90 dan 90',
+});
+const longitudeField = z.number().refine((v) => v >= -180 && v <= 180, {
+  message: 'Longitude harus antara -180 dan 180',
+});
+
+/** `metadata` stores a JSON object (SPEC §7) or null — arrays/scalars are not point metadata. */
+const metadataField = z.record(z.string(), z.unknown()).nullable().optional();
+
+const coverageSetField = z
+  .array(rtNumberField)
+  .max(MAX_RT_NUMBER, `Maksimal ${MAX_RT_NUMBER} RT per titik`);
+
+export const createPointSchema = z
+  .object({
+    name: nameField,
+    type: spatialPointTypeField,
+    latitude: latitudeField,
+    longitude: longitudeField,
+    metadata: metadataField,
+    rts: coverageSetField.optional(),
+  })
+  .strict();
+
+export const updatePointSchema = z
+  .object({
+    name: nameField.optional(),
+    type: spatialPointTypeField.optional(),
+    latitude: latitudeField.optional(),
+    longitude: longitudeField.optional(),
+    metadata: metadataField,
+    rts: coverageSetField.optional(),
+  })
+  .strict()
+  .refine((data) => Object.keys(data).length > 0, {
+    message: 'Setidaknya satu bidang harus disediakan untuk diperbarui',
+  });
+
+export const createCoverageSchema = z.object({ rtNumber: rtNumberField }).strict();
+
+export const updateLeaderSchema = z
+  .object({
+    name: nameField.optional(),
+    phone: z
+      .string()
+      .trim()
+      .min(1, 'Nomor telepon wajib diisi')
+      .max(191, 'Nomor telepon maksimal 191 karakter')
+      .optional(),
+    phoneIsWhatsapp: z.boolean().optional(),
+    alamat: z.string().trim().max(2000, 'Alamat maksimal 2000 karakter').nullable().optional(),
+  })
+  .strict()
+  .refine((data) => Object.keys(data).length > 0, {
+    message: 'Setidaknya satu bidang harus disediakan untuk diperbarui',
+  });
+
+export type CreatePointInput = z.infer<typeof createPointSchema>;
+export type UpdatePointInput = z.infer<typeof updatePointSchema>;
+export type CreateCoverageInput = z.infer<typeof createCoverageSchema>;
+export type UpdateLeaderInput = z.infer<typeof updateLeaderSchema>;
+
+// --- Shared write helpers ----------------------------------------------------
+
+interface SpatialPointWriteRow {
+  id: string;
+  name: string;
+  type: SpatialPointType;
+  latitude: number;
+  longitude: number;
+  metadata: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+  rtCoverages: Array<{ rtNumber: number }>;
+}
+
+interface RtLeaderWriteRow {
+  rtNumber: number;
+  name: string;
+  phone: string;
+  phoneIsWhatsapp: boolean;
+  alamat: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface SpatialWriteTxClient {
+  spatialPoint: Pick<typeof prisma.spatialPoint, 'findUnique' | 'create' | 'update' | 'delete'>;
+  spatialPointRt: Pick<
+    typeof prisma.spatialPointRt,
+    'findMany' | 'findUnique' | 'create' | 'createMany' | 'delete' | 'deleteMany'
+  >;
+  rtLeader: Pick<typeof prisma.rtLeader, 'findUnique' | 'update'>;
+  auditLog: Pick<typeof prisma.auditLog, 'create'>;
+  $queryRaw: (query: Prisma.Sql) => Promise<unknown>;
+}
+
+function isPrismaKnownError(error: unknown, code: string): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === code;
+}
+
+function parseWritePayload(rawInput: unknown): Record<string, unknown> {
+  if (typeof rawInput !== 'object' || rawInput === null || Array.isArray(rawInput)) {
+    throw new MapsServiceError('Payload harus berupa objek JSON.', 400);
+  }
+  return rawInput as Record<string, unknown>;
+}
+
+function parseZodErrorIssues(error: z.ZodError): MapsServiceError {
+  return new MapsServiceError(error.issues.map((issue) => issue.message).join(', '), 400);
+}
+
+/**
+ * Coverage payload normalisation: sorted ascending, duplicates rejected with a clear message —
+ * the (point_id, rt_number) unique constraint alone would surface them as an opaque 409.
+ */
+function normalizeCoverageSet(raw: number[]): number[] {
+  const seen = new Set<number>();
+  for (const rt of raw) {
+    if (seen.has(rt)) {
+      throw new MapsServiceError(
+        `Nomor RT ${rt.toString()} duplikat dalam payload — setiap RT hanya boleh muncul sekali.`,
+        400,
+      );
+    }
+    seen.add(rt);
+  }
+  return [...seen].sort((a, b) => a - b);
+}
+
+/** Empty/whitespace strings collapse to null, undefined stays undefined (pola selector nullable). */
+function sanitizeNullableText(val: string | null | undefined): string | null {
+  if (val === undefined || val === null || val.trim() === '') return null;
+  return val.trim();
+}
+
+/**
+ * Write-response formatter. Reuses the READ-side DTO builder (mapPointToDTO) so a point write
+ * response cannot disagree with what the public read paths would serve for the same row.
+ */
+async function formatWrittenPoint(
+  tx: SpatialWriteTxClient,
+  point: SpatialPointWriteRow,
+): Promise<SpatialPointDTO> {
+  const rts = point.rtCoverages.map((cov) => cov.rtNumber);
+  const leaderMap = new Map<
+    number,
+    {
+      rtNumber: number;
+      name: string;
+      phone: string;
+      phoneIsWhatsapp: boolean;
+      alamat: string | null;
+    }
+  >();
+  if (point.type === 'ketua_rt' && rts.length === 1 && rts[0] !== undefined) {
+    const leader = (await tx.rtLeader.findUnique({
+      where: { rtNumber: rts[0] },
+    })) as RtLeaderWriteRow | null;
+    if (leader) {
+      leaderMap.set(leader.rtNumber, {
+        rtNumber: leader.rtNumber,
+        name: leader.name,
+        phone: leader.phone,
+        phoneIsWhatsapp: leader.phoneIsWhatsapp,
+        alamat: leader.alamat,
+      });
+    }
+  }
+  return mapPointToDTO(point, leaderMap, new Set());
+}
+
+function formatWrittenLeader(row: RtLeaderWriteRow): RtLeaderWriteDTO {
+  return {
+    rtNumber: row.rtNumber,
+    name: row.name,
+    phone: row.phone,
+    phoneIsWhatsapp: row.phoneIsWhatsapp,
+    alamat: row.alamat,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function formatCoverage(row: {
+  id: number;
+  pointId: string;
+  rtNumber: number;
+  createdAt: Date;
+}): SpatialPointCoverageDTO {
+  return {
+    id: String(row.id),
+    pointId: row.pointId,
+    rtNumber: row.rtNumber,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+interface PointWriteSummary {
+  pointId: string;
+  pointName: string;
+  latitude: number;
+  longitude: number;
+  type: SpatialPointType;
+  coverages: number[];
+}
+
+function pointWriteSummary(point: SpatialPointWriteRow): PointWriteSummary {
+  return {
+    pointId: point.id,
+    pointName: point.name,
+    latitude: point.latitude,
+    longitude: point.longitude,
+    type: point.type,
+    coverages: point.rtCoverages.map((cov) => cov.rtNumber).sort((a, b) => a - b),
+  };
+}
+
+/**
+ * Write-path enforcement of the ketua_rt <-> RT invariant (SPEC.md §7), **reusing the shared
+ * read-side resolution rule** (`withDerivedCoverageCounts` + `resolveRtCoverage`) so reads and
+ * writes can never disagree about what a violation is:
+ *
+ * - the point's own post-write coverage must be exactly one RT (the rule's
+ *   'multi-rt-point' branch → 400). MySQL cannot express this as a partial unique index.
+ * - the assigned RT must not also be covered by any OTHER ketua_rt point (the rule's
+ *   'multiple-points' branch → 409).
+ *
+ * The check is scoped to the point being written and only runs on writes that touch the
+ * point's type or coverage — a pure field edit (name/coords/metadata) on a point whose stored
+ * coverage already violates the invariant stays possible, so legacy violations are always
+ * repairable; fixing them requires a coverage write, which is (re-)validated here. Violations
+ * untouched by a given write remain read-side integrityWarning territory.
+ */
+async function assertKetuaRtWriteInvariant(
+  tx: SpatialWriteTxClient,
+  target: {
+    pointId: string;
+    resultingType: SpatialPointType;
+    resultingCoverages: number[];
+  },
+): Promise<void> {
+  if (target.resultingType !== 'ketua_rt') return;
+
+  if (target.resultingCoverages.length !== 1) {
+    throw new MapsServiceError(
+      `Titik ketua_rt "${target.pointId}" harus mencakup tepat satu RT — ` +
+        `posisi setelah perubahan mencakup ${target.resultingCoverages.length} RT ` +
+        `(${target.resultingCoverages.join(', ') || 'kosong'}).`,
+      400,
+    );
+  }
+  const rt = target.resultingCoverages[0] as number;
+
+  // Post-write global ketua_rt coverage state: every OTHER ketua_rt point's stored rows plus
+  // the target point's post-write coverage. withDerivedCoverageCounts needs this unfiltered
+  // set to derive each point's TOTAL RT count for the shared rule.
+  const stored = (await tx.spatialPointRt.findMany({
+    where: { point: { type: 'ketua_rt' } },
+    select: { pointId: true, rtNumber: true },
+  })) as Array<{ pointId: string; rtNumber: number }>;
+  const derived = withDerivedCoverageCounts([
+    ...stored.filter((c) => c.pointId !== target.pointId),
+    { pointId: target.pointId, rtNumber: rt },
+  ]);
+  const resolution = resolveRtCoverage(
+    rt,
+    derived.filter((c) => c.rtNumber === rt),
+  );
+
+  if (resolution.conflict === 'multiple-points') {
+    const others = derived
+      .filter((c) => c.rtNumber === rt && c.pointId !== target.pointId)
+      .map((c) => c.pointId)
+      .join(', ');
+    throw new MapsServiceError(
+      `RT ${rt.toString()} sudah dicakup oleh titik ketua_rt lain (${others}) — ` +
+        `satu RT hanya boleh dicakup tepat satu titik ketua_rt.`,
+      409,
+    );
+  }
+  // 'multi-rt-point' cannot occur past the shape gate above (the target is pinned at exactly
+  // one RT), but honor the shared rule defensively rather than assume it.
+  if (resolution.conflict === 'multi-rt-point') {
+    throw new MapsServiceError(resolution.warning ?? 'Invariant ketua_rt/RT dilanggar.', 400);
+  }
+}
+
+/**
+ * Locks the rt_leaders rows of the RTs a ketua_rt write touches. serializeKetuaRt writes to
+ * the same RT (two sessions claiming RT 5 for two different ketua_rt points would otherwise
+ * both pass the cross-point check). The leader rows are seeded 1–100; a missing row degrades
+ * the lock to best-effort, matching SPEC's "validate rt_number 1–100" (existence is NOT
+ * required — orphaned coverage is a read-path integrityWarning, not a write reject).
+ * Lock order is ascending RT so overlapping write sets never deadlock.
+ */
+function leaderLockQuery(rts: number[]): LockQueryFn | undefined {
+  if (rts.length === 0) return undefined;
+  const sorted = [...rts].sort((a, b) => a - b);
+  return async (tx: unknown) => {
+    const client = tx as SpatialWriteTxClient;
+    await client.$queryRaw(
+      Prisma.sql`SELECT rt_number FROM rt_leaders WHERE rt_number IN (${Prisma.join(sorted)}) FOR UPDATE`,
+    );
+  };
+}
+
+interface LockQueryFn {
+  (tx: unknown): Promise<unknown>;
+}
+
+// --- Spatial point CRUD --------------------------------------------------------
+
+export const createSpatialPoint = async (
+  rawInput: unknown,
+  actor: AuditActor,
+  reqContext: AuditRequestContext,
+  client = prisma,
+): Promise<SpatialPointDTO> => {
+  const parsed = createPointSchema.safeParse(parseWritePayload(rawInput));
+  if (!parsed.success) {
+    throw parseZodErrorIssues(parsed.error);
+  }
+  const input = parsed.data;
+  const postCoverages = normalizeCoverageSet(input.rts ?? []);
+
+  try {
+    return await executeLockedTransaction({
+      client,
+      lockQuery: leaderLockQuery(input.type === 'ketua_rt' ? postCoverages : []),
+      execute: async (txRaw) => {
+        const tx = txRaw as SpatialWriteTxClient;
+        const created = (await tx.spatialPoint.create({
+          data: {
+            name: input.name,
+            type: input.type,
+            latitude: input.latitude,
+            longitude: input.longitude,
+            ...(input.metadata !== undefined && input.metadata !== null
+              ? { metadata: input.metadata as unknown as Prisma.InputJsonValue }
+              : {}),
+            ...(postCoverages.length > 0
+              ? { rtCoverages: { create: postCoverages.map((rtNumber) => ({ rtNumber })) } }
+              : {}),
+          },
+          include: { rtCoverages: { orderBy: { rtNumber: 'asc' } } },
+        })) as unknown as SpatialPointWriteRow;
+
+        await assertKetuaRtWriteInvariant(tx, {
+          pointId: created.id,
+          resultingType: created.type,
+          resultingCoverages: postCoverages,
+        });
+
+        await buildAuditLog(
+          {
+            action: AUDIT_ACTIONS.SPATIAL_POINT_CREATED,
+            actor,
+            target: { type: 'spatial_point', id: created.id, label: created.name },
+            metadata: {
+              ...pointWriteSummary(created),
+              coverages: postCoverages,
+            },
+            context: reqContext,
+          },
+          tx,
+        );
+
+        return formatWrittenPoint(tx, created);
+      },
+    });
+  } catch (error) {
+    if (error instanceof MapsServiceError) throw error;
+    if (isPrismaKnownError(error, 'P2002')) {
+      throw new MapsServiceError('Coverage RT sudah terdaftar pada titik ini.', 409);
+    }
+    throw error;
+  }
+};
+
+export const updateSpatialPoint = async (
+  id: unknown,
+  rawInput: unknown,
+  actor: AuditActor,
+  reqContext: AuditRequestContext,
+  client = prisma,
+): Promise<SpatialPointDTO> => {
+  if (typeof id !== 'string' || id.trim() === '' || id.length > 191) {
+    throw new MapsServiceError('ID titik spasial tidak valid.', 400);
+  }
+  const normalizedId = id.trim();
+
+  const parsed = updatePointSchema.safeParse(parseWritePayload(rawInput));
+  if (!parsed.success) {
+    throw parseZodErrorIssues(parsed.error);
+  }
+  const input = parsed.data as UpdatePointInput & Record<string, unknown>;
+
+  try {
+    return await executeLockedTransaction({
+      client,
+      lockQuery: Prisma.sql`SELECT id FROM spatial_points WHERE id = ${normalizedId} FOR UPDATE`,
+      execute: async (txRaw) => {
+        const tx = txRaw as SpatialWriteTxClient;
+        const existing = (await tx.spatialPoint.findUnique({
+          where: { id: normalizedId },
+          include: { rtCoverages: { orderBy: { rtNumber: 'asc' } } },
+        })) as unknown as SpatialPointWriteRow | null;
+        if (!existing) {
+          throw new MapsServiceError('Titik spasial tidak ditemukan.', 404);
+        }
+
+        const typeChanged = input.type !== undefined && input.type !== existing.type;
+        const rtsTouched = input.rts !== undefined;
+        const resultingType = typeChanged ? (input.type as SpatialPointType) : existing.type;
+        const preCoverages = normalizeCoverageSet(existing.rtCoverages.map((c) => c.rtNumber));
+        const postCoverages = rtsTouched
+          ? normalizeCoverageSet(input.rts as number[])
+          : preCoverages;
+        const addedCoverages = postCoverages.filter((rt) => !preCoverages.includes(rt));
+        const removedCoverages = preCoverages.filter((rt) => !postCoverages.includes(rt));
+        const coverageChanged = addedCoverages.length > 0 || removedCoverages.length > 0;
+
+        const changes: Record<string, { before: unknown; after: unknown }> = {};
+        const track = (field: string, before: unknown, after: unknown) => {
+          if (hasFieldChanged(before, after)) {
+            changes[field] = { before, after };
+          }
+        };
+        if (input.name !== undefined) track('name', existing.name, input.name.trim());
+        if (input.type !== undefined) track('type', existing.type, input.type);
+        if (input.latitude !== undefined) track('latitude', existing.latitude, input.latitude);
+        if (input.longitude !== undefined) track('longitude', existing.longitude, input.longitude);
+        if (input.metadata !== undefined) {
+          const sanitizedMetadata =
+            input.metadata === null ? null : (input.metadata as Record<string, unknown>);
+          track('metadata', existing.metadata ?? null, sanitizedMetadata);
+        }
+        if (coverageChanged) {
+          changes.coverages = { before: preCoverages, after: postCoverages };
+        }
+
+        if (!coverageChanged && Object.keys(changes).length === 0) {
+          // No-op PATCH: per SPEC.md §7 the invariant check only runs on type/coverage writes.
+          return withChangeResult(await formatWrittenPoint(tx, existing), false);
+        }
+
+        if (coverageChanged) {
+          if (removedCoverages.length > 0) {
+            await tx.spatialPointRt.deleteMany({
+              where: { pointId: normalizedId, rtNumber: { in: removedCoverages } },
+            });
+          }
+          if (addedCoverages.length > 0) {
+            await tx.spatialPointRt.createMany({
+              data: addedCoverages.map((rtNumber) => ({ pointId: normalizedId, rtNumber })),
+            });
+          }
+        }
+
+        if (Object.keys(changes).some((key) => key !== 'coverages')) {
+          await tx.spatialPoint.update({
+            where: { id: normalizedId },
+            data: {
+              ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+              ...(input.type !== undefined ? { type: input.type } : {}),
+              ...(input.latitude !== undefined ? { latitude: input.latitude } : {}),
+              ...(input.longitude !== undefined ? { longitude: input.longitude } : {}),
+              // MySQL Prisma Json handling: SQL NULL must go through DbNull on update, not JS null.
+              ...(input.metadata !== undefined
+                ? {
+                    metadata:
+                      input.metadata === null
+                        ? Prisma.DbNull
+                        : (input.metadata as unknown as Prisma.InputJsonValue),
+                  }
+                : {}),
+            },
+          });
+        }
+
+        const mustHoldInvariant = rtsTouched || typeChanged;
+        if (mustHoldInvariant && resultingType === 'ketua_rt') {
+          // contested RTs = pre ∪ post so a concurrent claim/release of any touched RT
+          // serializes on the same rt_leaders row before the assert reads global state.
+          const leaderLock = leaderLockQuery([...new Set([...preCoverages, ...postCoverages])]);
+          if (leaderLock) await leaderLock(tx);
+          await assertKetuaRtWriteInvariant(tx, {
+            pointId: normalizedId,
+            resultingType,
+            resultingCoverages: postCoverages,
+          });
+        }
+
+        const updated = (await tx.spatialPoint.findUnique({
+          where: { id: normalizedId },
+          include: { rtCoverages: { orderBy: { rtNumber: 'asc' } } },
+        })) as unknown as SpatialPointWriteRow;
+
+        await buildAuditLog(
+          {
+            action: AUDIT_ACTIONS.SPATIAL_POINT_UPDATED,
+            actor,
+            target: { type: 'spatial_point', id: existing.id, label: existing.name },
+            metadata: {
+              changes,
+              ...(addedCoverages.length > 0 ? { coveragesAdded: addedCoverages } : {}),
+              ...(removedCoverages.length > 0 ? { coveragesRemoved: removedCoverages } : {}),
+              coverages: postCoverages,
+            },
+            context: reqContext,
+          },
+          tx,
+        );
+
+        return formatWrittenPoint(tx, updated);
+      },
+    });
+  } catch (error) {
+    if (error instanceof MapsServiceError) throw error;
+    if (isPrismaKnownError(error, 'P2025')) {
+      throw new MapsServiceError('Titik spasial tidak ditemukan.', 404);
+    }
+    throw error;
+  }
+};
+
+export const deleteSpatialPoint = async (
+  id: unknown,
+  actor: AuditActor,
+  reqContext: AuditRequestContext,
+  client = prisma,
+): Promise<SpatialPointDTO> => {
+  if (typeof id !== 'string' || id.trim() === '' || id.length > 191) {
+    throw new MapsServiceError('ID titik spasial tidak valid.', 400);
+  }
+  const normalizedId = id.trim();
+
+  try {
+    return await executeLockedTransaction({
+      client,
+      lockQuery: Prisma.sql`SELECT id FROM spatial_points WHERE id = ${normalizedId} FOR UPDATE`,
+      execute: async (txRaw) => {
+        const tx = txRaw as SpatialWriteTxClient;
+        const existing = (await tx.spatialPoint.findUnique({
+          where: { id: normalizedId },
+          include: { rtCoverages: { orderBy: { rtNumber: 'asc' } } },
+        })) as unknown as SpatialPointWriteRow | null;
+        if (!existing) {
+          throw new MapsServiceError('Titik spasial tidak ditemukan.', 404);
+        }
+
+        // Deleting a point only RELEASES RT coverages (they cascade) — it cannot create a
+        // multiple-points or multi-rt-point state, so no ketua_rt invariant assert here (and
+        // no rt_leaders locks: the frees are always legal).
+        await tx.spatialPoint.delete({ where: { id: normalizedId } });
+
+        const before = await formatWrittenPoint(tx, existing);
+        await buildAuditLog(
+          {
+            action: AUDIT_ACTIONS.SPATIAL_POINT_DELETED,
+            actor,
+            target: { type: 'spatial_point', id: existing.id, label: existing.name },
+            metadata: { before: pointWriteSummary(existing), changes: {} },
+            context: reqContext,
+          },
+          tx,
+        );
+
+        return before;
+      },
+    });
+  } catch (error) {
+    if (error instanceof MapsServiceError) throw error;
+    if (isPrismaKnownError(error, 'P2025')) {
+      throw new MapsServiceError('Titik spasial tidak ditemukan.', 404);
+    }
+    throw error;
+  }
+};
+
+// --- RT coverage subresource -----------------------------------------------------
+
+export const createSpatialPointCoverage = async (
+  id: unknown,
+  rawInput: unknown,
+  actor: AuditActor,
+  reqContext: AuditRequestContext,
+  client = prisma,
+): Promise<SpatialPointCoverageDTO> => {
+  if (typeof id !== 'string' || id.trim() === '' || id.length > 191) {
+    throw new MapsServiceError('ID titik spasial tidak valid.', 400);
+  }
+  const normalizedId = id.trim();
+
+  const parsed = createCoverageSchema.safeParse(parseWritePayload(rawInput));
+  if (!parsed.success) {
+    throw parseZodErrorIssues(parsed.error);
+  }
+  const rtNumber = parsed.data.rtNumber;
+
+  const pointLock = Prisma.sql`SELECT id FROM spatial_points WHERE id = ${normalizedId} FOR UPDATE`;
+
+  try {
+    return await executeLockedTransaction({
+      client,
+      // Point lock first (consistent with PATCH/DELETE ordering), then the RT's rt_leaders row
+      // so concurrent ketua_rt writes claiming this same RT serialize on one resource.
+      lockQuery: async (txRaw) => {
+        const tx = txRaw as SpatialWriteTxClient;
+        await tx.$queryRaw(pointLock);
+        await leaderLockQuery([rtNumber])?.(tx);
+      },
+      execute: async (txRaw) => {
+        const tx = txRaw as SpatialWriteTxClient;
+        const point = (await tx.spatialPoint.findUnique({
+          where: { id: normalizedId },
+          include: { rtCoverages: { orderBy: { rtNumber: 'asc' } } },
+        })) as unknown as SpatialPointWriteRow | null;
+        if (!point) {
+          throw new MapsServiceError('Titik spasial tidak ditemukan.', 404);
+        }
+
+        const clash = point.rtCoverages.some((cov) => cov.rtNumber === rtNumber);
+        if (clash) {
+          throw new MapsServiceError(
+            `RT ${rtNumber.toString()} sudah terdaftar pada titik ini.`,
+            409,
+          );
+        }
+
+        const created = (await tx.spatialPointRt.create({
+          data: { pointId: normalizedId, rtNumber },
+        })) as unknown as { id: number; pointId: string; rtNumber: number; createdAt: Date };
+
+        const postCoverages = normalizeCoverageSet([
+          ...point.rtCoverages.map((cov) => cov.rtNumber),
+          rtNumber,
+        ]);
+        await assertKetuaRtWriteInvariant(tx, {
+          pointId: normalizedId,
+          resultingType: point.type,
+          resultingCoverages: postCoverages,
+        });
+
+        await buildAuditLog(
+          {
+            action: AUDIT_ACTIONS.SPATIAL_POINT_RT_CREATED,
+            actor,
+            target: { type: 'spatial_point_rt', id: String(created.id), label: `RT ${rtNumber}` },
+            metadata: { pointId: normalizedId, pointType: point.type, coverages: postCoverages },
+            context: reqContext,
+          },
+          tx,
+        );
+
+        return formatCoverage(created);
+      },
+    });
+  } catch (error) {
+    if (error instanceof MapsServiceError) throw error;
+    if (isPrismaKnownError(error, 'P2002')) {
+      throw new MapsServiceError(`RT ${rtNumber.toString()} sudah terdaftar pada titik ini.`, 409);
+    }
+    throw error;
+  }
+};
+
+export const deleteSpatialPointCoverage = async (
+  id: unknown,
+  rtNumber: number,
+  actor: AuditActor,
+  reqContext: AuditRequestContext,
+  client = prisma,
+): Promise<SpatialPointCoverageDTO> => {
+  if (typeof id !== 'string' || id.trim() === '' || id.length > 191) {
+    throw new MapsServiceError('ID titik spasial tidak valid.', 400);
+  }
+  if (!Number.isInteger(rtNumber) || rtNumber < MIN_RT_NUMBER || rtNumber > MAX_RT_NUMBER) {
+    throw new MapsServiceError(
+      `Nomor RT harus berupa bilangan bulat antara ${MIN_RT_NUMBER} dan ${MAX_RT_NUMBER}.`,
+      400,
+    );
+  }
+  const normalizedId = id.trim();
+
+  const pointLock = Prisma.sql`SELECT id FROM spatial_points WHERE id = ${normalizedId} FOR UPDATE`;
+
+  try {
+    return await executeLockedTransaction({
+      client,
+      // Same resource pair as the coverage add path (point row, then rt_leaders row) so an RT
+      // being freed here and an RT claimed elsewhere cannot race past each other's assert.
+      lockQuery: async (txRaw) => {
+        const tx = txRaw as SpatialWriteTxClient;
+        await tx.$queryRaw(pointLock);
+        await leaderLockQuery([rtNumber])?.(tx);
+      },
+      execute: async (txRaw) => {
+        const tx = txRaw as SpatialWriteTxClient;
+        const point = (await tx.spatialPoint.findUnique({
+          where: { id: normalizedId },
+          include: { rtCoverages: { orderBy: { rtNumber: 'asc' } } },
+        })) as unknown as SpatialPointWriteRow | null;
+        if (!point) {
+          throw new MapsServiceError('Titik spasial tidak ditemukan.', 404);
+        }
+
+        const existing = (await tx.spatialPointRt.findUnique({
+          where: { pointId_rtNumber: { pointId: normalizedId, rtNumber } },
+        })) as unknown as { id: number; pointId: string; rtNumber: number; createdAt: Date } | null;
+        if (!existing) {
+          throw new MapsServiceError(
+            `RT ${rtNumber.toString()} tidak terdaftar pada titik ini.`,
+            404,
+          );
+        }
+
+        await tx.spatialPointRt.delete({
+          where: { pointId_rtNumber: { pointId: normalizedId, rtNumber } },
+        });
+
+        const postCoverages = normalizeCoverageSet(
+          point.rtCoverages.filter((cov) => cov.rtNumber !== rtNumber).map((cov) => cov.rtNumber),
+        );
+        await assertKetuaRtWriteInvariant(tx, {
+          pointId: normalizedId,
+          resultingType: point.type,
+          resultingCoverages: postCoverages,
+        });
+
+        await buildAuditLog(
+          {
+            action: AUDIT_ACTIONS.SPATIAL_POINT_RT_DELETED,
+            actor,
+            target: { type: 'spatial_point_rt', id: String(existing.id), label: `RT ${rtNumber}` },
+            metadata: {
+              pointId: normalizedId,
+              pointType: point.type,
+              coveragesAfter: postCoverages,
+            },
+            context: reqContext,
+          },
+          tx,
+        );
+
+        return formatCoverage(existing);
+      },
+    });
+  } catch (error) {
+    if (error instanceof MapsServiceError) throw error;
+    throw error;
+  }
+};
+
+// --- RT leader edit ---------------------------------------------------------------
+
+export const updateRtLeader = async (
+  rtNumber: number,
+  rawInput: unknown,
+  actor: AuditActor,
+  reqContext: AuditRequestContext,
+  client = prisma,
+): Promise<RtLeaderWriteDTO> => {
+  if (!Number.isInteger(rtNumber) || rtNumber < MIN_RT_NUMBER || rtNumber > MAX_RT_NUMBER) {
+    throw new MapsServiceError(
+      `Nomor RT harus berupa bilangan bulat antara ${MIN_RT_NUMBER} dan ${MAX_RT_NUMBER}.`,
+      400,
+    );
+  }
+
+  const parsed = updateLeaderSchema.safeParse(parseWritePayload(rawInput));
+  if (!parsed.success) {
+    throw parseZodErrorIssues(parsed.error);
+  }
+  const input = parsed.data as UpdateLeaderInput & Record<string, unknown>;
+
+  try {
+    return await executeLockedTransaction({
+      client,
+      lockQuery: Prisma.sql`SELECT rt_number FROM rt_leaders WHERE rt_number = ${rtNumber} FOR UPDATE`,
+      execute: async (txRaw) => {
+        const tx = txRaw as SpatialWriteTxClient;
+        const existing = (await tx.rtLeader.findUnique({
+          where: { rtNumber },
+        })) as unknown as RtLeaderWriteRow | null;
+        if (!existing) {
+          throw new MapsServiceError('Ketua RT tidak ditemukan.', 404);
+        }
+
+        const changes: Record<string, { before: unknown; after: unknown }> = {};
+        const track = (field: string, before: unknown, after: unknown) => {
+          if (hasFieldChanged(before, after)) {
+            changes[field] = { before, after };
+          }
+        };
+
+        const sanitizedName = input.name !== undefined ? input.name.trim() : undefined;
+        const sanitizedPhone = input.phone !== undefined ? input.phone.trim() : undefined;
+        const sanitizedAlamat =
+          input.alamat !== undefined ? sanitizeNullableText(input.alamat) : undefined;
+
+        if (input.name !== undefined) track('name', existing.name, sanitizedName);
+        if (input.phone !== undefined) track('phone', existing.phone, sanitizedPhone);
+        if (input.phoneIsWhatsapp !== undefined) {
+          track('phoneIsWhatsapp', existing.phoneIsWhatsapp, input.phoneIsWhatsapp);
+        }
+        if (input.alamat !== undefined) track('alamat', existing.alamat, sanitizedAlamat);
+
+        if (Object.keys(changes).length === 0) {
+          return withChangeResult(formatWrittenLeader(existing), false);
+        }
+
+        const updated = (await tx.rtLeader.update({
+          where: { rtNumber },
+          data: {
+            ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+            ...(input.phone !== undefined ? { phone: input.phone.trim() } : {}),
+            ...(input.phoneIsWhatsapp !== undefined
+              ? { phoneIsWhatsapp: input.phoneIsWhatsapp }
+              : {}),
+            ...(input.alamat !== undefined ? { alamat: sanitizeNullableText(input.alamat) } : {}),
+          },
+        })) as unknown as RtLeaderWriteRow;
+
+        await buildAuditLog(
+          {
+            action: AUDIT_ACTIONS.RT_LEADER_UPDATED,
+            actor,
+            target: { type: 'rt_leader', id: String(rtNumber), label: `RT ${rtNumber}` },
+            metadata: { changes },
+            context: reqContext,
+          },
+          tx,
+        );
+
+        return formatWrittenLeader(updated);
+      },
+    });
+  } catch (error) {
+    if (error instanceof MapsServiceError) throw error;
+    if (isPrismaKnownError(error, 'P2025')) {
+      throw new MapsServiceError('Ketua RT tidak ditemukan.', 404);
+    }
+    throw error;
+  }
+};
