@@ -23,25 +23,25 @@ const pillars: PillarItem[] = [
       'Menstandarisasi metadata, variabel, dan format pelaporan data kelurahan agar selaras dengan prinsip Satu Data Indonesia (SDI) dan kaidah statistik resmi BPS.',
   },
   {
-    title: 'Penguatan Kapasitas Aparatur & Agen RT',
+    title: 'Penguatan Kapasitas Aparatur Kelurahan',
     description:
-      'Melatih perangkat kelurahan dan 100 Ketua RT sebagai agen literasi statistik yang mampu mengumpulkan data lapangan secara tertib, valid, dan berkesinambungan.',
+      'Melatih perangkat kelurahan sebagai agen statistik yang mampu mengumpulkan data lapangan secara tertib, valid, dan berkesinambungan.',
   },
   {
     title: 'Penyusunan Publikasi Statistik Kelurahan',
     description:
-      'Menghasilkan dokumen resmi tahunan seperti "Kelurahan Manggar Dalam Angka 2026" sebagai rujukan bagi pengambil kebijakan di tingkat kecamatan dan kota.',
+      'Menghasilkan dokumen resmi tahunan seperti "Kelurahan Manggar Dalam Angka 2026" sebagai rujukan bagi publik dan para pemangku kepentingan.',
   },
   {
     title: 'Pemanfaatan Data untuk Kebijakan Nyata',
     description:
-      'Memanfaatkan data kependudukan, kemiskinan, dan potensi lingkungan secara tepat sasaran dalam perencanaan musrenbang, bansos, dan pengelolaan sampah.',
+      'Memanfaatkan data kependudukan, kemiskinan, dan potensi lingkungan secara tepat sasaran dalam perencanaan seperti bantuan sosial, pengelolaan sampah, dan lainnya.',
   },
 ];
 
 const collaborationLogos = [
-  { src: logoDesaCantik, alt: 'Logo Desa Cantik' },
   { src: logoBps, alt: 'Logo Badan Pusat Statistik (BPS)' },
+  { src: logoDesaCantik, alt: 'Logo Desa Cantik' },
 ];
 </script>
 
@@ -51,7 +51,7 @@ const collaborationLogos = [
 
     <TentangHeroPanel
       title="Program Desa/Kelurahan Cinta Statistik (Desa Cantik)"
-      subtitle="Upaya Kelurahan Manggar dalam mewujudkan nagari sadar statistik."
+      subtitle="Upaya Kelurahan Manggar dalam mewujudkan kelurahan sadar statistik."
     >
       <template #figure>
         <TentangFigureCard
@@ -62,38 +62,20 @@ const collaborationLogos = [
       </template>
     </TentangHeroPanel>
 
-    <!-- Catatan batasan portal -->
-    <section class="border-b border-gray-200 bg-white px-4 py-4 sm:px-6" aria-labelledby="scope-title">
-      <div class="mx-auto max-w-5xl">
-        <h2 id="scope-title" class="text-base font-bold text-brand-navy">
-          Catatan Batasan Portal
-        </h2>
-        <p class="mt-1 text-base leading-relaxed text-gray-800">
-          Situs web <strong>SIDATA</strong> adalah salah satu luaran inovasi terpadu yang mendukung
-          implementasi pembinaan Desa Cantik di Kelurahan Manggar, dan diberi merek secara
-          tersendiri. Portal ini
-          <strong>bukan portal resmi milik Badan Pusat Statistik (BPS)</strong>.
-        </p>
-      </div>
-    </section>
-
     <div class="mx-auto flex max-w-5xl flex-col gap-5 px-4 py-10 sm:px-6 sm:py-12">
-      <TentangInfoCard heading="Tentang Program Kelurahan Cantik" icon="info">
+      <TentangInfoCard heading="Tentang Program Desa Cantik" icon="info">
         <p>
-          Kelurahan Cinta Statistik merupakan inisiatif dari Badan Pusat Statistik (BPS) untuk
-          meningkatkan literasi, pengelolaan, dan pemanfaatan data statistik di tingkat desa atau
-          kelurahan. Jadi, fokus utama Program Desa Cantik adalah meningkatkan literasi dan
-          kapabilitas perangkat desa dalam mengelola serta memanfaatkan data statistik agar
-          pembangunan desa lebih tepat sasaran.
+          Desa/Kelurahan Cinta Statistik merupakan inisiatif dari Badan Pusat Statistik (BPS) untuk
+          meningkatkan literasi, pengelolaan, dan pemanfaatan data statistik di tingkat
+          desa/kelurahan agar pembangunan desa/kelurahan lebih tepat sasaran.
         </p>
       </TentangInfoCard>
 
       <TentangInfoCard heading="Mewujudkan Sadar Statistik di Manggar" icon="chart">
         <p>
           Melalui pendampingan ini, Kelurahan Manggar berupaya menyusun kependudukan, potensi
-          geografis, dan sumber daya secara akurat. Data yang dihasilkan (seperti yang ditampilkan di
-          portal SIDATA ini) diharapkan dapat menjadi rujukan dalam perencanaan pembangunan kelurahan
-          ke depannya.
+          geografis, dan sumber daya secara akurat. Data yang dihasilkan diharapkan dapat menjadi
+          rujukan dalam perencanaan pembangunan kelurahan ke depannya.
         </p>
       </TentangInfoCard>
     </div>
@@ -116,13 +98,12 @@ const collaborationLogos = [
           cta-label="Peta Geospasial"
           class="flex-1"
         >
-          Plot titik koordinat rumah seluruh ketua RT dan sebaran lokasi penimbangan sampah aktif di
+          Plot titik koordinat rumah seluruh ketua RT dan sebaran lokasi bank sampah aktif di
           Balikpapan Timur.
         </TentangResourceCard>
 
-        <TentangResourceCard title="Sistem SIDATA" icon="system" class="flex-1">
-          Platform pencarian agregat kependudukan real-time, monitoring per RT, dan sinkronisasi
-          metadata secara berkala tanpa hambatan.
+        <TentangResourceCard title="Portal SIDATA" icon="system" class="flex-1">
+          Solusi terpadu untuk menyimpan dan menyajikan data kelurahan secara terstruktur.
         </TentangResourceCard>
       </div>
     </TentangFeatureBand>

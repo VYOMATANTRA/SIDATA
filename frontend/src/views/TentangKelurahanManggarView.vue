@@ -223,13 +223,12 @@ const batasWilayah = [
           cta-label="Peta Geospasial"
           class="flex-1"
         >
-          Plot titik koordinat rumah seluruh ketua RT dan sebaran lokasi penimbangan sampah aktif
-          di Balikpapan Timur.
+          Plot titik koordinat rumah seluruh ketua RT dan sebaran lokasi bank sampah aktif di
+          Balikpapan Timur.
         </TentangResourceCard>
 
-        <TentangResourceCard title="Sistem SIDATA" icon="system" class="flex-1">
-          Platform pencarian agregat kependudukan real-time, monitoring per RT, dan sinkronisasi
-          metadata secara berkala tanpa hambatan.
+        <TentangResourceCard title="Portal SIDATA" icon="system" class="flex-1">
+          Solusi terpadu untuk menyimpan dan menyajikan data kelurahan secara terstruktur.
         </TentangResourceCard>
       </div>
     </TentangFeatureBand>
@@ -346,7 +345,7 @@ const batasWilayah = [
               Daftar Struktur Organisasi dan Tata Kerja Kelurahan Manggar beserta tugas pokok dan
               fungsi
             </caption>
-            <thead class="bg-brand-navy text-xs font-semibold tracking-wider text-white uppercase">
+            <thead class="bg-brand-navy text-sm sm:text-base font-semibold text-white">
               <tr>
                 <th scope="col" class="px-4 py-3.5 sm:px-6">Jabatan / Satuan Tugas</th>
                 <th scope="col" class="px-4 py-3.5 sm:px-6">Nama Pejabat / Pelaksana</th>
