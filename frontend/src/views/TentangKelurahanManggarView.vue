@@ -223,13 +223,12 @@ const batasWilayah = [
           cta-label="Peta Geospasial"
           class="flex-1"
         >
-          Plot titik koordinat rumah seluruh ketua RT dan sebaran lokasi penimbangan sampah aktif
-          di Balikpapan Timur.
+          Plot titik koordinat rumah seluruh ketua RT dan sebaran lokasi bank sampah aktif di
+          Balikpapan Timur.
         </TentangResourceCard>
 
-        <TentangResourceCard title="Sistem SIDATA" icon="system" class="flex-1">
-          Platform pencarian agregat kependudukan real-time, monitoring per RT, dan sinkronisasi
-          metadata secara berkala tanpa hambatan.
+        <TentangResourceCard title="Portal SIDATA" icon="system" class="flex-1">
+          Solusi terpadu untuk menyimpan dan menyajikan data kelurahan secara terstruktur.
         </TentangResourceCard>
       </div>
     </TentangFeatureBand>
