@@ -57,6 +57,25 @@ export const AUDIT_ACTIONS = {
   PAGE_CREATED: defineAction('page.created', 'info'),
   PAGE_DELETED: defineAction('page.deleted', 'warning'),
   PAGE_REORDERED: defineAction('page.reordered', 'info'),
+  INDICATOR_CREATED: defineAction('indicator.created', 'info'),
+  INDICATOR_UPDATED: defineAction('indicator.updated', 'info'),
+  INDICATOR_DELETED: defineAction('indicator.deleted', 'warning'),
+  COMPARISON_TEMPLATE_CREATED: defineAction('comparison_template.created', 'info'),
+  COMPARISON_TEMPLATE_UPDATED: defineAction('comparison_template.updated', 'info'),
+  COMPARISON_TEMPLATE_DELETED: defineAction('comparison_template.deleted', 'warning'),
+  // SPEC §5: an admin saved trend/superlative wording outside the {trend} slot after
+  // acknowledging the warning. Warning, not critical: it is a trail for after-the-fact
+  // tracing, not an event that needs an admin to acknowledge it.
+  COMPARISON_TEMPLATE_KEYWORD_WARNING_OVERRIDDEN: defineAction(
+    'comparison_template.keyword_warning_overridden',
+    'warning',
+  ),
+  INDICATOR_TABLE_CREATED: defineAction('indicator_table.created', 'info'),
+  INDICATOR_TABLE_UPDATED: defineAction('indicator_table.updated', 'info'),
+  INDICATOR_TABLE_DELETED: defineAction('indicator_table.deleted', 'warning'),
+  INDICATOR_TABLE_ROW_CREATED: defineAction('indicator_table_row.created', 'info'),
+  INDICATOR_TABLE_ROW_UPDATED: defineAction('indicator_table_row.updated', 'info'),
+  INDICATOR_TABLE_ROW_DELETED: defineAction('indicator_table_row.deleted', 'warning'),
   AUDIT_PRUNED: defineAction('audit.pruned', 'info'),
 } as const satisfies Record<string, AuditActionDef>;
 

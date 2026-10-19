@@ -7,6 +7,7 @@ import {
   DEFAULT_WEATHER_CONFIG_SETTINGS,
 } from '../src/services/settings.service.js';
 import { DEFAULT_CONTENT_BLOCKS } from '../src/services/contentBlocks.service.js';
+import { DEFAULT_COMPARISON_TEMPLATES } from '../src/services/comparisonTemplates.service.js';
 import { CERITA_PAGES } from './ceritaPages.js';
 
 async function main() {
@@ -202,6 +203,24 @@ async function main() {
     });
   }
 
+  // Starter tier-1 comparison templates (docs/SPEC.md §5). `update: {}` keeps re-runs from
+  // overwriting wording an admin has since edited. Written straight through Prisma like the
+  // other seeds, so they carry no audit row and never trip the trend-keyword warning.
+  for (const template of DEFAULT_COMPARISON_TEMPLATES) {
+    await prisma.comparisonTemplate.upsert({
+      where: { slug: template.slug },
+      update: {},
+      create: {
+        slug: template.slug,
+        label: template.label,
+        body: template.body,
+        trendNaik: template.trendNaik,
+        trendTurun: template.trendTurun,
+        trendTetap: template.trendTetap,
+      },
+    });
+  }
+
   // Cerita pages and their chapters (docs/SPEC.md §2). `update: {}` keeps re-runs from
   // clobbering titles or ordering an editor has since changed. Sections are not seeded — they
   // arrive with the content work that attaches indicators/prose to them.
@@ -234,6 +253,7 @@ async function main() {
     roleAdmin,
     sampleRt: [rt1.rtNumber, rt2.rtNumber, rt3.rtNumber],
     seededBlocks: DEFAULT_CONTENT_BLOCKS.map((b) => b.slug),
+    seededComparisonTemplates: DEFAULT_COMPARISON_TEMPLATES.map((t) => t.slug),
   });
 }
 
