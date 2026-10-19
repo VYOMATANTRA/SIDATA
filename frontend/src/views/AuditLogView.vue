@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import {
-  ShieldCheckIcon,
-  FunnelIcon,
-  XMarkIcon,
-  CheckIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
+  HomeIcon,
+  Cog6ToothIcon,
+  ListBulletIcon,
+  ExclamationTriangleIcon,
+  UserIcon,
+  MagnifyingGlassIcon,
+  PencilSquareIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
 } from '@heroicons/vue/24/outline'
@@ -14,86 +15,156 @@ import { useAuditStore, type AuditLogItem } from '../stores/audit.store'
 
 const auditStore = useAuditStore()
 
-const expandedId = ref<string | null>(null)
+const searchQuery = ref('')
+const severityFilter = ref<'' | 'info' | 'warning' | 'critical'>('')
 const acknowledgingId = ref<string | null>(null)
 const acknowledgeError = ref<string | null>(null)
 
-const filterForm = ref({
-  severity: '' as '' | 'info' | 'warning' | 'critical',
-  outcome: '' as '' | 'success' | 'failure',
-  acknowledged: '' as '' | 'true' | 'false',
-  action: '',
-  from: '',
-  to: '',
-})
+/**
+ * Indonesian labels for every action code audit.service.ts can emit, so the "Kejadian"
+ * column reads as a sentence instead of a snake_case code. Unlisted codes fall back to
+ * the raw action string.
+ */
+const ACTION_LABELS: Record<string, string> = {
+  'user.created_by_admin': 'Pengguna dibuat oleh admin',
+  'user.created_via_google': 'Pengguna dibuat via Google',
+  'user.reactivated': 'Pengguna diaktifkan kembali',
+  'user.deactivated': 'Pengguna dinonaktifkan',
+  'user.role_changed': 'Ganti role user',
+  'user.password_reset_by_admin': 'Reset password oleh admin',
+  'profile.password_changed': 'Password profil diubah',
+  'auth.login': 'Berhasil login',
+  'auth.login_failed': 'Login gagal',
+  'auth.logout': 'Logout',
+  'auth.first_login_password_set': 'Password pertama kali disetel',
+  'auth.refresh_token_mismatch': 'Token refresh tidak cocok',
+  'auth.google_account_linked': 'Akun Google ditautkan',
+  'auth.sessions_revoked': 'Sesi pengguna dicabut',
+  'auth.oauth_state_mismatch': 'Status OAuth tidak cocok',
+  'auth.email_verified': 'Email terverifikasi',
+  'auth.otp_attempts_exceeded': 'Percobaan OTP melebihi batas',
+  'settings.audit_retention_changed': 'Retensi log audit diubah',
+  'settings.public_updated': 'Pengaturan publik diperbarui',
+  'settings.weather_updated': 'Pengaturan cuaca diperbarui',
+  'content_block.updated': 'Konten halaman diperbarui',
+  'indicator.created': 'Indikator dibuat',
+  'indicator.updated': 'Indikator diperbarui',
+  'indicator.deleted': 'Indikator dihapus',
+  'comparison_template.created': 'Templat kalimat dibuat',
+  'comparison_template.updated': 'Templat kalimat diperbarui',
+  'comparison_template.deleted': 'Templat kalimat dihapus',
+  'comparison_template.keyword_warning_overridden': 'Peringatan kata kunci diabaikan',
+  'indicator_table.created': 'Tabel indikator dibuat',
+  'indicator_table.updated': 'Tabel indikator diperbarui',
+  'indicator_table.deleted': 'Tabel indikator dihapus',
+  'indicator_table_row.created': 'Baris tabel indikator dibuat',
+  'indicator_table_row.updated': 'Baris tabel indikator diperbarui',
+  'indicator_table_row.deleted': 'Baris tabel indikator dihapus',
+  'audit.pruned': 'Log audit dipangkas',
+}
+
+function eventLabel(log: AuditLogItem): string {
+  const base = ACTION_LABELS[log.action] || log.action
+  // Mirror the wireframe's "Ganti role user (Admin to Editor)" detail from the
+  // before/after metadata recorded by users.service.ts.
+  if (log.action === 'user.role_changed' && log.metadata) {
+    const md = log.metadata as Record<string, unknown>
+    const from = typeof md.fromRoleName === 'string' ? md.fromRoleName : ''
+    const to = typeof md.toRoleName === 'string' ? md.toRoleName : ''
+    if (from && to) return `${base} (${from} to ${to})`
+  }
+  return base
+}
 
 const totalPages = computed(() => Math.max(1, Math.ceil(auditStore.total / auditStore.pageSize)))
 
-const pageRangeLabel = computed(
-  () => `Halaman ${auditStore.page} dari ${totalPages.value} — ${auditStore.total} entri`,
-)
-
-const hasActiveFilters = computed(() => {
-  const f = auditStore.filters
-  return !!(f.severity || f.outcome || f.acknowledged !== null || f.action || f.from || f.to)
+/**
+ * Client-side search over the loaded page (same pattern as UserManagement's search) —
+ * the API's `action` filter is an exact match, not a substring, so free-text search
+ * narrows what is already on screen rather than issuing a query the backend can't honor.
+ */
+const visibleLogs = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return auditStore.logs
+  return auditStore.logs.filter(
+    (l) =>
+      eventLabel(l).toLowerCase().includes(q) ||
+      l.action.toLowerCase().includes(q) ||
+      (l.actorEmail || '').toLowerCase().includes(q) ||
+      (l.targetLabel || '').toLowerCase().includes(q),
+  )
 })
 
+const totalLogCount = computed(() => {
+  const c = auditStore.summary?.counts
+  return c ? c.info + c.warning + c.critical : 0
+})
+
+// Wireframe asks for WITA; render the instant in that zone so label and clock agree.
+const WITA = 'Asia/Makassar'
+
 function formatDate(iso: string): string {
-  return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'medium' }).format(
-    new Date(iso),
-  )
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: WITA,
+  }).format(new Date(iso))
 }
 
-function severityClasses(severity: string): string {
-  switch (severity) {
-    case 'critical':
-      return 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-    case 'warning':
-      return 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-    default:
-      return 'bg-sky-500/10 text-sky-400 border-sky-500/30'
-  }
+function formatTime(iso: string): string {
+  const time = new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+    timeZone: WITA,
+  }).format(new Date(iso))
+  return `${time} WITA`
 }
 
 function severityLabel(severity: string): string {
   switch (severity) {
     case 'critical':
-      return 'Critical'
+      return 'Kritis'
     case 'warning':
-      return 'Warning'
+      return 'Peringatan'
     default:
       return 'Info'
   }
+}
+
+function severityClasses(severity: string): string {
+  switch (severity) {
+    case 'critical':
+      return 'bg-red-50 text-red-700 border-red-200'
+    case 'warning':
+      return 'bg-amber-50 text-amber-700 border-amber-200'
+    default:
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+  }
+}
+
+function targetText(log: AuditLogItem): string {
+  if (log.targetType === 'user' && log.targetId) {
+    const id = `#${log.targetId.substring(0, 8)}`
+    return log.targetLabel ? `User ID: ${id} (${log.targetLabel})` : `User ID: ${id}`
+  }
+  if (log.targetLabel) return log.targetLabel
+  return log.targetType || '-'
+}
+
+function capitalize(value: string | null): string {
+  if (!value) return '-'
+  return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
 function isOpenCritical(log: AuditLogItem): boolean {
   return log.severity === 'critical' && log.acknowledgedAt == null
 }
 
-function targetLabel(log: AuditLogItem): string {
-  return log.targetLabel || log.targetId || '-'
-}
-
-function toggleExpanded(id: string) {
-  expandedId.value = expandedId.value === id ? null : id
-}
-
-function applyFilters() {
-  const f = filterForm.value
-  auditStore.applyFilters({
-    severity: f.severity,
-    outcome: f.outcome,
-    acknowledged: f.acknowledged === '' ? null : f.acknowledged === 'true',
-    action: f.action,
-    from: f.from,
-    to: f.to,
-  })
-}
-
-function clearFilters() {
-  filterForm.value = { severity: '', outcome: '', acknowledged: '', action: '', from: '', to: '' }
-  auditStore.resetFilters()
-  auditStore.goToPage(1)
+function applySeverity() {
+  auditStore.applyFilters({ severity: severityFilter.value })
 }
 
 async function handleAcknowledge(log: AuditLogItem) {
@@ -110,228 +181,164 @@ async function handleAcknowledge(log: AuditLogItem) {
 }
 
 onMounted(async () => {
-  await Promise.all([auditStore.fetchLogs(), auditStore.fetchSummary()])
+  const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  await Promise.all([
+    auditStore.fetchLogs(),
+    auditStore.fetchSummary(oneMonthAgo),
+    auditStore.fetchAdminActionCount(24),
+  ])
 })
 </script>
 
 <template>
-  <main class="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10 font-sans">
+  <main class="min-h-screen bg-slate-50 text-slate-900 p-6 md:p-10 font-sans">
     <div class="max-w-7xl mx-auto space-y-6">
-      <!-- Top Bar / Header -->
-      <div
-        class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-6"
-      >
-        <div>
-          <h1 class="text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
-            <ShieldCheckIcon class="w-8 h-8 text-indigo-400" aria-hidden="true" />
-            <span>Log Audit</span>
-            <span
-              class="text-xs px-2.5 py-1 bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 rounded-full uppercase tracking-wider font-semibold"
-            >
-              Admin Portal
+      <!-- Page Title -->
+      <header class="border-b border-slate-200 pb-6">
+        <h1 class="text-3xl font-extrabold tracking-tight text-slate-900">
+          Log Sistem dan Audit Trail
+        </h1>
+        <p class="text-slate-600 text-sm mt-1">
+          Pantau seluruh aktivitas yang terjadi di sistem, mulai dari autentikasi hingga riwayat
+          konfigurasi admin.
+        </p>
+      </header>
+
+      <!-- Breadcrumb -->
+      <nav aria-label="Breadcrumb">
+        <ol class="flex flex-wrap items-center gap-2 text-sm text-slate-500">
+          <li class="flex items-center gap-1.5">
+            <router-link to="/" class="flex items-center gap-1.5 hover:text-slate-800">
+              <HomeIcon class="w-4 h-4" aria-hidden="true" />
+              <span>Beranda</span>
+            </router-link>
+          </li>
+          <li aria-hidden="true" class="text-slate-400">›</li>
+          <li class="flex items-center gap-1.5">
+            <Cog6ToothIcon class="w-4 h-4" aria-hidden="true" />
+            <span>Sistem</span>
+          </li>
+          <li aria-hidden="true" class="text-slate-400">›</li>
+          <li>
+            <span aria-current="page" class="font-semibold text-slate-900">
+              Log Sistem dan Audit Trail
             </span>
-          </h1>
-          <p class="text-slate-400 text-sm mt-1">
-            Jejak aktivitas keamanan & administrasi sistem. Baris critical harus di-acknowledge
-            oleh admin.
-          </p>
+          </li>
+        </ol>
+      </nav>
+
+      <!-- Stat Cards -->
+      <section aria-label="Ringkasan log audit">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <!-- Total Log -->
+          <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+            <div class="flex items-start justify-between">
+              <span class="text-sm font-medium text-slate-600">Total Log</span>
+              <ListBulletIcon class="w-6 h-6 text-slate-400" aria-hidden="true" />
+            </div>
+            <p class="text-3xl font-bold text-slate-900 mt-2">{{ totalLogCount }}</p>
+            <p class="text-xs text-slate-500 mt-1">Dalam Sebulan</p>
+          </div>
+
+          <!-- Kejadian Kritis -->
+          <div class="bg-red-50 border border-red-200 rounded-xl p-5 shadow-xs">
+            <div class="flex items-start justify-between">
+              <span class="text-sm font-medium text-red-800">Kejadian Kritis</span>
+              <ExclamationTriangleIcon class="w-6 h-6 text-red-400" aria-hidden="true" />
+            </div>
+            <p class="text-3xl font-bold text-red-900 mt-2">
+              {{ auditStore.summary?.openCritical ?? 0 }}
+            </p>
+            <p class="text-xs text-red-700 mt-1">Butuh Review</p>
+          </div>
+
+          <!-- Aksi Admin -->
+          <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+            <div class="flex items-start justify-between">
+              <span class="text-sm font-medium text-slate-600">Aksi Admin</span>
+              <UserIcon class="w-6 h-6 text-slate-400" aria-hidden="true" />
+            </div>
+            <p class="text-3xl font-bold text-slate-900 mt-2">{{ auditStore.adminActionCount }}</p>
+            <p class="text-xs text-slate-500 mt-1">24 Jam Terakhir</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Toolbar: Search + Severity Filter -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-end gap-3">
+        <div class="relative w-full sm:w-64">
+          <label for="audit-search" class="sr-only">Cari log audit</label>
+          <MagnifyingGlassIcon
+            class="w-4 h-4 text-slate-400 absolute left-2 top-2.5"
+            aria-hidden="true"
+          />
+          <input
+            id="audit-search"
+            v-model="searchQuery"
+            type="search"
+            placeholder="Cari"
+            class="w-full pl-8 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-500 transition"
+          />
+        </div>
+
+        <div>
+          <label for="severity-filter" class="sr-only">Tingkat Keparahan</label>
+          <select
+            id="severity-filter"
+            v-model="severityFilter"
+            @change="applySeverity"
+            class="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-slate-500"
+          >
+            <option value="">Semua Keparahan</option>
+            <option value="info">Info</option>
+            <option value="warning">Peringatan</option>
+            <option value="critical">Kritis</option>
+          </select>
         </div>
       </div>
 
-      <!-- Summary Strip -->
-      <div v-if="auditStore.summary" class="flex flex-wrap items-center gap-3" role="status">
-        <span
-          class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/30"
-        >
-          Info: {{ auditStore.summary.counts.info }}
-        </span>
-        <span
-          class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30"
-        >
-          Warning: {{ auditStore.summary.counts.warning }}
-        </span>
-        <span
-          class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30"
-        >
-          Critical: {{ auditStore.summary.counts.critical }}
-        </span>
-        <span
-          class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold"
-          :class="
-            auditStore.summary.openCritical > 0
-              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/50'
-              : 'bg-slate-800 text-slate-400 border border-slate-700'
-          "
-        >
-          Critical terbuka: {{ auditStore.summary.openCritical }}
-        </span>
-        <span class="text-xs text-slate-500">
-          (7 hari terakhir, {{ formatDate(auditStore.summary.since) }}–)
-        </span>
-      </div>
-
-      <!-- Filters -->
-      <form
-        class="bg-slate-900 border border-slate-800 rounded-2xl p-4 md:p-5 space-y-4"
-        @submit.prevent="applyFilters"
-      >
-        <fieldset class="flex items-center gap-2 text-slate-300">
-          <legend class="sr-only">Filter log audit</legend>
-          <FunnelIcon class="w-4 h-4 text-slate-500" aria-hidden="true" />
-          <span class="text-xs font-semibold uppercase tracking-wider">Filter</span>
-        </fieldset>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-          <div>
-            <label for="filter-severity" class="block text-xs font-semibold text-slate-300 mb-1">
-              Tingkat
-            </label>
-            <select
-              id="filter-severity"
-              v-model="filterForm.severity"
-              class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
-            >
-              <option value="">Semua</option>
-              <option value="info">Info</option>
-              <option value="warning">Warning</option>
-              <option value="critical">Critical</option>
-            </select>
-          </div>
-
-          <div>
-            <label for="filter-outcome" class="block text-xs font-semibold text-slate-300 mb-1">
-              Hasil
-            </label>
-            <select
-              id="filter-outcome"
-              v-model="filterForm.outcome"
-              class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
-            >
-              <option value="">Semua</option>
-              <option value="success">Success</option>
-              <option value="failure">Failure</option>
-            </select>
-          </div>
-
-          <div>
-            <label for="filter-acknowledged" class="block text-xs font-semibold text-slate-300 mb-1">
-              Status Acknowledge
-            </label>
-            <select
-              id="filter-acknowledged"
-              v-model="filterForm.acknowledged"
-              class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
-            >
-              <option value="">Semua</option>
-              <option value="false">Terbuka</option>
-              <option value="true">Diakui</option>
-            </select>
-          </div>
-
-          <div>
-            <label for="filter-action" class="block text-xs font-semibold text-slate-300 mb-1">
-              Aksi
-            </label>
-            <input
-              id="filter-action"
-              v-model="filterForm.action"
-              type="text"
-              placeholder="mis. auth.login_failed"
-              class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 font-mono"
-            />
-          </div>
-
-          <div>
-            <label for="filter-from" class="block text-xs font-semibold text-slate-300 mb-1">
-              Dari Tanggal
-            </label>
-            <input
-              id="filter-from"
-              v-model="filterForm.from"
-              type="date"
-              class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-
-          <div>
-            <label for="filter-to" class="block text-xs font-semibold text-slate-300 mb-1">
-              Sampai Tanggal
-            </label>
-            <input
-              id="filter-to"
-              v-model="filterForm.to"
-              type="date"
-              class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-        </div>
-
-        <div class="flex items-center justify-end gap-3">
-          <button
-            type="button"
-            :disabled="!hasActiveFilters"
-            @click="clearFilters"
-            class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition border border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <XMarkIcon class="w-4 h-4" aria-hidden="true" />
-            <span>Reset Filter</span>
-          </button>
-          <button
-            type="submit"
-            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition"
-          >
-            Terapkan Filter
-          </button>
-        </div>
-      </form>
-
-      <!-- Error State -->
+      <!-- Error States -->
       <div
         v-if="auditStore.error"
-        class="p-4 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl text-sm"
+        class="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm"
         role="alert"
       >
         {{ auditStore.error }}
       </div>
-
-      <!-- Acknowledge Error State -->
       <div
         v-if="acknowledgeError"
-        class="p-4 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl text-sm"
+        class="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm"
         role="alert"
       >
         {{ acknowledgeError }}
       </div>
 
-      <!-- Table Container -->
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+      <!-- Table -->
+      <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse text-sm">
             <caption class="sr-only">
-              Daftar log audit, diurutkan dari yang terbaru. Setiap baris memuat waktu, aksi,
-              tingkat keparahan, hasil, aktor, target, dan status acknowledge.
+              Daftar log sistem dan audit trail, diurutkan dari yang terbaru. Setiap baris memuat
+              waktu, kejadian, nama aktor, role, target, tingkat keparahan, dan aksi.
             </caption>
             <thead>
-              <tr
-                class="bg-slate-800/60 border-b border-slate-800 text-slate-400 font-semibold text-xs uppercase tracking-wider"
-              >
-                <th scope="col" class="px-6 py-4">Waktu</th>
-                <th scope="col" class="px-6 py-4">Aksi</th>
-                <th scope="col" class="px-6 py-4">Tingkat</th>
-                <th scope="col" class="px-6 py-4">Hasil</th>
-                <th scope="col" class="px-6 py-4">Aktor</th>
-                <th scope="col" class="px-6 py-4">Target</th>
-                <th scope="col" class="px-6 py-4">Status</th>
-                <th scope="col" class="px-6 py-4 text-right">Aksi</th>
+              <tr class="border-b border-slate-200 bg-slate-50 text-slate-600 font-semibold text-xs uppercase tracking-wider">
+                <th scope="col" class="px-4 py-3">Waktu</th>
+                <th scope="col" class="px-4 py-3">Kejadian</th>
+                <th scope="col" class="px-4 py-3">Nama</th>
+                <th scope="col" class="px-4 py-3">Role</th>
+                <th scope="col" class="px-4 py-3">Target</th>
+                <th scope="col" class="px-4 py-3">Tingkat Keparahan</th>
+                <th scope="col" class="px-4 py-3">Aksi</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-slate-800/60 text-slate-300">
+            <tbody class="divide-y divide-slate-100 text-slate-700">
               <template v-if="auditStore.loading && !auditStore.logs.length">
                 <tr>
-                  <td colspan="8" class="px-6 py-12 text-center text-slate-500">
+                  <td colspan="7" class="px-4 py-12 text-center text-slate-500">
                     <div class="flex justify-center items-center gap-2">
                       <svg
-                        class="animate-spin h-5 w-5 text-indigo-400"
+                        class="animate-spin h-5 w-5 text-slate-400"
                         viewBox="0 0 24 24"
                         fill="none"
                         aria-hidden="true"
@@ -356,167 +363,87 @@ onMounted(async () => {
                 </tr>
               </template>
 
-              <template v-else-if="!auditStore.logs.length">
+              <template v-else-if="!visibleLogs.length">
                 <tr>
-                  <td colspan="8" class="px-6 py-12 text-center text-slate-500">
-                    Tidak ada log audit yang cocok dengan filter.
+                  <td colspan="7" class="px-4 py-12 text-center text-slate-500">
+                    {{ auditStore.logs.length ? 'Tidak ada log yang cocok dengan pencarian.' : 'Tidak ada data log.' }}
                   </td>
                 </tr>
               </template>
 
-              <template v-for="log in auditStore.logs" :key="log.id">
-                <tr class="hover:bg-slate-800/40 transition duration-150">
-                  <!-- Waktu -->
-                  <td class="px-6 py-4 whitespace-nowrap text-slate-400">
-                    {{ formatDate(log.createdAt) }}
-                  </td>
+              <tr
+                v-for="log in visibleLogs"
+                :key="log.id"
+                class="hover:bg-slate-50 transition duration-150 align-top"
+              >
+                <!-- Waktu -->
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <div class="font-medium text-slate-900">{{ formatDate(log.createdAt) }}</div>
+                  <div class="text-xs text-slate-500">{{ formatTime(log.createdAt) }}</div>
+                </td>
 
-                  <!-- Aksi -->
-                  <td class="px-6 py-4 font-mono text-xs text-slate-200">{{ log.action }}</td>
+                <!-- Kejadian -->
+                <td class="px-4 py-3">{{ eventLabel(log) }}</td>
 
-                  <!-- Tingkat -->
-                  <td class="px-6 py-4">
-                    <span
-                      :class="[
-                        'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider border',
-                        severityClasses(log.severity),
-                      ]"
-                    >
-                      {{ severityLabel(log.severity) }}
-                    </span>
-                  </td>
+                <!-- Nama -->
+                <td class="px-4 py-3">{{ log.actorEmail || '-' }}</td>
 
-                  <!-- Hasil -->
-                  <td class="px-6 py-4">
-                    <span
-                      :class="
-                        log.outcome === 'failure'
-                          ? 'text-rose-400 font-semibold'
-                          : 'text-emerald-400'
-                      "
-                    >
-                      {{ log.outcome }}
-                    </span>
-                  </td>
+                <!-- Role -->
+                <td class="px-4 py-3">{{ capitalize(log.actorRole) }}</td>
 
-                  <!-- Aktor -->
-                  <td class="px-6 py-4">
-                    <div class="text-white">{{ log.actorEmail || '-' }}</div>
-                    <div v-if="log.actorRole" class="text-xs text-slate-500 capitalize">
-                      {{ log.actorRole }}
-                    </div>
-                  </td>
+                <!-- Target -->
+                <td class="px-4 py-3">{{ targetText(log) }}</td>
 
-                  <!-- Target -->
-                  <td class="px-6 py-4">
-                    <div v-if="log.targetType" class="text-xs text-slate-500 uppercase">
-                      {{ log.targetType }}
-                    </div>
-                    <div class="text-slate-200">{{ targetLabel(log) }}</div>
-                  </td>
+                <!-- Tingkat Keparahan -->
+                <td class="px-4 py-3">
+                  <span
+                    :class="[
+                      'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border',
+                      severityClasses(log.severity),
+                    ]"
+                  >
+                    {{ severityLabel(log.severity) }}
+                  </span>
+                </td>
 
-                  <!-- Status Acknowledge -->
-                  <td class="px-6 py-4">
-                    <span
-                      v-if="log.acknowledgedAt"
-                      class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                    >
-                      Diakui {{ formatDate(log.acknowledgedAt) }}
-                    </span>
-                    <span
-                      v-else-if="log.severity === 'critical'"
-                      class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30"
-                    >
-                      Terbuka
-                    </span>
-                    <span v-else class="text-xs text-slate-500">—</span>
-                  </td>
-
-                  <!-- Aksi -->
-                  <td class="px-6 py-4 text-right space-x-2 whitespace-nowrap">
-                    <button
-                      v-if="isOpenCritical(log)"
-                      type="button"
-                      :disabled="acknowledgingId === log.id"
-                      @click="handleAcknowledge(log)"
-                      class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <CheckIcon class="w-3.5 h-3.5" aria-hidden="true" />
-                      <span>{{ acknowledgingId === log.id ? 'Memproses...' : 'Acknowledge' }}</span>
-                    </button>
-                    <button
-                      type="button"
-                      :aria-expanded="expandedId === log.id"
-                      :aria-label="
-                        expandedId === log.id
-                          ? 'Sembunyikan detail log audit'
-                          : 'Tampilkan detail log audit'
-                      "
-                      @click="toggleExpanded(log.id)"
-                      class="inline-flex items-center p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
-                    >
-                      <ChevronUpIcon v-if="expandedId === log.id" class="w-4 h-4" aria-hidden="true" />
-                      <ChevronDownIcon v-else class="w-4 h-4" aria-hidden="true" />
-                    </button>
-                  </td>
-                </tr>
-
-                <!-- Expanded Detail Row -->
-                <tr v-if="expandedId === log.id" class="bg-slate-950/60">
-                  <td colspan="8" class="px-6 py-4">
-                    <dl class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                      <div>
-                        <dt class="text-slate-500 font-semibold uppercase tracking-wider mb-1">
-                          Metadata
-                        </dt>
-                        <dd class="text-slate-300 font-mono whitespace-pre-wrap break-all">
-                          {{ log.metadata ? JSON.stringify(log.metadata, null, 2) : '-' }}
-                        </dd>
-                      </div>
-                      <div class="space-y-3">
-                        <div>
-                          <dt class="text-slate-500 font-semibold uppercase tracking-wider mb-1">
-                            Alamat IP
-                          </dt>
-                          <dd class="text-slate-300 font-mono">{{ log.ipAddress || '-' }}</dd>
-                        </div>
-                        <div>
-                          <dt class="text-slate-500 font-semibold uppercase tracking-wider mb-1">
-                            User Agent
-                          </dt>
-                          <dd class="text-slate-300 font-mono break-all">
-                            {{ log.userAgent || '-' }}
-                          </dd>
-                        </div>
-                        <div v-if="log.targetId">
-                          <dt class="text-slate-500 font-semibold uppercase tracking-wider mb-1">
-                            Target ID
-                          </dt>
-                          <dd class="text-slate-300 font-mono break-all">{{ log.targetId }}</dd>
-                        </div>
-                      </div>
-                    </dl>
-                  </td>
-                </tr>
-              </template>
+                <!-- Aksi -->
+                <td class="px-4 py-3">
+                  <button
+                    v-if="isOpenCritical(log)"
+                    type="button"
+                    :disabled="acknowledgingId === log.id"
+                    @click="handleAcknowledge(log)"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <PencilSquareIcon class="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>{{ acknowledgingId === log.id ? 'Memproses...' : 'Tandai Telah Dibaca' }}</span>
+                  </button>
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      <!-- Pagination -->
+      <!-- Pagination Footer -->
       <nav
-        v-if="auditStore.total > 0"
         class="flex items-center justify-between"
         aria-label="Navigasi halaman log audit"
       >
-        <p class="text-xs text-slate-400">{{ pageRangeLabel }}</p>
+        <p class="text-sm text-slate-600">
+          Menampilkan
+          <span class="font-semibold">{{ visibleLogs.length }}</span>
+          dari
+          <span class="font-semibold">{{ auditStore.total }}</span>
+          data
+        </p>
         <div class="flex items-center gap-2">
           <button
+            v-if="auditStore.page > 1"
             type="button"
-            :disabled="auditStore.page <= 1 || auditStore.loading"
+            :disabled="auditStore.loading"
             @click="auditStore.goToPage(auditStore.page - 1)"
-            class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition border border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ChevronLeftIcon class="w-4 h-4" aria-hidden="true" />
             <span>Sebelumnya</span>
@@ -525,9 +452,9 @@ onMounted(async () => {
             type="button"
             :disabled="auditStore.page >= totalPages || auditStore.loading"
             @click="auditStore.goToPage(auditStore.page + 1)"
-            class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition border border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span>Berikutnya</span>
+            <span>Selanjutnya</span>
             <ChevronRightIcon class="w-4 h-4" aria-hidden="true" />
           </button>
         </div>

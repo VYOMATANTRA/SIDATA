@@ -64,6 +64,7 @@ export const useAuditStore = defineStore('audit', () => {
   const page = ref(1)
   const pageSize = ref(DEFAULT_PAGE_SIZE)
   const summary = ref<AuditSummary | null>(null)
+  const adminActionCount = ref(0)
   const loading = ref(false)
   const error = ref<string | null>(null)
   const filters = ref<AuditLogFilters>({ ...EMPTY_FILTERS })
@@ -120,10 +121,13 @@ export const useAuditStore = defineStore('audit', () => {
     }
   }
 
-  async function fetchSummary() {
+  async function fetchSummary(sinceIso?: string) {
     try {
       const headers = await getAuthHeaders()
-      const res = await fetch('/api/audit-logs/summary', {
+      const url = sinceIso
+        ? `/api/audit-logs/summary?since=${encodeURIComponent(sinceIso)}`
+        : '/api/audit-logs/summary'
+      const res = await fetch(url, {
         headers,
         credentials: 'include',
       })
@@ -135,6 +139,34 @@ export const useAuditStore = defineStore('audit', () => {
     } catch (err: unknown) {
       error.value =
         err instanceof Error ? err.message : 'Terjadi kesalahan saat memuat ringkasan audit log.'
+    }
+  }
+
+  /**
+   * Counts admin-performed actions within the last `hours` (default 24) for the dashboard
+   * "Aksi Admin" stat. The audit API has no `actorRole` filter, so this fetches the most
+   * recent window of logs (up to the API's MAX_PAGE_SIZE of 200) and counts admin actors
+   * client-side. Exact for the expected audit volume of a village-scale system; if a 24h
+   * window ever exceeds 200 events this becomes a lower bound — a server-side role filter
+   * would be the fix, and is out of scope here.
+   */
+  async function fetchAdminActionCount(hours = 24) {
+    try {
+      const headers = await getAuthHeaders()
+      const from = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()
+      const res = await fetch(`/api/audit-logs?from=${encodeURIComponent(from)}&pageSize=200`, {
+        headers,
+        credentials: 'include',
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Gagal mengambil hitungan aksi admin.')
+      }
+      const logs: AuditLogItem[] = data.logs || []
+      adminActionCount.value = logs.filter((l) => l.actorRole?.toLowerCase() === 'admin').length
+    } catch (err: unknown) {
+      // Non-fatal for the page — the stat simply stays at its last known value.
+      console.error('Error fetching admin action count:', err)
     }
   }
 
@@ -192,11 +224,13 @@ export const useAuditStore = defineStore('audit', () => {
     page,
     pageSize,
     summary,
+    adminActionCount,
     loading,
     error,
     filters,
     fetchLogs,
     fetchSummary,
+    fetchAdminActionCount,
     applyFilters,
     resetFilters,
     goToPage,

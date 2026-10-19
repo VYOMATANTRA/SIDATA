@@ -141,6 +141,45 @@ describe('audit store', () => {
     expect(store.summary?.openCritical).toBe(1)
   })
 
+  it('fetchSummary passes the since window to the API when provided', async () => {
+    const fetchMock = mockFetchWith({})
+
+    const store = useAuditStore()
+    await store.fetchSummary('2026-09-19T00:00:00.000Z')
+
+    const summaryCall = fetchMock.mock.calls.find(([input]) => String(input).includes('/summary'))
+    expect(String(summaryCall?.[0])).toContain('since=2026-09-19T00%3A00%3A00.000Z')
+  })
+
+  it('fetchAdminActionCount counts admin-actor logs in the window', async () => {
+    const fetchMock = mockFetchWith({
+      list: () =>
+        ({
+          ok: true,
+          json: async () => ({
+            logs: [
+              { ...AUDIT_LOG, actorRole: 'admin' },
+              { ...AUDIT_LOG, id: 'log-2', actorRole: 'editor' },
+              { ...AUDIT_LOG, id: 'log-3', actorRole: 'Admin' },
+            ],
+            total: 3,
+            page: 1,
+            pageSize: 200,
+          }),
+        }) as Response,
+    })
+
+    const store = useAuditStore()
+    await store.fetchAdminActionCount(24)
+
+    // Case-insensitive admin role match; non-admin actors excluded
+    expect(store.adminActionCount).toBe(2)
+
+    const listCall = fetchMock.mock.calls.find(([input]) => String(input).startsWith('/api/audit-logs?'))
+    expect(String(listCall?.[0])).toContain('pageSize=200')
+    expect(String(listCall?.[0])).toContain('from=')
+  })
+
   it('acknowledgeLog PATCHes with CSRF and updates the row in place without refetching', async () => {
     let listCalled = false
     let patchBody: unknown = null
