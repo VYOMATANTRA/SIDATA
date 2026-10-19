@@ -45,8 +45,8 @@ const initiatives: InitiativeItem[] = [
 ];
 
 const collaborationLogos = [
-  { src: logoVyomatantra, alt: 'Logo Tim Inovasi Sosial VYOMATANTRA' },
   { src: logoItk, alt: 'Logo Institut Teknologi Kalimantan (ITK)' },
+  { src: logoVyomatantra, alt: 'Logo Tim Inovasi Sosial VYOMATANTRA' },
 ];
 
 const sdgsLogos = [
