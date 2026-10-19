@@ -137,11 +137,11 @@ function severityLabel(severity: string): string {
 function severityClasses(severity: string): string {
   switch (severity) {
     case 'critical':
-      return 'bg-red-50 text-red-700 border-red-200'
+      return 'bg-red-600 text-white border-transparent'
     case 'warning':
-      return 'bg-amber-50 text-amber-700 border-amber-200'
+      return 'bg-amber-600 text-white border-transparent'
     default:
-      return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      return 'bg-emerald-600 text-white border-transparent'
   }
 }
 
@@ -195,10 +195,12 @@ onMounted(async () => {
     <div class="max-w-7xl mx-auto space-y-6">
       <!-- Page Title -->
       <header class="border-b border-slate-200 pb-6">
-        <h1 class="text-3xl font-extrabold tracking-tight text-slate-900">
-          Log Sistem dan Audit Trail
-        </h1>
-        <p class="text-slate-600 text-sm mt-1">
+        <div
+          class="h-1.5 w-28 rounded-full bg-gradient-to-r from-brand-indigo via-brand-violet to-brand-cyan mb-4"
+          aria-hidden="true"
+        ></div>
+        <h1 class="font-extrabold tracking-tight text-brand-navy">Log Sistem dan Audit Trail</h1>
+        <p class="text-slate-600 mt-1">
           Pantau seluruh aktivitas yang terjadi di sistem, mulai dari autentikasi hingga riwayat
           konfigurasi admin.
         </p>
@@ -220,7 +222,7 @@ onMounted(async () => {
           </li>
           <li aria-hidden="true" class="text-slate-400">›</li>
           <li>
-            <span aria-current="page" class="font-semibold text-slate-900">
+            <span aria-current="page" class="font-semibold text-brand-navy">
               Log Sistem dan Audit Trail
             </span>
           </li>
@@ -231,35 +233,45 @@ onMounted(async () => {
       <section aria-label="Ringkasan log audit">
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <!-- Total Log -->
-          <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+          <div
+            class="rounded-card bg-gradient-to-br from-brand-navy to-brand-navy-deep border border-white/10 text-white p-5 shadow-lg shadow-brand-navy/20"
+          >
             <div class="flex items-start justify-between">
-              <span class="text-sm font-medium text-slate-600">Total Log</span>
-              <ListBulletIcon class="w-6 h-6 text-slate-400" aria-hidden="true" />
+              <span class="text-sm font-medium text-white/80">Total Log</span>
+              <span class="rounded-xl bg-white/10 p-2">
+                <ListBulletIcon class="w-5 h-5 text-brand-cyan" aria-hidden="true" />
+              </span>
             </div>
-            <p class="text-3xl font-bold text-slate-900 mt-2">{{ totalLogCount }}</p>
-            <p class="text-xs text-slate-500 mt-1">Dalam Sebulan</p>
+            <p class="text-3xl font-bold mt-2">{{ totalLogCount }}</p>
+            <p class="text-xs text-white/70 mt-1">Dalam Sebulan</p>
           </div>
 
           <!-- Kejadian Kritis -->
-          <div class="bg-red-50 border border-red-200 rounded-xl p-5 shadow-xs">
+          <div
+            class="rounded-card bg-gradient-to-br from-red-500 to-rose-600 border border-white/10 text-white p-5 shadow-lg shadow-red-600/25"
+          >
             <div class="flex items-start justify-between">
-              <span class="text-sm font-medium text-red-800">Kejadian Kritis</span>
-              <ExclamationTriangleIcon class="w-6 h-6 text-red-400" aria-hidden="true" />
+              <span class="text-sm font-medium text-white/80">Kejadian Kritis</span>
+              <span class="rounded-xl bg-white/15 p-2">
+                <ExclamationTriangleIcon class="w-5 h-5 text-white" aria-hidden="true" />
+              </span>
             </div>
-            <p class="text-3xl font-bold text-red-900 mt-2">
-              {{ auditStore.summary?.openCritical ?? 0 }}
-            </p>
-            <p class="text-xs text-red-700 mt-1">Butuh Review</p>
+            <p class="text-3xl font-bold mt-2">{{ auditStore.summary?.openCritical ?? 0 }}</p>
+            <p class="text-xs text-white/75 mt-1">Butuh Review</p>
           </div>
 
           <!-- Aksi Admin -->
-          <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+          <div
+            class="rounded-card bg-gradient-to-br from-brand-indigo to-brand-violet border border-white/10 text-white p-5 shadow-lg shadow-brand-indigo/25"
+          >
             <div class="flex items-start justify-between">
-              <span class="text-sm font-medium text-slate-600">Aksi Admin</span>
-              <UserIcon class="w-6 h-6 text-slate-400" aria-hidden="true" />
+              <span class="text-sm font-medium text-white/80">Aksi Admin</span>
+              <span class="rounded-xl bg-white/15 p-2">
+                <UserIcon class="w-5 h-5 text-white" aria-hidden="true" />
+              </span>
             </div>
-            <p class="text-3xl font-bold text-slate-900 mt-2">{{ auditStore.adminActionCount }}</p>
-            <p class="text-xs text-slate-500 mt-1">24 Jam Terakhir</p>
+            <p class="text-3xl font-bold mt-2">{{ auditStore.adminActionCount }}</p>
+            <p class="text-xs text-white/75 mt-1">24 Jam Terakhir</p>
           </div>
         </div>
       </section>
@@ -277,7 +289,7 @@ onMounted(async () => {
             v-model="searchQuery"
             type="search"
             placeholder="Cari"
-            class="w-full pl-8 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-500 transition"
+            class="w-full pl-8 pr-3 py-2 bg-white border border-slate-300 rounded-btn text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-brand-navy focus:ring-1 focus:ring-brand-navy transition"
           />
         </div>
 
@@ -287,7 +299,7 @@ onMounted(async () => {
             id="severity-filter"
             v-model="severityFilter"
             @change="applySeverity"
-            class="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-slate-500"
+            class="px-3 py-2 bg-white border border-slate-300 rounded-btn text-sm text-slate-900 focus:outline-none focus:border-brand-navy focus:ring-1 focus:ring-brand-navy"
           >
             <option value="">Semua Keparahan</option>
             <option value="info">Info</option>
@@ -314,7 +326,7 @@ onMounted(async () => {
       </div>
 
       <!-- Table -->
-      <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+      <div class="bg-white border border-slate-200 rounded-card overflow-hidden shadow-xs">
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse text-sm">
             <caption class="sr-only">
@@ -322,7 +334,7 @@ onMounted(async () => {
               waktu, kejadian, nama aktor, role, target, tingkat keparahan, dan aksi.
             </caption>
             <thead>
-              <tr class="border-b border-slate-200 bg-slate-50 text-slate-600 font-semibold text-xs uppercase tracking-wider">
+              <tr class="bg-brand-navy text-white font-semibold text-xs uppercase tracking-wider">
                 <th scope="col" class="px-4 py-3">Waktu</th>
                 <th scope="col" class="px-4 py-3">Kejadian</th>
                 <th scope="col" class="px-4 py-3">Nama</th>
@@ -386,7 +398,7 @@ onMounted(async () => {
                 <td class="px-4 py-3">{{ eventLabel(log) }}</td>
 
                 <!-- Nama -->
-                <td class="px-4 py-3">{{ log.actorEmail || '-' }}</td>
+                <td class="px-4 py-3 font-medium text-slate-800">{{ log.actorEmail || '-' }}</td>
 
                 <!-- Role -->
                 <td class="px-4 py-3">{{ capitalize(log.actorRole) }}</td>
@@ -413,7 +425,7 @@ onMounted(async () => {
                     type="button"
                     :disabled="acknowledgingId === log.id"
                     @click="handleAcknowledge(log)"
-                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-xs font-medium bg-white text-brand-navy border border-brand-navy transition hover:bg-brand-navy hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <PencilSquareIcon class="w-3.5 h-3.5" aria-hidden="true" />
                     <span>{{ acknowledgingId === log.id ? 'Memproses...' : 'Tandai Telah Dibaca' }}</span>
@@ -432,9 +444,9 @@ onMounted(async () => {
       >
         <p class="text-sm text-slate-600">
           Menampilkan
-          <span class="font-semibold">{{ visibleLogs.length }}</span>
+          <span class="font-bold text-brand-navy">{{ visibleLogs.length }}</span>
           dari
-          <span class="font-semibold">{{ auditStore.total }}</span>
+          <span class="font-bold text-brand-navy">{{ auditStore.total }}</span>
           data
         </p>
         <div class="flex items-center gap-2">
@@ -443,7 +455,7 @@ onMounted(async () => {
             type="button"
             :disabled="auditStore.loading"
             @click="auditStore.goToPage(auditStore.page - 1)"
-            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-btn text-xs font-medium bg-white text-brand-navy border border-brand-navy transition hover:bg-brand-navy hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ChevronLeftIcon class="w-4 h-4" aria-hidden="true" />
             <span>Sebelumnya</span>
@@ -452,7 +464,7 @@ onMounted(async () => {
             type="button"
             :disabled="auditStore.page >= totalPages || auditStore.loading"
             @click="auditStore.goToPage(auditStore.page + 1)"
-            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-btn text-xs font-medium bg-brand-navy text-white border border-transparent transition hover:bg-white hover:text-brand-navy hover:border-brand-navy disabled:bg-gray-300 disabled:text-gray-600 disabled:border-transparent disabled:cursor-not-allowed"
           >
             <span>Selanjutnya</span>
             <ChevronRightIcon class="w-4 h-4" aria-hidden="true" />
