@@ -7,7 +7,6 @@ describe('MapFilterBar.vue', () => {
     const wrapper = mount(MapFilterBar, {
       props: {
         activeType: 'all',
-        activeRt: null,
       },
     });
 
@@ -19,33 +18,14 @@ describe('MapFilterBar.vue', () => {
     expect(wrapper.emitted('update:type')?.[0]).toEqual(['ketua_rt']);
   });
 
-  it('handles numeric input in RT search without trim() TypeError', async () => {
+  it('renders only the category filters so RT search can share the main search field', () => {
     const wrapper = mount(MapFilterBar, {
       props: {
         activeType: 'all',
-        activeRt: null,
       },
     });
 
-    const input = wrapper.find('input[type="number"]');
-    await input.setValue(1);
-    await input.trigger('keydown.enter');
-
-    expect(wrapper.emitted('update:rt')?.[0]).toEqual([1]);
-  });
-
-  it('clears RT filter and emits null when clear button is clicked', async () => {
-    const wrapper = mount(MapFilterBar, {
-      props: {
-        activeType: 'all',
-        activeRt: 5,
-      },
-    });
-
-    const clearBtn = wrapper.find('button[type="button"].absolute');
-    expect(clearBtn.exists()).toBe(true);
-
-    await clearBtn.trigger('click');
-    expect(wrapper.emitted('update:rt')?.[0]).toEqual([null]);
+    expect(wrapper.find('input').exists()).toBe(false);
+    expect(wrapper.findAll('button')).toHaveLength(4);
   });
 });

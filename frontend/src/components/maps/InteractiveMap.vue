@@ -4,6 +4,8 @@ import L from 'leaflet';
 // Leaflet's own stylesheet positions the tile/marker panes. Without it the tiles
 // stack in normal flow and the container grows to thousands of pixels.
 import 'leaflet/dist/leaflet.css';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster';
 import type { SpatialPointDTO, SpatialPointType } from '../../types/maps';
 
 interface Props {
@@ -21,8 +23,9 @@ const emit = defineEmits<{
 
 const mapContainer = ref<HTMLElement | null>(null);
 let map: L.Map | null = null;
-let markerLayerGroup: L.LayerGroup | null = null;
+let markerLayerGroup: L.MarkerClusterGroup | null = null;
 let sizeInvalidationTimer: number | null = null;
+const markers = new Map<string, L.Marker>();
 /**
  * The first data load frames the map on the surveyed extent; later changes (a
  * filter, a selection) must not move the viewport out from under the user.
@@ -54,35 +57,26 @@ function createCustomPin(type: SpatialPointType, isSelected: boolean, rtNumber?:
     label = 'FU';
   }
 
-  const badgeText = type === 'ketua_rt' && rtNumber ? `RT ${rtNumber}` : label;
-  const scaleClass = isSelected ? 'scale-125 z-50 ring-2 ring-white' : 'hover:scale-110';
+  const badgeText = type === 'ketua_rt' && rtNumber ? `${rtNumber}` : label;
+  const selectedClass = isSelected ? 'custom-map-marker--selected' : '';
 
   const html = `
-    <div class="relative flex items-center justify-center transition-transform duration-200 ${scaleClass}">
-      <div class="${bgClass} text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md border-2 border-white flex items-center gap-1 whitespace-nowrap">
+    <div class="custom-map-marker__badge ${bgClass} ${selectedClass}" aria-hidden="true">
         <span>${badgeText}</span>
-      </div>
-      <div class="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[6px] border-t-white absolute -bottom-[5px]"></div>
     </div>
   `;
 
   return L.divIcon({
     html,
     className: 'custom-map-marker',
-    iconSize: [40, 30],
-    iconAnchor: [20, 30],
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
   });
 }
 
-function renderMarkers() {
-  if (!map || !markerLayerGroup) return;
-
-  markerLayerGroup.clearLayers();
-
-  for (const point of props.points) {
-    const isSelected = point.id === props.selectedPointId;
+function createMarker(point: SpatialPointDTO) {
     const primaryRt = point.rts[0];
-    const icon = createCustomPin(point.type, isSelected, primaryRt);
+    const icon = createCustomPin(point.type, point.id === props.selectedPointId, primaryRt);
 
     const marker = L.marker([point.latitude, point.longitude], {
       icon,
@@ -94,15 +88,62 @@ function renderMarkers() {
       map?.panTo([point.latitude, point.longitude], { animate: true });
     });
 
-    markerLayerGroup.addLayer(marker);
+    marker.on('add', () => {
+      const markerElement = marker.getElement();
+      markerElement?.setAttribute('aria-label', markerLabel(point));
+      markerElement?.setAttribute('role', 'button');
+    });
+    return marker;
+}
 
-    // The title attribute gives a tooltip; the explicit aria-label gives the
-    // focusable marker element a name in every screen reader.
-    const markerElement = marker.getElement();
-    if (markerElement) {
-      markerElement.setAttribute('aria-label', markerLabel(point));
-      markerElement.setAttribute('role', 'button');
+function renderMarkers() {
+  if (!map || !markerLayerGroup) return;
+
+  const nextIds = new Set(props.points.map((point) => point.id));
+  for (const [id, marker] of markers) {
+    if (!nextIds.has(id)) {
+      markerLayerGroup.removeLayer(marker);
+      markers.delete(id);
     }
+  }
+
+  for (const point of props.points) {
+    const current = markers.get(point.id);
+    if (current) {
+      current.setLatLng([point.latitude, point.longitude]);
+      current.setIcon(createCustomPin(point.type, point.id === props.selectedPointId, point.rts[0]));
+      current.setZIndexOffset(point.id === props.selectedPointId ? 1000 : 0);
+      continue;
+    }
+
+    const marker = createMarker(point);
+    markers.set(point.id, marker);
+    markerLayerGroup.addLayer(marker);
+  }
+}
+
+function revealSelectedPoint() {
+  if (!map || !markerLayerGroup || !props.selectedPointId) return;
+  const marker = markers.get(props.selectedPointId);
+  if (!marker) return;
+  const zoom = Math.max(map.getZoom(), map.getMaxZoom() ?? 19);
+
+  const reveal = () => {
+    markerLayerGroup?.zoomToShowLayer(marker, () => {
+      const point = props.points.find((item) => item.id === props.selectedPointId);
+      if (point) marker.setIcon(createCustomPin(point.type, true, point.rts[0]));
+      marker.setZIndexOffset(1000);
+      marker.openTooltip();
+    });
+  };
+
+  if (map.getZoom() >= zoom) {
+    reveal();
+  } else {
+    map.once('zoomend', reveal);
+    map.setView(marker.getLatLng(), zoom, {
+      animate: !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    });
   }
 }
 
@@ -157,7 +198,22 @@ onMounted(() => {
       .addAttribution('© OpenStreetMap')
       .addTo(map);
 
-    markerLayerGroup = L.layerGroup().addTo(map);
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    markerLayerGroup = L.markerClusterGroup({
+      maxClusterRadius: 52,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      animate: !reduceMotion,
+      chunkedLoading: true,
+      iconCreateFunction: (cluster) => {
+        const count = cluster.getChildCount();
+        return L.divIcon({
+          html: `<span class="map-cluster__count">${count}</span>`,
+          className: 'map-cluster',
+          iconSize: [42, 42],
+        });
+      },
+    }).addTo(map);
     renderMarkers();
     framePoints();
 
@@ -170,14 +226,15 @@ onMounted(() => {
   });
 });
 
-watch(
-  () => [props.points, props.selectedPointId],
-  () => {
-    renderMarkers();
-    framePoints();
-  },
-  { deep: true },
-);
+watch(() => props.points, () => {
+  renderMarkers();
+  framePoints();
+}, { deep: true });
+
+watch(() => props.selectedPointId, (id) => {
+  renderMarkers();
+  if (id) revealSelectedPoint();
+});
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize);
@@ -189,6 +246,7 @@ onUnmounted(() => {
     map.remove();
     map = null;
   }
+  markers.clear();
 });
 </script>
 
@@ -205,6 +263,54 @@ onUnmounted(() => {
 .custom-map-marker {
   background: transparent !important;
   border: none !important;
+}
+
+.custom-map-marker__badge {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 2px solid white;
+  border-radius: 50%;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgb(10 35 83 / 32%);
+  transition: box-shadow 120ms ease-out, transform 120ms ease-out;
+}
+
+.custom-map-marker--selected {
+  outline: 3px solid #0a2353;
+  outline-offset: 2px;
+  transform: scale(1.12);
+}
+
+.map-cluster {
+  display: grid;
+  place-items: center;
+  border: 3px solid rgb(255 255 255 / 90%);
+  border-radius: 50%;
+  background: #0a2353;
+  box-shadow: 0 2px 8px rgb(10 35 83 / 24%);
+}
+
+.map-cluster__count {
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .custom-map-marker:hover .custom-map-marker__badge {
+    transform: scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .custom-map-marker__badge {
+    transition: none;
+  }
 }
 
 .leaflet-container {

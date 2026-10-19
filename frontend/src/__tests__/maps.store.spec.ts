@@ -77,6 +77,37 @@ describe('maps.ts Pinia Store', () => {
     expect(store.filteredPoints[0]?.name).toBe('Bank Sampah');
   });
 
+  it('does not let an older leader lookup overwrite the current selection', async () => {
+    let resolveFirst!: (value: import('../types/maps').RtLeaderDTO | null) => void;
+    const firstLookup = new Promise<import('../types/maps').RtLeaderDTO | null>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const currentLeader = {
+      rtNumber: 2,
+      name: 'Current leader',
+      phone: '08120000002',
+      phoneIsWhatsapp: true,
+      alamat: null,
+      coordinates: null,
+      createdAt: '2026-08-01T00:00:00Z',
+      updatedAt: '2026-08-01T00:00:00Z',
+    };
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation((input) => {
+      if (String(input).endsWith('/rt-leaders/1')) return firstLookup.then((leader) => ({ ok: true, json: async () => ({ leader }) }) as Response);
+      if (String(input).endsWith('/rt-leaders/2')) return Promise.resolve({ ok: true, json: async () => ({ leader: currentLeader }) } as Response);
+      return Promise.resolve({ ok: false, status: 404, json: async () => ({}) } as Response);
+    });
+
+    const store = useMapsStore();
+    const firstSelection = store.selectPoint(mockPoints[0]!);
+    await store.selectPoint({ ...mockPoints[0]!, id: 'point-2', rts: [2] });
+    resolveFirst({ ...currentLeader, rtNumber: 1, name: 'Stale leader' });
+    await firstSelection;
+
+    expect(store.selectedPoint?.rts).toEqual([2]);
+    expect(store.selectedLeader?.name).toBe('Current leader');
+  });
+
   it('loads map summary metrics', async () => {
     globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
       ok: true,
