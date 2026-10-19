@@ -219,9 +219,9 @@ function formatPhone(value: string): string {
         </div>
 
         <!-- Table -->
-        <div v-else class="mt-5 rounded-btn border border-gray-300 bg-white shadow-xs">
+        <div v-else class="mt-5 overflow-hidden rounded-btn border border-gray-300 bg-white shadow-xs">
           <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-left text-sm text-gray-800">
+            <table class="w-full min-w-[600px] table-fixed divide-y divide-gray-200 text-left text-sm text-gray-800">
               <caption class="sr-only">
                 <template v-if="hasAddressData">
                   Daftar Ketua RT Kelurahan Manggar beserta nomor RT, nama, kontak, dan alamat
@@ -230,12 +230,36 @@ function formatPhone(value: string): string {
                   Daftar Ketua RT Kelurahan Manggar beserta nomor RT, nama, dan kontak
                 </template>
               </caption>
-              <thead class="bg-brand-navy text-xs font-semibold tracking-wider text-white uppercase">
+              <thead class="bg-brand-navy text-sm sm:text-base font-semibold text-white">
                 <tr>
-                  <th scope="col" class="px-4 py-3.5 sm:px-6">No. RT</th>
-                  <th scope="col" class="px-4 py-3.5 sm:px-6">Nama Ketua RT</th>
-                  <th scope="col" class="px-4 py-3.5 sm:px-6">Kontak</th>
-                  <th v-if="hasAddressData" scope="col" class="px-4 py-3.5 sm:px-6">Alamat</th>
+                  <th
+                    scope="col"
+                    class="px-4 py-3.5 sm:px-6"
+                    :class="hasAddressData ? 'w-[18%] sm:w-[14%]' : 'w-[20%] sm:w-[16%]'"
+                  >
+                    No. RT
+                  </th>
+                  <th
+                    scope="col"
+                    class="px-4 py-3.5 sm:px-6"
+                    :class="hasAddressData ? 'w-[36%] sm:w-[34%]' : 'w-[50%] sm:w-[54%]'"
+                  >
+                    Nama Ketua RT
+                  </th>
+                  <th
+                    scope="col"
+                    class="px-4 py-3.5 sm:px-6"
+                    :class="hasAddressData ? 'w-[26%] sm:w-[24%]' : 'w-[30%] sm:w-[30%]'"
+                  >
+                    Kontak
+                  </th>
+                  <th
+                    v-if="hasAddressData"
+                    scope="col"
+                    class="w-[20%] px-4 py-3.5 sm:w-[28%] sm:px-6"
+                  >
+                    Alamat
+                  </th>
                 </tr>
               </thead>
 
@@ -245,7 +269,7 @@ function formatPhone(value: string): string {
                   <td class="px-4 py-4 sm:px-6"><span class="block h-4 w-10 animate-pulse rounded bg-gray-200"></span></td>
                   <td class="px-4 py-4 sm:px-6"><span class="block h-4 w-40 animate-pulse rounded bg-gray-200"></span></td>
                   <td class="px-4 py-4 sm:px-6"><span class="block h-4 w-32 animate-pulse rounded bg-gray-200"></span></td>
-                  <td class="px-4 py-4 sm:px-6"><span class="block h-4 w-48 animate-pulse rounded bg-gray-200"></span></td>
+                  <td v-if="hasAddressData" class="px-4 py-4 sm:px-6"><span class="block h-4 w-48 animate-pulse rounded bg-gray-200"></span></td>
                 </tr>
               </tbody>
 
@@ -255,11 +279,11 @@ function formatPhone(value: string): string {
                   :key="leader.rtNumber"
                   class="transition-colors hover:bg-gray-50/75"
                 >
-                  <th scope="row" class="px-4 py-4 align-top font-semibold text-brand-navy sm:px-6">
+                  <th scope="row" class="px-4 py-4 align-top font-semibold text-brand-navy whitespace-nowrap sm:px-6">
                     {{ leader.rtNumber }}
                   </th>
-                  <td class="px-4 py-4 align-top text-gray-800 sm:px-6">{{ leader.name }}</td>
-                  <td class="px-4 py-4 align-top text-gray-800 sm:px-6">
+                  <td class="px-4 py-4 align-top text-gray-800 break-words sm:px-6">{{ leader.name }}</td>
+                  <td class="px-4 py-4 align-top text-gray-800 whitespace-nowrap sm:px-6">
                     <a
                       v-if="leader.phoneIsWhatsapp"
                       :href="`https://wa.me/${whatsappNumber(leader.phone)}`"
@@ -279,7 +303,7 @@ function formatPhone(value: string): string {
                       <span class="sr-only">(panggilan telepon)</span>
                     </a>
                   </td>
-                  <td v-if="hasAddressData" class="px-4 py-4 align-top text-gray-700 sm:px-6">
+                  <td v-if="hasAddressData" class="px-4 py-4 align-top text-gray-700 break-words sm:px-6">
                     {{ leader.alamat ?? '—' }}
                   </td>
                 </tr>
@@ -322,7 +346,7 @@ function formatPhone(value: string): string {
                 <select
                   id="page-size-select"
                   v-model.number="pageSize"
-                  class="rounded border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-medium text-brand-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+                  class="rounded-btn border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-medium text-brand-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
                   data-test="page-size-select"
                 >
                   <option :value="10">10</option>

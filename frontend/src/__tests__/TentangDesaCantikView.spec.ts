@@ -59,7 +59,7 @@ describe('TentangDesaCantikView accessibility and content', () => {
     expect(wrapper.find('img[alt="Logo Badan Pusat Statistik (BPS)"]').exists()).toBe(true);
   });
 
-  it('includes scope notice clarifying relationship to BPS without internal SPEC leaks', async () => {
+  it('renders accurate hero subtitle and program description', async () => {
     const { pinia, router } = mountView();
     await router.push('/tentang/desa-cantik');
     await router.isReady();
@@ -68,9 +68,13 @@ describe('TentangDesaCantikView accessibility and content', () => {
       global: { plugins: [pinia, router] },
     });
 
-    expect(wrapper.text()).toContain('Catatan Batasan Portal');
-    expect(wrapper.text()).not.toContain('SPEC §');
-    expect(wrapper.text()).toContain('bukan portal resmi milik Badan Pusat Statistik (BPS)');
+    expect(wrapper.text()).toContain(
+      'Upaya Kelurahan Manggar dalam mewujudkan kelurahan sadar statistik.',
+    );
+    expect(wrapper.text()).not.toContain('nagari');
+    expect(wrapper.text()).not.toContain('Catatan Batasan Portal');
+    expect(wrapper.text()).toContain('Tentang Program Desa Cantik');
+    expect(wrapper.text()).toContain('Portal SIDATA');
   });
 
   it('renders accurate photo caption for kelurahan building', async () => {

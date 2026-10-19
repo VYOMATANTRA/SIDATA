@@ -18,44 +18,12 @@ export interface PublicIndicator {
   comparison?: string | null;
 }
 
-const INDICATORS_ENDPOINT = '/api/indicators?pageSize=200';
-
 export const useIndicatorsStore = defineStore('indicators', () => {
   const indicators = ref<PublicIndicator[]>([]);
   const isLoading = ref(false);
   const error = ref<string | null>(null);
 
-  let inFlightList: Promise<void> | null = null;
   const inFlightBySlug = new Map<string, Promise<PublicIndicator | null>>();
-
-  async function fetchIndicators(force = false): Promise<void> {
-    if (inFlightList) return inFlightList;
-    if (!force && indicators.value.length > 0) return;
-
-    isLoading.value = true;
-    error.value = null;
-
-    inFlightList = (async () => {
-      try {
-        const response = await fetch(INDICATORS_ENDPOINT);
-        if (!response.ok) {
-          throw new Error(`Gagal memuat indikator (status ${response.status})`);
-        }
-
-        const data = (await response.json()) as { indicators?: PublicIndicator[] };
-        if (Array.isArray(data.indicators)) {
-          indicators.value = data.indicators;
-        }
-      } catch (err) {
-        error.value = err instanceof Error ? err.message : 'Terjadi kesalahan jaringan';
-      } finally {
-        isLoading.value = false;
-        inFlightList = null;
-      }
-    })();
-
-    return inFlightList;
-  }
 
   async function fetchBySlug(slug: string): Promise<PublicIndicator | null> {
     const existing = findBySlug(slug);
@@ -109,7 +77,6 @@ export const useIndicatorsStore = defineStore('indicators', () => {
     indicators,
     isLoading,
     error,
-    fetchIndicators,
     fetchBySlug,
     findBySlug,
   };
