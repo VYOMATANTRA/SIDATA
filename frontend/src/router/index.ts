@@ -82,6 +82,12 @@ const router = createRouter({
       component: () => import('../views/PetaView.vue'),
       meta: { title: 'Peta' },
     },
+    {
+      path: '/publikasi',
+      name: 'publikasi',
+      component: () => import('../views/PublikasiView.vue'),
+      meta: { title: 'Publikasi' },
+    },
   ],
 });
 
