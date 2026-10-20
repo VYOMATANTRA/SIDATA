@@ -59,12 +59,12 @@ describe('TentangVyomatantraView accessibility and content', () => {
     expect(wrapper.find('img[alt="Logo Tim Inovasi Sosial VYOMATANTRA"]').exists()).toBe(true);
     expect(wrapper.find('img[alt="Logo Institut Teknologi Kalimantan (ITK)"]').exists()).toBe(true);
     expect(wrapper.find('img[alt="Logo SDGs Desa"]').exists()).toBe(true);
-    expect(
-      wrapper.find('img[alt="Logo SDGs 17: Kemitraan untuk Pembangunan Desa"]').exists(),
-    ).toBe(true);
+    expect(wrapper.find('img[alt="Logo SDGs 17: Kemitraan untuk Pembangunan Desa"]').exists()).toBe(
+      true,
+    );
   });
 
-  it('renders core initiatives including Eco Boba and Bank Sampah Unit', async () => {
+  it('renders artifact-backed program facts and the proposal team roster', async () => {
     const { pinia, router } = mountView();
     await router.push('/tentang/vyomatantra');
     await router.isReady();
@@ -73,10 +73,26 @@ describe('TentangVyomatantraView accessibility and content', () => {
       global: { plugins: [pinia, router] },
     });
 
-    expect(wrapper.text()).toContain('Program Eco Boba (Briket Arang Batok Kelapa)');
+    expect(wrapper.text()).toContain('Pelatihan Eco Boba untuk Pengolahan Limbah Kemasan Plastik');
+    expect(wrapper.text()).toContain('58 peserta');
+    expect(wrapper.text()).toContain('lima produk');
+    expect(wrapper.text()).not.toContain('briket arang');
+    expect(wrapper.text()).toContain('mendampingi survei lapangan');
+    expect(wrapper.text()).toContain('mengumpulkan data spasial');
+    expect(wrapper.text()).toContain('mengompilasi data spasial');
     expect(wrapper.text()).toContain('Pembinaan & Pemetaan Bank Sampah Unit (BSU)');
-    expect(wrapper.text()).toContain('Rancang Bangun Sistem SIDATA');
+    expect(wrapper.text()).toContain('Sistem Informasi Data Terpadu Kelurahan (SIDATA)');
     expect(wrapper.text()).toContain('SDG 17: Kemitraan untuk Mencapai Tujuan');
+    expect(wrapper.text()).toContain('Naca Kirana Badarudin');
+    expect(wrapper.text()).toContain('Indah Rahma Mihadha');
+    expect(wrapper.text()).toContain('Andi Naufal Nurfadhil');
+    expect(wrapper.text()).toContain('Muhammad Aditya Putra');
+    expect(wrapper.text()).toContain('Muhammad Iqbal Ferhan');
+    expect(wrapper.text()).toContain('Sulthan Farizan Fawwaz');
+    expect(wrapper.text()).toContain('Andi Mushawwira Muchlis');
+    expect(wrapper.text()).toContain('Feby Anggraini');
+    expect(wrapper.text()).not.toContain('Nama Anggota');
+    expect(wrapper.text()).not.toContain('TODO');
   });
 
   it('uses shared tentang components and the brand navy hero panel', async () => {
@@ -103,7 +119,7 @@ describe('TentangVyomatantraView accessibility and content', () => {
     expect(wrapper.text()).toContain('Data Tepat, Aksi Hebat');
   });
 
-  it('renders 8 team member roster cards with TODO markers for future definitive roles', async () => {
+  it('renders the eight proposal team members with their listed roles', async () => {
     const { pinia, router } = mountView();
     await router.push('/tentang/vyomatantra');
     await router.isReady();
@@ -122,11 +138,10 @@ describe('TentangVyomatantraView accessibility and content', () => {
     const rosterCards = rosterSection.findAll('article');
     expect(rosterCards.length).toBe(8);
 
-    for (let i = 1; i <= 8; i++) {
-      expect(rosterSection.text()).toContain(`Nama Anggota ${i}`);
-    }
-    expect(rosterSection.text()).toContain('Anggota Tim VYOMATANTRA');
-    expect(rosterSection.text()).toContain('TODO');
+    expect(rosterSection.text()).toContain('Ketua Tim');
+    expect(rosterSection.text()).toContain('Sekretaris');
+    expect(rosterSection.text()).toContain('Bendahara');
+    expect(rosterSection.findAll('article')).toHaveLength(8);
 
     // Assert photo placeholders rendered for team members
     const placeholders = rosterSection.findAll('[data-test="team-photo-placeholder"]');

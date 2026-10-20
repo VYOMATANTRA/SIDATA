@@ -73,19 +73,19 @@ const collaborationLogos = [
 
       <TentangInfoCard heading="Mewujudkan Sadar Statistik di Manggar" icon="chart">
         <p>
-          Melalui pendampingan ini, Kelurahan Manggar berupaya menyusun kependudukan, potensi
-          geografis, dan sumber daya secara akurat. Data yang dihasilkan diharapkan dapat menjadi
-          rujukan dalam perencanaan pembangunan kelurahan ke depannya.
+          Pendampingan ini membantu perangkat Kelurahan Manggar mengumpulkan, mengolah, dan menyajikan
+          data statistik. Publikasi Manggar Dalam Angka 2026 menghimpun data geografi, pemerintahan,
+          kependudukan, sosial, ekonomi, dan infrastruktur untuk menjadi rujukan perencanaan.
         </p>
       </TentangInfoCard>
     </div>
 
-    <TentangFeatureBand heading="Dampak Nyata Program Kelurahan Cantik di Manggar">
+    <TentangFeatureBand heading="Luaran dan Kegiatan Desa Cantik di Manggar">
       <div class="mt-4 flex flex-col gap-5 md:flex-row items-stretch">
         <TentangResourceCard
           title="Manggar Dalam Angka 2026"
           icon="document"
-          cta-label="Lihat Publikasi"
+          cta-label="Segera hadir"
           class="flex-1"
         >
           Kompilasi statistik sektoral tahunan kelurahan yang memuat demografi, ekonomi
@@ -95,7 +95,7 @@ const collaborationLogos = [
         <TentangResourceCard
           title="Peta Spasial RT dan Bank Sampah Unit"
           icon="map"
-          cta-label="Peta Geospasial"
+          cta-label="Segera hadir"
           class="flex-1"
         >
           Plot titik koordinat rumah seluruh ketua RT dan sebaran lokasi bank sampah aktif di
