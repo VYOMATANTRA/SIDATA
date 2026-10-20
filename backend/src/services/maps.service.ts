@@ -1266,6 +1266,11 @@ export const updateSpatialPoint = async (
     });
   } catch (error) {
     if (error instanceof MapsServiceError) throw error;
+    if (isPrismaKnownError(error, 'P2002')) {
+      // Only possible race residue: a concurrent writer claimed the same RT after our leader
+      // lock degraded to best-effort (missing rt_leaders row). Surface it as a conflict, not 500.
+      throw new MapsServiceError('Coverage RT sudah terdaftar pada titik ini.', 409);
+    }
     if (isPrismaKnownError(error, 'P2025')) {
       throw new MapsServiceError('Titik spasial tidak ditemukan.', 404);
     }
