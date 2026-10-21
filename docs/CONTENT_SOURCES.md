@@ -33,10 +33,12 @@ All titles below refer to files in the Google Drive folder above, in the named s
 
 - The expanded `Monografi Kelurahan Manggar 2026` describes participatory data collection with
   kelurahan staff, RT chairs, and BSU managers. It credits BPS Kota Balikpapan with technical and
-  methodological assistance. See printed p. 3.
-- The expanded monografi edition reports 14 active BSUs and contains their profiles. See printed
-  pp. 56–58 and following pages. Because the approved edition is unresolved in `docs/SPEC.md` §10,
-  do not publish the count until that source conflict is resolved.
+  methodological assistance. See PDF viewer p. 3. This PDF exposes no printed page numbers, so
+  reference it by PDF viewer page.
+- The expanded monografi edition lists 14 active BSUs and contains their profiles: RT 25, 29, 34,
+  38, 39, 40, 44, 46, 49, 50, 59, 60, 61, and 62. See PDF viewer pp. 56–58 and the following pages.
+  Because the approved edition is unresolved in `docs/SPEC.md` §10, do not publish the count until
+  that source conflict is resolved.
 - The Monografi's employee list records the Lurah, Secretary, Kasi Trantib L-H, Kasi Pemerintahan
   dan Pelayanan Publik, and Kasi Pemberdayaan Masyarakat with names. See PDF viewer pp. 8–9; the
   extracted pages do not expose consistent printed page numbers. The source lists names/titles but
@@ -44,8 +46,9 @@ All titles below refer to files in the Google Drive folder above, in the named s
   fields present in the same record.
 - The standalone RT/BSU map credits direct field survey by Tim Insos VYOMATANTRA, July 2026. The
   `Manggar Dalam Angka 2026` map caption independently credits a field survey by Tim Inovasi Sosial
-  VYOMATANTRA ITK. Cite the standalone map or its publication caption when describing the spatial
-  survey.
+  VYOMATANTRA ITK (Gambar 1, printed p. 17, PDF viewer p. 18). Cite the standalone map or its
+  publication caption when describing the spatial survey. Neither source establishes complete
+  coverage of all RT and BSU locations, so do not describe the map as covering every house.
 - These sources support describing the team's work as participatory data collection, field survey,
   processing/compilation for the monografi, and mapping RT/BSU locations. They do **not** establish
   that individual members personally performed each spatial-data task; describe those activities as
@@ -73,17 +76,26 @@ All titles below refer to files in the Google Drive folder above, in the named s
   District, and Kelurahan Manggar. The collaboration named in the booklet includes the district,
   kelurahan, BPS Kota Balikpapan, ITK, Ecco Walibar, Pelita Borneo 38, BSU participants, and the
   implementation team. See printed pp. 3, 7.
+- The booklet labels its pages "Hal. 01"–"Hal. 06" and "Page 07", while the PDF viewer starts two
+  pages later. Quote the booklet's own page label; the PDF viewer page is two higher.
 
 ### Manggar snapshot and spatial reference
 
-- `Manggar Dalam Angka 2026` reports 2025 population of 53,098 (27,310 male; 25,788 female), 100
-  RT, and area of 3,525.50 hectares. See its metadata and printed pp. 17–19, 26–27, and 34–38.
+- `Manggar Dalam Angka 2026` reports 2025 population of 53,098 (27,310 male; 25,788 female) in
+  Tabel 3.1.1 (printed p. 36, PDF viewer p. 37) and its technical narrative (printed p. 34, PDF
+  viewer p. 35); 100 Rukun Tetangga in Tabel 2.4.1 (printed p. 30, PDF viewer p. 31) and the
+  technical narrative (printed p. 24, PDF viewer p. 25); and area of 3,525.50 hectares in Tabel
+  1.1.3 (printed p. 19, PDF viewer p. 20) and the technical narrative (printed p. 16, PDF viewer
+  p. 17). This publication prints page numbers in its footer, so quote the printed page and the
+  PDF viewer page together.
 - The publication metadata states data years 2024–2025 and field collection in 2025/2026. Always
   label these statistics as 2025 where the cited table says 2025; do not call them 2026 observations
   merely because the publication was issued in 2026.
 - The 2025 boundary table in `Manggar Dalam Angka 2026` gives north: Karang Joang; south: Selat
-  Makassar; east: Manggar Baru; west: Sepinggan and Sepinggan Baru (printed p. 19). Check the open
-  source conflict in `docs/SPEC.md` §10 before publishing boundary copy.
+  Makassar; east: Manggar Baru; west: Sepinggan and Sepinggan Baru (Tabel 1.1.2, printed p. 18,
+  PDF viewer p. 19). Use this table for public boundary copy. The user confirmed **Kelurahan
+  Karang Joang** only as the northern boundary on 21 October 2026; the settled rule is recorded
+  in `docs/SPEC.md` §8.
 
 ## Handling sensitive source fields
 

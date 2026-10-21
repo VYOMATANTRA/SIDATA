@@ -110,7 +110,7 @@ const wilayahStats = [
 ];
 
 const batasWilayah = [
-  { arah: 'Sebelah Utara', wilayah: 'Informasi sedang diverifikasi' },
+  { arah: 'Sebelah Utara', wilayah: 'Kelurahan Karang Joang' },
   { arah: 'Sebelah Timur', wilayah: 'Kelurahan Manggar Baru' },
   { arah: 'Sebelah Selatan', wilayah: 'Selat Makassar' },
   { arah: 'Sebelah Barat', wilayah: 'Kelurahan Sepinggan dan Sepinggan Baru' },
@@ -205,7 +205,7 @@ const batasWilayah = [
           cta-label="Segera hadir"
           class="flex-1"
         >
-          Plot titik koordinat rumah seluruh ketua RT dan sebaran lokasi bank sampah aktif di
+          Peta lokasi rumah ketua RT dan bank sampah aktif di Kelurahan Manggar, Kecamatan
           Balikpapan Timur.
         </TentangResourceCard>
 
@@ -257,16 +257,17 @@ const batasWilayah = [
             <div class="space-y-3 text-base leading-relaxed text-gray-800">
               <p>
                 Sebagai garda terdepan pelayanan pemerintah daerah bagi masyarakat di wilayah
-                Balikpapan Timur, Kelurahan Manggar senantiasa berkomitmen untuk menghadirkan
-                pelayanan yang ramah, akuntabel, dan transparan.
+                Balikpapan Timur, Kelurahan Manggar strive menyediakan pelayanan yang ramah,
+                akuntabel, dan transparan.
               </p>
               <p>
-                Melalui integrasi program
-                <strong class="font-semibold text-brand-navy">Kelurahan Cinta Statistik (Desa Cantik)</strong> serta peluncuran portal
-                <strong class="font-semibold text-brand-navy">SIDATA</strong>, kami berikhtiar membangun tata kelola berbasis data akurat
-                bersama 100 Rukun Tetangga (RT). Data yang tepat menjadi kompas kami dalam
-                merencanakan program sosial, penanganan lingkungan, serta pemulihan ekonomi
-                masyarakat yang berkelanjutan.
+                Integrasi program
+                <strong class="font-semibold text-brand-navy">Kelurahan Cinta Statistik (Desa Cantik)</strong> dan
+                pengembangan portal
+                <strong class="font-semibold text-brand-navy">SIDATA</strong> bersama 100 Rukun Tetangga (RT)
+                diharapkan dapat membantu penyajian informasi Kelurahan Manggar secara terstruktur dan
+                mendukung pemanfaatan data dalam perencanaan pelayanan masyarakat, seperti dalam program
+                sosial dan penanganan lingkungan.
               </p>
             </div>
 

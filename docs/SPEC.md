@@ -339,6 +339,20 @@ Implemented frontend routes:
 
 `/tentang` redirects to `/tentang/kelurahan-manggar`.
 
+The Kelurahan Manggar profile publishes **Kelurahan Karang Joang** only as its northern
+administrative boundary, following the 2025 boundary table in `Manggar Dalam Angka 2026`
+(Tabel 1.1.2; printed p. 18, PDF viewer p. 19).
+
+The official-profile paragraphs (the Lurah section) describe intent and expected benefit in
+neutral third-person narration, using "diharapkan" or "dapat membantu". They do not use first-person
+"kami" phrasing and do not state that policies, outcomes, or economic improvements have already
+happened.
+
+The spatial map card uses the same description on both the Kelurahan Manggar and Desa Cantik
+pages: "Peta lokasi rumah ketua RT dan bank sampah aktif di Kelurahan Manggar, Kecamatan Balikpapan
+Timur." Complete coverage of all RT and BSU locations is not established, so the wording must not
+claim it (no "seluruh").
+
 The VYOMATANTRA page publishes the eight-student proposal roster and assigned role labels from
 `Proposal Inovasi Sosial_Desa Cantik Kelurahan Manggar.docx`, Lampiran 2. The page attributes field
 survey, spatial-data collection/compilation, and mapping to the team collectively, not to individual
@@ -373,9 +387,6 @@ Single register — unresolved questions live here and nowhere else.
 - **Source-version reconciliation (Google Drive: Descan Manggar 2026):** Confirm which of the two
   `Monografi Kelurahan Manggar 2026` editions is current/approved for public facts. The expanded
   edition has 14 BSU profiles; another edition has a different page count and content.
-- **Geographic boundaries:** `Manggar Dalam Angka 2026` printed p. 19 and the Monografi list
-  Karang Joang as the northern boundary, while the same publication's technical narrative printed
-  p. 17 says Karang Joang and Lamaru. Confirm the approved boundary wording before publishing.
 - **BSU RT identity:** The expanded Monografi's BSU identity list includes RT 46, while later
   profile sections refer to RT 64. Confirm the correct RT and update derived public data consistently.
 - **Cross-publication data conflicts:** Reconcile any conflicting values between the 2025 profile,

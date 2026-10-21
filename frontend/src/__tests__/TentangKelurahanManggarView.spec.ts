@@ -201,6 +201,40 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(wrapper.text()).toContain('Munir Achmad, S.E.');
   });
 
+  it('describes the Lurah program in neutral, aspirational narration', async () => {
+    const { pinia, router } = mountView();
+    await router.push('/tentang/kelurahan-manggar');
+    await router.isReady();
+
+    const wrapper = mount(TentangKelurahanManggarView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    expect(wrapper.text()).toContain(
+      'diharapkan dapat membantu penyajian informasi Kelurahan Manggar secara terstruktur',
+    );
+    expect(wrapper.text()).toContain(
+      'mendukung pemanfaatan data dalam perencanaan pelayanan masyarakat',
+    );
+    expect(wrapper.text()).not.toContain('kami berikhtiar');
+    expect(wrapper.text()).not.toContain('pemulihan ekonomi');
+  });
+
+  it('describes the spatial map card without claiming complete coverage', async () => {
+    const { pinia, router } = mountView();
+    await router.push('/tentang/kelurahan-manggar');
+    await router.isReady();
+
+    const wrapper = mount(TentangKelurahanManggarView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    expect(wrapper.text()).toContain(
+      'Peta lokasi rumah ketua RT dan bank sampah aktif di Kelurahan Manggar, Kecamatan Balikpapan Timur.',
+    );
+    expect(wrapper.text()).not.toContain('seluruh ketua RT');
+  });
+
   it('renders SOTK table with proper accessibility attributes', async () => {
     const { pinia, router } = mountView();
     await router.push('/tentang/kelurahan-manggar');
@@ -240,7 +274,7 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(wrapper.text()).not.toContain('Periode Berjalan');
   });
 
-  it('marks the disputed northern boundary as under verification and keeps verified sides', async () => {
+  it('renders Karang Joang as the approved northern boundary and keeps the other sides', async () => {
     const { pinia, router } = mountView();
     await router.push('/tentang/kelurahan-manggar');
     await router.isReady();
@@ -250,8 +284,12 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     });
 
     expect(wrapper.find('[data-test="stat-card"]').exists()).toBe(true);
-    expect(wrapper.text()).toContain('Informasi sedang diverifikasi');
-    expect(wrapper.text()).not.toContain('Kelurahan Karang Joang');
+    const northernBoundary = wrapper
+      .findAll('li')
+      .find((item) => item.text().includes('Sebelah Utara:'));
+    expect(northernBoundary?.findAll('span')[1]?.text()).toBe('Kelurahan Karang Joang');
+    expect(wrapper.text()).not.toContain('Informasi sedang diverifikasi');
+    expect(wrapper.text()).not.toContain('Lamaru');
     expect(wrapper.text()).toContain('Kelurahan Manggar Baru');
     expect(wrapper.text()).toContain('Selat Makassar');
     expect(wrapper.text()).toContain('Kelurahan Sepinggan dan Sepinggan Baru');

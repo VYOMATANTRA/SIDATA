@@ -82,6 +82,21 @@ describe('TentangDesaCantikView accessibility and content', () => {
     expect(wrapper.text()).not.toContain('(seperti yang ditampilkan di portal SIDATA ini)');
   });
 
+  it('describes the spatial map card with the shared coverage wording', async () => {
+    const { pinia, router } = mountView();
+    await router.push('/tentang/desa-cantik');
+    await router.isReady();
+
+    const wrapper = mount(TentangDesaCantikView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    expect(wrapper.text()).toContain(
+      'Peta lokasi rumah ketua RT dan bank sampah aktif di Kelurahan Manggar, Kecamatan Balikpapan Timur.',
+    );
+    expect(wrapper.text()).not.toContain('seluruh ketua RT');
+  });
+
   it('renders accurate photo caption for kelurahan building', async () => {
     const { pinia, router } = mountView();
     await router.push('/tentang/desa-cantik');

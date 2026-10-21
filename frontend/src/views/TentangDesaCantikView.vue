@@ -98,7 +98,7 @@ const collaborationLogos = [
           cta-label="Segera hadir"
           class="flex-1"
         >
-          Plot titik koordinat rumah seluruh ketua RT dan sebaran lokasi bank sampah aktif di
+          Peta lokasi rumah ketua RT dan bank sampah aktif di Kelurahan Manggar, Kecamatan
           Balikpapan Timur.
         </TentangResourceCard>
 
