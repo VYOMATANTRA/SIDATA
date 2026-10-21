@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
 import TentangPageLayout from '../components/tentang/TentangPageLayout.vue';
 import TentangBreadcrumb from '../components/tentang/TentangBreadcrumb.vue';
 import TentangHeroPanel from '../components/tentang/TentangHeroPanel.vue';
@@ -7,13 +6,6 @@ import TentangNotice from '../components/tentang/TentangNotice.vue';
 import TentangStepList, { type StepItem } from '../components/tentang/TentangStepList.vue';
 import TentangFeatureBand from '../components/tentang/TentangFeatureBand.vue';
 import TentangIcon from '../components/tentang/TentangIcon.vue';
-import { useSettingsStore } from '../stores/settings.store';
-
-const settingsStore = useSettingsStore();
-
-onMounted(() => {
-  void settingsStore.fetchPublicSettings();
-});
 
 const steps: StepItem[] = [
   {
@@ -142,7 +134,7 @@ const escalationPath = [
   {
     title: 'Sengketa',
     target: 'Komisi Informasi Provinsi Kaltim',
-    note: 'Diajukan paling lambat 14 hari kerja setelah tanggapan Atasan PPID diterima. Komisi Informasi menyelesaikan mediasi/ajudikasi maksimal 100 hari kerja.',
+    note: 'Permohonan penyelesaian sengketa diajukan paling lambat 14 hari kerja sejak tanggapan tertulis Atasan PPID diterima, atau sejak berakhirnya batas waktu 30 hari kerja pemberian tanggapan apabila tidak ada jawaban. Dasar hukum: Pasal 13 PerKI No. 1 Tahun 2013 dan Pasal 37–38 UU No. 14 Tahun 2008. Penyelesaian mediasi/ajudikasi paling lama 100 hari kerja.',
   },
 ];
 
@@ -188,10 +180,19 @@ const officialSopDocuments: SopDocument[] = [
     id: 'sop-sengketa-informasi',
     title: 'Prosedur Permohonan Penyelesaian Sengketa Informasi',
     category: 'Eskalasi & Pengujian',
-    refNumber: 'Pasal 37–38 UU No. 14/2008 & Perki No. 1/2013',
+    refNumber: 'Pasal 13 PerKI No. 1 Tahun 2013; Pasal 37–38 UU No. 14 Tahun 2008',
     description:
-      'Tata cara pengajuan sengketa ke Komisi Informasi (diajukan max. 14 hari kerja setelah tanggapan Atasan PPID; penyelesaian mediasi atau ajudikasi maksimal 100 hari kerja).',
+      'Permohonan penyelesaian sengketa diajukan paling lambat 14 hari kerja sejak tanggapan tertulis Atasan PPID diterima, atau sejak berakhirnya batas waktu 30 hari kerja pemberian tanggapan apabila tidak ada jawaban. Penyelesaian mediasi/ajudikasi paling lama 100 hari kerja.',
     url: 'https://ppid.balikpapan.go.id/assets/content_pdf/1667187395208.pdf',
+  },
+  {
+    id: 'perki-sengketa-informasi-2013',
+    title: 'Peraturan Komisi Informasi No. 1 Tahun 2013',
+    category: 'Eskalasi & Pengujian',
+    refNumber: 'Pasal 13 PerKI No. 1 Tahun 2013',
+    description:
+      'Peraturan resmi tentang prosedur penyelesaian sengketa informasi publik, termasuk tenggat pengajuan pada Pasal 13.',
+    url: 'https://peraturan.go.id/files/bn649-2013.pdf',
   },
   {
     id: 'sop-uji-konsekuensi',
@@ -230,32 +231,6 @@ const officialSopDocuments: SopDocument[] = [
     url: 'http://ppid.balikpapan.go.id/assets/global_file/SOP_PPID/Maklumat%20Pelayanan%20Informasi%20Publik%20Pemkot%20Balikpapan%20-%202021.pdf',
   },
 ];
-
-const serviceDesk = computed(() => [
-  {
-    title: 'Alamat Kantor',
-    lines: [
-      settingsStore.institutionName,
-      settingsStore.contactAddress,
-    ],
-  },
-  {
-    title: 'Jam Pelayanan',
-    lines: [
-      'Senin – Kamis: 08.00 – 15.30 WITA',
-      'Jumat: 08.00 – 11.30 WITA',
-      'Sabtu, Minggu & hari libur nasional: tutup',
-    ],
-  },
-  {
-    title: 'Kontak Resmi',
-    lines: [
-      `Telepon: ${settingsStore.contactPhone}`,
-      `WhatsApp/SMS PPID: ${settingsStore.contactWhatsapp}`,
-      `Email: ${settingsStore.contactEmail}`,
-    ],
-  },
-]);
 </script>
 
 <template>
@@ -270,12 +245,15 @@ const serviceDesk = computed(() => [
     <TentangNotice heading="Batasan Layanan Portal Informasi">
       <p>
         Portal <strong>SIDATA</strong> menyajikan profil data terbuka kelurahan dan
-        <strong>tidak menyimpan dokumen resmi PPID</strong>, seperti transparansi keuangan, RKA, atau
-        berkas administratif internal.
+        <strong>tidak menyimpan dokumen resmi PPID</strong>, seperti transparansi keuangan, RKA,
+        atau berkas administratif internal.
       </p>
       <p>
-        Laman panduan ini membantu Anda memahami tata cara dan alur pengajuan permohonan informasi publik secara resmi kepada
-        <strong>Pejabat Pengelola Informasi dan Dokumentasi (PPID) Pemerintah Kota Balikpapan</strong>.
+        Laman panduan ini membantu Anda memahami tata cara dan alur pengajuan permohonan informasi
+        publik secara resmi kepada
+        <strong
+          >Pejabat Pengelola Informasi dan Dokumentasi (PPID) Pemerintah Kota Balikpapan</strong
+        >.
       </p>
     </TentangNotice>
 
@@ -329,7 +307,8 @@ const serviceDesk = computed(() => [
           Jika Permohonan Ditolak atau Tidak Dijawab
         </h2>
         <p class="mt-2 max-w-3xl text-base text-gray-700">
-          Permohonan yang tidak terpenuhi atau ditolak dapat Anda lanjutkan melalui tahapan eskalasi resmi berikut.
+          Permohonan yang tidak terpenuhi atau ditolak dapat Anda lanjutkan melalui tahapan eskalasi
+          resmi berikut.
         </p>
 
         <ol class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -360,10 +339,15 @@ const serviceDesk = computed(() => [
             7 Alasan Sah Pengajuan Keberatan (Perki No. 1/2021 &amp; SOP PPID)
           </h3>
           <p class="mt-1 text-sm text-gray-700">
-            Pemohon berhak mengajukan keberatan tertulis kepada Atasan PPID Kota Balikpapan berdasarkan salah satu dari kondisi berikut:
+            Pemohon berhak mengajukan keberatan tertulis kepada Atasan PPID Kota Balikpapan
+            berdasarkan salah satu dari kondisi berikut:
           </p>
           <ul class="mt-3 grid grid-cols-1 gap-2.5 text-sm text-gray-800 sm:grid-cols-2">
-            <li v-for="(reason, rIdx) in objectionReasons" :key="rIdx" class="flex items-start gap-2">
+            <li
+              v-for="(reason, rIdx) in objectionReasons"
+              :key="rIdx"
+              class="flex items-start gap-2"
+            >
               <span
                 class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-navy text-[10px] font-bold text-white"
                 aria-hidden="true"
@@ -392,7 +376,9 @@ const serviceDesk = computed(() => [
               class="inline-flex min-h-[44px] items-center gap-1.5 font-medium text-gray-700 underline hover:text-brand-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
             >
               <span>Unduh Tata Cara Keberatan (PDF)</span>
-              <span class="sr-only">Tautan eksternal dokumen panduan keberatan PPID, terbuka di tab baru</span>
+              <span class="sr-only"
+                >Tautan eksternal dokumen panduan keberatan PPID, terbuka di tab baru</span
+              >
               <span aria-hidden="true">&nearr;</span>
             </a>
           </div>
@@ -442,7 +428,10 @@ const serviceDesk = computed(() => [
           class="mt-4 flex flex-col gap-2 text-xs text-brand-navy/80 sm:flex-row sm:items-center sm:justify-between"
         >
           <p>
-            * Standar waktu dan prosedur diselaraskan dengan SOP PPID Kota Balikpapan No. 490/365/M/DISKOMINFO, UU No. 14 Tahun 2008 tentang Keterbukaan Informasi Publik, Peraturan Komisi Informasi No. 1 Tahun 2021, serta SOP Layanan Informasi PPID Pemerintah Kota Balikpapan.
+            * Standar waktu dan prosedur diselaraskan dengan SOP PPID Kota Balikpapan No.
+            490/365/M/DISKOMINFO, UU No. 14 Tahun 2008 tentang Keterbukaan Informasi Publik,
+            Peraturan Komisi Informasi No. 1 Tahun 2021, serta SOP Layanan Informasi PPID Pemerintah
+            Kota Balikpapan.
           </p>
           <a
             href="https://ppid.balikpapan.go.id/assets/global_file/SOP_PPID/SOP_Pelayanan%20Permohonan%20Informasi%20Publik%20di%20PPID.pdf"
@@ -451,7 +440,9 @@ const serviceDesk = computed(() => [
             class="inline-flex shrink-0 items-center gap-1.5 font-semibold text-brand-navy underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
           >
             <span>Unduh SOP PPID (PDF)</span>
-            <span class="sr-only">Tautan eksternal dokumen SOP PPID Balikpapan, terbuka di tab baru</span>
+            <span class="sr-only"
+              >Tautan eksternal dokumen SOP PPID Balikpapan, terbuka di tab baru</span
+            >
             <span aria-hidden="true">&rarr;</span>
           </a>
         </div>
@@ -467,7 +458,7 @@ const serviceDesk = computed(() => [
               Dokumen Standar Operasional Prosedur (SOP) &amp; Regulasi Resmi
             </h2>
             <p class="mt-2 max-w-3xl text-base text-gray-700">
-              Kumpulan dokumen SOP dan regulasi resmi yang diterbitkan PPID Pemerintah Kota Balikpapan sebagai rujukan pelayanan informasi dan tata kelola data.
+              Kumpulan SOP PPID dan peraturan resmi sebagai rujukan pelayanan informasi publik.
             </p>
           </div>
           <a
@@ -477,7 +468,9 @@ const serviceDesk = computed(() => [
             class="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-btn border border-brand-navy/30 bg-white px-4 py-2 text-xs font-semibold text-brand-navy transition-colors hover:border-brand-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
           >
             <span>Portal PPID Balikpapan</span>
-            <span class="sr-only">Tautan eksternal portal resmi PPID Balikpapan, terbuka di tab baru</span>
+            <span class="sr-only"
+              >Tautan eksternal portal resmi PPID Balikpapan, terbuka di tab baru</span
+            >
             <span aria-hidden="true">&nearr;</span>
           </a>
         </div>
@@ -530,7 +523,9 @@ const serviceDesk = computed(() => [
                 </span>
                 <span>Unduh Dokumen</span>
               </span>
-              <span class="sr-only">Tautan eksternal dokumen {{ doc.title }}, terbuka di tab baru</span>
+              <span class="sr-only"
+                >Tautan eksternal dokumen {{ doc.title }}, terbuka di tab baru</span
+              >
               <span aria-hidden="true">&nearr;</span>
             </a>
           </article>
@@ -564,7 +559,9 @@ const serviceDesk = computed(() => [
           class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-btn border-2 border-brand-navy bg-white px-5 py-2.5 text-base font-medium text-brand-navy transition-colors hover:bg-brand-navy hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
         >
           Formulir Keberatan Daring
-          <span class="sr-only">Tautan eksternal formulir keberatan PPID Balikpapan, terbuka di tab baru</span>
+          <span class="sr-only"
+            >Tautan eksternal formulir keberatan PPID Balikpapan, terbuka di tab baru</span
+          >
           <span aria-hidden="true">&rarr;</span>
         </a>
 
@@ -580,30 +577,5 @@ const serviceDesk = computed(() => [
         </a>
       </div>
     </TentangFeatureBand>
-
-    <!-- Meja pelayanan -->
-    <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="meja-title">
-      <div class="mx-auto max-w-5xl">
-        <h2 id="meja-title" class="text-lg font-bold text-brand-navy">
-          Meja Pelayanan Informasi Kelurahan Manggar
-        </h2>
-        <p class="mt-2 max-w-3xl text-base text-gray-700">
-          Bantuan konsultasi dan penerimaan berkas permohonan secara luring.
-        </p>
-
-        <div class="mt-5 rounded-btn border border-gray-300 bg-white">
-          <dl
-            class="grid grid-cols-1 divide-y divide-gray-200 sm:grid-cols-3 sm:divide-x sm:divide-y-0"
-          >
-            <div v-for="desk in serviceDesk" :key="desk.title" class="p-5">
-              <dt class="text-base font-bold text-brand-navy">{{ desk.title }}</dt>
-              <dd class="mt-2 space-y-1 text-base leading-relaxed text-gray-800">
-                <p v-for="(line, lineIdx) in desk.lines" :key="lineIdx">{{ line }}</p>
-              </dd>
-            </div>
-          </dl>
-        </div>
-      </div>
-    </section>
   </TentangPageLayout>
 </template>
