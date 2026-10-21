@@ -124,17 +124,17 @@ const escalationPath = [
   {
     title: 'Permohonan',
     target: 'PPID Kota Balikpapan & Meja Layanan Kelurahan',
-    note: 'Diajukan tertulis atau daring. PPID wajib memberikan tanggapan tertulis maksimal 10 hari kerja (+ perpanjangan 7 hari kerja bila diperlukan).',
+    note: 'Diajukan tertulis atau daring. PPID wajib memberikan pemberitahuan tertulis paling lambat 10 hari kerja sejak permohonan diterima, dan dapat memperpanjang waktu paling lambat 7 hari kerja berikutnya dengan alasan tertulis. Dasar hukum: Pasal 22 ayat (7)–(8) UU No. 14 Tahun 2008.',
   },
   {
     title: 'Keberatan',
     target: 'Atasan PPID Kota Balikpapan',
-    note: 'Diajukan maksimal 30 hari kerja apabila permohonan ditolak atau tidak ditanggapi. Atasan PPID memberikan keputusan tertulis maksimal 30 hari kerja.',
+    note: 'Diajukan tertulis paling lambat 30 hari kerja sejak ditemukannya alasan keberatan, misalnya permohonan ditolak, tidak ditanggapi, atau tidak dipenuhi. Atasan PPID memberikan tanggapan tertulis paling lambat 30 hari kerja sejak keberatan diterima. Dasar hukum: Pasal 35 ayat (1) dan Pasal 36 ayat (1)–(2) UU No. 14 Tahun 2008.',
   },
   {
     title: 'Sengketa',
     target: 'Komisi Informasi Provinsi Kaltim',
-    note: 'Permohonan penyelesaian sengketa diajukan paling lambat 14 hari kerja sejak tanggapan tertulis Atasan PPID diterima, atau sejak berakhirnya batas waktu 30 hari kerja pemberian tanggapan apabila tidak ada jawaban. Dasar hukum: Pasal 13 PerKI No. 1 Tahun 2013 dan Pasal 37–38 UU No. 14 Tahun 2008. Penyelesaian mediasi/ajudikasi paling lama 100 hari kerja.',
+    note: 'Permohonan penyelesaian sengketa diajukan paling lambat 14 hari kerja sejak tanggapan tertulis Atasan PPID diterima, atau sejak berakhirnya batas waktu 30 hari kerja pemberian tanggapan apabila tidak ada jawaban. Dasar hukum: Pasal 13 PerKI No. 1 Tahun 2013, Pasal 37 ayat (2), dan Pasal 38 ayat (2) UU No. 14 Tahun 2008. Penyelesaian mediasi/ajudikasi paling lama 100 hari kerja.',
   },
 ];
 
