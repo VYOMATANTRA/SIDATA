@@ -196,7 +196,7 @@ onMounted(async () => {
       <!-- Page Title -->
       <header class="border-b border-slate-200 pb-6">
         <div
-          class="h-1.5 w-28 rounded-full bg-gradient-to-r from-brand-indigo via-brand-violet to-brand-cyan mb-4"
+          class="h-1.5 w-28 rounded-full bg-linear-to-r from-brand-indigo via-brand-violet to-brand-cyan mb-4"
           aria-hidden="true"
         ></div>
         <h1 class="font-extrabold tracking-tight text-brand-navy">Log Sistem dan Audit Trail</h1>
@@ -234,7 +234,7 @@ onMounted(async () => {
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <!-- Total Log -->
           <div
-            class="rounded-card bg-gradient-to-br from-brand-navy to-brand-navy-deep border border-white/10 text-white p-5 shadow-lg shadow-brand-navy/20"
+            class="rounded-card bg-linear-to-br from-brand-navy to-brand-navy-deep border border-white/10 text-white p-5 shadow-lg shadow-brand-navy/20"
           >
             <div class="flex items-start justify-between">
               <span class="text-sm font-medium text-white/80">Total Log</span>
@@ -248,7 +248,7 @@ onMounted(async () => {
 
           <!-- Kejadian Kritis -->
           <div
-            class="rounded-card bg-gradient-to-br from-red-500 to-rose-600 border border-white/10 text-white p-5 shadow-lg shadow-red-600/25"
+            class="rounded-card bg-linear-to-br from-red-500 to-rose-600 border border-white/10 text-white p-5 shadow-lg shadow-red-600/25"
           >
             <div class="flex items-start justify-between">
               <span class="text-sm font-medium text-white/80">Kejadian Kritis</span>
@@ -262,7 +262,7 @@ onMounted(async () => {
 
           <!-- Aksi Admin -->
           <div
-            class="rounded-card bg-gradient-to-br from-brand-indigo to-brand-violet border border-white/10 text-white p-5 shadow-lg shadow-brand-indigo/25"
+            class="rounded-card bg-linear-to-br from-brand-indigo to-brand-violet border border-white/10 text-white p-5 shadow-lg shadow-brand-indigo/25"
           >
             <div class="flex items-start justify-between">
               <span class="text-sm font-medium text-white/80">Aksi Admin</span>
