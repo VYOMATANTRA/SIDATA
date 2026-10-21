@@ -157,13 +157,38 @@ describe('PermintaanDataView accessibility and content', () => {
       global: { plugins: [pinia, router] },
     });
 
-    expect(wrapper.text()).toContain('Jika Permohonan Ditolak atau Tidak Dijawab');
-    expect(wrapper.text()).toContain('Keberatan');
-    expect(wrapper.text()).toContain('Sengketa');
+    const escalation = wrapper.find('section[aria-labelledby="eskalasi-title"]');
+    expect(escalation.exists()).toBe(true);
+    expect(escalation.text()).toContain('Jika Permohonan Ditolak atau Tidak Dijawab');
+    expect(escalation.text()).toContain('Keberatan');
+
+    const disputeNote = escalation
+      .findAll('ol > li')
+      .find((item) => item.text().includes('Sengketa'))
+      ?.text();
+    expect(disputeNote).toContain(
+      'Permohonan penyelesaian sengketa diajukan paling lambat 14 hari kerja sejak tanggapan tertulis Atasan PPID diterima, atau sejak berakhirnya batas waktu 30 hari kerja pemberian tanggapan apabila tidak ada jawaban.',
+    );
+    expect(disputeNote).toContain('Pasal 13 PerKI No. 1 Tahun 2013');
 
     const keberatanLink = wrapper.find('a[href="https://ppid.balikpapan.go.id/ppid/keberatan"]');
     expect(keberatanLink.exists()).toBe(true);
     expect(keberatanLink.attributes('rel')).toContain('noopener');
+
+    const disputeDocument = wrapper
+      .find('section[aria-labelledby="sop-title"]')
+      .findAll('article')
+      .find((item) => item.text().includes('Prosedur Permohonan Penyelesaian Sengketa Informasi'));
+    expect(disputeDocument?.text()).toContain(
+      'Permohonan penyelesaian sengketa diajukan paling lambat 14 hari kerja sejak tanggapan tertulis Atasan PPID diterima, atau sejak berakhirnya batas waktu 30 hari kerja pemberian tanggapan apabila tidak ada jawaban.',
+    );
+    expect(disputeDocument?.text()).toContain('Pasal 13 PerKI No. 1 Tahun 2013');
+
+    const perkiLink = wrapper.find('a[href="https://peraturan.go.id/files/bn649-2013.pdf"]');
+    expect(perkiLink.exists()).toBe(true);
+    expect(perkiLink.attributes('target')).toBe('_blank');
+    expect(perkiLink.attributes('rel')).toContain('noopener');
+    expect(perkiLink.attributes('rel')).toContain('noreferrer');
   });
 
   it('deep-links the official request form as the primary action', async () => {
@@ -200,7 +225,7 @@ describe('PermintaanDataView accessibility and content', () => {
     expect(breadcrumb.text()).not.toContain('Tentang');
   });
 
-  it('binds contact information dynamically from settings store', async () => {
+  it('directs residents to PPID without presenting kelurahan settings as PPID contacts', async () => {
     const { pinia, router } = mountView();
     await router.push('/permintaan-data');
     await router.isReady();
@@ -209,9 +234,17 @@ describe('PermintaanDataView accessibility and content', () => {
       global: { plugins: [pinia, router] },
     });
 
-    expect(wrapper.text()).toContain('Telepon:');
-    expect(wrapper.text()).toContain('WhatsApp/SMS PPID:');
-    expect(wrapper.text()).toContain('Email:');
+    const main = wrapper.find('main#main-content');
+    expect(main.find('section[aria-labelledby="meja-title"]').exists()).toBe(false);
+    expect(main.text()).not.toContain('Kontak Resmi');
+    expect(main.text()).not.toContain('WhatsApp/SMS PPID');
+
+    const ppidLink = main.find('a[href="https://ppid.balikpapan.go.id"]');
+    expect(ppidLink.exists()).toBe(true);
+    expect(ppidLink.text()).toContain('Portal PPID Balikpapan');
+    expect(ppidLink.attributes('target')).toBe('_blank');
+    expect(ppidLink.attributes('rel')).toContain('noopener');
+    expect(ppidLink.attributes('rel')).toContain('noreferrer');
   });
 
   it('renders the official Balikpapan PPID SOP documents with accessible download links', async () => {
@@ -225,7 +258,9 @@ describe('PermintaanDataView accessibility and content', () => {
 
     const sopSection = wrapper.find('section[aria-labelledby="sop-title"]');
     expect(sopSection.exists()).toBe(true);
-    expect(sopSection.text()).toContain('Dokumen Standar Operasional Prosedur (SOP) & Regulasi Resmi');
+    expect(sopSection.text()).toContain(
+      'Dokumen Standar Operasional Prosedur (SOP) & Regulasi Resmi',
+    );
     expect(sopSection.text()).toContain('Nomor 490/365/M/DISKOMINFO');
     expect(sopSection.text()).toContain('Nomor 490/378/M/DISKOMINFO');
     expect(sopSection.text()).toContain('SOP Pengumpulan Data Statistik Sektoral');
@@ -265,4 +300,3 @@ describe('PermintaanDataView accessibility and content', () => {
     expect(keberatanPdfLink.attributes('rel')).toContain('noopener');
   });
 });
-
