@@ -48,6 +48,40 @@ export function validateRetentionPolicy(policy: AuditRetentionPolicy): string | 
   return null;
 }
 
+/**
+ * Parses and validates an unknown raw retention payload from the server.
+ * Ensures each field is a non-negative integer within allowable bounds
+ * and satisfies the severity hierarchy (critical >= warning >= info).
+ * Returns a valid AuditRetentionPolicy, or null if malformed or invalid.
+ */
+export function parseRetention(raw: unknown): AuditRetentionPolicy | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null;
+  }
+
+  const candidate = raw as Record<string, unknown>;
+  const keys: Array<keyof AuditRetentionPolicy> = ['info', 'warning', 'critical'];
+
+  for (const key of keys) {
+    const val = candidate[key];
+    if (typeof val !== 'number' || !Number.isInteger(val) || val < 0) {
+      return null;
+    }
+  }
+
+  const policy: AuditRetentionPolicy = {
+    info: candidate.info as number,
+    warning: candidate.warning as number,
+    critical: candidate.critical as number,
+  };
+
+  if (validateRetentionPolicy(policy) !== null) {
+    return null;
+  }
+
+  return policy;
+}
+
 export const useAuditRetentionStore = defineStore('auditRetention', () => {
   const retention = ref<AuditRetentionPolicy>({
     info: 0,
@@ -76,17 +110,23 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
         throw new Error(body.error || `Gagal memuat pengaturan retensi audit (HTTP ${res.status})`);
       }
 
-      const data = await res.json();
-      if (data && typeof data === 'object' && data.retention) {
-        retention.value = {
-          info: Number(data.retention.info) || 0,
-          warning: Number(data.retention.warning) || 0,
-          critical: Number(data.retention.critical) || 0,
-        };
+      const data = await res.json().catch(() => null);
+      const parsed =
+        data && typeof data === 'object'
+          ? parseRetention((data as Record<string, unknown>).retention)
+          : null;
+
+      if (!parsed) {
+        throw new Error('Format pengaturan retensi dari server tidak valid.');
       }
+
+      retention.value = parsed;
       return true;
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Terjadi kesalahan jaringan saat memuat retensi audit.';
+      error.value =
+        err instanceof Error
+          ? err.message
+          : 'Terjadi kesalahan jaringan saat memuat retensi audit.';
       return false;
     } finally {
       isLoading.value = false;
@@ -118,21 +158,40 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `Gagal memperbarui pengaturan retensi audit (HTTP ${res.status})`);
+        throw new Error(
+          body.error || `Gagal memperbarui pengaturan retensi audit (HTTP ${res.status})`,
+        );
       }
 
-      const data = await res.json();
-      if (data && typeof data === 'object' && data.retention) {
-        retention.value = {
-          info: Number(data.retention.info) || 0,
-          warning: Number(data.retention.warning) || 0,
-          critical: Number(data.retention.critical) || 0,
-        };
+      const data = await res.json().catch(() => null);
+      if (data && typeof data === 'object') {
+        const record = data as Record<string, unknown>;
+        if (record.retention !== undefined && record.retention !== null) {
+          const parsed = parseRetention(record.retention);
+          if (!parsed) {
+            throw new Error('Format pengaturan retensi dari server tidak valid.');
+          }
+          retention.value = parsed;
+        } else {
+          retention.value = { ...policy };
+        }
+      } else {
+        retention.value = { ...policy };
       }
-      successMessage.value = data.message || 'Pengaturan retensi audit log berhasil diperbarui.';
+
+      const message =
+        data &&
+        typeof data === 'object' &&
+        typeof (data as Record<string, unknown>).message === 'string'
+          ? ((data as Record<string, unknown>).message as string)
+          : null;
+      successMessage.value = message || 'Pengaturan retensi audit log berhasil diperbarui.';
       return true;
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Terjadi kesalahan jaringan saat memperbarui retensi audit.';
+      error.value =
+        err instanceof Error
+          ? err.message
+          : 'Terjadi kesalahan jaringan saat memperbarui retensi audit.';
       return false;
     } finally {
       isSaving.value = false;

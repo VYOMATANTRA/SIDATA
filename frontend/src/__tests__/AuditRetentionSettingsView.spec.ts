@@ -236,6 +236,35 @@ describe('AuditRetentionSettingsView Client-Side Validation & Error Handling (No
     expect(wrapper.find('[data-test="server-error-banner"]').exists()).toBe(false);
     expect((wrapper.find('input#retention-info').element as HTMLInputElement).value).toBe('10');
   });
+
+  it('disables save button and displays error banner when initial fetch returns malformed retention fields', async () => {
+    // Initial fetch returns malformed retention fields (info: null, warning: 'abc')
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        retention: { info: null, warning: 'abc' },
+      }),
+    } as Response);
+
+    const router = createTestRouter();
+    const wrapper = mount(AuditRetentionSettingsView, {
+      global: { plugins: [router] },
+    });
+    await flushPromises();
+
+    // 1. Save button must be disabled
+    const submitBtn = wrapper.find('button[type="submit"]');
+    expect(submitBtn.attributes('disabled')).toBeDefined();
+
+    // 2. Server error banner and retry button are shown
+    const serverAlert = wrapper.find('[data-test="server-error-banner"]');
+    expect(serverAlert.exists()).toBe(true);
+    expect(serverAlert.text()).toMatch(/tidak valid/i);
+
+    const retryBtn = wrapper.find('button[data-test="retry-btn"]');
+    expect(retryBtn.exists()).toBe(true);
+  });
 });
 
 describe('AuditRetentionSettingsView Submission & Reset (Happy Path)', () => {
