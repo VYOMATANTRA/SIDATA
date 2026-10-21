@@ -191,6 +191,40 @@ describe('PermintaanDataView accessibility and content', () => {
     expect(perkiLink.attributes('rel')).toContain('noreferrer');
   });
 
+  it('cites the statute behind every published deadline', async () => {
+    const { pinia, router } = mountView();
+    await router.push('/permintaan-data');
+    await router.isReady();
+
+    const wrapper = mount(PermintaanDataView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    const escalation = wrapper.find('section[aria-labelledby="eskalasi-title"]');
+    const steps = escalation.findAll('ol > li');
+
+    const applicationNote = steps.find((item) => item.text().includes('Permohonan'))?.text();
+    expect(applicationNote).toContain('10 hari kerja');
+    expect(applicationNote).toContain('7 hari kerja');
+    expect(applicationNote).toContain('Pasal 22 ayat (7)–(8) UU No. 14 Tahun 2008');
+
+    const objectionNote = steps.find((item) => item.text().includes('Keberatan'))?.text();
+    expect(objectionNote).toContain('30 hari kerja');
+    expect(objectionNote).toContain('Pasal 35 ayat (1)');
+    expect(objectionNote).toContain('Pasal 36 ayat (1)–(2) UU No. 14 Tahun 2008');
+
+    const disputeNote = steps.find((item) => item.text().includes('Sengketa'))?.text();
+    expect(disputeNote).toContain('Pasal 37 ayat (2)');
+    expect(disputeNote).toContain('Pasal 38 ayat (2) UU No. 14 Tahun 2008');
+    expect(disputeNote).toContain('100 hari kerja');
+
+    // The service-level table names the article for each published duration.
+    const slaTable = wrapper.find('table');
+    expect(slaTable.text()).toContain('Pasal 22 ayat (7) UU No. 14 Tahun 2008');
+    expect(slaTable.text()).toContain('Pasal 22 ayat (8) UU No. 14 Tahun 2008');
+    expect(slaTable.text()).toContain('Pasal 36 ayat (1) UU No. 14 Tahun 2008');
+  });
+
   it('deep-links the official request form as the primary action', async () => {
     const { pinia, router } = mountView();
     await router.push('/permintaan-data');
