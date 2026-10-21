@@ -8,6 +8,7 @@
     --color-brand-navy: #0a2353; /* Primary Base Color */
     --color-brand-navy-deep: #112c71;
     --color-brand-cyan: #56e1e9;
+    --color-brand-teal-deep: #0b7285; /* Accessible teal for text on light surfaces */
     --color-brand-navy-overlay: rgba(
     0,
     27,

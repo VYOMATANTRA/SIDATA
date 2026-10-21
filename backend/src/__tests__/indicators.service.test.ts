@@ -429,6 +429,26 @@ describe('indicators.service createIndicator', () => {
     assert.equal(createdData!['source'], null);
     assert.equal(createdData!['hedgeNote'], null);
   });
+
+  it('clears a mixed-case slug miss when the indicator is created', async () => {
+    let rowExists = false;
+    indicatorImpl['findUnique'] = async (args: AnyRecord) => {
+      const where = args['where'] as AnyRecord;
+      if (where['slug'] === 'new-stat')
+        return rowExists ? indicatorRow({ id: 'ind-new', slug: 'new-stat' }) : null;
+      return null;
+    };
+    indicatorImpl['create'] = async (...args: never[]) => {
+      const { data } = args[0] as unknown as { data: AnyRecord };
+      rowExists = true;
+      return indicatorRow({ ...data, id: 'ind-new' });
+    };
+
+    assert.equal(await getIndicatorById('NEW-STAT'), null);
+    await createIndicator(validPayload({ slug: 'new-stat' }), ACTOR, CONTEXT);
+
+    assert.equal((await getIndicatorById('NEW-STAT'))?.id, 'ind-new');
+  });
 });
 
 describe('indicators.service updateIndicator', () => {
@@ -624,6 +644,26 @@ describe('indicators.service updateIndicator', () => {
     assert.equal(reread?.label, 'Penduduk Anyar');
   });
 
+  it('invalidates a mixed-case slug cache after update', async () => {
+    let current = existing();
+    indicatorImpl['findUnique'] = async (args: AnyRecord) => {
+      const where = args['where'] as AnyRecord;
+      if (where['id'] === 'ind-1') return current;
+      if (where['slug'] === 'jumlah-penduduk') return current;
+      return null;
+    };
+    indicatorImpl['update'] = async (...args: never[]) => {
+      const { data } = args[0] as unknown as { data: AnyRecord };
+      current = { ...current, ...data };
+      return current;
+    };
+
+    assert.equal((await getIndicatorById('JUMLAH-PENDUDUK'))?.label, 'Jumlah Penduduk');
+    await updateIndicator('ind-1', { label: 'Penduduk Manggar' }, ACTOR, CONTEXT);
+
+    assert.equal((await getIndicatorById('JUMLAH-PENDUDUK'))?.label, 'Penduduk Manggar');
+  });
+
   it('leaves list caches intact on no-op updates', async () => {
     let findManyCount = 0;
     indicatorImpl['findMany'] = async () => {
@@ -714,6 +754,25 @@ describe('indicators.service deleteIndicator', () => {
     assert.equal(relisted.total, 0);
     // Per-id slot was dropped: the re-read goes to the DB and observes the miss.
     assert.equal(await getIndicatorById('ind-1'), null);
+  });
+
+  it('invalidates a mixed-case slug cache after delete', async () => {
+    let rowGone = false;
+    indicatorImpl['findUnique'] = async (args: AnyRecord) => {
+      const where = args['where'] as AnyRecord;
+      if (where['id'] === 'ind-1') return rowGone ? null : indicatorRow();
+      if (where['slug'] === 'jumlah-penduduk') return rowGone ? null : indicatorRow();
+      return null;
+    };
+    indicatorImpl['delete'] = async () => {
+      rowGone = true;
+      return indicatorRow();
+    };
+
+    assert.equal((await getIndicatorById('JUMLAH-PENDUDUK'))?.id, 'ind-1');
+    await deleteIndicator('ind-1', ACTOR, CONTEXT);
+
+    assert.equal(await getIndicatorById('JUMLAH-PENDUDUK'), null);
   });
 
   it('deletes and writes an indicator.deleted warning audit with the before snapshot', async () => {
@@ -868,8 +927,9 @@ describe('indicators.service getIndicatorById', () => {
 
   it('resolves an indicator by slug when id lookup returns null', async () => {
     indicatorImpl['findUnique'] = async (args: AnyRecord) => {
-      if (args['where']?.['id'] === 'jumlah-penduduk') return null;
-      if (args['where']?.['slug'] === 'jumlah-penduduk') {
+      const where = args['where'] as { id?: string; slug?: string };
+      if (where.id === 'jumlah-penduduk') return null;
+      if (where.slug === 'jumlah-penduduk') {
         return indicatorRow({ id: 'ind-1', slug: 'jumlah-penduduk' });
       }
       return null;
@@ -883,8 +943,9 @@ describe('indicators.service getIndicatorById', () => {
   it('normalizes slug lookup to lowercase', async () => {
     let queriedSlug: string | undefined;
     indicatorImpl['findUnique'] = async (args: AnyRecord) => {
-      if (args['where']?.['slug']) {
-        queriedSlug = args['where']['slug'];
+      const where = args['where'] as { id?: string; slug?: string };
+      if (where.slug) {
+        queriedSlug = where.slug;
         return indicatorRow({ id: 'ind-1', slug: 'jumlah-penduduk' });
       }
       return null;
@@ -893,11 +954,14 @@ describe('indicators.service getIndicatorById', () => {
     const result = await getIndicatorById('JUMLAH-PENDUDUK');
     assert.equal(queriedSlug, 'jumlah-penduduk');
     assert.equal(result?.id, 'ind-1');
+    assert.equal(indicatorByIdCache.has('jumlah-penduduk'), true);
+    assert.equal(indicatorByIdCache.has('JUMLAH-PENDUDUK'), false);
   });
 
   it('invalidates both id and slug cache when requested', async () => {
     indicatorImpl['findUnique'] = async (args: AnyRecord) => {
-      if (args['where']?.['id'] === 'ind-1' || args['where']?.['slug'] === 'jumlah-penduduk') {
+      const where = args['where'] as { id?: string; slug?: string };
+      if (where.id === 'ind-1' || where.slug === 'jumlah-penduduk') {
         return indicatorRow({ id: 'ind-1', slug: 'jumlah-penduduk' });
       }
       return null;

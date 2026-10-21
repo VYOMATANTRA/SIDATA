@@ -293,7 +293,8 @@ describe('indicators.controller getIndicatorHandler', () => {
 
   it('returns 200 with the indicator when queried by slug', async () => {
     indicatorImpl['findUnique'] = async (args: AnyRecord) => {
-      if (args['where']?.['slug'] === 'jumlah-penduduk') {
+      const where = args['where'] as { id?: string; slug?: string };
+      if (where.slug === 'jumlah-penduduk') {
         return indicatorRow({ id: 'ind-1', slug: 'jumlah-penduduk' });
       }
       return null;

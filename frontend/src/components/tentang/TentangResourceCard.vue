@@ -29,7 +29,6 @@ withDefaults(
     </div>
 
     <div v-if="$slots.footer || ctaLabel" class="mt-4 border-t border-white/70 pt-4">
-      <!-- TODO: ganti dengan BaseLink saat halaman Publikasi/Peta tersedia -->
       <slot name="footer">
         <span
           class="inline-flex items-center gap-2 rounded-[5px] bg-brand-cyan px-4 py-1.5 text-base text-brand-navy"

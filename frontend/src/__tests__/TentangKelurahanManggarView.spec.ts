@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
@@ -121,6 +121,24 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     );
   });
 
+  it('renders the population loading state without flashing an empty state', async () => {
+    const { pinia, router } = mountView();
+    const indicatorsStore = useIndicatorsStore();
+    indicatorsStore.indicators = [];
+    indicatorsStore.isLoading = true;
+    vi.spyOn(indicatorsStore, 'fetchBySlug').mockResolvedValue(null);
+
+    await router.push('/tentang/kelurahan-manggar');
+    await router.isReady();
+
+    const wrapper = mount(TentangKelurahanManggarView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    expect(wrapper.find('section[aria-label="Memuat data kependudukan"]').exists()).toBe(true);
+    expect(wrapper.text()).not.toContain('Data Belum Tersedia');
+  });
+
   it('renders the Potensi Manggar grid with the four potential cards', async () => {
     const { pinia, router } = mountView();
     await router.push('/tentang/kelurahan-manggar');
@@ -183,6 +201,40 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(wrapper.text()).toContain('Munir Achmad, S.E.');
   });
 
+  it('describes the Lurah program in neutral, aspirational narration', async () => {
+    const { pinia, router } = mountView();
+    await router.push('/tentang/kelurahan-manggar');
+    await router.isReady();
+
+    const wrapper = mount(TentangKelurahanManggarView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    expect(wrapper.text()).toContain(
+      'diharapkan dapat membantu penyajian informasi Kelurahan Manggar secara terstruktur',
+    );
+    expect(wrapper.text()).toContain(
+      'mendukung pemanfaatan data dalam perencanaan pelayanan masyarakat',
+    );
+    expect(wrapper.text()).not.toContain('kami berikhtiar');
+    expect(wrapper.text()).not.toContain('pemulihan ekonomi');
+  });
+
+  it('describes the spatial map card without claiming complete coverage', async () => {
+    const { pinia, router } = mountView();
+    await router.push('/tentang/kelurahan-manggar');
+    await router.isReady();
+
+    const wrapper = mount(TentangKelurahanManggarView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    expect(wrapper.text()).toContain(
+      'Peta lokasi rumah ketua RT dan bank sampah aktif di Kelurahan Manggar, Kecamatan Balikpapan Timur.',
+    );
+    expect(wrapper.text()).not.toContain('seluruh ketua RT');
+  });
+
   it('renders SOTK table with proper accessibility attributes', async () => {
     const { pinia, router } = mountView();
     await router.push('/tentang/kelurahan-manggar');
@@ -202,18 +254,27 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     const colHeaders = table.findAll('th[scope="col"]');
     expect(colHeaders.length).toBe(3);
 
-    // Row header scopes
+    // Keep each job title as a semantic row header and reject invented appointment statuses.
     const rowHeaders = table.findAll('tbody th[scope="row"]');
-    expect(rowHeaders.length).toBeGreaterThanOrEqual(6);
+    expect(rowHeaders.length).toBeGreaterThanOrEqual(5);
 
     expect(wrapper.text()).toContain('Struktur Organisasi dan Tata Kerja (SOTK)');
-    expect(wrapper.text()).toContain('Seksi Pemerintahan');
-    expect(wrapper.text()).toContain('Seksi Ketenteraman dan Ketertiban');
-    expect(wrapper.text()).toContain('Seksi Pemberdayaan Masyarakat');
-    expect(wrapper.text()).toContain('Seksi Kesejahteraan Sosial');
+    expect(wrapper.text()).toContain('Sekretaris Lurah');
+    expect(wrapper.text()).toContain('Munjiah Puspitawaty');
+    expect(wrapper.text()).toContain('Kasi Pemerintahan dan Pelayanan Publik');
+    expect(wrapper.text()).toContain('Hasiba, S.A.P');
+    expect(wrapper.text()).toContain('Kasi Trantib L-H');
+    expect(wrapper.text()).toContain('Nanang Sri Ruriyanto');
+    expect(wrapper.text()).toContain('Kasi Pemberdayaan Masyarakat');
+    expect(wrapper.text()).toContain('Marthen Solly');
+    expect(wrapper.text()).toContain('Rincian tugas resmi belum tersedia');
+    expect(wrapper.text()).not.toContain('Dalam proses penetapan definitif');
+    expect(wrapper.text()).not.toContain('Penetapan resmi Pemerintah Kota Balikpapan');
+    expect(wrapper.text()).not.toContain('Masa Bakti Jabatan');
+    expect(wrapper.text()).not.toContain('Periode Berjalan');
   });
 
-  it('keeps the wilayah overview on the shared StatCard component with official boundaries', async () => {
+  it('renders Karang Joang as the approved northern boundary and keeps the other sides', async () => {
     const { pinia, router } = mountView();
     await router.push('/tentang/kelurahan-manggar');
     await router.isReady();
@@ -223,9 +284,28 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     });
 
     expect(wrapper.find('[data-test="stat-card"]').exists()).toBe(true);
-    expect(wrapper.text()).toContain('Kelurahan Karang Joang');
+    const northernBoundary = wrapper
+      .findAll('li')
+      .find((item) => item.text().includes('Sebelah Utara:'));
+    expect(northernBoundary?.findAll('span')[1]?.text()).toBe('Kelurahan Karang Joang');
+    expect(wrapper.text()).not.toContain('Informasi sedang diverifikasi');
+    expect(wrapper.text()).not.toContain('Lamaru');
     expect(wrapper.text()).toContain('Kelurahan Manggar Baru');
     expect(wrapper.text()).toContain('Selat Makassar');
     expect(wrapper.text()).toContain('Kelurahan Sepinggan dan Sepinggan Baru');
+  });
+
+  it('does not publish an unverified vision or mission statement', async () => {
+    const { pinia, router } = mountView();
+    await router.push('/tentang/kelurahan-manggar');
+    await router.isReady();
+
+    const wrapper = mount(TentangKelurahanManggarView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    expect(wrapper.text()).not.toContain('Visi dan Misi Pelayanan');
+    expect(wrapper.text()).not.toContain('Terwujudnya Pelayanan Publik Kelurahan Manggar');
+    expect(wrapper.text()).not.toContain('Mengoptimalkan pemanfaatan data statistik');
   });
 });
