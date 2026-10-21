@@ -358,6 +358,12 @@ The VYOMATANTRA page publishes the eight-student proposal roster and assigned ro
 survey, spatial-data collection/compilation, and mapping to the team collectively, not to individual
 members without supporting evidence.
 
+The VYOMATANTRA page also publishes the program kerja as a four-part journey, following the
+proposal's own stages: persiapan, pelaksanaan, monitoring dan evaluasi, and pelaporan dan tindak
+lanjut, with the proposal's scheduled activities listed under each stage. The section presents the
+program work as designed in the proposal and attributes it to that document, pointing to the
+Monografi, the map, and the booklet for the field record.
+
 ## 9. Explicitly Out of Scope
 
 - **Budget/finance (APBDes) surfacing** — dropped entirely; the kelurahan has no APBDes. Note that

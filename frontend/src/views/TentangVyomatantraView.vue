@@ -6,6 +6,7 @@ import TentangFigureCard from '../components/tentang/TentangFigureCard.vue';
 import TentangInfoCard from '../components/tentang/TentangInfoCard.vue';
 import TentangFeatureBand from '../components/tentang/TentangFeatureBand.vue';
 import TentangResourceCard from '../components/tentang/TentangResourceCard.vue';
+import TentangStepList, { type StepItem } from '../components/tentang/TentangStepList.vue';
 import TentangTeamCard from '../components/tentang/TentangTeamCard.vue';
 import TentangLogoRow from '../components/tentang/TentangLogoRow.vue';
 import heroImage from '@/assets/img/background_laman_depan_kelurahan.png';
@@ -44,6 +45,55 @@ const initiatives: InitiativeItem[] = [
 const collaborationLogos = [
   { src: logoItk, alt: 'Logo Institut Teknologi Kalimantan (ITK)' },
   { src: logoVyomatantra, alt: 'Logo Tim Inovasi Sosial VYOMATANTRA' },
+];
+
+const prokerStages: StepItem[] = [
+  {
+    step: 1,
+    title: 'Persiapan: merapikan rencana sebelum menyentuh data',
+    description:
+      'Perjalanan dimulai dari meja, bukan dari lapangan. Delapan mahasiswa tim menyusun proposal kegiatan, menetapkan tujuan dan sasaran, dan menyusun rundown. Mereka lalu duduk bersama anggota BPS dan pengurus Kelurahan Manggar untuk menyelaraskan jadwal, sebelum turun ke lapangan untuk survei lokasi dan mengidentifikasi sasaran peserta. Materi pembinaan statistik dan literasi digital disusun, banner, poster, dan id card dirancang lalu dicetak.',
+    details: [
+      'Pembentukan tim pelaksana dan pembagian tugas',
+      'Penyusunan proposal kegiatan',
+      'Menentukan tujuan dan sasaran',
+      'Penyusunan rundown kegiatan',
+      'Koordinasi awal dengan anggota BPS dan Kelurahan Manggar',
+      'Survei lokasi kegiatan dan identifikasi sasaran peserta',
+      'Penyusunan materi edukasi Pembinaan Statistik dan Literasi Digital',
+      'Desain serta cetak banner, poster, dan id card',
+    ],
+  },
+  {
+    step: 2,
+    title: 'Pelaksanaan: membawa pendampingan ke halaman warga',
+    description:
+      'Kuesioner after kegiatan disiapkan, rundown dan kuesioner difinalisasi, lalu kegiatan dipromosikan dan peserta diundang. Koordinasi teknis akhir bersama BPS dan pengurus Kelurahan Manggar ditutup dengan pemeriksaan perlengkapan. Puncak perjalanan adalah pelaksanaan sosialisasi, di mana pembinaan statistik dan literasi digital disampaikan bersama perangkat kelurahan, ketua RT, dan warga.',
+    details: [
+      'Penyusunan kuesioner after kegiatan',
+      'Finalisasi rundown kegiatan dan kuesioner after kegiatan',
+      'Promosi kegiatan, undangan peserta, dan koordinasi teknis akhir bersama BPS dan pengurus Kelurahan Manggar',
+      'Pelaksanaan sosialisasi',
+    ],
+  },
+  {
+    step: 3,
+    title: 'Monitoring dan evaluasi: mengukur kembali, bukan menebak',
+    description:
+      'Kegiatan tidak ditutup begitu acara selesai. Tim menilai partisipasi dan persepsi warga, lalu mengevaluasi seluruh rangkaian kegiatan untuk melihat sejauh mana pendampingan sudah berjalan.',
+    details: ['Evaluasi partisipasi dan persepsi warga serta evaluasi seluruh kegiatan'],
+  },
+  {
+    step: 4,
+    title: 'Pelaporan dan tindak lanjut: menyerahkan karya',
+    description:
+      'Tahap terakhir mengembalikan semua pekerjaan kepada mitra. Laporan kegiatan difinalisasi, after movie dan artikel dibuat, lalu laporan diserahkan kepada mitra dan pihak pendukung. Luaran yang dicatat dalam proposal meliputi artikel di laman ITK/LPPM, after movie pada kanal YouTube prodi, dan HKI atas source code website.',
+    details: [
+      'Finalisasi laporan kegiatan',
+      'Pembuatan after movie dan artikel',
+      'Penyerahan laporan kepada mitra dan pihak pendukung',
+    ],
+  },
 ];
 
 const sdgsLogos = [
@@ -116,6 +166,31 @@ const supervisor = {
         </p>
       </TentangInfoCard>
     </div>
+
+    <!-- Program kerja -->
+    <section class="bg-brand-cyan px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="proker-title">
+      <div class="mx-auto max-w-5xl">
+        <h2 id="proker-title" class="text-lg font-bold text-brand-navy">
+          Perjalanan Program Kerja
+        </h2>
+        <p class="mt-2 max-w-3xl text-base text-brand-navy/90">
+          Program kerja ini dirancang sebagai satu semester perubahan: menyiapkan, melaksanakan,
+          mengukur, lalu menyerahkan. Setiap babnya bergerak mengikuti siklus statistik —
+          pengumpulan, pengolahan, analisis, hingga penyajian data — dengan fokus tematik pada
+          sektor pariwisata sebagai salah satu potensi unggulan Manggar.
+        </p>
+
+        <div class="mt-5 rounded-btn bg-white p-5 sm:p-6">
+          <TentangStepList :steps="prokerStages" />
+        </div>
+
+        <p class="mt-5 text-sm text-brand-navy/80">
+          Program kerja ini disusun dalam Proposal Inovasi Sosial Desa Cantik Kelurahan Manggar
+          (Februari 2026). Pelaksanaan di lapangan terdokumentasi dalam Monografi Kelurahan Manggar
+          2026, Peta Ketua RT dan BSU Aktif Manggar, serta Booklet Pelatihan BSU.
+        </p>
+      </div>
+    </section>
 
     <TentangFeatureBand heading="Inisiatif Unggulan di Kelurahan Manggar">
       <div class="mt-4 flex flex-col gap-5 lg:flex-row items-stretch">

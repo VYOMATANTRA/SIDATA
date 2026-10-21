@@ -59,6 +59,16 @@ All titles below refer to files in the Google Drive folder above, in the named s
   Farizan Fawwaz (Teknis), plus Andi Mushawwira Muchlis and Feby Anggraini (PDD). It names Riki
   Herliansyah as the dosen pembimbing. Publish only these names and role labels; do not copy NIM,
   private contact details, or individualize the collective fieldwork duties without another source.
+- The same proposal holds the program kerja: BAB 3 (Alur Pelaksanaan Kegiatan) names the four stages
+  — persiapan, pelaksanaan, monitoring dan evaluasi, pelaporan dan tindak lanjut — and BAB 6
+  (Jadwal) lists the seventeen scheduled activities, from team formation and proposal drafting
+  through the localization survey, the socialization, the after-activity evaluation, and the
+  handover of the final report. The Ringkasan states the thematic focus is the tourism sector and
+  the four stages. BAB 4 (Luaran Kegiatan) records the article on the ITK/LPPM page, the
+  after movie, and the HKI for the website source code. Present this as the planned program work
+  attributed to the proposal, and point readers to the Monografi, the map, and the booklet for what
+  the field documentation records. The public section groups the separate banner/poster design and
+  printing tasks into one line, so it lists sixteen lines for the proposal's seventeen activities.
 - No approved vision/mission statement was found in the inspected profile, Monografi, or proposal
   documents. Keep official statements out of public copy until an approved source is supplied.
 

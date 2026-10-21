@@ -165,4 +165,61 @@ describe('TentangVyomatantraView accessibility and content', () => {
       'Kantor Kelurahan Manggar, Balikpapan Timur — lokasi koordinasi kegiatan program Desa Cantik',
     );
   });
+
+  it('tells the program work as a four-part journey', async () => {
+    const { pinia, router } = mountView();
+    await router.push('/tentang/vyomatantra');
+    await router.isReady();
+
+    const wrapper = mount(TentangVyomatantraView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    const proker = wrapper.find('section[aria-labelledby="proker-title"]');
+    expect(proker.exists()).toBe(true);
+    expect(proker.text()).toContain('Perjalanan Program Kerja');
+
+    const steps = proker.findAll('[data-test="procedure-steps"] > li');
+    expect(steps.length).toBe(4);
+    expect(steps[0]?.text()).toContain('Persiapan');
+    expect(steps[1]?.text()).toContain('Pelaksanaan');
+    expect(steps[2]?.text()).toContain('Monitoring dan evaluasi');
+    expect(steps[3]?.text()).toContain('Pelaporan dan tindak lanjut');
+  });
+
+  it('lists the proposal program work activities under the journey', async () => {
+    const { pinia, router } = mountView();
+    await router.push('/tentang/vyomatantra');
+    await router.isReady();
+
+    const wrapper = mount(TentangVyomatantraView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    const proker = wrapper.find('section[aria-labelledby="proker-title"]');
+    for (const activity of [
+      'Pembentukan tim pelaksana dan pembagian tugas',
+      'Penyusunan proposal kegiatan',
+      'Menentukan tujuan dan sasaran',
+      'Penyusunan rundown kegiatan',
+      'Koordinasi awal dengan anggota BPS dan Kelurahan Manggar',
+      'Survei lokasi kegiatan dan identifikasi sasaran peserta',
+      'Penyusunan materi edukasi Pembinaan Statistik dan Literasi Digital',
+      'Desain serta cetak banner, poster, dan id card',
+      'Penyusunan kuesioner after kegiatan',
+      'Finalisasi rundown kegiatan dan kuesioner after kegiatan',
+      'Promosi kegiatan, undangan peserta, dan koordinasi teknis akhir bersama BPS dan pengurus Kelurahan Manggar',
+      'Pelaksanaan sosialisasi',
+      'Evaluasi partisipasi dan persepsi warga serta evaluasi seluruh kegiatan',
+      'Finalisasi laporan kegiatan',
+      'Pembuatan after movie dan artikel',
+      'Penyerahan laporan kepada mitra dan pihak pendukung',
+    ]) {
+      expect(proker.text()).toContain(activity);
+    }
+
+    // The section attributes itself to the proposal and the field documentation.
+    expect(proker.text()).toContain('Proposal Inovasi Sosial Desa Cantik Kelurahan Manggar');
+    expect(proker.text()).toContain('Monografi Kelurahan Manggar');
+  });
 });
