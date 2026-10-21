@@ -37,6 +37,12 @@ const router = createRouter({
       meta: { requiresAuth: true, requiresAdmin: true, title: 'Manajemen Pengguna' },
     },
     {
+      path: '/settings/audit-retention',
+      name: 'audit-retention-settings',
+      component: () => import('../views/AuditRetentionSettingsView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true, title: 'Pengaturan Retensi Audit' },
+    },
+    {
       path: '/auth/callback',
       name: 'auth-callback',
       component: () => import('../views/AuthCallbackView.vue'),
