@@ -298,26 +298,34 @@ const NEGATIVE_TTL_MS = 10 * 1000; // 10 seconds
 const MAX_NEGATIVE_ENTRIES = 200;
 const missingIndicatorIds = new Map<string, number>();
 
+const normalizeIndicatorCacheKey = (key: string): string => key.trim().toLowerCase();
+
 function isKnownMissing(id: string): boolean {
-  const expiresAt = missingIndicatorIds.get(id);
+  const key = normalizeIndicatorCacheKey(id);
+  const expiresAt = missingIndicatorIds.get(key);
   if (expiresAt === undefined) return false;
   if (Date.now() >= expiresAt) {
-    missingIndicatorIds.delete(id);
+    missingIndicatorIds.delete(key);
     return false;
   }
   return true;
 }
 
 function rememberMissing(id: string): void {
-  if (!missingIndicatorIds.has(id)) {
+  const key = normalizeIndicatorCacheKey(id);
+  if (!missingIndicatorIds.has(key)) {
     if (missingIndicatorIds.size >= MAX_NEGATIVE_ENTRIES) {
       const oldest = missingIndicatorIds.keys().next().value;
       if (oldest !== undefined) missingIndicatorIds.delete(oldest);
     }
   } else {
-    missingIndicatorIds.delete(id);
+    missingIndicatorIds.delete(key);
   }
-  missingIndicatorIds.set(id, Date.now() + NEGATIVE_TTL_MS);
+  missingIndicatorIds.set(key, Date.now() + NEGATIVE_TTL_MS);
+}
+
+function forgetMissing(id: string): void {
+  missingIndicatorIds.delete(normalizeIndicatorCacheKey(id));
 }
 
 const getListCache = (key: string): VersionedTtlCache<IndicatorListResult> =>
@@ -328,7 +336,7 @@ const getListCache = (key: string): VersionedTtlCache<IndicatorListResult> =>
 
 const getByIdCache = (id: string): VersionedTtlCache<IndicatorDto | null> =>
   indicatorByIdCache.getOrCompute(
-    id,
+    normalizeIndicatorCacheKey(id),
     () => new VersionedTtlCache<IndicatorDto | null>({ ttlMs: CACHE_TTL_MS, baseClient: prisma }),
   );
 
@@ -348,14 +356,16 @@ const listCachesInvalidator: CacheInvalidator = {
 
 export const invalidateIndicatorsCache = (id?: string, slug?: string): void => {
   if (id) {
-    indicatorByIdCache.get(id)?.invalidate();
-    indicatorByIdCache.delete(id);
-    missingIndicatorIds.delete(id);
+    const key = normalizeIndicatorCacheKey(id);
+    indicatorByIdCache.get(key)?.invalidate();
+    indicatorByIdCache.delete(key);
+    forgetMissing(key);
   }
   if (slug) {
-    indicatorByIdCache.get(slug)?.invalidate();
-    indicatorByIdCache.delete(slug);
-    missingIndicatorIds.delete(slug);
+    const key = normalizeIndicatorCacheKey(slug);
+    indicatorByIdCache.get(key)?.invalidate();
+    indicatorByIdCache.delete(key);
+    forgetMissing(key);
   }
   if (!id && !slug) {
     indicatorByIdCache.clear();
@@ -507,11 +517,12 @@ export const getIndicatorById = async (
     return null;
   }
   const normalizedId = id.trim();
+  const cacheKey = normalizeIndicatorCacheKey(normalizedId);
   const useSharedCache = client === prisma;
-  if (useSharedCache && isKnownMissing(normalizedId)) {
+  if (useSharedCache && isKnownMissing(cacheKey)) {
     return null;
   }
-  const result = await getByIdCache(normalizedId).getOrFetch(async (db) => {
+  const result = await getByIdCache(cacheKey).getOrFetch(async (db) => {
     let row = await db.indicator.findUnique({
       where: { id: normalizedId },
       include: WITH_TEMPLATE,
@@ -527,8 +538,8 @@ export const getIndicatorById = async (
   }, client);
   if (result === null && useSharedCache) {
     // Drop the just-allocated slot instead of retaining the miss in the shared LRU.
-    indicatorByIdCache.delete(normalizedId);
-    rememberMissing(normalizedId);
+    indicatorByIdCache.delete(cacheKey);
+    rememberMissing(cacheKey);
   }
   return result;
 };
@@ -567,8 +578,8 @@ export const createIndicator = async (
       onCommit: (committed) => {
         getByIdCache(committed.id).setCommitted(committed);
         getByIdCache(committed.slug).setCommitted(committed);
-        missingIndicatorIds.delete(committed.id);
-        missingIndicatorIds.delete(committed.slug);
+        forgetMissing(committed.id);
+        forgetMissing(committed.slug);
       },
       execute: async (tx) => {
         const section = await tx.section.findUnique({ where: { id: sectionId } });
@@ -663,17 +674,17 @@ export const updateIndicator = async (
         // row with stale data. Invalidate first to discard any in-flight read.
         targetCache.invalidate();
         targetCache.setCommitted(committed);
-        missingIndicatorIds.delete(committed.id);
+        forgetMissing(committed.id);
 
         if (oldSlug && oldSlug !== committed.slug) {
-          indicatorByIdCache.get(oldSlug)?.invalidate();
-          indicatorByIdCache.delete(oldSlug);
-          missingIndicatorIds.delete(oldSlug);
+          indicatorByIdCache.get(normalizeIndicatorCacheKey(oldSlug))?.invalidate();
+          indicatorByIdCache.delete(normalizeIndicatorCacheKey(oldSlug));
+          forgetMissing(oldSlug);
         }
         const slugCache = getByIdCache(committed.slug);
         slugCache.invalidate();
         slugCache.setCommitted(committed);
-        missingIndicatorIds.delete(committed.slug);
+        forgetMissing(committed.slug);
       },
       execute: async (tx) => {
         const existing = await tx.indicator.findUnique({
@@ -876,12 +887,12 @@ export const deleteIndicator = async (
       lockQuery,
       cache: [listCachesInvalidator],
       onCommit: (committed) => {
-        indicatorByIdCache.get(committed.id)?.invalidate();
-        indicatorByIdCache.delete(committed.id);
-        indicatorByIdCache.get(committed.slug)?.invalidate();
-        indicatorByIdCache.delete(committed.slug);
-        missingIndicatorIds.delete(committed.id);
-        missingIndicatorIds.delete(committed.slug);
+        indicatorByIdCache.get(normalizeIndicatorCacheKey(committed.id))?.invalidate();
+        indicatorByIdCache.delete(normalizeIndicatorCacheKey(committed.id));
+        indicatorByIdCache.get(normalizeIndicatorCacheKey(committed.slug))?.invalidate();
+        indicatorByIdCache.delete(normalizeIndicatorCacheKey(committed.slug));
+        forgetMissing(committed.id);
+        forgetMissing(committed.slug);
       },
       execute: async (tx) => {
         const existing = await tx.indicator.findUnique({
