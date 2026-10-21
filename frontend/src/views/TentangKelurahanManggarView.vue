@@ -45,53 +45,35 @@ const potentials: PotentialItem[] = [
 
 interface SotkItem {
   role: string;
-  officialName: string;
-  duties: string;
-  notes?: string;
+  officialName: string | null;
+  duties: string | null;
 }
 
 const sotkMembers: SotkItem[] = [
   {
     role: 'Lurah',
     officialName: 'Munir Achmad, S.E.',
-    duties:
-      'Memimpin, mengatur, membina, dan mengawasi penyelenggaraan pemerintahan kelurahan serta pelaksanaan pelimpahan wewenang dari Walikota Balikpapan.',
-    notes: 'Penanggung jawab utama kelurahan',
+    duties: null,
   },
   {
-    role: 'Sekretaris Kelurahan',
-    officialName: 'Dalam proses penetapan definitif', // TODO: Masukkan nama definitif Sekretaris Kelurahan
-    duties:
-      'Mengkoordinasikan perencanaan, ketatausahaan, kepegawaian, perlengkapan, keuangan, serta pelayanan administrasi internal kelurahan.',
-    notes: 'Koordinator administrasi & aparatur',
+    role: 'Sekretaris Lurah',
+    officialName: 'Munjiah Puspitawaty. M, S.E',
+    duties: null,
   },
   {
-    role: 'Seksi Pemerintahan',
-    officialName: 'Dalam proses penetapan definitif', // TODO: Masukkan nama definitif Kasi Pemerintahan
-    duties:
-      'Menyelenggarakan urusan administrasi pemerintahan umum, kependudukan, pertanahan, serta pembinaan organisasi Rukun Tetangga (RT).',
-    notes: 'Pembinaan 100 RT & kependudukan',
+    role: 'Kasi Trantib L-H',
+    officialName: 'Nanang Sri Ruriyanto, S.Sos.',
+    duties: null,
   },
   {
-    role: 'Seksi Ketenteraman dan Ketertiban',
-    officialName: 'Dalam proses penetapan definitif', // TODO: Masukkan nama definitif Kasi Trantib
-    duties:
-      'Memelihara ketenteraman, ketertiban umum, penegakan peraturan daerah, perlindungan masyarakat, dan koordinasi pencegahan bencana.',
-    notes: 'Ketertiban umum & Linmas',
+    role: 'Kasi Pemerintahan dan Pelayanan Publik',
+    officialName: 'Hasiba, S.A.P',
+    duties: null,
   },
   {
-    role: 'Seksi Pemberdayaan Masyarakat',
-    officialName: 'Dalam proses penetapan definitif', // TODO: Masukkan nama definitif Kasi PM
-    duties:
-      'Memfasilitasi pemberdayaan masyarakat, pembinaan kelembagaan kemasyarakatan (LPM, PKK, Karang Taruna), lingkungan hidup, dan UMKM.',
-    notes: 'Pengembangan masyarakat & Bank Sampah',
-  },
-  {
-    role: 'Seksi Kesejahteraan Sosial',
-    officialName: 'Dalam proses penetapan definitif', // TODO: Masukkan nama definitif Kasi Kesos
-    duties:
-      'Mengelola pelayanan bantuan sosial, pemutakhiran data kemiskinan, pembinaan kesehatan, kepemudaan, dan keagamaan.',
-    notes: 'Jaminan sosial & pelayanan warga',
+    role: 'Kasi Pemberdayaan Masyarakat',
+    officialName: 'Marthen Solly, S.ST',
+    duties: null,
   },
 ];
 
@@ -220,10 +202,10 @@ const batasWilayah = [
         <TentangResourceCard
           title="Peta Spasial RT dan Bank Sampah Unit"
           icon="map"
-          cta-label="Peta Geospasial"
+          cta-label="Segera hadir"
           class="flex-1"
         >
-          Plot titik koordinat rumah seluruh ketua RT dan sebaran lokasi bank sampah aktif di
+          Peta lokasi rumah ketua RT dan bank sampah aktif di Kelurahan Manggar, Kecamatan
           Balikpapan Timur.
         </TentangResourceCard>
 
@@ -275,24 +257,20 @@ const batasWilayah = [
             <div class="space-y-3 text-base leading-relaxed text-gray-800">
               <p>
                 Sebagai garda terdepan pelayanan pemerintah daerah bagi masyarakat di wilayah
-                Balikpapan Timur, Kelurahan Manggar senantiasa berkomitmen untuk menghadirkan
-                pelayanan yang ramah, akuntabel, dan transparan.
+                Balikpapan Timur, Kelurahan Manggar strive menyediakan pelayanan yang ramah,
+                akuntabel, dan transparan.
               </p>
               <p>
-                Melalui integrasi program
-                <strong class="font-semibold text-brand-navy">Kelurahan Cinta Statistik (Desa Cantik)</strong> serta peluncuran portal
-                <strong class="font-semibold text-brand-navy">SIDATA</strong>, kami berikhtiar membangun tata kelola berbasis data akurat
-                bersama 100 Rukun Tetangga (RT). Data yang tepat menjadi kompas kami dalam
-                merencanakan program sosial, penanganan lingkungan, serta pemulihan ekonomi
-                masyarakat yang berkelanjutan.
+                Integrasi program
+                <strong class="font-semibold text-brand-navy">Kelurahan Cinta Statistik (Desa Cantik)</strong> dan
+                pengembangan portal
+                <strong class="font-semibold text-brand-navy">SIDATA</strong> bersama 100 Rukun Tetangga (RT)
+                diharapkan dapat membantu penyajian informasi Kelurahan Manggar secara terstruktur dan
+                mendukung pemanfaatan data dalam perencanaan pelayanan masyarakat, seperti dalam program
+                sosial dan penanganan lingkungan.
               </p>
             </div>
 
-            <div class="border-t border-gray-200 pt-3 text-sm text-gray-600">
-              <p class="font-medium text-brand-navy">Masa Bakti Jabatan</p>
-              <p>Periode Berjalan &mdash; Kelurahan Manggar, Balikpapan Timur</p>
-              <!-- TODO: Perbarui informasi masa bakti jika telah tersedia surat keputusan resmi -->
-            </div>
           </div>
         </div>
       </div>
@@ -355,16 +333,15 @@ const batasWilayah = [
             <tbody class="divide-y divide-gray-200 bg-white">
               <tr v-for="(member, idx) in sotkMembers" :key="idx" class="transition-colors">
                 <th scope="row" class="px-4 py-4 align-top font-semibold text-brand-navy sm:px-6">
-                  <div>{{ member.role }}</div>
-                  <span v-if="member.notes" class="text-xs font-normal text-gray-600">
-                    {{ member.notes }}
-                  </span>
+                  {{ member.role }}
                 </th>
                 <td class="px-4 py-4 align-top text-gray-800 sm:px-6">
-                  <span class="text-sm italic text-gray-600">{{ member.officialName }}</span>
+                  <span class="text-sm italic text-gray-600">
+                    {{ member.officialName ?? 'Nama pejabat belum tersedia' }}
+                  </span>
                 </td>
                 <td class="px-4 py-4 leading-relaxed text-gray-700 sm:px-6 align-top">
-                  {{ member.duties }}
+                  {{ member.duties ?? 'Rincian tugas resmi belum tersedia pada sumber yang dirujuk.' }}
                 </td>
               </tr>
             </tbody>
@@ -372,52 +349,11 @@ const batasWilayah = [
         </div>
 
         <p class="mt-3 text-sm text-gray-600">
-          * Data aparatur dan penugasan diperbarui secara berkala berdasarkan keputusan mutasi dan
-          penetapan resmi Pemerintah Kota Balikpapan.
+          Sumber nama dan jabatan: Monografi Kelurahan Manggar 2026, Data Personil (PDF viewer
+          halaman 8–9). Rincian tugas resmi belum tersedia pada sumber yang dirujuk.
         </p>
       </div>
     </section>
 
-    <!-- Visi & Misi -->
-    <section class="bg-brand-cyan px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="visi-misi-title">
-      <div class="mx-auto max-w-5xl">
-        <h2 id="visi-misi-title" class="text-lg font-bold text-brand-navy">
-          Visi dan Misi Pelayanan
-        </h2>
-        <p class="mt-2 max-w-3xl text-base text-brand-navy/90">
-          Arah dan komitmen bersama aparatur kelurahan dalam melayani masyarakat Manggar.
-        </p>
-
-        <div class="mt-5 grid grid-cols-1 gap-5 md:grid-cols-2">
-          <article class="rounded-btn bg-white p-5">
-            <h3 class="text-lg font-bold text-brand-navy">Visi Kelurahan</h3>
-            <p class="mt-3 text-base leading-relaxed text-gray-800">
-              &ldquo;Terwujudnya Pelayanan Publik Kelurahan Manggar yang Profesional, Akuntabel,
-              Partisipatif, dan Berbasis Data Terpadu Menuju Masyarakat yang Maju dan
-              Sejahtera.&rdquo;
-            </p>
-            <!-- TODO: Selaraskan rumusan visi dengan dokumen Rencana Strategis definitif -->
-          </article>
-
-          <article class="rounded-btn bg-white p-5">
-            <h3 class="text-lg font-bold text-brand-navy">Misi Kelurahan</h3>
-            <ol class="mt-3 list-decimal space-y-2 pl-5 text-base leading-relaxed text-gray-800">
-              <li>
-                Meningkatkan mutu pelayanan administrasi kelurahan yang cepat, tepat, dan transparan.
-              </li>
-              <li>
-                Memperkuat peran kelembagaan 100 Rukun Tetangga (RT) dalam pemeliharaan lingkungan
-                dan ketertiban.
-              </li>
-              <li>Mengoptimalkan pemanfaatan data statistik melalui inisiatif Kelurahan Cinta Statistik.</li>
-              <li>
-                Mendukung inovasi pemberdayaan masyarakat dan pengelolaan sampah terpadu (Eco Boba
-                dan Bank Sampah Unit).
-              </li>
-            </ol>
-          </article>
-        </div>
-      </div>
-    </section>
   </TentangPageLayout>
 </template>

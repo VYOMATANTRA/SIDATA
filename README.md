@@ -144,6 +144,12 @@ Checklist for a new environment (Docker on a VPS). Background: [`AGENTS.md`](AGE
      (needs `AUDIT_ADMIN_DATABASE_URL` and the other required backend variables in the root `.env`, and `npx` on cron's `PATH`).
 5. If behind a reverse proxy, set `TRUST_PROXY`.
 
+## Public Content Sources
+
+For factual website content, use the [Descan Manggar 2026 source guide](docs/CONTENT_SOURCES.md),
+which points to the canonical Google Drive folder and records source periods, citations, and
+verification rules.
+
 ## Available Scripts
 
 ### Frontend (`frontend/`)
