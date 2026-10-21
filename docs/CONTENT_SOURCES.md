@@ -128,5 +128,23 @@ that register alone.
   Ministry of Law's regulatory database.
 - **Pasal 13, printed page 8 (PDF viewer page 8)** sets the 14-working-day filing period from
   receipt of the PPID superior's written response, or from expiry of the 30-working-day period for
-  that response. Cite this article with UU No. 14 Tahun 2008, Pasal 37–38, whenever explaining that
+  that response. Cite this article alongside UU No. 14 Tahun 2008 whenever explaining that
   deadline.
+- [Undang-Undang Nomor 14 Tahun 2008 tentang Keterbukaan Informasi Publik, official record](https://www.peraturan.go.id/id/uu-no-14-tahun-2008)
+  and [official PDF](https://peraturan.go.id/files/UU+14+Tahun+2008.pdf). The articles backing each
+  published deadline, all verified against the official text:
+
+  | Article | Rule |
+  | --- | --- |
+  | Pasal 22 ayat (7) | Written notification within 10 working days of receiving the request |
+  | Pasal 22 ayat (8) | Extension of at most 7 working days, with a written reason |
+  | Pasal 35 ayat (1) | Grounds for objection, including refusal, no response, and incomplete response |
+  | Pasal 36 ayat (1) | Objection filed within 30 working days of discovering the grounds |
+  | Pasal 36 ayat (2) | The superior's written response within 30 working days of receiving the objection |
+  | Pasal 37 ayat (2) | Dispute application within 14 working days of receiving that written response |
+  | Pasal 38 ayat (2) | Dispute resolution completed within 100 working days |
+
+  The "or from expiry of the 30-working-day period when there is no response" wording comes from
+  PerKI No. 1 Tahun 2013 Pasal 13, not from this law. Attribute it accordingly.
+- The service-level table on the Permintaan Data page quotes the durations above and names the
+  article for each row. Do not publish a duration that is not traceable to one of these articles.
