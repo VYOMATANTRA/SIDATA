@@ -9,6 +9,7 @@ import TentangResourceCard from '../components/tentang/TentangResourceCard.vue';
 import TentangTeamCard from '../components/tentang/TentangTeamCard.vue';
 import TentangLogoRow from '../components/tentang/TentangLogoRow.vue';
 import heroImage from '@/assets/img/background_laman_depan_kelurahan.png';
+import prokerPlaceholder from '@/assets/img/proker-placeholder.svg';
 import logoVyomatantra from '@/assets/img/logo_vyomatantra.png';
 import logoItk from '@/assets/img/logo_itk.png';
 import logoSdgsDesa from '@/assets/img/sdgs_desa.png';
@@ -17,30 +18,27 @@ import logoSdgs17 from '@/assets/img/17_kemitraan_pembangunan_desa.png';
 interface InitiativeItem {
   title: string;
   description: string;
-  impact: string;
+  note: string;
 }
 
 const initiatives: InitiativeItem[] = [
   {
-    title: 'Program Eco Boba (Briket Arang Batok Kelapa)',
+    title: 'Pelatihan Eco Boba untuk Pengolahan Limbah Kemasan Plastik',
     description:
-      'Inisiatif pengolahan limbah tempurung kelapa dari para pedagang dan rumah tangga menjadi briket arang ramah lingkungan tanpa asap dan berkalori tinggi. Program ini mencakup pelatihan teknik pirolisis, pencetakan briket, pengemasan, hingga penyusunan Booklet Edukasi Eco Boba.',
-    impact:
-      'Mereduksi timbunan sampah batok kelapa dan membuka peluang wirausaha hijau bagi kelompok warga.',
+      'Pada Juli 2026, 58 peserta dalam lima kelompok mencacah kemasan plastik, memasukkannya ke kantong LDPE, lalu menjahit sarung bantal. Tiap kelompok menyelesaikan satu bantal: lima produk dengan tingkat penyelesaian tugas 100%.',
+    note: 'Booklet menyebut pengembangan usaha kecil dan pengurangan sampah sebagai potensi. Belum ada pemantauan terstruktur setelah pelatihan.',
   },
   {
     title: 'Pembinaan & Pemetaan Bank Sampah Unit (BSU)',
     description:
-      'Pendampingan tata kelola operasional dan pencatatan nasabah bagi Bank Sampah Unit di lingkungan RT Kelurahan Manggar. Mengintegrasikan titik-titik persebaran unit pengumpulan sampah ke dalam peta spasial interaktif kelurahan.',
-    impact:
-      'Meningkatkan kesadaran pemilahan sampah dari sumbernya dan memperkuat ekonomi sirkular lokal.',
+      'Peta Ketua RT dan BSU Aktif Manggar menyajikan lokasi rumah ketua RT dan BSU berdasarkan survei lapangan langsung pada Juli 2026.',
+    note: 'Sumber peta mencantumkan Tim Inovasi Sosial VYOMATANTRA ITK sebagai pelaksana survei.',
   },
   {
-    title: 'Rancang Bangun Sistem SIDATA',
+    title: 'Sistem Informasi Data Terpadu Kelurahan (SIDATA)',
     description:
-      'Pengembangan Sistem Informasi Data Terpadu Kelurahan Manggar (SIDATA) sebagai platform publik yang menyajikan data statistik kependudukan, sarana prasarana, peta spasial RT, dan keterbukaan informasi berbasis web.',
-    impact:
-      'Menyediakan basis data terpadu yang mudah diakses warga, peneliti, dan pemerintah daerah.',
+      'Portal publik untuk menyimpan dan menyajikan data Kelurahan Manggar secara terstruktur, termasuk statistik, informasi wilayah, peta, dan publikasi.',
+    note: 'SIDATA menyajikan informasi; pengumpulan dan pemutakhiran data dilakukan bersama mitra.',
   },
 ];
 
@@ -49,22 +47,71 @@ const collaborationLogos = [
   { src: logoVyomatantra, alt: 'Logo Tim Inovasi Sosial VYOMATANTRA' },
 ];
 
+interface ProkerAct {
+  kicker: string;
+  title: string;
+  lead: string;
+  body: string;
+  activities: string[];
+}
+
+const prokerIntro = {
+  lead: 'Proposal kegiatan merancang satu semester perubahan: menyiapkan, melaksanakan, mengukur, lalu menyerahkan.',
+  body: 'Setiap bab bergerak mengikuti siklus statistik — pengumpulan, pengolahan, analisis, hingga penyajian data — dengan fokus tematik pada sektor pariwisata sebagai salah satu potensi unggulan Manggar.',
+};
+
+const prokerActs: ProkerAct[] = [
+  {
+    kicker: 'Bab 01 · Persiapan',
+    title: 'Merapikan rencana sebelum menyentuh data',
+    lead: 'Perjalanan dimulai dari meja, bukan dari lapangan.',
+    body: 'Delapan mahasiswa tim menyusun proposal kegiatan, menetapkan tujuan dan sasaran, lalu menyusun rundown. Mereka duduk bersama anggota BPS dan pengurus Kelurahan Manggar untuk menyelaraskan jadwal, sebelum turun ke lapangan melakukan survei lokasi dan mengidentifikasi sasaran peserta. Materi pembinaan statistik dan literasi digital disusun, banner, poster, dan id card dirancang lalu dicetak.',
+    activities: [
+      'Pembentukan tim pelaksana dan pembagian tugas',
+      'Penyusunan proposal kegiatan',
+      'Menentukan tujuan dan sasaran',
+      'Penyusunan rundown kegiatan',
+      'Koordinasi awal dengan anggota BPS dan Kelurahan Manggar',
+      'Survei lokasi kegiatan dan identifikasi sasaran peserta',
+      'Penyusunan materi edukasi Pembinaan Statistik dan Literasi Digital',
+      'Desain serta cetak banner, poster, dan id card',
+    ],
+  },
+  {
+    kicker: 'Bab 02 · Pelaksanaan',
+    title: 'Membawa pendampingan ke halaman warga',
+    lead: 'Puncak perjalanan adalah pelaksanaan sosialisasi.',
+    body: 'Kuesioner after kegiatan disiapkan, rundown dan kuesioner difinalisasi, lalu kegiatan dipromosikan dan peserta diundang. Koordinasi teknis akhir bersama BPS dan pengurus Kelurahan Manggar ditutup dengan pemeriksaan perlengkapan. Pembinaan statistik dan literasi digital disampaikan bersama perangkat kelurahan, ketua RT, dan warga.',
+    activities: [
+      'Penyusunan kuesioner after kegiatan',
+      'Finalisasi rundown kegiatan dan kuesioner after kegiatan',
+      'Promosi kegiatan, undangan peserta, dan koordinasi teknis akhir bersama BPS dan pengurus Kelurahan Manggar',
+      'Pelaksanaan sosialisasi',
+    ],
+  },
+  {
+    kicker: 'Bab 03 · Monitoring dan evaluasi',
+    title: 'Mengukur kembali, bukan menebak',
+    lead: 'Kegiatan tidak ditutup begitu acara selesai.',
+    body: 'Tim menilai partisipasi dan persepsi warga, lalu mengevaluasi seluruh rangkaian kegiatan untuk melihat sejauh mana pendampingan sudah berjalan.',
+    activities: ['Evaluasi partisipasi dan persepsi warga serta evaluasi seluruh kegiatan'],
+  },
+  {
+    kicker: 'Bab 04 · Pelaporan dan tindak lanjut',
+    title: 'Menyerahkan karya',
+    lead: 'Tahap terakhir mengembalikan semua pekerjaan kepada mitra.',
+    body: 'Laporan kegiatan difinalisasi, after movie dan artikel dibuat, lalu laporan diserahkan kepada mitra dan pihak pendukung. Luaran yang dicatat dalam proposal meliputi artikel di laman ITK/LPPM, after movie pada kanal YouTube prodi, dan HKI atas source code website.',
+    activities: [
+      'Finalisasi laporan kegiatan',
+      'Pembuatan after movie dan artikel',
+      'Penyerahan laporan kepada mitra dan pihak pendukung',
+    ],
+  },
+];
+
 const sdgsLogos = [
   { src: logoSdgsDesa, alt: 'Logo SDGs Desa' },
   { src: logoSdgs17, alt: 'Logo SDGs 17: Kemitraan untuk Pembangunan Desa' },
-];
-
-const partners = [
-  {
-    title: 'Institut Teknologi Kalimantan (ITK)',
-    role: 'Perguruan Tinggi Pengusul',
-    meta: 'Jl. Soekarno-Hatta Km. 15, Karang Joang, Balikpapan Utara, Kalimantan Timur 76127',
-  },
-  {
-    title: 'Sekretariat Tim Inovasi Sosial',
-    role: 'Koordinator Program',
-    meta: 'Kelurahan Manggar, Balikpapan Timur & Kampus ITK Balikpapan',
-  },
 ];
 
 interface TeamMember {
@@ -74,23 +121,21 @@ interface TeamMember {
 }
 
 const teamMembers: TeamMember[] = [
-  // TODO: Konfirmasi nama dan peran definitif anggota 1
-  { title: 'Nama Anggota 1', role: 'Anggota Tim VYOMATANTRA' },
-  // TODO: Konfirmasi nama dan peran definitif anggota 2
-  { title: 'Nama Anggota 2', role: 'Anggota Tim VYOMATANTRA' },
-  // TODO: Konfirmasi nama dan peran definitif anggota 3
-  { title: 'Nama Anggota 3', role: 'Anggota Tim VYOMATANTRA' },
-  // TODO: Konfirmasi nama dan peran definitif anggota 4
-  { title: 'Nama Anggota 4', role: 'Anggota Tim VYOMATANTRA' },
-  // TODO: Konfirmasi nama dan peran definitif anggota 5
-  { title: 'Nama Anggota 5', role: 'Anggota Tim VYOMATANTRA' },
-  // TODO: Konfirmasi nama dan peran definitif anggota 6
-  { title: 'Nama Anggota 6', role: 'Anggota Tim VYOMATANTRA' },
-  // TODO: Konfirmasi nama dan peran definitif anggota 7
-  { title: 'Nama Anggota 7', role: 'Anggota Tim VYOMATANTRA' },
-  // TODO: Konfirmasi nama dan peran definitif anggota 8
-  { title: 'Nama Anggota 8', role: 'Anggota Tim VYOMATANTRA' },
+  { title: 'Naca Kirana Badarudin', role: 'Ketua Tim' },
+  { title: 'Indah Rahma Mihadha', role: 'Sekretaris' },
+  { title: 'Andi Naufal Nurfadhil', role: 'Bendahara' },
+  { title: 'Muhammad Aditya Putra', role: 'Teknis' },
+  { title: 'Muhammad Iqbal Ferhan', role: 'Teknis' },
+  { title: 'Sulthan Farizan Fawwaz', role: 'Teknis' },
+  { title: 'Andi Mushawwira Muchlis', role: 'PDD' },
+  { title: 'Feby Anggraini', role: 'PDD' },
 ];
+
+const supervisor = {
+  title: 'Riki Herliansyah, S.Si., M.Stats., Ph.D.',
+  role: 'Dosen Pembimbing',
+  meta: 'Institut Teknologi Kalimantan (ITK)',
+};
 </script>
 
 <template>
@@ -119,23 +164,136 @@ const teamMembers: TeamMember[] = [
           teknologi digital dengan kearifan lokal masyarakat pesisir dan permukiman.
         </p>
         <p>
-          Pendekatan yang diterapkan memadukan penelitian partisipatif
-          (<em>participatory research</em>) dan aksi nyata di lapangan. Bersama aparatur kelurahan,
-          pengurus RT, dan pegiat bank sampah, VYOMATANTRA mengurai tantangan persampahan kota
-          menjadi peluang ekonomi bernilai tambah, sembari memperkuat kedaulatan data kelurahan lewat
-          pengembangan portal terpadu <strong>SIDATA</strong>.
+          Bersama Kelurahan Manggar, ketua RT, pengurus BSU, dan BPS Kota Balikpapan, tim mendukung
+          pengumpulan, pengolahan, dan penyajian data kelurahan. Salah satu hasilnya adalah peta
+          lokasi ketua RT dan BSU aktif.
         </p>
       </TentangInfoCard>
 
       <TentangInfoCard heading="Peran" icon="chart">
         <p>
-          Vyomatantra berperan dalam mengintegrasikan dan memvisualisasikan data wilayah Kelurahan
-          Manggar dalam bentuk informasi geospasial yang mudah diakses. Data tersebut dapat membantu
-          dalam mengidentifikasi kondisi wilayah, persebaran penduduk, potensi pengelolaan sampah,
-          serta lokasi bank sampah sebagai dasar pengambilan keputusan.
+          <strong>VYOMATANTRA</strong> mendampingi survei lapangan bersama mitra, mengumpulkan data
+          spasial, mengompilasi data spasial tersebut, serta memetakan lokasi rumah ketua RT dan BSU
+          aktif di Kelurahan Manggar. Monografi juga mencatat pendataan partisipatif bersama
+          perangkat kelurahan, ketua RT, dan pengurus BSU.
         </p>
       </TentangInfoCard>
     </div>
+
+    <!-- Program kerja -->
+    <section class="bg-white px-4 py-12 sm:px-6 sm:py-16" aria-labelledby="proker-title">
+      <div class="mx-auto max-w-5xl">
+        <p
+          class="flex items-center justify-end gap-2 text-xs font-bold uppercase tracking-[0.2em] text-brand-navy"
+        >
+          <span class="h-5 w-0.5 bg-brand-cyan" aria-hidden="true"></span>
+          Program Kerja
+        </p>
+
+        <h2
+          id="proker-title"
+          class="mt-3 text-3xl font-bold uppercase leading-[1.05] tracking-tight text-brand-navy sm:text-4xl"
+        >
+          Perjalanan <span class="font-normal">Program Kerja</span>
+        </h2>
+
+        <p
+          class="mt-4 text-sm font-bold uppercase tracking-[0.18em] text-brand-teal-deep"
+        >
+          Empat bab dalam satu semester
+        </p>
+
+        <div class="mt-6 grid gap-8 lg:grid-cols-[1.7fr_1fr] lg:items-start lg:gap-12">
+          <div class="space-y-4 text-base leading-relaxed text-brand-navy/90">
+            <p>
+              <strong class="font-bold text-brand-navy">{{ prokerIntro.lead }}</strong>
+              {{ prokerIntro.body }}
+            </p>
+            <p>
+              Setiap bab diuraikan sebagai rangkaian kerja, dari penyusunan rencana di meja hingga
+              penyerahan laporan kepada mitra. Nama kegiatan diambil dari proposal, sementara catatan
+              lapangan merujuk pada Monografi, peta, dan booklet pelatihan.
+            </p>
+          </div>
+
+          <figure class="relative mx-auto w-52 sm:w-60">
+            <span
+              class="absolute -top-6 -right-6 h-24 w-24 rounded-full bg-brand-cyan/30"
+              aria-hidden="true"
+            ></span>
+            <div class="relative aspect-square overflow-hidden rounded-full ring-8 ring-brand-cyan/25">
+              <img
+                :src="heroImage"
+                alt="Kantor Kelurahan Manggar, Balikpapan Timur"
+                class="h-full w-full object-cover"
+              />
+            </div>
+            <figcaption class="mt-4 text-center text-sm leading-snug text-brand-navy">
+              Kantor Kelurahan Manggar, Balikpapan Timur
+              <span class="block text-xs text-brand-navy/70">
+                lokasi koordinasi kegiatan program Desa Cantik
+              </span>
+            </figcaption>
+          </figure>
+        </div>
+
+        <div
+          class="mt-10 flex flex-col gap-12 border-t border-brand-navy/10 pt-9"
+          data-test="proker-acts"
+        >
+          <article
+            v-for="(act, index) in prokerActs"
+            :key="act.kicker"
+            class="flex flex-col gap-6 lg:flex-row lg:items-center lg:gap-12"
+            :class="index % 2 === 1 ? 'lg:flex-row-reverse' : ''"
+          >
+            <div class="flex-1">
+              <p class="text-sm font-bold uppercase tracking-[0.18em] text-brand-teal-deep">
+                {{ act.kicker }}
+              </p>
+              <h3 class="mt-2 text-lg font-bold leading-snug text-brand-navy">{{ act.title }}</h3>
+              <p class="mt-3 text-base leading-relaxed text-brand-navy/90">
+                <strong class="font-bold text-brand-navy">{{ act.lead }}</strong>
+                {{ act.body }}
+              </p>
+              <ul class="mt-4 space-y-1.5">
+                <li
+                  v-for="activity in act.activities"
+                  :key="activity"
+                  class="flex gap-2.5 text-sm leading-relaxed text-brand-navy/80"
+                >
+                  <span class="mt-2 h-1.5 w-1.5 shrink-0 bg-brand-cyan" aria-hidden="true"></span>
+                  {{ activity }}
+                </li>
+              </ul>
+            </div>
+
+            <figure class="w-full shrink-0 lg:w-72">
+              <div class="relative">
+                <span
+                  class="absolute -bottom-3 -left-3 h-full w-full rounded-btn bg-brand-cyan/40"
+                  aria-hidden="true"
+                ></span>
+                <img
+                  :src="prokerPlaceholder"
+                  :alt="`Placeholder foto kegiatan ${act.kicker}`"
+                  class="relative aspect-[4/3] w-full rounded-btn object-cover"
+                />
+              </div>
+              <figcaption class="mt-4 text-xs leading-relaxed text-brand-navy/70">
+                Foto kegiatan pada bab ini belum tersedia.
+              </figcaption>
+            </figure>
+          </article>
+        </div>
+
+        <p class="mt-9 border-t border-brand-navy/10 pt-5 text-sm leading-relaxed text-brand-navy/70">
+          Program kerja ini disusun dalam Proposal Inovasi Sosial Desa Cantik Kelurahan Manggar
+          (Februari 2026). Pelaksanaan di lapangan terdokumentasi dalam Monografi Kelurahan Manggar
+          2026, Peta Ketua RT dan BSU Aktif Manggar, serta Booklet Pelatihan BSU.
+        </p>
+      </div>
+    </section>
 
     <TentangFeatureBand heading="Inisiatif Unggulan di Kelurahan Manggar">
       <div class="mt-4 flex flex-col gap-5 lg:flex-row items-stretch">
@@ -149,7 +307,7 @@ const teamMembers: TeamMember[] = [
           <p>{{ item.description }}</p>
           <template #footer>
             <p class="text-sm text-white">
-              <span class="font-bold">Dampak:</span> {{ item.impact }}
+              <span class="font-bold">Catatan:</span> {{ item.note }}
             </p>
           </template>
         </TentangResourceCard>
@@ -178,19 +336,18 @@ const teamMembers: TeamMember[] = [
               SDG 17: Kemitraan untuk Mencapai Tujuan (Partnership for the Goals)
             </h3>
             <p>
-              Inovasi sosial VYOMATANTRA membuktikan bahwa pembangunan desa dan kelurahan yang
-              efektif lahir dari sinergi pentahelix: perguruan tinggi (ITK), aparatur pemerintah
-              kelurahan, lembaga statistik (BPS Kota Balikpapan), kelompok masyarakat (Bank Sampah &
-              Ketua RT), serta mitra pendukung.
+              Program ini melibatkan Institut Teknologi Kalimantan (ITK), Kelurahan Manggar, BPS
+              Kota Balikpapan, Kecamatan Balikpapan Timur, Ecco Walibar, Pelita Borneo 38, dan
+              peserta BSU.
             </p>
             <ul class="list-disc space-y-1.5 pl-5 text-base">
               <li>
-                <strong>SDG 12 (Konsumsi dan Produksi yang Bertanggung Jawab):</strong> Diterapkan
-                lewat pemanfaatan limbah padat tempurung kelapa menjadi briket arang Eco Boba.
+                <strong>SDG 12 (Konsumsi dan Produksi yang Bertanggung Jawab):</strong> Pelatihan
+                Eco Boba mengolah kemasan plastik menjadi isian bantal.
               </li>
               <li>
-                <strong>SDG 8 (Pekerjaan Layak dan Pertumbuhan Ekonomi):</strong> Menciptakan potensi
-                lapangan usaha baru dan nilai tambah ekonomi bagi pegiat bank sampah warga.
+                <strong>SDG 8 (Pekerjaan Layak dan Pertumbuhan Ekonomi):</strong> Booklet menyebut
+                pengembangan usaha kecil dari produk Eco Boba sebagai potensi tindak lanjut.
               </li>
             </ul>
           </div>
@@ -198,32 +355,21 @@ const teamMembers: TeamMember[] = [
       </div>
     </section>
 
-    <!-- Narahubung & sivitas pelaksana -->
+    <!-- Dosen pembimbing -->
     <section class="bg-brand-cyan px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="tim-title">
       <div class="mx-auto max-w-5xl">
-        <h2 id="tim-title" class="text-lg font-bold text-brand-navy">
-          Tim Inovasi Sosial &amp; Narahubung
-        </h2>
+        <h2 id="tim-title" class="text-lg font-bold text-brand-navy">Dosen Pembimbing</h2>
         <p class="mt-2 max-w-3xl text-base text-brand-navy/90">
-          Lembaga pengusul inisiatif pengabdian masyarakat.
+          Proposal kegiatan mencantumkan dosen pembimbing tim pengusul berikut.
         </p>
 
-        <div class="mt-5 flex flex-col gap-5 lg:flex-row">
+        <div class="mt-5 max-w-md">
           <TentangTeamCard
-            v-for="partner in partners"
-            :key="partner.title"
-            :title="partner.title"
-            :role="partner.role"
-            :meta="partner.meta"
-            class="flex-1"
+            :title="supervisor.title"
+            :role="supervisor.role"
+            :meta="supervisor.meta"
           />
         </div>
-
-        <p class="mt-5 text-sm text-brand-navy">
-          * Komposisi tim pelaksana dan publikasi ilmiah luaran program didokumentasikan dalam
-          laporan resmi program pengabdian masyarakat.
-          <!-- TODO: Konfirmasi susunan nama lengkap tim pelaksana mahasiswa dan dosen pembimbing VYOMATANTRA -->
-        </p>
       </div>
     </section>
 
@@ -234,14 +380,14 @@ const teamMembers: TeamMember[] = [
           Tim Pelaksana VYOMATANTRA
         </h2>
         <p class="mt-2 max-w-3xl text-base text-gray-700">
-          Civitas akademika Institut Teknologi Kalimantan (ITK) yang mendedikasikan keahlian dalam
-          perancangan dan implementasi program inovasi sosial di Kelurahan Manggar.
+          Proposal kegiatan mencantumkan susunan delapan mahasiswa dan pembagian tugas tim pengusul.
+          Tugas survei lapangan dan penyusunan peta dideskripsikan sebagai kerja tim bersama mitra.
         </p>
 
         <div class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           <TentangTeamCard
-            v-for="(member, idx) in teamMembers"
-            :key="idx"
+            v-for="member in teamMembers"
+            :key="member.title"
             :title="member.title"
             :role="member.role"
             :meta="member.meta"
@@ -249,9 +395,10 @@ const teamMembers: TeamMember[] = [
           />
         </div>
 
-        <p class="mt-5 text-sm text-gray-600 italic">
-          * Catatan (TODO): Susunan nama lengkap dan peran definitif 8 anggota tim pelaksana
-          didokumentasikan dalam laporan resmi program pengabdian masyarakat.
+        <p class="mt-5 text-sm text-gray-600">
+          Peran individu mengikuti Proposal Inovasi Sosial Desa Cantik Kelurahan Manggar (Februari
+          2026). Kegiatan lapangan dan pemetaan tercatat dalam Monografi Kelurahan Manggar 2026
+          serta Peta Ketua RT dan BSU Aktif Manggar.
         </p>
       </div>
     </section>

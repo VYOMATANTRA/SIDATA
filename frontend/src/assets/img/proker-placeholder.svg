@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <defs>
+    <linearGradient id="proker-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a2353" />
+      <stop offset="1" stop-color="#112c71" />
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#proker-bg)" />
+  <circle cx="648" cy="118" r="152" fill="#56e1e9" opacity="0.18" />
+  <circle cx="132" cy="506" r="112" fill="#56e1e9" opacity="0.12" />
+  <g fill="none" stroke="#56e1e9" stroke-width="10" stroke-linejoin="round">
+    <rect x="248" y="202" width="304" height="212" rx="18" />
+    <path d="M276 384l72-72 60 60 46-46 68 58" />
+  </g>
+  <circle cx="330" cy="262" r="22" fill="#56e1e9" />
+</svg>
