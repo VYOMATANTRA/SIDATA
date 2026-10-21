@@ -249,4 +249,29 @@ describe('TentangVyomatantraView accessibility and content', () => {
     expect(figure.find('div').classes()).toContain('rounded-full');
     expect(figure.find('figcaption').text()).toContain('Kantor Kelurahan Manggar');
   });
+
+  it('stacks the acts vertically and alternates text and picture sides', async () => {
+    const { pinia, router } = mountView();
+    await router.push('/tentang/vyomatantra');
+    await router.isReady();
+
+    const wrapper = mount(TentangVyomatantraView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    const proker = wrapper.find('section[aria-labelledby="proker-title"]');
+    const acts = proker.findAll('[data-test="proker-acts"] > article');
+    expect(acts.length).toBe(4);
+
+    // The acts stack as full-width rows instead of a side-by-side grid.
+    expect(proker.find('[data-test="proker-acts"]').classes()).toContain('flex-col');
+    expect(proker.find('[data-test="proker-acts"]').classes()).not.toContain('sm:grid-cols-2');
+
+    acts.forEach((act, index) => {
+      // Odd acts read text-then-picture, even acts picture-then-text.
+      expect(act.classes()).toContain(index % 2 === 1 ? 'lg:flex-row-reverse' : 'lg:flex-row');
+      expect(act.find('figure').exists()).toBe(true);
+      expect(act.find('img').attributes('src')).toBeTruthy();
+    });
+  });
 });

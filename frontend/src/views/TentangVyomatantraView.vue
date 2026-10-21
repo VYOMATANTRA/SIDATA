@@ -9,6 +9,7 @@ import TentangResourceCard from '../components/tentang/TentangResourceCard.vue';
 import TentangTeamCard from '../components/tentang/TentangTeamCard.vue';
 import TentangLogoRow from '../components/tentang/TentangLogoRow.vue';
 import heroImage from '@/assets/img/background_laman_depan_kelurahan.png';
+import prokerPlaceholder from '@/assets/img/proker-placeholder.svg';
 import logoVyomatantra from '@/assets/img/logo_vyomatantra.png';
 import logoItk from '@/assets/img/logo_itk.png';
 import logoSdgsDesa from '@/assets/img/sdgs_desa.png';
@@ -237,28 +238,52 @@ const supervisor = {
         </div>
 
         <div
-          class="mt-10 grid gap-x-10 gap-y-9 border-t border-brand-navy/10 pt-9 sm:grid-cols-2"
+          class="mt-10 flex flex-col gap-12 border-t border-brand-navy/10 pt-9"
           data-test="proker-acts"
         >
-          <article v-for="act in prokerActs" :key="act.kicker">
-            <p class="text-sm font-bold uppercase tracking-[0.18em] text-brand-teal-deep">
-              {{ act.kicker }}
-            </p>
-            <h3 class="mt-2 text-lg font-bold leading-snug text-brand-navy">{{ act.title }}</h3>
-            <p class="mt-3 text-base leading-relaxed text-brand-navy/90">
-              <strong class="font-bold text-brand-navy">{{ act.lead }}</strong>
-              {{ act.body }}
-            </p>
-            <ul class="mt-4 space-y-1.5">
-              <li
-                v-for="activity in act.activities"
-                :key="activity"
-                class="flex gap-2.5 text-sm leading-relaxed text-brand-navy/80"
-              >
-                <span class="mt-2 h-1.5 w-1.5 shrink-0 bg-brand-cyan" aria-hidden="true"></span>
-                {{ activity }}
-              </li>
-            </ul>
+          <article
+            v-for="(act, index) in prokerActs"
+            :key="act.kicker"
+            class="flex flex-col gap-6 lg:flex-row lg:items-center lg:gap-12"
+            :class="index % 2 === 1 ? 'lg:flex-row-reverse' : ''"
+          >
+            <div class="flex-1">
+              <p class="text-sm font-bold uppercase tracking-[0.18em] text-brand-teal-deep">
+                {{ act.kicker }}
+              </p>
+              <h3 class="mt-2 text-lg font-bold leading-snug text-brand-navy">{{ act.title }}</h3>
+              <p class="mt-3 text-base leading-relaxed text-brand-navy/90">
+                <strong class="font-bold text-brand-navy">{{ act.lead }}</strong>
+                {{ act.body }}
+              </p>
+              <ul class="mt-4 space-y-1.5">
+                <li
+                  v-for="activity in act.activities"
+                  :key="activity"
+                  class="flex gap-2.5 text-sm leading-relaxed text-brand-navy/80"
+                >
+                  <span class="mt-2 h-1.5 w-1.5 shrink-0 bg-brand-cyan" aria-hidden="true"></span>
+                  {{ activity }}
+                </li>
+              </ul>
+            </div>
+
+            <figure class="w-full shrink-0 lg:w-72">
+              <div class="relative">
+                <span
+                  class="absolute -bottom-3 -left-3 h-full w-full rounded-btn bg-brand-cyan/40"
+                  aria-hidden="true"
+                ></span>
+                <img
+                  :src="prokerPlaceholder"
+                  :alt="`Placeholder foto kegiatan ${act.kicker}`"
+                  class="relative aspect-[4/3] w-full rounded-btn object-cover"
+                />
+              </div>
+              <figcaption class="mt-4 text-xs leading-relaxed text-brand-navy/70">
+                Foto kegiatan pada bab ini belum tersedia.
+              </figcaption>
+            </figure>
           </article>
         </div>
 
