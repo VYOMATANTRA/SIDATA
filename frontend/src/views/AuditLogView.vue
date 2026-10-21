@@ -276,8 +276,10 @@ onMounted(async () => {
         </div>
       </section>
 
-      <!-- Toolbar: Search + Severity Filter -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-end gap-3">
+      <!-- Toolbar: Search + Severity Filter. The fieldset groups both controls under one
+           label so AT announces them as a "Filter log audit" group, not loose inputs. -->
+      <fieldset class="flex flex-col sm:flex-row sm:items-center justify-end gap-3">
+        <legend class="sr-only">Filter log audit</legend>
         <div class="relative w-full sm:w-64">
           <label for="audit-search" class="sr-only">Cari log audit</label>
           <MagnifyingGlassIcon
@@ -307,7 +309,7 @@ onMounted(async () => {
             <option value="critical">Kritis</option>
           </select>
         </div>
-      </div>
+      </fieldset>
 
       <!-- Error States -->
       <div
@@ -449,12 +451,18 @@ onMounted(async () => {
         class="flex items-center justify-between"
         aria-label="Navigasi halaman log audit"
       >
-        <p class="text-sm text-slate-600">
+        <!-- Always-mounted polite live region: filter/page/search changes alter this text,
+             so AT announces the new result count. The sr-only page span guarantees a page
+             change is announced even when the visible row counts happen to match. -->
+        <p role="status" aria-live="polite" class="text-sm text-slate-600">
           Menampilkan
           <span class="font-bold text-brand-navy">{{ visibleLogs.length }}</span>
           dari
           <span class="font-bold text-brand-navy">{{ auditStore.total }}</span>
           data
+          <span class="sr-only">
+            , halaman {{ auditStore.page }} dari {{ totalPages }}
+          </span>
         </p>
         <div class="flex items-center gap-2">
           <button

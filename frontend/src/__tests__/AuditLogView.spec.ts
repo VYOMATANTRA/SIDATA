@@ -203,6 +203,38 @@ describe('AuditLogView', () => {
     })
   })
 
+  it('groups both filter controls in a fieldset with a labelled legend', async () => {
+    mockBackend([CRITICAL_OPEN_LOG])
+    const wrapper = await mountView()
+
+    // The reviewer's exact check: the fieldset must actually contain the controls.
+    const fieldset = wrapper.find('fieldset')
+    expect(fieldset.exists()).toBe(true)
+    expect(fieldset.find('legend').text()).toBe('Filter log audit')
+
+    const controls = fieldset.element.querySelectorAll('input, select, button')
+    expect(controls).toHaveLength(2)
+    expect(fieldset.find('#audit-search').exists()).toBe(true)
+    expect(fieldset.find('#severity-filter').exists()).toBe(true)
+  })
+
+  it('announces result changes via an always-mounted polite live region', async () => {
+    mockBackend([CRITICAL_OPEN_LOG, INFO_LOG])
+    const wrapper = await mountView()
+
+    const status = wrapper.find('[role="status"]')
+    expect(status.exists()).toBe(true)
+    expect(status.attributes('aria-live')).toBe('polite')
+    expect(status.text()).toContain('Menampilkan')
+    expect(status.text()).toContain('halaman 1 dari 1')
+
+    // Client-side search narrows the count → live text must follow.
+    await wrapper.find('#audit-search').setValue('login')
+    await vi.waitFor(() => expect(status.text()).toMatch(/Menampilkan\s+1\s+dari\s+2/))
+    // Still mounted after filtering — never v-if'd out of the DOM.
+    expect(wrapper.find('[role="status"]').exists()).toBe(true)
+  })
+
   it('shows the pagination footer with the row and total counts', async () => {
     mockBackend([CRITICAL_OPEN_LOG, INFO_LOG])
     const wrapper = await mountView()
