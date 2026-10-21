@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createPinia, setActivePinia } from 'pinia'
-import { useAuditStore } from '../stores/audit.store'
-import { useAuthStore } from '../stores/auth'
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
+import { useAuditStore } from '../stores/audit.store';
+import { useAuthStore } from '../stores/auth';
 
 const AUDIT_LOG = {
   id: 'log-1',
@@ -20,17 +20,17 @@ const AUDIT_LOG = {
   ipAddress: '127.0.0.1',
   userAgent: 'Mozilla/5.0',
   createdAt: '2026-10-19T00:00:00.000Z',
-}
+};
 
 function mockFetchWith(handlers: {
-  list?: () => Response | Promise<Response>
-  summary?: () => Response | Promise<Response>
-  acknowledge?: (input: RequestInfo | URL, init?: RequestInit) => Response | Promise<Response>
+  list?: () => Response | Promise<Response>;
+  summary?: () => Response | Promise<Response>;
+  acknowledge?: (input: RequestInfo | URL, init?: RequestInit) => Response | Promise<Response>;
 }) {
   const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
-    const url = String(input)
+    const url = String(input);
     if (url.includes('csrf-token')) {
-      return { ok: true, json: async () => ({ csrfToken: 'mock-csrf' }) } as Response
+      return { ok: true, json: async () => ({ csrfToken: 'mock-csrf' }) } as Response;
     }
     if (url.includes('/acknowledge')) {
       return handlers.acknowledge
@@ -39,140 +39,140 @@ function mockFetchWith(handlers: {
             ok: true,
             json: async () => ({
               message: 'Audit log berhasil di-acknowledge.',
-              log: { ...AUDIT_LOG, acknowledgedAt: '2026-10-19T01:00:00.000Z', acknowledgedById: 'admin-1' },
+              log: {
+                ...AUDIT_LOG,
+                acknowledgedAt: '2026-10-19T01:00:00.000Z',
+                acknowledgedById: 'admin-1',
+              },
             }),
-          } as Response)
+          } as Response);
     }
     if (url.includes('/summary')) {
-      return (
-        handlers.summary?.() ?? {
-          ok: true,
-          json: async () => ({
-            since: '2026-10-12T00:00:00.000Z',
-            counts: { info: 3, warning: 2, critical: 1 },
-            openCritical: 1,
-          }),
-        }
-      ) as Response
-    }
-    return (
-      handlers.list?.() ?? {
+      return (handlers.summary?.() ?? {
         ok: true,
         json: async () => ({
-          logs: [AUDIT_LOG],
-          total: 1,
-          page: Number(new URL(url, 'http://localhost').searchParams.get('page')) || 1,
-          pageSize: 50,
+          since: '2026-10-12T00:00:00.000Z',
+          counts: { info: 3, warning: 2, critical: 1 },
+          openCritical: 1,
         }),
-      }
-    ) as Response
-  })
-  globalThis.fetch = fetchMock
-  return fetchMock
+      }) as Response;
+    }
+    return (handlers.list?.() ?? {
+      ok: true,
+      json: async () => ({
+        logs: [AUDIT_LOG],
+        total: 1,
+        page: Number(new URL(url, 'http://localhost').searchParams.get('page')) || 1,
+        pageSize: 50,
+      }),
+    }) as Response;
+  });
+  globalThis.fetch = fetchMock;
+  return fetchMock;
 }
 
 describe('audit store', () => {
   beforeEach(() => {
-    setActivePinia(createPinia())
-  })
+    setActivePinia(createPinia());
+  });
 
   it('fetchLogs calls GET /api/audit-logs and populates logs, total and pagination', async () => {
-    const fetchMock = mockFetchWith({})
+    const fetchMock = mockFetchWith({});
 
-    const store = useAuditStore()
-    await store.fetchLogs()
+    const store = useAuditStore();
+    await store.fetchLogs();
 
     const listCall = fetchMock.mock.calls.find(([input]) =>
       String(input).startsWith('/api/audit-logs?'),
-    )
-    expect(listCall).toBeDefined()
-    expect(String(listCall?.[0])).toContain('page=1')
-    expect(String(listCall?.[0])).toContain('pageSize=50')
-    expect(store.logs).toHaveLength(1)
-    expect(store.logs[0]?.action).toBe('user.role_changed')
-    expect(store.total).toBe(1)
-    expect(store.page).toBe(1)
-  })
+    );
+    expect(listCall).toBeDefined();
+    expect(String(listCall?.[0])).toContain('page=1');
+    expect(String(listCall?.[0])).toContain('pageSize=50');
+    expect(store.logs).toHaveLength(1);
+    expect(store.logs[0]?.action).toBe('user.role_changed');
+    expect(store.total).toBe(1);
+    expect(store.page).toBe(1);
+  });
 
   it('buildListQuery reflects active filters and omits empty ones', async () => {
-    const fetchMock = mockFetchWith({})
+    const fetchMock = mockFetchWith({});
 
-    const store = useAuditStore()
+    const store = useAuditStore();
     await store.applyFilters({
       severity: 'critical',
       acknowledged: false,
       action: ' user.role_changed ',
       to: '2026-10-19',
-    })
+    });
 
     const listCall = fetchMock.mock.calls.find(([input]) =>
       String(input).startsWith('/api/audit-logs?'),
-    )
-    const query = new URLSearchParams(String(listCall?.[0]).split('?')[1])
-    expect(query.get('severity')).toBe('critical')
-    expect(query.get('acknowledged')).toBe('false')
-    expect(query.get('action')).toBe('user.role_changed')
+    );
+    const query = new URLSearchParams(String(listCall?.[0]).split('?')[1]);
+    expect(query.get('severity')).toBe('critical');
+    expect(query.get('acknowledged')).toBe('false');
+    expect(query.get('action')).toBe('user.role_changed');
     // 'to' is the local end of the selected day, sent as an explicit UTC instant
-    expect(query.get('to')).toBe(new Date(2026, 9, 19, 23, 59, 59, 999).toISOString())
+    expect(query.get('to')).toBe(new Date(2026, 9, 19, 23, 59, 59, 999).toISOString());
     // Empty filters stay out of the query
-    expect(query.get('outcome')).toBeNull()
-    expect(query.get('from')).toBeNull()
-  })
+    expect(query.get('outcome')).toBeNull();
+    expect(query.get('from')).toBeNull();
+  });
 
   it('sends date bounds as UTC instants of the local day, not bare calendar dates', async () => {
-    const fetchMock = mockFetchWith({})
+    const fetchMock = mockFetchWith({});
 
-    const store = useAuditStore()
-    await store.applyFilters({ from: '2026-10-19', to: '2026-10-19' })
+    const store = useAuditStore();
+    await store.applyFilters({ from: '2026-10-19', to: '2026-10-19' });
 
     const listCall = fetchMock.mock.calls.find(([input]) =>
       String(input).startsWith('/api/audit-logs?'),
-    )
-    const query = new URLSearchParams(String(listCall?.[0]).split('?')[1])
-    const from = query.get('from')
-    const to = query.get('to')
+    );
+    const query = new URLSearchParams(String(listCall?.[0]).split('?')[1]);
+    const from = query.get('from');
+    const to = query.get('to');
 
     // Both bounds must be full UTC instants (explicit Z), never the raw 'YYYY-MM-DD'
     // the backend would read as UTC midnight / server-local end-of-day.
-    expect(from).toBe(new Date(2026, 9, 19, 0, 0, 0, 0).toISOString())
-    expect(to).toBe(new Date(2026, 9, 19, 23, 59, 59, 999).toISOString())
-    expect(from).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
-    expect(to).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+    expect(from).toBe(new Date(2026, 9, 19, 0, 0, 0, 0).toISOString());
+    expect(to).toBe(new Date(2026, 9, 19, 23, 59, 59, 999).toISOString());
+    expect(from).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    expect(to).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     // The window spans the full local day and from < to
-    expect(new Date(to!).getTime() - new Date(from!).getTime()).toBe(24 * 60 * 60 * 1000 - 1)
-  })
+    expect(new Date(to!).getTime() - new Date(from!).getTime()).toBe(24 * 60 * 60 * 1000 - 1);
+  });
 
   it('applyFilters resets to page 1 before refetching', async () => {
-    mockFetchWith({})
+    mockFetchWith({});
 
-    const store = useAuditStore()
-    await store.goToPage(3)
-    expect(store.page).toBe(3)
+    const store = useAuditStore();
+    await store.goToPage(3);
+    expect(store.page).toBe(3);
 
-    await store.applyFilters({ severity: 'warning' })
-    expect(store.page).toBe(1)
-    expect(store.filters.severity).toBe('warning')
-  })
+    await store.applyFilters({ severity: 'warning' });
+    expect(store.page).toBe(1);
+    expect(store.filters.severity).toBe('warning');
+  });
 
   it('fetchSummary populates severity counts and openCritical', async () => {
-    mockFetchWith({})
+    mockFetchWith({});
 
-    const store = useAuditStore()
-    await store.fetchSummary()
+    const store = useAuditStore();
+    await store.fetchSummary();
 
-    expect(store.summary?.counts).toEqual({ info: 3, warning: 2, critical: 1 })
-    expect(store.summary?.openCritical).toBe(1)
-  })
+    expect(store.summary?.counts).toEqual({ info: 3, warning: 2, critical: 1 });
+    expect(store.summary?.openCritical).toBe(1);
+  });
 
   it('fetchSummary passes the since window to the API when provided', async () => {
-    const fetchMock = mockFetchWith({})
+    const fetchMock = mockFetchWith({});
 
-    const store = useAuditStore()
-    await store.fetchSummary('2026-09-19T00:00:00.000Z')
+    const store = useAuditStore();
+    await store.fetchSummary('2026-09-19T00:00:00.000Z');
 
-    const summaryCall = fetchMock.mock.calls.find(([input]) => String(input).includes('/summary'))
-    expect(String(summaryCall?.[0])).toContain('since=2026-09-19T00%3A00%3A00.000Z')
-  })
+    const summaryCall = fetchMock.mock.calls.find(([input]) => String(input).includes('/summary'));
+    expect(String(summaryCall?.[0])).toContain('since=2026-09-19T00%3A00%3A00.000Z');
+  });
 
   it('fetchAdminActionCount counts admin-actor logs in the window', async () => {
     const fetchMock = mockFetchWith({
@@ -190,29 +190,34 @@ describe('audit store', () => {
             pageSize: 200,
           }),
         }) as Response,
-    })
+    });
 
-    const store = useAuditStore()
-    await store.fetchAdminActionCount(24)
+    const store = useAuditStore();
+    await store.fetchAdminActionCount(24);
 
     // Case-insensitive admin role match; non-admin actors excluded
-    expect(store.adminActionCount).toBe(2)
+    expect(store.adminActionCount).toBe(2);
 
-    const listCall = fetchMock.mock.calls.find(([input]) => String(input).startsWith('/api/audit-logs?'))
-    expect(String(listCall?.[0])).toContain('pageSize=200')
-    expect(String(listCall?.[0])).toContain('from=')
-  })
+    const listCall = fetchMock.mock.calls.find(([input]) =>
+      String(input).startsWith('/api/audit-logs?'),
+    );
+    expect(String(listCall?.[0])).toContain('pageSize=200');
+    expect(String(listCall?.[0])).toContain('from=');
+  });
 
   it('acknowledgeLog PATCHes with CSRF and updates the row in place without refetching', async () => {
-    let listCalled = false
-    let patchBody: unknown = null
+    let listCalled = false;
+    let patchBody: unknown = null;
     mockFetchWith({
       list: () => {
-        listCalled = true
-        return { ok: true, json: async () => ({ logs: [], total: 0, page: 1, pageSize: 50 }) } as Response
+        listCalled = true;
+        return {
+          ok: true,
+          json: async () => ({ logs: [], total: 0, page: 1, pageSize: 50 }),
+        } as Response;
       },
       acknowledge: (_input, init) => {
-        patchBody = init?.body || null
+        patchBody = init?.body || null;
         return {
           ok: true,
           json: async () => ({
@@ -223,64 +228,64 @@ describe('audit store', () => {
               acknowledgedById: 'admin-1',
             },
           }),
-        } as Response
+        } as Response;
       },
-    })
+    });
 
-    const authStore = useAuthStore()
-    authStore.accessToken = 'mock-access-token'
+    const authStore = useAuthStore();
+    authStore.accessToken = 'mock-access-token';
 
-    const store = useAuditStore()
-    store.logs = [{ ...AUDIT_LOG }]
+    const store = useAuditStore();
+    store.logs = [{ ...AUDIT_LOG }];
     store.summary = {
       since: '2026-10-12T00:00:00.000Z',
       counts: { info: 3, warning: 2, critical: 1 },
       openCritical: 1,
-    }
+    };
 
-    const res = await store.acknowledgeLog('log-1')
+    const res = await store.acknowledgeLog('log-1');
 
-    expect(patchBody).toBeNull() // PATCH tanpa body
-    expect(listCalled).toBe(false)
-    expect(res).toHaveProperty('message')
-    expect(store.logs[0]?.acknowledgedAt).toBe('2026-10-19T01:00:00.000Z')
-    expect(store.logs[0]?.acknowledgedById).toBe('admin-1')
-    expect(store.summary?.openCritical).toBe(0)
-  })
+    expect(patchBody).toBeNull(); // PATCH tanpa body
+    expect(listCalled).toBe(false);
+    expect(res).toHaveProperty('message');
+    expect(store.logs[0]?.acknowledgedAt).toBe('2026-10-19T01:00:00.000Z');
+    expect(store.logs[0]?.acknowledgedById).toBe('admin-1');
+    expect(store.summary?.openCritical).toBe(0);
+  });
 
   it('acknowledgeLog refetches the page when the open-only filter is active, keeping list and filter consistent', async () => {
-    let listCalls = 0
+    let listCalls = 0;
     mockFetchWith({
       list: () => {
-        listCalls += 1
+        listCalls += 1;
         // Simulate the server honoring acknowledged=false: the acknowledged row is gone.
         return {
           ok: true,
           json: async () => ({ logs: [], total: 0, page: 1, pageSize: 50 }),
-        } as Response
+        } as Response;
       },
-    })
+    });
 
-    const authStore = useAuthStore()
-    authStore.accessToken = 'mock-access-token'
+    const authStore = useAuthStore();
+    authStore.accessToken = 'mock-access-token';
 
-    const store = useAuditStore()
-    await store.applyFilters({ acknowledged: false }) // "Terbuka" filter; 1 list call
-    store.logs = [{ ...AUDIT_LOG }]
+    const store = useAuditStore();
+    await store.applyFilters({ acknowledged: false }); // "Terbuka" filter; 1 list call
+    store.logs = [{ ...AUDIT_LOG }];
     store.summary = {
       since: '2026-10-12T00:00:00.000Z',
       counts: { info: 3, warning: 2, critical: 1 },
       openCritical: 1,
-    }
+    };
 
-    await store.acknowledgeLog('log-1')
+    await store.acknowledgeLog('log-1');
 
     // One extra list call after the PATCH — the acknowledged row must leave an
     // "open only" list rather than linger contradicting the active filter.
-    expect(listCalls).toBe(2)
-    expect(store.logs).toHaveLength(0)
-    expect(store.summary?.openCritical).toBe(0)
-  })
+    expect(listCalls).toBe(2);
+    expect(store.logs).toHaveLength(0);
+    expect(store.summary?.openCritical).toBe(0);
+  });
 
   it('acknowledgeLog throws on backend error and sets the error ref', async () => {
     mockFetchWith({
@@ -289,45 +294,44 @@ describe('audit store', () => {
           ok: false,
           json: async () => ({ error: 'Audit log ini sudah di-acknowledge sebelumnya.' }),
         }) as Response,
-    })
+    });
 
-    const store = useAuditStore()
-    store.logs = [{ ...AUDIT_LOG }]
+    const store = useAuditStore();
+    store.logs = [{ ...AUDIT_LOG }];
 
     await expect(store.acknowledgeLog('log-1')).rejects.toThrow(
       'Audit log ini sudah di-acknowledge sebelumnya.',
-    )
-    expect(store.error).toBe('Audit log ini sudah di-acknowledge sebelumnya.')
+    );
+    expect(store.error).toBe('Audit log ini sudah di-acknowledge sebelumnya.');
     // Row left untouched on failure
-    expect(store.logs[0]?.acknowledgedAt).toBeNull()
-  })
+    expect(store.logs[0]?.acknowledgedAt).toBeNull();
+  });
 
   it('fetchLogs sets a friendly error message when the API fails', async () => {
     mockFetchWith({
-      list: () =>
-        ({ ok: false, json: async () => ({ error: 'Akses ditolak.' }) }) as Response,
-    })
+      list: () => ({ ok: false, json: async () => ({ error: 'Akses ditolak.' }) }) as Response,
+    });
 
-    const store = useAuditStore()
-    await store.fetchLogs()
+    const store = useAuditStore();
+    await store.fetchLogs();
 
-    expect(store.logs).toHaveLength(0)
-    expect(store.error).toBe('Akses ditolak.')
-  })
+    expect(store.logs).toHaveLength(0);
+    expect(store.error).toBe('Akses ditolak.');
+  });
 
   it('discards a stale fetchLogs response that resolves after a newer one', async () => {
-    let listCalls = 0
-    let resolveSlow: (r: Response) => void = () => {}
+    let listCalls = 0;
+    let resolveSlow: (r: Response) => void = () => {};
     const slowResponse = new Promise<Response>((resolve) => {
-      resolveSlow = resolve
-    })
+      resolveSlow = resolve;
+    });
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
-      const url = String(input)
+      const url = String(input);
       if (url.includes('csrf-token')) {
-        return { ok: true, json: async () => ({ csrfToken: 'mock-csrf' }) } as Response
+        return { ok: true, json: async () => ({ csrfToken: 'mock-csrf' }) } as Response;
       }
-      listCalls += 1
-      if (listCalls === 1) return slowResponse // first call: hangs until we resolve it
+      listCalls += 1;
+      if (listCalls === 1) return slowResponse; // first call: hangs until we resolve it
       return {
         ok: true,
         json: async () => ({
@@ -336,16 +340,16 @@ describe('audit store', () => {
           page: 1,
           pageSize: 50,
         }),
-      } as Response
-    })
-    globalThis.fetch = fetchMock
+      } as Response;
+    });
+    globalThis.fetch = fetchMock;
 
-    const store = useAuditStore()
+    const store = useAuditStore();
     // Two overlapping fetches (e.g. rapid page clicks); the newer resolves first.
-    const first = store.fetchLogs()
-    const second = store.fetchLogs()
-    await second
-    expect(store.logs[0]?.id).toBe('fresh')
+    const first = store.fetchLogs();
+    const second = store.fetchLogs();
+    await second;
+    expect(store.logs[0]?.id).toBe('fresh');
 
     // Now the older, slower response arrives with different data — it must be dropped.
     resolveSlow({
@@ -356,62 +360,62 @@ describe('audit store', () => {
         page: 7,
         pageSize: 50,
       }),
-    } as Response)
-    await first
+    } as Response);
+    await first;
 
-    expect(store.logs[0]?.id).toBe('fresh')
-    expect(store.total).toBe(1)
-    expect(store.page).toBe(1)
-    expect(store.loading).toBe(false)
-  })
+    expect(store.logs[0]?.id).toBe('fresh');
+    expect(store.total).toBe(1);
+    expect(store.page).toBe(1);
+    expect(store.loading).toBe(false);
+  });
 
   it('a stale fetchLogs failure does not clobber the error state of a newer success', async () => {
-    let listCalls = 0
-    let rejectSlow: (e: unknown) => void = () => {}
+    let listCalls = 0;
+    let rejectSlow: (e: unknown) => void = () => {};
     const slowResponse = new Promise<Response>((_resolve, reject) => {
-      rejectSlow = reject
-    })
+      rejectSlow = reject;
+    });
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
-      const url = String(input)
+      const url = String(input);
       if (url.includes('csrf-token')) {
-        return { ok: true, json: async () => ({ csrfToken: 'mock-csrf' }) } as Response
+        return { ok: true, json: async () => ({ csrfToken: 'mock-csrf' }) } as Response;
       }
-      listCalls += 1
-      if (listCalls === 1) return slowResponse
+      listCalls += 1;
+      if (listCalls === 1) return slowResponse;
       return {
         ok: true,
         json: async () => ({ logs: [AUDIT_LOG], total: 1, page: 1, pageSize: 50 }),
-      } as Response
-    })
-    globalThis.fetch = fetchMock
+      } as Response;
+    });
+    globalThis.fetch = fetchMock;
 
-    const store = useAuditStore()
-    const first = store.fetchLogs()
-    const second = store.fetchLogs()
-    await second
-    expect(store.error).toBeNull()
+    const store = useAuditStore();
+    const first = store.fetchLogs();
+    const second = store.fetchLogs();
+    await second;
+    expect(store.error).toBeNull();
 
     // The superseded request fails late; its error must stay silent.
-    rejectSlow(new Error('network down'))
-    await first
+    rejectSlow(new Error('network down'));
+    await first;
 
-    expect(store.error).toBeNull()
-    expect(store.logs).toHaveLength(1)
-    expect(store.loading).toBe(false)
-  })
+    expect(store.error).toBeNull();
+    expect(store.logs).toHaveLength(1);
+    expect(store.loading).toBe(false);
+  });
 
   it('fetchSummary errors land in summaryError, not the shared list error ref', async () => {
     mockFetchWith({
       summary: () =>
         ({ ok: false, json: async () => ({ error: 'Ringkasan tidak tersedia.' }) }) as Response,
-    })
+    });
 
-    const store = useAuditStore()
-    await store.fetchSummary()
+    const store = useAuditStore();
+    await store.fetchSummary();
 
-    expect(store.summaryError).toBe('Ringkasan tidak tersedia.')
-    expect(store.error).toBeNull()
-  })
+    expect(store.summaryError).toBe('Ringkasan tidak tersedia.');
+    expect(store.error).toBeNull();
+  });
 
   it('a summary failure does not mask or clear a concurrent list failure', async () => {
     mockFetchWith({
@@ -419,13 +423,13 @@ describe('audit store', () => {
         ({ ok: false, json: async () => ({ error: 'Daftar tidak tersedia.' }) }) as Response,
       summary: () =>
         ({ ok: false, json: async () => ({ error: 'Ringkasan tidak tersedia.' }) }) as Response,
-    })
+    });
 
-    const store = useAuditStore()
-    await Promise.all([store.fetchLogs(), store.fetchSummary()])
+    const store = useAuditStore();
+    await Promise.all([store.fetchLogs(), store.fetchSummary()]);
 
     // Both failures surface independently instead of one overwriting the other.
-    expect(store.error).toBe('Daftar tidak tersedia.')
-    expect(store.summaryError).toBe('Ringkasan tidak tersedia.')
-  })
-})
+    expect(store.error).toBe('Daftar tidak tersedia.');
+    expect(store.summaryError).toBe('Ringkasan tidak tersedia.');
+  });
+});
