@@ -6,7 +6,6 @@ import TentangFigureCard from '../components/tentang/TentangFigureCard.vue';
 import TentangInfoCard from '../components/tentang/TentangInfoCard.vue';
 import TentangFeatureBand from '../components/tentang/TentangFeatureBand.vue';
 import TentangResourceCard from '../components/tentang/TentangResourceCard.vue';
-import TentangStepList, { type StepItem } from '../components/tentang/TentangStepList.vue';
 import TentangTeamCard from '../components/tentang/TentangTeamCard.vue';
 import TentangLogoRow from '../components/tentang/TentangLogoRow.vue';
 import heroImage from '@/assets/img/background_laman_depan_kelurahan.png';
@@ -47,13 +46,26 @@ const collaborationLogos = [
   { src: logoVyomatantra, alt: 'Logo Tim Inovasi Sosial VYOMATANTRA' },
 ];
 
-const prokerStages: StepItem[] = [
+interface ProkerAct {
+  kicker: string;
+  title: string;
+  lead: string;
+  body: string;
+  activities: string[];
+}
+
+const prokerIntro = {
+  lead: 'Proposal kegiatan merancang satu semester perubahan: menyiapkan, melaksanakan, mengukur, lalu menyerahkan.',
+  body: 'Setiap bab bergerak mengikuti siklus statistik — pengumpulan, pengolahan, analisis, hingga penyajian data — dengan fokus tematik pada sektor pariwisata sebagai salah satu potensi unggulan Manggar.',
+};
+
+const prokerActs: ProkerAct[] = [
   {
-    step: 1,
-    title: 'Persiapan: merapikan rencana sebelum menyentuh data',
-    description:
-      'Perjalanan dimulai dari meja, bukan dari lapangan. Delapan mahasiswa tim menyusun proposal kegiatan, menetapkan tujuan dan sasaran, dan menyusun rundown. Mereka lalu duduk bersama anggota BPS dan pengurus Kelurahan Manggar untuk menyelaraskan jadwal, sebelum turun ke lapangan untuk survei lokasi dan mengidentifikasi sasaran peserta. Materi pembinaan statistik dan literasi digital disusun, banner, poster, dan id card dirancang lalu dicetak.',
-    details: [
+    kicker: 'Bab 01 · Persiapan',
+    title: 'Merapikan rencana sebelum menyentuh data',
+    lead: 'Perjalanan dimulai dari meja, bukan dari lapangan.',
+    body: 'Delapan mahasiswa tim menyusun proposal kegiatan, menetapkan tujuan dan sasaran, lalu menyusun rundown. Mereka duduk bersama anggota BPS dan pengurus Kelurahan Manggar untuk menyelaraskan jadwal, sebelum turun ke lapangan melakukan survei lokasi dan mengidentifikasi sasaran peserta. Materi pembinaan statistik dan literasi digital disusun, banner, poster, dan id card dirancang lalu dicetak.',
+    activities: [
       'Pembentukan tim pelaksana dan pembagian tugas',
       'Penyusunan proposal kegiatan',
       'Menentukan tujuan dan sasaran',
@@ -65,11 +77,11 @@ const prokerStages: StepItem[] = [
     ],
   },
   {
-    step: 2,
-    title: 'Pelaksanaan: membawa pendampingan ke halaman warga',
-    description:
-      'Kuesioner after kegiatan disiapkan, rundown dan kuesioner difinalisasi, lalu kegiatan dipromosikan dan peserta diundang. Koordinasi teknis akhir bersama BPS dan pengurus Kelurahan Manggar ditutup dengan pemeriksaan perlengkapan. Puncak perjalanan adalah pelaksanaan sosialisasi, di mana pembinaan statistik dan literasi digital disampaikan bersama perangkat kelurahan, ketua RT, dan warga.',
-    details: [
+    kicker: 'Bab 02 · Pelaksanaan',
+    title: 'Membawa pendampingan ke halaman warga',
+    lead: 'Puncak perjalanan adalah pelaksanaan sosialisasi.',
+    body: 'Kuesioner after kegiatan disiapkan, rundown dan kuesioner difinalisasi, lalu kegiatan dipromosikan dan peserta diundang. Koordinasi teknis akhir bersama BPS dan pengurus Kelurahan Manggar ditutup dengan pemeriksaan perlengkapan. Pembinaan statistik dan literasi digital disampaikan bersama perangkat kelurahan, ketua RT, dan warga.',
+    activities: [
       'Penyusunan kuesioner after kegiatan',
       'Finalisasi rundown kegiatan dan kuesioner after kegiatan',
       'Promosi kegiatan, undangan peserta, dan koordinasi teknis akhir bersama BPS dan pengurus Kelurahan Manggar',
@@ -77,18 +89,18 @@ const prokerStages: StepItem[] = [
     ],
   },
   {
-    step: 3,
-    title: 'Monitoring dan evaluasi: mengukur kembali, bukan menebak',
-    description:
-      'Kegiatan tidak ditutup begitu acara selesai. Tim menilai partisipasi dan persepsi warga, lalu mengevaluasi seluruh rangkaian kegiatan untuk melihat sejauh mana pendampingan sudah berjalan.',
-    details: ['Evaluasi partisipasi dan persepsi warga serta evaluasi seluruh kegiatan'],
+    kicker: 'Bab 03 · Monitoring dan evaluasi',
+    title: 'Mengukur kembali, bukan menebak',
+    lead: 'Kegiatan tidak ditutup begitu acara selesai.',
+    body: 'Tim menilai partisipasi dan persepsi warga, lalu mengevaluasi seluruh rangkaian kegiatan untuk melihat sejauh mana pendampingan sudah berjalan.',
+    activities: ['Evaluasi partisipasi dan persepsi warga serta evaluasi seluruh kegiatan'],
   },
   {
-    step: 4,
-    title: 'Pelaporan dan tindak lanjut: menyerahkan karya',
-    description:
-      'Tahap terakhir mengembalikan semua pekerjaan kepada mitra. Laporan kegiatan difinalisasi, after movie dan artikel dibuat, lalu laporan diserahkan kepada mitra dan pihak pendukung. Luaran yang dicatat dalam proposal meliputi artikel di laman ITK/LPPM, after movie pada kanal YouTube prodi, dan HKI atas source code website.',
-    details: [
+    kicker: 'Bab 04 · Pelaporan dan tindak lanjut',
+    title: 'Menyerahkan karya',
+    lead: 'Tahap terakhir mengembalikan semua pekerjaan kepada mitra.',
+    body: 'Laporan kegiatan difinalisasi, after movie dan artikel dibuat, lalu laporan diserahkan kepada mitra dan pihak pendukung. Luaran yang dicatat dalam proposal meliputi artikel di laman ITK/LPPM, after movie pada kanal YouTube prodi, dan HKI atas source code website.',
+    activities: [
       'Finalisasi laporan kegiatan',
       'Pembuatan after movie dan artikel',
       'Penyerahan laporan kepada mitra dan pihak pendukung',
@@ -168,23 +180,89 @@ const supervisor = {
     </div>
 
     <!-- Program kerja -->
-    <section class="bg-brand-cyan px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="proker-title">
+    <section class="bg-white px-4 py-12 sm:px-6 sm:py-16" aria-labelledby="proker-title">
       <div class="mx-auto max-w-5xl">
-        <h2 id="proker-title" class="text-lg font-bold text-brand-navy">
-          Perjalanan Program Kerja
-        </h2>
-        <p class="mt-2 max-w-3xl text-base text-brand-navy/90">
-          Program kerja ini dirancang sebagai satu semester perubahan: menyiapkan, melaksanakan,
-          mengukur, lalu menyerahkan. Setiap babnya bergerak mengikuti siklus statistik —
-          pengumpulan, pengolahan, analisis, hingga penyajian data — dengan fokus tematik pada
-          sektor pariwisata sebagai salah satu potensi unggulan Manggar.
+        <p
+          class="flex items-center justify-end gap-2 text-xs font-bold uppercase tracking-[0.2em] text-brand-navy"
+        >
+          <span class="h-5 w-0.5 bg-brand-cyan" aria-hidden="true"></span>
+          Program Kerja
         </p>
 
-        <div class="mt-5 rounded-btn bg-white p-5 sm:p-6">
-          <TentangStepList :steps="prokerStages" />
+        <h2
+          id="proker-title"
+          class="mt-3 text-3xl font-bold uppercase leading-[1.05] tracking-tight text-brand-navy sm:text-4xl"
+        >
+          Perjalanan <span class="font-normal">Program Kerja</span>
+        </h2>
+
+        <p
+          class="mt-4 text-sm font-bold uppercase tracking-[0.18em] text-brand-teal-deep"
+        >
+          Empat bab dalam satu semester
+        </p>
+
+        <div class="mt-6 grid gap-8 lg:grid-cols-[1.7fr_1fr] lg:items-start lg:gap-12">
+          <div class="space-y-4 text-base leading-relaxed text-brand-navy/90">
+            <p>
+              <strong class="font-bold text-brand-navy">{{ prokerIntro.lead }}</strong>
+              {{ prokerIntro.body }}
+            </p>
+            <p>
+              Setiap bab diuraikan sebagai rangkaian kerja, dari penyusunan rencana di meja hingga
+              penyerahan laporan kepada mitra. Nama kegiatan diambil dari proposal, sementara catatan
+              lapangan merujuk pada Monografi, peta, dan booklet pelatihan.
+            </p>
+          </div>
+
+          <figure class="relative mx-auto w-52 sm:w-60">
+            <span
+              class="absolute -top-6 -right-6 h-24 w-24 rounded-full bg-brand-cyan/30"
+              aria-hidden="true"
+            ></span>
+            <div class="relative aspect-square overflow-hidden rounded-full ring-8 ring-brand-cyan/25">
+              <img
+                :src="heroImage"
+                alt="Kantor Kelurahan Manggar, Balikpapan Timur"
+                class="h-full w-full object-cover"
+              />
+            </div>
+            <figcaption class="mt-4 text-center text-sm leading-snug text-brand-navy">
+              Kantor Kelurahan Manggar, Balikpapan Timur
+              <span class="block text-xs text-brand-navy/70">
+                lokasi koordinasi kegiatan program Desa Cantik
+              </span>
+            </figcaption>
+          </figure>
         </div>
 
-        <p class="mt-5 text-sm text-brand-navy/80">
+        <div
+          class="mt-10 grid gap-x-10 gap-y-9 border-t border-brand-navy/10 pt-9 sm:grid-cols-2"
+          data-test="proker-acts"
+        >
+          <article v-for="act in prokerActs" :key="act.kicker">
+            <p class="text-sm font-bold uppercase tracking-[0.18em] text-brand-teal-deep">
+              {{ act.kicker }}
+            </p>
+            <h3 class="mt-2 text-lg font-bold leading-snug text-brand-navy">{{ act.title }}</h3>
+            <p class="mt-3 text-base leading-relaxed text-brand-navy/90">
+              <strong class="font-bold text-brand-navy">{{ act.lead }}</strong>
+              {{ act.body }}
+            </p>
+            <ul class="mt-4 space-y-1.5">
+              <li
+                v-for="activity in act.activities"
+                :key="activity"
+                class="flex gap-2.5 text-sm leading-relaxed text-brand-navy/80"
+              >
+                <span class="mt-2 h-1.5 w-1.5 shrink-0 bg-brand-cyan" aria-hidden="true"></span>
+                {{ activity }}
+              </li>
+            </ul>
+          </article>
+        </div>
+
+        <p class="mt-9 border-t border-brand-navy/10 pt-5 text-sm leading-relaxed text-brand-navy/70">
           Program kerja ini disusun dalam Proposal Inovasi Sosial Desa Cantik Kelurahan Manggar
           (Februari 2026). Pelaksanaan di lapangan terdokumentasi dalam Monografi Kelurahan Manggar
           2026, Peta Ketua RT dan BSU Aktif Manggar, serta Booklet Pelatihan BSU.

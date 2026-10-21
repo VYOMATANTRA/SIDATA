@@ -177,14 +177,14 @@ describe('TentangVyomatantraView accessibility and content', () => {
 
     const proker = wrapper.find('section[aria-labelledby="proker-title"]');
     expect(proker.exists()).toBe(true);
-    expect(proker.text()).toContain('Perjalanan Program Kerja');
+    expect(proker.find('h2#proker-title').text()).toContain('Perjalanan Program Kerja');
 
-    const steps = proker.findAll('[data-test="procedure-steps"] > li');
-    expect(steps.length).toBe(4);
-    expect(steps[0]?.text()).toContain('Persiapan');
-    expect(steps[1]?.text()).toContain('Pelaksanaan');
-    expect(steps[2]?.text()).toContain('Monitoring dan evaluasi');
-    expect(steps[3]?.text()).toContain('Pelaporan dan tindak lanjut');
+    const acts = proker.findAll('[data-test="proker-acts"] > article');
+    expect(acts.length).toBe(4);
+    expect(acts[0]?.text()).toContain('Bab 01 · Persiapan');
+    expect(acts[1]?.text()).toContain('Bab 02 · Pelaksanaan');
+    expect(acts[2]?.text()).toContain('Bab 03 · Monitoring dan evaluasi');
+    expect(acts[3]?.text()).toContain('Bab 04 · Pelaporan dan tindak lanjut');
   });
 
   it('lists the proposal program work activities under the journey', async () => {
@@ -221,5 +221,32 @@ describe('TentangVyomatantraView accessibility and content', () => {
     // The section attributes itself to the proposal and the field documentation.
     expect(proker.text()).toContain('Proposal Inovasi Sosial Desa Cantik Kelurahan Manggar');
     expect(proker.text()).toContain('Monografi Kelurahan Manggar');
+  });
+
+  it('renders the booklet-style heading treatment for the program work section', async () => {
+    const { pinia, router } = mountView();
+    await router.push('/tentang/vyomatantra');
+    await router.isReady();
+
+    const wrapper = mount(TentangVyomatantraView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    const proker = wrapper.find('section[aria-labelledby="proker-title"]');
+    const heading = proker.find('h2#proker-title');
+    expect(heading.classes()).toContain('uppercase');
+    expect(heading.text()).toContain('Perjalanan');
+
+    // The lighter second word mirrors the booklet's two-tone heading.
+    const secondWord = heading.find('span');
+    expect(secondWord.classes()).toContain('font-normal');
+
+    // The teal kicker label and the act kickers carry the booklet's accent color.
+    expect(proker.findAll('.text-brand-teal-deep').length).toBeGreaterThanOrEqual(5);
+
+    // The location photo is a circular cutout with a caption.
+    const figure = proker.find('figure');
+    expect(figure.find('div').classes()).toContain('rounded-full');
+    expect(figure.find('figcaption').text()).toContain('Kantor Kelurahan Manggar');
   });
 });
