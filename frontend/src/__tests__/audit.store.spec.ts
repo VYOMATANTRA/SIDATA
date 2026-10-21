@@ -108,15 +108,38 @@ describe('audit store', () => {
     const listCall = fetchMock.mock.calls.find(([input]) =>
       String(input).startsWith('/api/audit-logs?'),
     )
-    const query = String(listCall?.[0])
-    expect(query).toContain('severity=critical')
-    expect(query).toContain('acknowledged=false')
-    expect(query).toContain('action=user.role_changed')
-    // Date-only upper bound extended to end of day
-    expect(query).toContain('to=2026-10-19T23%3A59%3A59.999')
+    const query = new URLSearchParams(String(listCall?.[0]).split('?')[1])
+    expect(query.get('severity')).toBe('critical')
+    expect(query.get('acknowledged')).toBe('false')
+    expect(query.get('action')).toBe('user.role_changed')
+    // 'to' is the local end of the selected day, sent as an explicit UTC instant
+    expect(query.get('to')).toBe(new Date(2026, 9, 19, 23, 59, 59, 999).toISOString())
     // Empty filters stay out of the query
-    expect(query).not.toContain('outcome=')
-    expect(query).not.toContain('from=')
+    expect(query.get('outcome')).toBeNull()
+    expect(query.get('from')).toBeNull()
+  })
+
+  it('sends date bounds as UTC instants of the local day, not bare calendar dates', async () => {
+    const fetchMock = mockFetchWith({})
+
+    const store = useAuditStore()
+    await store.applyFilters({ from: '2026-10-19', to: '2026-10-19' })
+
+    const listCall = fetchMock.mock.calls.find(([input]) =>
+      String(input).startsWith('/api/audit-logs?'),
+    )
+    const query = new URLSearchParams(String(listCall?.[0]).split('?')[1])
+    const from = query.get('from')
+    const to = query.get('to')
+
+    // Both bounds must be full UTC instants (explicit Z), never the raw 'YYYY-MM-DD'
+    // the backend would read as UTC midnight / server-local end-of-day.
+    expect(from).toBe(new Date(2026, 9, 19, 0, 0, 0, 0).toISOString())
+    expect(to).toBe(new Date(2026, 9, 19, 23, 59, 59, 999).toISOString())
+    expect(from).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+    expect(to).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+    // The window spans the full local day and from < to
+    expect(new Date(to!).getTime() - new Date(from!).getTime()).toBe(24 * 60 * 60 * 1000 - 1)
   })
 
   it('applyFilters resets to page 1 before refetching', async () => {
@@ -222,6 +245,40 @@ describe('audit store', () => {
     expect(res).toHaveProperty('message')
     expect(store.logs[0]?.acknowledgedAt).toBe('2026-10-19T01:00:00.000Z')
     expect(store.logs[0]?.acknowledgedById).toBe('admin-1')
+    expect(store.summary?.openCritical).toBe(0)
+  })
+
+  it('acknowledgeLog refetches the page when the open-only filter is active, keeping list and filter consistent', async () => {
+    let listCalls = 0
+    mockFetchWith({
+      list: () => {
+        listCalls += 1
+        // Simulate the server honoring acknowledged=false: the acknowledged row is gone.
+        return {
+          ok: true,
+          json: async () => ({ logs: [], total: 0, page: 1, pageSize: 50 }),
+        } as Response
+      },
+    })
+
+    const authStore = useAuthStore()
+    authStore.accessToken = 'mock-access-token'
+
+    const store = useAuditStore()
+    await store.applyFilters({ acknowledged: false }) // "Terbuka" filter; 1 list call
+    store.logs = [{ ...AUDIT_LOG }]
+    store.summary = {
+      since: '2026-10-12T00:00:00.000Z',
+      counts: { info: 3, warning: 2, critical: 1 },
+      openCritical: 1,
+    }
+
+    await store.acknowledgeLog('log-1')
+
+    // One extra list call after the PATCH — the acknowledged row must leave an
+    // "open only" list rather than linger contradicting the active filter.
+    expect(listCalls).toBe(2)
+    expect(store.logs).toHaveLength(0)
     expect(store.summary?.openCritical).toBe(0)
   })
 

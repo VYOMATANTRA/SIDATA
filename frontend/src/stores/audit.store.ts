@@ -88,10 +88,13 @@ export const useAuditStore = defineStore('audit', () => {
     if (f.outcome) params.set('outcome', f.outcome)
     if (f.acknowledged !== null) params.set('acknowledged', String(f.acknowledged))
     if (f.action.trim()) params.set('action', f.action.trim())
-    if (f.from) params.set('from', f.from)
-    // Extend a date-only upper bound to end-of-day so logs from the selected day
-    // itself are not cut off at midnight by the backend's `new Date('YYYY-MM-DD')`.
-    if (f.to) params.set('to', `${f.to}T23:59:59.999`)
+    // The date inputs carry a calendar date in the *user's* timezone. Turn each into
+    // the local start/end of that day and send it as an explicit UTC instant: a bare
+    // 'YYYY-MM-DD' would be read as UTC midnight by the backend, while an unoffset
+    // '...T23:59:59.999' would be read in the *server's* timezone — mixing the two
+    // shifts the window so logs near the day boundary silently drop out of the filter.
+    if (f.from) params.set('from', new Date(`${f.from}T00:00:00`).toISOString())
+    if (f.to) params.set('to', new Date(`${f.to}T23:59:59.999`).toISOString())
     params.set('page', String(page.value))
     params.set('pageSize', String(pageSize.value))
     return params.toString()
@@ -201,14 +204,21 @@ export const useAuditStore = defineStore('audit', () => {
       if (!res.ok) {
         throw new Error(data.error || 'Gagal meng-acknowledge audit log.')
       }
-      // Update in place instead of refetching the page (same pattern as users.store).
+      if (summary.value && summary.value.openCritical > 0) {
+        summary.value.openCritical -= 1
+      }
+      // With the "open only" filter active, the row just acknowledged no longer belongs
+      // in the result set — refetch the current page so the list and its total stop
+      // contradicting the filter. Without that filter the row stays visible (its status
+      // simply flips), so the in-place update below avoids a pointless refetch.
+      if (filters.value.acknowledged === false) {
+        await fetchLogs()
+        return data
+      }
       const target = logs.value.find((l) => l.id === id)
       if (target) {
         target.acknowledgedAt = data.log?.acknowledgedAt || new Date().toISOString()
         target.acknowledgedById = data.log?.acknowledgedById || authStore.user?.id || null
-      }
-      if (summary.value && summary.value.openCritical > 0) {
-        summary.value.openCritical -= 1
       }
       return data
     } catch (err: unknown) {
