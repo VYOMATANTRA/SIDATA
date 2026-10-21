@@ -314,4 +314,118 @@ describe('audit store', () => {
     expect(store.logs).toHaveLength(0)
     expect(store.error).toBe('Akses ditolak.')
   })
+
+  it('discards a stale fetchLogs response that resolves after a newer one', async () => {
+    let listCalls = 0
+    let resolveSlow: (r: Response) => void = () => {}
+    const slowResponse = new Promise<Response>((resolve) => {
+      resolveSlow = resolve
+    })
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'mock-csrf' }) } as Response
+      }
+      listCalls += 1
+      if (listCalls === 1) return slowResponse // first call: hangs until we resolve it
+      return {
+        ok: true,
+        json: async () => ({
+          logs: [{ ...AUDIT_LOG, id: 'fresh' }],
+          total: 1,
+          page: 1,
+          pageSize: 50,
+        }),
+      } as Response
+    })
+    globalThis.fetch = fetchMock
+
+    const store = useAuditStore()
+    // Two overlapping fetches (e.g. rapid page clicks); the newer resolves first.
+    const first = store.fetchLogs()
+    const second = store.fetchLogs()
+    await second
+    expect(store.logs[0]?.id).toBe('fresh')
+
+    // Now the older, slower response arrives with different data — it must be dropped.
+    resolveSlow({
+      ok: true,
+      json: async () => ({
+        logs: [{ ...AUDIT_LOG, id: 'stale' }],
+        total: 99,
+        page: 7,
+        pageSize: 50,
+      }),
+    } as Response)
+    await first
+
+    expect(store.logs[0]?.id).toBe('fresh')
+    expect(store.total).toBe(1)
+    expect(store.page).toBe(1)
+    expect(store.loading).toBe(false)
+  })
+
+  it('a stale fetchLogs failure does not clobber the error state of a newer success', async () => {
+    let listCalls = 0
+    let rejectSlow: (e: unknown) => void = () => {}
+    const slowResponse = new Promise<Response>((_resolve, reject) => {
+      rejectSlow = reject
+    })
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'mock-csrf' }) } as Response
+      }
+      listCalls += 1
+      if (listCalls === 1) return slowResponse
+      return {
+        ok: true,
+        json: async () => ({ logs: [AUDIT_LOG], total: 1, page: 1, pageSize: 50 }),
+      } as Response
+    })
+    globalThis.fetch = fetchMock
+
+    const store = useAuditStore()
+    const first = store.fetchLogs()
+    const second = store.fetchLogs()
+    await second
+    expect(store.error).toBeNull()
+
+    // The superseded request fails late; its error must stay silent.
+    rejectSlow(new Error('network down'))
+    await first
+
+    expect(store.error).toBeNull()
+    expect(store.logs).toHaveLength(1)
+    expect(store.loading).toBe(false)
+  })
+
+  it('fetchSummary errors land in summaryError, not the shared list error ref', async () => {
+    mockFetchWith({
+      summary: () =>
+        ({ ok: false, json: async () => ({ error: 'Ringkasan tidak tersedia.' }) }) as Response,
+    })
+
+    const store = useAuditStore()
+    await store.fetchSummary()
+
+    expect(store.summaryError).toBe('Ringkasan tidak tersedia.')
+    expect(store.error).toBeNull()
+  })
+
+  it('a summary failure does not mask or clear a concurrent list failure', async () => {
+    mockFetchWith({
+      list: () =>
+        ({ ok: false, json: async () => ({ error: 'Daftar tidak tersedia.' }) }) as Response,
+      summary: () =>
+        ({ ok: false, json: async () => ({ error: 'Ringkasan tidak tersedia.' }) }) as Response,
+    })
+
+    const store = useAuditStore()
+    await Promise.all([store.fetchLogs(), store.fetchSummary()])
+
+    // Both failures surface independently instead of one overwriting the other.
+    expect(store.error).toBe('Daftar tidak tersedia.')
+    expect(store.summaryError).toBe('Ringkasan tidak tersedia.')
+  })
 })

@@ -318,6 +318,13 @@ onMounted(async () => {
         {{ auditStore.error }}
       </div>
       <div
+        v-if="auditStore.summaryError"
+        class="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm"
+        role="alert"
+      >
+        Ringkasan tidak tersedia: {{ auditStore.summaryError }}
+      </div>
+      <div
         v-if="acknowledgeError"
         class="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm"
         role="alert"

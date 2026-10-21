@@ -67,7 +67,14 @@ export const useAuditStore = defineStore('audit', () => {
   const adminActionCount = ref(0)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const summaryError = ref<string | null>(null)
   const filters = ref<AuditLogFilters>({ ...EMPTY_FILTERS })
+
+  // Monotonic id for list fetches. Page controls and filters stay interactive while a
+  // fetch is in flight, so two fetchLogs calls can overlap; whichever response arrives
+  // last must not win by arrival order. Each call takes the next id and only the call
+  // holding the latest id may write state (or clear loading/error) on completion.
+  let listRequestId = 0
 
   async function getAuthHeaders(): Promise<Record<string, string>> {
     const csrfToken = await getCsrfToken()
@@ -101,6 +108,7 @@ export const useAuditStore = defineStore('audit', () => {
   }
 
   async function fetchLogs() {
+    const requestId = ++listRequestId
     loading.value = true
     error.value = null
     try {
@@ -113,18 +121,24 @@ export const useAuditStore = defineStore('audit', () => {
       if (!res.ok) {
         throw new Error(data.error || 'Gagal mengambil daftar audit log.')
       }
+      // A newer fetch superseded this one while it was in flight — discard, or a slow
+      // stale response would overwrite fresher logs/total/page.
+      if (requestId !== listRequestId) return
       logs.value = data.logs || []
       total.value = data.total || 0
       page.value = data.page || page.value
       pageSize.value = data.pageSize || pageSize.value
     } catch (err: unknown) {
+      // Stale failures stay silent too: the newer request owns the error state.
+      if (requestId !== listRequestId) return
       error.value = err instanceof Error ? err.message : 'Terjadi kesalahan saat memuat audit log.'
     } finally {
-      loading.value = false
+      if (requestId === listRequestId) loading.value = false
     }
   }
 
   async function fetchSummary(sinceIso?: string) {
+    summaryError.value = null
     try {
       const headers = await getAuthHeaders()
       const url = sinceIso
@@ -140,7 +154,9 @@ export const useAuditStore = defineStore('audit', () => {
       }
       summary.value = data
     } catch (err: unknown) {
-      error.value =
+      // Own error ref, not `error`: fetchLogs and fetchSummary run concurrently at mount
+      // and one failure must not mask or clear the other's.
+      summaryError.value =
         err instanceof Error ? err.message : 'Terjadi kesalahan saat memuat ringkasan audit log.'
     }
   }
@@ -237,6 +253,7 @@ export const useAuditStore = defineStore('audit', () => {
     adminActionCount,
     loading,
     error,
+    summaryError,
     filters,
     fetchLogs,
     fetchSummary,
