@@ -35,14 +35,14 @@ const resourceLinks = [
 
 // Story & Statistics Links (Cerita)
 const storyLinks = [
-  { label: 'Demografi Kependudukan', to: '/cerita/demografi' },
+  { label: 'Demografi Kependudukan', to: '/cerita/kependudukan' },
   { label: 'Pendidikan', to: '/cerita/pendidikan' },
   { label: 'Kesehatan', to: '/cerita/kesehatan' },
-  { label: 'Pemerintahan & Kelembagaan', to: '/cerita/pemerintahan' },
-  { label: 'Ekonomi & Ketertiban', to: '/cerita/ekonomi' },
-  { label: 'Geografis & Tata Ruang', to: '/cerita/geografis' },
-  { label: 'Infrastruktur & Perumahan', to: '/cerita/infrastruktur' },
-  { label: 'Persampahan & Bank Sampah Unit', to: '/cerita/persampahan' },
+  { label: 'Pemerintahan & Kelembagaan', to: '/cerita/pemerintahan-dan-kelembagaan' },
+  { label: 'Ekonomi & Ketertiban', to: '/cerita/ekonomi-dan-ketertiban' },
+  { label: 'Geografis & Tata Ruang', to: '/cerita/geografis-dan-tata-ruang' },
+  { label: 'Infrastruktur & Perumahan', to: '/cerita/infrastruktur-dan-perumahan' },
+  { label: 'Persampahan & Bank Sampah Unit', to: '/cerita/persampahan-dan-bank-sampah-unit' },
 ];
 
 // About Links (Tentang)

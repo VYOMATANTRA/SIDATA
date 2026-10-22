@@ -124,10 +124,18 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
     expect(mainEl.contains(weatherEl)).toBe(true);
 
     // Verify DOM position order using compareDocumentPosition (DOCUMENT_POSITION_FOLLOWING = 4)
-    expect(heroEl.compareDocumentPosition(sambutanEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(sambutanEl.compareDocumentPosition(ceritaEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(ceritaEl.compareDocumentPosition(highlightsEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(highlightsEl.compareDocumentPosition(weatherEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      heroEl.compareDocumentPosition(sambutanEl) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      sambutanEl.compareDocumentPosition(ceritaEl) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      ceritaEl.compareDocumentPosition(highlightsEl) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      highlightsEl.compareDocumentPosition(weatherEl) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   // Edge Case 4: Default Fallback Content when Cerita and Weather Slots are Omitted
@@ -256,7 +264,9 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
     const authStore = useAuthStore(pinia);
     authStore.setAuth({ id: '1', email: 'user@manggar.go.id', role: 'user' }, 'token');
 
-    vi.spyOn(authStore, 'logout').mockRejectedValue(new Error('Network offline or unexpected crash'));
+    vi.spyOn(authStore, 'logout').mockRejectedValue(
+      new Error('Network offline or unexpected crash'),
+    );
 
     const wrapper = mount(HomeView, {
       global: { plugins: [pinia, router] },
@@ -425,5 +435,153 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
 
     expect(authStore.isAuthenticated).toBe(false);
     expect(router.currentRoute.value.path).toBe('/login');
+  });
+
+  // Edge Case 12: Cerita preview renders "Data belum tersedia" and does NOT contain invented numbers
+  it('renders "Data belum tersedia" placeholder for all 8 categories and does not render invented dummy numbers', async () => {
+    const { pinia, router } = setupHomeView();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(HomeView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    const ceritaSection = wrapper.find('section#cerita-preview');
+    expect(ceritaSection.exists()).toBe(true);
+
+    // Verify invented numbers from PR review are absent
+    const fullText = ceritaSection.text();
+    expect(fullText).not.toContain('14.210');
+    expect(fullText).not.toContain('24,5 ton');
+    expect(fullText).not.toContain('2 jiwa/km²');
+    expect(fullText).not.toContain('45 Posyandu');
+
+    // Verify all 8 categories render "Data belum tersedia"
+    const emptyStates = ceritaSection.findAll('[data-test="stat-empty"]');
+    expect(emptyStates.length).toBe(8);
+    emptyStates.forEach((el) => {
+      expect(el.text()).toContain('Data belum tersedia');
+    });
+
+    // Verify canonical category titles matching Spec §2
+    expect(fullText).toContain('Kependudukan');
+    expect(fullText).toContain('Pendidikan');
+    expect(fullText).toContain('Kesehatan');
+    expect(fullText).toContain('Ekonomi & Ketertiban');
+    expect(fullText).toContain('Pemerintahan & Kelembagaan');
+    expect(fullText).toContain('Geografis & Tata Ruang');
+    expect(fullText).toContain('Infrastruktur & Perumahan');
+    expect(fullText).toContain('Persampahan & Bank Sampah Unit');
+  });
+
+  // Edge Case 13: Unbuilt routes are hidden in navigation drawer and StatOverview CTA buttons
+  it('hides unbuilt routes in drawer and StatOverview CTA buttons when routes are not registered', async () => {
+    const { pinia, router } = setupHomeView();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(HomeView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    // Open mobile drawer
+    const hamburgerBtn = wrapper.find('[data-test="hamburger-btn"]');
+    await hamburgerBtn.trigger('click');
+
+    const drawer = wrapper.find('[data-test="nav-menu-drawer"]');
+    expect(drawer.exists()).toBe(true);
+
+    // Unregistered routes are hidden
+    expect(drawer.find('a[href="/publikasi"]').exists()).toBe(false);
+    expect(drawer.find('a[href="/peta"]').exists()).toBe(false);
+    expect(drawer.find('a[href="/ketua-rt"]').exists()).toBe(false);
+
+    // StatOverview buttons to unregistered /cerita/* routes are hidden
+    const ceritaSection = wrapper.find('section#cerita-preview');
+    expect(ceritaSection.findAll('[data-test="stat-overview-button"]').length).toBe(0);
+  });
+
+  // Edge Case 14: Dynamic route links and CTA buttons render when routes are registered in router
+  it('renders drawer links and StatOverview CTA buttons when matching routes are registered', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+
+    const routerWithRoutes = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', component: HomeView },
+        { path: '/login', component: { template: '<div>login</div>' } },
+        { path: '/publikasi', component: { template: '<div>publikasi</div>' } },
+        { path: '/peta', component: { template: '<div>peta</div>' } },
+        { path: '/ketua-rt', component: { template: '<div>ketua-rt</div>' } },
+        { path: '/cerita/:slug', component: { template: '<div>cerita</div>' } },
+      ],
+    });
+
+    await routerWithRoutes.push('/');
+    await routerWithRoutes.isReady();
+
+    const wrapper = mount(HomeView, {
+      global: { plugins: [pinia, routerWithRoutes] },
+    });
+
+    // Open mobile drawer
+    const hamburgerBtn = wrapper.find('[data-test="hamburger-btn"]');
+    await hamburgerBtn.trigger('click');
+
+    const drawer = wrapper.find('[data-test="nav-menu-drawer"]');
+    expect(drawer.find('a[href="/publikasi"]').exists()).toBe(true);
+    expect(drawer.find('a[href="/peta"]').exists()).toBe(true);
+    expect(drawer.find('a[href="/ketua-rt"]').exists()).toBe(true);
+
+    // StatOverview CTA buttons are rendered now that /cerita/:slug matches
+    const ceritaSection = wrapper.find('section#cerita-preview');
+    const buttons = ceritaSection.findAll('[data-test="stat-overview-button"]');
+    expect(buttons.length).toBe(8);
+    expect(buttons[0]?.attributes('href')).toBe('/cerita/kependudukan');
+    expect(buttons[1]?.attributes('href')).toBe('/cerita/pendidikan');
+  });
+
+  // Edge Case 15: Displays real indicators from indicatorsStore when API returns data
+  it('renders real indicator statistics when /api/indicators returns data', async () => {
+    const { pinia, router } = setupHomeView();
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/indicators')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            indicators: [
+              {
+                id: 'ind-1',
+                slug: 'kependudukan-total',
+                label: 'Jumlah Penduduk Resmi',
+                unit: 'jiwa',
+                valueCurrent: '53.120',
+                pageSlug: 'kependudukan',
+                sortOrder: 1,
+              },
+            ],
+          }),
+        } as Response;
+      }
+      return { ok: true, json: async () => ({}) } as Response;
+    });
+
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(HomeView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    await vi.waitUntil(() => wrapper.text().includes('53.120'));
+
+    const ceritaSection = wrapper.find('section#cerita-preview');
+    expect(ceritaSection.text()).toContain('53.120');
+    expect(ceritaSection.text()).toContain('Jumlah Penduduk Resmi');
   });
 });

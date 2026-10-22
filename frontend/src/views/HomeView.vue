@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useSettingsStore } from '../stores/settings.store';
 import { useContentBlocksStore } from '../stores/contentBlocks.store';
+import { useIndicatorsStore } from '../stores/indicators.store';
 import AppNavbar from '../components/common/AppNavbar.vue';
 import AppFooter from '../components/common/AppFooter.vue';
 import SectionHero from '../components/landing/SectionHero.vue';
@@ -12,16 +13,119 @@ import SectionHighlights from '../components/landing/SectionHighlights.vue';
 import StatOverview from '../components/common/StatOverview.vue';
 import defaultHeroBg from '@/assets/img/background_laman_depan_kelurahan.png';
 
+interface CeritaPreviewCategory {
+  slug: string;
+  title: string;
+  description: string;
+  cardTitle: string;
+  to: string;
+  bgOverlay: string;
+}
+
+const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
+  {
+    slug: 'kependudukan',
+    title: 'Kependudukan',
+    description:
+      'Komposisi dan kepadatan penduduk, keluarga, persebaran rasio jenis kelamin, umur, pendidikan, dan lainnya',
+    cardTitle: 'Ringkasan Statistik Kependudukan Kelurahan Manggar',
+    to: '/cerita/kependudukan',
+    bgOverlay: 'linear-gradient(180deg, rgba(8, 20, 42, 0.88) 0%, rgba(6, 15, 32, 0.96) 100%)',
+  },
+  {
+    slug: 'pendidikan',
+    title: 'Pendidikan',
+    description:
+      'Data sarana prasarana sekolah, angka partisipasi sekolah, dan tingkat kelulusan jenjang pendidikan warga',
+    cardTitle: 'Ringkasan Statistik Pendidikan Kelurahan Manggar',
+    to: '/cerita/pendidikan',
+    bgOverlay: 'linear-gradient(180deg, rgba(10, 24, 48, 0.88) 0%, rgba(7, 18, 38, 0.96) 100%)',
+  },
+  {
+    slug: 'kesehatan',
+    title: 'Kesehatan',
+    description:
+      'Layanan posyandu, fasilitas kesehatan tingkat pertama, sebaran tenaga medis, dan derajat kesehatan balita',
+    cardTitle: 'Ringkasan Statistik Kesehatan Kelurahan Manggar',
+    to: '/cerita/kesehatan',
+    bgOverlay: 'linear-gradient(180deg, rgba(12, 28, 54, 0.88) 0%, rgba(9, 21, 42, 0.96) 100%)',
+  },
+  {
+    slug: 'ekonomi-dan-ketertiban',
+    title: 'Ekonomi & Ketertiban',
+    description:
+      'Potensi perekonomian maritim pesisir, sentra UMKM mandiri, ketertiban lingkungan, dan pos pengamanan wilayah',
+    cardTitle: 'Ringkasan Statistik Ekonomi & Ketertiban Kelurahan Manggar',
+    to: '/cerita/ekonomi-dan-ketertiban',
+    bgOverlay: 'linear-gradient(180deg, rgba(10, 26, 50, 0.88) 0%, rgba(8, 20, 40, 0.96) 100%)',
+  },
+  {
+    slug: 'pemerintahan-dan-kelembagaan',
+    title: 'Pemerintahan & Kelembagaan',
+    description:
+      'Struktur kelembagaan perangkat kelurahan, koordinasi 100 RT, LPM, PKK, dan lembaga kemasyarakatan kelurahan',
+    cardTitle: 'Ringkasan Statistik Pemerintahan & Kelembagaan Kelurahan Manggar',
+    to: '/cerita/pemerintahan-dan-kelembagaan',
+    bgOverlay: 'linear-gradient(180deg, rgba(14, 30, 58, 0.88) 0%, rgba(10, 22, 44, 0.96) 100%)',
+  },
+  {
+    slug: 'geografis-dan-tata-ruang',
+    title: 'Geografis & Tata Ruang',
+    description:
+      'Luas wilayah administratif pesisir Balikpapan Timur, pemanfaatan tata guna lahan hijau, dan batas batas wilayah',
+    cardTitle: 'Ringkasan Statistik Geografis & Tata Ruang Kelurahan Manggar',
+    to: '/cerita/geografis-dan-tata-ruang',
+    bgOverlay: 'linear-gradient(180deg, rgba(11, 25, 52, 0.88) 0%, rgba(7, 19, 41, 0.96) 100%)',
+  },
+  {
+    slug: 'infrastruktur-dan-perumahan',
+    title: 'Infrastruktur & Perumahan',
+    description:
+      'Cakupan sambungan air perpipaan PDAM, sanitasi layak, kualitas pemukiman, dan prasarana transportasi jalan',
+    cardTitle: 'Ringkasan Statistik Infrastruktur & Perumahan Kelurahan Manggar',
+    to: '/cerita/infrastruktur-dan-perumahan',
+    bgOverlay: 'linear-gradient(180deg, rgba(9, 23, 49, 0.88) 0%, rgba(6, 17, 37, 0.96) 100%)',
+  },
+  {
+    slug: 'persampahan-dan-bank-sampah-unit',
+    title: 'Persampahan & Bank Sampah Unit',
+    description:
+      'Pengelolaan persampahan berbasis masyarakat, inovasi Eco Boba, dan jaringan Bank Sampah Unit tingkat RT',
+    cardTitle: 'Ringkasan Statistik Persampahan & Bank Sampah Unit Kelurahan Manggar',
+    to: '/cerita/persampahan-dan-bank-sampah-unit',
+    bgOverlay: 'linear-gradient(180deg, rgba(8, 22, 46, 0.88) 0%, rgba(5, 16, 35, 0.96) 100%)',
+  },
+];
+
 const router = useRouter();
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
 const contentBlocksStore = useContentBlocksStore();
+const indicatorsStore = useIndicatorsStore();
 
 const isLoggingOut = ref(false);
 const logoutError = ref('');
 
+function isRouteAvailable(path: string): boolean {
+  const routes = router.getRoutes();
+  return routes.some((r) => {
+    if (r.path === path) return true;
+    if (r.path.includes(':')) {
+      const basePattern = r.path.split('/:')[0];
+      if (basePattern && path.startsWith(`${basePattern}/`)) {
+        return true;
+      }
+    }
+    return false;
+  });
+}
+
 onMounted(async () => {
-  await Promise.allSettled([settingsStore.fetchPublicSettings(), contentBlocksStore.fetchBlocks()]);
+  await Promise.allSettled([
+    settingsStore.fetchPublicSettings(),
+    contentBlocksStore.fetchBlocks(),
+    indicatorsStore.fetchIndicators(),
+  ]);
 });
 
 async function handleLogout() {
@@ -47,11 +151,13 @@ async function handleLogout() {
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col bg-slate-50 selection:bg-brand-cyan selection:text-brand-navy">
+  <div
+    class="selection:bg-brand-cyan selection:text-brand-navy flex min-h-screen flex-col bg-slate-50"
+  >
     <!-- Skip to Content Link per docs/ACCESSIBILITY.md §3 (2.4.1) -->
     <a
       href="#main-content"
-      class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-btn focus:bg-brand-navy focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cyan"
+      class="focus:rounded-btn focus:bg-brand-navy focus-visible:outline-brand-cyan sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2"
     >
       Lewati ke konten utama
     </a>
@@ -67,7 +173,7 @@ async function handleLogout() {
         <template v-if="authStore.isAuthenticated">
           <div class="hidden flex-col text-right sm:flex">
             <span class="text-xs font-semibold text-slate-100">{{ authStore.user?.email }}</span>
-            <span class="text-[11px] font-medium tracking-wider text-brand-cyan uppercase">
+            <span class="text-brand-cyan text-[11px] font-medium tracking-wider uppercase">
               Peran: {{ authStore.user?.role }}
             </span>
           </div>
@@ -75,7 +181,7 @@ async function handleLogout() {
           <router-link
             v-if="authStore.isAdmin"
             to="/users"
-            class="rounded-btn bg-white/10 px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-brand-cyan sm:text-sm"
+            class="rounded-btn focus-visible:outline-brand-cyan bg-white/10 px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/20 focus-visible:outline-2 sm:text-sm"
           >
             Manajemen Pengguna
           </router-link>
@@ -85,7 +191,7 @@ async function handleLogout() {
             @click="handleLogout"
             :disabled="isLoggingOut"
             data-test="logout-btn"
-            class="cursor-pointer rounded-btn border border-white/20 bg-white/10 px-3.5 py-1.5 text-xs font-medium text-white shadow-xs transition-colors hover:bg-white hover:text-brand-navy focus-visible:outline-2 focus-visible:outline-brand-cyan disabled:opacity-50 sm:text-sm"
+            class="rounded-btn hover:text-brand-navy focus-visible:outline-brand-cyan cursor-pointer border border-white/20 bg-white/10 px-3.5 py-1.5 text-xs font-medium text-white shadow-xs transition-colors hover:bg-white focus-visible:outline-2 disabled:opacity-50 sm:text-sm"
           >
             <span v-if="isLoggingOut">Memproses...</span>
             <span v-else>Keluar (Logout)</span>
@@ -95,7 +201,7 @@ async function handleLogout() {
         <template v-else>
           <router-link
             to="/login"
-            class="rounded-btn bg-brand-cyan px-4 py-2 text-xs font-semibold text-brand-navy shadow-md shadow-black/20 transition-all hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cyan sm:text-sm"
+            class="rounded-btn bg-brand-cyan text-brand-navy focus-visible:outline-brand-cyan px-4 py-2 text-xs font-semibold shadow-md shadow-black/20 transition-all hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 sm:text-sm"
           >
             Masuk (Login)
           </router-link>
@@ -113,6 +219,7 @@ async function handleLogout() {
             Beranda
           </router-link>
           <router-link
+            v-if="isRouteAvailable('/publikasi')"
             to="/publikasi"
             class="block rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
             @click="close"
@@ -120,6 +227,7 @@ async function handleLogout() {
             Publikasi
           </router-link>
           <router-link
+            v-if="isRouteAvailable('/peta')"
             to="/peta"
             class="block rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
             @click="close"
@@ -127,6 +235,7 @@ async function handleLogout() {
             Peta
           </router-link>
           <router-link
+            v-if="isRouteAvailable('/ketua-rt')"
             to="/ketua-rt"
             class="block rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
             @click="close"
@@ -140,7 +249,7 @@ async function handleLogout() {
           <template v-if="authStore.isAuthenticated">
             <div class="mb-3 space-y-0.5">
               <p class="text-xs font-semibold text-slate-200">{{ authStore.user?.email }}</p>
-              <p class="text-[11px] font-medium tracking-wider text-brand-cyan uppercase">
+              <p class="text-brand-cyan text-[11px] font-medium tracking-wider uppercase">
                 Peran: {{ authStore.user?.role }}
               </p>
             </div>
@@ -149,17 +258,22 @@ async function handleLogout() {
                 v-if="authStore.isAdmin"
                 to="/users"
                 data-test="mobile-admin-link"
-                class="block rounded-btn bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20"
+                class="rounded-btn block bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20"
                 @click="close"
               >
                 Manajemen Pengguna
               </router-link>
               <button
                 type="button"
-                @click="() => { close(); handleLogout(); }"
+                @click="
+                  () => {
+                    close();
+                    handleLogout();
+                  }
+                "
                 :disabled="isLoggingOut"
                 data-test="mobile-logout-btn"
-                class="w-full rounded-btn border border-white/20 bg-white/10 px-4 py-2 text-left text-sm font-medium text-white transition-colors hover:bg-white hover:text-brand-navy disabled:opacity-50"
+                class="rounded-btn hover:text-brand-navy w-full border border-white/20 bg-white/10 px-4 py-2 text-left text-sm font-medium text-white transition-colors hover:bg-white disabled:opacity-50"
               >
                 <span v-if="isLoggingOut">Memproses...</span>
                 <span v-else>Keluar (Logout)</span>
@@ -170,7 +284,7 @@ async function handleLogout() {
             <router-link
               to="/login"
               data-test="mobile-login-link"
-              class="block w-full rounded-btn bg-brand-cyan px-4 py-2 text-center text-sm font-semibold text-brand-navy transition-colors hover:bg-white"
+              class="rounded-btn bg-brand-cyan text-brand-navy block w-full px-4 py-2 text-center text-sm font-semibold transition-colors hover:bg-white"
               @click="close"
             >
               Masuk (Login)
@@ -208,173 +322,29 @@ async function handleLogout() {
         <!-- Cerita Preview Slot (Figma StatOverview 8 category sections) -->
         <slot name="cerita-preview">
           <div class="flex w-full flex-col divide-y divide-white/10">
-            <!-- 1. Demografi Penduduk -->
             <StatOverview
-              title="Demografi Penduduk"
-              description="Komposisi dan kepadatan penduduk, keluarga, persebaran rasio jenis kelamin, umur, pendidikan, dan lainnya"
-              :stats="[
-                { icon: 'person', value: '53.098', label: 'Penduduk' },
-                { icon: 'house', value: '100', label: 'Rukun Tetangga' },
-                { icon: 'density', value: '2 jiwa/km²', label: 'Kepadatan Penduduk' },
-                { icon: 'ratio', value: '1,06 : 1', label: 'Rasio Laki-laki & Perempuan' },
-              ]"
-              card-title="Ringkasan Statistik Kependudukan Kelurahan Manggar"
+              v-for="category in CERITA_CATEGORIES"
+              :key="category.slug"
+              :title="category.title"
+              :description="category.description"
+              :stats="indicatorsStore.getStatsForPage(category.slug)"
+              :card-title="category.cardTitle"
               card-variant="glass"
               heading-tag="h3"
               button-label="Lihat selengkapnya"
-              to="/cerita/demografi"
+              :to="category.to"
+              :show-button="isRouteAvailable(category.to)"
               align="left"
               :is-full-bleed="true"
               :bg-image="defaultHeroBg"
-              bg-overlay="linear-gradient(180deg, rgba(8, 20, 42, 0.88) 0%, rgba(6, 15, 32, 0.96) 100%)"
-            />
-
-            <!-- 2. Pendidikan -->
-            <StatOverview
-              title="Pendidikan"
-              description="Data sarana prasarana sekolah, angka partisipasi sekolah, dan tingkat kelulusan jenjang pendidikan warga"
-              :stats="[
-                { icon: 'person', value: '14.210', label: 'Peserta Didik' },
-                { icon: 'house', value: '32', label: 'Satuan Pendidikan' },
-                { icon: 'density', value: '98,4%', label: 'Angka Melek Aksara' },
-                { icon: 'ratio', value: '1 : 22', label: 'Rasio Guru & Siswa' },
-              ]"
-              card-title="Ringkasan Statistik Pendidikan Kelurahan Manggar"
-              card-variant="glass"
-              heading-tag="h3"
-              button-label="Lihat selengkapnya"
-              to="/cerita/pendidikan"
-              align="left"
-              :is-full-bleed="true"
-              :bg-image="defaultHeroBg"
-              bg-overlay="linear-gradient(180deg, rgba(10, 24, 48, 0.88) 0%, rgba(7, 18, 38, 0.96) 100%)"
-            />
-
-            <!-- 3. Kesehatan -->
-            <StatOverview
-              title="Kesehatan"
-              description="Layanan posyandu, fasilitas kesehatan tingkat pertama, sebaran tenaga medis, dan derajat kesehatan balita"
-              :stats="[
-                { icon: 'house', value: '45', label: 'Posyandu Aktif' },
-                { icon: 'person', value: '3', label: 'Fasilitas Kesehatan' },
-                { icon: 'density', value: '94,2%', label: 'Cakupan Imunisasi' },
-                { icon: 'ratio', value: '12', label: 'Tenaga Kesehatan' },
-              ]"
-              card-title="Ringkasan Statistik Kesehatan Kelurahan Manggar"
-              card-variant="glass"
-              heading-tag="h3"
-              button-label="Lihat selengkapnya"
-              to="/cerita/kesehatan"
-              align="left"
-              :is-full-bleed="true"
-              :bg-image="defaultHeroBg"
-              bg-overlay="linear-gradient(180deg, rgba(12, 28, 54, 0.88) 0%, rgba(9, 21, 42, 0.96) 100%)"
-            />
-
-            <!-- 4. Ekonomi & Ketertiban -->
-            <StatOverview
-              title="Ekonomi & Ketertiban"
-              description="Potensi perekonomian maritim pesisir, sentra UMKM mandiri, ketertiban lingkungan, dan pos pengamanan wilayah"
-              :stats="[
-                { icon: 'house', value: '142', label: 'Unit Usaha Mikro' },
-                { icon: 'person', value: '4.820', label: 'Tenaga Kerja Pesisir' },
-                { icon: 'density', value: '98,8%', label: 'Indeks Lingkungan Aman' },
-                { icon: 'ratio', value: '100 RT', label: 'Pos Kamling Aktif' },
-              ]"
-              card-title="Ringkasan Statistik Ekonomi & Ketertiban Kelurahan Manggar"
-              card-variant="glass"
-              heading-tag="h3"
-              button-label="Lihat selengkapnya"
-              to="/cerita/ekonomi"
-              align="left"
-              :is-full-bleed="true"
-              :bg-image="defaultHeroBg"
-              bg-overlay="linear-gradient(180deg, rgba(10, 26, 50, 0.88) 0%, rgba(8, 20, 40, 0.96) 100%)"
-            />
-
-            <!-- 5. Pemerintahan & Kelembagaan -->
-            <StatOverview
-              title="Pemerintahan & Kelembagaan"
-              description="Struktur kelembagaan perangkat kelurahan, koordinasi 100 RT, LPM, PKK, dan lembaga kemasyarakatan kelurahan"
-              :stats="[
-                { icon: 'house', value: '100', label: 'Rukun Tetangga' },
-                { icon: 'person', value: '28', label: 'Aparatur Pemerintahan' },
-                { icon: 'density', value: '12', label: 'Lembaga Kemasyarakatan' },
-                { icon: 'ratio', value: '100%', label: 'Penyaluran Layanan Warga' },
-              ]"
-              card-title="Ringkasan Statistik Pemerintahan & Kelembagaan Kelurahan Manggar"
-              card-variant="glass"
-              heading-tag="h3"
-              button-label="Lihat selengkapnya"
-              to="/cerita/pemerintahan"
-              align="left"
-              :is-full-bleed="true"
-              :bg-image="defaultHeroBg"
-              bg-overlay="linear-gradient(180deg, rgba(14, 30, 58, 0.88) 0%, rgba(10, 22, 44, 0.96) 100%)"
-            />
-
-            <!-- 6. Geografis & Tata Ruang -->
-            <StatOverview
-              title="Geografis & Tata Ruang"
-              description="Luas wilayah administratif pesisir Balikpapan Timur, pemanfaatan tata guna lahan hijau, dan batas batas wilayah"
-              :stats="[
-                { icon: 'density', value: '35,4 km²', label: 'Luas Wilayah' },
-                { icon: 'house', value: '7', label: 'Kategori Zona Wilayah' },
-                { icon: 'person', value: '12 km', label: 'Garis Pantai Pesisir' },
-                { icon: 'ratio', value: '54%', label: 'Ruang Terbuka Hijau' },
-              ]"
-              card-title="Ringkasan Statistik Geografis & Tata Ruang Kelurahan Manggar"
-              card-variant="glass"
-              heading-tag="h3"
-              button-label="Lihat selengkapnya"
-              to="/cerita/geografis"
-              align="left"
-              :is-full-bleed="true"
-              :bg-image="defaultHeroBg"
-              bg-overlay="linear-gradient(180deg, rgba(11, 25, 52, 0.88) 0%, rgba(7, 19, 41, 0.96) 100%)"
-            />
-
-            <!-- 7. Infrastruktur & Perumahan -->
-            <StatOverview
-              title="Infrastruktur & Perumahan"
-              description="Cakupan sambungan air perpipaan PDAM, sanitasi layak, kualitas pemukiman, dan prasarana transportasi jalan"
-              :stats="[
-                { icon: 'house', value: '88,6%', label: 'Akses Air Bersih' },
-                { icon: 'person', value: '92,1%', label: 'Sanitasi Warga Layak' },
-                { icon: 'density', value: '64 km', label: 'Panjang Jalan Mantap' },
-                { icon: 'ratio', value: '14.890', label: 'Rumah Tinggal Terdata' },
-              ]"
-              card-title="Ringkasan Statistik Infrastruktur & Perumahan Kelurahan Manggar"
-              card-variant="glass"
-              heading-tag="h3"
-              button-label="Lihat selengkapnya"
-              to="/cerita/infrastruktur"
-              align="left"
-              :is-full-bleed="true"
-              :bg-image="defaultHeroBg"
-              bg-overlay="linear-gradient(180deg, rgba(9, 23, 49, 0.88) 0%, rgba(6, 17, 37, 0.96) 100%)"
-            />
-
-            <!-- 8. Persampahan -->
-            <StatOverview
-              title="Persampahan"
-              description="Pengelolaan persampahan berbasis masyarakat, inovasi Eco Boba, dan jaringan Bank Sampah Unit tingkat RT"
-              :stats="[
-                { icon: 'house', value: '18', label: 'Bank Sampah Unit' },
-                { icon: 'person', value: '1.450', label: 'Nasabah Terdaftar' },
-                { icon: 'density', value: '24,5 ton', label: 'Reduksi Sampah/Bulan' },
-                { icon: 'ratio', value: '3 RT', label: 'Percontohan Mandiri' },
-              ]"
-              card-title="Ringkasan Statistik Persampahan Kelurahan Manggar"
-              card-variant="glass"
-              heading-tag="h3"
-              button-label="Lihat selengkapnya"
-              to="/cerita/persampahan"
-              align="left"
-              :is-full-bleed="true"
-              :bg-image="defaultHeroBg"
-              bg-overlay="linear-gradient(180deg, rgba(8, 22, 46, 0.88) 0%, rgba(5, 16, 35, 0.96) 100%)"
-            />
+              :bg-overlay="category.bgOverlay"
+            >
+              <template #card-empty>
+                <div class="flex flex-col items-center justify-center py-6 text-center">
+                  <p class="text-sm text-slate-300 italic">Data belum tersedia</p>
+                </div>
+              </template>
+            </StatOverview>
           </div>
         </slot>
       </section>
@@ -405,10 +375,10 @@ async function handleLogout() {
           <!-- Weather Widget Slot (separate issue will provide live BMKG integration) -->
           <slot name="weather">
             <div
-              class="mx-auto max-w-xl rounded-card border border-slate-200/90 bg-white p-8 text-center shadow-xs"
+              class="rounded-card mx-auto max-w-xl border border-slate-200/90 bg-white p-8 text-center shadow-xs"
             >
               <div
-                class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-brand-navy/10 text-brand-navy"
+                class="bg-brand-navy/10 text-brand-navy mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full"
                 aria-hidden="true"
               >
                 <svg
