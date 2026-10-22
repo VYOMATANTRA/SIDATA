@@ -25,6 +25,7 @@ export const weatherLimiter = createLimiter(300);
 export const mapsPointsLimiter = createLimiter(300);
 export const mapsRtLeadersLimiter = createLimiter(300);
 export const mapsSummaryLimiter = createLimiter(300);
+export const pagesLimiter = createLimiter(300);
 
 // Session-maintenance endpoints (csrf-token, refresh, logout, me) are hit on every SPA
 // navigation while unauthenticated (see router/index.ts's beforeEach), not just on deliberate
@@ -58,6 +59,22 @@ const createUserKeyedLimiter = (limit: number) =>
 
 // Content blocks CMS write operations rate limiter (dedicated 100 req/15min bucket keyed by user ID)
 export const contentBlocksWriteLimiter = createUserKeyedLimiter(100);
+
+// Pages management write operations rate limiter (dedicated 100 req/15min bucket keyed by user ID)
+export const pagesWriteLimiter = createUserKeyedLimiter(100);
+
+// Indicators CMS write operations rate limiter (dedicated 100 req/15min bucket keyed by user ID,
+// separate from contentBlocksWriteLimiter so indicator edits and prose edits do not drain each other)
+export const indicatorsWriteLimiter = createUserKeyedLimiter(100);
+
+// Comparison template write operations rate limiter (dedicated 100 req/15min bucket keyed by
+// admin user ID, so authoring templates does not drain the indicator or prose edit budgets)
+export const comparisonTemplatesWriteLimiter = createUserKeyedLimiter(100);
+
+// Indicator tables CMS write operations rate limiter (dedicated 100 req/15min bucket keyed by
+// user ID, separate from indicatorsWriteLimiter so matrix-table edits and scalar-figure edits
+// do not drain each other)
+export const indicatorTablesWriteLimiter = createUserKeyedLimiter(100);
 
 // Settings write operations rate limiter (dedicated 100 req/15min bucket keyed by admin user ID,
 // separate from userManagementWriteLimiter so settings edits and user management do not drain each other)

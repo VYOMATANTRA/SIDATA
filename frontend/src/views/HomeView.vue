@@ -279,6 +279,31 @@ async function handleLogout() {
                 <span v-else>Keluar (Logout)</span>
               </button>
             </div>
+
+            <router-link
+              v-if="authStore.isAdmin"
+              to="/users"
+              class="rounded-lg bg-slate-100 px-3.5 py-1.5 text-xs font-medium text-slate-800 transition-colors hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-slate-500 sm:text-sm"
+            >
+              Manajemen Pengguna
+            </router-link>
+
+            <router-link
+              v-if="authStore.isAdmin"
+              to="/audit-logs"
+              class="rounded-lg bg-slate-100 px-3.5 py-1.5 text-xs font-medium text-slate-800 transition-colors hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-slate-500 sm:text-sm"
+            >
+              Log Sistem
+            </router-link>
+
+            <button
+              @click="handleLogout"
+              :disabled="isLoggingOut"
+              class="cursor-pointer rounded-lg bg-slate-900 px-3.5 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-slate-900 disabled:opacity-50 sm:text-sm"
+            >
+              <span v-if="isLoggingOut">Memproses...</span>
+              <span v-else>Keluar (Logout)</span>
+            </button>
           </template>
           <template v-else>
             <router-link

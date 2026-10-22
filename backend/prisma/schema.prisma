@@ -191,7 +191,168 @@ model ContentBlock {
   createdAt   DateTime         @default(now()) @map("created_at")
   updatedAt   DateTime         @updatedAt @map("updated_at")
 
+  section Section? @relation(fields: [sectionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
   @@index([type])
   @@index([sectionId, sortOrder])
   @@map("content_blocks")
+}
+
+/// Content hierarchy (SPEC.md §2, §7): Page → Chapter → Section. A chapter may hold one or
+/// more sections; there is no 1:1 constraint between them.
+model Page {
+  id        String   @id @default(uuid())
+  slug      String   @unique
+  title     String   @db.VarChar(255)
+  sortOrder Int      @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  chapters Chapter[]
+
+  @@index([sortOrder])
+  @@map("pages")
+}
+
+model Chapter {
+  id        String   @id @default(uuid())
+  pageId    String   @map("page_id")
+  slug      String
+  number    String?  @db.VarChar(16)
+  title     String   @db.VarChar(255)
+  sortOrder Int      @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  page     Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  sections Section[]
+
+  @@unique([pageId, slug])
+  @@index([pageId, sortOrder])
+  @@map("chapters")
+}
+
+model Section {
+  id        String   @id @default(uuid())
+  chapterId String   @map("chapter_id")
+  slug      String
+  title     String?  @db.VarChar(255)
+  sortOrder Int      @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  chapter       Chapter        @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  contentBlocks ContentBlock[]
+  indicators    Indicator[]
+  indicatorTables IndicatorTable[]
+
+  @@unique([chapterId, slug])
+  @@index([chapterId, sortOrder])
+  @@map("sections")
+}
+
+/// Scalar figures (SPEC.md §2, §5, §7): one row per figure, attached to a section.
+/// `valuePrevious`/`periodPrevious` are nullable — a null `valuePrevious` mechanically gates
+/// the tier-1 computed-comparison prose builder off (SPEC.md §5). `isStale` flags the June 2024
+/// Potensi fields, which have no tahun-lalu pairing at all (SPEC.md §6).
+model Indicator {
+  id                   String   @id @default(uuid())
+  sectionId            String   @map("section_id")
+  slug                 String   @unique
+  label                String   @db.Text
+  unit                 String?  @db.VarChar(32)
+  valueCurrent         Decimal  @map("value_current") @db.Decimal(18, 4)
+  valuePrevious        Decimal? @map("value_previous") @db.Decimal(18, 4)
+  periodCurrent        String   @map("period_current") @db.VarChar(64)
+  periodPrevious       String?  @map("period_previous") @db.VarChar(64)
+  isComputedComparison Boolean  @default(false) @map("is_computed_comparison")
+  isStale              Boolean  @default(false) @map("is_stale")
+  source               String?  @db.Text
+  hedgeNote            String?  @map("hedge_note") @db.Text
+  sortOrder            Int      @default(0) @map("sort_order")
+  // Tier-1 prose builder (SPEC §5): which admin-authored sentence template renders this
+  // indicator's naik/turun/tetap comparison. A DB CHECK (added by hand in the
+  // add_comparison_templates migration) only allows a non-null id on a paired, computed
+  // indicator. That CHECK is also why both FK actions below must be RESTRICT: MySQL
+  // (error 3823) forbids CASCADE/SET NULL on a column used in a CHECK.
+  comparisonTemplateId String?  @map("comparison_template_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  section            Section             @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  comparisonTemplate ComparisonTemplate? @relation(fields: [comparisonTemplateId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([sectionId, sortOrder])
+  @@index([comparisonTemplateId])
+  @@map("indicators")
+}
+
+/// Admin-authored sentence structure for the tier-1 computed-comparison prose builder
+/// (SPEC §5). `body` holds exactly one `{trend}` slot; the trend_* columns are the only
+/// text substituted into it, chosen by comparing value_current to value_previous.
+model ComparisonTemplate {
+  id         String   @id @default(uuid())
+  slug       String   @unique @db.VarChar(100)
+  label      String   @db.VarChar(255)
+  body       String   @db.Text
+  trendNaik  String   @map("trend_naik") @db.Text
+  trendTurun String   @map("trend_turun") @db.Text
+  trendTetap String   @map("trend_tetap") @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  indicators Indicator[]
+
+  @@map("comparison_templates")
+}
+
+/// Matrix/table-shaped figures (SPEC.md §4, §6, §7): the 4 fixed-shape tables — age pyramid,
+/// 17-group ethnicity, religion×sex, occupation. Opsi A (wide): one row per logical group with
+/// nullable INT cells (`male`/`female` for sex-split kinds, `total` for single-value kinds).
+/// Cells stay queryable/computable via SQL SUM(); `total` for sex-split rows is derived on read
+/// (`male + female`), never stored alongside them. Single `period` — these are June 2024 Potensi
+/// point-in-time snapshots with no tahun-lalu pairing (SPEC.md §6), unlike `indicators`.
+enum IndicatorTableKind {
+  age_pyramid
+  ethnicity
+  religion_by_sex
+  occupation
+}
+
+model IndicatorTable {
+  id        String            @id @default(uuid())
+  sectionId String            @map("section_id")
+  slug      String            @unique
+  title     String            @db.VarChar(255)
+  kind      IndicatorTableKind
+  period    String            @db.VarChar(64)
+  source    String?           @db.Text
+  sortOrder Int               @default(0) @map("sort_order")
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  section Section             @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  rows    IndicatorTableRow[]
+
+  @@index([sectionId, sortOrder])
+  @@map("indicator_tables")
+}
+
+model IndicatorTableRow {
+  id      String @id @default(uuid())
+  tableId String @map("table_id")
+  rowKey  String @map("row_key") @db.VarChar(64)
+  label   String @db.VarChar(255)
+  male    Int?
+  female  Int?
+  total   Int?
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  table IndicatorTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  @@unique([tableId, rowKey])
+  @@index([tableId, sortOrder])
+  @@map("indicator_table_rows")
 }

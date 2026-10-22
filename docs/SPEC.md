@@ -56,12 +56,22 @@ Notes:
 - Ketua RT is presented as a single table (100 rows, one per RT), not one page per RT — see
   `rt_leaders` in §7 for the schema and §8 for where it lives.
 - Widget Cuaca is not editorial content (no CRUD, not passed through editor/admin, directly from BMKG's public API).
+- Chapters are seeded (`backend/prisma/ceritaPages.ts`) from the table above; sections are not —
+  they are created with the content that attaches to them. Two choices go beyond what the table
+  states: Sosial Kemasyarakatan is the last, unnumbered chapter of Pemerintahan & Kelembagaan, and Persampahan &
+  Bank Sampah Unit starts with Bank Sampah Unit, Program Eco Boba and Booklet Eco Boba chapters.
+  Seeding never overwrites titles or ordering an editor has since changed.
+- `GET /api/pages` and `GET /api/pages/:slug` expose the hierarchy publicly (page → chapters →
+  sections, each ordered by `sort_order`).
+- `POST /api/pages`, `DELETE /api/pages/:slug`, and `PUT /api/pages/reorder` manage the Cerita page list
+  (restricted to Editor and Admin roles, audited via `audit_logs`). Reordering updates page `sort_order`
+  values in a single atomic database transaction with deterministic lock ordering to prevent deadlocks.
 
 ## 3. Roles
 
 | Role   | Can do                                                                                                                                       |
 | ------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Editor | Edit data figures and prose; manage the Cerita page list (add/remove/reorder pages); edit Sambutan Lurah                                     |
+| Editor | Edit data figures and prose; choose which comparison template an indicator uses (§5); manage the Cerita page list (add/remove/reorder pages); edit Sambutan Lurah |
 | Admin  | Everything Editor can, plus user/role management and authoring new phrase-structure templates for the computed-comparison prose builder (§5) |
 
 No third role (e.g. viewer/approver) is defined. No periodic-review role exists — see §6.
@@ -74,15 +84,21 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
 - **Anti-Bot Protection**: Mutating authentication endpoints (registration, login, OTP verification, OTP resend, first-login password setup) enforce Cloudflare Turnstile verification.
 - **Admin User Management & Soft Deletion**: Only Admins can manage users and roles. Account deletion is performed via soft deletion (`deletedAt`). Deactivated accounts remain visible in the Admin User Management table with their status displayed. Soft-deleting an account immediately revokes all active refresh tokens for that user and blocks active JWT access tokens via real-time DB verification. Admins cannot deactivate, change the password of, or demote their own account or peer Admin accounts via the User Management endpoints (self-service password changes must go through the `/api/profile/change-password` endpoint). Public registration using a soft-deleted email returns a distinct notification (`409 Conflict`) instructing the user to contact an Administrator, while creating an account in User Management with an email belonging to a soft-deleted account returns `409 Conflict` directing the Administrator to use account reactivation instead. User management API rate limiting separates read operations (`GET /api/users`, `GET /api/users/roles` at 300 req/15min) from mutating actions (`POST`, `PATCH`, `DELETE` at 100 req/15min) to prevent high-frequency administrative workflows and NAT-shared IP environments from tripping false-positive rate limit locks.
 - **Account Reactivation & Forced Password Change**: Admins can reactivate soft-deleted accounts directly via the dedicated reactivation toggle in the User Management table, confirmed via a modal popup. Accounts created or having their password reset by an Admin are trusted (`email_verified = true`), enforce NIST password guidelines (8–128 characters, zxcvbn strength >= 2), revoke all outstanding sessions immediately, and are flagged with `requires_password_change = true`. Upon logging in with an admin-assigned password, users receive a restricted setup token and must complete the Cloudflare Turnstile-protected password setup flow (`/setup-password`) before gaining access to standard protected routes. Setting a new password via the first-login setup flow is restricted strictly to local accounts (`auth_provider = 'local'`).
+- **Cerita Page Management Rules**: Editors and Admins manage the Cerita page list via `POST /api/pages`, `DELETE /api/pages/:slug`, and `PUT /api/pages/reorder`.
+  - Adding a page (`POST /api/pages`) rejects HTML markup in titles, validates slugs as kebab-case (max 100 characters, protected against reserved keywords), and auto-defaults `sort_order = max + 1` if omitted.
+  - Deleting a page (`DELETE /api/pages/:slug`) cascades empty chapters/sections, blocks deletion if attached `content_blocks` exist, and records a `warning` audit log.
+  - Reordering pages (`PUT /api/pages/reorder`) is atomic and validates against concurrent changes; a no-op reorder is not audited or written to the database.
+  - Rate limiting for mutating page actions is per-user (100 req/15min).
 
 ### Audit Trail
 
-Every admin user-management action (create, reactivate, role change, password reset, deactivate)
+Every admin user-management action (create, reactivate, role change, password reset, deactivate),
+every page list mutation (page creation, deletion, reordering),
 and every security-relevant auth event (login success/failure, logout, first-login password set,
 Google account linking, session revocation, OAuth state mismatch, refresh-token mismatch, OTP
 verification/lockout) is recorded in `audit_logs` (§7). Read access is admin-only
 (`GET /api/audit-logs`, `/summary`); there is no editor-facing or public view. `audit_logs` is
-also where the tier-1 prose-builder override log (§5) belongs once that CMS work lands, rather
+also where the tier-1 prose-builder override log (§5) lives (`comparison_template.keyword_warning_overridden`), rather
 than a second table — `target_type`/`target_id` are unconstrained (no FK) specifically so future
 content tables (indicators, prose, RT leaders, etc.) can be audited without a schema change.
 
@@ -134,18 +150,37 @@ Two tiers, by design intent:
 
 **Tier 1 — computed comparison.** Applies only to indicators with a genuinely paired
 tahun-ini/tahun-lalu value (`value_previous` not null — see §7). Confirmed scope so far:
-Jumlah Penduduk and Jumlah Keluarga on the Kependudukan page. Editor picks from pre-approved
-sentence structures ("naik" / "turun" / "tetap") and maps only paired fields into slots — no
-free-text claim authoring at Editor level. This is rendered, not human-authored, comparison
-language.
+Jumlah Penduduk and Jumlah Keluarga on the Kependudukan page. Editor chooses a pre-approved
+sentence template for the indicator; the system fills it from the paired fields — no free-text
+claim authoring at Editor level. This is rendered, not human-authored, comparison language, and it
+is rendered at read time (never stored), so it cannot disagree with the figures beside it.
+
+- **Template shape.** One `body` with exactly one `{trend}` slot, plus three variants (`naik`,
+  `turun`, `tetap`) that fill that slot. Allowed slots: `{label}`, `{unit}`, `{value_current}`,
+  `{value_previous}`, `{period_current}`, `{period_previous}`, `{delta}`, `{delta_percent}`,
+  `{trend}`; `{trend}` is body-only. Placeholder names are exact (`{Trend}` is unknown); an unknown
+  or malformed placeholder, a missing or repeated `{trend}`, or `{trend}` inside a variant is rejected.
+- **Computed, not chosen.** The direction comes from an exact decimal comparison of
+  `value_current` and `value_previous`. Numbers render id-ID style (`12.480`, `0,97`); `{delta}` is
+  the absolute difference and `{delta_percent}` its share of `|value_previous|`, rounded half-up to
+  two places. When the text needs a percentage of a zero base, no comparison is rendered.
+- **Attaching.** An indicator may reference a template only if it is flagged
+  `is_computed_comparison` and has both `value_previous` and `period_previous` (otherwise 400,
+  backed by a database `CHECK`). A request cannot clear that pair or the flag while a template is
+  attached unless it detaches the template in the same request.
 
 Admin can author new sentence structures without a code deploy. Any new structure containing a
 trend/comparison claim must place it in a proper conditional slot; a keyword check scans for
 trend/superlative language (_meningkat, menurun, tertinggi, terendah_, etc.) appearing **outside**
-that slot. Enforcement is **warn-on-save**, not a hard block — the warning restates the specific
-flagged phrase and its consequence and requires acknowledgment tied to that exact wording (not a
-generic dismiss). Overrides are logged for after-the-fact tracing only, not proactive catching —
-see §6 for why.
+that slot. The word list lives in code, not in the CMS, and only the `body` is scanned (the
+variants are the conditional slot). Enforcement is **warn-on-save**, not a hard block — the
+warning restates the specific flagged phrase and its consequence and requires acknowledgment tied
+to that exact wording (not a generic dismiss): the save is refused with `422
+TREND_KEYWORD_ACK_REQUIRED` listing each flagged occurrence with an `ackKey` bound to the exact
+body and position, and only a request that echoes those keys back in `acknowledgedWarnings` is
+saved, so changing the wording needs a fresh acknowledgment. Overrides are logged
+(`comparison_template.keyword_warning_overridden`, §3) for after-the-fact tracing only, not
+proactive catching — see §6 for why.
 
 **Tier 2 — general narrative** (page prose, Sambutan Lurah). Free text, house-style-guided, no
 system enforcement.
@@ -172,31 +207,34 @@ override logs) are a separate concern and not covered by this pass. (The existin
 from the tables below.)
 
 This section expresses design intent in raw-DDL vocabulary (`ENUM`, `CHECK`, snake_case table
-names). 4 of these tables (`spatial_points`, `spatial_point_rt`, `rt_leaders`, `content_blocks`) are implemented
-in `backend/prisma/schema.prisma` (migrations `20260819000000_add_spatial_and_rt_tables` and `20260917103839_add_content_blocks`);
-the remaining 6 tables (`pages`, `chapters`, `sections`, `indicators`, `indicator_tables`, `indicator_table_rows`)
-remain pending implementation. Translate into Prisma models with `@@map` when implementing.
+names). All 10 tables are implemented in `backend/prisma/schema.prisma`: `spatial_points`,
+`spatial_point_rt`, `rt_leaders` (migration `20260819000000_add_spatial_and_rt_tables`),
+`content_blocks` (migration `20260917103839_add_content_blocks`), `pages`, `chapters`, `sections`
+(migration `20261009000000_add_content_hierarchy`), `indicators` in migration
+`20261010011827_add_indicators`, and `indicator_tables`, `indicator_table_rows` in migration
+`20261010120000_add_indicator_tables`. Translate into Prisma models with `@@map` when
+implementing.
 
 | Table                                       | Purpose / key design notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pages`, `chapters`, `sections`             | Hierarchy per §2. No 1:1 constraint between chapter and section.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `indicators`                                | Scalar figures. `value_current` / `value_previous` (nullable — null `value_previous` mechanically gates the tier-1 prose builder), `period_current` / `period_previous`, `is_computed_comparison`, `is_stale` (flags June 2024 Potensi fields), `source`, `hedge_note`.                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `indicator_tables` + `indicator_table_rows` | Normalized rows (not a JSON blob) for the 4 fixed-shape matrix tables — cells need to be queryable/computable. Manual entry only (§4).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `indicators`                                | Scalar figures. `value_current` / `value_previous` (nullable — null `value_previous` mechanically gates the tier-1 prose builder), `period_current` / `period_previous`, `is_computed_comparison`, `is_stale` (flags June 2024 Potensi fields), `source`, `hedge_note`. `section_id` required FK to `sections.id` (`ON DELETE RESTRICT` — a section holding indicators cannot be deleted until they are removed through the audited API, consistent with `content_blocks`). Read via public `GET /api/indicators` and `GET /api/indicators/:id` (in-memory cached); mutated via editor/admin-only `POST` / `PATCH /:id` / `DELETE /:id` (CSRF-protected, logged in `audit_logs` as `indicator.created` / `indicator.updated` / `indicator.deleted`). `comparison_template_id` nullable FK to `comparison_templates` (§5 tier-1; the read DTO carries the rendered `comparison`).                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `indicator_tables` + `indicator_table_rows` | Normalized rows (not a JSON blob) for the 4 fixed-shape matrix tables — cells need to be queryable/computable. Manual entry only (§4). Wide-row shape: one row per logical group with nullable `INT` cells — `male`/`female` for the sex-split kinds (`age_pyramid`, `religion_by_sex`), `total` for the single-value kinds (`ethnicity`, `occupation`); enforced per-kind in the service. `total` for sex-split rows is derived on read (`male + female`), never stored alongside them, so the two cannot drift. Single `period` (June 2024 Potensi point-in-time snapshots, no tahun-lalu pairing — §6). `section_id` required FK to `sections.id` (`ON DELETE RESTRICT`, consistent with `indicators`/`content_blocks`); rows cascade with their table; `UNIQUE (table_id, row_key)`. Read via public `GET /api/indicator-tables` (filterable by `sectionId`/`kind`) and `GET /api/indicator-tables/:key` (slug-or-id, returns rows + SQL-`SUM` totals, in-memory cached); mutated via editor/admin-only `POST /` (optional nested `rows` in one transaction), `PATCH /:id` / `DELETE /:id`, `POST /:id/rows`, `PATCH /rows/:rowId` / `DELETE /rows/:rowId` (CSRF-protected, logged in `audit_logs` as `indicator_table.created` / `indicator_table.updated` / `indicator_table.deleted` and `indicator_table_row.created` / `indicator_table_row.updated` / `indicator_table_row.deleted`). |
 | `spatial_points`                            | Ketua RT and Bank Sampah unit point records (~100, manual field survey). `type` ENUM, lat/lng, `metadata` JSON (MySQL has no JSONB). Feeds the interactive map, which is also an entry point to the Ketua RT page (§8).                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `spatial_point_rt`                          | Junction table (`point_id`, `rt_number`). Needed because Ketua RT points are always 1:1 with an RT, but a Bank Sampah unit can cover multiple RTs (e.g. one unit serving RT 30/72/60) — a flat `rt_number` column on `spatial_points` would be lossy. **Enforcement notes**: (1) The 1:1 invariant for `ketua_rt` points cannot be enforced with a partial unique index (`UNIQUE (point_id) WHERE type = 'ketua_rt'`) because MySQL does not support partial unique indexes. The write path (when a spatial-point write endpoint is added) must validate that a `ketua_rt` point references exactly one RT before committing. The read path (`maps.service.ts`) detects violations at query time via one shared resolution rule applied on both sides of the join: an RT resolves to a `ketua_rt` point only if exactly one `ketua_rt` point covers it **and** that point covers exactly one RT. On the points side (`GET /api/maps/points`, `/points/:id`) a violation sets `rtLeader` to `null`; on the leaders side (`GET /api/maps/rt-leaders`, `/rt-leaders/:rtNumber`) it sets `coordinates` to `null`. In both cases an `integrityWarning` field describes the anomaly (multiple `ketua_rt` points on one RT, a `ketua_rt` point spanning several RTs, or an RT coverage referencing an RT with no matching `rt_leaders` row), and the anomaly is logged server-side. `GET /api/maps/summary` applies the same rule: conflicted RTs are excluded from `rtLeadersWithCoordinates` (so they fall into `rtLeadersWithoutCoordinates`) and are additionally reported via `rtLeadersWithIntegrityConflicts`, so a data problem is visible from the summary endpoint without cross-referencing the points list. (2) The FK from `rt_number` → `rt_leaders.rt_number` was intentionally dropped (migration `20260820000000`) because Prisma 7 requires a declared back-relation on both sides of a `@relation`, and adding `spatialPointRts SpatialPointRt[]` to the `RtLeader` model has no semantic meaning in this domain — the coordinate join is an asymmetric, query-time filtered read. In place of the FK, migration `20260826000000` adds `CHECK (rt_number BETWEEN 1 AND 100)` to enforce the valid RT range at the DB layer. Manggar has 100 RTs; if this changes, update the `BETWEEN` bounds in that migration and here. |
-| `content_blocks`                            | Prose/narrative content. `section_id` nullable (populated for normal Cerita/stat-page prose tied to the hierarchy; null for standalone blocks like hero, Sambutan Lurah, landing highlights). `block_type` ENUM (`hero`, `sambutan_lurah`, `highlight`, `prose`), `slug` (stable lookup key), `body` TEXT (tier-2 free text). `sort_order INT NULL` with `CHECK (section_id IS NOT NULL OR sort_order IS NULL)` — ordering only means something within a section; standalone blocks are unique named slots with no siblings to sort against. Read via public `GET /api/content-blocks` and `GET /api/content-blocks/:slug` (in-memory cached); mutated via `PATCH /api/content-blocks/:slug` (Editor or Admin only, CSRF-protected, logged in `audit_logs` as `content_block.updated`). |
+| `content_blocks`                            | Prose/narrative content. `section_id` nullable FK to `sections.id` (`ON DELETE RESTRICT` — a section that still has blocks cannot be deleted, since MySQL forbids `SET NULL`/`CASCADE` on a column used in the `CHECK` below; populated for normal Cerita/stat-page prose tied to the hierarchy; null for standalone blocks like hero, Sambutan Lurah, landing highlights). `block_type` ENUM (`hero`, `sambutan_lurah`, `highlight`, `prose`), `slug` (stable lookup key), `body` TEXT (tier-2 free text). `sort_order INT NULL` with `CHECK (section_id IS NOT NULL OR sort_order IS NULL)` — ordering only means something within a section; standalone blocks are unique named slots with no siblings to sort against. Read via public `GET /api/content-blocks` and `GET /api/content-blocks/:slug` (in-memory cached); mutated via `PATCH /api/content-blocks/:slug` (Editor or Admin only, CSRF-protected, logged in `audit_logs` as `content_block.updated`). |
 | `rt_leaders`                                | Single table, 100 rows (one per RT — not per-RT pages). `rt_number`, `name`, `phone`, `phone_is_whatsapp BOOLEAN` (some numbers aren't WhatsApp-registered — determines tap-to-chat vs. call-only rendering), `alamat` nullable (some addresses genuinely missing). No lat/lng column — coordinates are reached by joining `rt_leaders.rt_number` → `spatial_point_rt.rt_number` → `spatial_points.id`, filtered on `spatial_points.type` (required, not optional: a Bank Sampah unit covering RT 30/72/60 means `rt_number` is not unique in `spatial_point_rt`, so an unfiltered join also returns Bank Sampah points). Avoids duplicating/drifting lat-lng across two tables. |
 
 No indicator-citation-tracking table exists. Cerita-page data citations (e.g. the Bank Sampah
 page citing Ekonomi & Ketertiban figures) stay informal/manual in prose text, not structurally
 linked.
 
-Two more tables exist alongside the auth layer (`Role`, `User`, `RefreshToken`, `EmailOtp`),
+Three more tables exist alongside the auth layer (`Role`, `User`, `RefreshToken`, `EmailOtp`),
 implemented and out of scope for this schema pass in the same way those are:
 
 - `audit_logs` — the audit trail (§3). `target_type`/`target_id` are deliberately not a foreign
   key, so it can log actions against any of the 10 content tables above once they exist, without
-  a schema change. This is also where the §5 tier-1 prose-builder override log belongs.
+  a schema change. This is also where the §5 tier-1 prose-builder override log lives.
 - `system_settings` — generic key/value store. Stores admin-configurable audit log
   retention (`audit.retention_*`, §3), public portal profile/contact metadata (`public.*`
   covering app name, institution, tagline, administrative area, phone, WhatsApp, email, address,
@@ -209,6 +247,19 @@ implemented and out of scope for this schema pass in the same way those are:
   managed by Admins via `GET` and `PATCH /api/settings/weather-config` (cached in-memory, audited as
   `settings.weather_updated`), allowing runtime tuning of BMKG endpoint, cache TTL, and retry backoffs
   without code redeployment.
+
+- `comparison_templates` — the admin-authored sentence templates of the §5 tier-1 builder
+  (migration `20261010123453_add_comparison_templates`): `slug` (unique), `label`, `body` TEXT with
+  exactly one `{trend}` slot, and `trend_naik` / `trend_turun` / `trend_tetap` TEXT variants.
+  `indicators.comparison_template_id` references it with `ON DELETE RESTRICT` / `ON UPDATE
+  RESTRICT` (MySQL forbids CASCADE/SET NULL on a column used in a `CHECK`), so a template that
+  indicators use cannot be deleted (409), and `CHECK (comparison_template_id IS NULL OR
+  (is_computed_comparison AND value_previous IS NOT NULL AND period_previous IS NOT NULL))`
+  enforces the §5 attach rule in the database. Read via `GET /api/comparison-templates` and
+  `/:id` (Editor or Admin — templates are not public content, only the rendered sentence is);
+  mutated via Admin-only `POST` / `PATCH /:id` / `DELETE /:id` (CSRF-protected, logged as
+  `comparison_template.created` / `.updated` / `.deleted`, plus the override action in §3).
+  Seeded with a default `perbandingan-tahunan` template.
 
 Weather widget data (§8) has no table here, and isn't merely uncovered by this pass — it's
 out of scope for this schema entirely. It's fetched live from BMKG's public API and cached

@@ -43,6 +43,12 @@ const router = createRouter({
       meta: { requiresAuth: true, title: 'Dasbor' },
     },
     {
+      path: '/audit-logs',
+      name: 'audit-log-viewer',
+      component: () => import('../views/AuditLogView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true, title: 'Log Sistem dan Audit Trail' },
+    },
+    {
       path: '/auth/callback',
       name: 'auth-callback',
       component: () => import('../views/AuthCallbackView.vue'),
