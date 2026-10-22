@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import TentangPageLayout from '../components/tentang/TentangPageLayout.vue';
 import TentangBreadcrumb from '../components/tentang/TentangBreadcrumb.vue';
 import TentangHeroPanel from '../components/tentang/TentangHeroPanel.vue';
+import TentangNotice from '../components/tentang/TentangNotice.vue';
 import BaseButton from '../components/common/BaseButton.vue';
 import { useRtLeadersStore } from '../stores/rtLeaders.store';
 
@@ -85,6 +86,15 @@ function digitsOnly(value: string): string {
 }
 
 /**
+ * A placeholder row carries no contact at all — the seeded roster stores a
+ * non-dialable marker instead of a number. There is nothing to call or message
+ * then, so the cell shows the value as plain text rather than a dead link.
+ */
+function isDialable(value: string): boolean {
+  return digitsOnly(value) !== '';
+}
+
+/**
  * WhatsApp requires an international MSISDN. The roster mixes formats — local
  * `08…`, international `+62 8…`, and bare `8…` — so the number is normalised to
  * the `62…` form before building the wa.me link.
@@ -129,8 +139,18 @@ function formatPhone(value: string): string {
 
     <TentangHeroPanel
       title="Ketua RT Kelurahan Manggar"
-      subtitle="Direktori 100 Rukun Tetangga beserta kontak ketua RT. Cari langsung di tabel berdasarkan nomor RT atau nama."
+      subtitle="Contoh data daftar Ketua RT. Cari langsung di tabel berdasarkan nomor RT atau nama ketua."
     />
+
+    <TentangNotice heading="Data contoh, bukan daftar resmi">
+      <p>
+        Isi tabel di bawah ini adalah <strong>data contoh</strong>, bukan data resmi dari
+        kelurahan. Nama dan kontak yang tampil belum mewakili ketua RT yang sebenarnya.
+      </p>
+      <p>
+        Untuk informasi kontak yang benar, hubungi kantor kelurahan.
+      </p>
+    </TentangNotice>
 
     <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="daftar-rt-title">
       <div class="mx-auto max-w-5xl">
@@ -238,7 +258,7 @@ function formatPhone(value: string): string {
                   <td class="px-4 py-4 align-top text-gray-800 break-words sm:px-6">{{ leader.name }}</td>
                   <td class="px-4 py-4 align-top text-gray-800 whitespace-nowrap sm:px-6">
                     <a
-                      v-if="leader.phoneIsWhatsapp"
+                      v-if="leader.phoneIsWhatsapp && isDialable(leader.phone)"
                       :href="`https://wa.me/${whatsappNumber(leader.phone)}`"
                       target="_blank"
                       rel="noopener noreferrer"
@@ -248,13 +268,20 @@ function formatPhone(value: string): string {
                       <span class="sr-only">(WhatsApp, tautan eksternal, terbuka di tab baru)</span>
                     </a>
                     <a
-                      v-else
+                      v-else-if="isDialable(leader.phone)"
                       :href="`tel:${digitsOnly(leader.phone)}`"
                       class="font-medium text-brand-navy underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
                     >
                       {{ formatPhone(leader.phone) }}
                       <span class="sr-only">(panggilan telepon)</span>
                     </a>
+                    <span
+                      v-else
+                      class="text-gray-700"
+                      data-test="rt-phone-placeholder"
+                    >
+                      {{ leader.phone }}
+                    </span>
                   </td>
                   <td v-if="hasAddressData" class="px-4 py-4 align-top text-gray-700 break-words sm:px-6">
                     {{ leader.alamat ?? '—' }}
@@ -297,7 +324,8 @@ function formatPhone(value: string): string {
 
         <p class="mt-3 text-sm text-gray-600">
           <template v-if="isFiltered">
-            Pencarian hanya menyaring tabel; hapus filter untuk melihat seluruh 100 RT.
+            Pencarian hanya menyaring tabel; hapus filter untuk melihat seluruh
+            {{ rtLeadersStore.rtLeaders.length }} RT.
           </template>
           <template v-else>
             Gunakan kolom pencarian untuk menyaring nomor RT atau nama ketua secara langsung.

@@ -131,6 +131,18 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
     expect(wrapper.findAll('[aria-live="polite"]')).toHaveLength(1);
   });
 
+  it('presents the rows as sample data, not the live kelurahan roster', async () => {
+    const wrapper = await mountReady();
+
+    // The hero says up front that this is sample data.
+    expect(wrapper.text()).toContain('Contoh data daftar Ketua RT');
+    // …and the notice repeats it, so a resident cannot mistake the table for the
+    // real directory.
+    expect(wrapper.text()).toContain('Data contoh, bukan daftar resmi');
+    // The old wording presented the rows as the live directory.
+    expect(wrapper.text()).not.toContain('Direktori 100 Rukun Tetangga');
+  });
+
   it('filters by RT number, including zero-padded input', async () => {
     const wrapper = await mountReady();
     const search = wrapper.find('[data-test="rt-search"]');
@@ -183,6 +195,57 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
 
     // RT 2 is not
     expect(wrapper.find('a[href="tel:6281100000002"]').exists()).toBe(true);
+  });
+
+  it('renders a placeholder phone as plain text instead of a dead link', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          leaders: [
+            {
+              rtNumber: 1,
+              name: 'Ketua RT 01',
+              // The seeded roster stores a non-dialable marker, not a number.
+              phone: '—',
+              phoneIsWhatsapp: true,
+              alamat: 'Jl. Contoh RT 01, Manggar',
+              coordinates: null,
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+            {
+              rtNumber: 2,
+              name: 'Ketua RT 02',
+              phone: '—',
+              phoneIsWhatsapp: false,
+              alamat: 'Jl. Contoh RT 02, Manggar',
+              coordinates: null,
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          total: 2,
+        }),
+      } as Response),
+    );
+
+    const wrapper = await mountReady();
+
+    // No number means nothing to call or message, so no anchor is rendered —
+    // not even for a row still flagged as WhatsApp.
+    const cells = wrapper.findAll('tbody tr td:nth-child(3)');
+    expect(cells).toHaveLength(2);
+    for (const cell of cells) {
+      expect(cell.text()).toContain('—');
+      expect(cell.find('a').exists()).toBe(false);
+    }
+    expect(wrapper.findAll('[data-test="rt-phone-placeholder"]')).toHaveLength(2);
+    // Scoped to the table: the page footer carries its own kelurahan contact link.
+    const table = wrapper.find('table');
+    expect(table.find('a[href^="tel:"]').exists()).toBe(false);
+    expect(table.find('a[href^="https://wa.me/"]').exists()).toBe(false);
   });
 
   it('normalises local 08… numbers to an international wa.me link', async () => {
