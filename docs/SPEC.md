@@ -252,10 +252,16 @@ page citing Ekonomi & Ketertiban figures) stay informal/manual in prose text, no
 linked.
 
 `allowPublicKeyRetrieval` is off unless a deployment opts in with `?allowPublicKeyRetrieval=true`
-in the connection string. It is off by default for the app client and for the privileged
-audit-pruning client alike: fetching the MySQL RSA public key over an unverified channel hands
-the key to whoever is in the middle, and with it the database password — including the
-`AUDIT_ADMIN_DATABASE_URL` credential.
+in the connection string. Fetching the MySQL RSA public key over an unverified channel hands the
+key to whoever is in the middle, and with it the database password. The two database clients
+therefore differ:
+
+- The **app client** (`DATABASE_URL`) opts in through the query parameter, and only through it —
+  `allowPublicKeyRetrievalFrom` returns true only for `?allowPublicKeyRetrieval=true`.
+- The **privileged audit-pruning client** (`AUDIT_ADMIN_DATABASE_URL`, `backend/scripts/prune-audit-logs.ts`)
+  never opts in. It hardcodes `allowPublicKeyRetrieval: false`, and the flag in
+  `AUDIT_ADMIN_DATABASE_URL` is ignored, because this client carries the admin password and a
+  query parameter must not be able to turn the safeguard off for it.
 
 Three more tables exist alongside the auth layer (`Role`, `User`, `RefreshToken`, `EmailOtp`),
 implemented and out of scope for this schema pass in the same way those are:
