@@ -26,10 +26,31 @@ export interface RtLeader {
  */
 const RT_LEADERS_ENDPOINT = '/api/maps/rt-leaders?limit=100';
 
+/**
+ * A row without a usable number, name, or phone cannot be rendered or searched,
+ * so it is dropped rather than allowed to break the table.
+ */
+function isRtLeader(value: unknown): value is RtLeader {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as Partial<RtLeader>;
+  return (
+    typeof candidate.rtNumber === 'number' &&
+    Number.isFinite(candidate.rtNumber) &&
+    typeof candidate.name === 'string' &&
+    candidate.name.trim() !== '' &&
+    typeof candidate.phone === 'string' &&
+    typeof candidate.phoneIsWhatsapp === 'boolean'
+  );
+}
+
 export const useRtLeadersStore = defineStore('rtLeaders', () => {
   const rtLeaders = ref<RtLeader[]>([]);
   const isLoading = ref(false);
   const error = ref<string | null>(null);
+  /** True once a fetch has completed, so the page can tell "not loaded" from "empty". */
+  const hasFetched = ref(false);
+  /** Rows the API returned that could not be rendered. */
+  const rejectedCount = ref(0);
 
   let inFlight: Promise<void> | null = null;
 
@@ -47,14 +68,16 @@ export const useRtLeadersStore = defineStore('rtLeaders', () => {
           throw new Error(`Gagal memuat data Ketua RT (status ${response.status})`);
         }
 
-        const data = (await response.json()) as { leaders?: RtLeader[] };
-        rtLeaders.value = Array.isArray(data.leaders)
-          ? [...data.leaders].sort((a, b) => a.rtNumber - b.rtNumber)
-          : [];
+        const data = (await response.json()) as { leaders?: unknown };
+        const rows = Array.isArray(data.leaders) ? data.leaders : [];
+        const valid = rows.filter(isRtLeader);
+        rejectedCount.value = rows.length - valid.length;
+        rtLeaders.value = [...valid].sort((a, b) => a.rtNumber - b.rtNumber);
       } catch (err) {
         error.value = err instanceof Error ? err.message : 'Terjadi kesalahan jaringan';
       } finally {
         isLoading.value = false;
+        hasFetched.value = true;
         inFlight = null;
       }
     })();
@@ -66,6 +89,8 @@ export const useRtLeadersStore = defineStore('rtLeaders', () => {
     rtLeaders,
     isLoading,
     error,
+    hasFetched,
+    rejectedCount,
     fetchRtLeaders,
   };
 });
