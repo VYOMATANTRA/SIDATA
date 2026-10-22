@@ -328,8 +328,11 @@ buried inside a stat page. Entry points:
 
 The page provides **in-table search**: a single labelled text input filtering on both
 `rt_number` and leader `name`, applied client-side over the full 100-row set (no server
-round-trip, no pagination). The visible row count is announced as results change
-("Menampilkan N dari 100 RT"). Rows remain sorted by `rt_number` and the unfiltered table is
+round-trip). The matching rows are then **paginated client-side**, with a page-size control
+(10/25/50/100 rows) and a bounded page-number list, so paging never costs a second request —
+the page already asks for all 100 leaders in one call. The visible row count is announced as
+results change ("Menampilkan N dari 100 RT"; a paginated slice is announced as
+"Menampilkan 1–10 dari 100 RT"). Rows remain sorted by `rt_number` and the unfiltered table is
 the default state, so the page is fully usable with JavaScript-driven filtering ignored. No
 RT-range grouping or collapsible bands — flat table only.
 
