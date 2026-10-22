@@ -16,6 +16,8 @@ export interface SectionTextAreaProps {
   maxWidthClass?: string;
   /** Optional custom CSS classes for the eyebrow tag */
   eyebrowClass?: string;
+  /** Optional HTML id attribute for the heading element */
+  titleId?: string;
 }
 
 withDefaults(defineProps<SectionTextAreaProps>(), {
@@ -62,6 +64,7 @@ withDefaults(defineProps<SectionTextAreaProps>(), {
     <component
       :is="headingTag"
       v-if="title || $slots.title"
+      :id="titleId"
       class="min-w-0 leading-tight font-bold tracking-tight"
       :class="[
         theme === 'light' ? 'text-slate-900' : 'text-white',

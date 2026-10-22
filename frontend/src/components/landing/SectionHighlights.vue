@@ -59,17 +59,17 @@ const items = computed<HighlightItem[]>(() => {
         <article
           v-for="(item, index) in items"
           :key="index"
-          class="group flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-slate-50 p-6 transition-all duration-200 hover:border-emerald-200 hover:bg-emerald-50/40 hover:shadow-md sm:p-8"
+          class="group flex flex-col justify-between rounded-card border border-slate-200/80 bg-slate-50/70 p-6 transition-all duration-200 hover:border-brand-navy/30 hover:bg-white hover:shadow-lg sm:p-8"
         >
           <div class="space-y-4">
             <div
-              class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-lg font-bold text-emerald-800 transition-colors group-hover:bg-emerald-200/80"
+              class="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-navy/10 text-lg font-bold text-brand-navy transition-colors group-hover:bg-brand-navy group-hover:text-white"
               aria-hidden="true"
             >
               {{ index + 1 }}
             </div>
             <h3
-              class="text-lg font-bold tracking-tight text-slate-900 group-hover:text-emerald-900 sm:text-xl"
+              class="text-lg font-bold tracking-tight text-slate-900 transition-colors group-hover:text-brand-navy sm:text-xl"
             >
               {{ item.title }}
             </h3>

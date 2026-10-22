@@ -31,6 +31,12 @@ export interface HugeQuoteProps {
   align?: 'left' | 'center';
   /** Optional max width class for the quote description (default: 'max-w-2xl') */
   maxWidthClass?: string;
+  /** Optional container element ID */
+  id?: string;
+  /** Optional title heading ID (e.g. for aria-labelledby binding) */
+  titleId?: string;
+  /** Optional aria-labelledby attribute for the section landmark */
+  ariaLabelledby?: string;
 }
 
 const props = withDefaults(defineProps<HugeQuoteProps>(), {
@@ -100,15 +106,18 @@ const containerVariantClasses = computed(() => {
 
 <template>
   <section
+    :id="id"
     class="relative w-full max-w-4xl overflow-hidden rounded-2xl p-6 transition-all sm:p-10 md:p-12"
     :class="containerVariantClasses"
     data-test="huge-quote"
-    :aria-label="title"
+    :aria-label="ariaLabelledby ? undefined : title"
+    :aria-labelledby="ariaLabelledby"
   >
     <!-- Top Area: Quote Heading & Paragraph using SectionTextArea -->
     <div class="relative z-10 w-full" data-test="quote-header">
       <SectionTextArea
         :title="title"
+        :title-id="titleId"
         :description="effectiveQuote"
         :eyebrow="eyebrow"
         :heading-tag="headingTag"
