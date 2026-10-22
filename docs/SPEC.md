@@ -251,6 +251,12 @@ No indicator-citation-tracking table exists. Cerita-page data citations (e.g. th
 page citing Ekonomi & Ketertiban figures) stay informal/manual in prose text, not structurally
 linked.
 
+`allowPublicKeyRetrieval` is off unless a deployment opts in with `?allowPublicKeyRetrieval=true`
+in the connection string. It is off by default for the app client and for the privileged
+audit-pruning client alike: fetching the MySQL RSA public key over an unverified channel hands
+the key to whoever is in the middle, and with it the database password — including the
+`AUDIT_ADMIN_DATABASE_URL` credential.
+
 Three more tables exist alongside the auth layer (`Role`, `User`, `RefreshToken`, `EmailOtp`),
 implemented and out of scope for this schema pass in the same way those are:
 
