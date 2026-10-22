@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import TentangPageLayout from '../components/tentang/TentangPageLayout.vue';
 import TentangBreadcrumb from '../components/tentang/TentangBreadcrumb.vue';
 import TentangHeroPanel from '../components/tentang/TentangHeroPanel.vue';
+import TentangNotice from '../components/tentang/TentangNotice.vue';
 import BaseButton from '../components/common/BaseButton.vue';
 import { useRtLeadersStore } from '../stores/rtLeaders.store';
 
@@ -13,6 +14,8 @@ onMounted(() => {
 });
 
 const query = ref('');
+const currentPage = ref(1);
+const pageSize = ref(10);
 
 /**
  * A digits-only query names one RT, so "7", "07", and "007" all address RT 7.
@@ -27,8 +30,8 @@ const queryAsRtNumber = computed<number | null>(() => {
 
 /**
  * Filtering runs entirely client-side over the full roster (SPEC §8): no server
- * round-trip and no pagination. An empty query returns every row, so the default
- * state is the complete table.
+ * round-trip. An empty query returns every row, so the default state is the
+ * complete table.
  */
 const filteredLeaders = computed(() => {
   const term = query.value.trim().toLowerCase();
@@ -45,6 +48,68 @@ const filteredLeaders = computed(() => {
   return rtLeadersStore.rtLeaders.filter((leader) => leader.name.toLowerCase().includes(term));
 });
 
+/**
+ * Pagination is client-side over the rows already loaded. The store asks the API
+ * for all 100 leaders in one request (the endpoint's default page size is 10, so
+ * the explicit limit is load-bearing), so paging never costs a round-trip.
+ */
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(filteredLeaders.value.length / pageSize.value)),
+);
+
+const paginatedLeaders = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value;
+  return filteredLeaders.value.slice(start, start + pageSize.value);
+});
+
+const startRowIndex = computed(() =>
+  filteredLeaders.value.length === 0 ? 0 : (currentPage.value - 1) * pageSize.value + 1,
+);
+
+const endRowIndex = computed(() =>
+  Math.min(currentPage.value * pageSize.value, filteredLeaders.value.length),
+);
+
+/**
+ * A bounded page list with ellipsis windowing, so the control never grows wide
+ * enough to wrap onto a second line.
+ */
+const paginationPages = computed<(number | 'ellipsis')[]>(() => {
+  const total = totalPages.value;
+  const current = currentPage.value;
+
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, index) => index + 1);
+  }
+
+  if (current <= 4) {
+    return [1, 2, 3, 4, 5, 'ellipsis', total];
+  }
+
+  if (current >= total - 3) {
+    return [1, 'ellipsis', total - 4, total - 3, total - 2, total - 1, total];
+  }
+
+  return [1, 'ellipsis', current - 1, current, current + 1, 'ellipsis', total];
+});
+
+function goToPage(page: number) {
+  if (page < 1 || page > totalPages.value) return;
+  currentPage.value = page;
+}
+
+// A new search or a new page size invalidates the current offset.
+watch([query, pageSize], () => {
+  currentPage.value = 1;
+});
+
+// Filtering down can leave the current page beyond the last one.
+watch(totalPages, (newTotal) => {
+  if (currentPage.value > newTotal) {
+    currentPage.value = Math.max(1, newTotal);
+  }
+});
+
 const isFiltered = computed(() => query.value.trim() !== '');
 const hasRows = computed(() => rtLeadersStore.rtLeaders.length > 0);
 const showEmptyResult = computed(
@@ -59,12 +124,32 @@ const showNoData = computed(
 );
 
 /**
- * One polite announcement for the whole table (SPEC §8): the number of rows on
- * screen against the roster size.
+ * One polite announcement for the whole table (SPEC §8): how many rows match,
+ * against the roster size. When the matches span several pages it reports the
+ * visible slice instead, so a page change is announced too.
  */
 const countSummary = computed(() => {
-  const total = rtLeadersStore.rtLeaders.length;
-  return `Menampilkan ${filteredLeaders.value.length} dari ${total} RT`;
+  const rosterTotal = rtLeadersStore.rtLeaders.length;
+  const filtered = filteredLeaders.value.length;
+
+  if (filtered === 0) {
+    return `Menampilkan 0 dari ${rosterTotal} RT`;
+  }
+
+  if (filtered === 1) {
+    return `Menampilkan 1 dari ${rosterTotal} RT`;
+  }
+
+  // Every match fits on the first page: report the match count.
+  if (pageSize.value >= filtered && currentPage.value === 1) {
+    return `Menampilkan ${filtered} dari ${rosterTotal} RT`;
+  }
+
+  if (isFiltered.value) {
+    return `Menampilkan ${startRowIndex.value}–${endRowIndex.value} dari ${filtered} RT (total ${rosterTotal} RT)`;
+  }
+
+  return `Menampilkan ${startRowIndex.value}–${endRowIndex.value} dari ${rosterTotal} RT`;
 });
 
 /**
@@ -82,6 +167,15 @@ function clearFilter() {
 
 function digitsOnly(value: string): string {
   return value.replace(/[^0-9]/g, '');
+}
+
+/**
+ * A placeholder row carries no contact at all — the seeded roster stores a
+ * non-dialable marker instead of a number. There is nothing to call or message
+ * then, so the cell shows the value as plain text rather than a dead link.
+ */
+function isDialable(value: string): boolean {
+  return digitsOnly(value) !== '';
 }
 
 /**
@@ -129,8 +223,18 @@ function formatPhone(value: string): string {
 
     <TentangHeroPanel
       title="Ketua RT Kelurahan Manggar"
-      subtitle="Direktori 100 Rukun Tetangga beserta kontak ketua RT. Cari langsung di tabel berdasarkan nomor RT atau nama."
+      subtitle="Contoh data daftar Ketua RT. Cari langsung di tabel berdasarkan nomor RT atau nama ketua."
     />
+
+    <TentangNotice heading="Data contoh, bukan daftar resmi">
+      <p>
+        Isi tabel di bawah ini adalah <strong>data contoh</strong>, bukan data resmi dari
+        kelurahan. Nama dan kontak yang tampil belum mewakili ketua RT yang sebenarnya.
+      </p>
+      <p>
+        Untuk informasi kontak yang benar, hubungi kantor kelurahan.
+      </p>
+    </TentangNotice>
 
     <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="daftar-rt-title">
       <div class="mx-auto max-w-5xl">
@@ -226,9 +330,9 @@ function formatPhone(value: string): string {
                 </tr>
               </tbody>
 
-              <tbody v-else-if="filteredLeaders.length > 0" class="divide-y divide-gray-200 bg-white">
+              <tbody v-else-if="paginatedLeaders.length > 0" class="divide-y divide-gray-200 bg-white">
                 <tr
-                  v-for="leader in filteredLeaders"
+                  v-for="leader in paginatedLeaders"
                   :key="leader.rtNumber"
                   class="transition-colors hover:bg-gray-50/75"
                 >
@@ -238,7 +342,7 @@ function formatPhone(value: string): string {
                   <td class="px-4 py-4 align-top text-gray-800 break-words sm:px-6">{{ leader.name }}</td>
                   <td class="px-4 py-4 align-top text-gray-800 whitespace-nowrap sm:px-6">
                     <a
-                      v-if="leader.phoneIsWhatsapp"
+                      v-if="leader.phoneIsWhatsapp && isDialable(leader.phone)"
                       :href="`https://wa.me/${whatsappNumber(leader.phone)}`"
                       target="_blank"
                       rel="noopener noreferrer"
@@ -248,13 +352,20 @@ function formatPhone(value: string): string {
                       <span class="sr-only">(WhatsApp, tautan eksternal, terbuka di tab baru)</span>
                     </a>
                     <a
-                      v-else
+                      v-else-if="isDialable(leader.phone)"
                       :href="`tel:${digitsOnly(leader.phone)}`"
                       class="font-medium text-brand-navy underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
                     >
                       {{ formatPhone(leader.phone) }}
                       <span class="sr-only">(panggilan telepon)</span>
                     </a>
+                    <span
+                      v-else
+                      class="text-gray-700"
+                      data-test="rt-phone-placeholder"
+                    >
+                      {{ leader.phone }}
+                    </span>
                   </td>
                   <td v-if="hasAddressData" class="px-4 py-4 align-top text-gray-700 break-words sm:px-6">
                     {{ leader.alamat ?? '—' }}
@@ -283,6 +394,108 @@ function formatPhone(value: string): string {
           >
             Data Ketua RT belum tersedia. Hubungi kantor kelurahan untuk informasi terbaru.
           </div>
+
+          <!-- Pagination: page size and page navigation, both client-side -->
+          <div
+            v-if="!showEmptyResult && !showNoData && filteredLeaders.length > 0"
+            class="flex flex-col gap-4 border-t border-gray-200 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+            data-test="rt-pagination"
+          >
+            <div class="flex flex-wrap items-center gap-3 text-sm text-gray-700">
+              <div class="flex items-center gap-2">
+                <label for="page-size-select" class="text-xs font-medium text-gray-600 sm:text-sm">
+                  Baris per halaman:
+                </label>
+                <select
+                  id="page-size-select"
+                  v-model.number="pageSize"
+                  class="rounded-btn border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-medium text-brand-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+                  data-test="page-size-select"
+                >
+                  <option :value="10">10</option>
+                  <option :value="25">25</option>
+                  <option :value="50">50</option>
+                  <option :value="100">100</option>
+                </select>
+              </div>
+
+              <p class="text-xs text-gray-600 sm:text-sm" data-test="pagination-summary">
+                Menampilkan
+                <span class="font-semibold text-brand-navy">{{ startRowIndex }}–{{ endRowIndex }}</span>
+                dari
+                <span class="font-semibold text-brand-navy">{{ filteredLeaders.length }}</span>
+                RT
+              </p>
+            </div>
+
+            <nav
+              v-if="totalPages > 1"
+              aria-label="Navigasi halaman tabel Ketua RT"
+              class="flex items-center gap-1 self-center sm:self-auto"
+            >
+              <button
+                type="button"
+                :disabled="currentPage === 1"
+                :aria-disabled="currentPage === 1"
+                aria-label="Halaman sebelumnya"
+                class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-btn border border-gray-300 px-3 py-2 text-sm font-medium text-brand-navy transition-colors duration-150 motion-reduce:transform-none hover:bg-gray-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:active:scale-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+                data-test="pagination-prev"
+                @click="goToPage(currentPage - 1)"
+              >
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                </svg>
+                <span class="hidden sm:inline">Sebelumnya</span>
+              </button>
+
+              <span class="px-2 text-xs font-medium text-gray-700 sm:hidden">
+                {{ currentPage }} / {{ totalPages }}
+              </span>
+
+              <ul class="hidden items-center gap-1 sm:flex" role="list">
+                <li v-for="(item, idx) in paginationPages" :key="`page-${idx}`">
+                  <span
+                    v-if="item === 'ellipsis'"
+                    class="flex min-h-[44px] min-w-[36px] items-center justify-center text-sm font-medium text-gray-400"
+                    aria-hidden="true"
+                  >
+                    …
+                  </span>
+                  <button
+                    v-else
+                    type="button"
+                    :aria-current="currentPage === item ? 'page' : undefined"
+                    :aria-label="`Halaman ${item}`"
+                    class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-btn text-sm font-medium transition-colors duration-150 motion-reduce:transform-none active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+                    :class="
+                      currentPage === item
+                        ? 'bg-brand-navy text-white font-semibold shadow-xs'
+                        : 'border border-gray-300 text-brand-navy hover:bg-gray-100'
+                    "
+                    :data-test="`pagination-page-${item}`"
+                    @click="goToPage(item)"
+                  >
+                    {{ item }}
+                  </button>
+                </li>
+              </ul>
+
+              <button
+                type="button"
+                :disabled="currentPage === totalPages"
+                :aria-disabled="currentPage === totalPages"
+                aria-label="Halaman selanjutnya"
+                class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-btn border border-gray-300 px-3 py-2 text-sm font-medium text-brand-navy transition-colors duration-150 motion-reduce:transform-none hover:bg-gray-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:active:scale-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+                data-test="pagination-next"
+                @click="goToPage(currentPage + 1)"
+              >
+                <span class="hidden sm:inline">Selanjutnya</span>
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                </svg>
+              </button>
+            </nav>
+          </div>
         </div>
 
         <!-- Rows the API returned that could not be rendered -->
@@ -297,13 +510,13 @@ function formatPhone(value: string): string {
 
         <p class="mt-3 text-sm text-gray-600">
           <template v-if="isFiltered">
-            Pencarian hanya menyaring tabel; hapus filter untuk melihat seluruh 100 RT.
+            Pencarian hanya menyaring tabel; hapus filter untuk melihat seluruh
+            {{ rtLeadersStore.rtLeaders.length }} RT.
           </template>
           <template v-else>
             Gunakan kolom pencarian untuk menyaring nomor RT atau nama ketua secara langsung.
           </template>
-        </p>
-      </div>
+        </p>      </div>
     </section>
   </TentangPageLayout>
 </template>

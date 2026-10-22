@@ -120,9 +120,10 @@ describe('RT_LEADERS_DATA', () => {
     for (const rt of RT_LEADERS_DATA) {
       // Placeholder names only — never a real person's name.
       assert.match(rt.name, /^Ketua RT \d{2,3}$/);
-      // Synthetic numbers from the reserved dev block.
-      assert.match(rt.phone, /^0812000\d{4}$/);
-      assert.equal(typeof rt.phoneIsWhatsapp, 'boolean');
+      // A non-dialable marker, not a number: a fabricated number would render as a
+      // working WhatsApp or telephone link on the Ketua RT page.
+      assert.equal(rt.phone, '—');
+      assert.equal(rt.phoneIsWhatsapp, false);
       assert.ok(rt.latitude < 0 && rt.latitude > -2);
       assert.ok(rt.longitude > 116 && rt.longitude < 117);
     }
