@@ -6,6 +6,8 @@ import KetuaRtView from '../views/KetuaRtView.vue';
 import type { RtLeader } from '../stores/rtLeaders.store';
 
 const ROSTER_SIZE = 100;
+/** The page's default page size, matching the view's initial `pageSize`. */
+const DEFAULT_PAGE_SIZE = 10;
 
 function buildRoster(): RtLeader[] {
   return Array.from({ length: ROSTER_SIZE }, (_, index) => {
@@ -93,7 +95,7 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
     expect(calledUrl).toContain('limit=100');
   });
 
-  it('renders a semantic table with the whole roster, sorted by RT number', async () => {
+  it('renders a semantic table with the roster sorted by RT number', async () => {
     const wrapper = await mountReady();
 
     const table = wrapper.find('table');
@@ -109,14 +111,46 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
       'Alamat',
     ]);
 
-    // SPEC §8: one flat table of all 100 rows, no pagination.
+    // The default page size is 10, so the first page holds the first 10 RTs —
+    // still in RT-number order, and still the same rows the API returned.
     const rowHeaders = table.findAll('tbody th[scope="row"]');
-    expect(rowHeaders).toHaveLength(ROSTER_SIZE);
+    expect(rowHeaders).toHaveLength(DEFAULT_PAGE_SIZE);
     expect(rowHeaders[0]?.text()).toBe('1');
-    expect(rowHeaders[ROSTER_SIZE - 1]?.text()).toBe(String(ROSTER_SIZE));
-    expect(wrapper.find('[data-test="rt-pagination"]').exists()).toBe(false);
-    expect(wrapper.find('[data-test="page-size-select"]').exists()).toBe(false);
-    expect(wrapper.find('nav[aria-label="Navigasi halaman tabel Ketua RT"]').exists()).toBe(false);
+    expect(rowHeaders[DEFAULT_PAGE_SIZE - 1]?.text()).toBe(String(DEFAULT_PAGE_SIZE));
+  });
+
+  it('paginates the roster client-side with a page-size control', async () => {
+    const wrapper = await mountReady();
+
+    expect(wrapper.find('[data-test="rt-pagination"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="page-size-select"]').exists()).toBe(true);
+    expect(wrapper.find('nav[aria-label="Navigasi halaman tabel Ketua RT"]').exists()).toBe(true);
+
+    // Every leader is still loaded in one request — paging is client-side only.
+    const calledUrl = String((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]);
+    expect(calledUrl).toContain('limit=100');
+
+    // The first page holds 10 rows; the summary names the visible slice.
+    expect(wrapper.findAll('tbody th[scope="row"]')).toHaveLength(DEFAULT_PAGE_SIZE);
+    expect(wrapper.find('[data-test="pagination-summary"]').text()).toContain('1–10');
+    expect(wrapper.find('[data-test="pagination-summary"]').text()).toContain('100');
+  });
+
+  it('moves between pages and back to the full roster with the page-size control', async () => {
+    const wrapper = await mountReady();
+
+    const next = wrapper.find('[data-test="pagination-next"]');
+    await next.trigger('click');
+    expect(wrapper.findAll('tbody th[scope="row"]')[0]?.text()).toBe('11');
+    expect(wrapper.find('[data-test="rt-count"]').text()).toBe('Menampilkan 11–20 dari 100 RT');
+
+    await wrapper.find('[data-test="pagination-prev"]').trigger('click');
+    expect(wrapper.findAll('tbody th[scope="row"]')[0]?.text()).toBe('1');
+
+    // Widening the page size shows every loaded row again.
+    await wrapper.find('[data-test="page-size-select"]').setValue('100');
+    expect(wrapper.findAll('tbody th[scope="row"]')).toHaveLength(ROSTER_SIZE);
+    expect(wrapper.find('[data-test="rt-count"]').text()).toBe('Menampilkan 100 dari 100 RT');
   });
 
   it('announces the live row count for the unfiltered default state', async () => {
@@ -125,10 +159,22 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
     const count = wrapper.find('[data-test="rt-count"]');
     expect(count.exists()).toBe(true);
     expect(count.attributes('aria-live')).toBe('polite');
-    expect(count.text()).toBe('Menampilkan 100 dari 100 RT');
+    expect(count.text()).toBe('Menampilkan 1–10 dari 100 RT');
 
     // Exactly one live region, so nothing competes with the count.
     expect(wrapper.findAll('[aria-live="polite"]')).toHaveLength(1);
+  });
+
+  it('presents the rows as sample data, not the live kelurahan roster', async () => {
+    const wrapper = await mountReady();
+
+    // The hero says up front that this is sample data.
+    expect(wrapper.text()).toContain('Contoh data daftar Ketua RT');
+    // …and the notice repeats it, so a resident cannot mistake the table for the
+    // real directory.
+    expect(wrapper.text()).toContain('Data contoh, bukan daftar resmi');
+    // The old wording presented the rows as the live directory.
+    expect(wrapper.text()).not.toContain('Direktori 100 Rukun Tetangga');
   });
 
   it('filters by RT number, including zero-padded input', async () => {
@@ -183,6 +229,57 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
 
     // RT 2 is not
     expect(wrapper.find('a[href="tel:6281100000002"]').exists()).toBe(true);
+  });
+
+  it('renders a placeholder phone as plain text instead of a dead link', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          leaders: [
+            {
+              rtNumber: 1,
+              name: 'Ketua RT 01',
+              // The seeded roster stores a non-dialable marker, not a number.
+              phone: '—',
+              phoneIsWhatsapp: true,
+              alamat: 'Jl. Contoh RT 01, Manggar',
+              coordinates: null,
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+            {
+              rtNumber: 2,
+              name: 'Ketua RT 02',
+              phone: '—',
+              phoneIsWhatsapp: false,
+              alamat: 'Jl. Contoh RT 02, Manggar',
+              coordinates: null,
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          total: 2,
+        }),
+      } as Response),
+    );
+
+    const wrapper = await mountReady();
+
+    // No number means nothing to call or message, so no anchor is rendered —
+    // not even for a row still flagged as WhatsApp.
+    const cells = wrapper.findAll('tbody tr td:nth-child(3)');
+    expect(cells).toHaveLength(2);
+    for (const cell of cells) {
+      expect(cell.text()).toContain('—');
+      expect(cell.find('a').exists()).toBe(false);
+    }
+    expect(wrapper.findAll('[data-test="rt-phone-placeholder"]')).toHaveLength(2);
+    // Scoped to the table: the page footer carries its own kelurahan contact link.
+    const table = wrapper.find('table');
+    expect(table.find('a[href^="tel:"]').exists()).toBe(false);
+    expect(table.find('a[href^="https://wa.me/"]').exists()).toBe(false);
   });
 
   it('normalises local 08… numbers to an international wa.me link', async () => {
@@ -263,7 +360,7 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
     const clearButton = empty.find('button');
     expect(clearButton.text()).toContain('Hapus filter');
     await clearButton.trigger('click');
-    expect(wrapper.findAll('tbody th[scope="row"]')).toHaveLength(ROSTER_SIZE);
+    expect(wrapper.findAll('tbody th[scope="row"]')).toHaveLength(DEFAULT_PAGE_SIZE);
     expect(wrapper.find('tbody th[scope="row"]').text()).toBe('1');
   });
 
@@ -278,7 +375,7 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
 
     await flushPromises();
     expect(wrapper.find('[data-test="rt-nodata"]').exists()).toBe(false);
-    expect(wrapper.findAll('tbody th[scope="row"]')).toHaveLength(ROSTER_SIZE);
+    expect(wrapper.findAll('tbody th[scope="row"]')).toHaveLength(DEFAULT_PAGE_SIZE);
   });
 
   it('drops rows that cannot be rendered and reports how many', async () => {

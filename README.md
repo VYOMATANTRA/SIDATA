@@ -49,7 +49,7 @@ Copy `.env.example` to `.env` at the root of the repository:
 cp .env.example .env
 ```
 
-> **Note for local (non-Docker) runs**: `.env.example` defaults `DATABASE_URL` to host `mysql` for Docker Compose. When running MySQL directly on your machine or connecting to a local instance, update `DATABASE_URL` in `.env` to use `localhost` (e.g. `mysql://sidata:changeme@localhost:3306/sidata` or with your local MySQL credentials).
+> **Note for local (non-Docker) runs**: `.env.example` defaults `DATABASE_URL` to host `mysql` for Docker Compose. When running MySQL directly on your machine or connecting to a local instance, update `DATABASE_URL` in `.env` to use `localhost` (e.g. `mysql://sidata:changeme@localhost:3306/sidata` or with your local MySQL credentials). A local MySQL using `caching_sha2_password` can opt in to public-key retrieval with `?allowPublicKeyRetrieval=true` on `DATABASE_URL` only — never on `AUDIT_ADMIN_DATABASE_URL`.
 
 Install backend dependencies:
 
