@@ -76,6 +76,13 @@ Notes:
   states: Sosial Kemasyarakatan is the last, unnumbered chapter of Pemerintahan & Kelembagaan, and Persampahan &
   Bank Sampah Unit starts with Bank Sampah Unit, Program Eco Boba and Booklet Eco Boba chapters.
   Seeding never overwrites titles or ordering an editor has since changed.
+- The Ketua RT roster the repository ships is **synthetic only** (`backend/prisma/rtLeadersData.ts`):
+  placeholder names, placeholder phone numbers, and generated coordinates. Real Ketua RT names, phone
+  numbers, and home locations are personal data and must never be committed. The operational roster is
+  loaded from a non-committed source or an admin import at deploy time — see §10 for the open
+  import-path question.
+- Every RT-leader seed upsert carries `update: {}`. Re-running the seed fills in rows that are
+  missing and nothing else; it must never revert a correction an editor has already made.
 - `GET /api/pages` and `GET /api/pages/:slug` expose the hierarchy publicly (page → chapters →
   sections, each ordered by `sort_order`).
 - `POST /api/pages`, `DELETE /api/pages/:slug`, and `PUT /api/pages/reorder` manage the Cerita page list
@@ -244,6 +251,18 @@ No indicator-citation-tracking table exists. Cerita-page data citations (e.g. th
 page citing Ekonomi & Ketertiban figures) stay informal/manual in prose text, not structurally
 linked.
 
+`allowPublicKeyRetrieval` is off unless a deployment opts in with `?allowPublicKeyRetrieval=true`
+in the connection string. Fetching the MySQL RSA public key over an unverified channel hands the
+key to whoever is in the middle, and with it the database password. The two database clients
+therefore differ:
+
+- The **app client** (`DATABASE_URL`) opts in through the query parameter, and only through it —
+  `allowPublicKeyRetrievalFrom` returns true only for `?allowPublicKeyRetrieval=true`.
+- The **privileged audit-pruning client** (`AUDIT_ADMIN_DATABASE_URL`, `backend/scripts/prune-audit-logs.ts`)
+  never opts in. It hardcodes `allowPublicKeyRetrieval: false`, and the flag in
+  `AUDIT_ADMIN_DATABASE_URL` is ignored, because this client carries the admin password and a
+  query parameter must not be able to turn the safeguard off for it.
+
 Three more tables exist alongside the auth layer (`Role`, `User`, `RefreshToken`, `EmailOtp`),
 implemented and out of scope for this schema pass in the same way those are:
 
@@ -309,8 +328,11 @@ buried inside a stat page. Entry points:
 
 The page provides **in-table search**: a single labelled text input filtering on both
 `rt_number` and leader `name`, applied client-side over the full 100-row set (no server
-round-trip, no pagination). The visible row count is announced as results change
-("Menampilkan N dari 100 RT"). Rows remain sorted by `rt_number` and the unfiltered table is
+round-trip). The matching rows are then **paginated client-side**, with a page-size control
+(10/25/50/100 rows) and a bounded page-number list, so paging never costs a second request —
+the page already asks for all 100 leaders in one call. The visible row count is announced as
+results change ("Menampilkan N dari 100 RT"; a paginated slice is announced as
+"Menampilkan 1–10 dari 100 RT"). Rows remain sorted by `rt_number` and the unfiltered table is
 the default state, so the page is fully usable with JavaScript-driven filtering ignored. No
 RT-range grouping or collapsible bands — flat table only.
 
@@ -416,3 +438,10 @@ Single register — unresolved questions live here and nowhere else.
   not infer an appointment process.
 - **Vision and mission statement:** No approved wording was found in the inspected source set. Keep
   this section omitted until the Kelurahan provides an approved vision/mission document.
+- **Operational Ketua RT roster import:** The repository ships a synthetic roster only (§2). Decide
+  and build the path that loads the real roster — a non-committed deploy-time file, or an
+  editor/admin import — before the Ketua RT page carries real contacts. Until then the seeded rows
+  are placeholders and the page must not be presented as the live directory.
+- **Public visibility of Ketua RT contacts:** The page publishes names, phone numbers, and addresses
+  for private individuals. Confirm with the kelurahan whether the directory is published as-is, or
+  needs a reduced field set (for example address withheld, or contact only on request).

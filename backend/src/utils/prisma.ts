@@ -2,6 +2,7 @@ import { PrismaClient } from '../../generated/prisma/client.js';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { DATABASE_URL } from '../configs/index.js';
 import { assertAuditLogAcknowledgeOnlyUpdate, AuditLogImmutableError } from './auditLogGuard.js';
+import { allowPublicKeyRetrievalFrom } from './dbConnection.js';
 
 // Prisma 7 has no dedicated MySQL adapter; `@prisma/adapter-mariadb` (the `mariadb` driver)
 // is the officially documented adapter for both MySQL and MariaDB — this is the correct
@@ -15,6 +16,7 @@ const basePrisma = new PrismaClient({
     user: decodeURIComponent(databaseUrl.username),
     password: decodeURIComponent(databaseUrl.password),
     database: databaseUrl.pathname.slice(1),
+    allowPublicKeyRetrieval: allowPublicKeyRetrievalFrom(databaseUrl),
   }),
 });
 

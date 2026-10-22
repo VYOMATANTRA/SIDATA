@@ -34,6 +34,11 @@ function getPrivilegedClient() {
       user: decodeURIComponent(url.username),
       password: decodeURIComponent(url.password),
       database: url.pathname.slice(1),
+      // Always off. This client holds the privileged audit_logs credential, and
+      // fetching the MySQL RSA public key over an unverified channel hands the key
+      // to whoever is in the middle — and with it the admin password. Unlike the
+      // app client, this one has no opt-in: a query parameter cannot turn it on.
+      allowPublicKeyRetrieval: false,
     }),
   });
 }
