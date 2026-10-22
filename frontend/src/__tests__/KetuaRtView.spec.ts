@@ -6,6 +6,8 @@ import KetuaRtView from '../views/KetuaRtView.vue';
 import type { RtLeader } from '../stores/rtLeaders.store';
 
 const ROSTER_SIZE = 100;
+/** The page's default page size, matching the view's initial `pageSize`. */
+const DEFAULT_PAGE_SIZE = 10;
 
 function buildRoster(): RtLeader[] {
   return Array.from({ length: ROSTER_SIZE }, (_, index) => {
@@ -93,7 +95,7 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
     expect(calledUrl).toContain('limit=100');
   });
 
-  it('renders a semantic table with the whole roster, sorted by RT number', async () => {
+  it('renders a semantic table with the roster sorted by RT number', async () => {
     const wrapper = await mountReady();
 
     const table = wrapper.find('table');
@@ -109,14 +111,46 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
       'Alamat',
     ]);
 
-    // SPEC §8: one flat table of all 100 rows, no pagination.
+    // The default page size is 10, so the first page holds the first 10 RTs —
+    // still in RT-number order, and still the same rows the API returned.
     const rowHeaders = table.findAll('tbody th[scope="row"]');
-    expect(rowHeaders).toHaveLength(ROSTER_SIZE);
+    expect(rowHeaders).toHaveLength(DEFAULT_PAGE_SIZE);
     expect(rowHeaders[0]?.text()).toBe('1');
-    expect(rowHeaders[ROSTER_SIZE - 1]?.text()).toBe(String(ROSTER_SIZE));
-    expect(wrapper.find('[data-test="rt-pagination"]').exists()).toBe(false);
-    expect(wrapper.find('[data-test="page-size-select"]').exists()).toBe(false);
-    expect(wrapper.find('nav[aria-label="Navigasi halaman tabel Ketua RT"]').exists()).toBe(false);
+    expect(rowHeaders[DEFAULT_PAGE_SIZE - 1]?.text()).toBe(String(DEFAULT_PAGE_SIZE));
+  });
+
+  it('paginates the roster client-side with a page-size control', async () => {
+    const wrapper = await mountReady();
+
+    expect(wrapper.find('[data-test="rt-pagination"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="page-size-select"]').exists()).toBe(true);
+    expect(wrapper.find('nav[aria-label="Navigasi halaman tabel Ketua RT"]').exists()).toBe(true);
+
+    // Every leader is still loaded in one request — paging is client-side only.
+    const calledUrl = String((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]);
+    expect(calledUrl).toContain('limit=100');
+
+    // The first page holds 10 rows; the summary names the visible slice.
+    expect(wrapper.findAll('tbody th[scope="row"]')).toHaveLength(DEFAULT_PAGE_SIZE);
+    expect(wrapper.find('[data-test="pagination-summary"]').text()).toContain('1–10');
+    expect(wrapper.find('[data-test="pagination-summary"]').text()).toContain('100');
+  });
+
+  it('moves between pages and back to the full roster with the page-size control', async () => {
+    const wrapper = await mountReady();
+
+    const next = wrapper.find('[data-test="pagination-next"]');
+    await next.trigger('click');
+    expect(wrapper.findAll('tbody th[scope="row"]')[0]?.text()).toBe('11');
+    expect(wrapper.find('[data-test="rt-count"]').text()).toBe('Menampilkan 11–20 dari 100 RT');
+
+    await wrapper.find('[data-test="pagination-prev"]').trigger('click');
+    expect(wrapper.findAll('tbody th[scope="row"]')[0]?.text()).toBe('1');
+
+    // Widening the page size shows every loaded row again.
+    await wrapper.find('[data-test="page-size-select"]').setValue('100');
+    expect(wrapper.findAll('tbody th[scope="row"]')).toHaveLength(ROSTER_SIZE);
+    expect(wrapper.find('[data-test="rt-count"]').text()).toBe('Menampilkan 100 dari 100 RT');
   });
 
   it('announces the live row count for the unfiltered default state', async () => {
@@ -125,7 +159,7 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
     const count = wrapper.find('[data-test="rt-count"]');
     expect(count.exists()).toBe(true);
     expect(count.attributes('aria-live')).toBe('polite');
-    expect(count.text()).toBe('Menampilkan 100 dari 100 RT');
+    expect(count.text()).toBe('Menampilkan 1–10 dari 100 RT');
 
     // Exactly one live region, so nothing competes with the count.
     expect(wrapper.findAll('[aria-live="polite"]')).toHaveLength(1);
@@ -326,7 +360,7 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
     const clearButton = empty.find('button');
     expect(clearButton.text()).toContain('Hapus filter');
     await clearButton.trigger('click');
-    expect(wrapper.findAll('tbody th[scope="row"]')).toHaveLength(ROSTER_SIZE);
+    expect(wrapper.findAll('tbody th[scope="row"]')).toHaveLength(DEFAULT_PAGE_SIZE);
     expect(wrapper.find('tbody th[scope="row"]').text()).toBe('1');
   });
 
@@ -341,7 +375,7 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
 
     await flushPromises();
     expect(wrapper.find('[data-test="rt-nodata"]').exists()).toBe(false);
-    expect(wrapper.findAll('tbody th[scope="row"]')).toHaveLength(ROSTER_SIZE);
+    expect(wrapper.findAll('tbody th[scope="row"]')).toHaveLength(DEFAULT_PAGE_SIZE);
   });
 
   it('drops rows that cannot be rendered and reports how many', async () => {
