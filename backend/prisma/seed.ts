@@ -10,6 +10,7 @@ import { DEFAULT_CONTENT_BLOCKS } from '../src/services/contentBlocks.service.js
 import { DEFAULT_COMPARISON_TEMPLATES } from '../src/services/comparisonTemplates.service.js';
 import { CERITA_PAGES } from './ceritaPages.js';
 import { RT_LEADERS_DATA } from './rtLeadersData.js';
+import { seedRtLeaders } from './seedRtLeaders.js';
 
 async function main() {
   console.log('Memulai proses seeding...');
@@ -38,67 +39,10 @@ async function main() {
     },
   });
 
-  // Clean up legacy sample RT point 1 if present
-  await prisma.spatialPoint.deleteMany({
-    where: { id: '00000000-0000-0000-0000-000000000001' },
-  });
-
-  // Seed all 100 RT Leaders and their 1:1 Spatial Points
-  for (const rt of RT_LEADERS_DATA) {
-    await prisma.rtLeader.upsert({
-      where: { rtNumber: rt.rtNumber },
-      update: {
-        name: rt.name,
-        phone: rt.phone,
-        phoneIsWhatsapp: rt.phoneIsWhatsapp,
-        alamat: rt.alamat,
-      },
-      create: {
-        rtNumber: rt.rtNumber,
-        name: rt.name,
-        phone: rt.phone,
-        phoneIsWhatsapp: rt.phoneIsWhatsapp,
-        alamat: rt.alamat,
-      },
-    });
-
-    const pointId = `00000000-0000-0000-0001-${String(rt.rtNumber).padStart(12, '0')}`;
-    const point = await prisma.spatialPoint.upsert({
-      where: { id: pointId },
-      update: {
-        name: `Pos RT ${String(rt.rtNumber).padStart(2, '0')} Kelurahan Manggar`,
-        latitude: rt.latitude,
-        longitude: rt.longitude,
-        metadata: {
-          keterangan: `Ketua RT ${rt.rtNumber}: ${rt.name}`,
-        },
-      },
-      create: {
-        id: pointId,
-        name: `Pos RT ${String(rt.rtNumber).padStart(2, '0')} Kelurahan Manggar`,
-        type: 'ketua_rt',
-        latitude: rt.latitude,
-        longitude: rt.longitude,
-        metadata: {
-          keterangan: `Ketua RT ${rt.rtNumber}: ${rt.name}`,
-        },
-      },
-    });
-
-    await prisma.spatialPointRt.upsert({
-      where: {
-        pointId_rtNumber: {
-          pointId: point.id,
-          rtNumber: rt.rtNumber,
-        },
-      },
-      update: {},
-      create: {
-        pointId: point.id,
-        rtNumber: rt.rtNumber,
-      },
-    });
-  }
+  // Seed all 100 RT Leaders and their 1:1 Spatial Points.
+  // `update: {}` throughout: seeding must never overwrite a correction an editor
+  // has already made (SPEC §2). Re-running the seed only fills in missing rows.
+  await seedRtLeaders(prisma, RT_LEADERS_DATA);
 
   const pointBankSampah = await prisma.spatialPoint.upsert({
     where: { id: '00000000-0000-0000-0000-000000000002' },
