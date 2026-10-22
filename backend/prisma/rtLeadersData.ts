@@ -16,17 +16,13 @@ export interface RtSeedRecord {
  * so a seeded database exercises the page without publishing anyone's details.
  * Load the operational roster from a non-committed source or an admin import at
  * deploy time instead.
- *
- * The seeded phone is a non-dialable marker rather than a number: a fabricated
- * number would render as a working WhatsApp or telephone link that reaches nobody.
- * `phoneIsWhatsapp` is therefore false everywhere here.
  */
 export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 1,
     name: 'Ketua RT 01',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000001',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 01, Manggar',
     latitude: -1.2483902,
     longitude: 116.9273113,
@@ -34,7 +30,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 2,
     name: 'Ketua RT 02',
-    phone: '—',
+    phone: '08120000002',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 02, Manggar',
     latitude: -1.2428175,
@@ -43,8 +39,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 3,
     name: 'Ketua RT 03',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000003',
+    phoneIsWhatsapp: true,
     alamat: null,
     latitude: -1.2372449,
     longitude: 116.9366232,
@@ -52,7 +48,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 4,
     name: 'Ketua RT 04',
-    phone: '—',
+    phone: '08120000004',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 04, Manggar',
     latitude: -1.2316722,
@@ -61,8 +57,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 5,
     name: 'Ketua RT 05',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000005',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 05, Manggar',
     latitude: -1.2260996,
     longitude: 116.9459352,
@@ -70,7 +66,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 6,
     name: 'Ketua RT 06',
-    phone: '—',
+    phone: '08120000006',
     phoneIsWhatsapp: false,
     alamat: null,
     latitude: -1.2205269,
@@ -79,8 +75,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 7,
     name: 'Ketua RT 07',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000007',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 07, Manggar',
     latitude: -1.215874,
     longitude: 116.9544787,
@@ -88,7 +84,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 8,
     name: 'Ketua RT 08',
-    phone: '—',
+    phone: '08120000008',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 08, Manggar',
     latitude: -1.2103014,
@@ -97,8 +93,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 9,
     name: 'Ketua RT 09',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000009',
+    phoneIsWhatsapp: true,
     alamat: null,
     latitude: -1.2047287,
     longitude: 116.9637907,
@@ -106,7 +102,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 10,
     name: 'Ketua RT 10',
-    phone: '—',
+    phone: '08120000010',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 10, Manggar',
     latitude: -1.1991561,
@@ -115,8 +111,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 11,
     name: 'Ketua RT 11',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000011',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 11, Manggar',
     latitude: -1.2476868,
     longitude: 116.9278989,
@@ -124,7 +120,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 12,
     name: 'Ketua RT 12',
-    phone: '—',
+    phone: '08120000012',
     phoneIsWhatsapp: false,
     alamat: null,
     latitude: -1.2421142,
@@ -133,8 +129,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 13,
     name: 'Ketua RT 13',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000013',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 13, Manggar',
     latitude: -1.2374613,
     longitude: 116.9364424,
@@ -142,7 +138,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 14,
     name: 'Ketua RT 14',
-    phone: '—',
+    phone: '08120000014',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 14, Manggar',
     latitude: -1.2318886,
@@ -151,8 +147,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 15,
     name: 'Ketua RT 15',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000015',
+    phoneIsWhatsapp: true,
     alamat: null,
     latitude: -1.226316,
     longitude: 116.9457544,
@@ -160,7 +156,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 16,
     name: 'Ketua RT 16',
-    phone: '—',
+    phone: '08120000016',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 16, Manggar',
     latitude: -1.2207433,
@@ -169,8 +165,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 17,
     name: 'Ketua RT 17',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000017',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 17, Manggar',
     latitude: -1.2151707,
     longitude: 116.9550664,
@@ -178,7 +174,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 18,
     name: 'Ketua RT 18',
-    phone: '—',
+    phone: '08120000018',
     phoneIsWhatsapp: false,
     alamat: null,
     latitude: -1.2105178,
@@ -187,8 +183,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 19,
     name: 'Ketua RT 19',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000019',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 19, Manggar',
     latitude: -1.2049451,
     longitude: 116.9636099,
@@ -196,7 +192,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 20,
     name: 'Ketua RT 20',
-    phone: '—',
+    phone: '08120000020',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 20, Manggar',
     latitude: -1.1993725,
@@ -205,8 +201,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 21,
     name: 'Ketua RT 21',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000021',
+    phoneIsWhatsapp: true,
     alamat: null,
     latitude: -1.2479032,
     longitude: 116.9277181,
@@ -214,7 +210,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 22,
     name: 'Ketua RT 22',
-    phone: '—',
+    phone: '08120000022',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 22, Manggar',
     latitude: -1.2423306,
@@ -223,8 +219,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 23,
     name: 'Ketua RT 23',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000023',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 23, Manggar',
     latitude: -1.2367579,
     longitude: 116.9370301,
@@ -232,7 +228,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 24,
     name: 'Ketua RT 24',
-    phone: '—',
+    phone: '08120000024',
     phoneIsWhatsapp: false,
     alamat: null,
     latitude: -1.232105,
@@ -241,8 +237,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 25,
     name: 'Ketua RT 25',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000025',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 25, Manggar',
     latitude: -1.2265324,
     longitude: 116.9455736,
@@ -250,7 +246,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 26,
     name: 'Ketua RT 26',
-    phone: '—',
+    phone: '08120000026',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 26, Manggar',
     latitude: -1.2209597,
@@ -259,8 +255,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 27,
     name: 'Ketua RT 27',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000027',
+    phoneIsWhatsapp: true,
     alamat: null,
     latitude: -1.2153871,
     longitude: 116.9548856,
@@ -268,7 +264,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 28,
     name: 'Ketua RT 28',
-    phone: '—',
+    phone: '08120000028',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 28, Manggar',
     latitude: -1.2098144,
@@ -277,8 +273,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 29,
     name: 'Ketua RT 29',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000029',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 29, Manggar',
     latitude: -1.2042418,
     longitude: 116.9641976,
@@ -286,7 +282,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 30,
     name: 'Ketua RT 30',
-    phone: '—',
+    phone: '08120000030',
     phoneIsWhatsapp: false,
     alamat: null,
     latitude: -1.1995889,
@@ -295,8 +291,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 31,
     name: 'Ketua RT 31',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000031',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 31, Manggar',
     latitude: -1.2481196,
     longitude: 116.9275373,
@@ -304,7 +300,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 32,
     name: 'Ketua RT 32',
-    phone: '—',
+    phone: '08120000032',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 32, Manggar',
     latitude: -1.242547,
@@ -313,8 +309,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 33,
     name: 'Ketua RT 33',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000033',
+    phoneIsWhatsapp: true,
     alamat: null,
     latitude: -1.2369743,
     longitude: 116.9368493,
@@ -322,7 +318,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 34,
     name: 'Ketua RT 34',
-    phone: '—',
+    phone: '08120000034',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 34, Manggar',
     latitude: -1.2314017,
@@ -331,8 +327,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 35,
     name: 'Ketua RT 35',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000035',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 35, Manggar',
     latitude: -1.2267488,
     longitude: 116.9453928,
@@ -340,7 +336,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 36,
     name: 'Ketua RT 36',
-    phone: '—',
+    phone: '08120000036',
     phoneIsWhatsapp: false,
     alamat: null,
     latitude: -1.2211761,
@@ -349,8 +345,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 37,
     name: 'Ketua RT 37',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000037',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 37, Manggar',
     latitude: -1.2156035,
     longitude: 116.9547048,
@@ -358,7 +354,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 38,
     name: 'Ketua RT 38',
-    phone: '—',
+    phone: '08120000038',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 38, Manggar',
     latitude: -1.2100308,
@@ -367,8 +363,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 39,
     name: 'Ketua RT 39',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000039',
+    phoneIsWhatsapp: true,
     alamat: null,
     latitude: -1.2044582,
     longitude: 116.9640167,
@@ -376,7 +372,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 40,
     name: 'Ketua RT 40',
-    phone: '—',
+    phone: '08120000040',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 40, Manggar',
     latitude: -1.1988855,
@@ -385,8 +381,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 41,
     name: 'Ketua RT 41',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000041',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 41, Manggar',
     latitude: -1.2483361,
     longitude: 116.9273565,
@@ -394,7 +390,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 42,
     name: 'Ketua RT 42',
-    phone: '—',
+    phone: '08120000042',
     phoneIsWhatsapp: false,
     alamat: null,
     latitude: -1.2427634,
@@ -403,8 +399,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 43,
     name: 'Ketua RT 43',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000043',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 43, Manggar',
     latitude: -1.2371908,
     longitude: 116.9366684,
@@ -412,7 +408,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 44,
     name: 'Ketua RT 44',
-    phone: '—',
+    phone: '08120000044',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 44, Manggar',
     latitude: -1.2316181,
@@ -421,8 +417,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 45,
     name: 'Ketua RT 45',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000045',
+    phoneIsWhatsapp: true,
     alamat: null,
     latitude: -1.2260455,
     longitude: 116.9459804,
@@ -430,7 +426,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 46,
     name: 'Ketua RT 46',
-    phone: '—',
+    phone: '08120000046',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 46, Manggar',
     latitude: -1.2204728,
@@ -439,8 +435,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 47,
     name: 'Ketua RT 47',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000047',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 47, Manggar',
     latitude: -1.2158199,
     longitude: 116.9545239,
@@ -448,7 +444,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 48,
     name: 'Ketua RT 48',
-    phone: '—',
+    phone: '08120000048',
     phoneIsWhatsapp: false,
     alamat: null,
     latitude: -1.2102473,
@@ -457,8 +453,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 49,
     name: 'Ketua RT 49',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000049',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 49, Manggar',
     latitude: -1.2046746,
     longitude: 116.9638359,
@@ -466,7 +462,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 50,
     name: 'Ketua RT 50',
-    phone: '—',
+    phone: '08120000050',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 50, Manggar',
     latitude: -1.199102,
@@ -475,8 +471,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 51,
     name: 'Ketua RT 51',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000051',
+    phoneIsWhatsapp: true,
     alamat: null,
     latitude: -1.2476327,
     longitude: 116.9279441,
@@ -484,7 +480,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 52,
     name: 'Ketua RT 52',
-    phone: '—',
+    phone: '08120000052',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 52, Manggar',
     latitude: -1.2429798,
@@ -493,8 +489,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 53,
     name: 'Ketua RT 53',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000053',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 53, Manggar',
     latitude: -1.2374072,
     longitude: 116.9364876,
@@ -502,7 +498,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 54,
     name: 'Ketua RT 54',
-    phone: '—',
+    phone: '08120000054',
     phoneIsWhatsapp: false,
     alamat: null,
     latitude: -1.2318345,
@@ -511,8 +507,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 55,
     name: 'Ketua RT 55',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000055',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 55, Manggar',
     latitude: -1.2262619,
     longitude: 116.9457996,
@@ -520,7 +516,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 56,
     name: 'Ketua RT 56',
-    phone: '—',
+    phone: '08120000056',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 56, Manggar',
     latitude: -1.2206892,
@@ -529,8 +525,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 57,
     name: 'Ketua RT 57',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000057',
+    phoneIsWhatsapp: true,
     alamat: null,
     latitude: -1.2151166,
     longitude: 116.9551116,
@@ -538,7 +534,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 58,
     name: 'Ketua RT 58',
-    phone: '—',
+    phone: '08120000058',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 58, Manggar',
     latitude: -1.2104637,
@@ -547,8 +543,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 59,
     name: 'Ketua RT 59',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000059',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 59, Manggar',
     latitude: -1.204891,
     longitude: 116.9636551,
@@ -556,7 +552,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 60,
     name: 'Ketua RT 60',
-    phone: '—',
+    phone: '08120000060',
     phoneIsWhatsapp: false,
     alamat: null,
     latitude: -1.1993184,
@@ -565,8 +561,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 61,
     name: 'Ketua RT 61',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000061',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 61, Manggar',
     latitude: -1.2478491,
     longitude: 116.9277633,
@@ -574,7 +570,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 62,
     name: 'Ketua RT 62',
-    phone: '—',
+    phone: '08120000062',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 62, Manggar',
     latitude: -1.2422765,
@@ -583,8 +579,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 63,
     name: 'Ketua RT 63',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000063',
+    phoneIsWhatsapp: true,
     alamat: null,
     latitude: -1.2367038,
     longitude: 116.9370753,
@@ -592,7 +588,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 64,
     name: 'Ketua RT 64',
-    phone: '—',
+    phone: '08120000064',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 64, Manggar',
     latitude: -1.2320509,
@@ -601,8 +597,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 65,
     name: 'Ketua RT 65',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000065',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 65, Manggar',
     latitude: -1.2264783,
     longitude: 116.9456188,
@@ -610,7 +606,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 66,
     name: 'Ketua RT 66',
-    phone: '—',
+    phone: '08120000066',
     phoneIsWhatsapp: false,
     alamat: null,
     latitude: -1.2209056,
@@ -619,8 +615,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 67,
     name: 'Ketua RT 67',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000067',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 67, Manggar',
     latitude: -1.215333,
     longitude: 116.9549308,
@@ -628,7 +624,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 68,
     name: 'Ketua RT 68',
-    phone: '—',
+    phone: '08120000068',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 68, Manggar',
     latitude: -1.2097603,
@@ -637,8 +633,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 69,
     name: 'Ketua RT 69',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000069',
+    phoneIsWhatsapp: true,
     alamat: null,
     latitude: -1.2051074,
     longitude: 116.9634743,
@@ -646,7 +642,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 70,
     name: 'Ketua RT 70',
-    phone: '—',
+    phone: '08120000070',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 70, Manggar',
     latitude: -1.1995348,
@@ -655,8 +651,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 71,
     name: 'Ketua RT 71',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000071',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 71, Manggar',
     latitude: -1.2480655,
     longitude: 116.9275825,
@@ -664,7 +660,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 72,
     name: 'Ketua RT 72',
-    phone: '—',
+    phone: '08120000072',
     phoneIsWhatsapp: false,
     alamat: null,
     latitude: -1.2424929,
@@ -673,8 +669,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 73,
     name: 'Ketua RT 73',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000073',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 73, Manggar',
     latitude: -1.2369202,
     longitude: 116.9368945,
@@ -682,7 +678,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 74,
     name: 'Ketua RT 74',
-    phone: '—',
+    phone: '08120000074',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 74, Manggar',
     latitude: -1.2313476,
@@ -691,8 +687,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 75,
     name: 'Ketua RT 75',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000075',
+    phoneIsWhatsapp: true,
     alamat: null,
     latitude: -1.2266947,
     longitude: 116.945438,
@@ -700,7 +696,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 76,
     name: 'Ketua RT 76',
-    phone: '—',
+    phone: '08120000076',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 76, Manggar',
     latitude: -1.221122,
@@ -709,8 +705,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 77,
     name: 'Ketua RT 77',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000077',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 77, Manggar',
     latitude: -1.2155494,
     longitude: 116.95475,
@@ -718,7 +714,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 78,
     name: 'Ketua RT 78',
-    phone: '—',
+    phone: '08120000078',
     phoneIsWhatsapp: false,
     alamat: null,
     latitude: -1.2099767,
@@ -727,8 +723,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 79,
     name: 'Ketua RT 79',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000079',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 79, Manggar',
     latitude: -1.2044041,
     longitude: 116.9640619,
@@ -736,7 +732,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 80,
     name: 'Ketua RT 80',
-    phone: '—',
+    phone: '08120000080',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 80, Manggar',
     latitude: -1.1988314,
@@ -745,8 +741,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 81,
     name: 'Ketua RT 81',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000081',
+    phoneIsWhatsapp: true,
     alamat: null,
     latitude: -1.248282,
     longitude: 116.9274017,
@@ -754,7 +750,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 82,
     name: 'Ketua RT 82',
-    phone: '—',
+    phone: '08120000082',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 82, Manggar',
     latitude: -1.2427093,
@@ -763,8 +759,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 83,
     name: 'Ketua RT 83',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000083',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 83, Manggar',
     latitude: -1.2371367,
     longitude: 116.9367137,
@@ -772,7 +768,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 84,
     name: 'Ketua RT 84',
-    phone: '—',
+    phone: '08120000084',
     phoneIsWhatsapp: false,
     alamat: null,
     latitude: -1.231564,
@@ -781,8 +777,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 85,
     name: 'Ketua RT 85',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000085',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 85, Manggar',
     latitude: -1.2259913,
     longitude: 116.9460256,
@@ -790,7 +786,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 86,
     name: 'Ketua RT 86',
-    phone: '—',
+    phone: '08120000086',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 86, Manggar',
     latitude: -1.2213385,
@@ -799,8 +795,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 87,
     name: 'Ketua RT 87',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000087',
+    phoneIsWhatsapp: true,
     alamat: null,
     latitude: -1.2157658,
     longitude: 116.9545692,
@@ -808,7 +804,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 88,
     name: 'Ketua RT 88',
-    phone: '—',
+    phone: '08120000088',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 88, Manggar',
     latitude: -1.2101932,
@@ -817,8 +813,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 89,
     name: 'Ketua RT 89',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000089',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 89, Manggar',
     latitude: -1.2046205,
     longitude: 116.9638811,
@@ -826,7 +822,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 90,
     name: 'Ketua RT 90',
-    phone: '—',
+    phone: '08120000090',
     phoneIsWhatsapp: false,
     alamat: null,
     latitude: -1.1990479,
@@ -835,8 +831,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 91,
     name: 'Ketua RT 91',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000091',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 91, Manggar',
     latitude: -1.2475786,
     longitude: 116.9279893,
@@ -844,7 +840,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 92,
     name: 'Ketua RT 92',
-    phone: '—',
+    phone: '08120000092',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 92, Manggar',
     latitude: -1.2429257,
@@ -853,8 +849,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 93,
     name: 'Ketua RT 93',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000093',
+    phoneIsWhatsapp: true,
     alamat: null,
     latitude: -1.2373531,
     longitude: 116.9365328,
@@ -862,7 +858,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 94,
     name: 'Ketua RT 94',
-    phone: '—',
+    phone: '08120000094',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 94, Manggar',
     latitude: -1.2317804,
@@ -871,8 +867,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 95,
     name: 'Ketua RT 95',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000095',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 95, Manggar',
     latitude: -1.2262078,
     longitude: 116.9458448,
@@ -880,7 +876,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 96,
     name: 'Ketua RT 96',
-    phone: '—',
+    phone: '08120000096',
     phoneIsWhatsapp: false,
     alamat: null,
     latitude: -1.2206351,
@@ -889,8 +885,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 97,
     name: 'Ketua RT 97',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000097',
+    phoneIsWhatsapp: true,
     alamat: 'Jl. Contoh RT 97, Manggar',
     latitude: -1.2150625,
     longitude: 116.9551568,
@@ -898,7 +894,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 98,
     name: 'Ketua RT 98',
-    phone: '—',
+    phone: '08120000098',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 98, Manggar',
     latitude: -1.2104096,
@@ -907,8 +903,8 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 99,
     name: 'Ketua RT 99',
-    phone: '—',
-    phoneIsWhatsapp: false,
+    phone: '08120000099',
+    phoneIsWhatsapp: true,
     alamat: null,
     latitude: -1.2048369,
     longitude: 116.9637003,
@@ -916,7 +912,7 @@ export const RT_LEADERS_DATA: RtSeedRecord[] = [
   {
     rtNumber: 100,
     name: 'Ketua RT 100',
-    phone: '—',
+    phone: '08120000100',
     phoneIsWhatsapp: false,
     alamat: 'Jl. Contoh RT 100, Manggar',
     latitude: -1.1992643,
