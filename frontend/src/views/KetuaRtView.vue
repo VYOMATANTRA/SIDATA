@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import TentangPageLayout from '../components/tentang/TentangPageLayout.vue';
 import TentangBreadcrumb from '../components/tentang/TentangBreadcrumb.vue';
 import TentangHeroPanel from '../components/tentang/TentangHeroPanel.vue';
@@ -13,18 +13,22 @@ onMounted(() => {
 });
 
 const query = ref('');
-const currentPage = ref(1);
-const pageSize = ref(10);
 
-/** Digits-only form of the query, so "007" still matches RT 7. */
-const queryAsNumber = computed<number | null>(() => {
+/**
+ * A digits-only query names one RT, so "7", "07", and "007" all address RT 7.
+ * Anything else is treated as a name search.
+ */
+const queryAsRtNumber = computed<number | null>(() => {
   const trimmed = query.value.trim();
-  return /^\d+$/.test(trimmed) ? Number.parseInt(trimmed, 10) : null;
+  if (!/^\d+$/.test(trimmed)) return null;
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isFinite(parsed) ? parsed : null;
 });
 
 /**
  * Filtering runs entirely client-side over the full roster (SPEC §8): no server
- * round-trip. An empty query returns every row, so the default state is the complete table.
+ * round-trip and no pagination. An empty query returns every row, so the default
+ * state is the complete table.
  */
 const filteredLeaders = computed(() => {
   const term = query.value.trim().toLowerCase();
@@ -33,70 +37,12 @@ const filteredLeaders = computed(() => {
     return rtLeadersStore.rtLeaders;
   }
 
-  return rtLeadersStore.rtLeaders.filter((leader) => {
-    if (queryAsNumber.value !== null && leader.rtNumber === queryAsNumber.value) {
-      return true;
-    }
-    if (String(leader.rtNumber).includes(term)) {
-      return true;
-    }
-    return leader.name.toLowerCase().includes(term);
-  });
-});
-
-const totalPages = computed(() =>
-  Math.max(1, Math.ceil(filteredLeaders.value.length / pageSize.value)),
-);
-
-const paginatedLeaders = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value;
-  return filteredLeaders.value.slice(start, start + pageSize.value);
-});
-
-const startRowIndex = computed(() =>
-  filteredLeaders.value.length === 0 ? 0 : (currentPage.value - 1) * pageSize.value + 1,
-);
-
-const endRowIndex = computed(() =>
-  Math.min(currentPage.value * pageSize.value, filteredLeaders.value.length),
-);
-
-/**
- * Generates an accessible, bounded pagination item list with ellipsis windowing.
- * Never exceeds 7 items to avoid layout shift and wrapped rows.
- */
-const paginationPages = computed<(number | 'ellipsis')[]>(() => {
-  const total = totalPages.value;
-  const current = currentPage.value;
-
-  if (total <= 7) {
-    return Array.from({ length: total }, (_, i) => i + 1);
+  const rtNumber = queryAsRtNumber.value;
+  if (rtNumber !== null) {
+    return rtLeadersStore.rtLeaders.filter((leader) => leader.rtNumber === rtNumber);
   }
 
-  if (current <= 4) {
-    return [1, 2, 3, 4, 5, 'ellipsis', total];
-  }
-
-  if (current >= total - 3) {
-    return [1, 'ellipsis', total - 4, total - 3, total - 2, total - 1, total];
-  }
-
-  return [1, 'ellipsis', current - 1, current, current + 1, 'ellipsis', total];
-});
-
-function goToPage(page: number) {
-  if (page < 1 || page > totalPages.value) return;
-  currentPage.value = page;
-}
-
-watch([query, pageSize], () => {
-  currentPage.value = 1;
-});
-
-watch(totalPages, (newTotal) => {
-  if (currentPage.value > newTotal) {
-    currentPage.value = Math.max(1, newTotal);
-  }
+  return rtLeadersStore.rtLeaders.filter((leader) => leader.name.toLowerCase().includes(term));
 });
 
 const isFiltered = computed(() => query.value.trim() !== '');
@@ -105,25 +51,20 @@ const showEmptyResult = computed(
   () => !rtLeadersStore.isLoading && hasRows.value && filteredLeaders.value.length === 0,
 );
 const showNoData = computed(
-  () => !rtLeadersStore.isLoading && !rtLeadersStore.error && !hasRows.value,
+  () =>
+    !rtLeadersStore.isLoading &&
+    rtLeadersStore.hasFetched &&
+    !rtLeadersStore.error &&
+    !hasRows.value,
 );
 
+/**
+ * One polite announcement for the whole table (SPEC §8): the number of rows on
+ * screen against the roster size.
+ */
 const countSummary = computed(() => {
-  const total = 100;
-  const filtered = filteredLeaders.value.length;
-  if (filtered === 0) {
-    return `Menampilkan 0 dari ${total} RT`;
-  }
-  if (filtered === 1) {
-    return `Menampilkan 1 dari ${total} RT`;
-  }
-  if (pageSize.value >= filtered && currentPage.value === 1 && !isFiltered.value) {
-    return `Menampilkan ${filtered} dari ${total} RT`;
-  }
-  if (isFiltered.value) {
-    return `Menampilkan ${startRowIndex.value}–${endRowIndex.value} dari ${filtered} RT (total ${total} RT)`;
-  }
-  return `Menampilkan ${startRowIndex.value}–${endRowIndex.value} dari ${total} RT`;
+  const total = rtLeadersStore.rtLeaders.length;
+  return `Menampilkan ${filteredLeaders.value.length} dari ${total} RT`;
 });
 
 /**
@@ -144,29 +85,41 @@ function digitsOnly(value: string): string {
 }
 
 /**
- * WhatsApp requires an international MSISDN. Survey data mixes formats — the
- * seeded roster stores local `08…` numbers — so a leading 0 is rewritten to
- * Indonesia's country code (62) before building the wa.me link.
+ * WhatsApp requires an international MSISDN. The roster mixes formats — local
+ * `08…`, international `+62 8…`, and bare `8…` — so the number is normalised to
+ * the `62…` form before building the wa.me link.
  */
 function whatsappNumber(value: string): string {
   const digits = digitsOnly(value);
-  return digits.startsWith('0') ? `62${digits.slice(1)}` : digits;
+  if (digits === '') return '';
+  if (digits.startsWith('62')) return digits;
+  if (digits.startsWith('0')) return `62${digits.slice(1)}`;
+  if (digits.startsWith('8')) return `62${digits}`;
+  return digits;
 }
 
 /**
- * Display grouping (0812 5356 695) matching the source list, so a long mobile
- * number stays readable in the table cell. Anything that is not the local
- * `08…` form is shown exactly as recorded.
+ * Display grouping that keeps a long mobile number readable: local numbers read
+ * `0812 5356 695`, international ones `+62 812 5356 695`. Anything that is not a
+ * recognisable mobile number is shown exactly as recorded.
  */
 function formatPhone(value: string): string {
   const digits = digitsOnly(value);
-  if (!digits.startsWith('0') || digits.length < 10 || digits.length > 13) {
-    return value;
+
+  if (digits.startsWith('62')) {
+    const rest = digits.slice(2);
+    if (rest.length < 9) return value;
+    return `+62 ${rest.slice(0, 3)} ${rest.slice(3, 7)} ${rest.slice(7)}`;
   }
-  const head = digits.slice(0, 4);
-  const middle = digits.slice(4, 8);
-  const rest = digits.slice(8);
-  return rest === '' ? `${head} ${middle}` : `${head} ${middle} ${rest}`;
+
+  if (digits.startsWith('0') && digits.length >= 10 && digits.length <= 13) {
+    const head = digits.slice(0, 4);
+    const middle = digits.slice(4, 8);
+    const rest = digits.slice(8);
+    return rest === '' ? `${head} ${middle}` : `${head} ${middle} ${rest}`;
+  }
+
+  return value;
 }
 </script>
 
@@ -220,7 +173,7 @@ function formatPhone(value: string): string {
 
         <!-- Table -->
         <div v-else class="mt-5 overflow-hidden rounded-btn border border-gray-300 bg-white shadow-xs">
-          <div class="overflow-x-auto">
+          <div class="relative overflow-x-auto">
             <table class="w-full min-w-[600px] table-fixed divide-y divide-gray-200 text-left text-sm text-gray-800">
               <caption class="sr-only">
                 <template v-if="hasAddressData">
@@ -273,9 +226,9 @@ function formatPhone(value: string): string {
                 </tr>
               </tbody>
 
-              <tbody v-else-if="paginatedLeaders.length > 0" class="divide-y divide-gray-200 bg-white">
+              <tbody v-else-if="filteredLeaders.length > 0" class="divide-y divide-gray-200 bg-white">
                 <tr
-                  v-for="leader in paginatedLeaders"
+                  v-for="leader in filteredLeaders"
                   :key="leader.rtNumber"
                   class="transition-colors hover:bg-gray-50/75"
                 >
@@ -330,109 +283,17 @@ function formatPhone(value: string): string {
           >
             Data Ketua RT belum tersedia. Hubungi kantor kelurahan untuk informasi terbaru.
           </div>
-
-          <!-- Pagination Bar -->
-          <div
-            v-if="!showEmptyResult && !showNoData && filteredLeaders.length > 0"
-            class="flex flex-col gap-4 border-t border-gray-200 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-6"
-            data-test="rt-pagination"
-          >
-            <!-- Page Size Selection & Position Summary -->
-            <div class="flex flex-wrap items-center gap-3 text-sm text-gray-700">
-              <div class="flex items-center gap-2">
-                <label for="page-size-select" class="text-xs font-medium text-gray-600 sm:text-sm">
-                  Baris per halaman:
-                </label>
-                <select
-                  id="page-size-select"
-                  v-model.number="pageSize"
-                  class="rounded-btn border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-medium text-brand-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
-                  data-test="page-size-select"
-                >
-                  <option :value="10">10</option>
-                  <option :value="25">25</option>
-                  <option :value="50">50</option>
-                  <option :value="100">100</option>
-                </select>
-              </div>
-
-              <span class="hidden text-gray-300 sm:inline" aria-hidden="true">•</span>
-
-              <p class="text-xs text-gray-600 sm:text-sm" data-test="pagination-summary">
-                Menampilkan <span class="font-semibold text-brand-navy">{{ startRowIndex }}–{{ endRowIndex }}</span> dari <span class="font-semibold text-brand-navy">{{ filteredLeaders.length }}</span> RT
-              </p>
-            </div>
-
-            <!-- Page Navigation Controls -->
-            <nav
-              v-if="totalPages > 1"
-              aria-label="Navigasi halaman tabel Ketua RT"
-              class="flex items-center gap-1 self-center sm:self-auto"
-            >
-              <button
-                type="button"
-                :disabled="currentPage === 1"
-                :aria-disabled="currentPage === 1"
-                aria-label="Halaman sebelumnya"
-                class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-btn border border-gray-300 px-3 py-2 text-sm font-medium text-brand-navy transition-colors duration-150 motion-reduce:transform-none hover:bg-gray-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:active:scale-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
-                data-test="pagination-prev"
-                @click="goToPage(currentPage - 1)"
-              >
-                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-                </svg>
-                <span class="hidden sm:inline">Sebelumnya</span>
-              </button>
-
-              <span class="px-2 text-xs font-medium text-gray-700 sm:hidden" aria-live="polite">
-                {{ currentPage }} / {{ totalPages }}
-              </span>
-
-              <ul class="hidden items-center gap-1 sm:flex" role="list">
-                <li v-for="(item, idx) in paginationPages" :key="`page-${idx}`">
-                  <span
-                    v-if="item === 'ellipsis'"
-                    class="flex min-h-[44px] min-w-[36px] items-center justify-center text-sm font-medium text-gray-400"
-                    aria-hidden="true"
-                  >
-                    …
-                  </span>
-                  <button
-                    v-else
-                    type="button"
-                    :aria-current="currentPage === item ? 'page' : undefined"
-                    :aria-label="`Halaman ${item}`"
-                    class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-btn text-sm font-medium transition-colors duration-150 motion-reduce:transform-none active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
-                    :class="
-                      currentPage === item
-                        ? 'bg-brand-navy text-white font-semibold shadow-xs'
-                        : 'border border-gray-300 text-brand-navy hover:bg-gray-100'
-                    "
-                    :data-test="`pagination-page-${item}`"
-                    @click="goToPage(item)"
-                  >
-                    {{ item }}
-                  </button>
-                </li>
-              </ul>
-
-              <button
-                type="button"
-                :disabled="currentPage === totalPages"
-                :aria-disabled="currentPage === totalPages"
-                aria-label="Halaman selanjutnya"
-                class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-btn border border-gray-300 px-3 py-2 text-sm font-medium text-brand-navy transition-colors duration-150 motion-reduce:transform-none hover:bg-gray-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:active:scale-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
-                data-test="pagination-next"
-                @click="goToPage(currentPage + 1)"
-              >
-                <span class="hidden sm:inline">Selanjutnya</span>
-                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                </svg>
-              </button>
-            </nav>
-          </div>
         </div>
+
+        <!-- Rows the API returned that could not be rendered -->
+        <p
+          v-if="rtLeadersStore.rejectedCount > 0"
+          class="mt-4 text-sm text-gray-700"
+          data-test="rt-rejected"
+        >
+          {{ rtLeadersStore.rejectedCount }} baris data tidak lengkap dan tidak ditampilkan. Hubungi
+          kantor kelurahan untuk pemutakhiran data.
+        </p>
 
         <p class="mt-3 text-sm text-gray-600">
           <template v-if="isFiltered">
