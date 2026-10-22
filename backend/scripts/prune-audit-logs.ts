@@ -15,7 +15,6 @@ import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { AUDIT_ADMIN_DATABASE_URL } from '../src/configs/index.js';
 import { AUDIT_ACTIONS, type AuditSeverity } from '../src/services/audit.service.js';
 import { AUDIT_RETENTION_KEYS as RETENTION_KEYS } from '../src/services/settings.service.js';
-import { allowPublicKeyRetrievalFrom } from '../src/utils/dbConnection.js';
 
 function getPrivilegedClient() {
   if (!AUDIT_ADMIN_DATABASE_URL) {
@@ -35,9 +34,11 @@ function getPrivilegedClient() {
       user: decodeURIComponent(url.username),
       password: decodeURIComponent(url.password),
       database: url.pathname.slice(1),
-      // Off unless explicitly requested: this client holds the privileged audit_logs
-      // credential, so the RSA key must never be fetched over an unverified channel.
-      allowPublicKeyRetrieval: allowPublicKeyRetrievalFrom(url),
+      // Always off. This client holds the privileged audit_logs credential, and
+      // fetching the MySQL RSA public key over an unverified channel hands the key
+      // to whoever is in the middle — and with it the admin password. Unlike the
+      // app client, this one has no opt-in: a query parameter cannot turn it on.
+      allowPublicKeyRetrieval: false,
     }),
   });
 }
