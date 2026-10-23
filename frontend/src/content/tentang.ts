@@ -1,15 +1,15 @@
 import type { StatCardIconName, StatItem } from '../components/common/StatCard.vue';
 
-// TODO(#<issue>): move to CMS
+// TODO: move to CMS
 export const RT_COUNT = 100;
 
-// TODO(#<issue>): move to CMS
+// TODO: move to CMS
 export const KECAMATAN = 'Balikpapan Timur';
 
-// TODO(#<issue>): move to CMS
+// TODO: move to CMS
 export const KOTA = 'Kota Balikpapan';
 
-// TODO(#<issue>): move to CMS
+// TODO: move to CMS
 export const LANDSCAPE = 'Pesisir & Dataran';
 
 export interface BatasWilayahItem {
@@ -17,7 +17,7 @@ export interface BatasWilayahItem {
   wilayah: string;
 }
 
-// TODO(#<issue>): move to CMS
+// TODO: move to CMS
 export const BATAS_WILAYAH: BatasWilayahItem[] = [
   { arah: 'Sebelah Utara', wilayah: 'Kelurahan Karang Joang' },
   { arah: 'Sebelah Timur', wilayah: 'Kelurahan Manggar Baru' },
@@ -31,7 +31,7 @@ export interface SotkMember {
   duties: string | null;
 }
 
-// TODO(#<issue>): move to CMS
+// TODO: move to CMS
 export const SOTK_MEMBERS: SotkMember[] = [
   {
     role: 'Lurah',
@@ -62,12 +62,12 @@ export const SOTK_MEMBERS: SotkMember[] = [
 
 export const LURAH_OFFICIAL: SotkMember | undefined = SOTK_MEMBERS.find((m) => m.role === 'Lurah');
 
-// TODO(#<issue>): move to CMS
+// TODO: move to CMS
 export const SOTK_SOURCE_CITATION =
   'Sumber nama dan jabatan: Monografi Kelurahan Manggar 2026, Data Personil (PDF viewer halaman 8–9). Rincian tugas resmi belum tersedia pada sumber yang dirujuk.';
 
-// TODO(#<issue>): move to CMS
+// TODO: move to CMS
 export const BOUNDARY_SOURCE_CITATION =
-  'Batas wilayah: Manggar Dalam Angka 2026, Tabel 1.1.2 (printed p. 18, PDF viewer p. 19).';
+  'Batas wilayah: Manggar Dalam Angka 2026, Tabel 1.1.2 (hlm. 18 versi cetak, hlm. 19 PDF).';
 
 export type { StatCardIconName, StatItem };

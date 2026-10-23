@@ -20,6 +20,7 @@ import {
   SOTK_MEMBERS,
   LURAH_OFFICIAL,
   SOTK_SOURCE_CITATION,
+  BOUNDARY_SOURCE_CITATION,
 } from '../content/tentang';
 import heroImage from '@/assets/img/background_laman_depan_kelurahan.png';
 import lurahPhoto from '@/assets/img/lurah_placeholder_sample.png';
@@ -82,8 +83,8 @@ const formattedPopulation = computed(() => {
 const wilayahStats = computed<StatItem[]>(() => [
   { icon: 'house', value: String(RT_COUNT), label: 'Rukun Tetangga terdaftar' },
   { icon: 'density', value: KECAMATAN, label: `Kecamatan, ${KOTA}` },
-  { icon: 'ratio', value: LANDSCAPE, label: 'Potensi pantai & pertanian' },
-  { icon: 'person', value: 'Desa Cantik', label: 'Kelurahan Cinta Statistik' },
+  { icon: 'person', value: LANDSCAPE, label: 'Potensi pantai & pertanian' },
+  { icon: 'ratio', value: 'Desa Cantik', label: 'Kelurahan Cinta Statistik' },
 ]);
 </script>
 
@@ -171,11 +172,11 @@ const wilayahStats = computed<StatItem[]>(() => [
         <TentangResourceCard
           title="Peta Spasial RT dan Bank Sampah Unit"
           icon="map"
-          cta-label="Segera hadir"
+          cta-label="Segera Hadir"
           class="flex-1"
         >
           Peta lokasi rumah ketua RT dan bank sampah aktif di Kelurahan Manggar, Kecamatan
-          Balikpapan Timur.
+          {{ KECAMATAN }}.
         </TentangResourceCard>
 
         <TentangResourceCard title="Portal SIDATA" icon="system" class="flex-1">
@@ -208,7 +209,9 @@ const wilayahStats = computed<StatItem[]>(() => [
             </div>
             <!-- Name & Title below the photo -->
             <div class="mt-4 flex flex-col items-center text-center">
-              <h3 class="text-brand-navy text-lg font-bold">{{ LURAH_OFFICIAL?.officialName }}</h3>
+              <h3 class="text-brand-navy text-lg font-bold">
+                {{ LURAH_OFFICIAL?.officialName ?? 'Nama pejabat belum tersedia' }}
+              </h3>
               <p class="mt-0.5 text-sm font-medium text-gray-700">Lurah Kelurahan Manggar</p>
               <p class="text-xs text-gray-500">Pemerintah Kelurahan Manggar</p>
               <span
@@ -223,7 +226,7 @@ const wilayahStats = computed<StatItem[]>(() => [
             <div class="space-y-3 text-base leading-relaxed text-gray-800">
               <p>
                 Sebagai garda terdepan pelayanan pemerintah daerah bagi masyarakat di wilayah
-                Balikpapan Timur, Kelurahan Manggar berupaya menyediakan pelayanan yang ramah,
+                {{ KECAMATAN }}, Kelurahan Manggar berupaya menyediakan pelayanan yang ramah,
                 akuntabel, dan transparan.
               </p>
               <p>
@@ -268,6 +271,9 @@ const wilayahStats = computed<StatItem[]>(() => [
               <span>{{ item.wilayah }}</span>
             </li>
           </ul>
+          <p class="mt-3 text-sm text-gray-600">
+            {{ BOUNDARY_SOURCE_CITATION }}
+          </p>
         </div>
       </div>
     </section>
@@ -286,8 +292,7 @@ const wilayahStats = computed<StatItem[]>(() => [
         <div class="rounded-btn mt-5 overflow-x-auto border border-gray-300 bg-white">
           <table class="min-w-full divide-y divide-gray-200 text-left text-sm text-gray-800">
             <caption class="sr-only">
-              Daftar Struktur Organisasi dan Tata Kerja Kelurahan Manggar beserta tugas pokok dan
-              fungsi
+              Daftar Struktur Organisasi dan Tata Kerja Kelurahan Manggar
             </caption>
             <thead class="bg-brand-navy text-xs font-semibold tracking-wider text-white uppercase">
               <tr>
@@ -297,7 +302,7 @@ const wilayahStats = computed<StatItem[]>(() => [
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-200 bg-white">
-              <tr v-for="(member, idx) in SOTK_MEMBERS" :key="idx" class="transition-colors">
+              <tr v-for="member in SOTK_MEMBERS" :key="member.role" class="transition-colors">
                 <th scope="row" class="text-brand-navy px-4 py-4 align-top font-semibold sm:px-6">
                   {{ member.role }}
                 </th>

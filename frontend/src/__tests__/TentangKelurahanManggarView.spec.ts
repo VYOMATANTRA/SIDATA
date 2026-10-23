@@ -248,7 +248,10 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(table.exists()).toBe(true);
 
     // Caption check
-    expect(table.find('caption').exists()).toBe(true);
+    const caption = table.find('caption');
+    expect(caption.exists()).toBe(true);
+    expect(caption.text()).toBe('Daftar Struktur Organisasi dan Tata Kerja Kelurahan Manggar');
+    expect(caption.text()).not.toContain('tugas pokok dan fungsi');
 
     // Header column scopes
     const colHeaders = table.findAll('th[scope="col"]');
@@ -293,6 +296,8 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(wrapper.text()).toContain('Kelurahan Manggar Baru');
     expect(wrapper.text()).toContain('Selat Makassar');
     expect(wrapper.text()).toContain('Kelurahan Sepinggan dan Sepinggan Baru');
+    expect(wrapper.text()).toContain('Batas wilayah: Manggar Dalam Angka 2026, Tabel 1.1.2');
+    expect(wrapper.text()).toContain('hlm. 18 versi cetak, hlm. 19 PDF');
   });
 
   it('does not publish an unverified vision or mission statement', async () => {
