@@ -1,4 +1,7 @@
 import type { Request, Response } from 'express';
+import type { AuthRequest } from '../middlewares/auth.middleware.js';
+import { extractRequestActor } from '../utils/actor.js';
+import { extractRequestContext } from '../utils/requestContext.js';
 import {
   getSpatialPoints,
   getSpatialPointsAsGeoJson,
@@ -7,6 +10,15 @@ import {
   getRtLeaderByRtNumber,
   getMapSummary,
   ALL_SPATIAL_POINT_TYPES,
+  MapsServiceError,
+  MIN_RT_NUMBER,
+  MAX_RT_NUMBER,
+  createSpatialPoint,
+  updateSpatialPoint,
+  deleteSpatialPoint,
+  createSpatialPointCoverage,
+  deleteSpatialPointCoverage,
+  updateRtLeader,
 } from '../services/maps.service.js';
 import type { SpatialPointType } from '../../generated/prisma/client.js';
 
@@ -252,6 +264,165 @@ export const getSummary = async (req: Request, res: Response): Promise<Response>
     return res.status(200).json(summary);
   } catch (error) {
     console.error('Error saat mengambil ringkasan peta:', error);
+    return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Write handlers (SPEC.md §7) — editor/admin via route middleware, CSRF-protected,
+// written as thin pass-throughs: zod validation and the ketua_rt invariant live in
+// maps.service.ts, controllers only map service errors to status codes.
+// ---------------------------------------------------------------------------
+
+function requireActor(req: AuthRequest) {
+  const actor = extractRequestActor(req);
+  if (!actor) {
+    throw new MapsServiceError('Akses ditolak. Pengguna belum terautentikasi.', 401);
+  }
+  return actor;
+}
+
+/**
+ * Route :rtNumber params for RT-scoped write endpoints must sit in the 1–100 range SPEC §7
+ * pins for validation (reads keep their looser MAX_MYSQL_INT tolerance, writes do not).
+ */
+function parseRtNumberParam(value: string | undefined): { rtNumber?: number; error?: string } {
+  return parsePositiveIntParam(
+    value,
+    `Nomor RT harus berupa angka bulat antara ${MIN_RT_NUMBER} dan ${MAX_RT_NUMBER}`,
+    MAX_RT_NUMBER,
+  );
+}
+
+export const createPointHandler = async (req: AuthRequest, res: Response): Promise<Response> => {
+  try {
+    const actor = requireActor(req);
+    const point = await createSpatialPoint(req.body, actor, extractRequestContext(req));
+    return res.status(201).json({ message: 'Titik spasial berhasil dibuat', point });
+  } catch (error) {
+    if (error instanceof MapsServiceError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    console.error(
+      'Error saat membuat titik spasial:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
+    return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
+  }
+};
+
+export const updatePointHandler = async (req: AuthRequest, res: Response): Promise<Response> => {
+  try {
+    const actor = requireActor(req);
+    const point = await updateSpatialPoint(
+      req.params['id'],
+      req.body,
+      actor,
+      extractRequestContext(req),
+    );
+    return res.status(200).json({ message: 'Titik spasial berhasil diperbarui', point });
+  } catch (error) {
+    if (error instanceof MapsServiceError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    console.error(
+      'Error saat memperbarui titik spasial:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
+    return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
+  }
+};
+
+export const deletePointHandler = async (req: AuthRequest, res: Response): Promise<Response> => {
+  try {
+    const actor = requireActor(req);
+    const point = await deleteSpatialPoint(req.params['id'], actor, extractRequestContext(req));
+    return res.status(200).json({ message: 'Titik spasial berhasil dihapus', point });
+  } catch (error) {
+    if (error instanceof MapsServiceError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    console.error(
+      'Error saat menghapus titik spasial:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
+    return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
+  }
+};
+
+export const createPointCoverageHandler = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<Response> => {
+  try {
+    const actor = requireActor(req);
+    const coverage = await createSpatialPointCoverage(
+      req.params['id'],
+      req.body,
+      actor,
+      extractRequestContext(req),
+    );
+    return res.status(201).json({ message: 'Coverage RT berhasil dibuat', coverage });
+  } catch (error) {
+    if (error instanceof MapsServiceError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    console.error(
+      'Error saat membuat coverage RT:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
+    return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
+  }
+};
+
+export const deletePointCoverageHandler = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<Response> => {
+  try {
+    const { rtNumber, error } = parseRtNumberParam(req.params['rtNumber']);
+    if (error || rtNumber === undefined) {
+      return res.status(400).json({ error: error ?? 'Nomor RT wajib diisi' });
+    }
+
+    const actor = requireActor(req);
+    const coverage = await deleteSpatialPointCoverage(
+      req.params['id'],
+      rtNumber,
+      actor,
+      extractRequestContext(req),
+    );
+    return res.status(200).json({ message: 'Coverage RT berhasil dihapus', coverage });
+  } catch (error) {
+    if (error instanceof MapsServiceError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    console.error(
+      'Error saat menghapus coverage RT:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
+    return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
+  }
+};
+
+export const updateRtLeaderHandler = async (req: AuthRequest, res: Response): Promise<Response> => {
+  try {
+    const { rtNumber, error } = parseRtNumberParam(req.params['rtNumber']);
+    if (error || rtNumber === undefined) {
+      return res.status(400).json({ error: error ?? 'Nomor RT wajib diisi' });
+    }
+
+    const actor = requireActor(req);
+    const leader = await updateRtLeader(rtNumber, req.body, actor, extractRequestContext(req));
+    return res.status(200).json({ message: 'Ketua RT berhasil diperbarui', leader });
+  } catch (error) {
+    if (error instanceof MapsServiceError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    console.error(
+      'Error saat memperbarui Ketua RT:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
     return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
   }
 };
