@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
+export type StatCardIconName = 'person' | 'house' | 'density' | 'ratio';
+
 export interface StatItem {
   /** Identifier or built-in icon name ('person' | 'house' | 'density' | 'ratio') */
-  icon?: 'person' | 'house' | 'density' | 'ratio' | string;
+  icon?: StatCardIconName;
   /** Primary numeric or text figure (e.g. '53.098', 100, '2 jiwa/km²', '1,06 : 1') */
   value: string | number;
   /** Label description below the figure (e.g. 'Penduduk', 'Rukun Tetangga') */
@@ -22,7 +24,7 @@ export interface StatCardProps {
   /** Single item shorthand: description label */
   label?: string;
   /** Single item shorthand: icon name */
-  icon?: 'person' | 'house' | 'density' | 'ratio' | string;
+  icon?: StatCardIconName;
   /** Visual variant: 'dark' (Figma default charcoal) | 'glass' | 'navy' | 'light' */
   variant?: 'dark' | 'glass' | 'navy' | 'light';
   /** Optional title or section heading for the card landmark */
@@ -122,11 +124,7 @@ const variantClasses = computed(() => {
       Semantic Description List (<dl>) adhering to docs/UI_STYLE_GUIDE.md & docs/ACCESSIBILITY.md
       Layout: Responsive flexbox on mobile & tablet (2x2 wrapped) and flex-nowrap on desktop (4 across), ensuring equal spacing and zero collisions.
     -->
-    <dl
-      v-if="displayedItems.length > 0"
-      :class="listClasses"
-      data-test="stat-list"
-    >
+    <dl v-if="displayedItems.length > 0" :class="listClasses" data-test="stat-list">
       <div
         v-for="(item, idx) in displayedItems"
         :key="idx"
@@ -240,7 +238,7 @@ const variantClasses = computed(() => {
 
         <!-- Description Details (<dd>): Numeric or text stat value -->
         <dd
-          class="order-1 min-w-0 w-full text-base leading-tight font-bold tracking-tight sm:text-lg lg:text-[19px]"
+          class="order-1 w-full min-w-0 text-base leading-tight font-bold tracking-tight sm:text-lg lg:text-[19px]"
           :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
           data-test="stat-value"
         >

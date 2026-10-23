@@ -8,8 +8,9 @@ import TentangPotentialCard from '../components/tentang/TentangPotentialCard.vue
 import TentangPublicationCard from '../components/tentang/TentangPublicationCard.vue';
 import TentangFeatureBand from '../components/tentang/TentangFeatureBand.vue';
 import TentangResourceCard from '../components/tentang/TentangResourceCard.vue';
-import StatCard from '../components/common/StatCard.vue';
+import StatCard, { type StatItem } from '../components/common/StatCard.vue';
 import { useIndicatorsStore } from '../stores/indicators.store';
+import { useSettingsStore } from '../stores/settings.store';
 import type { TentangIconName } from '../components/tentang/TentangIcon.vue';
 import heroImage from '@/assets/img/background_laman_depan_kelurahan.png';
 import lurahPhoto from '@/assets/img/lurah_placeholder_sample.png';
@@ -80,8 +81,11 @@ const sotkMembers: SotkItem[] = [
 const POPULATION_INDICATOR_SLUG = 'jumlah-penduduk';
 
 const indicatorsStore = useIndicatorsStore();
+const settingsStore = useSettingsStore();
+
 onMounted(() => {
   void indicatorsStore.fetchBySlug(POPULATION_INDICATOR_SLUG);
+  void settingsStore.fetchPublicSettings();
 });
 
 const populationIndicator = computed(() => {
@@ -102,12 +106,19 @@ const formattedPopulation = computed(() => {
   };
 });
 
-const wilayahStats = [
+const kecamatan = computed(() => {
+  const area = settingsStore.administrativeArea;
+  if (!area) return 'Balikpapan Timur';
+  const parts = area.split(',').map((p) => p.trim());
+  return parts.length >= 2 && parts[1] ? parts[1] : area;
+});
+
+const wilayahStats = computed<StatItem[]>(() => [
   { icon: 'house', value: '100', label: 'Rukun Tetangga terdaftar' },
-  { icon: 'density', value: 'Balikpapan Timur', label: 'Kecamatan, Kota Balikpapan' },
+  { icon: 'density', value: kecamatan.value, label: 'Kecamatan, Kota Balikpapan' },
   { icon: 'ratio', value: 'Pesisir & Dataran', label: 'Potensi pantai & pertanian' },
   { icon: 'person', value: 'Desa Cantik', label: 'Kelurahan Cinta Statistik' },
-];
+]);
 
 const batasWilayah = [
   { arah: 'Sebelah Utara', wilayah: 'Kelurahan Karang Joang' },
@@ -153,13 +164,12 @@ const batasWilayah = [
     />
 
     <!-- 3. Error / missing state: explicit data-unavailable card -->
-    <section
-      v-else
-      class="bg-white px-4 py-10 sm:px-6 sm:py-12"
-      aria-labelledby="empty-pop-title"
-    >
+    <section v-else class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="empty-pop-title">
       <div class="mx-auto max-w-5xl">
-        <p id="empty-pop-title" class="text-sm font-semibold tracking-[0.25em] text-brand-navy uppercase">
+        <p
+          id="empty-pop-title"
+          class="text-brand-navy text-sm font-semibold tracking-[0.25em] uppercase"
+        >
           Sekilas Manggar
         </p>
         <div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-6 text-gray-600">
@@ -174,8 +184,8 @@ const batasWilayah = [
     <!-- Potensi Manggar -->
     <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="potensi-title">
       <div class="mx-auto max-w-5xl">
-        <h2 id="potensi-title" class="text-lg font-bold text-brand-navy">Potensi Manggar</h2>
-        <ul class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:auto-rows-fr">
+        <h2 id="potensi-title" class="text-brand-navy text-lg font-bold">Potensi Manggar</h2>
+        <ul class="mt-4 grid grid-cols-1 gap-4 sm:auto-rows-fr sm:grid-cols-2">
           <li v-for="item in potentials" :key="item.title" class="flex">
             <TentangPotentialCard
               :title="item.title"
@@ -198,7 +208,7 @@ const batasWilayah = [
 
     <!-- Rujukan data terpadu -->
     <TentangFeatureBand heading="Jelajahi Data Kelurahan Manggar">
-      <div class="mt-4 flex flex-col gap-5 sm:flex-row items-stretch">
+      <div class="mt-4 flex flex-col items-stretch gap-5 sm:flex-row">
         <TentangResourceCard
           title="Peta Spasial RT dan Bank Sampah Unit"
           icon="map"
@@ -216,12 +226,9 @@ const batasWilayah = [
     </TentangFeatureBand>
 
     <!-- Pimpinan Kelurahan -->
-    <section
-      class="bg-white px-4 py-10 sm:px-6 sm:py-12"
-      aria-labelledby="lurah-section-title"
-    >
+    <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="lurah-section-title">
       <div class="mx-auto max-w-5xl">
-        <h2 id="lurah-section-title" class="text-lg font-bold text-brand-navy">
+        <h2 id="lurah-section-title" class="text-brand-navy text-lg font-bold">
           Pimpinan Kelurahan
         </h2>
         <p class="mt-2 max-w-3xl text-base text-gray-700">
@@ -230,10 +237,10 @@ const batasWilayah = [
         </p>
 
         <div
-          class="mt-5 flex flex-col items-center gap-6 rounded-btn border border-gray-300 bg-white p-5 sm:flex-row sm:items-start sm:p-6"
+          class="rounded-btn mt-5 flex flex-col items-center gap-6 border border-gray-300 bg-white p-5 sm:flex-row sm:items-start sm:p-6"
         >
           <div class="flex shrink-0 flex-col items-center text-center sm:w-56">
-            <div class="h-40 w-40 overflow-hidden rounded-full bg-brand-cyan sm:h-48 sm:w-48">
+            <div class="bg-brand-cyan h-40 w-40 overflow-hidden rounded-full sm:h-48 sm:w-48">
               <img
                 :src="lurahPhoto"
                 alt="Foto resmi Lurah Kelurahan Manggar"
@@ -242,11 +249,11 @@ const batasWilayah = [
             </div>
             <!-- Name & Title below the photo -->
             <div class="mt-4 flex flex-col items-center text-center">
-              <h3 class="text-lg font-bold text-brand-navy">Munir Achmad, S.E.</h3>
+              <h3 class="text-brand-navy text-lg font-bold">Munir Achmad, S.E.</h3>
               <p class="mt-0.5 text-sm font-medium text-gray-700">Lurah Kelurahan Manggar</p>
               <p class="text-xs text-gray-500">Pemerintah Kelurahan Manggar</p>
               <span
-                class="mt-2.5 inline-block rounded-[5px] bg-brand-cyan px-3 py-1 text-xs font-semibold text-brand-navy"
+                class="bg-brand-cyan text-brand-navy mt-2.5 inline-block rounded-[5px] px-3 py-1 text-xs font-semibold"
               >
                 Kepala Kelurahan
               </span>
@@ -262,15 +269,16 @@ const batasWilayah = [
               </p>
               <p>
                 Integrasi program
-                <strong class="font-semibold text-brand-navy">Kelurahan Cinta Statistik (Desa Cantik)</strong> dan
-                pengembangan portal
-                <strong class="font-semibold text-brand-navy">SIDATA</strong> bersama 100 Rukun Tetangga (RT)
-                diharapkan dapat membantu penyajian informasi Kelurahan Manggar secara terstruktur dan
-                mendukung pemanfaatan data dalam perencanaan pelayanan masyarakat, seperti dalam program
-                sosial dan penanganan lingkungan.
+                <strong class="text-brand-navy font-semibold"
+                  >Kelurahan Cinta Statistik (Desa Cantik)</strong
+                >
+                dan pengembangan portal
+                <strong class="text-brand-navy font-semibold">SIDATA</strong> bersama 100 Rukun
+                Tetangga (RT) diharapkan dapat membantu penyajian informasi Kelurahan Manggar secara
+                terstruktur dan mendukung pemanfaatan data dalam perencanaan pelayanan masyarakat,
+                seperti dalam program sosial dan penanganan lingkungan.
               </p>
             </div>
-
           </div>
         </div>
       </div>
@@ -279,10 +287,8 @@ const batasWilayah = [
     <!-- Gambaran Umum Wilayah -->
     <section class="bg-brand-cyan px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="wilayah-title">
       <div class="mx-auto max-w-5xl">
-        <h2 id="wilayah-title" class="text-lg font-bold text-brand-navy">
-          Gambaran Umum Wilayah
-        </h2>
-        <p class="mt-2 max-w-3xl text-base text-brand-navy/90">
+        <h2 id="wilayah-title" class="text-brand-navy text-lg font-bold">Gambaran Umum Wilayah</h2>
+        <p class="text-brand-navy/90 mt-2 max-w-3xl text-base">
           Karakteristik geografis dan pembagian administratif Kelurahan Manggar.
         </p>
 
@@ -290,15 +296,15 @@ const batasWilayah = [
           <StatCard :items="wilayahStats" variant="light" title="Statistik Umum Wilayah" />
         </div>
 
-        <div class="mt-6 rounded-btn border border-brand-navy/20 bg-white p-5">
-          <h3 class="text-base font-bold text-brand-navy">Batas-Batas Wilayah Administratif:</h3>
+        <div class="rounded-btn border-brand-navy/20 mt-6 border bg-white p-5">
+          <h3 class="text-brand-navy text-base font-bold">Batas-Batas Wilayah Administratif:</h3>
           <ul class="mt-3 flex flex-wrap gap-x-6 gap-y-3 text-base text-gray-800">
             <li
               v-for="item in batasWilayah"
               :key="item.arah"
               class="flex w-full items-center gap-2 sm:w-[calc(50%-12px)]"
             >
-              <span class="font-medium text-brand-navy">{{ item.arah }}:</span>
+              <span class="text-brand-navy font-medium">{{ item.arah }}:</span>
               <span>{{ item.wilayah }}</span>
             </li>
           </ul>
@@ -309,7 +315,7 @@ const batasWilayah = [
     <!-- SOTK -->
     <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="sotk-title">
       <div class="mx-auto max-w-5xl">
-        <h2 id="sotk-title" class="text-lg font-bold text-brand-navy">
+        <h2 id="sotk-title" class="text-brand-navy text-lg font-bold">
           Struktur Organisasi dan Tata Kerja (SOTK)
         </h2>
         <p class="mt-2 max-w-3xl text-base text-gray-700">
@@ -317,7 +323,7 @@ const batasWilayah = [
           pemerintahan dan pelayanan warga.
         </p>
 
-        <div class="mt-5 overflow-x-auto rounded-btn border border-gray-300 bg-white">
+        <div class="rounded-btn mt-5 overflow-x-auto border border-gray-300 bg-white">
           <table class="min-w-full divide-y divide-gray-200 text-left text-sm text-gray-800">
             <caption class="sr-only">
               Daftar Struktur Organisasi dan Tata Kerja Kelurahan Manggar beserta tugas pokok dan
@@ -332,16 +338,18 @@ const batasWilayah = [
             </thead>
             <tbody class="divide-y divide-gray-200 bg-white">
               <tr v-for="(member, idx) in sotkMembers" :key="idx" class="transition-colors">
-                <th scope="row" class="px-4 py-4 align-top font-semibold text-brand-navy sm:px-6">
+                <th scope="row" class="text-brand-navy px-4 py-4 align-top font-semibold sm:px-6">
                   {{ member.role }}
                 </th>
                 <td class="px-4 py-4 align-top text-gray-800 sm:px-6">
-                  <span class="text-sm italic text-gray-600">
+                  <span class="text-sm text-gray-600 italic">
                     {{ member.officialName ?? 'Nama pejabat belum tersedia' }}
                   </span>
                 </td>
-                <td class="px-4 py-4 leading-relaxed text-gray-700 sm:px-6 align-top">
-                  {{ member.duties ?? 'Rincian tugas resmi belum tersedia pada sumber yang dirujuk.' }}
+                <td class="px-4 py-4 align-top leading-relaxed text-gray-700 sm:px-6">
+                  {{
+                    member.duties ?? 'Rincian tugas resmi belum tersedia pada sumber yang dirujuk.'
+                  }}
                 </td>
               </tr>
             </tbody>
@@ -354,6 +362,5 @@ const batasWilayah = [
         </p>
       </div>
     </section>
-
   </TentangPageLayout>
 </template>
