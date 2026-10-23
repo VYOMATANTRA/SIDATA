@@ -281,6 +281,15 @@ beforeEach(() => {
   const tx = {
     $queryRaw: (async (...args: never[]) => {
       queryRawCalls.push(args as unknown[]);
+      const [query] = args as unknown as [Prisma.Sql];
+      const text = query?.sql ?? String(query);
+      // Serves the invariant assert's FOR SHARE locking read with the emulator's ketua_rt
+      // coverage state, exactly like the real database would (current read).
+      if (text.includes('spatial_point_rt')) {
+        return coverages
+          .filter((c) => points.get(c.pointId)?.type === 'ketua_rt')
+          .map((c) => ({ pointId: c.pointId, rtNumber: c.rtNumber }));
+      }
       return [];
     }) as AsyncFn,
     spatialPoint: proxied(pointImpl, pointCalls),
@@ -525,6 +534,15 @@ describe('maps.service updateSpatialPoint', () => {
       'sudah dicakup',
     );
     assert.equal(auditRows.length, 0);
+    // The invariant assert must consult global state through the FOR SHARE locking read
+    // (current-read semantics) — see the PM review note on the PATCH snapshot race.
+    assert.ok(
+      queryRawCalls.some((args) => {
+        const query = (args?.[0] as Prisma.Sql) ?? undefined;
+        return (query?.sql ?? String(query ?? '')).includes('spatial_point_rt');
+      }),
+      'invariant assert must run its locking read over spatial_point_rt',
+    );
   });
 
   it('rejects switching type to ketua_rt while the point still spans several RTs (no rts sent)', async () => {
@@ -783,8 +801,10 @@ describe('maps.service updateRtLeader', () => {
     assert.ok(leaderCalls['update'], 'leader row must be updated');
     assert.equal(auditRows[0]?.action, 'rt_leader.updated');
     assert.equal(auditRows[0]?.targetType, 'rt_leader');
+    // Privacy (SPEC.md §3): only field NAMES, never before/after personal values.
     const metadata = auditRows[0]?.metadata as AnyRecord;
-    assert.equal((metadata['changes'] as AnyRecord)['name'] !== undefined, true);
+    assert.deepEqual(metadata['changedFields'], ['name', 'phone', 'phoneIsWhatsapp']);
+    assert.equal(metadata['changes'], undefined);
   });
 
   it('collapses a blank alamat to null', async () => {
@@ -794,7 +814,7 @@ describe('maps.service updateRtLeader', () => {
 
     assert.equal(leaderDto.alamat, null);
     const metadata = auditRows[0]?.metadata as AnyRecord;
-    assert.equal(((metadata['changes'] as AnyRecord)['alamat'] as AnyRecord)['after'], null);
+    assert.deepEqual(metadata['changedFields'], ['alamat']);
   });
 
   it('treats an identical PATCH as a no-op: no update, no audit row', async () => {

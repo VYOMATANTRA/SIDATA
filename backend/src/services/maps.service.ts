@@ -965,6 +965,20 @@ function pointWriteSummary(point: SpatialPointWriteRow): PointWriteSummary {
 }
 
 /**
+ * Locking read backing the write-path invariant assert (SPEC.md §7). Locking reads carry
+ * current-read semantics in InnoDB, unlike the snapshot-backed ORM findMany that previously
+ * fed this check — the shared "spatial_point_rt joined on ketua_rt spatial_points" row set is
+ * exactly what the read-side rule consumes. Results are aliased to the shape
+ * `withDerivedCoverageCounts` expects.
+ */
+const KETUA_RT_COVERAGE_SHARE_READ = Prisma.sql`
+  SELECT spr.point_id AS pointId, spr.rt_number AS rtNumber
+  FROM spatial_point_rt spr
+  JOIN spatial_points sp ON sp.id = spr.point_id
+  WHERE sp.type = 'ketua_rt'
+  FOR SHARE`;
+
+/**
  * Write-path enforcement of the ketua_rt <-> RT invariant (SPEC.md §7), **reusing the shared
  * read-side resolution rule** (`withDerivedCoverageCounts` + `resolveRtCoverage`) so reads and
  * writes can never disagree about what a violation is:
@@ -1000,13 +1014,18 @@ async function assertKetuaRtWriteInvariant(
   }
   const rt = target.resultingCoverages[0] as number;
 
-  // Post-write global ketua_rt coverage state: every OTHER ketua_rt point's stored rows plus
-  // the target point's post-write coverage. withDerivedCoverageCounts needs this unfiltered
-  // set to derive each point's TOTAL RT count for the shared rule.
-  const stored = (await tx.spatialPointRt.findMany({
-    where: { point: { type: 'ketua_rt' } },
-    select: { pointId: true, rtNumber: true },
-  })) as Array<{ pointId: string; rtNumber: number }>;
+  // Post-write global ketua_rt coverage state, read as a LOCKING (FOR SHARE) read. InnoDB
+  // locking reads are always current reads: they see every claim another transaction has
+  // committed — even though this transaction's REPEATABLE READ snapshot (established at its
+  // first consistent read, possibly before any rt_leaders lock wait) no longer reflects
+  // reality — and they BLOCK while a sibling transaction still holds uncommitted coverage
+  // rows. Two concurrent ketua_rt writes claiming the same RT therefore can never both pass.
+  // This also closes the residual gap where an rt_leaders FOR UPDATE lock no-ops for an RT
+  // lacking its seeded row and the (point_id, rt_number) unique key does not span points.
+  const stored = (await tx.$queryRaw(KETUA_RT_COVERAGE_SHARE_READ)) as Array<{
+    pointId: string;
+    rtNumber: number;
+  }>;
   const derived = withDerivedCoverageCounts([
     ...stored.filter((c) => c.pointId !== target.pointId),
     { pointId: target.pointId, rtNumber: rt },
@@ -1229,8 +1248,12 @@ export const updateSpatialPoint = async (
 
         const mustHoldInvariant = rtsTouched || typeChanged;
         if (mustHoldInvariant && resultingType === 'ketua_rt') {
-          // contested RTs = pre ∪ post so a concurrent claim/release of any touched RT
-          // serializes on the same rt_leaders row before the assert reads global state.
+          // Contention shaping only, NOT the correctness guarantee: this lock runs after this
+          // transaction's read snapshot already exists, so it cannot prevent the assert from
+          // reading a stale view. The guarantee lives in assertKetuaRtWriteInvariant's
+          // FOR SHARE current read, which cannot miss a sibling transaction's claim. Keeping
+          // these locks just serializes same-RT writers early so shared-lock waits stay
+          // short and rare.
           const leaderLock = leaderLockQuery([...new Set([...preCoverages, ...postCoverages])]);
           if (leaderLock) await leaderLock(tx);
           await assertKetuaRtWriteInvariant(tx, {
@@ -1541,26 +1564,30 @@ export const updateRtLeader = async (
           throw new MapsServiceError('Ketua RT tidak ditemukan.', 404);
         }
 
-        const changes: Record<string, { before: unknown; after: unknown }> = {};
-        const track = (field: string, before: unknown, after: unknown) => {
-          if (hasFieldChanged(before, after)) {
-            changes[field] = { before, after };
-          }
-        };
-
+        // Privacy (SPEC.md §3): record only WHICH fields changed. Phone/alamat are a
+        // resident's personal details; storing before/after values would persist them
+        // indefinitely through the audit trail long after the person's tenure ends.
         const sanitizedName = input.name !== undefined ? input.name.trim() : undefined;
         const sanitizedPhone = input.phone !== undefined ? input.phone.trim() : undefined;
         const sanitizedAlamat =
           input.alamat !== undefined ? sanitizeNullableText(input.alamat) : undefined;
-
-        if (input.name !== undefined) track('name', existing.name, sanitizedName);
-        if (input.phone !== undefined) track('phone', existing.phone, sanitizedPhone);
-        if (input.phoneIsWhatsapp !== undefined) {
-          track('phoneIsWhatsapp', existing.phoneIsWhatsapp, input.phoneIsWhatsapp);
+        const changedFields: string[] = [];
+        if (input.name !== undefined && hasFieldChanged(existing.name, sanitizedName)) {
+          changedFields.push('name');
         }
-        if (input.alamat !== undefined) track('alamat', existing.alamat, sanitizedAlamat);
+        if (input.phone !== undefined && hasFieldChanged(existing.phone, sanitizedPhone)) {
+          changedFields.push('phone');
+        }
+        if (input.phoneIsWhatsapp !== undefined) {
+          if (existing.phoneIsWhatsapp !== input.phoneIsWhatsapp) {
+            changedFields.push('phoneIsWhatsapp');
+          }
+        }
+        if (input.alamat !== undefined && hasFieldChanged(existing.alamat, sanitizedAlamat)) {
+          changedFields.push('alamat');
+        }
 
-        if (Object.keys(changes).length === 0) {
+        if (changedFields.length === 0) {
           return withChangeResult(formatWrittenLeader(existing), false);
         }
 
@@ -1581,7 +1608,7 @@ export const updateRtLeader = async (
             action: AUDIT_ACTIONS.RT_LEADER_UPDATED,
             actor,
             target: { type: 'rt_leader', id: String(rtNumber), label: `RT ${rtNumber}` },
-            metadata: { changes },
+            metadata: { changedFields },
             context: reqContext,
           },
           tx,
