@@ -4,7 +4,6 @@ import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import TentangKelurahanManggarView from '../views/TentangKelurahanManggarView.vue';
 import { useIndicatorsStore } from '../stores/indicators.store';
-import { useSettingsStore } from '../stores/settings.store';
 
 function mountView() {
   const pinia = createPinia();
@@ -310,12 +309,8 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(wrapper.text()).not.toContain('Mengoptimalkan pemanfaatan data statistik');
   });
 
-  it('renders general area statistics and dynamically updates kecamatan from settings store', async () => {
+  it('renders general area statistics and profile content from tentang content module', async () => {
     const { pinia, router } = mountView();
-    const settingsStore = useSettingsStore();
-    settingsStore.settings.administrativeArea =
-      'Kelurahan Manggar, Balikpapan Timur Selatan, Kota Balikpapan';
-
     await router.push('/tentang/kelurahan-manggar');
     await router.isReady();
 
@@ -327,11 +322,18 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(statCard.exists()).toBe(true);
     expect(statCard.text()).toContain('100');
     expect(statCard.text()).toContain('Rukun Tetangga terdaftar');
-    expect(statCard.text()).toContain('Balikpapan Timur Selatan');
+    expect(statCard.text()).toContain('Balikpapan Timur');
     expect(statCard.text()).toContain('Kecamatan, Kota Balikpapan');
     expect(statCard.text()).toContain('Pesisir & Dataran');
     expect(statCard.text()).toContain('Potensi pantai & pertanian');
     expect(statCard.text()).toContain('Desa Cantik');
     expect(statCard.text()).toContain('Kelurahan Cinta Statistik');
+
+    // RT count in prose
+    expect(wrapper.text()).toContain('bersama 100 Rukun Tetangga (RT)');
+
+    // Typo fix assertion: "berupaya menyediakan" instead of "strive menyediakan"
+    expect(wrapper.text()).toContain('Kelurahan Manggar berupaya menyediakan');
+    expect(wrapper.text()).not.toContain('strive menyediakan');
   });
 });

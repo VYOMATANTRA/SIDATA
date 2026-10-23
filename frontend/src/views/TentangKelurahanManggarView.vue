@@ -10,8 +10,17 @@ import TentangFeatureBand from '../components/tentang/TentangFeatureBand.vue';
 import TentangResourceCard from '../components/tentang/TentangResourceCard.vue';
 import StatCard, { type StatItem } from '../components/common/StatCard.vue';
 import { useIndicatorsStore } from '../stores/indicators.store';
-import { useSettingsStore } from '../stores/settings.store';
 import type { TentangIconName } from '../components/tentang/TentangIcon.vue';
+import {
+  RT_COUNT,
+  KECAMATAN,
+  KOTA,
+  LANDSCAPE,
+  BATAS_WILAYAH,
+  SOTK_MEMBERS,
+  LURAH_OFFICIAL,
+  SOTK_SOURCE_CITATION,
+} from '../content/tentang';
 import heroImage from '@/assets/img/background_laman_depan_kelurahan.png';
 import lurahPhoto from '@/assets/img/lurah_placeholder_sample.png';
 
@@ -44,48 +53,12 @@ const potentials: PotentialItem[] = [
   },
 ];
 
-interface SotkItem {
-  role: string;
-  officialName: string | null;
-  duties: string | null;
-}
-
-const sotkMembers: SotkItem[] = [
-  {
-    role: 'Lurah',
-    officialName: 'Munir Achmad, S.E.',
-    duties: null,
-  },
-  {
-    role: 'Sekretaris Lurah',
-    officialName: 'Munjiah Puspitawaty. M, S.E',
-    duties: null,
-  },
-  {
-    role: 'Kasi Trantib L-H',
-    officialName: 'Nanang Sri Ruriyanto, S.Sos.',
-    duties: null,
-  },
-  {
-    role: 'Kasi Pemerintahan dan Pelayanan Publik',
-    officialName: 'Hasiba, S.A.P',
-    duties: null,
-  },
-  {
-    role: 'Kasi Pemberdayaan Masyarakat',
-    officialName: 'Marthen Solly, S.ST',
-    duties: null,
-  },
-];
-
 const POPULATION_INDICATOR_SLUG = 'jumlah-penduduk';
 
 const indicatorsStore = useIndicatorsStore();
-const settingsStore = useSettingsStore();
 
 onMounted(() => {
   void indicatorsStore.fetchBySlug(POPULATION_INDICATOR_SLUG);
-  void settingsStore.fetchPublicSettings();
 });
 
 const populationIndicator = computed(() => {
@@ -106,26 +79,12 @@ const formattedPopulation = computed(() => {
   };
 });
 
-const kecamatan = computed(() => {
-  const area = settingsStore.administrativeArea;
-  if (!area) return 'Balikpapan Timur';
-  const parts = area.split(',').map((p) => p.trim());
-  return parts.length >= 2 && parts[1] ? parts[1] : area;
-});
-
 const wilayahStats = computed<StatItem[]>(() => [
-  { icon: 'house', value: '100', label: 'Rukun Tetangga terdaftar' },
-  { icon: 'density', value: kecamatan.value, label: 'Kecamatan, Kota Balikpapan' },
-  { icon: 'ratio', value: 'Pesisir & Dataran', label: 'Potensi pantai & pertanian' },
+  { icon: 'house', value: String(RT_COUNT), label: 'Rukun Tetangga terdaftar' },
+  { icon: 'density', value: KECAMATAN, label: `Kecamatan, ${KOTA}` },
+  { icon: 'ratio', value: LANDSCAPE, label: 'Potensi pantai & pertanian' },
   { icon: 'person', value: 'Desa Cantik', label: 'Kelurahan Cinta Statistik' },
 ]);
-
-const batasWilayah = [
-  { arah: 'Sebelah Utara', wilayah: 'Kelurahan Karang Joang' },
-  { arah: 'Sebelah Timur', wilayah: 'Kelurahan Manggar Baru' },
-  { arah: 'Sebelah Selatan', wilayah: 'Selat Makassar' },
-  { arah: 'Sebelah Barat', wilayah: 'Kelurahan Sepinggan dan Sepinggan Baru' },
-];
 </script>
 
 <template>
@@ -249,7 +208,7 @@ const batasWilayah = [
             </div>
             <!-- Name & Title below the photo -->
             <div class="mt-4 flex flex-col items-center text-center">
-              <h3 class="text-brand-navy text-lg font-bold">Munir Achmad, S.E.</h3>
+              <h3 class="text-brand-navy text-lg font-bold">{{ LURAH_OFFICIAL?.officialName }}</h3>
               <p class="mt-0.5 text-sm font-medium text-gray-700">Lurah Kelurahan Manggar</p>
               <p class="text-xs text-gray-500">Pemerintah Kelurahan Manggar</p>
               <span
@@ -264,7 +223,7 @@ const batasWilayah = [
             <div class="space-y-3 text-base leading-relaxed text-gray-800">
               <p>
                 Sebagai garda terdepan pelayanan pemerintah daerah bagi masyarakat di wilayah
-                Balikpapan Timur, Kelurahan Manggar strive menyediakan pelayanan yang ramah,
+                Balikpapan Timur, Kelurahan Manggar berupaya menyediakan pelayanan yang ramah,
                 akuntabel, dan transparan.
               </p>
               <p>
@@ -273,10 +232,11 @@ const batasWilayah = [
                   >Kelurahan Cinta Statistik (Desa Cantik)</strong
                 >
                 dan pengembangan portal
-                <strong class="text-brand-navy font-semibold">SIDATA</strong> bersama 100 Rukun
-                Tetangga (RT) diharapkan dapat membantu penyajian informasi Kelurahan Manggar secara
-                terstruktur dan mendukung pemanfaatan data dalam perencanaan pelayanan masyarakat,
-                seperti dalam program sosial dan penanganan lingkungan.
+                <strong class="text-brand-navy font-semibold">SIDATA</strong> bersama
+                {{ RT_COUNT }} Rukun Tetangga (RT) diharapkan dapat membantu penyajian informasi
+                Kelurahan Manggar secara terstruktur dan mendukung pemanfaatan data dalam
+                perencanaan pelayanan masyarakat, seperti dalam program sosial dan penanganan
+                lingkungan.
               </p>
             </div>
           </div>
@@ -300,7 +260,7 @@ const batasWilayah = [
           <h3 class="text-brand-navy text-base font-bold">Batas-Batas Wilayah Administratif:</h3>
           <ul class="mt-3 flex flex-wrap gap-x-6 gap-y-3 text-base text-gray-800">
             <li
-              v-for="item in batasWilayah"
+              v-for="item in BATAS_WILAYAH"
               :key="item.arah"
               class="flex w-full items-center gap-2 sm:w-[calc(50%-12px)]"
             >
@@ -337,7 +297,7 @@ const batasWilayah = [
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-200 bg-white">
-              <tr v-for="(member, idx) in sotkMembers" :key="idx" class="transition-colors">
+              <tr v-for="(member, idx) in SOTK_MEMBERS" :key="idx" class="transition-colors">
                 <th scope="row" class="text-brand-navy px-4 py-4 align-top font-semibold sm:px-6">
                   {{ member.role }}
                 </th>
@@ -357,8 +317,7 @@ const batasWilayah = [
         </div>
 
         <p class="mt-3 text-sm text-gray-600">
-          Sumber nama dan jabatan: Monografi Kelurahan Manggar 2026, Data Personil (PDF viewer
-          halaman 8–9). Rincian tugas resmi belum tersedia pada sumber yang dirujuk.
+          {{ SOTK_SOURCE_CITATION }}
         </p>
       </div>
     </section>
