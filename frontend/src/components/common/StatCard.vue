@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
+export type StatCardIconName = 'person' | 'house' | 'density' | 'ratio';
+
 export interface StatItem {
   /** Identifier or built-in icon name ('person' | 'house' | 'density' | 'ratio') */
-  icon?: 'person' | 'house' | 'density' | 'ratio' | string;
+  icon?: StatCardIconName;
   /** Primary numeric or text figure (e.g. '53.098', 100, '2 jiwa/km²', '1,06 : 1') */
   value: string | number;
   /** Label description below the figure (e.g. 'Penduduk', 'Rukun Tetangga') */
@@ -22,13 +24,15 @@ export interface StatCardProps {
   /** Single item shorthand: description label */
   label?: string;
   /** Single item shorthand: icon name */
-  icon?: 'person' | 'house' | 'density' | 'ratio' | string;
+  icon?: StatCardIconName;
   /** Visual variant: 'dark' (Figma default charcoal) | 'glass' | 'navy' | 'light' */
   variant?: 'dark' | 'glass' | 'navy' | 'light';
   /** Optional title or section heading for the card landmark */
   title?: string;
   /** Optional custom card classes */
   cardClass?: string;
+  /** Optional custom description list classes */
+  listClass?: string;
 }
 
 const props = withDefaults(defineProps<StatCardProps>(), {
@@ -53,6 +57,41 @@ const displayedItems = computed<StatItem[]>(() => {
   return [];
 });
 
+// Responsive flexbox layout container classes based on item count
+const listClasses = computed(() => {
+  if (props.listClass) {
+    return props.listClass;
+  }
+  const count = displayedItems.value.length;
+  if (count === 4) {
+    // Symmetrical 2x2 layout on mobile & tablet, expanding to 4-across on desktop
+    return 'flex flex-wrap items-stretch justify-between gap-y-7 sm:gap-y-8 lg:flex-nowrap lg:gap-x-6 text-center';
+  }
+  if (count === 3) {
+    return 'flex flex-wrap items-start justify-center gap-6 sm:flex-nowrap sm:gap-8 text-center max-w-3xl mx-auto';
+  }
+  if (count === 2) {
+    return 'flex flex-wrap items-start justify-center gap-x-6 gap-y-6 sm:gap-x-10 md:gap-x-14 text-center max-w-lg mx-auto';
+  }
+  return 'flex flex-wrap items-start justify-center gap-x-6 gap-y-6 text-center sm:gap-x-10 md:gap-x-14';
+});
+
+// Responsive flex item classes based on item count
+const itemClasses = computed(() => {
+  const count = displayedItems.value.length;
+  if (count === 4) {
+    // Exactly 2 items per row on mobile & tablet: w-[calc(50%-12px)] sm:w-[calc(50%-16px)] with flex-none shrink-0, expanding to 4-across (flex-1) on desktop (lg)
+    return 'flex flex-col items-center text-center flex-none shrink-0 w-[calc(50%-12px)] sm:w-[calc(50%-16px)] lg:w-auto lg:flex-1 lg:shrink';
+  }
+  if (count === 3) {
+    return 'flex flex-col items-center text-center w-full sm:w-auto sm:flex-1 mx-auto';
+  }
+  if (count === 2) {
+    return 'flex flex-col items-center text-center w-[calc(50%-12px)] sm:w-[calc(50%-20px)] sm:flex-1 mx-auto';
+  }
+  return 'flex flex-col items-center text-center w-full flex-1 mx-auto';
+});
+
 // Variant styling classes
 const variantClasses = computed(() => {
   switch (props.variant) {
@@ -72,7 +111,7 @@ const variantClasses = computed(() => {
 
 <template>
   <div
-    class="w-full rounded-2xl p-6 transition-all sm:px-8 sm:py-7"
+    class="w-full rounded-2xl p-5 transition-all sm:px-8 sm:py-7"
     :class="[variantClasses, cardClass]"
     data-test="stat-card"
     role="region"
@@ -83,17 +122,13 @@ const variantClasses = computed(() => {
 
     <!--
       Semantic Description List (<dl>) adhering to docs/UI_STYLE_GUIDE.md & docs/ACCESSIBILITY.md
-      Layout: Flexbox with justify-center and equal gaps, ensuring stats are always centered with equal spacing regardless of count.
+      Layout: Responsive flexbox on mobile & tablet (2x2 wrapped) and flex-nowrap on desktop (4 across), ensuring equal spacing and zero collisions.
     -->
-    <dl
-      v-if="displayedItems.length > 0"
-      class="flex flex-wrap items-start justify-center gap-x-6 gap-y-6 text-center sm:gap-x-10 md:gap-x-14"
-      data-test="stat-list"
-    >
+    <dl v-if="displayedItems.length > 0" :class="listClasses" data-test="stat-list">
       <div
         v-for="(item, idx) in displayedItems"
         :key="idx"
-        class="flex max-w-[170px] min-w-[120px] flex-col items-center text-center"
+        :class="itemClasses"
         data-test="stat-item"
       >
         <!-- Icon Container -->
@@ -194,16 +229,16 @@ const variantClasses = computed(() => {
 
         <!-- Description Term (<dt>): Stat Label Description (precedes <dd> in DOM for screen readers) -->
         <dt
-          class="order-2 mt-1.5 max-w-[140px] text-xs leading-snug whitespace-pre-line sm:text-sm"
+          class="order-2 mt-1.5 w-full max-w-[200px] text-xs leading-snug whitespace-pre-line sm:max-w-[260px] sm:text-sm lg:max-w-none"
           :class="variant === 'light' ? 'font-medium text-slate-600' : 'font-normal text-slate-200'"
           data-test="stat-label"
         >
           {{ item.label }}
         </dt>
 
-        <!-- Description Details (<dd>): Numeric Stat Value -->
+        <!-- Description Details (<dd>): Numeric or text stat value -->
         <dd
-          class="order-1 min-w-0 text-xl leading-tight font-bold tracking-tight sm:text-2xl"
+          class="order-1 w-full min-w-0 text-base leading-tight font-bold tracking-tight sm:text-lg lg:text-[19px]"
           :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
           data-test="stat-value"
         >
