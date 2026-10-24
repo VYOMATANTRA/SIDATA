@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import type { Request } from 'express';
-import { listPages, getPage, PAGE_SLUG_PATTERN } from '../controllers/pages.controller.js';
+import {
+  listPages,
+  getPage,
+  createPageHandler,
+  deletePageHandler,
+  reorderPagesHandler,
+} from '../controllers/pages.controller.js';
+import * as pagesControllerModule from '../controllers/pages.controller.js';
+import { PAGE_SLUG_PATTERN } from '../services/pages.service.js';
 import prisma from '../utils/prisma.js';
 import { CERITA_PAGES } from '../../prisma/ceritaPages.js';
 import { fakeRes } from './helpers/fakeRes.js';
@@ -69,9 +77,13 @@ const expectedPageDto = (slug = 'kependudukan') => ({
 describe('pages.controller', () => {
   let originalFindMany: typeof prisma.page.findMany;
   let originalFindUnique: typeof prisma.page.findUnique;
+  let originalTransaction: typeof prisma.$transaction;
+  let originalContentBlockCount: typeof prisma.contentBlock.count;
+  let originalPageCount: typeof prisma.page.count;
   let originalConsoleError: typeof console.error;
   let findManyCalls: unknown[][];
   let findUniqueCalls: unknown[][];
+  let pageCountCalls: unknown[][];
   let consoleErrorCalls: unknown[][];
 
   const stubFindMany = (impl: () => Promise<unknown>) => {
@@ -88,12 +100,23 @@ describe('pages.controller', () => {
     }) as unknown as typeof prisma.page.findUnique;
   };
 
+  const stubPageCount = (impl: () => Promise<number>) => {
+    prisma.page.count = (async (...args: unknown[]) => {
+      pageCountCalls.push(args);
+      return impl();
+    }) as unknown as typeof prisma.page.count;
+  };
+
   beforeEach(() => {
     originalFindMany = prisma.page.findMany;
     originalFindUnique = prisma.page.findUnique;
+    originalTransaction = prisma.$transaction;
+    originalContentBlockCount = prisma.contentBlock.count;
+    originalPageCount = prisma.page.count;
     originalConsoleError = console.error;
     findManyCalls = [];
     findUniqueCalls = [];
+    pageCountCalls = [];
     consoleErrorCalls = [];
     console.error = (...args: unknown[]) => {
       consoleErrorCalls.push(args);
@@ -105,12 +128,26 @@ describe('pages.controller', () => {
     stubFindUnique(async () => {
       throw new Error('unexpected prisma.page.findUnique call');
     });
+    stubPageCount(async () => {
+      throw new Error('unexpected prisma.page.count call');
+    });
   });
 
   afterEach(() => {
     prisma.page.findMany = originalFindMany;
     prisma.page.findUnique = originalFindUnique;
+    prisma.$transaction = originalTransaction;
+    prisma.contentBlock.count = originalContentBlockCount;
+    prisma.page.count = originalPageCount;
     console.error = originalConsoleError;
+  });
+
+  it('does not re-export PAGE_SLUG_PATTERN from pages.controller', () => {
+    assert.equal(
+      'PAGE_SLUG_PATTERN' in pagesControllerModule,
+      false,
+      'pages.controller must not re-export PAGE_SLUG_PATTERN',
+    );
   });
 
   describe('PAGE_SLUG_PATTERN', () => {
@@ -320,8 +357,12 @@ describe('pages.controller', () => {
         where: { slug: 'kependudukan' },
         include: {
           chapters: {
-            orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
-            include: { sections: { orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }] } },
+            orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+            include: {
+              sections: {
+                orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+              },
+            },
           },
         },
       });
@@ -423,6 +464,15 @@ describe('pages.controller', () => {
         assert.deepStrictEqual(res.body, INVALID_SLUG);
         assert.equal(findUniqueCalls.length, 0);
       });
+
+      it('rejects a slug exceeding 100 characters with 400 (anti-drift with service)', async () => {
+        const res = fakeRes();
+        await getPage(reqWithSlug('a'.repeat(101)), res);
+
+        assert.equal(res.status, 400);
+        assert.deepStrictEqual(res.body, INVALID_SLUG);
+        assert.equal(findUniqueCalls.length, 0);
+      });
     });
 
     describe('valid slugs reach prisma with the exact param', () => {
@@ -450,8 +500,8 @@ describe('pages.controller', () => {
         });
       }
 
-      it('passes a 10_000-char slug (valid by pattern) through untouched', async () => {
-        const slug = 'a'.repeat(10_000);
+      it('passes a 100-char slug (valid boundary) through untouched', async () => {
+        const slug = 'a'.repeat(100);
         stubFindUnique(async () => null);
         const res = fakeRes();
 
@@ -460,9 +510,290 @@ describe('pages.controller', () => {
         assert.equal(findUniqueCalls.length, 1);
         const args = findUniqueCalls[0]![0] as { where: { slug: string } };
         assert.equal(args.where.slug, slug);
-        assert.equal(args.where.slug.length, 10_000);
+        assert.equal(args.where.slug.length, 100);
         assert.equal(res.status, 404);
         assert.deepStrictEqual(res.body, NOT_FOUND);
+      });
+    });
+  });
+
+  describe('createPageHandler', () => {
+    it('returns 400 when body is not an object or null', async () => {
+      const res = fakeRes();
+      await createPageHandler({ body: null, user: { id: 'u1', role: 'editor' } } as never, res);
+      assert.equal(res.status, 400);
+    });
+
+    it('returns 400 when title is missing or empty', async () => {
+      const res = fakeRes();
+      await createPageHandler(
+        { body: { title: '   ' }, user: { id: 'u1', role: 'editor' } } as never,
+        res,
+      );
+      assert.equal(res.status, 400);
+    });
+
+    it('returns 401 when req.user is missing', async () => {
+      const res = fakeRes();
+      await createPageHandler({ body: { title: 'Valid' } } as never, res);
+      assert.equal(res.status, 401);
+    });
+
+    it('returns 409 when service throws 409 Conflict', async () => {
+      stubFindUnique(async () => pageRow());
+      const res = fakeRes();
+      await createPageHandler(
+        {
+          body: { title: 'Kependudukan', slug: 'kependudukan' },
+          user: { id: 'u1', role: 'editor' },
+        } as never,
+        res,
+      );
+      assert.equal(res.status, 409);
+    });
+
+    it('returns 500 without leaking error details when unhandled exception occurs', async () => {
+      stubFindUnique(async () => {
+        throw new Error('db failure');
+      });
+      const res = fakeRes();
+      await createPageHandler(
+        {
+          body: { title: 'New Page', slug: 'new-page' },
+          user: { id: 'u1', role: 'editor' },
+        } as never,
+        res,
+      );
+      assert.equal(res.status, 500);
+      assert.deepStrictEqual(res.body, INTERNAL_ERROR);
+    });
+
+    it('returns 201 with created page on valid input (Happy Path)', async () => {
+      stubFindUnique(async () => null);
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            create: async (args: { data: { slug: string; title: string; sortOrder: number } }) => ({
+              ...pageRow(args.data.slug),
+              title: args.data.title,
+              sortOrder: args.data.sortOrder,
+            }),
+            aggregate: async () => ({ _max: { sortOrder: 7 } }),
+          },
+          auditLog: {
+            create: async () => ({ id: 'audit-1' }),
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      const res = fakeRes();
+      await createPageHandler(
+        {
+          body: { title: 'Inovasi Desa' },
+          user: { id: 'u1', email: 'editor@manggar.go.id', role: 'editor' },
+          ip: '127.0.0.1',
+          headers: { 'user-agent': 'test-agent' },
+        } as never,
+        res,
+      );
+
+      assert.equal(res.status, 201);
+      assert.deepStrictEqual(res.body, {
+        page: {
+          id: 'page-1',
+          slug: 'inovasi-desa',
+          title: 'Inovasi Desa',
+          sortOrder: 8,
+          chapterCount: 0,
+        },
+      });
+    });
+  });
+
+  describe('deletePageHandler', () => {
+    it('returns 401 when req.user is missing', async () => {
+      const res = fakeRes();
+      await deletePageHandler({ params: { slug: 'kependudukan' } } as never, res);
+      assert.equal(res.status, 401);
+    });
+
+    it('returns 400 when req.params.slug is missing or invalid', async () => {
+      for (const badSlug of ['', 'Kependudukan', 'a_b', 'bad\\slug']) {
+        const res = fakeRes();
+        await deletePageHandler(
+          { params: { slug: badSlug }, user: { id: 'u1', role: 'editor' } } as never,
+          res,
+        );
+        assert.equal(res.status, 400);
+      }
+    });
+
+    it('returns 404 when service throws 404 Not Found', async () => {
+      stubFindUnique(async () => null);
+      const res = fakeRes();
+      await deletePageHandler(
+        { params: { slug: 'tidak-ada' }, user: { id: 'u1', role: 'editor' } } as never,
+        res,
+      );
+      assert.equal(res.status, 404);
+      assert.deepStrictEqual(res.body, { error: 'Halaman tidak ditemukan' });
+    });
+
+    it('returns 409 when service throws 409 Conflict', async () => {
+      stubFindUnique(async () => pageRow('kependudukan'));
+      prisma.contentBlock.count = (async () => 1) as unknown as typeof prisma.contentBlock.count;
+      const res = fakeRes();
+      await deletePageHandler(
+        { params: { slug: 'kependudukan' }, user: { id: 'u1', role: 'editor' } } as never,
+        res,
+      );
+      assert.equal(res.status, 409);
+    });
+
+    it('returns 500 without leaking error details when unhandled exception occurs', async () => {
+      stubFindUnique(async () => {
+        throw new Error('db failure');
+      });
+      const res = fakeRes();
+      await deletePageHandler(
+        { params: { slug: 'kependudukan' }, user: { id: 'u1', role: 'editor' } } as never,
+        res,
+      );
+      assert.equal(res.status, 500);
+      assert.deepStrictEqual(res.body, INTERNAL_ERROR);
+    });
+
+    it('returns 200 with deleted page on valid request (Happy Path)', async () => {
+      stubFindUnique(async () => pageRow('kependudukan'));
+      prisma.contentBlock.count = (async () => 0) as unknown as typeof prisma.contentBlock.count;
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            delete: async () => pageRow('kependudukan'),
+          },
+          auditLog: {
+            create: async () => ({ id: 'audit-del-1' }),
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      const res = fakeRes();
+      await deletePageHandler(
+        {
+          params: { slug: 'kependudukan' },
+          user: { id: 'u1', email: 'editor@manggar.go.id', role: 'editor' },
+          ip: '127.0.0.1',
+          get: () => 'test-agent',
+        } as never,
+        res,
+      );
+
+      assert.equal(res.status, 200);
+      assert.deepStrictEqual(res.body, {
+        message: 'Halaman berhasil dihapus',
+        page: {
+          id: 'page-1',
+          slug: 'kependudukan',
+          title: 'Kependudukan',
+          sortOrder: 0,
+        },
+      });
+    });
+  });
+
+  describe('reorderPagesHandler', () => {
+    it('returns 401 when req.user is missing', async () => {
+      const res = fakeRes();
+      await reorderPagesHandler({ body: [{ id: 'p1', sortOrder: 0 }] } as never, res);
+      assert.equal(res.status, 401);
+    });
+
+    it('returns 400 when body is null, non-object, or empty array', async () => {
+      for (const bad of [null, undefined, [], { items: [] }]) {
+        const res = fakeRes();
+        await reorderPagesHandler({ body: bad, user: { id: 'u1', role: 'editor' } } as never, res);
+        assert.equal(res.status, 400);
+      }
+    });
+
+    it('returns 404 when service throws 404 Not Found', async () => {
+      stubFindMany(async () => []);
+      const res = fakeRes();
+      await reorderPagesHandler(
+        {
+          body: [{ id: 'p-tiada', sortOrder: 0 }],
+          user: { id: 'u1', role: 'editor' },
+        } as never,
+        res,
+      );
+      assert.equal(res.status, 404);
+      assert.deepStrictEqual(res.body, { error: 'Satu atau lebih halaman tidak ditemukan' });
+    });
+
+    it('returns 500 without leaking error details when unhandled exception occurs', async () => {
+      stubFindMany(async () => {
+        throw new Error('database connection lost');
+      });
+      const res = fakeRes();
+      await reorderPagesHandler(
+        {
+          body: [{ id: 'p1', sortOrder: 0 }],
+          user: { id: 'u1', role: 'editor' },
+        } as never,
+        res,
+      );
+      assert.equal(res.status, 500);
+      assert.deepStrictEqual(res.body, INTERNAL_ERROR);
+    });
+
+    it('returns 200 with updated pages on valid reorder payload (Happy Path)', async () => {
+      stubFindMany(async () => [
+        { id: 'p1', slug: 'p1', title: 'P1', sortOrder: 0, _count: { chapters: 2 } },
+        { id: 'p2', slug: 'p2', title: 'P2', sortOrder: 1, _count: { chapters: 4 } },
+      ]);
+      stubPageCount(async () => 2);
+
+      prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+        const fakeTx = {
+          page: {
+            update: async () => ({ id: 'p-updated' }),
+            findMany: async () => [
+              { id: 'p2', slug: 'p2', title: 'P2', sortOrder: 0, _count: { chapters: 4 } },
+              { id: 'p1', slug: 'p1', title: 'P1', sortOrder: 1, _count: { chapters: 2 } },
+            ],
+          },
+          auditLog: {
+            create: async () => ({ id: 'audit-reorder-handler' }),
+          },
+        };
+        return fn(fakeTx as unknown as typeof prisma);
+      }) as unknown as typeof prisma.$transaction;
+
+      const res = fakeRes();
+      await reorderPagesHandler(
+        {
+          body: {
+            items: [
+              { id: 'p1', sortOrder: 1 },
+              { id: 'p2', sortOrder: 0 },
+            ],
+          },
+          user: { id: 'u1', email: 'editor@manggar.go.id', role: 'editor' },
+          ip: '127.0.0.1',
+          get: () => 'test-agent',
+        } as never,
+        res,
+      );
+
+      assert.equal(res.status, 200);
+      assert.deepStrictEqual(res.body, {
+        message: 'Urutan halaman berhasil diperbarui',
+        pages: [
+          { id: 'p2', slug: 'p2', title: 'P2', sortOrder: 0, chapterCount: 4 },
+          { id: 'p1', slug: 'p1', title: 'P1', sortOrder: 1, chapterCount: 2 },
+        ],
       });
     });
   });
