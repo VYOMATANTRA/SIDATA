@@ -124,14 +124,16 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * Performs silent refresh on app boot using the HTTP-only refresh token cookie.
-   * Keeps access token strictly in JavaScript memory without disk persistence.
+   * Forces a refresh even when an access token is already in memory. The 401 retry path in
+   * `utils/apiClient.ts` calls this precisely because the in-memory token is the one the API
+   * just rejected — `initAuth()` cannot be used there, since it short-circuits while a token is
+   * present.
+   *
+   * Concurrent callers (the router guard plus one or more replaying requests) share one request,
+   * and a definitive 401/403 latches `refreshDenied` so a dead session is not hammered. Network
+   * errors and 5xx stay retryable.
    */
-  async function initAuth(): Promise<boolean> {
-    if (isInitialized.value && accessToken.value) {
-      return true
-    }
-
+  async function refreshSession(): Promise<boolean> {
     if (refreshDenied.value) {
       return false
     }
@@ -143,6 +145,18 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     return inFlight
+  }
+
+  /**
+   * Performs silent refresh on app boot using the HTTP-only refresh token cookie.
+   * Keeps access token strictly in JavaScript memory without disk persistence.
+   */
+  async function initAuth(): Promise<boolean> {
+    if (isInitialized.value && accessToken.value) {
+      return true
+    }
+
+    return refreshSession()
   }
 
   return {
@@ -159,5 +173,6 @@ export const useAuthStore = defineStore('auth', () => {
     setSetupAuth,
     clearAuth,
     initAuth,
+    refreshSession,
   }
 })
