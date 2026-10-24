@@ -119,8 +119,55 @@ describe('ScalarIndicatorForm.vue', () => {
     expect(payload.isStale).toBe(true);
     expect(payload.valuePrevious).toBe('52386');
     expect(payload.periodPrevious).toBe('2025');
-    expect(payload.isComputedComparison).toBe(true);
+    // The flag is preserved, not derived from the checkbox: this indicator is already flagged
+    // computed, so re-sending `true` would only add noise (and an audit diff) to every save.
+    expect(payload).not.toHaveProperty('isComputedComparison');
     expect(payload).not.toHaveProperty('comparisonTemplateId');
+
+    wrapper.unmount();
+  });
+
+  it('does not flip isComputedComparison when saving a pair that was never flagged computed', async () => {
+    // Regression: SPEC §5 restricts tier-1 to specific indicators, so a pair alone must not
+    // promote an indicator into the computed set on an unrelated edit.
+    const wrapper = mount(ScalarIndicatorForm, {
+      props: {
+        indicator: makeIndicator({ isComputedComparison: false }),
+      },
+    });
+
+    expect(wrapper.find('[data-test="computed-note"]').exists()).toBe(false);
+
+    await wrapper.find('#indicator-source').setValue('Sensus Kelurahan');
+    await wrapper.find('form').trigger('submit');
+
+    const payload = wrapper.emitted('submit')?.[0]?.[0] as IndicatorPatch;
+    expect(payload.source).toBe('Sensus Kelurahan');
+    expect(payload.valuePrevious).toBe('52386');
+    expect(payload.periodPrevious).toBe('2025');
+    expect(payload).not.toHaveProperty('isComputedComparison');
+
+    wrapper.unmount();
+  });
+
+  it('clears a computed flag that would otherwise be left without a pair', async () => {
+    // A stored row may be flagged computed with no pair (computed, no template yet). Saving it
+    // back unchanged is a 400 ("membutuhkan value_previous"), so the flag must be cleared.
+    const wrapper = mount(ScalarIndicatorForm, {
+      props: {
+        indicator: makeIndicator({ valuePrevious: null, periodPrevious: null }),
+      },
+    });
+
+    expect(wrapper.find('[data-test="computed-note"]').exists()).toBe(true);
+    expect(wrapper.find('#indicator-value-previous').exists()).toBe(false);
+
+    await wrapper.find('form').trigger('submit');
+
+    const payload = wrapper.emitted('submit')?.[0]?.[0] as IndicatorPatch;
+    expect(payload.isComputedComparison).toBe(false);
+    expect(payload.valuePrevious).toBeNull();
+    expect(payload.periodPrevious).toBeNull();
 
     wrapper.unmount();
   });

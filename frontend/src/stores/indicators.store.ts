@@ -49,9 +49,9 @@ export interface IndicatorPatch {
   periodCurrent?: string;
   periodPrevious?: string | null;
   /**
-   * Kept in step with the pair: enabling the previous-year comparison sets it, clearing the
-   * pair clears it. A stored row may legitimately be flagged computed with an empty pair, and
-   * saving that combination back is a 400.
+   * Only sent when the flag has to be cleared — the pair was removed and the stored row was
+   * flagged computed (the service rejects `is_computed_comparison` with an empty pair). Enabling
+   * a pair does not set it; tier-1 is limited to specific indicators (SPEC §5).
    */
   isComputedComparison?: boolean;
   isStale?: boolean;

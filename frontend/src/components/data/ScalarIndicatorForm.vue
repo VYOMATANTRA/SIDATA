@@ -151,13 +151,20 @@ function isEmptyPayloadValue(value: string): boolean {
 
 /**
  * Sends every editable field (the service diffs and no-ops unchanged ones, so there is no
- * benefit to sending a sparse patch) and encodes the pair/flag rule:
+ * benefit to sending a sparse patch). The previous-year pair is encoded as:
  *
- * - pair on  → `isComputedComparison: true`, so attaching a tier-1 template later actually
- *   renders a comparison;
- * - pair off → pair values null **and** `isComputedComparison: false`. Leaving the flag true
- *   while the pair is empty is the one state the service rejects outright
- *   ("membutuhkan value_previous"), and it can legitimately exist on a stored row.
+ * - pair on  → send `valuePrevious`/`periodPrevious`; leave `isComputedComparison` untouched.
+ * - pair off → pair values null.
+ *
+ * `isComputedComparison` is **not** derived from the checkbox. SPEC §5 restricts tier-1 to
+ * specific indicators (Jumlah Penduduk, Jumlah Keluarga), and a row may legitimately carry a
+ * previous-year pair without being flagged computed. Sending `isComputedComparison: comparisonOn`
+ * on every save would flip the flag on an unrelated edit and write an audit diff nobody intended.
+ *
+ * The one case where the flag must be sent is clearing it: the service rejects
+ * `is_computed_comparison` with an empty pair ("membutuhkan value_previous"), and a stored row
+ * can legitimately be flagged computed with no pair (computed, no template, no pair yet).
+ *
  * - pair off on an indicator that has a template → `comparisonTemplateId: null` in the same
  *   request, which SPEC §5 requires (a template may not outlive its pair).
  */
@@ -170,11 +177,13 @@ function buildPatch(): IndicatorPatch {
     periodCurrent: draft.value.periodCurrent.trim(),
     valuePrevious: comparisonOn ? draft.value.valuePrevious.trim() : null,
     periodPrevious: comparisonOn ? draft.value.periodPrevious.trim() : null,
-    isComputedComparison: comparisonOn,
     isStale: draft.value.isStale,
     source: isEmptyPayloadValue(draft.value.source) ? null : draft.value.source.trim(),
     hedgeNote: isEmptyPayloadValue(draft.value.hedgeNote) ? null : draft.value.hedgeNote.trim(),
   };
+  if (!comparisonOn && props.indicator.isComputedComparison) {
+    patch.isComputedComparison = false;
+  }
   if (!comparisonOn && hasAttachedTemplate.value) {
     patch.comparisonTemplateId = null;
   }
@@ -197,7 +206,7 @@ function handleSubmit(): void {
     />
 
     <fieldset class="space-y-4">
-      <legend class="text-sm font-semibold tracking-wide text-brand-navy uppercase">
+      <legend class="text-brand-navy text-sm font-semibold tracking-wide uppercase">
         Identitas Indikator
       </legend>
 
@@ -240,7 +249,7 @@ function handleSubmit(): void {
     </fieldset>
 
     <fieldset class="space-y-4">
-      <legend class="text-sm font-semibold tracking-wide text-brand-navy uppercase">
+      <legend class="text-brand-navy text-sm font-semibold tracking-wide uppercase">
         Nilai &amp; Periode Saat Ini
       </legend>
 
@@ -284,7 +293,7 @@ function handleSubmit(): void {
     </fieldset>
 
     <fieldset class="rounded-card border border-slate-200 bg-slate-50/70 p-4">
-      <legend class="px-1 text-sm font-semibold tracking-wide text-brand-navy uppercase">
+      <legend class="text-brand-navy px-1 text-sm font-semibold tracking-wide uppercase">
         Nilai Pembanding Tahun Lalu
       </legend>
 
@@ -302,13 +311,23 @@ function handleSubmit(): void {
       </div>
 
       <p class="mt-1.5 text-xs leading-snug text-slate-500">
-        Aktifkan hanya bila ada angka tahun lalu yang benar-benar sebanding. Pasangan ini yang
-        dipakai untuk kalimat perbandingan otomatis.
+        Aktifkan hanya bila ada angka tahun lalu yang benar-benar sebanding. Angka ini disimpan
+        sebagai pembanding; kalimat perbandingan otomatis hanya dirender pada indikator yang sudah
+        memakai template perbandingan.
+      </p>
+
+      <p
+        v-if="indicator.isComputedComparison"
+        class="rounded-btn mt-2 border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600"
+        data-test="computed-note"
+      >
+        Indikator ini sudah ditandai sebagai perbandingan terkomputasi. Menonaktifkan pembanding
+        akan menghapus tanda tersebut.
       </p>
 
       <p
         v-if="hasAttachedTemplate && draft.comparisonEnabled"
-        class="mt-2 rounded-btn border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+        class="rounded-btn mt-2 border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"
         data-test="template-detach-warning"
       >
         Indikator ini memakai template perbandingan. Menonaktifkan pembanding akan melepas template
@@ -355,7 +374,7 @@ function handleSubmit(): void {
 
       <p
         v-if="indicator.comparison"
-        class="mt-3 rounded-btn border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600"
+        class="rounded-btn mt-3 border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600"
         data-test="comparison-preview"
       >
         <span class="font-medium text-slate-700">Kalimat perbandingan saat ini:</span>
@@ -364,7 +383,7 @@ function handleSubmit(): void {
     </fieldset>
 
     <fieldset class="space-y-4">
-      <legend class="text-sm font-semibold tracking-wide text-brand-navy uppercase">
+      <legend class="text-brand-navy text-sm font-semibold tracking-wide uppercase">
         Sumber, Catatan &amp; Status
       </legend>
 
@@ -404,7 +423,7 @@ function handleSubmit(): void {
         />
       </FormField>
 
-      <div class="flex items-start gap-3 rounded-card border border-slate-200 bg-slate-50/70 p-4">
+      <div class="rounded-card flex items-start gap-3 border border-slate-200 bg-slate-50/70 p-4">
         <input
           :id="fieldId('is-stale')"
           v-model="draft.isStale"

@@ -149,9 +149,11 @@ sidebar shell): a searchable, type-filterable card list of every scalar indicato
 table, each opening an accessible edit dialog. It is edit-only — an indicator or table must
 attach to a `section`, and no section-management surface exists, so create/delete are not in the
 UI rather than shipped as forms that cannot submit. "Import From" from the wireframe is not
-built, consistent with the scope above. Enabling the previous-year pair is what sets
-`is_computed_comparison`; clearing the pair detaches any tier-1 template in the same request, as
-§5 requires.
+built, consistent with the scope above. The previous-year pair is edited independently of
+`is_computed_comparison`: a pair alone does not promote an indicator into the tier-1 computed set
+(§5), so the flag is preserved as stored and is only cleared when the pair is cleared, since the
+service rejects a computed flag with no pair. Clearing the pair also detaches any tier-1 template
+in the same request, as §5 requires.
 
 ## 5. Prose Rules
 
