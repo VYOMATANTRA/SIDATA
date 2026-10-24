@@ -379,4 +379,57 @@ describe('auth store', () => {
     expect(store.accessToken).toBe('token-without-user')
     expect(store.user).toEqual({ id: '', email: '', role: '' })
   })
+
+  it('refreshSession forces a refresh even when an access token is already present', async () => {
+    let refreshCalls = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input)
+        if (url.includes('csrf-token')) {
+          return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+        }
+        refreshCalls++
+        return {
+          ok: true,
+          json: async () => ({
+            accessToken: 'fresh-access-token',
+            user: { id: '1', email: 'editor@example.com', role: 'editor' },
+          }),
+        } as Response
+      }),
+    )
+
+    const store = useAuthStore()
+    store.setAuth({ id: '1', email: 'editor@example.com', role: 'editor' }, 'expired-access-token')
+
+    const result = await store.refreshSession()
+
+    expect(result).toBe(true)
+    expect(refreshCalls).toBe(1)
+    expect(store.accessToken).toBe('fresh-access-token')
+  })
+
+  it('refreshSession latches after a definitive denial so a dead session is not hammered', async () => {
+    let refreshCalls = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input)
+        if (url.includes('csrf-token')) {
+          return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+        }
+        refreshCalls++
+        return { ok: false, status: 403, json: async () => ({}) } as Response
+      }),
+    )
+
+    const store = useAuthStore()
+    store.setAuth({ id: '1', email: 'editor@example.com', role: 'editor' }, 'expired-access-token')
+
+    expect(await store.refreshSession()).toBe(false)
+    expect(await store.refreshSession()).toBe(false)
+    expect(refreshCalls).toBe(1)
+    expect(store.isAuthenticated).toBe(false)
+  })
 })
