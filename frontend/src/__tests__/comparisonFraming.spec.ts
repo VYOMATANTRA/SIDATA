@@ -31,8 +31,12 @@ describe('formatIndicatorValue', () => {
     expect(formatIndicatorValue('12480.0000')).toBe('12.480');
   });
 
-  it('formats fractional values id-ID style with up to 2 decimals', () => {
+  it('formats fractional values id-ID style, keeping the stored fraction (up to 4 decimals)', () => {
     expect(formatIndicatorValue('0.9700')).toBe('0,97');
+  });
+
+  it('does not render "-0" for a stored negative zero', () => {
+    expect(formatIndicatorValue('-0.0000')).toBe('0');
   });
 
   it('does not round a small decimal (e.g. a ratio) down to "0"', () => {
