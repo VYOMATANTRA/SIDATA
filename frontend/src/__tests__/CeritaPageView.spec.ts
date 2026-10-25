@@ -306,4 +306,71 @@ describe('CeritaPageView', () => {
     expect(wrapper.find('[data-test="cerita-error"]').exists()).toBe(false);
     expect(wrapper.find('h1').text()).toBe('Kesehatan');
   });
+
+  it('discards a stale, out-of-order page response instead of letting it clear isLoading for the page actually in view', async () => {
+    // A (kependudukan), B (pendidikan), and C (kesehatan) are all navigated to in quick
+    // succession, all three requests still in flight. B then resolves out of order (after we've
+    // already moved on to C) — a superseded request settling late must not touch isLoading or
+    // run scroll-spy setup on C's behalf, or <main> would briefly show neither a loading state
+    // nor content (isLoading false, but page for the current slug still unresolved).
+    let resolveB!: (value: Response) => void;
+    const pendingB = new Promise<Response>((resolve) => {
+      resolveB = resolve;
+    });
+    let resolveC!: (value: Response) => void;
+    const pendingC = new Promise<Response>((resolve) => {
+      resolveC = resolve;
+    });
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/pages/kependudukan')) {
+        return new Promise<Response>(() => {}); // never resolves in this test
+      }
+      if (url.includes('/api/pages/pendidikan')) {
+        return pendingB;
+      }
+      if (url.includes('/api/pages/kesehatan')) {
+        return pendingC;
+      }
+      if (url.startsWith('/api/indicators')) {
+        return { ok: true, json: async () => ({ indicators: [] }) } as Response;
+      }
+      if (url.startsWith('/api/indicator-tables')) {
+        return { ok: true, json: async () => ({ tables: [] }) } as Response;
+      }
+      return { ok: true, json: async () => ({ blocks: [] }) } as Response;
+    });
+
+    const { pinia, router } = await setupAndPush('kependudukan');
+    const wrapper = mount(CeritaPageView, { global: { plugins: [pinia, router] } });
+
+    await router.push('/cerita/pendidikan');
+    await flushPromises();
+    await router.push('/cerita/kesehatan');
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="cerita-loading"]').exists()).toBe(true);
+
+    resolveB({
+      ok: true,
+      status: 200,
+      json: async () => ({ page: makePage('pendidikan', 'Pendidikan') }),
+    } as Response);
+    await flushPromises();
+
+    // Still kesehatan's request in flight — must still be loading, never a blank <main>.
+    expect(wrapper.find('[data-test="cerita-loading"]').exists()).toBe(true);
+    expect(wrapper.find('h1').exists()).toBe(false);
+
+    resolveC({
+      ok: true,
+      status: 200,
+      json: async () => ({ page: makePage('kesehatan', 'Kesehatan') }),
+    } as Response);
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="cerita-loading"]').exists()).toBe(false);
+    expect(wrapper.find('h1').text()).toBe('Kesehatan');
+  });
 });
