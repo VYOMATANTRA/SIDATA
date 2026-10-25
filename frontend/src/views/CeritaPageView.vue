@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router';
 import { usePagesStore } from '../stores/pages.store';
 import { useIndicatorsStore, type IndicatorDto } from '../stores/indicators.store';
 import { useIndicatorTablesStore, type IndicatorTableDetailDto } from '../stores/indicatorTables.store';
-import { useContentBlocksStore } from '../stores/contentBlocks.store';
+import { useContentBlocksStore, type ContentBlock } from '../stores/contentBlocks.store';
 import ChapterToc, { type TocChapter } from '../components/cerita/ChapterToc.vue';
 import ChapterSection from '../components/cerita/ChapterSection.vue';
 
@@ -21,12 +21,21 @@ const slug = computed(() => String(route.params['slug'] ?? ''));
 const page = computed(() => pagesStore.pagesBySlug[slug.value] ?? null);
 const notFound = computed(() => pagesStore.notFound && !page.value);
 
-const proseBySectionId = computed<Record<string, string>>(() => {
-  const map: Record<string, string> = {};
+// Grouped (not last-write-wins) and sorted by sortOrder, since a section can carry more than
+// one prose block and editors rely on sort_order to control reading order.
+const proseBySectionId = computed<Record<string, ContentBlock[]>>(() => {
+  const map: Record<string, ContentBlock[]> = {};
   for (const block of Object.values(contentBlocksStore.blocks)) {
     if (block.type === 'prose' && block.sectionId) {
-      map[block.sectionId] = block.body;
+      (map[block.sectionId] ??= []).push(block);
     }
+  }
+  for (const blocks of Object.values(map)) {
+    blocks.sort((a, b) => {
+      const orderA = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+      const orderB = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+      return orderA !== orderB ? orderA - orderB : a.id.localeCompare(b.id);
+    });
   }
   return map;
 });
@@ -70,7 +79,16 @@ let observer: IntersectionObserver | null = null;
 
 function setupScrollSpy() {
   observer?.disconnect();
-  if (typeof IntersectionObserver === 'undefined' || !page.value) return;
+  if (!page.value) return;
+
+  // Runs unconditionally (ahead of the IntersectionObserver feature check below) so the
+  // first/current chapter is still highlighted in environments without IntersectionObserver
+  // support, not only once the user scrolls.
+  if (!activeChapterId.value && page.value.chapters.length > 0) {
+    activeChapterId.value = page.value.chapters[0]!.id;
+  }
+
+  if (typeof IntersectionObserver === 'undefined') return;
 
   observer = new IntersectionObserver(
     (entries) => {
@@ -90,10 +108,6 @@ function setupScrollSpy() {
       observer.observe(el);
     }
   }
-
-  if (!activeChapterId.value && page.value.chapters.length > 0) {
-    activeChapterId.value = page.value.chapters[0]!.id;
-  }
 }
 
 function handleNavigate(chapterId: string) {
@@ -106,6 +120,10 @@ function retryLoad() {
 
 async function loadPage() {
   isLoading.value = true;
+  // Reset here, not just left to setupScrollSpy's fallback: that fallback only fires when
+  // activeChapterId is still falsy, so without this a stale id from the previous Cerita page
+  // would survive the navigation and never get highlighted in the new page's chapter list.
+  activeChapterId.value = null;
   observer?.disconnect();
 
   const [loadedPage] = await Promise.all([
