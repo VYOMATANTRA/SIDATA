@@ -124,6 +124,12 @@ function retryLoad() {
 }
 
 async function loadPage() {
+  // Captured once, compared against the live slug after every await below: if the route moves
+  // on to a different Cerita page before this call's requests resolve, its results are stale and
+  // must be discarded rather than clobbering isLoading/scroll-spy state for the page actually
+  // showing now (e.g. a slow A finishing after a faster B when navigating A -> B quickly).
+  const requestedSlug = slug.value;
+
   isLoading.value = true;
   // Reset here, not just left to setupScrollSpy's fallback: that fallback only fires when
   // activeChapterId is still falsy, so without this a stale id from the previous Cerita page
@@ -132,9 +138,11 @@ async function loadPage() {
   observer?.disconnect();
 
   const [loadedPage] = await Promise.all([
-    pagesStore.fetchPageBySlug(slug.value),
+    pagesStore.fetchPageBySlug(requestedSlug),
     contentBlocksStore.fetchBlocks(),
   ]);
+
+  if (slug.value !== requestedSlug) return;
 
   if (loadedPage) {
     await Promise.allSettled(
@@ -146,6 +154,8 @@ async function loadPage() {
       ),
     );
   }
+
+  if (slug.value !== requestedSlug) return;
 
   isLoading.value = false;
   await nextTick();
