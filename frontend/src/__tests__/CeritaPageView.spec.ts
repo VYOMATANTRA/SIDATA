@@ -264,4 +264,46 @@ describe('CeritaPageView', () => {
     expect(secondPageChapterLink().exists()).toBe(true);
     expect(secondPageChapterLink().attributes('href')).toBe('#pendidikan-bab-1');
   });
+
+  it('does not show a stale error for a cached page after a different page failed to load', async () => {
+    // Repro: open B (succeeds, gets cached) -> open A (fails with 500) -> go back to B.
+    // pagesStore.error is a single shared flag; its cache-hit path for B must not leave A's
+    // error visible once B (already cached) resolves successfully again.
+    const pageB = makePage('kesehatan', 'Kesehatan');
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/pages/kesehatan')) {
+        return { ok: true, status: 200, json: async () => ({ page: pageB }) } as Response;
+      }
+      if (url.includes('/api/pages/kependudukan')) {
+        return { ok: false, status: 500, json: async () => ({ error: 'boom' }) } as Response;
+      }
+      if (url.startsWith('/api/indicators')) {
+        return { ok: true, json: async () => ({ indicators: [] }) } as Response;
+      }
+      if (url.startsWith('/api/indicator-tables')) {
+        return { ok: true, json: async () => ({ tables: [] }) } as Response;
+      }
+      return { ok: true, json: async () => ({ blocks: [] }) } as Response;
+    });
+
+    const { pinia, router } = await setupAndPush('kesehatan');
+    const wrapper = mount(CeritaPageView, { global: { plugins: [pinia, router] } });
+    await flushPromises();
+
+    expect(wrapper.find('h1').text()).toBe('Kesehatan');
+    expect(wrapper.find('[data-test="cerita-error"]').exists()).toBe(false);
+
+    await router.push('/cerita/kependudukan');
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="cerita-error"]').exists()).toBe(true);
+
+    await router.push('/cerita/kesehatan');
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="cerita-error"]').exists()).toBe(false);
+    expect(wrapper.find('h1').text()).toBe('Kesehatan');
+  });
 });
