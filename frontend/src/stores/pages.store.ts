@@ -131,11 +131,19 @@ export const usePagesStore = defineStore('pages', () => {
 
         const details = await Promise.all(
           summaries.map(async (summary) => {
+            // Reuse a page already loaded by the Cerita view (or by an earlier hierarchy load)
+            // instead of refetching every slug. `force` still bypasses the cache.
+            const cached = !force ? pagesBySlug.value[summary.slug] : undefined;
+            if (cached) return cached;
             try {
               const data = await apiRequestJson<{ page?: PageDetail }>(
                 `/api/pages/${encodeURIComponent(summary.slug)}`,
               );
-              return data.page ?? null;
+              const page = data.page ?? null;
+              if (page) {
+                pagesBySlug.value = { ...pagesBySlug.value, [summary.slug]: page };
+              }
+              return page;
             } catch {
               // One unreadable page must not blank out the whole hierarchy — the section
               // list degrades to "page not labelled" rather than failing the view.
