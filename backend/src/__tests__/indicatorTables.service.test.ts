@@ -613,6 +613,79 @@ describe('indicatorTables.service updateIndicatorTable', () => {
     assert.equal(txCalls.length, 0);
   });
 
+  it('supports swapping two row keys in one batch', async () => {
+    rowImpl['findMany'] = async () => [
+      cellRow(),
+      cellRow({ id: 'row-2', rowKey: '5-9', label: 'Usia 5-9 tahun', male: 80, female: 70 }),
+    ];
+    rowImpl['update'] = async (...args: never[]) => {
+      const { data } = args[0] as unknown as { data: AnyRecord };
+      return { ...cellRow(), ...data };
+    };
+
+    await updateIndicatorTable(
+      'tbl-1',
+      {
+        rows: [
+          { id: 'row-1', rowKey: '5-9' },
+          { id: 'row-2', rowKey: '0-4' },
+        ],
+      },
+      ACTOR,
+      CONTEXT,
+    );
+
+    // Each renamed row is parked on a temporary key first, then written to its final key:
+    // two rows × two writes, otherwise the unique index would reject the swap.
+    assert.equal(txRowCalls['update']?.length, 4);
+    const rowKeyChanges = auditRows.map(
+      (row) => ((row['metadata'] as AnyRecord)['changes'] as AnyRecord)['rowKey'],
+    );
+    assert.deepStrictEqual(rowKeyChanges[0], { before: '0-4', after: '5-9' });
+    assert.deepStrictEqual(rowKeyChanges[1], { before: '5-9', after: '0-4' });
+  });
+
+  it('rejects a rename whose target key is held by a row outside the batch', async () => {
+    rowImpl['findMany'] = async (...args: never[]) => {
+      const { where } = args[0] as unknown as { where: AnyRecord };
+      if (where['rowKey'] !== undefined) {
+        return [cellRow({ id: 'row-other', rowKey: 'dipakai', label: 'Baris lain' })];
+      }
+      return [cellRow()];
+    };
+
+    await assertServiceError(
+      updateIndicatorTable('tbl-1', { rows: [{ id: 'row-1', rowKey: 'dipakai' }] }, ACTOR, CONTEXT),
+      409,
+      'sudah dipakai',
+    );
+    assert.equal(txRowCalls['update']?.length ?? 0, 0);
+    assert.equal(auditRows.length, 0);
+  });
+
+  it('rejects two rows renamed to the same key with 400', async () => {
+    rowImpl['findMany'] = async () => [
+      cellRow(),
+      cellRow({ id: 'row-2', rowKey: '5-9', label: 'Usia 5-9 tahun' }),
+    ];
+
+    await assertServiceError(
+      updateIndicatorTable(
+        'tbl-1',
+        {
+          rows: [
+            { id: 'row-1', rowKey: 'sama' },
+            { id: 'row-2', rowKey: 'sama' },
+          ],
+        },
+        ACTOR,
+        CONTEXT,
+      ),
+      400,
+      'duplikat',
+    );
+  });
+
   it('treats unchanged nested rows as a no-op without an audit row', async () => {
     rowImpl['findMany'] = async () => [cellRow()];
 
