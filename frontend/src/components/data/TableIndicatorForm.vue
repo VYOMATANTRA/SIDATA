@@ -88,7 +88,15 @@ function resetDrafts(table: IndicatorTableDetail): void {
   submitted.value = false;
 }
 
-watch(() => props.table, resetDrafts, { immediate: true });
+// Drafts belong to a table, not to a snapshot of it. Keying the watcher on the id means a
+// refetch of the same table (a retry, a background refresh) cannot wipe unsaved edits, while
+// switching to another table still resets. The modal remounts on every open, so `immediate`
+// covers the first load.
+watch(
+  () => props.table.id,
+  () => resetDrafts(props.table),
+  { immediate: true },
+);
 
 const fieldId = (name: string): string => `${props.idPrefix}-${name}`;
 const rowFieldId = (rowId: string, cell: string): string =>
