@@ -148,6 +148,46 @@ describe('auth store', () => {
     expect(refreshCalls).toBe(2)
   })
 
+  it('keeps an existing session when the refresh fails with a transient 5xx', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input)
+        if (url.includes('csrf-token')) {
+          return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+        }
+        return { ok: false, status: 503, json: async () => ({}) } as Response
+      }),
+    )
+
+    const store = useAuthStore()
+    store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'token-1')
+
+    expect(await store.refreshSession()).toBe(false)
+    expect(store.accessToken).toBe('token-1')
+    expect(store.isAuthenticated).toBe(true)
+  })
+
+  it('keeps an existing session when the refresh request throws (network error)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input)
+        if (url.includes('csrf-token')) {
+          return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+        }
+        throw new Error('Network error')
+      }),
+    )
+
+    const store = useAuthStore()
+    store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'token-1')
+
+    expect(await store.refreshSession()).toBe(false)
+    expect(store.accessToken).toBe('token-1')
+    expect(store.isAuthenticated).toBe(true)
+  })
+
   it('clearAuth resets the refresh-denied latch so initAuth can retry again', async () => {
     let refreshCalls = 0
     vi.stubGlobal(
