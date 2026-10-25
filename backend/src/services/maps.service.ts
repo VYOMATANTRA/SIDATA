@@ -1173,25 +1173,30 @@ export const updateSpatialPoint = async (
   try {
     return await executeLockedTransaction({
       client,
-      // Point row first — every coverage write to this point goes through that lock — then the
-      // rt_leaders rows of the point's PRE ∪ POST RT set, locked ascending, before this
-      // transaction writes anything: same-RT writers queue on the leader rows regardless of
-      // which direction a race runs (a PATCH moving 3→9 and a sibling moving 9→3 both grab
-      // {3,9} in the same order, so neither can end up holding one RT while waiting for the
-      // other — exactly the deadlock window that destination-only locking left behind,
-      // recoverable only by InnoDB detection plus the P2034 retry). The pre set is read with
-      // a consistent read AFTER the point row lock, which makes it stable: no sibling writer
-      // can touch this point's coverage rows while the lock is held, and every coverage write
-      // elsewhere goes through the same leaders-first ordering the coverage add/delete
-      // endpoints use, so no cross-endpoint lock-ordering flip exists either. Field-only
-      // payloads (name/lat/lng/metadata) skip the RT locking entirely — the point row lock is
-      // the whole story for them.
+      // Point row first — every coverage write to this point goes through that lock — then,
+      // ONLY for ketua_rt-side writes (the point is or becomes ketua_rt), the rt_leaders rows
+      // of its PRE ∪ POST RT set, locked ascending, before this transaction writes anything:
+      // same-RT writers queue on the leader rows regardless of which direction a race runs
+      // (a PATCH moving 3→9 and a sibling moving 9→3 both grab {3,9} in the same order, so
+      // neither can end up holding one RT while waiting for the other — exactly the deadlock
+      // window that destination-only locking left behind, recoverable only by InnoDB
+      // detection plus the P2034 retry). The pre set is read with a consistent read AFTER the
+      // point row lock, which makes it stable: no sibling writer can touch this point's
+      // coverage rows while the lock is held, and every ketua_rt coverage write elsewhere
+      // goes through the same leaders-first ordering, so no cross-endpoint lock-ordering flip
+      // exists either. A bank_sampah point is never exclusive on an RT, so leader locks would
+      // be pure overhead there — same-point writers already serialize on the point row lock.
+      // Field-only payloads (name/lat/lng/metadata) skip the RT locking entirely too.
       lockQuery: async (txRaw) => {
         const tx = txRaw as SpatialWriteTxClient;
-        await tx.$queryRaw(
-          Prisma.sql`SELECT id FROM spatial_points WHERE id = ${normalizedId} FOR UPDATE`,
-        );
+        const pointRows = (await tx.$queryRaw(
+          Prisma.sql`SELECT type FROM spatial_points WHERE id = ${normalizedId} FOR UPDATE`,
+        )) as Array<{ type: string }>;
         if (input.type === undefined && input.rts === undefined) return;
+        const isOrBecomesKetua =
+          (input.type !== undefined && input.type === 'ketua_rt') ||
+          (input.type === undefined && pointRows[0]?.type === 'ketua_rt');
+        if (!isOrBecomesKetua) return;
         const preRtRows = (await tx.$queryRaw(
           Prisma.sql`SELECT rt_number AS rtNumber FROM spatial_point_rt WHERE point_id = ${normalizedId}`,
         )) as Array<{ rtNumber: number }>;

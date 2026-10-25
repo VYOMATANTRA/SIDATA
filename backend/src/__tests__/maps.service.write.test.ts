@@ -283,6 +283,13 @@ beforeEach(() => {
       queryRawCalls.push(args as unknown[]);
       const [query] = args as unknown as [Prisma.Sql];
       const text = query?.sql ?? String(query);
+      // Serves updateSpatialPoint's lockQuery point-row lock with the emulated row's type
+      // (real DB returns the FOR UPDATE row, including its ENUM type value).
+      if (text.includes('FROM spatial_points') && text.includes('FOR UPDATE')) {
+        const pointId = (query?.values as unknown[] | undefined)?.[0] as string | undefined;
+        const found = points.get(pointId ?? '');
+        return found ? [{ type: (found as unknown as AnyRecord)['type'] }] : [];
+      }
       // Serves the invariant assert's FOR SHARE locking read with the emulator's ketua_rt
       // coverage state, exactly like the real database would (current read) — including the
       // target-RT scoping: that SQL's only bound parameter is the RT being written, and rows
@@ -598,33 +605,34 @@ describe('maps.service updateSpatialPoint', () => {
     );
   });
 
-  it('does a type-only PATCH leader-lock its current RTs via lockQuery (no in-execute pass)', async () => {
+  it('takes rt_leaders locks only when the point is or becomes ketua_rt', async () => {
+    // Perf review follow-up: a bank_sampah point is never exclusive on an RT, so leader rows
+    // would be pure overhead there — same-point writers already serialize on the point row
+    // lock. Only the ketua_rt side of a write (is or becomes ketua_rt) takes them.
     seed();
-    await updateSpatialPoint(
-      'point-ketua-1',
-      { name: 'Pos RT 5', latitude: -1.23 },
-      ACTOR,
-      CONTEXT,
-    );
-    // Field-only payload: point row lock only — no RT read, no RT locks.
-    assert.equal(queryRawCalls.length, 1);
-
-    await updateSpatialPoint('point-ketua-1', { type: 'bank_sampah' }, ACTOR, CONTEXT);
     const sqlOf = (args: unknown) =>
       ((args as unknown[] | undefined)?.[0] as Prisma.Sql | undefined)?.sql ?? String(args);
-    const typePatchLeaderLocks = queryRawCalls.filter((args) => {
-      const sql = sqlOf(args);
-      return sql.includes('FROM rt_leaders') || sql.includes('spatial_point_rt');
-    });
-    // Type PATCH: pre-read of the moved-off point's RTs + one ascending rt_leaders lock
-    // ([5]), both up front in lockQuery — nothing left for the in-execute pass.
-    const preCount = typePatchLeaderLocks.filter((args) =>
-      sqlOf(args).includes('spatial_point_rt'),
-    ).length;
-    assert.equal(preCount, 1);
-    const leader = (queryRawCalls.find((args) => sqlOf(args).includes('FROM rt_leaders'))?.[0] ??
-      undefined) as Prisma.Sql | undefined;
-    assert.deepEqual((leader?.values as unknown[] | undefined)?.map(Number), [5]);
+    const leaderLocks = () =>
+      queryRawCalls.filter((args) => sqlOf(args).includes('FROM rt_leaders'));
+    const preReads = () =>
+      queryRawCalls.filter((args) => sqlOf(args).includes('rt_number AS rtNumber'));
+
+    // Field-only payload: point row lock only — no RT read, no RT locks.
+    await updateSpatialPoint('point-ketua-1', { name: 'Pos RT 5 (ubah nama)' }, ACTOR, CONTEXT);
+    assert.equal(leaderLocks().length, 0);
+    assert.equal(preReads().length, 0);
+
+    // bank_sampah rts PATCH (stays bank_sampah): coverage rewritten, no leader locks.
+    const dto = await updateSpatialPoint('point-bs-1', { rts: [30] }, ACTOR, CONTEXT);
+    assert.deepEqual(dto.rts, [30]);
+    assert.equal(leaderLocks().length, 0);
+    assert.equal(preReads().length, 0);
+    assert.equal(auditRows[auditRows.length - 1]?.action, 'spatial_point.updated');
+
+    // type-only PATCH LEAVING ketua_rt: no leader locks either (no longer a ketua write).
+    await updateSpatialPoint('point-ketua-1', { type: 'bank_sampah' }, ACTOR, CONTEXT);
+    assert.equal(leaderLocks().length, 0);
+    assert.equal(preReads().length, 0);
   });
 
   it('rejects switching type to ketua_rt while the point still spans several RTs (no rts sent)', async () => {
