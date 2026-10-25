@@ -32,7 +32,10 @@ export function formatIndicatorValue(value: string): string {
   const groupedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   const trimmedFraction = fractionPart.replace(/0+$/, '');
 
-  return `${sign}${groupedInteger}${trimmedFraction ? `,${trimmedFraction}` : ''}`;
+  // Avoid a "-0" display for values like "-0.0000" — there's no real negative figure here.
+  const isZero = !/[1-9]/.test(integerPart + trimmedFraction);
+
+  return `${isZero ? '' : sign}${groupedInteger}${trimmedFraction ? `,${trimmedFraction}` : ''}`;
 }
 
 /**
