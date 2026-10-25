@@ -53,8 +53,10 @@ export interface IndicatorTableDetailDto {
 
 export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
   const bySectionId = ref<Record<string, IndicatorTableDetailDto[]>>({});
-  const isLoading = ref(false);
-  const error = ref<string | null>(null);
+  // Keyed per sectionId so one section's failure can't be masked by, or clobber,
+  // the loading/error state of a sibling section's concurrent request.
+  const loadingBySectionId = ref<Record<string, boolean>>({});
+  const errorsBySectionId = ref<Record<string, string | null>>({});
 
   const inFlight: Record<string, Promise<IndicatorTableDetailDto[]> | undefined> = {};
 
@@ -69,8 +71,8 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
       return inFlight[sectionId]!;
     }
 
-    isLoading.value = true;
-    error.value = null;
+    loadingBySectionId.value = { ...loadingBySectionId.value, [sectionId]: true };
+    errorsBySectionId.value = { ...errorsBySectionId.value, [sectionId]: null };
 
     const task = (async () => {
       try {
@@ -100,10 +102,16 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
         bySectionId.value = { ...bySectionId.value, [sectionId]: detailResults };
         return detailResults;
       } catch (err) {
-        error.value = err instanceof Error ? err.message : 'Terjadi kesalahan jaringan';
+        // See indicators.store.ts: on failure we intentionally leave bySectionId[sectionId]
+        // unset rather than [] — an empty array must only ever mean "no matrix tables here",
+        // never "the fetch failed". The error lives in errorsBySectionId instead.
+        errorsBySectionId.value = {
+          ...errorsBySectionId.value,
+          [sectionId]: err instanceof Error ? err.message : 'Terjadi kesalahan jaringan',
+        };
         return [];
       } finally {
-        isLoading.value = false;
+        loadingBySectionId.value = { ...loadingBySectionId.value, [sectionId]: false };
         delete inFlight[sectionId];
       }
     })();
@@ -114,8 +122,8 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
 
   return {
     bySectionId,
-    isLoading,
-    error,
+    loadingBySectionId,
+    errorsBySectionId,
     fetchBySectionId,
   };
 });
