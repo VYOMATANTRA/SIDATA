@@ -37,10 +37,22 @@ const router = createRouter({
       meta: { requiresAuth: true, requiresAdmin: true, title: 'Manajemen Pengguna' },
     },
     {
+      path: '/audit-logs',
+      name: 'audit-log-viewer',
+      component: () => import('../views/AuditLogView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true, title: 'Log Sistem dan Audit Trail' },
+    },
+    {
       path: '/settings/audit-retention',
       name: 'audit-retention-settings',
       component: () => import('../views/AuditRetentionSettingsView.vue'),
       meta: { requiresAuth: true, requiresAdmin: true, title: 'Pengaturan Retensi Audit' },
+    },
+    {
+      path: '/cerita/:slug',
+      name: 'cerita-page',
+      component: () => import('../views/CeritaPageView.vue'),
+      meta: { title: 'Cerita' },
     },
     {
       path: '/auth/callback',
