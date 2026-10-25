@@ -118,6 +118,44 @@ describe('indicator tables store', () => {
     expect(JSON.parse(String(captured?.body))).toEqual({ title: 'Piramida Penduduk' });
   });
 
+  it('saves the header and every changed row in one batch PATCH', async () => {
+    let capturedInit: RequestInit | undefined;
+
+    globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
+      if (url === '/api/indicator-tables?pageSize=200') {
+        return json({ tables: [makeTable()], total: 1 });
+      }
+      if (url === '/api/indicator-tables/tbl-1') {
+        capturedInit = init;
+        return json({ table: { ...makeDetail(), title: 'Piramida Penduduk' } });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    const store = useIndicatorTablesStore();
+    await store.fetchTables();
+
+    await store.saveTableDetail('tbl-1', {
+      table: { title: 'Piramida Penduduk' },
+      rows: [
+        { rowId: 'row-1', patch: { male: 130 } },
+        { rowId: 'row-2', patch: { female: 75 } },
+      ],
+    });
+
+    expect(capturedInit?.method).toBe('PATCH');
+    expect(JSON.parse(String(capturedInit?.body))).toEqual({
+      title: 'Piramida Penduduk',
+      rows: [
+        { id: 'row-1', male: 130 },
+        { id: 'row-2', female: 75 },
+      ],
+    });
+    expect(store.tables[0]?.title).toBe('Piramida Penduduk');
+  });
+
   it('patches a single row through the row endpoint', async () => {
     let capturedUrl = '';
     let capturedInit: RequestInit | undefined;
