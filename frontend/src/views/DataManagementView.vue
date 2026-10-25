@@ -220,24 +220,16 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
   saving.value = true;
   serverError.value = '';
   try {
-    if (Object.keys(payload.table).length > 0) {
-      await tablesStore.updateTable(target.id, payload.table);
-    }
-    for (const row of payload.rows) {
-      await tablesStore.updateTableRow(row.rowId, row.patch);
-    }
+    // One atomic PATCH: the header and every changed row commit together or not at all, so
+    // there is no partial write to reconcile here.
+    await tablesStore.saveTableDetail(target.id, payload);
     resetEditor();
     announce(`Perubahan tabel “${target.title}” disimpan.`);
   } catch (error) {
-    // Row updates are individual requests, so a failure part-way leaves earlier rows committed.
-    // Re-read the table so the form shows what is actually stored instead of a half-applied
-    // draft that still looks unsaved.
+    // Deliberately no refetch. Replacing `activeTable` would hand the form a new `table` prop,
+    // and its watcher resets every draft — the failed row and the rows that were never sent.
+    // The request wrote nothing, so the drafts are still exactly what the editor typed.
     serverError.value = errorMessage(error, 'Gagal menyimpan perubahan tabel.');
-    try {
-      activeTable.value = await tablesStore.fetchTableDetail(target.id);
-    } catch {
-      // Keep the original save error; a failed refresh should not mask it.
-    }
   } finally {
     saving.value = false;
   }
