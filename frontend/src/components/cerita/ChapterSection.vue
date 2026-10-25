@@ -2,14 +2,15 @@
 import type { ChapterDto } from '../../stores/pages.store';
 import type { IndicatorDto } from '../../stores/indicators.store';
 import type { IndicatorTableDetailDto } from '../../stores/indicatorTables.store';
+import type { ContentBlock } from '../../stores/contentBlocks.store';
 import SectionProse from './SectionProse.vue';
 import IndicatorStat from './IndicatorStat.vue';
 import MatrixTableBlock from './MatrixTableBlock.vue';
 
 export interface ChapterSectionProps {
   chapter: ChapterDto;
-  /** Section prose body, keyed by sectionId. */
-  proseBySectionId: Record<string, string>;
+  /** Section prose blocks, keyed by sectionId, pre-sorted by sortOrder. */
+  proseBySectionId: Record<string, ContentBlock[]>;
   /** Indicators, keyed by sectionId. */
   indicatorsBySectionId: Record<string, IndicatorDto[]>;
   /** Matrix tables, keyed by sectionId. */
@@ -40,7 +41,11 @@ defineProps<ChapterSectionProps>();
         {{ section.title }}
       </h3>
 
-      <SectionProse v-if="proseBySectionId[section.id]" :body="proseBySectionId[section.id]!" />
+      <SectionProse
+        v-for="block in proseBySectionId[section.id] ?? []"
+        :key="block.id"
+        :body="block.body"
+      />
 
       <div
         v-if="indicatorsBySectionId[section.id]?.length"
