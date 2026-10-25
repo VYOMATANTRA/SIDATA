@@ -4,9 +4,14 @@ import { apiRequestJson } from '../utils/apiClient';
 
 /**
  * Scalar indicator figures (SPEC §7). Read is public; writes need an editor/admin token.
- * The backend caps `pageSize` at 200 and the kelurahan publishes dozens of figures, so the
- * CMS pulls them in one page and filters client-side, the same choice the Ketua RT page
- * makes for its 100 rows (SPEC §8).
+ *
+ * Two consumers, one store:
+ * - The Cerita page reads indicators per section (`fetchBySectionId`, `bySectionId`), tracking
+ *   loading/error per section so one failed section cannot blank out or clobber a sibling.
+ * - The CMS pulls the whole list in one page (`fetchIndicators`) and edits a row in place
+ *   (`updateIndicator`). The backend caps `pageSize` at 200 and the kelurahan publishes dozens of
+ *   figures, so the CMS filters client-side, the same choice the Ketua RT page makes for its 100
+ *   rows (SPEC §8).
  */
 
 export const INDICATORS_PAGE_SIZE = 200;
@@ -40,6 +45,10 @@ export interface Indicator {
   updatedAt: string;
 }
 
+/** The public Cerita read names the same shapes `…Dto`; keep both import paths working. */
+export type IndicatorDto = Indicator;
+export type IndicatorComparison = RenderedComparison;
+
 /** Only the fields the CMS form can change; the API rejects unknown keys (`.strict()`). */
 export interface IndicatorPatch {
   label?: string;
@@ -65,6 +74,7 @@ export interface IndicatorPatch {
 }
 
 export const useIndicatorsStore = defineStore('indicators', () => {
+  // --- CMS: full list + edits ---
   const indicators = ref<Indicator[]>([]);
   const total = ref(0);
   const isLoading = ref(false);
@@ -72,6 +82,15 @@ export const useIndicatorsStore = defineStore('indicators', () => {
   const error = ref<string | null>(null);
 
   let inFlight: Promise<void> | null = null;
+
+  // --- Public Cerita: reads grouped per section ---
+  const bySectionId = ref<Record<string, Indicator[]>>({});
+  // Keyed per sectionId so one section's failure can't be masked by, or clobber,
+  // the loading/error state of a sibling section's concurrent request.
+  const loadingBySectionId = ref<Record<string, boolean>>({});
+  const errorsBySectionId = ref<Record<string, string | null>>({});
+
+  const sectionInFlight: Record<string, Promise<Indicator[]> | undefined> = {};
 
   const staleCount = computed(() => indicators.value.filter((item) => item.isStale).length);
 
@@ -122,6 +141,49 @@ export const useIndicatorsStore = defineStore('indicators', () => {
     return data.indicator;
   }
 
+  async function fetchBySectionId(sectionId: string, force = false): Promise<Indicator[]> {
+    if (!force && bySectionId.value[sectionId]) {
+      return bySectionId.value[sectionId]!;
+    }
+    if (sectionInFlight[sectionId]) {
+      return sectionInFlight[sectionId]!;
+    }
+
+    loadingBySectionId.value = { ...loadingBySectionId.value, [sectionId]: true };
+    errorsBySectionId.value = { ...errorsBySectionId.value, [sectionId]: null };
+
+    const task = (async () => {
+      try {
+        const params = new URLSearchParams({ sectionId, pageSize: '200' });
+        const response = await fetch(`/api/indicators?${params.toString()}`);
+        if (!response.ok) {
+          throw new Error(`Gagal memuat indikator (status ${response.status})`);
+        }
+
+        const data = (await response.json()) as { indicators: Indicator[] };
+        const list = Array.isArray(data.indicators) ? data.indicators : [];
+        bySectionId.value = { ...bySectionId.value, [sectionId]: list };
+        return list;
+      } catch (err) {
+        // Deliberately does NOT write [] into bySectionId on failure: an empty array there
+        // must mean "fetched, genuinely no indicators" — never "fetch failed". The failure is
+        // recorded only in errorsBySectionId so a view can tell the two apart and show an
+        // error for this section instead of rendering it as silently empty.
+        errorsBySectionId.value = {
+          ...errorsBySectionId.value,
+          [sectionId]: err instanceof Error ? err.message : 'Terjadi kesalahan jaringan',
+        };
+        return [];
+      } finally {
+        loadingBySectionId.value = { ...loadingBySectionId.value, [sectionId]: false };
+        delete sectionInFlight[sectionId];
+      }
+    })();
+
+    sectionInFlight[sectionId] = task;
+    return task;
+  }
+
   return {
     indicators,
     total,
@@ -129,8 +191,12 @@ export const useIndicatorsStore = defineStore('indicators', () => {
     isLoaded,
     error,
     staleCount,
+    bySectionId,
+    loadingBySectionId,
+    errorsBySectionId,
     fetchIndicators,
     updateIndicator,
     replaceIndicator,
+    fetchBySectionId,
   };
 });

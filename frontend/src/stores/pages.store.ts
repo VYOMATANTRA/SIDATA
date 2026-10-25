@@ -3,11 +3,16 @@ import { computed, ref } from 'vue';
 import { apiRequestJson } from '../utils/apiClient';
 
 /**
- * Reads the public page → chapter → section hierarchy (SPEC §2). The CMS forms need the
- * reverse lookup: given an `indicator.sectionId`, which page/chapter does it belong to
- * (for the card kicker and the modal breadcrumb)? Sections are the attachment point for
- * indicators and indicator tables, so this is the only place that knowledge lives on the
- * frontend.
+ * Reads the public page → chapter → section hierarchy (SPEC §2).
+ *
+ * Two consumers, one store:
+ * - The Cerita page fetches a single page by slug (`fetchPageBySlug`, `pagesBySlug`) and renders
+ *   it. It tracks its own `isLoading` / `error` / `notFound`.
+ * - The CMS forms need the reverse lookup: given an `indicator.sectionId`, which page/chapter does
+ *   it belong to (for the card kicker and the modal breadcrumb)? `fetchHierarchy` flattens every
+ *   page into a section index and keeps its loading/error state separate so the two flows cannot
+ *   clobber each other. Sections are the attachment point for indicators and indicator tables, so
+ *   this is the only place that knowledge lives on the frontend.
  */
 
 export interface PageSummary {
@@ -53,16 +58,30 @@ export interface SectionOption {
   pageSlug: string;
 }
 
+/** The public Cerita read names the same shapes `…Dto`; keep both import paths working. */
+export type SectionDto = SectionSummary;
+export type ChapterDto = ChapterDetail;
+export type PageDetailDto = PageDetail;
+
 const NOT_AVAILABLE = 'Tanpa bagian';
 
 export const usePagesStore = defineStore('pages', () => {
+  // --- CMS: flattened hierarchy (all pages → sections) ---
   const pages = ref<PageSummary[]>([]);
   const sections = ref<SectionOption[]>([]);
-  const isLoading = ref(false);
+  const isHierarchyLoading = ref(false);
   const isLoaded = ref(false);
-  const error = ref<string | null>(null);
+  const hierarchyError = ref<string | null>(null);
 
-  let inFlight: Promise<void> | null = null;
+  let hierarchyInFlight: Promise<void> | null = null;
+
+  // --- Public Cerita: one page by slug ---
+  const pagesBySlug = ref<Record<string, PageDetail>>({});
+  const isLoading = ref(false);
+  const error = ref<string | null>(null);
+  const notFound = ref(false);
+
+  const inFlight: Record<string, Promise<PageDetail | null> | undefined> = {};
 
   const sectionById = computed(() => {
     const map = new Map<string, SectionOption>();
@@ -100,12 +119,12 @@ export const usePagesStore = defineStore('pages', () => {
 
   async function fetchHierarchy(force = false): Promise<void> {
     if (isLoaded.value && !force) return;
-    if (inFlight) return inFlight;
+    if (hierarchyInFlight) return hierarchyInFlight;
 
-    isLoading.value = true;
-    error.value = null;
+    isHierarchyLoading.value = true;
+    hierarchyError.value = null;
 
-    inFlight = (async () => {
+    hierarchyInFlight = (async () => {
       try {
         const listed = await apiRequestJson<{ pages?: PageSummary[] }>('/api/pages');
         const summaries = Array.isArray(listed.pages) ? listed.pages : [];
@@ -145,26 +164,71 @@ export const usePagesStore = defineStore('pages', () => {
         sections.value = flattened;
         isLoaded.value = true;
       } catch (err) {
-        error.value = err instanceof Error ? err.message : 'Gagal memuat struktur halaman.';
+        hierarchyError.value =
+          err instanceof Error ? err.message : 'Gagal memuat struktur halaman.';
       } finally {
-        isLoading.value = false;
-        inFlight = null;
+        isHierarchyLoading.value = false;
+        hierarchyInFlight = null;
       }
     })();
 
-    return inFlight;
+    return hierarchyInFlight;
+  }
+
+  async function fetchPageBySlug(slug: string, force = false): Promise<PageDetail | null> {
+    if (!force && pagesBySlug.value[slug]) {
+      return pagesBySlug.value[slug];
+    }
+    if (inFlight[slug]) {
+      return inFlight[slug]!;
+    }
+
+    isLoading.value = true;
+    error.value = null;
+    notFound.value = false;
+
+    const task = (async () => {
+      try {
+        const response = await fetch(`/api/pages/${encodeURIComponent(slug)}`);
+        if (response.status === 404) {
+          notFound.value = true;
+          return null;
+        }
+        if (!response.ok) {
+          throw new Error(`Gagal memuat halaman (status ${response.status})`);
+        }
+
+        const data = (await response.json()) as { page: PageDetail };
+        pagesBySlug.value = { ...pagesBySlug.value, [slug]: data.page };
+        return data.page;
+      } catch (err) {
+        error.value = err instanceof Error ? err.message : 'Terjadi kesalahan jaringan';
+        return null;
+      } finally {
+        isLoading.value = false;
+        delete inFlight[slug];
+      }
+    })();
+
+    inFlight[slug] = task;
+    return task;
   }
 
   return {
     pages,
     sections,
-    isLoading,
+    isHierarchyLoading,
     isLoaded,
+    hierarchyError,
+    pagesBySlug,
+    isLoading,
     error,
+    notFound,
     sectionById,
     breadcrumbParts,
     pageTitleFor,
     labelFor,
     fetchHierarchy,
+    fetchPageBySlug,
   };
 });

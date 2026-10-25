@@ -337,7 +337,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
       </div>
 
       <p
-        v-if="pagesStore.error"
+        v-if="pagesStore.hierarchyError"
         class="mt-4 rounded-card border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900"
       >
         Struktur halaman tidak dapat dimuat, jadi asal halaman tiap data tidak ditampilkan. Daftar

@@ -6,6 +6,12 @@ import { apiRequestJson } from '../utils/apiClient';
  * The four fixed-shape matrix tables (SPEC §7): normalized rows, one row per logical group.
  * Sex-split kinds store `male`/`female` and derive `total` on read; single-value kinds store
  * `total`. The CMS form must follow the same split or the service answers 400.
+ *
+ * Two consumers, one store:
+ * - The Cerita page reads tables per section (`fetchBySectionId`, `bySectionId`), tracking
+ *   loading/error per section so one failed section cannot blank out a sibling.
+ * - The CMS lists every table (`fetchTables`), opens one detail (`fetchTableDetail`) and saves
+ *   the header plus changed rows in one atomic request (`saveTableDetail`).
  */
 
 export const INDICATOR_TABLES_PAGE_SIZE = 200;
@@ -92,6 +98,10 @@ export interface IndicatorTableDetail extends IndicatorTable {
   totals: IndicatorTableTotals;
 }
 
+/** The public Cerita read names the same shapes `…Dto`; keep both import paths working. */
+export type IndicatorTableRowDto = IndicatorTableRow;
+export type IndicatorTableDetailDto = IndicatorTableDetail;
+
 /** Table-level fields the CMS may change; `kind` is immutable once rows exist. */
 export interface IndicatorTablePatch {
   title?: string;
@@ -113,6 +123,7 @@ export interface IndicatorTableSavePayload {
 }
 
 export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
+  // --- CMS: full list + editable details ---
   const tables = ref<IndicatorTable[]>([]);
   const details = ref<Record<string, IndicatorTableDetail>>({});
   const total = ref(0);
@@ -121,6 +132,15 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
   const error = ref<string | null>(null);
 
   let inFlight: Promise<void> | null = null;
+
+  // --- Public Cerita: reads grouped per section ---
+  const bySectionId = ref<Record<string, IndicatorTableDetail[]>>({});
+  // Keyed per sectionId so one section's failure can't be masked by, or clobber,
+  // the loading/error state of a sibling section's concurrent request.
+  const loadingBySectionId = ref<Record<string, boolean>>({});
+  const errorsBySectionId = ref<Record<string, string | null>>({});
+
+  const sectionInFlight: Record<string, Promise<IndicatorTableDetail[]> | undefined> = {};
 
   function detailById(id: string): IndicatorTableDetail | null {
     return details.value[id] ?? null;
@@ -217,6 +237,66 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
     return data.row;
   }
 
+  async function fetchBySectionId(
+    sectionId: string,
+    force = false,
+  ): Promise<IndicatorTableDetail[]> {
+    if (!force && bySectionId.value[sectionId]) {
+      return bySectionId.value[sectionId]!;
+    }
+    if (sectionInFlight[sectionId]) {
+      return sectionInFlight[sectionId]!;
+    }
+
+    loadingBySectionId.value = { ...loadingBySectionId.value, [sectionId]: true };
+    errorsBySectionId.value = { ...errorsBySectionId.value, [sectionId]: null };
+
+    const task = (async () => {
+      try {
+        const params = new URLSearchParams({ sectionId, pageSize: '200' });
+        const listResponse = await fetch(`/api/indicator-tables?${params.toString()}`);
+        if (!listResponse.ok) {
+          throw new Error(`Gagal memuat tabel matriks (status ${listResponse.status})`);
+        }
+        const listData = (await listResponse.json()) as {
+          tables: Array<{ id: string }>;
+        };
+        const summaries = Array.isArray(listData.tables) ? listData.tables : [];
+
+        const detailResults = await Promise.all(
+          summaries.map(async (summary) => {
+            const detailResponse = await fetch(
+              `/api/indicator-tables/${encodeURIComponent(summary.id)}`,
+            );
+            if (!detailResponse.ok) {
+              throw new Error(`Gagal memuat detail tabel matriks (status ${detailResponse.status})`);
+            }
+            const detailData = (await detailResponse.json()) as { table: IndicatorTableDetail };
+            return detailData.table;
+          }),
+        );
+
+        bySectionId.value = { ...bySectionId.value, [sectionId]: detailResults };
+        return detailResults;
+      } catch (err) {
+        // See indicators.store.ts: on failure we intentionally leave bySectionId[sectionId]
+        // unset rather than [] — an empty array must only ever mean "no matrix tables here",
+        // never "the fetch failed". The error lives in errorsBySectionId instead.
+        errorsBySectionId.value = {
+          ...errorsBySectionId.value,
+          [sectionId]: err instanceof Error ? err.message : 'Terjadi kesalahan jaringan',
+        };
+        return [];
+      } finally {
+        loadingBySectionId.value = { ...loadingBySectionId.value, [sectionId]: false };
+        delete sectionInFlight[sectionId];
+      }
+    })();
+
+    sectionInFlight[sectionId] = task;
+    return task;
+  }
+
   return {
     tables,
     details,
@@ -224,6 +304,9 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
     isLoading,
     isLoaded,
     error,
+    bySectionId,
+    loadingBySectionId,
+    errorsBySectionId,
     detailById,
     fetchTables,
     fetchTableDetail,
@@ -231,5 +314,6 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
     updateTable,
     updateTableRow,
     replaceTable,
+    fetchBySectionId,
   };
 });
