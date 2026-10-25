@@ -82,6 +82,10 @@ function handleNavigate(chapterId: string) {
   activeChapterId.value = chapterId;
 }
 
+function retryLoad() {
+  loadPage();
+}
+
 async function loadPage() {
   isLoading.value = true;
   observer?.disconnect();
@@ -121,7 +125,7 @@ onBeforeUnmount(() => observer?.disconnect());
       Lewati ke konten utama
     </a>
 
-    <main id="main-content" class="flex-grow pb-24 lg:pb-12">
+    <main id="main-content" class="grow pb-24 lg:pb-12">
       <div v-if="isLoading" class="mx-auto max-w-3xl px-4 py-16 sm:px-6" data-test="cerita-loading">
         <div class="h-8 w-2/3 animate-pulse rounded-md bg-slate-200" />
         <div class="mt-4 h-4 w-full animate-pulse rounded-md bg-slate-100" />
@@ -136,6 +140,25 @@ onBeforeUnmount(() => observer?.disconnect());
         <p class="mt-2 text-sm text-slate-600">
           Halaman yang Anda cari tidak tersedia. Periksa kembali tautan yang Anda gunakan.
         </p>
+      </div>
+
+      <div
+        v-else-if="pagesStore.error"
+        class="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6"
+        data-test="cerita-error"
+      >
+        <h1 class="text-lg font-semibold text-slate-900">Gagal memuat halaman</h1>
+        <p class="mt-2 text-sm text-slate-600">
+          Terjadi kesalahan saat memuat data. Periksa koneksi Anda dan coba lagi.
+        </p>
+        <button
+          type="button"
+          class="bg-brand-navy mt-5 rounded-btn px-4 py-2 text-sm font-semibold text-white"
+          data-test="cerita-retry"
+          @click="retryLoad"
+        >
+          Coba lagi
+        </button>
       </div>
 
       <template v-else-if="page">
