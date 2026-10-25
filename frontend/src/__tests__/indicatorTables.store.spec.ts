@@ -88,7 +88,7 @@ describe('indicatorTables store', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('records an error and returns an empty list when the list request fails', async () => {
+  it('records the error against that sectionId, not globally, when the list request fails', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
       ok: false,
       status: 500,
@@ -100,6 +100,35 @@ describe('indicatorTables store', () => {
     const result = await store.fetchBySectionId('sec-1');
 
     expect(result).toEqual([]);
-    expect(store.error).toContain('500');
+    expect(store.errorsBySectionId['sec-1']).toContain('500');
+    // A failed fetch must never be written into bySectionId as [] — that would be
+    // indistinguishable from a section that genuinely has no matrix tables.
+    expect(store.bySectionId['sec-1']).toBeUndefined();
+  });
+
+  it('keeps one section error from clobbering a sibling section in-flight at the same time', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('sectionId=sec-fail')) {
+        return { ok: false, status: 500, json: async () => ({ error: 'boom' }) } as Response;
+      }
+      if (url.includes('/api/indicator-tables?')) {
+        return { ok: true, json: async () => ({ tables: [tableSummary] }) } as Response;
+      }
+      return { ok: true, json: async () => ({ table: tableDetail }) } as Response;
+    });
+    globalThis.fetch = fetchMock;
+
+    const store = useIndicatorTablesStore();
+    await Promise.all([
+      store.fetchBySectionId('sec-fail'),
+      store.fetchBySectionId('sec-ok'),
+    ]);
+
+    expect(store.errorsBySectionId['sec-fail']).toContain('500');
+    expect(store.errorsBySectionId['sec-ok']).toBeNull();
+    expect(store.bySectionId['sec-ok']).toEqual([tableDetail]);
+    expect(store.loadingBySectionId['sec-fail']).toBe(false);
+    expect(store.loadingBySectionId['sec-ok']).toBe(false);
   });
 });

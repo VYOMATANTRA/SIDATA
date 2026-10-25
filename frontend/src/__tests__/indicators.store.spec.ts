@@ -58,7 +58,7 @@ describe('indicators store', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('returns an empty list and records an error on failure', async () => {
+  it('returns an empty list and records the error against that sectionId, not globally', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
       ok: false,
       status: 500,
@@ -70,6 +70,32 @@ describe('indicators store', () => {
     const result = await store.fetchBySectionId('sec-1');
 
     expect(result).toEqual([]);
-    expect(store.error).toContain('500');
+    expect(store.errorsBySectionId['sec-1']).toContain('500');
+    // A failed fetch must never be written into bySectionId as [] — that would be
+    // indistinguishable from a section that genuinely has no indicators.
+    expect(store.bySectionId['sec-1']).toBeUndefined();
+  });
+
+  it('keeps one section error from clobbering a sibling section in-flight at the same time', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('sectionId=sec-fail')) {
+        return { ok: false, status: 500, json: async () => ({ error: 'boom' }) } as Response;
+      }
+      return { ok: true, json: async () => ({ indicators: [sampleIndicator] }) } as Response;
+    });
+    globalThis.fetch = fetchMock;
+
+    const store = useIndicatorsStore();
+    await Promise.all([
+      store.fetchBySectionId('sec-fail'),
+      store.fetchBySectionId('sec-ok'),
+    ]);
+
+    expect(store.errorsBySectionId['sec-fail']).toContain('500');
+    expect(store.errorsBySectionId['sec-ok']).toBeNull();
+    expect(store.bySectionId['sec-ok']).toEqual([sampleIndicator]);
+    expect(store.loadingBySectionId['sec-fail']).toBe(false);
+    expect(store.loadingBySectionId['sec-ok']).toBe(false);
   });
 });
