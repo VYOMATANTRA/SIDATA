@@ -1462,71 +1462,70 @@ export const deleteSpatialPointCoverage = async (
 
   const pointLock = Prisma.sql`SELECT id FROM spatial_points WHERE id = ${normalizedId} FOR UPDATE`;
 
-  try {
-    return await executeLockedTransaction({
-      client,
-      // Same resource pair as the coverage add path (point row, then rt_leaders row) so an RT
-      // being freed here and an RT claimed elsewhere cannot race past each other's assert.
-      lockQuery: async (txRaw) => {
-        const tx = txRaw as SpatialWriteTxClient;
-        await tx.$queryRaw(pointLock);
-        await leaderLockQuery([rtNumber])?.(tx);
-      },
-      execute: async (txRaw) => {
-        const tx = txRaw as SpatialWriteTxClient;
-        const point = (await tx.spatialPoint.findUnique({
-          where: { id: normalizedId },
-          include: { rtCoverages: { orderBy: { rtNumber: 'asc' } } },
-        })) as unknown as SpatialPointWriteRow | null;
-        if (!point) {
-          throw new MapsServiceError('Titik spasial tidak ditemukan.', 404);
-        }
+  // No error mapping needed: both P2025 sources (missing point, missing coverage row) are
+  // already handled by the explicit 404 findUnique checks below inside the same locked
+  // transaction, so every failure this function can meaningfully map is a MapsServiceError
+  // already; anything else (connectivity, unexpected constraint) must surface raw.
+  return await executeLockedTransaction({
+    client,
+    // Same resource pair as the coverage add path (point row, then rt_leaders row) so an RT
+    // being freed here and an RT claimed elsewhere cannot race past each other's assert.
+    lockQuery: async (txRaw) => {
+      const tx = txRaw as SpatialWriteTxClient;
+      await tx.$queryRaw(pointLock);
+      await leaderLockQuery([rtNumber])?.(tx);
+    },
+    execute: async (txRaw) => {
+      const tx = txRaw as SpatialWriteTxClient;
+      const point = (await tx.spatialPoint.findUnique({
+        where: { id: normalizedId },
+        include: { rtCoverages: { orderBy: { rtNumber: 'asc' } } },
+      })) as unknown as SpatialPointWriteRow | null;
+      if (!point) {
+        throw new MapsServiceError('Titik spasial tidak ditemukan.', 404);
+      }
 
-        const existing = (await tx.spatialPointRt.findUnique({
-          where: { pointId_rtNumber: { pointId: normalizedId, rtNumber } },
-        })) as unknown as { id: number; pointId: string; rtNumber: number; createdAt: Date } | null;
-        if (!existing) {
-          throw new MapsServiceError(
-            `RT ${rtNumber.toString()} tidak terdaftar pada titik ini.`,
-            404,
-          );
-        }
-
-        await tx.spatialPointRt.delete({
-          where: { pointId_rtNumber: { pointId: normalizedId, rtNumber } },
-        });
-
-        const postCoverages = normalizeCoverageSet(
-          point.rtCoverages.filter((cov) => cov.rtNumber !== rtNumber).map((cov) => cov.rtNumber),
+      const existing = (await tx.spatialPointRt.findUnique({
+        where: { pointId_rtNumber: { pointId: normalizedId, rtNumber } },
+      })) as unknown as { id: number; pointId: string; rtNumber: number; createdAt: Date } | null;
+      if (!existing) {
+        throw new MapsServiceError(
+          `RT ${rtNumber.toString()} tidak terdaftar pada titik ini.`,
+          404,
         );
-        await assertKetuaRtWriteInvariant(tx, {
-          pointId: normalizedId,
-          resultingType: point.type,
-          resultingCoverages: postCoverages,
-        });
+      }
 
-        await buildAuditLog(
-          {
-            action: AUDIT_ACTIONS.SPATIAL_POINT_RT_DELETED,
-            actor,
-            target: { type: 'spatial_point_rt', id: String(existing.id), label: `RT ${rtNumber}` },
-            metadata: {
-              pointId: normalizedId,
-              pointType: point.type,
-              coveragesAfter: postCoverages,
-            },
-            context: reqContext,
+      await tx.spatialPointRt.delete({
+        where: { pointId_rtNumber: { pointId: normalizedId, rtNumber } },
+      });
+
+      const postCoverages = normalizeCoverageSet(
+        point.rtCoverages.filter((cov) => cov.rtNumber !== rtNumber).map((cov) => cov.rtNumber),
+      );
+      await assertKetuaRtWriteInvariant(tx, {
+        pointId: normalizedId,
+        resultingType: point.type,
+        resultingCoverages: postCoverages,
+      });
+
+      await buildAuditLog(
+        {
+          action: AUDIT_ACTIONS.SPATIAL_POINT_RT_DELETED,
+          actor,
+          target: { type: 'spatial_point_rt', id: String(existing.id), label: `RT ${rtNumber}` },
+          metadata: {
+            pointId: normalizedId,
+            pointType: point.type,
+            coveragesAfter: postCoverages,
           },
-          tx,
-        );
+          context: reqContext,
+        },
+        tx,
+      );
 
-        return formatCoverage(existing);
-      },
-    });
-  } catch (error) {
-    if (error instanceof MapsServiceError) throw error;
-    throw error;
-  }
+      return formatCoverage(existing);
+    },
+  });
 };
 
 // --- RT leader edit ---------------------------------------------------------------
