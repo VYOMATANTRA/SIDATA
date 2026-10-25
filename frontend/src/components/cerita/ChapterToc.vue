@@ -64,7 +64,8 @@ function toggleSheet() {
 
   <div v-else class="fixed right-0 bottom-0 left-0 z-30 lg:hidden" data-test="chapter-toc-sheet">
     <div
-      v-if="isSheetOpen"
+      v-show="isSheetOpen"
+      id="chapter-toc-sheet-panel"
       class="max-h-[60vh] overflow-y-auto border-t border-slate-200 bg-white shadow-lg"
       data-test="chapter-toc-sheet-panel"
     >
