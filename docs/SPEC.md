@@ -158,6 +158,12 @@ shared API client refreshes the session once via `POST /api/auth/refresh` and re
 so a form left open does not lose its draft; if the refresh is denied, the save fails with an
 explicit session-ended message and the open form keeps its contents.
 
+A matrix-table save is one atomic request: `PATCH /api/indicator-tables/:id` carries the table
+header plus every changed row and applies them in a single transaction, mirroring the nested
+`rows` that `POST /` already accepts. A rejected row therefore leaves the table untouched —
+never a sex-split row with a new `male` and the old `female` — and the dialog keeps every draft,
+including rows that were not part of the failed save.
+
 ## 5. Prose Rules
 
 Two tiers, by design intent:
