@@ -29,8 +29,10 @@ export interface IndicatorDto {
 
 export const useIndicatorsStore = defineStore('indicators', () => {
   const bySectionId = ref<Record<string, IndicatorDto[]>>({});
-  const isLoading = ref(false);
-  const error = ref<string | null>(null);
+  // Keyed per sectionId so one section's failure can't be masked by, or clobber,
+  // the loading/error state of a sibling section's concurrent request.
+  const loadingBySectionId = ref<Record<string, boolean>>({});
+  const errorsBySectionId = ref<Record<string, string | null>>({});
 
   const inFlight: Record<string, Promise<IndicatorDto[]> | undefined> = {};
 
@@ -42,8 +44,8 @@ export const useIndicatorsStore = defineStore('indicators', () => {
       return inFlight[sectionId]!;
     }
 
-    isLoading.value = true;
-    error.value = null;
+    loadingBySectionId.value = { ...loadingBySectionId.value, [sectionId]: true };
+    errorsBySectionId.value = { ...errorsBySectionId.value, [sectionId]: null };
 
     const task = (async () => {
       try {
@@ -58,10 +60,17 @@ export const useIndicatorsStore = defineStore('indicators', () => {
         bySectionId.value = { ...bySectionId.value, [sectionId]: indicators };
         return indicators;
       } catch (err) {
-        error.value = err instanceof Error ? err.message : 'Terjadi kesalahan jaringan';
+        // Deliberately does NOT write [] into bySectionId on failure: an empty array there
+        // must mean "fetched, genuinely no indicators" — never "fetch failed". The failure is
+        // recorded only in errorsBySectionId so a view can tell the two apart and show an
+        // error for this section instead of rendering it as silently empty.
+        errorsBySectionId.value = {
+          ...errorsBySectionId.value,
+          [sectionId]: err instanceof Error ? err.message : 'Terjadi kesalahan jaringan',
+        };
         return [];
       } finally {
-        isLoading.value = false;
+        loadingBySectionId.value = { ...loadingBySectionId.value, [sectionId]: false };
         delete inFlight[sectionId];
       }
     })();
@@ -72,8 +81,8 @@ export const useIndicatorsStore = defineStore('indicators', () => {
 
   return {
     bySectionId,
-    isLoading,
-    error,
+    loadingBySectionId,
+    errorsBySectionId,
     fetchBySectionId,
   };
 });
