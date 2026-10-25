@@ -163,4 +163,31 @@ describe('TableIndicatorForm.vue', () => {
     expect(wrapper.find('[data-test="form-error"]').text()).toContain('rowKey');
     wrapper.unmount();
   });
+
+  it('keeps unsaved drafts when the parent re-renders with the same table', async () => {
+    const wrapper = mount(TableIndicatorForm, { props: { table: makeTable() } });
+
+    await wrapper.find('#table-row-row-1-male').setValue('250');
+    await wrapper.find('#table-row-row-2-female').setValue('99');
+
+    // A refetch hands the form a new object for the same table. Resetting here would wipe the
+    // editor's work — including rows that were never sent.
+    await wrapper.setProps({ table: makeTable() });
+
+    expect((wrapper.find('#table-row-row-1-male').element as HTMLInputElement).value).toBe('250');
+    expect((wrapper.find('#table-row-row-2-female').element as HTMLInputElement).value).toBe('99');
+
+    wrapper.unmount();
+  });
+
+  it('resets the drafts when a different table is loaded', async () => {
+    const wrapper = mount(TableIndicatorForm, { props: { table: makeTable() } });
+
+    await wrapper.find('#table-row-row-1-male').setValue('250');
+    await wrapper.setProps({ table: makeTable('age_pyramid', { id: 'tbl-2' }) });
+
+    expect((wrapper.find('#table-row-row-1-male').element as HTMLInputElement).value).toBe('100');
+
+    wrapper.unmount();
+  });
 });
