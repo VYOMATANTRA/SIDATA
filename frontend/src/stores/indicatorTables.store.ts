@@ -106,6 +106,12 @@ export interface IndicatorTableRowPatch {
   total?: number | null;
 }
 
+/** What the table form submits: one atomic request carrying the header and every changed row. */
+export interface IndicatorTableSavePayload {
+  table: IndicatorTablePatch;
+  rows: Array<{ rowId: string; patch: IndicatorTableRowPatch }>;
+}
+
 export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
   const tables = ref<IndicatorTable[]>([]);
   const details = ref<Record<string, IndicatorTableDetail>>({});
@@ -170,17 +176,34 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
     return data.table;
   }
 
-  async function updateTable(
+  /**
+   * Saves the table header and every changed row in one PATCH. The backend applies the whole
+   * batch in a single transaction (mirroring the nested `rows` POST), so a 409 on one row leaves
+   * the table exactly as it was — there is no partial write to reconcile with a refetch.
+   */
+  async function saveTableDetail(
     id: string,
-    patch: IndicatorTablePatch,
+    payload: IndicatorTableSavePayload,
   ): Promise<IndicatorTableDetail> {
+    const body: Record<string, unknown> = { ...payload.table };
+    if (payload.rows.length > 0) {
+      body.rows = payload.rows.map(({ rowId, patch }) => ({ id: rowId, ...patch }));
+    }
+
     const data = await apiRequestJson<{ table: IndicatorTableDetail }>(
       `/api/indicator-tables/${encodeURIComponent(id)}`,
-      { method: 'PATCH', body: JSON.stringify(patch) },
+      { method: 'PATCH', body: JSON.stringify(body) },
     );
     details.value = { ...details.value, [data.table.id]: data.table };
     replaceTable(data.table);
     return data.table;
+  }
+
+  async function updateTable(
+    id: string,
+    patch: IndicatorTablePatch,
+  ): Promise<IndicatorTableDetail> {
+    return saveTableDetail(id, { table: patch, rows: [] });
   }
 
   async function updateTableRow(
@@ -204,6 +227,7 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
     detailById,
     fetchTables,
     fetchTableDetail,
+    saveTableDetail,
     updateTable,
     updateTableRow,
     replaceTable,
