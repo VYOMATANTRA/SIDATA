@@ -148,6 +148,12 @@ const tableBaseFields = {
   sortOrder: rowBaseFields.sortOrder,
 };
 
+/**
+ * Upper bound on rows per table — the 17-group ethnicity table is the largest. Also caps how
+ * many rows one batch PATCH may carry, so a single request cannot rewrite an unbounded set.
+ */
+export const MAX_ROWS_PER_TABLE = 500;
+
 export const createTableRowSchema = z.object(rowBaseFields).strict();
 
 export const updateTableRowSchema = z
@@ -164,10 +170,34 @@ export const updateTableRowSchema = z
     message: 'Setidaknya satu bidang harus disediakan untuk diperbarui',
   });
 
+/**
+ * One row inside a table PATCH. The table PATCH doubles as the batch endpoint (mirroring the
+ * nested `rows` POST accepts): the table header and every row patch are applied in one
+ * transaction, so a failure part-way cannot leave a sex-split row with a new `male` and the old
+ * `female`.
+ */
+export const updateTableRowByIdSchema = z
+  .object({
+    id: z.string().trim().min(1, 'id baris wajib diisi').max(191),
+    rowKey: rowBaseFields.rowKey.optional(),
+    label: rowBaseFields.label.optional(),
+    male: rowBaseFields.male,
+    female: rowBaseFields.female,
+    total: rowBaseFields.total,
+    sortOrder: rowBaseFields.sortOrder,
+  })
+  .strict()
+  .refine((data) => Object.keys(data).length > 1, {
+    message: 'Setiap baris harus menyertakan id dan setidaknya satu bidang untuk diperbarui',
+  });
+
 export const createTableSchema = z
   .object({
     ...tableBaseFields,
-    rows: z.array(createTableRowSchema).max(500, 'Maksimal 500 baris per tabel').optional(),
+    rows: z
+      .array(createTableRowSchema)
+      .max(MAX_ROWS_PER_TABLE, `Maksimal ${MAX_ROWS_PER_TABLE} baris per tabel`)
+      .optional(),
   })
   .strict();
 
@@ -180,6 +210,10 @@ export const updateTableSchema = z
     period: tableBaseFields.period.optional(),
     source: tableBaseFields.source,
     sortOrder: tableBaseFields.sortOrder,
+    rows: z
+      .array(updateTableRowByIdSchema)
+      .max(MAX_ROWS_PER_TABLE, `Maksimal ${MAX_ROWS_PER_TABLE} baris per permintaan`)
+      .optional(),
   })
   .strict()
   .refine((data) => Object.keys(data).length > 0, {
@@ -188,6 +222,7 @@ export const updateTableSchema = z
 
 export type CreateTableRowInput = z.infer<typeof createTableRowSchema>;
 export type UpdateTableRowInput = z.infer<typeof updateTableRowSchema>;
+export type UpdateTableRowByIdInput = z.infer<typeof updateTableRowByIdSchema>;
 export type CreateTableInput = z.infer<typeof createTableSchema>;
 export type UpdateTableInput = z.infer<typeof updateTableSchema>;
 
@@ -271,8 +306,6 @@ async function resolveAppendSortOrder(
 const DEFAULT_PAGE_SIZE = 50;
 export const MAX_TABLE_LIST_PAGE = 10_000;
 export const MAX_TABLE_LIST_PAGE_SIZE = 200;
-/** Upper bound on rows served per table detail — the 17-group ethnicity table is the largest. */
-export const MAX_ROWS_PER_TABLE = 500;
 
 function toIsoString(value: unknown): string {
   if (value instanceof Date) return value.toISOString();
@@ -786,6 +819,20 @@ export const updateIndicatorTable = async (
     throw new IndicatorTableServiceError(parsed.error.issues.map((i) => i.message).join(', '), 400);
   }
   const input = parsed.data as UpdateTableInput & Record<string, unknown>;
+  const rowUpdates = (input.rows ?? []) as UpdateTableRowByIdInput[];
+
+  // Reject duplicate row ids up front: applying the same row twice in one payload is always a
+  // client bug, and MySQL would silently keep only the last write.
+  const seenRowIds = new Set<string>();
+  for (const rowUpdate of rowUpdates) {
+    if (seenRowIds.has(rowUpdate.id)) {
+      throw new IndicatorTableServiceError(
+        `id baris '${rowUpdate.id}' duplikat dalam payload.`,
+        400,
+      );
+    }
+    seenRowIds.add(rowUpdate.id);
+  }
 
   const lockQuery = Prisma.sql`SELECT id FROM indicator_tables WHERE id = ${normalizedId} FOR UPDATE`;
   const affected: AffectedTable[] = [];
@@ -867,7 +914,91 @@ export const updateIndicatorTable = async (
           );
         if (input.sortOrder !== undefined) track('sortOrder', existing.sortOrder, input.sortOrder);
 
-        if (Object.keys(changes).length === 0) {
+        // Load every row named in the payload before touching anything: a stale id must fail the
+        // whole batch, and validating first keeps the error off a half-applied request.
+        const existingRows = new Map<string, CellRow>();
+        if (seenRowIds.size > 0) {
+          const rows = (await tx.indicatorTableRow.findMany({
+            where: { id: { in: [...seenRowIds] }, tableId: normalizedId },
+          })) as unknown as CellRow[];
+          for (const row of rows) existingRows.set(row.id, row);
+          if (existingRows.size !== seenRowIds.size) {
+            const missing = [...seenRowIds].filter((rowId) => !existingRows.has(rowId));
+            throw new IndicatorTableServiceError(
+              `Baris tidak ditemukan pada tabel ini: ${missing.join(', ')}.`,
+              404,
+            );
+          }
+        }
+
+        interface PendingRowUpdate {
+          existing: CellRow;
+          nextRowKey: string;
+          nextLabel: string;
+          nextSortOrder: number;
+          nextCells: NormalizedCells;
+          changes: Record<string, { before: unknown; after: unknown }>;
+        }
+
+        const pendingRowUpdates: PendingRowUpdate[] = [];
+        const seenNextRowKeys = new Set<string>();
+
+        for (const rowUpdate of rowUpdates) {
+          const row = existingRows.get(rowUpdate.id)!;
+          const nextCells: NormalizedCells = {
+            male: rowUpdate.male !== undefined ? (rowUpdate.male ?? null) : row.male,
+            female: rowUpdate.female !== undefined ? (rowUpdate.female ?? null) : row.female,
+            total: rowUpdate.total !== undefined ? (rowUpdate.total ?? null) : row.total,
+          };
+          assertRowCells(existing.kind, nextCells, `Baris '${row.label}'`);
+
+          const nextRowKey = rowUpdate.rowKey !== undefined ? rowUpdate.rowKey.trim() : row.rowKey;
+          if (nextRowKey !== row.rowKey) {
+            if (seenNextRowKeys.has(nextRowKey)) {
+              throw new IndicatorTableServiceError(
+                `rowKey '${nextRowKey}' duplikat dalam payload.`,
+                400,
+              );
+            }
+            seenNextRowKeys.add(nextRowKey);
+            const clash = await tx.indicatorTableRow.findUnique({
+              where: { tableId_rowKey: { tableId: normalizedId, rowKey: nextRowKey } },
+            });
+            if (clash && (clash as unknown as CellRow).id !== row.id) {
+              throw new IndicatorTableServiceError(
+                `rowKey '${nextRowKey}' sudah dipakai baris lain di tabel ini.`,
+                409,
+              );
+            }
+          }
+
+          const rowChanges: Record<string, { before: unknown; after: unknown }> = {};
+          const trackRow = (field: string, before: unknown, after: unknown) => {
+            if (hasFieldChanged(before, after)) {
+              rowChanges[field] = { before, after };
+            }
+          };
+          if (rowUpdate.rowKey !== undefined) trackRow('rowKey', row.rowKey, nextRowKey);
+          if (rowUpdate.label !== undefined) trackRow('label', row.label, rowUpdate.label.trim());
+          if (rowUpdate.male !== undefined) trackRow('male', row.male, nextCells.male);
+          if (rowUpdate.female !== undefined) trackRow('female', row.female, nextCells.female);
+          if (rowUpdate.total !== undefined) trackRow('total', row.total, nextCells.total);
+          if (rowUpdate.sortOrder !== undefined)
+            trackRow('sortOrder', row.sortOrder, rowUpdate.sortOrder);
+
+          if (Object.keys(rowChanges).length > 0) {
+            pendingRowUpdates.push({
+              existing: row,
+              nextRowKey,
+              nextLabel: rowUpdate.label !== undefined ? rowUpdate.label.trim() : row.label,
+              nextSortOrder: rowUpdate.sortOrder ?? row.sortOrder,
+              nextCells,
+              changes: rowChanges,
+            });
+          }
+        }
+
+        if (Object.keys(changes).length === 0 && pendingRowUpdates.length === 0) {
           const detail = await fetchTableDetail(
             tx as unknown as Pick<TableReadClient, 'indicatorTableRow'>,
             existing,
@@ -875,33 +1006,78 @@ export const updateIndicatorTable = async (
           return withChangeResult(detail, false);
         }
 
-        const updated = (await tx.indicatorTable.update({
-          where: { id: normalizedId },
-          data: {
-            ...(input.sectionId !== undefined
-              ? { sectionId: (input.sectionId as string).trim() }
-              : {}),
-            ...(input.slug !== undefined ? { slug: input.slug } : {}),
-            ...(input.title !== undefined ? { title: (input.title as string).trim() } : {}),
-            ...(input.kind !== undefined ? { kind: input.kind } : {}),
-            ...(input.period !== undefined ? { period: (input.period as string).trim() } : {}),
-            ...(input.source !== undefined
-              ? { source: sanitizeNullableText(input.source as string | null) ?? null }
-              : {}),
-            ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
-          },
-        })) as unknown as TableRow;
+        let updated = existing;
+        if (Object.keys(changes).length > 0) {
+          updated = (await tx.indicatorTable.update({
+            where: { id: normalizedId },
+            data: {
+              ...(input.sectionId !== undefined
+                ? { sectionId: (input.sectionId as string).trim() }
+                : {}),
+              ...(input.slug !== undefined ? { slug: input.slug } : {}),
+              ...(input.title !== undefined ? { title: (input.title as string).trim() } : {}),
+              ...(input.kind !== undefined ? { kind: input.kind } : {}),
+              ...(input.period !== undefined ? { period: (input.period as string).trim() } : {}),
+              ...(input.source !== undefined
+                ? { source: sanitizeNullableText(input.source as string | null) ?? null }
+                : {}),
+              ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
+            },
+          })) as unknown as TableRow;
 
-        await buildAuditLog(
-          {
-            action: AUDIT_ACTIONS.INDICATOR_TABLE_UPDATED,
-            actor,
-            target: { type: 'indicator_table', id: existing.id, label: existing.slug },
-            metadata: { slug: existing.slug, changes },
-            context: reqContext,
-          },
-          tx,
-        );
+          await buildAuditLog(
+            {
+              action: AUDIT_ACTIONS.INDICATOR_TABLE_UPDATED,
+              actor,
+              target: { type: 'indicator_table', id: existing.id, label: existing.slug },
+              metadata: { slug: existing.slug, changes },
+              context: reqContext,
+            },
+            tx,
+          );
+        }
+
+        // Applied after every row has been validated, so the batch either lands whole or not at
+        // all. The transaction is what actually guarantees it; validating first keeps the
+        // failure path free of writes.
+        for (const pending of pendingRowUpdates) {
+          await tx.indicatorTableRow.update({
+            where: { id: pending.existing.id },
+            data: {
+              ...(pending.nextRowKey !== pending.existing.rowKey
+                ? { rowKey: pending.nextRowKey }
+                : {}),
+              ...(pending.changes['label'] !== undefined ? { label: pending.nextLabel } : {}),
+              ...(pending.changes['male'] !== undefined ? { male: pending.nextCells.male } : {}),
+              ...(pending.changes['female'] !== undefined
+                ? { female: pending.nextCells.female }
+                : {}),
+              ...(pending.changes['total'] !== undefined ? { total: pending.nextCells.total } : {}),
+              ...(pending.changes['sortOrder'] !== undefined
+                ? { sortOrder: pending.nextSortOrder }
+                : {}),
+            },
+          });
+
+          await buildAuditLog(
+            {
+              action: AUDIT_ACTIONS.INDICATOR_TABLE_ROW_UPDATED,
+              actor,
+              target: {
+                type: 'indicator_table_row',
+                id: pending.existing.id,
+                label: pending.existing.rowKey,
+              },
+              metadata: {
+                tableId: normalizedId,
+                tableSlug: existing.slug,
+                changes: pending.changes,
+              },
+              context: reqContext,
+            },
+            tx,
+          );
+        }
 
         affected.push({ id: existing.id, slug: existing.slug });
         if (updated.slug !== existing.slug) {
