@@ -1173,25 +1173,32 @@ export const updateSpatialPoint = async (
   try {
     return await executeLockedTransaction({
       client,
-      // Point row first, then — because the payload carries `rts`, the post-write coverage set
-      // is known before anything is read — the touched rt_leaders rows, matching
-      // createSpatialPoint's ordering: same-RT writers now queue BEFORE this transaction's
-      // coverage writes and FOR SHARE assert exist. That removes the cross-endpoint
-      // lock-ordering flip (this PATCH previously inserted coverage first and locked
-      // leaders after; the coverage add/delete paths lock first) which could otherwise end
-      // in a deadlock — InnoDB detection would still resolve it via the P2034 retry in
-      // executeLockedTransaction, so the outcome was always correct, but front-loading the
-      // wait means the common same-RT race never reaches retry at all. When only `type`
-      // changes, the pre-read coverage (and thus the affected RTs) is unknown before the first
-      // read, so those leader locks stay in-execute below.
+      // Point row first — every coverage write to this point goes through that lock — then the
+      // rt_leaders rows of the point's PRE ∪ POST RT set, locked ascending, before this
+      // transaction writes anything: same-RT writers queue on the leader rows regardless of
+      // which direction a race runs (a PATCH moving 3→9 and a sibling moving 9→3 both grab
+      // {3,9} in the same order, so neither can end up holding one RT while waiting for the
+      // other — exactly the deadlock window that destination-only locking left behind,
+      // recoverable only by InnoDB detection plus the P2034 retry). The pre set is read with
+      // a consistent read AFTER the point row lock, which makes it stable: no sibling writer
+      // can touch this point's coverage rows while the lock is held, and every coverage write
+      // elsewhere goes through the same leaders-first ordering the coverage add/delete
+      // endpoints use, so no cross-endpoint lock-ordering flip exists either. Field-only
+      // payloads (name/lat/lng/metadata) skip the RT locking entirely — the point row lock is
+      // the whole story for them.
       lockQuery: async (txRaw) => {
         const tx = txRaw as SpatialWriteTxClient;
         await tx.$queryRaw(
           Prisma.sql`SELECT id FROM spatial_points WHERE id = ${normalizedId} FOR UPDATE`,
         );
-        if (input.rts !== undefined) {
-          await leaderLockQuery(normalizeCoverageSet(input.rts as number[]))?.(tx);
-        }
+        if (input.type === undefined && input.rts === undefined) return;
+        const preRtRows = (await tx.$queryRaw(
+          Prisma.sql`SELECT rt_number AS rtNumber FROM spatial_point_rt WHERE point_id = ${normalizedId}`,
+        )) as Array<{ rtNumber: number }>;
+        const postRts = input.rts === undefined ? [] : normalizeCoverageSet(input.rts as number[]);
+        await leaderLockQuery([
+          ...new Set([...preRtRows.map((row) => row.rtNumber), ...postRts]),
+        ])?.(tx);
       },
       execute: async (txRaw) => {
         const tx = txRaw as SpatialWriteTxClient;
@@ -1281,17 +1288,10 @@ export const updateSpatialPoint = async (
 
         const mustHoldInvariant = rtsTouched || typeChanged;
         if (mustHoldInvariant && resultingType === 'ketua_rt') {
-          // Contention shaping only, NOT the correctness guarantee. For `rts`-carrying PATCHes
-          // the leader locks were already taken in lockQuery; this second pass remains for
-          // type-only changes, where the affected RTs (the pre-read coverage) are only known
-          // after the first read, so here it runs after the snapshot and after the coverage
-          // writes: a cross-path interleaving with the coverage add/delete endpoints can
-          // still deadlock, and InnoDB detection plus the P2034 retry in
-          // executeLockedTransaction resolve that into a correct retried outcome. The
-          // guarantee itself lives in the FOR SHARE current read below. Keeping these locks
-          // just serializes same-RT writers so shared-lock waits stay short and rare.
-          const leaderLock = leaderLockQuery([...new Set([...preCoverages, ...postCoverages])]);
-          if (leaderLock) await leaderLock(tx);
+          // All contention shaping happened up in lockQuery (point row + pre ∪ POST RT
+          // leader locks). What remains here is pure correctness: the FOR SHARE current read
+          // below cannot miss a sibling transaction's claim, whatever this transaction's
+          // REPEATABLE READ snapshot says.
           await assertKetuaRtWriteInvariant(tx, {
             pointId: normalizedId,
             resultingType,

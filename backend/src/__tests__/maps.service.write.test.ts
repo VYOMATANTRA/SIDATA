@@ -285,14 +285,22 @@ beforeEach(() => {
       const text = query?.sql ?? String(query);
       // Serves the invariant assert's FOR SHARE locking read with the emulator's ketua_rt
       // coverage state, exactly like the real database would (current read) — including the
-      // target-RT scoping: the SQL's only bound parameter is the RT being written, and rows
-      // for other RTs must NOT come back.
+      // target-RT scoping: that SQL's only bound parameter is the RT being written, and rows
+      // for other RTs must NOT come back. The other spatial_point_rt query (no FOR SHARE) is
+      // PATCH lockQuery's pre-read of the point's current RT set, which returns rows for any
+      // point type.
       if (text.includes('spatial_point_rt')) {
-        const rtFilter = (query?.values as unknown[] | undefined)?.[0];
-        if (typeof rtFilter !== 'number') return [];
+        if (text.includes('FOR SHARE')) {
+          const rtFilter = (query?.values as unknown[] | undefined)?.[0];
+          if (typeof rtFilter !== 'number') return [];
+          return coverages
+            .filter((c) => points.get(c.pointId)?.type === 'ketua_rt' && c.rtNumber === rtFilter)
+            .map((c) => ({ pointId: c.pointId, rtNumber: c.rtNumber }));
+        }
+        const pointId = (query?.values as unknown[] | undefined)?.[0] as string | undefined;
         return coverages
-          .filter((c) => points.get(c.pointId)?.type === 'ketua_rt' && c.rtNumber === rtFilter)
-          .map((c) => ({ pointId: c.pointId, rtNumber: c.rtNumber }));
+          .filter((c) => c.pointId === pointId)
+          .map((c) => ({ rtNumber: c.rtNumber }));
       }
       return [];
     }) as AsyncFn,
@@ -539,21 +547,24 @@ describe('maps.service updateSpatialPoint', () => {
     );
     assert.equal(auditRows.length, 0);
     // The invariant assert must consult global state through the FOR SHARE locking read
-    // (current-read semantics) — see the PM review note on the PATCH snapshot race.
+    // (current-read semantics) — see the PM review note on the PATCH snapshot race. Matched
+    // via the FOR SHARE marker so lockQuery's pre-read of the point's RT set is not confused
+    // for the assert's read.
     const shareReads = queryRawCalls.filter((args) => {
       const query = (args?.[0] as Prisma.Sql) ?? undefined;
-      return (query?.sql ?? String(query ?? '')).includes('spatial_point_rt');
+      const sql = query?.sql ?? String(query ?? '');
+      return sql.includes('spatial_point_rt') && sql.includes('FOR SHARE');
     });
     assert.equal(shareReads.length, 1, 'one target-RT-scoped locking read expected');
     const shareQuery = (shareReads[0]?.[0] as Prisma.Sql) ?? undefined;
     assert.equal(shareQuery?.values?.[0], 7, 'locking read must be scoped to the contested RT');
   });
 
-  it('takes the rt_leaders payload locks in lockQuery before any coverage write', async () => {
-    // Reliability review follow-up: a PATCH that carries `rts` knows its post coverage before
-    // reading anything, so the leader locks must happen in lockQuery (createSpatialPoint's
-    // ordering) — same-RT writers queue before this transaction's coverage writes exist,
-    // instead of risking a cross-endpoint lock-ordering deadlock.
+  it('takes the rt_leaders pre AND post RT locks in lockQuery, ascending, before any write', async () => {
+    // Reliability review follow-up (round 2): a PATCH that MOVES a point between RTs (5→9)
+    // must lock the RTs it LEAVES up front too — two opposite PATCHes (3→9 and 9→3) can each
+    // hold one destination RT and wait for the other's, a deadlock InnoDB only recovers via
+    // detection + P2034 retry. Locking pre ∪ post ascending in lockQuery closes it.
     seed();
     const dto = await updateSpatialPoint('point-ketua-1', { rts: [9] }, ACTOR, CONTEXT);
 
@@ -563,19 +574,57 @@ describe('maps.service updateSpatialPoint', () => {
     const pointLockIdx = queryRawCalls.findIndex((args) =>
       sqlOf(args).includes('FROM spatial_points WHERE id'),
     );
+    const preReadIdx = queryRawCalls.findIndex(
+      (args) => sqlOf(args).includes('spatial_point_rt') && !sqlOf(args).includes('FOR SHARE'),
+    );
     const leaderLockIdx = queryRawCalls.findIndex((args) =>
       sqlOf(args).includes('FROM rt_leaders'),
     );
-    const shareIdx = queryRawCalls.findIndex((args) => sqlOf(args).includes('spatial_point_rt'));
+    const shareIdx = queryRawCalls.findIndex(
+      (args) => sqlOf(args).includes('spatial_point_rt') && sqlOf(args).includes('FOR SHARE'),
+    );
     assert.ok(pointLockIdx !== -1, 'point row lock expected');
-    assert.ok(leaderLockIdx !== -1, 'rt_leaders payload lock expected');
+    assert.ok(leaderLockIdx !== -1, 'rt_leaders lock expected');
     assert.ok(shareIdx !== -1, 'invariant locking read expected');
     assert.ok(
-      pointLockIdx < leaderLockIdx && leaderLockIdx < shareIdx,
-      'lock ordering must be point row -> rt_leaders payload -> invariant share read',
+      pointLockIdx < preReadIdx && preReadIdx < leaderLockIdx && leaderLockIdx < shareIdx,
+      'order must be point row -> pre RT read -> ascending rt_leaders lock -> invariant share read',
     );
     const leaderLockSql = (queryRawCalls[leaderLockIdx]?.[0] as Prisma.Sql) ?? undefined;
-    assert.deepEqual(Number(leaderLockSql?.values?.[0]), 9);
+    assert.deepEqual(
+      (leaderLockSql?.values as unknown[] | undefined)?.map(Number),
+      [5, 9],
+      'locks must cover the RTs the point leaves AND the RTs it moves to, ascending',
+    );
+  });
+
+  it('does a type-only PATCH leader-lock its current RTs via lockQuery (no in-execute pass)', async () => {
+    seed();
+    await updateSpatialPoint(
+      'point-ketua-1',
+      { name: 'Pos RT 5', latitude: -1.23 },
+      ACTOR,
+      CONTEXT,
+    );
+    // Field-only payload: point row lock only — no RT read, no RT locks.
+    assert.equal(queryRawCalls.length, 1);
+
+    await updateSpatialPoint('point-ketua-1', { type: 'bank_sampah' }, ACTOR, CONTEXT);
+    const sqlOf = (args: unknown) =>
+      ((args as unknown[] | undefined)?.[0] as Prisma.Sql | undefined)?.sql ?? String(args);
+    const typePatchLeaderLocks = queryRawCalls.filter((args) => {
+      const sql = sqlOf(args);
+      return sql.includes('FROM rt_leaders') || sql.includes('spatial_point_rt');
+    });
+    // Type PATCH: pre-read of the moved-off point's RTs + one ascending rt_leaders lock
+    // ([5]), both up front in lockQuery — nothing left for the in-execute pass.
+    const preCount = typePatchLeaderLocks.filter((args) =>
+      sqlOf(args).includes('spatial_point_rt'),
+    ).length;
+    assert.equal(preCount, 1);
+    const leader = (queryRawCalls.find((args) => sqlOf(args).includes('FROM rt_leaders'))?.[0] ??
+      undefined) as Prisma.Sql | undefined;
+    assert.deepEqual((leader?.values as unknown[] | undefined)?.map(Number), [5]);
   });
 
   it('rejects switching type to ketua_rt while the point still spans several RTs (no rts sent)', async () => {
