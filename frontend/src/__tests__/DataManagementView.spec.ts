@@ -45,14 +45,29 @@ const table: IndicatorTable = {
   updatedAt: CREATED,
 };
 
-function installFetchMock() {
-  globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL) => {
+interface FetchOverrides {
+  /** Answers `PATCH /api/indicator-tables/tbl-1`; the default succeeds with the stored detail. */
+  tablePatch?: (body: Record<string, unknown>) => Response;
+}
+
+function installFetchMock(overrides: FetchOverrides = {}) {
+  globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+
+    if (url === '/api/auth/csrf-token') {
+      return json({ csrfToken: 'csrf-token' });
+    }
 
     if (url === '/api/pages') {
       return json({
         pages: [
-          { id: 'p1', slug: 'kependudukan', title: 'Kependudukan', sortOrder: 0, chapterCount: 1 },
+          {
+            id: 'p1',
+            slug: 'kependudukan',
+            title: 'Kependudukan',
+            sortOrder: 0,
+            chapterCount: 1,
+          },
         ],
       });
     }
@@ -88,31 +103,40 @@ function installFetchMock() {
       return json({ tables: [table], total: 1, page: 1, pageSize: 200 });
     }
 
+    if (url === '/api/indicator-tables/tbl-1' && init?.method === 'PATCH') {
+      if (overrides.tablePatch) {
+        return overrides.tablePatch(JSON.parse(String(init.body)) as Record<string, unknown>);
+      }
+      return json({ table: tableDetail() });
+    }
+
     if (url === '/api/indicator-tables/tbl-1') {
-      return json({
-        table: {
-          ...table,
-          rows: [
-            {
-              id: 'row-1',
-              tableId: 'tbl-1',
-              rowKey: '0-4',
-              label: '0-4 tahun',
-              male: 100,
-              female: 90,
-              total: 190,
-              sortOrder: 0,
-              createdAt: CREATED,
-              updatedAt: CREATED,
-            },
-          ],
-          totals: { rowCount: 1, male: 100, female: 90, total: 190 },
-        },
-      });
+      return json({ table: tableDetail() });
     }
 
     throw new Error(`unexpected fetch: ${url}`);
   }) as typeof fetch;
+}
+
+function tableDetail() {
+  return {
+    ...table,
+    rows: [
+      {
+        id: 'row-1',
+        tableId: 'tbl-1',
+        rowKey: '0-4',
+        label: '0-4 tahun',
+        male: 100,
+        female: 90,
+        total: 190,
+        sortOrder: 0,
+        createdAt: CREATED,
+        updatedAt: CREATED,
+      },
+    ],
+    totals: { rowCount: 1, male: 100, female: 90, total: 190 },
+  };
 }
 
 function mountView() {
@@ -234,6 +258,71 @@ describe('DataManagementView.vue', () => {
     await flushPromises();
 
     expect(wrapper.text().toLowerCase()).not.toContain('import from');
+
+    wrapper.unmount();
+  });
+
+  it('keeps every unsaved row draft when the table save fails', async () => {
+    installFetchMock({
+      tablePatch: () => json({ error: 'Baris 12 bentrok dengan data lain.' }, false, 409),
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+
+    const editButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Piramida Usia'));
+    await editButton?.trigger('click');
+    await flushPromises();
+
+    await wrapper.find('#table-row-row-1-male').setValue('250');
+    await wrapper.find('[role="dialog"] form').trigger('submit');
+    await flushPromises();
+
+    const dialog = wrapper.find('[role="dialog"]');
+    expect(dialog.exists()).toBe(true);
+    expect(dialog.text()).toContain('Baris 12 bentrok dengan data lain.');
+
+    // The save is one atomic PATCH, so a failure wrote nothing and there is nothing to reconcile.
+    // A refetch here is what used to wipe the drafts: it replaces `table`, and the form resets
+    // every draft on a new table object.
+    const fetchMock = globalThis.fetch as unknown as {
+      mock: { calls: Array<[unknown, RequestInit | undefined]> };
+    };
+    const tableGets = fetchMock.mock.calls.filter(
+      ([input, init]) =>
+        String(input) === '/api/indicator-tables/tbl-1' && init?.method !== 'PATCH',
+    );
+    expect(tableGets).toHaveLength(1);
+
+    wrapper.unmount();
+  });
+
+  it('saves the table header and its rows as one batch request', async () => {
+    let patchBody: Record<string, unknown> | null = null;
+    installFetchMock({
+      tablePatch: (body) => {
+        patchBody = body;
+        return json({ table: tableDetail() });
+      },
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+
+    const editButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Piramida Usia'));
+    await editButton?.trigger('click');
+    await flushPromises();
+
+    await wrapper.find('#table-row-row-1-male').setValue('250');
+    await wrapper.find('[role="dialog"] form').trigger('submit');
+    await flushPromises();
+
+    expect(patchBody).toEqual({ rows: [{ id: 'row-1', male: 250 }] });
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
 
     wrapper.unmount();
   });
