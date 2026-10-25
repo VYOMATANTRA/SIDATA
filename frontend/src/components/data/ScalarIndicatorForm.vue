@@ -90,7 +90,7 @@ function validateDecimal(value: string, required: boolean, label: string): strin
     return required ? `${label} wajib diisi.` : undefined;
   }
   if (!DECIMAL_RE.test(trimmed)) {
-    return `${label} harus berupa angka desimal (maksimal 14 digit bulat, 4 digit desimal).`;
+    return `${label} harus berupa angka desimal dengan titik (mis. 12.5), maksimal 14 digit bulat dan 4 digit desimal.`;
   }
   return undefined;
 }
@@ -258,6 +258,7 @@ function handleSubmit(): void {
           :id="fieldId('value-current')"
           label="Nilai Sekarang"
           required
+          hint="Pakai titik sebagai pemisah desimal, misalnya 12.5 (bukan 12,5)."
           :error="submitted ? fieldErrors.valueCurrent : undefined"
           v-slot="{ describedBy, invalid }"
         >
@@ -339,6 +340,7 @@ function handleSubmit(): void {
           :id="fieldId('value-previous')"
           label="Nilai Tahun Lalu"
           required
+          hint="Pakai titik sebagai pemisah desimal, misalnya 12.5 (bukan 12,5)."
           :error="submitted ? fieldErrors.valuePrevious : undefined"
           v-slot="{ describedBy, invalid }"
         >
