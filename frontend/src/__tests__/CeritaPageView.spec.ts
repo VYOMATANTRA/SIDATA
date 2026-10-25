@@ -111,4 +111,57 @@ describe('CeritaPageView', () => {
     expect(wrapper.find('[data-test="cerita-not-found"]').exists()).toBe(true);
     expect(wrapper.find('[data-test="cerita-not-found"]').text()).toContain('Halaman tidak ditemukan');
   });
+
+  it('shows an error state with a retry button on a server error, instead of a blank main', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith('/api/pages/')) {
+        return { ok: false, status: 500, json: async () => ({ error: 'boom' }) } as Response;
+      }
+      return { ok: true, json: async () => ({ blocks: [] }) } as Response;
+    });
+
+    const { pinia, router } = await setupAndPush('kependudukan');
+    const wrapper = mount(CeritaPageView, { global: { plugins: [pinia, router] } });
+    await flushPromises();
+
+    expect(wrapper.find('main#main-content h1').exists()).toBe(true);
+    expect(wrapper.find('[data-test="cerita-error"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="cerita-retry"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="cerita-not-found"]').exists()).toBe(false);
+  });
+
+  it('retries the fetch when the retry button is clicked and recovers', async () => {
+    const page = makePage('kependudukan', 'Kependudukan');
+    let callCount = 0;
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith('/api/pages/')) {
+        callCount++;
+        if (callCount === 1) {
+          return { ok: false, status: 500, json: async () => ({ error: 'boom' }) } as Response;
+        }
+        return { ok: true, status: 200, json: async () => ({ page }) } as Response;
+      }
+      if (url.startsWith('/api/indicators')) {
+        return { ok: true, json: async () => ({ indicators: [] }) } as Response;
+      }
+      if (url.startsWith('/api/indicator-tables')) {
+        return { ok: true, json: async () => ({ tables: [] }) } as Response;
+      }
+      return { ok: true, json: async () => ({ blocks: [] }) } as Response;
+    });
+
+    const { pinia, router } = await setupAndPush('kependudukan');
+    const wrapper = mount(CeritaPageView, { global: { plugins: [pinia, router] } });
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="cerita-error"]').exists()).toBe(true);
+
+    await wrapper.find('[data-test="cerita-retry"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="cerita-error"]').exists()).toBe(false);
+    expect(wrapper.find('h1').text()).toBe('Kependudukan');
+  });
 });
