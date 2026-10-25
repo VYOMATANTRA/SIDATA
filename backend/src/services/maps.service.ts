@@ -965,17 +965,17 @@ function pointWriteSummary(point: SpatialPointWriteRow): PointWriteSummary {
 }
 
 /**
- * Locking read backing the write-path invariant assert (SPEC.md §7). Locking reads carry
- * current-read semantics in InnoDB, unlike the snapshot-backed ORM findMany that previously
- * fed this check — the shared "spatial_point_rt joined on ketua_rt spatial_points" row set is
- * exactly what the read-side rule consumes. Results are aliased to the shape
- * `withDerivedCoverageCounts` expects.
+ * Locking read backing the write-path invariant assert (SPEC.md §7), scoped to the single RT
+ * being written. Locking reads carry current-read semantics in InnoDB, unlike the
+ * snapshot-backed ORM findMany that previously fed this check — the shared
+ * "spatial_point_rt joined on ketua_rt spatial_points" row set is exactly what the read-side
+ * rule consumes. Results are aliased to the shape the resolution rule expects.
  */
-const KETUA_RT_COVERAGE_SHARE_READ = Prisma.sql`
+const KETUA_RT_COVERAGE_SHARE_READ = (rt: number) => Prisma.sql`
   SELECT spr.point_id AS pointId, spr.rt_number AS rtNumber
   FROM spatial_point_rt spr
   JOIN spatial_points sp ON sp.id = spr.point_id
-  WHERE sp.type = 'ketua_rt'
+  WHERE sp.type = 'ketua_rt' AND spr.rt_number = ${rt}
   FOR SHARE`;
 
 /**
@@ -1014,30 +1014,36 @@ async function assertKetuaRtWriteInvariant(
   }
   const rt = target.resultingCoverages[0] as number;
 
-  // Post-write global ketua_rt coverage state, read as a LOCKING (FOR SHARE) read. InnoDB
-  // locking reads are always current reads: they see every claim another transaction has
-  // committed — even though this transaction's REPEATABLE READ snapshot (established at its
-  // first consistent read, possibly before any rt_leaders lock wait) no longer reflects
-  // reality — and they BLOCK while a sibling transaction still holds uncommitted coverage
-  // rows. Two concurrent ketua_rt writes claiming the same RT therefore can never both pass.
-  // This also closes the residual gap where an rt_leaders FOR UPDATE lock no-ops for an RT
-  // lacking its seeded row and the (point_id, rt_number) unique key does not span points.
-  const stored = (await tx.$queryRaw(KETUA_RT_COVERAGE_SHARE_READ)) as Array<{
+  // The RT's ketua_rt coverage state, read as a LOCKING (FOR SHARE) read scoped to that RT
+  // (map writes no longer serialize on every ketua_rt coverage row — only on rows serving the
+  // RT being written). InnoDB locking reads are always current reads: they see every claim
+  // another transaction has committed — even though this transaction's REPEATABLE READ
+  // snapshot (established at its first consistent read, possibly before any rt_leaders lock
+  // wait) no longer reflects reality — and they BLOCK while a sibling transaction still holds
+  // uncommitted coverage rows for that RT. Two concurrent ketua_rt writes claiming the same
+  // RT therefore can never both pass. This also closes the residual gap where an rt_leaders
+  // FOR UPDATE lock no-ops for an RT lacking its seeded row and the (point_id, rt_number)
+  // unique key does not span points.
+  const stored = (await tx.$queryRaw(KETUA_RT_COVERAGE_SHARE_READ(rt))) as Array<{
     pointId: string;
     rtNumber: number;
   }>;
-  const derived = withDerivedCoverageCounts([
-    ...stored.filter((c) => c.pointId !== target.pointId),
-    { pointId: target.pointId, rtNumber: rt },
+  // Scoping the read to `rt` intentionally omits other points' rows on other RTs, so a foreign
+  // point's total coverage count is unknown here — and irrelevant: for THIS RT the only
+  // conflict class beyond the target's own shape (gated above) is 'multiple-points', which
+  // fires on any second point covering the same RT regardless of what else that point spans
+  // (a ketua_rt point spanning several RTs is itself an invalid state the write path never
+  // produces). Per-point totals are therefore pinned at 1 in this read window.
+  const resolution = resolveRtCoverage(rt, [
+    ...stored
+      .filter((c) => c.pointId !== target.pointId)
+      .map((c) => ({ pointId: c.pointId, totalRtCoverage: 1 })),
+    { pointId: target.pointId, totalRtCoverage: 1 },
   ]);
-  const resolution = resolveRtCoverage(
-    rt,
-    derived.filter((c) => c.rtNumber === rt),
-  );
 
   if (resolution.conflict === 'multiple-points') {
-    const others = derived
-      .filter((c) => c.rtNumber === rt && c.pointId !== target.pointId)
+    const others = stored
+      .filter((c) => c.pointId !== target.pointId)
       .map((c) => c.pointId)
       .join(', ');
     throw new MapsServiceError(
@@ -1046,8 +1052,9 @@ async function assertKetuaRtWriteInvariant(
       409,
     );
   }
-  // 'multi-rt-point' cannot occur past the shape gate above (the target is pinned at exactly
-  // one RT), but honor the shared rule defensively rather than assume it.
+  // With this target-scoped read both totalRtCoverage values are pinned to 1, so
+  // 'multi-rt-point' cannot surface here either — honor the shared rule defensively rather
+  // than assume it.
   if (resolution.conflict === 'multi-rt-point') {
     throw new MapsServiceError(resolution.warning ?? 'Invariant ketua_rt/RT dilanggar.', 400);
   }
@@ -1166,7 +1173,26 @@ export const updateSpatialPoint = async (
   try {
     return await executeLockedTransaction({
       client,
-      lockQuery: Prisma.sql`SELECT id FROM spatial_points WHERE id = ${normalizedId} FOR UPDATE`,
+      // Point row first, then — because the payload carries `rts`, the post-write coverage set
+      // is known before anything is read — the touched rt_leaders rows, matching
+      // createSpatialPoint's ordering: same-RT writers now queue BEFORE this transaction's
+      // coverage writes and FOR SHARE assert exist. That removes the cross-endpoint
+      // lock-ordering flip (this PATCH previously inserted coverage first and locked
+      // leaders after; the coverage add/delete paths lock first) which could otherwise end
+      // in a deadlock — InnoDB detection would still resolve it via the P2034 retry in
+      // executeLockedTransaction, so the outcome was always correct, but front-loading the
+      // wait means the common same-RT race never reaches retry at all. When only `type`
+      // changes, the pre-read coverage (and thus the affected RTs) is unknown before the first
+      // read, so those leader locks stay in-execute below.
+      lockQuery: async (txRaw) => {
+        const tx = txRaw as SpatialWriteTxClient;
+        await tx.$queryRaw(
+          Prisma.sql`SELECT id FROM spatial_points WHERE id = ${normalizedId} FOR UPDATE`,
+        );
+        if (input.rts !== undefined) {
+          await leaderLockQuery(normalizeCoverageSet(input.rts as number[]))?.(tx);
+        }
+      },
       execute: async (txRaw) => {
         const tx = txRaw as SpatialWriteTxClient;
         const existing = (await tx.spatialPoint.findUnique({
@@ -1188,7 +1214,8 @@ export const updateSpatialPoint = async (
         const removedCoverages = preCoverages.filter((rt) => !postCoverages.includes(rt));
         const coverageChanged = addedCoverages.length > 0 || removedCoverages.length > 0;
 
-        const changes: Record<string, { before: unknown; after: unknown }> = {};
+        const changes: Record<string, { before: unknown; after: unknown } | { redacted: true }> =
+          {};
         const track = (field: string, before: unknown, after: unknown) => {
           if (hasFieldChanged(before, after)) {
             changes[field] = { before, after };
@@ -1199,9 +1226,15 @@ export const updateSpatialPoint = async (
         if (input.latitude !== undefined) track('latitude', existing.latitude, input.latitude);
         if (input.longitude !== undefined) track('longitude', existing.longitude, input.longitude);
         if (input.metadata !== undefined) {
+          // Values redacted: metadata is free-form JSON that real data embeds personal details
+          // in (e.g. a pengelola/manager name), and audit rows default to infinite retention —
+          // consistent with the rt_leader.updated privacy fix, this audit entry records only
+          // THAT the key changed, never its before/after values (SPEC.md §3).
           const sanitizedMetadata =
             input.metadata === null ? null : (input.metadata as Record<string, unknown>);
-          track('metadata', existing.metadata ?? null, sanitizedMetadata);
+          if (hasFieldChanged(existing.metadata ?? null, sanitizedMetadata)) {
+            changes.metadata = { redacted: true };
+          }
         }
         if (coverageChanged) {
           changes.coverages = { before: preCoverages, after: postCoverages };
@@ -1248,12 +1281,15 @@ export const updateSpatialPoint = async (
 
         const mustHoldInvariant = rtsTouched || typeChanged;
         if (mustHoldInvariant && resultingType === 'ketua_rt') {
-          // Contention shaping only, NOT the correctness guarantee: this lock runs after this
-          // transaction's read snapshot already exists, so it cannot prevent the assert from
-          // reading a stale view. The guarantee lives in assertKetuaRtWriteInvariant's
-          // FOR SHARE current read, which cannot miss a sibling transaction's claim. Keeping
-          // these locks just serializes same-RT writers early so shared-lock waits stay
-          // short and rare.
+          // Contention shaping only, NOT the correctness guarantee. For `rts`-carrying PATCHes
+          // the leader locks were already taken in lockQuery; this second pass remains for
+          // type-only changes, where the affected RTs (the pre-read coverage) are only known
+          // after the first read, so here it runs after the snapshot and after the coverage
+          // writes: a cross-path interleaving with the coverage add/delete endpoints can
+          // still deadlock, and InnoDB detection plus the P2034 retry in
+          // executeLockedTransaction resolve that into a correct retried outcome. The
+          // guarantee itself lives in the FOR SHARE current read below. Keeping these locks
+          // just serializes same-RT writers so shared-lock waits stay short and rare.
           const leaderLock = leaderLockQuery([...new Set([...preCoverages, ...postCoverages])]);
           if (leaderLock) await leaderLock(tx);
           await assertKetuaRtWriteInvariant(tx, {

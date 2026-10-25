@@ -284,10 +284,14 @@ beforeEach(() => {
       const [query] = args as unknown as [Prisma.Sql];
       const text = query?.sql ?? String(query);
       // Serves the invariant assert's FOR SHARE locking read with the emulator's ketua_rt
-      // coverage state, exactly like the real database would (current read).
+      // coverage state, exactly like the real database would (current read) — including the
+      // target-RT scoping: the SQL's only bound parameter is the RT being written, and rows
+      // for other RTs must NOT come back.
       if (text.includes('spatial_point_rt')) {
+        const rtFilter = (query?.values as unknown[] | undefined)?.[0];
+        if (typeof rtFilter !== 'number') return [];
         return coverages
-          .filter((c) => points.get(c.pointId)?.type === 'ketua_rt')
+          .filter((c) => points.get(c.pointId)?.type === 'ketua_rt' && c.rtNumber === rtFilter)
           .map((c) => ({ pointId: c.pointId, rtNumber: c.rtNumber }));
       }
       return [];
@@ -536,13 +540,42 @@ describe('maps.service updateSpatialPoint', () => {
     assert.equal(auditRows.length, 0);
     // The invariant assert must consult global state through the FOR SHARE locking read
     // (current-read semantics) — see the PM review note on the PATCH snapshot race.
-    assert.ok(
-      queryRawCalls.some((args) => {
-        const query = (args?.[0] as Prisma.Sql) ?? undefined;
-        return (query?.sql ?? String(query ?? '')).includes('spatial_point_rt');
-      }),
-      'invariant assert must run its locking read over spatial_point_rt',
+    const shareReads = queryRawCalls.filter((args) => {
+      const query = (args?.[0] as Prisma.Sql) ?? undefined;
+      return (query?.sql ?? String(query ?? '')).includes('spatial_point_rt');
+    });
+    assert.equal(shareReads.length, 1, 'one target-RT-scoped locking read expected');
+    const shareQuery = (shareReads[0]?.[0] as Prisma.Sql) ?? undefined;
+    assert.equal(shareQuery?.values?.[0], 7, 'locking read must be scoped to the contested RT');
+  });
+
+  it('takes the rt_leaders payload locks in lockQuery before any coverage write', async () => {
+    // Reliability review follow-up: a PATCH that carries `rts` knows its post coverage before
+    // reading anything, so the leader locks must happen in lockQuery (createSpatialPoint's
+    // ordering) — same-RT writers queue before this transaction's coverage writes exist,
+    // instead of risking a cross-endpoint lock-ordering deadlock.
+    seed();
+    const dto = await updateSpatialPoint('point-ketua-1', { rts: [9] }, ACTOR, CONTEXT);
+
+    assert.deepEqual(dto.rts, [9]);
+    const sqlOf = (args: unknown) =>
+      ((args as unknown[] | undefined)?.[0] as Prisma.Sql | undefined)?.sql ?? String(args);
+    const pointLockIdx = queryRawCalls.findIndex((args) =>
+      sqlOf(args).includes('FROM spatial_points WHERE id'),
     );
+    const leaderLockIdx = queryRawCalls.findIndex((args) =>
+      sqlOf(args).includes('FROM rt_leaders'),
+    );
+    const shareIdx = queryRawCalls.findIndex((args) => sqlOf(args).includes('spatial_point_rt'));
+    assert.ok(pointLockIdx !== -1, 'point row lock expected');
+    assert.ok(leaderLockIdx !== -1, 'rt_leaders payload lock expected');
+    assert.ok(shareIdx !== -1, 'invariant locking read expected');
+    assert.ok(
+      pointLockIdx < leaderLockIdx && leaderLockIdx < shareIdx,
+      'lock ordering must be point row -> rt_leaders payload -> invariant share read',
+    );
+    const leaderLockSql = (queryRawCalls[leaderLockIdx]?.[0] as Prisma.Sql) ?? undefined;
+    assert.deepEqual(Number(leaderLockSql?.values?.[0]), 9);
   });
 
   it('rejects switching type to ketua_rt while the point still spans several RTs (no rts sent)', async () => {

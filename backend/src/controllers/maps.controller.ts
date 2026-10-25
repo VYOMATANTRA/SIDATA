@@ -286,9 +286,16 @@ function requireActor(req: AuthRequest) {
  * Route :rtNumber params for RT-scoped write endpoints must sit in the 1–100 range SPEC §7
  * pins for validation (reads keep their looser MAX_MYSQL_INT tolerance, writes do not).
  */
-function parseRtNumberParam(value: string | undefined): { rtNumber?: number; error?: string } {
+function parseRtNumberParam(value: string | string[] | undefined): {
+  rtNumber?: number;
+  error?: string;
+} {
+  // @types/express-serve-static-core 5.1 widens req.params to Params (including
+  // ParamsFlatDictionary's string[] entries for unnamed regex routes); named :rtNumber
+  // params are always present exactly once, so narrowing to the first string is sufficient.
+  const raw = Array.isArray(value) ? value[0] : value;
   return parsePositiveIntParam(
-    value,
+    raw,
     `Nomor RT harus berupa angka bulat antara ${MIN_RT_NUMBER} dan ${MAX_RT_NUMBER}`,
     MAX_RT_NUMBER,
   );
