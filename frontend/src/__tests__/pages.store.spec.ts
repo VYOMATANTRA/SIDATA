@@ -120,6 +120,58 @@ describe('pages store (CMS hierarchy)', () => {
     expect(store.breadcrumbParts('s1')).toEqual(['Pendidikan', 'Tingkat Pendidikan']);
   });
 
+  it('reuses a page already cached by the public read instead of refetching it', async () => {
+    let detailFetches = 0;
+
+    globalThis.fetch = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url === '/api/pages') {
+        return json({
+          pages: [
+            {
+              id: 'p1',
+              slug: 'kependudukan',
+              title: 'Kependudukan',
+              sortOrder: 0,
+              chapterCount: 1,
+            },
+          ],
+        });
+      }
+      if (url === '/api/pages/kependudukan') {
+        detailFetches += 1;
+        return json({
+          page: {
+            id: 'p1',
+            slug: 'kependudukan',
+            title: 'Kependudukan',
+            sortOrder: 0,
+            chapters: [
+              {
+                id: 'c1',
+                slug: 'jumlah-penduduk',
+                number: null,
+                title: 'Jumlah Penduduk',
+                sortOrder: 0,
+                sections: [{ id: 's1', slug: 'ringkasan', title: null, sortOrder: 0 }],
+              },
+            ],
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    const store = usePagesStore();
+    await store.fetchPageBySlug('kependudukan');
+    await store.fetchHierarchy();
+
+    expect(detailFetches).toBe(1);
+    expect(store.sections.map((section) => section.sectionId)).toEqual(['s1']);
+  });
+
   it('falls back to a neutral label for unknown sections', () => {
     const store = usePagesStore();
 
