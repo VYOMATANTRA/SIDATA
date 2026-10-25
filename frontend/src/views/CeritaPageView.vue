@@ -20,6 +20,11 @@ const activeChapterId = ref<string | null>(null);
 const slug = computed(() => String(route.params['slug'] ?? ''));
 const page = computed(() => pagesStore.pagesBySlug[slug.value] ?? null);
 const notFound = computed(() => pagesStore.notFound && !page.value);
+// pagesStore.error is a single shared flag, not keyed per slug — fetchPageBySlug's cache-hit
+// path returns before it's ever cleared, so a failed load on one slug can otherwise leave a
+// stale error visible after navigating to a different, already-cached slug that loaded fine.
+// Guarding on `!page.value` (same pattern as notFound above) means a resolved page always wins.
+const hasError = computed(() => Boolean(pagesStore.error) && !page.value);
 
 // Grouped (not last-write-wins) and sorted by sortOrder, since a section can carry more than
 // one prose block and editors rely on sort_order to control reading order.
@@ -179,7 +184,7 @@ onBeforeUnmount(() => observer?.disconnect());
       </div>
 
       <div
-        v-else-if="pagesStore.error"
+        v-else-if="hasError"
         class="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6"
         data-test="cerita-error"
       >
