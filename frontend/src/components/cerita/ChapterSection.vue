@@ -14,6 +14,8 @@ export interface ChapterSectionProps {
   indicatorsBySectionId: Record<string, IndicatorDto[]>;
   /** Matrix tables, keyed by sectionId. */
   tablesBySectionId: Record<string, IndicatorTableDetailDto[]>;
+  /** Combined indicator/matrix-table fetch error for a section, keyed by sectionId. */
+  sectionErrorsBySectionId: Record<string, string>;
 }
 
 defineProps<ChapterSectionProps>();
@@ -56,6 +58,15 @@ defineProps<ChapterSectionProps>();
         :key="table.id"
         :table="table"
       />
+
+      <div
+        v-if="sectionErrorsBySectionId[section.id]"
+        class="rounded-card border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+        role="alert"
+        data-test="section-data-error"
+      >
+        Sebagian data pada bagian ini gagal dimuat. Muat ulang halaman untuk mencoba lagi.
+      </div>
     </div>
   </section>
 </template>
