@@ -49,6 +49,12 @@ const router = createRouter({
       meta: { requiresAuth: true, requiresAdmin: true, title: 'Log Sistem dan Audit Trail' },
     },
     {
+      path: '/cerita/:slug',
+      name: 'cerita-page',
+      component: () => import('../views/CeritaPageView.vue'),
+      meta: { title: 'Cerita' },
+    },
+    {
       path: '/auth/callback',
       name: 'auth-callback',
       component: () => import('../views/AuthCallbackView.vue'),
