@@ -38,6 +38,24 @@ const tablesBySectionId = computed<Record<string, IndicatorTableDetailDto[]>>(
   () => indicatorTablesStore.bySectionId,
 );
 
+const sectionErrorsBySectionId = computed<Record<string, string>>(() => {
+  const map: Record<string, string> = {};
+  const sectionIds = new Set([
+    ...Object.keys(indicatorsStore.errorsBySectionId),
+    ...Object.keys(indicatorTablesStore.errorsBySectionId),
+  ]);
+  for (const sectionId of sectionIds) {
+    const messages = [
+      indicatorsStore.errorsBySectionId[sectionId],
+      indicatorTablesStore.errorsBySectionId[sectionId],
+    ].filter((message): message is string => Boolean(message));
+    if (messages.length > 0) {
+      map[sectionId] = messages.join(' ');
+    }
+  }
+  return map;
+});
+
 const tocChapters = computed<TocChapter[]>(
   () =>
     page.value?.chapters.map((chapter) => ({
@@ -184,6 +202,7 @@ onBeforeUnmount(() => observer?.disconnect());
               :prose-by-section-id="proseBySectionId"
               :indicators-by-section-id="indicatorsBySectionId"
               :tables-by-section-id="tablesBySectionId"
+              :section-errors-by-section-id="sectionErrorsBySectionId"
             />
           </div>
         </div>
