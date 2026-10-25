@@ -11,34 +11,49 @@ const props = defineProps<MatrixTableBlockProps>();
 
 const sexSplit = computed(() => isSexSplitKind(props.table.kind));
 
+// Rows with a missing cell are left out of the chart entirely rather than drawn as a 0-value
+// bar: a 0 bar reads as "measured, came out to zero", which contradicts the table's "—" for the
+// same cell. A missing bar + "—" in the table both read as "not available" consistently.
 const chartItems = computed<BarDiagramItem[]>(() => {
   if (sexSplit.value) {
-    return props.table.rows.flatMap((row) => [
-      {
-        id: `${row.id}-male`,
-        label: `${row.label} — Laki-laki`,
-        value: row.male ?? 0,
-        color: 'bg-brand-navy',
-      },
-      {
-        id: `${row.id}-female`,
-        label: `${row.label} — Perempuan`,
-        value: row.female ?? 0,
-        color: 'bg-brand-cyan',
-      },
-    ]);
+    return props.table.rows.flatMap((row) => {
+      const items: BarDiagramItem[] = [];
+      if (row.male !== null) {
+        items.push({
+          id: `${row.id}-male`,
+          label: `${row.label} — Laki-laki`,
+          value: row.male,
+          color: 'bg-brand-navy',
+        });
+      }
+      if (row.female !== null) {
+        items.push({
+          id: `${row.id}-female`,
+          label: `${row.label} — Perempuan`,
+          value: row.female,
+          color: 'bg-brand-cyan',
+        });
+      }
+      return items;
+    });
   }
 
-  return props.table.rows.map((row) => ({
-    id: row.id,
-    label: row.label,
-    value: row.total ?? 0,
-  }));
+  return props.table.rows
+    .filter((row) => row.total !== null)
+    .map((row) => ({
+      id: row.id,
+      label: row.label,
+      value: row.total as number,
+    }));
 });
 </script>
 
 <template>
   <div data-test="matrix-table-block">
+    <p class="mb-2 text-sm text-slate-600" data-test="matrix-table-period">
+      Berdasarkan data periode {{ table.period }}.
+    </p>
+
     <BarDiagram :title="table.title" :items="chartItems" />
 
     <details class="mt-3" data-test="matrix-table-details">
