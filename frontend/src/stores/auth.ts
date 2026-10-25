@@ -100,10 +100,12 @@ export const useAuthStore = defineStore('auth', () => {
       })
 
       if (!res.ok) {
-        clearAuth(mustChangePassword.value)
         if (res.status === 401 || res.status === 403) {
+          clearAuth(mustChangePassword.value)
           refreshDenied.value = true
         }
+        // A 5xx (or any other transient failure) must not destroy a session that may still be
+        // valid: keep the in-memory token and let the next navigation or request retry.
         return false
       }
 
@@ -116,7 +118,8 @@ export const useAuthStore = defineStore('auth', () => {
       clearAuth(mustChangePassword.value)
       return false
     } catch {
-      clearAuth(mustChangePassword.value)
+      // Network failure: transient, exactly like a 5xx. Clearing here would log the user out
+      // of a session the server never rejected.
       return false
     } finally {
       isInitialized.value = true
