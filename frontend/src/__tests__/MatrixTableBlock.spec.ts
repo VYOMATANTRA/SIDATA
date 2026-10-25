@@ -94,4 +94,64 @@ describe('MatrixTableBlock.vue', () => {
     const wrapper = mount(MatrixTableBlock, { props: { table: sexSplitTable } });
     expect(wrapper.find('[data-test="matrix-table-source"]').text()).toContain('Prodeskel');
   });
+
+  it('shows a visible period framing sentence (Spec §6), not just the screen-reader caption', () => {
+    const wrapper = mount(MatrixTableBlock, { props: { table: sexSplitTable } });
+
+    const period = wrapper.find('[data-test="matrix-table-period"]');
+    expect(period.exists()).toBe(true);
+    expect(period.text()).toContain('Juni 2024');
+    expect(period.classes()).not.toContain('sr-only');
+  });
+
+  it('leaves a missing cell out of the chart instead of drawing it as a 0 bar', () => {
+    const partialSexSplitTable: IndicatorTableDetailDto = {
+      ...sexSplitTable,
+      rows: [
+        {
+          ...sexSplitTable.rows[0]!,
+          male: null,
+          female: 110,
+        },
+      ],
+    };
+
+    const wrapper = mount(MatrixTableBlock, { props: { table: partialSexSplitTable } });
+
+    const bars = wrapper.findAll('[data-test="bar-item"]');
+    expect(bars).toHaveLength(1);
+    expect(wrapper.find('[data-test="bar-label"]').text()).toContain('Perempuan');
+
+    // The table alternative still shows the missing cell explicitly as "—", so chart and
+    // table don't contradict each other (no bar vs. no "0" either).
+    const table = wrapper.find('[data-test="matrix-table-data"]');
+    expect(table.text()).toContain('—');
+  });
+
+  it('leaves a row with a null total out of the chart entirely for single-value kinds', () => {
+    const partialSingleValueTable: IndicatorTableDetailDto = {
+      ...singleValueTable,
+      rows: [
+        ...singleValueTable.rows,
+        {
+          id: 'row-3',
+          tableId: 'tbl-2',
+          rowKey: 'nelayan',
+          label: 'Nelayan',
+          male: null,
+          female: null,
+          total: null,
+          sortOrder: 1,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    };
+
+    const wrapper = mount(MatrixTableBlock, { props: { table: partialSingleValueTable } });
+
+    const bars = wrapper.findAll('[data-test="bar-item"]');
+    expect(bars).toHaveLength(1);
+    expect(wrapper.find('[data-test="bar-label"]').text()).toBe('Petani');
+  });
 });
