@@ -523,6 +523,110 @@ describe('indicatorTables.service updateIndicatorTable', () => {
     const changes = (audit['metadata'] as AnyRecord)['changes'] as AnyRecord;
     assert.deepStrictEqual(changes['title'], { before: 'Piramida Usia', after: 'Piramida Anyar' });
   });
+
+  it('applies table fields and nested rows in one transaction, auditing each change', async () => {
+    rowImpl['findMany'] = async () => [
+      cellRow(),
+      cellRow({ id: 'row-2', rowKey: '5-9', label: 'Usia 5-9 tahun', male: 80, female: 70 }),
+    ];
+    rowImpl['update'] = async (...args: never[]) => {
+      const { data } = args[0] as unknown as { data: AnyRecord };
+      return { ...cellRow(), ...data };
+    };
+
+    await updateIndicatorTable(
+      'tbl-1',
+      {
+        title: 'Piramida Anyar',
+        rows: [
+          { id: 'row-1', male: 130 },
+          { id: 'row-2', female: 75 },
+        ],
+      },
+      ACTOR,
+      CONTEXT,
+    );
+
+    assert.equal(txTableCalls['update']?.length, 1);
+    assert.equal(txRowCalls['update']?.length, 2);
+    assert.deepStrictEqual(
+      auditRows.map((row) => row['action']),
+      ['indicator_table.updated', 'indicator_table_row.updated', 'indicator_table_row.updated'],
+    );
+    const secondRowAudit = auditRows[2]!;
+    assert.deepStrictEqual((secondRowAudit['metadata'] as AnyRecord)['changes'], {
+      female: { before: 70, after: 75 },
+    });
+  });
+
+  it('rejects the whole batch when a row id does not belong to the table', async () => {
+    rowImpl['findMany'] = async () => [cellRow()];
+
+    await assertServiceError(
+      updateIndicatorTable(
+        'tbl-1',
+        {
+          rows: [
+            { id: 'row-1', male: 130 },
+            { id: 'row-other', male: 5 },
+          ],
+        },
+        ACTOR,
+        CONTEXT,
+      ),
+      404,
+      'tidak ditemukan',
+    );
+    assert.equal(txRowCalls['update']?.length ?? 0, 0);
+    assert.equal(txTableCalls['update']?.length ?? 0, 0);
+    assert.equal(auditRows.length, 0);
+  });
+
+  it('validates every nested row cell shape before applying any update', async () => {
+    rowImpl['findMany'] = async () => [cellRow()];
+
+    await assertServiceError(
+      updateIndicatorTable('tbl-1', { rows: [{ id: 'row-1', total: 190 }] }, ACTOR, CONTEXT),
+      400,
+      'tidak memakai total',
+    );
+    assert.equal(txRowCalls['update']?.length ?? 0, 0);
+    assert.equal(auditRows.length, 0);
+  });
+
+  it('rejects duplicate row ids in one payload with 400 before opening a transaction', async () => {
+    await assertServiceError(
+      updateIndicatorTable(
+        'tbl-1',
+        {
+          rows: [
+            { id: 'row-1', male: 1 },
+            { id: 'row-1', male: 2 },
+          ],
+        },
+        ACTOR,
+        CONTEXT,
+      ),
+      400,
+      'duplikat',
+    );
+    assert.equal(txCalls.length, 0);
+  });
+
+  it('treats unchanged nested rows as a no-op without an audit row', async () => {
+    rowImpl['findMany'] = async () => [cellRow()];
+
+    const result = await updateIndicatorTable(
+      'tbl-1',
+      { rows: [{ id: 'row-1', male: 120 }] },
+      ACTOR,
+      CONTEXT,
+    );
+
+    assert.equal(result.id, 'tbl-1');
+    assert.equal(txRowCalls['update']?.length ?? 0, 0);
+    assert.equal(auditRows.length, 0);
+  });
 });
 
 describe('indicatorTables.service deleteIndicatorTable', () => {
