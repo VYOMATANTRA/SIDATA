@@ -226,17 +226,6 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
     return saveTableDetail(id, { table: patch, rows: [] });
   }
 
-  async function updateTableRow(
-    rowId: string,
-    patch: IndicatorTableRowPatch,
-  ): Promise<IndicatorTableRow> {
-    const data = await apiRequestJson<{ row: IndicatorTableRow }>(
-      `/api/indicator-tables/rows/${encodeURIComponent(rowId)}`,
-      { method: 'PATCH', body: JSON.stringify(patch) },
-    );
-    return data.row;
-  }
-
   async function fetchBySectionId(
     sectionId: string,
     force = false,
@@ -312,7 +301,6 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
     fetchTableDetail,
     saveTableDetail,
     updateTable,
-    updateTableRow,
     replaceTable,
     fetchBySectionId,
   };
