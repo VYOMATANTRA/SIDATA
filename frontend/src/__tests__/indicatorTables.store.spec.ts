@@ -200,40 +200,7 @@ describe('indicator tables store (CMS list and edits)', () => {
     expect(store.tables[0]?.title).toBe('Piramida Penduduk');
   });
 
-  it('patches a single row through the row endpoint', async () => {
-    let capturedUrl = '';
-    let capturedInit: RequestInit | undefined;
-
-    globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
-      capturedUrl = url;
-      capturedInit = init;
-      return json({
-        row: {
-          id: 'row-1',
-          tableId: 'tbl-1',
-          rowKey: '0-4',
-          label: '0-4 tahun',
-          male: 120,
-          female: 90,
-          total: 210,
-          sortOrder: 0,
-          createdAt: CREATED,
-          updatedAt: CREATED,
-        },
-      });
-    }) as typeof fetch;
-
-    const store = useIndicatorTablesStore();
-    const row = await store.updateTableRow('row-1', { male: 120 });
-
-    expect(row.male).toBe(120);
-    expect(capturedUrl).toBe('/api/indicator-tables/rows/row-1');
-    expect(JSON.parse(String(capturedInit?.body))).toEqual({ male: 120 });
-  });
-
-  it('surfaces a per-kind shape rejection', async () => {
+  it('surfaces a per-kind shape rejection from the batch save', async () => {
     globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
@@ -246,9 +213,12 @@ describe('indicator tables store (CMS list and edits)', () => {
 
     const store = useIndicatorTablesStore();
 
-    await expect(store.updateTableRow('row-1', { total: 190 })).rejects.toThrow(
-      'Tabel dengan pembagian jenis kelamin tidak menyimpan nilai total',
-    );
+    await expect(
+      store.saveTableDetail('tbl-1', {
+        table: {},
+        rows: [{ rowId: 'row-1', patch: { total: 190 } }],
+      }),
+    ).rejects.toThrow('Tabel dengan pembagian jenis kelamin tidak menyimpan nilai total');
   });
 });
 
