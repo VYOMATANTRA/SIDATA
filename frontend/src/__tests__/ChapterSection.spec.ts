@@ -66,4 +66,46 @@ describe('ChapterSection.vue', () => {
     expect(blocks[0]?.find('[data-test="section-data-error"]').exists()).toBe(true);
     expect(blocks[1]?.find('[data-test="section-data-error"]').exists()).toBe(false);
   });
+
+  it('renders every prose block for a section, not just the last one', () => {
+    const wrapper = mount(ChapterSection, {
+      props: {
+        chapter,
+        proseBySectionId: {
+          'sec-1': [
+            {
+              id: 'block-1',
+              sectionId: 'sec-1',
+              type: 'prose',
+              slug: 'intro',
+              title: null,
+              body: 'Paragraf pertama.',
+              metadata: null,
+              sortOrder: 0,
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+            {
+              id: 'block-2',
+              sectionId: 'sec-1',
+              type: 'prose',
+              slug: 'lanjutan',
+              title: null,
+              body: 'Paragraf kedua.',
+              metadata: null,
+              sortOrder: 1,
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+        },
+        indicatorsBySectionId: {},
+        tablesBySectionId: {},
+        sectionErrorsBySectionId: {},
+      },
+    });
+
+    const paragraphs = wrapper.findAll('[data-test="section-prose"]');
+    expect(paragraphs).toHaveLength(2);
+    expect(paragraphs[0]?.text()).toBe('Paragraf pertama.');
+    expect(paragraphs[1]?.text()).toBe('Paragraf kedua.');
+  });
 });
