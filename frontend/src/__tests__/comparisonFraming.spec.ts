@@ -34,6 +34,18 @@ describe('formatIndicatorValue', () => {
   it('formats fractional values id-ID style with up to 2 decimals', () => {
     expect(formatIndicatorValue('0.9700')).toBe('0,97');
   });
+
+  it('does not round a small decimal (e.g. a ratio) down to "0"', () => {
+    expect(formatIndicatorValue('0.0040')).toBe('0,004');
+  });
+
+  it('preserves the full stored fraction up to DECIMAL(18,4) precision', () => {
+    expect(formatIndicatorValue('1.2345')).toBe('1,2345');
+  });
+
+  it('does not lose precision on a large value (beyond what Number() can represent exactly)', () => {
+    expect(formatIndicatorValue('123456789012345.6789')).toBe('123.456.789.012.345,6789');
+  });
 });
 
 describe('buildIndicatorNarrative', () => {
