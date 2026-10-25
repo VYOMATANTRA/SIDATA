@@ -961,15 +961,6 @@ export const updateIndicatorTable = async (
               );
             }
             seenNextRowKeys.add(nextRowKey);
-            const clash = await tx.indicatorTableRow.findUnique({
-              where: { tableId_rowKey: { tableId: normalizedId, rowKey: nextRowKey } },
-            });
-            if (clash && (clash as unknown as CellRow).id !== row.id) {
-              throw new IndicatorTableServiceError(
-                `rowKey '${nextRowKey}' sudah dipakai baris lain di tabel ini.`,
-                409,
-              );
-            }
           }
 
           const rowChanges: Record<string, { before: unknown; after: unknown }> = {};
@@ -995,6 +986,30 @@ export const updateIndicatorTable = async (
               nextCells,
               changes: rowChanges,
             });
+          }
+        }
+
+        // Validate row-key renames against the final key set, not the current one: a swap
+        // (A→b, B→a) or a longer cycle is valid because every current holder is itself being
+        // renamed away in this batch. A target key still held by a row outside the batch is a
+        // genuine 409.
+        const rowsChangingKey = pendingRowUpdates.filter(
+          (pending) => pending.nextRowKey !== pending.existing.rowKey,
+        );
+        if (rowsChangingKey.length > 0) {
+          const targetKeys = [...new Set(rowsChangingKey.map((pending) => pending.nextRowKey))];
+          const holders = (await tx.indicatorTableRow.findMany({
+            where: { tableId: normalizedId, rowKey: { in: targetKeys } },
+          })) as unknown as CellRow[];
+          const changingIds = new Set(rowsChangingKey.map((pending) => pending.existing.id));
+          for (const pending of rowsChangingKey) {
+            const holder = holders.find((row) => row.rowKey === pending.nextRowKey);
+            if (holder && holder.id !== pending.existing.id && !changingIds.has(holder.id)) {
+              throw new IndicatorTableServiceError(
+                `rowKey '${pending.nextRowKey}' sudah dipakai baris lain di tabel ini.`,
+                409,
+              );
+            }
           }
         }
 
@@ -1040,6 +1055,20 @@ export const updateIndicatorTable = async (
         // Applied after every row has been validated, so the batch either lands whole or not at
         // all. The transaction is what actually guarantees it; validating first keeps the
         // failure path free of writes.
+        //
+        // Renamed rows are parked on a temporary key first: MySQL checks the (tableId, rowKey)
+        // unique index per statement, so writing a swap one row at a time would collide even
+        // though the final key set is valid. Row ids are generated (cuid), so `tmp:<id>` is
+        // unique and comfortably under the column limit.
+        if (rowsChangingKey.length > 0) {
+          for (const pending of rowsChangingKey) {
+            await tx.indicatorTableRow.update({
+              where: { id: pending.existing.id },
+              data: { rowKey: `tmp:${pending.existing.id}` },
+            });
+          }
+        }
+
         for (const pending of pendingRowUpdates) {
           await tx.indicatorTableRow.update({
             where: { id: pending.existing.id },
