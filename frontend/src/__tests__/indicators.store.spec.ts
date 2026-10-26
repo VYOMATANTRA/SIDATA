@@ -184,6 +184,37 @@ describe('indicators store (public per-section reads)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('drops the section cache after an edit so the Cerita view refetches', async () => {
+    let sectionValue = '100';
+
+    globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
+      if (url.startsWith('/api/indicators?sectionId=sec-1')) {
+        return json({ indicators: [makeIndicator({ valueCurrent: sectionValue })] });
+      }
+      if (url === '/api/indicators/ind-1') {
+        sectionValue = '200';
+        return json({ indicator: makeIndicator({ valueCurrent: '200' }) });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    const store = useIndicatorsStore();
+
+    const before = await store.fetchBySectionId('sec-1');
+    expect(before[0]?.valueCurrent).toBe('100');
+
+    await store.updateIndicator('ind-1', { valueCurrent: '200' });
+
+    // The CMS list holds the new value, and the Cerita cache must not keep serving the old one.
+    expect(store.indicators[0]?.valueCurrent).toBe('200');
+    expect(store.bySectionId['sec-1']).toBeUndefined();
+
+    const after = await store.fetchBySectionId('sec-1');
+    expect(after[0]?.valueCurrent).toBe('200');
+  });
+
   it('returns an empty list and records the error against that sectionId, not globally', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
       ok: false,
