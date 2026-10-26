@@ -116,8 +116,22 @@ const rowCells = {
   total: nonnegInt('total').nullable().optional(),
 };
 
+/**
+ * Prefix reserved for the temporary keys `updateIndicatorTable` parks renamed rows on during a
+ * row-key swap. Rejecting it in the schema means a real row can never occupy a temp key and
+ * collide with an in-flight swap.
+ */
+export const RESERVED_ROW_KEY_PREFIX = 'tmp:';
+
 const rowBaseFields = {
-  rowKey: z.string().trim().min(1, 'rowKey wajib diisi').max(64, 'rowKey maksimal 64 karakter'),
+  rowKey: z
+    .string()
+    .trim()
+    .min(1, 'rowKey wajib diisi')
+    .max(64, 'rowKey maksimal 64 karakter')
+    .refine((value) => !value.startsWith(RESERVED_ROW_KEY_PREFIX), {
+      message: `rowKey tidak boleh diawali "${RESERVED_ROW_KEY_PREFIX}" (prefiks dicadangkan)`,
+    }),
   label: z
     .string()
     .trim()
@@ -1058,8 +1072,9 @@ export const updateIndicatorTable = async (
         //
         // Renamed rows are parked on a temporary key first: MySQL checks the (tableId, rowKey)
         // unique index per statement, so writing a swap one row at a time would collide even
-        // though the final key set is valid. Row ids are generated (cuid), so `tmp:<id>` is
-        // unique and comfortably under the column limit.
+        // though the final key set is valid. Row ids are generated (uuid), so `tmp:<id>` is
+        // unique and under the 64-character column limit, and the row-key schema reserves the
+        // `tmp:` prefix so no real row can hold one.
         if (rowsChangingKey.length > 0) {
           for (const pending of rowsChangingKey) {
             await tx.indicatorTableRow.update({
