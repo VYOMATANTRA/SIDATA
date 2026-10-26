@@ -58,7 +58,7 @@ function installFetchMock(overrides: FetchOverrides = {}) {
       return json({ csrfToken: 'csrf-token' });
     }
 
-    if (url === '/api/pages') {
+    if (url === '/api/pages?include=sections') {
       return json({
         pages: [
           {
@@ -66,32 +66,20 @@ function installFetchMock(overrides: FetchOverrides = {}) {
             slug: 'kependudukan',
             title: 'Kependudukan',
             sortOrder: 0,
-            chapterCount: 1,
+            chapters: [
+              {
+                id: 'c1',
+                slug: 'jumlah-penduduk',
+                number: null,
+                title: 'Jumlah Penduduk',
+                sortOrder: 0,
+                sections: [{ id: 'sec-1', slug: 'ringkasan', title: null, sortOrder: 0 }],
+              },
+            ],
+            createdAt: CREATED,
+            updatedAt: CREATED,
           },
         ],
-      });
-    }
-
-    if (url === '/api/pages/kependudukan') {
-      return json({
-        page: {
-          id: 'p1',
-          slug: 'kependudukan',
-          title: 'Kependudukan',
-          sortOrder: 0,
-          chapters: [
-            {
-              id: 'c1',
-              slug: 'jumlah-penduduk',
-              number: null,
-              title: 'Jumlah Penduduk',
-              sortOrder: 0,
-              sections: [{ id: 'sec-1', slug: 'ringkasan', title: null, sortOrder: 0 }],
-            },
-          ],
-          createdAt: CREATED,
-          updatedAt: CREATED,
-        },
       });
     }
 
@@ -199,7 +187,7 @@ describe('DataManagementView.vue', () => {
   it('shows an explicit empty state instead of an empty list', async () => {
     globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === '/api/pages') return json({ pages: [] });
+      if (url === '/api/pages?include=sections') return json({ pages: [] });
       if (url.startsWith('/api/indicators?')) return json({ indicators: [], total: 0 });
       if (url.startsWith('/api/indicator-tables?')) return json({ tables: [], total: 0 });
       throw new Error(`unexpected fetch: ${url}`);
