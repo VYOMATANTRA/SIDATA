@@ -21,11 +21,12 @@ export const SESSION_EXPIRED_MESSAGE =
 
 /**
  * Shown when the 401 refresh could not even be attempted (network error) or the server failed
- * (5xx). The session may still be valid, so telling the user to log in again would be wrong —
- * and would push them to discard a draft for no reason.
+ * (5xx). The client cannot tell whether the session is still valid — the access token already
+ * got a 401 and the refresh never finished — so the wording promises nothing and asks for a
+ * retry instead of pushing the user to discard a draft.
  */
 export const REFRESH_UNAVAILABLE_MESSAGE =
-  'Koneksi ke server bermasalah saat memperbarui sesi. Sesi Anda masih aktif — coba simpan lagi.';
+  'Koneksi ke server bermasalah; coba simpan lagi sebentar lagi.';
 
 /** Error carrying the HTTP status, so callers can branch on 409/422 without string matching. */
 export class ApiError extends Error {
