@@ -163,7 +163,7 @@ describe('auth store', () => {
     const store = useAuthStore()
     store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'token-1')
 
-    expect(await store.refreshSession()).toBe(false)
+    expect(await store.refreshSession()).toBe('transient')
     expect(store.accessToken).toBe('token-1')
     expect(store.isAuthenticated).toBe(true)
   })
@@ -183,7 +183,7 @@ describe('auth store', () => {
     const store = useAuthStore()
     store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'token-1')
 
-    expect(await store.refreshSession()).toBe(false)
+    expect(await store.refreshSession()).toBe('transient')
     expect(store.accessToken).toBe('token-1')
     expect(store.isAuthenticated).toBe(true)
   })
@@ -445,7 +445,7 @@ describe('auth store', () => {
 
     const result = await store.refreshSession()
 
-    expect(result).toBe(true)
+    expect(result).toBe('ok')
     expect(refreshCalls).toBe(1)
     expect(store.accessToken).toBe('fresh-access-token')
   })
@@ -467,8 +467,8 @@ describe('auth store', () => {
     const store = useAuthStore()
     store.setAuth({ id: '1', email: 'editor@example.com', role: 'editor' }, 'expired-access-token')
 
-    expect(await store.refreshSession()).toBe(false)
-    expect(await store.refreshSession()).toBe(false)
+    expect(await store.refreshSession()).toBe('denied')
+    expect(await store.refreshSession()).toBe('denied')
     expect(refreshCalls).toBe(1)
     expect(store.isAuthenticated).toBe(false)
   })
