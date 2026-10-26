@@ -94,7 +94,20 @@ export const useIndicatorsStore = defineStore('indicators', () => {
 
   const staleCount = computed(() => indicators.value.filter((item) => item.isStale).length);
 
+  /**
+   * Drops the Cerita view's cached copy of a section. `indicators` and `bySectionId` are two
+   * caches over the same rows; leaving the per-section one in place after a write would make
+   * /cerita serve the pre-edit value until a full reload.
+   */
+  function invalidateSectionCache(sectionId: string): void {
+    if (bySectionId.value[sectionId] === undefined) return;
+    const next = { ...bySectionId.value };
+    delete next[sectionId];
+    bySectionId.value = next;
+  }
+
   function replaceIndicator(updated: Indicator): void {
+    invalidateSectionCache(updated.sectionId);
     const index = indicators.value.findIndex((item) => item.id === updated.id);
     if (index === -1) {
       indicators.value = [...indicators.value, updated];
@@ -133,11 +146,15 @@ export const useIndicatorsStore = defineStore('indicators', () => {
   }
 
   async function updateIndicator(id: string, patch: IndicatorPatch): Promise<Indicator> {
+    const previousSectionId = indicators.value.find((item) => item.id === id)?.sectionId;
     const data = await apiRequestJson<{ indicator: Indicator }>(
       `/api/indicators/${encodeURIComponent(id)}`,
       { method: 'PATCH', body: JSON.stringify(patch) },
     );
     replaceIndicator(data.indicator);
+    if (previousSectionId && previousSectionId !== data.indicator.sectionId) {
+      invalidateSectionCache(previousSectionId);
+    }
     return data.indicator;
   }
 
