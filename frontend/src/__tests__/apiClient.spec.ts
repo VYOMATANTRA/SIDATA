@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useAuthStore } from '../stores/auth';
-import { apiFetch, apiRequestJson, SESSION_EXPIRED_MESSAGE } from '../utils/apiClient';
+import {
+  apiFetch,
+  apiRequestJson,
+  REFRESH_UNAVAILABLE_MESSAGE,
+  SESSION_EXPIRED_MESSAGE,
+} from '../utils/apiClient';
 
 const EDITOR = { id: 'u-1', email: 'editor@example.com', role: 'editor' };
 
@@ -220,6 +225,27 @@ describe('apiClient', () => {
       status: 401,
       message: SESSION_EXPIRED_MESSAGE,
     });
+  });
+
+  it('reports a connection problem instead of an expired session when the refresh is unavailable', async () => {
+    const store = signIn('expired-token');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input);
+        if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-token' });
+        if (url === '/api/auth/refresh') return json({ error: 'boom' }, 503);
+        return json({ error: 'Token tidak valid' }, 401);
+      }),
+    );
+
+    await expect(apiRequestJson('/api/indicators')).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 503,
+      message: REFRESH_UNAVAILABLE_MESSAGE,
+    });
+    // The session was never rejected, so the token stays in memory for the next attempt.
+    expect(store.accessToken).toBe('expired-token');
   });
 
   it('keeps the server message for non-401 failures', async () => {
