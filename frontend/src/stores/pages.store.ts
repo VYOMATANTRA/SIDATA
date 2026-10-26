@@ -126,35 +126,29 @@ export const usePagesStore = defineStore('pages', () => {
 
     hierarchyInFlight = (async () => {
       try {
-        const listed = await apiRequestJson<{ pages?: PageSummary[] }>('/api/pages');
-        const summaries = Array.isArray(listed.pages) ? listed.pages : [];
-
-        const details = await Promise.all(
-          summaries.map(async (summary) => {
-            // Reuse a page already loaded by the Cerita view (or by an earlier hierarchy load)
-            // instead of refetching every slug. `force` still bypasses the cache.
-            const cached = !force ? pagesBySlug.value[summary.slug] : undefined;
-            if (cached) return cached;
-            try {
-              const data = await apiRequestJson<{ page?: PageDetail }>(
-                `/api/pages/${encodeURIComponent(summary.slug)}`,
-              );
-              const page = data.page ?? null;
-              if (page) {
-                pagesBySlug.value = { ...pagesBySlug.value, [summary.slug]: page };
-              }
-              return page;
-            } catch {
-              // One unreadable page must not blank out the whole hierarchy — the section
-              // list degrades to "page not labelled" rather than failing the view.
-              return null;
-            }
-          }),
+        // One request: the list already carries chapters and sections when asked, so a cold
+        // load no longer fires one /api/pages/:slug request per page.
+        const listed = await apiRequestJson<{ pages?: PageDetail[] }>(
+          '/api/pages?include=sections',
         );
+        const details = Array.isArray(listed.pages) ? listed.pages : [];
+
+        const summaries: PageSummary[] = [];
+        for (const detail of details) {
+          // Seed the per-slug cache as well: a later Cerita visit renders from it without a
+          // second fetch.
+          pagesBySlug.value = { ...pagesBySlug.value, [detail.slug]: detail };
+          summaries.push({
+            id: detail.id,
+            slug: detail.slug,
+            title: detail.title,
+            sortOrder: detail.sortOrder,
+            chapterCount: detail.chapters?.length ?? 0,
+          });
+        }
 
         const flattened: SectionOption[] = [];
         for (const detail of details) {
-          if (!detail) continue;
           for (const chapter of detail.chapters ?? []) {
             for (const section of chapter.sections ?? []) {
               flattened.push({
