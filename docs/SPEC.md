@@ -172,6 +172,10 @@ the audit trail stays row-granular rather than collapsing into a single summary.
 final ones, because `UNIQUE (table_id, row_key)` is enforced per statement. The CMS does not
 expose `rowKey` editing today — this is an API-level capability.
 
+The Cerita view and the CMS keep separate caches over the same rows, so a successful save
+invalidates the Cerita entry for the affected section (both the old and the new section when a
+save moves a row), forcing the next Cerita visit to refetch rather than render pre-edit values.
+
 ## 5. Prose Rules
 
 Two tiers, by design intent:
