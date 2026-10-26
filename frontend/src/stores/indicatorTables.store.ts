@@ -146,6 +146,18 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
     return details.value[id] ?? null;
   }
 
+  /**
+   * Drops the Cerita view's cached copy of a section. `tables`/`details` and `bySectionId` are
+   * two caches over the same rows; leaving the per-section one in place after a save would make
+   * /cerita serve the pre-edit cells until a full reload.
+   */
+  function invalidateSectionCache(sectionId: string): void {
+    if (bySectionId.value[sectionId] === undefined) return;
+    const next = { ...bySectionId.value };
+    delete next[sectionId];
+    bySectionId.value = next;
+  }
+
   function replaceTable(updated: IndicatorTable): void {
     const index = tables.value.findIndex((item) => item.id === updated.id);
     if (index === -1) {
@@ -210,12 +222,17 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
       body.rows = payload.rows.map(({ rowId, patch }) => ({ id: rowId, ...patch }));
     }
 
+    const previousSectionId = details.value[id]?.sectionId;
     const data = await apiRequestJson<{ table: IndicatorTableDetail }>(
       `/api/indicator-tables/${encodeURIComponent(id)}`,
       { method: 'PATCH', body: JSON.stringify(body) },
     );
     details.value = { ...details.value, [data.table.id]: data.table };
     replaceTable(data.table);
+    invalidateSectionCache(data.table.sectionId);
+    if (previousSectionId && previousSectionId !== data.table.sectionId) {
+      invalidateSectionCache(previousSectionId);
+    }
     return data.table;
   }
 
