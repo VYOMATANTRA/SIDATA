@@ -188,6 +188,45 @@ describe('auth store', () => {
     expect(store.isAuthenticated).toBe(true)
   })
 
+  it('treats a non-auth 4xx refresh rejection as a denial so the user is asked to sign in', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input)
+        if (url.includes('csrf-token')) {
+          return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+        }
+        return { ok: false, status: 400, json: async () => ({}) } as Response
+      }),
+    )
+
+    const store = useAuthStore()
+    store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'token-1')
+
+    expect(await store.refreshSession()).toBe('denied')
+    expect(store.accessToken).toBeNull()
+    expect(store.isAuthenticated).toBe(false)
+  })
+
+  it('keeps a rate-limited (429) refresh retryable instead of logging the user out', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input)
+        if (url.includes('csrf-token')) {
+          return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+        }
+        return { ok: false, status: 429, json: async () => ({}) } as Response
+      }),
+    )
+
+    const store = useAuthStore()
+    store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'token-1')
+
+    expect(await store.refreshSession()).toBe('transient')
+    expect(store.accessToken).toBe('token-1')
+  })
+
   it('clearAuth resets the refresh-denied latch so initAuth can retry again', async () => {
     let refreshCalls = 0
     vi.stubGlobal(
