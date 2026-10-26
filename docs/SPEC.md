@@ -170,7 +170,9 @@ the audit trail stays row-granular rather than collapsing into a single summary.
 `rowKey` renames are validated against the final key set, not the current one, so a swap
 (`A→b`, `B→a`) succeeds; the service parks renamed rows on a temporary key before writing the
 final ones, because `UNIQUE (table_id, row_key)` is enforced per statement. The CMS does not
-expose `rowKey` editing today — this is an API-level capability.
+expose `rowKey` editing today — this is an API-level capability. Keys beginning with `tmp:` are
+reserved for that temporary parking and rejected by the row-key schema, so a real row can never
+occupy one.
 
 The Cerita view and the CMS keep separate caches over the same rows, so a successful save
 invalidates the Cerita entry for the affected section (both the old and the new section when a
