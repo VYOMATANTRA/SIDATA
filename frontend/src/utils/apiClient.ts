@@ -19,6 +19,14 @@ const MUTATING_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
 export const SESSION_EXPIRED_MESSAGE =
   'Sesi Anda berakhir. Silakan masuk kembali — isi formulir ini belum dikirim.';
 
+/**
+ * Shown when the 401 refresh could not even be attempted (network error) or the server failed
+ * (5xx). The session may still be valid, so telling the user to log in again would be wrong —
+ * and would push them to discard a draft for no reason.
+ */
+export const REFRESH_UNAVAILABLE_MESSAGE =
+  'Koneksi ke server bermasalah saat memperbarui sesi. Sesi Anda masih aktif — coba simpan lagi.';
+
 /** Error carrying the HTTP status, so callers can branch on 409/422 without string matching. */
 export class ApiError extends Error {
   status: number;
@@ -60,8 +68,10 @@ async function buildInit(init: RequestInit): Promise<RequestInit> {
  * strand the draft.
  *
  * The replay happens at most once: a second 401 is returned to the caller, which turns it into
- * `SESSION_EXPIRED_MESSAGE`. Requests that were sent without a token are never replayed — there
- * is no session to restore, so the 401 is the real answer.
+ * `SESSION_EXPIRED_MESSAGE`. A refresh that fails for a transient reason (network/5xx) throws
+ * `REFRESH_UNAVAILABLE_MESSAGE` instead, because that is not the session ending. Requests that
+ * were sent without a token are never replayed — there is no session to restore, so the 401 is
+ * the real answer.
  */
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const authStore = useAuthStore();
@@ -75,8 +85,14 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   if (authStore.accessToken === tokenUsed) {
     // `refreshSession()` shares one in-flight refresh with the router guard and with other
     // requests that 401'd at the same time, so a burst of saves triggers one refresh.
-    const refreshed = await authStore.refreshSession();
-    if (!refreshed) {
+    const outcome = await authStore.refreshSession();
+    if (outcome === 'transient') {
+      // The refresh endpoint failed, not the session: throwing here (rather than returning the
+      // original 401) keeps the caller from showing "please log in again" to a user who is
+      // still signed in.
+      throw new ApiError(REFRESH_UNAVAILABLE_MESSAGE, 503);
+    }
+    if (outcome === 'denied') {
       return response;
     }
   } else if (!authStore.accessToken) {
