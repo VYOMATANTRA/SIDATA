@@ -8,6 +8,16 @@ export interface UserProfile {
   role: string
 }
 
+/**
+ * Why a silent refresh did or did not restore the session.
+ *
+ * - `ok` — a new access token was issued.
+ * - `denied` — the server rejected the refresh token (401/403); the session is really over.
+ * - `transient` — the refresh could not be attempted (network) or the server failed (5xx).
+ *   The session may still be valid, so callers must not tell the user to log in again.
+ */
+export type RefreshOutcome = 'ok' | 'denied' | 'transient'
+
 const SETUP_TOKEN_KEY = 'sidata_setup_token'
 
 function getStoredSetupToken(): string | null {
@@ -50,7 +60,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Shares one in-flight request across concurrent initAuth() callers (e.g. router guards
   // firing on rapid navigations) instead of each firing its own csrf-token + refresh pair.
-  let inFlight: Promise<boolean> | null = null
+  let inFlight: Promise<RefreshOutcome> | null = null
 
   const isAuthenticated = computed(() => !!accessToken.value)
   const isAdmin = computed(() => user.value?.role?.toLowerCase() === 'admin')
@@ -88,7 +98,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function performInitAuth(): Promise<boolean> {
+  async function performInitAuth(): Promise<RefreshOutcome> {
     try {
       const csrfToken = await getCsrfToken()
       const res = await fetch('/api/auth/refresh', {
@@ -103,24 +113,25 @@ export const useAuthStore = defineStore('auth', () => {
         if (res.status === 401 || res.status === 403) {
           clearAuth(mustChangePassword.value)
           refreshDenied.value = true
+          return 'denied'
         }
         // A 5xx (or any other transient failure) must not destroy a session that may still be
         // valid: keep the in-memory token and let the next navigation or request retry.
-        return false
+        return 'transient'
       }
 
       const data = await res.json()
       if (data.accessToken) {
         setAuth(data.user || { id: '', email: '', role: '' }, data.accessToken)
-        return true
+        return 'ok'
       }
 
       clearAuth(mustChangePassword.value)
-      return false
+      return 'denied'
     } catch {
       // Network failure: transient, exactly like a 5xx. Clearing here would log the user out
       // of a session the server never rejected.
-      return false
+      return 'transient'
     } finally {
       isInitialized.value = true
     }
@@ -136,9 +147,9 @@ export const useAuthStore = defineStore('auth', () => {
    * and a definitive 401/403 latches `refreshDenied` so a dead session is not hammered. Network
    * errors and 5xx stay retryable.
    */
-  async function refreshSession(): Promise<boolean> {
+  async function refreshSession(): Promise<RefreshOutcome> {
     if (refreshDenied.value) {
-      return false
+      return 'denied'
     }
 
     if (!inFlight) {
@@ -159,7 +170,7 @@ export const useAuthStore = defineStore('auth', () => {
       return true
     }
 
-    return refreshSession()
+    return (await refreshSession()) === 'ok'
   }
 
   return {
