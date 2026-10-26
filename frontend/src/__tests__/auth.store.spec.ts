@@ -227,6 +227,24 @@ describe('auth store', () => {
     expect(store.accessToken).toBe('token-1')
   })
 
+  it('treats a missing CSRF token as transient and never calls refresh', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes('csrf-token')) {
+        return { ok: false, status: 503, json: async () => ({}) } as Response
+      }
+      throw new Error(`refresh must not be called without a CSRF token: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const store = useAuthStore()
+    store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'token-1')
+
+    expect(await store.refreshSession()).toBe('transient')
+    expect(store.accessToken).toBe('token-1')
+    expect(store.isAuthenticated).toBe(true)
+  })
+
   it('clearAuth resets the refresh-denied latch so initAuth can retry again', async () => {
     let refreshCalls = 0
     vi.stubGlobal(
