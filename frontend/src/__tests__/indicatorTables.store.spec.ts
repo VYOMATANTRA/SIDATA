@@ -264,6 +264,56 @@ describe('indicator tables store (public per-section reads)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('drops the section cache after a save so the Cerita view refetches', async () => {
+    let male = 120;
+
+    globalThis.fetch = vi.fn<typeof fetch>(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
+        if (url.startsWith('/api/indicator-tables?sectionId=sec-1')) {
+          return json({ tables: [tableSummary] });
+        }
+        if (url === '/api/indicator-tables/tbl-1') {
+          if (init?.method === 'PATCH') {
+            male = 200;
+            return json({
+              table: {
+                ...tableDetail,
+                rows: [{ ...tableDetail.rows[0], male }],
+                totals: { ...tableDetail.totals, male },
+              },
+            });
+          }
+          return json({
+            table: {
+              ...tableDetail,
+              rows: [{ ...tableDetail.rows[0], male }],
+              totals: { ...tableDetail.totals, male },
+            },
+          });
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      },
+    ) as typeof fetch;
+
+    const store = useIndicatorTablesStore();
+
+    const before = await store.fetchBySectionId('sec-1');
+    expect(before[0]?.rows[0]?.male).toBe(120);
+
+    await store.saveTableDetail('tbl-1', {
+      table: {},
+      rows: [{ rowId: 'row-1', patch: { male: 200 } }],
+    });
+
+    expect(store.detailById('tbl-1')?.rows[0]?.male).toBe(200);
+    expect(store.bySectionId['sec-1']).toBeUndefined();
+
+    const after = await store.fetchBySectionId('sec-1');
+    expect(after[0]?.rows[0]?.male).toBe(200);
+  });
+
   it('records the error against that sectionId, not globally, when the list request fails', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
       ok: false,
