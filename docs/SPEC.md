@@ -62,7 +62,9 @@ Notes:
   Bank Sampah Unit starts with Bank Sampah Unit, Program Eco Boba and Booklet Eco Boba chapters.
   Seeding never overwrites titles or ordering an editor has since changed.
 - `GET /api/pages` and `GET /api/pages/:slug` expose the hierarchy publicly (page → chapters →
-  sections, each ordered by `sort_order`).
+  sections, each ordered by `sort_order`). `GET /api/pages?include=sections` returns every page
+  with its chapters and sections in one request (one nested query), so a caller that needs all
+  section labels — the CMS hierarchy — does not fire one detail request per page.
 - `POST /api/pages`, `DELETE /api/pages/:slug`, and `PUT /api/pages/reorder` manage the Cerita page list
   (restricted to Editor and Admin roles, audited via `audit_logs`). Reordering updates page `sort_order`
   values in a single atomic database transaction with deterministic lock ordering to prevent deadlocks.
