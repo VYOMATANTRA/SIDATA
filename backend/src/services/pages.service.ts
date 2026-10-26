@@ -151,6 +151,45 @@ export interface PageDetailDTO {
   updatedAt: string;
 }
 
+interface PageRowWithChapters {
+  id: string;
+  slug: string;
+  title: string;
+  sortOrder: number;
+  createdAt: Date;
+  updatedAt: Date;
+  chapters: Array<{
+    id: string;
+    slug: string;
+    number: string | null;
+    title: string;
+    sortOrder: number;
+    sections: SectionDTO[];
+  }>;
+}
+
+const toPageDetail = (page: PageRowWithChapters): PageDetailDTO => ({
+  id: page.id,
+  slug: page.slug,
+  title: page.title,
+  sortOrder: page.sortOrder,
+  chapters: page.chapters.map((chapter) => ({
+    id: chapter.id,
+    slug: chapter.slug,
+    number: chapter.number,
+    title: chapter.title,
+    sortOrder: chapter.sortOrder,
+    sections: chapter.sections.map((section) => ({
+      id: section.id,
+      slug: section.slug,
+      title: section.title,
+      sortOrder: section.sortOrder,
+    })),
+  })),
+  createdAt: page.createdAt.toISOString(),
+  updatedAt: page.updatedAt.toISOString(),
+});
+
 export const getPages = async (): Promise<PageSummaryDTO[]> => {
   const pages = await prisma.page.findMany({
     orderBy: SORT_ORDER,
@@ -158,6 +197,25 @@ export const getPages = async (): Promise<PageSummaryDTO[]> => {
   });
 
   return pages.map(toPageSummary);
+};
+
+/**
+ * The whole page → chapter → section tree in one query, for callers that need every section
+ * label at once (the CMS hierarchy). Same DTO shape as `getPageBySlug`, so a caller can cache
+ * each entry and serve a later per-slug read from it.
+ */
+export const getPagesWithSections = async (): Promise<PageDetailDTO[]> => {
+  const pages = await prisma.page.findMany({
+    orderBy: SORT_ORDER,
+    include: {
+      chapters: {
+        orderBy: SORT_ORDER,
+        include: { sections: { orderBy: SORT_ORDER } },
+      },
+    },
+  });
+
+  return pages.map(toPageDetail);
 };
 
 export const getPageBySlug = async (slug: string): Promise<PageDetailDTO | null> => {
@@ -175,27 +233,7 @@ export const getPageBySlug = async (slug: string): Promise<PageDetailDTO | null>
     return null;
   }
 
-  return {
-    id: page.id,
-    slug: page.slug,
-    title: page.title,
-    sortOrder: page.sortOrder,
-    chapters: page.chapters.map((chapter) => ({
-      id: chapter.id,
-      slug: chapter.slug,
-      number: chapter.number,
-      title: chapter.title,
-      sortOrder: chapter.sortOrder,
-      sections: chapter.sections.map((section) => ({
-        id: section.id,
-        slug: section.slug,
-        title: section.title,
-        sortOrder: section.sortOrder,
-      })),
-    })),
-    createdAt: page.createdAt.toISOString(),
-    updatedAt: page.updatedAt.toISOString(),
-  };
+  return toPageDetail(page);
 };
 
 export const createPage = async (
