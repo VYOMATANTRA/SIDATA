@@ -101,6 +101,12 @@ export const useAuthStore = defineStore('auth', () => {
   async function performInitAuth(): Promise<RefreshOutcome> {
     try {
       const csrfToken = await getCsrfToken()
+      if (!csrfToken) {
+        // getCsrfToken() collapses a network/5xx failure into ''. Sending an empty header would
+        // make /refresh answer 403, which this function reads as a dead session — so a brief
+        // hiccup on the CSRF endpoint would log the user out. Treat it as transient instead.
+        return 'transient'
+      }
       const res = await fetch('/api/auth/refresh', {
         method: 'POST',
         credentials: 'include',
