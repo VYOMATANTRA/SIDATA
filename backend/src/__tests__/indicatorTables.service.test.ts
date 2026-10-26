@@ -291,6 +291,21 @@ describe('indicatorTables.service createIndicatorTable', () => {
     assert.equal(txCalls.length, 0);
   });
 
+  it('rejects a rowKey using the reserved tmp: prefix with 400', async () => {
+    await assertServiceError(
+      createIndicatorTable(
+        tablePayload({
+          rows: [{ rowKey: 'tmp:row-1', label: 'A', male: 1, female: 1 }],
+        }),
+        ACTOR,
+        CONTEXT,
+      ),
+      400,
+      'dicadangkan',
+    );
+    assert.equal(txCalls.length, 0);
+  });
+
   it('returns 404 when the section does not exist and writes no audit row', async () => {
     sectionImpl['findUnique'] = async () => null;
 
@@ -684,6 +699,23 @@ describe('indicatorTables.service updateIndicatorTable', () => {
       400,
       'duplikat',
     );
+  });
+
+  it('rejects a rename to the reserved tmp: prefix with 400', async () => {
+    rowImpl['findMany'] = async () => [cellRow()];
+
+    await assertServiceError(
+      updateIndicatorTable(
+        'tbl-1',
+        { rows: [{ id: 'row-1', rowKey: 'tmp:row-1' }] },
+        ACTOR,
+        CONTEXT,
+      ),
+      400,
+      'dicadangkan',
+    );
+    assert.equal(txRowCalls['update']?.length ?? 0, 0);
+    assert.equal(auditRows.length, 0);
   });
 
   it('treats unchanged nested rows as a no-op without an audit row', async () => {
