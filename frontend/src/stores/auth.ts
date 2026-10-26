@@ -110,13 +110,24 @@ export const useAuthStore = defineStore('auth', () => {
       })
 
       if (!res.ok) {
-        if (res.status === 401 || res.status === 403) {
+        // 401/403 is the server saying the session is dead. Every other 4xx (400 malformed,
+        // CSRF rejection) means the refresh will keep failing the same way, so it is also a
+        // denial — otherwise the user retries forever and is never asked to sign in again.
+        // 408 (timeout) and 429 (rate limited) are failures of this attempt, not of the
+        // session, and stay transient so a busy IP is not logged out.
+        const denied =
+          res.status === 401 ||
+          res.status === 403 ||
+          (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429);
+
+        if (denied) {
           clearAuth(mustChangePassword.value)
           refreshDenied.value = true
           return 'denied'
         }
-        // A 5xx (or any other transient failure) must not destroy a session that may still be
-        // valid: keep the in-memory token and let the next navigation or request retry.
+
+        // A 5xx (or a network blip) must not destroy a session that may still be valid: keep
+        // the in-memory token and let the next navigation or request retry.
         return 'transient'
       }
 
