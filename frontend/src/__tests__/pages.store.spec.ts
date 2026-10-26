@@ -31,10 +31,10 @@ describe('pages store (CMS hierarchy)', () => {
     vi.restoreAllMocks();
   });
 
-  it('flattens the page hierarchy into a section lookup with breadcrumbs', async () => {
-    globalThis.fetch = vi.fn<typeof fetch>(async (input) => {
+  it('loads the whole hierarchy in one request and flattens it into a section lookup', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
-      if (url === '/api/pages') {
+      if (url === '/api/pages?include=sections') {
         return json({
           pages: [
             {
@@ -42,39 +42,32 @@ describe('pages store (CMS hierarchy)', () => {
               slug: 'kependudukan',
               title: 'Kependudukan',
               sortOrder: 0,
-              chapterCount: 1,
+              chapters: [
+                {
+                  id: 'c1',
+                  slug: 'jumlah-penduduk',
+                  number: null,
+                  title: 'Jumlah Penduduk',
+                  sortOrder: 0,
+                  sections: [{ id: 's1', slug: 'ringkasan', title: 'Ringkasan', sortOrder: 0 }],
+                },
+              ],
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
             },
           ],
         });
       }
-      if (url === '/api/pages/kependudukan') {
-        return json({
-          page: {
-            id: 'p1',
-            slug: 'kependudukan',
-            title: 'Kependudukan',
-            sortOrder: 0,
-            chapters: [
-              {
-                id: 'c1',
-                slug: 'jumlah-penduduk',
-                number: null,
-                title: 'Jumlah Penduduk',
-                sortOrder: 0,
-                sections: [{ id: 's1', slug: 'ringkasan', title: 'Ringkasan', sortOrder: 0 }],
-              },
-            ],
-            createdAt: '2026-01-01T00:00:00.000Z',
-            updatedAt: '2026-01-01T00:00:00.000Z',
-          },
-        });
-      }
       throw new Error(`unexpected fetch: ${url}`);
-    }) as typeof fetch;
+    });
+
+    globalThis.fetch = fetchMock as typeof fetch;
 
     const store = usePagesStore();
     await store.fetchHierarchy();
 
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/pages?include=sections');
     expect(store.sections).toHaveLength(1);
     expect(store.breadcrumbParts('s1')).toEqual(['Kependudukan', 'Jumlah Penduduk', 'Ringkasan']);
     expect(store.pageTitleFor('s1')).toBe('Kependudukan');
@@ -85,33 +78,31 @@ describe('pages store (CMS hierarchy)', () => {
   it('omits a null section title from the breadcrumb', async () => {
     globalThis.fetch = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
-      if (url === '/api/pages') {
+      if (url === '/api/pages?include=sections') {
         return json({
           pages: [
-            { id: 'p1', slug: 'pendidikan', title: 'Pendidikan', sortOrder: 0, chapterCount: 1 },
+            {
+              id: 'p1',
+              slug: 'pendidikan',
+              title: 'Pendidikan',
+              sortOrder: 0,
+              chapters: [
+                {
+                  id: 'c1',
+                  slug: 'tingkat-pendidikan',
+                  number: null,
+                  title: 'Tingkat Pendidikan',
+                  sortOrder: 0,
+                  sections: [{ id: 's1', slug: 'ringkasan', title: null, sortOrder: 0 }],
+                },
+              ],
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
           ],
         });
       }
-      return json({
-        page: {
-          id: 'p1',
-          slug: 'pendidikan',
-          title: 'Pendidikan',
-          sortOrder: 0,
-          chapters: [
-            {
-              id: 'c1',
-              slug: 'tingkat-pendidikan',
-              number: null,
-              title: 'Tingkat Pendidikan',
-              sortOrder: 0,
-              sections: [{ id: 's1', slug: 'ringkasan', title: null, sortOrder: 0 }],
-            },
-          ],
-          createdAt: '2026-01-01T00:00:00.000Z',
-          updatedAt: '2026-01-01T00:00:00.000Z',
-        },
-      });
+      throw new Error(`unexpected fetch: ${url}`);
     }) as typeof fetch;
 
     const store = usePagesStore();
@@ -120,56 +111,36 @@ describe('pages store (CMS hierarchy)', () => {
     expect(store.breadcrumbParts('s1')).toEqual(['Pendidikan', 'Tingkat Pendidikan']);
   });
 
-  it('reuses a page already cached by the public read instead of refetching it', async () => {
-    let detailFetches = 0;
-
-    globalThis.fetch = vi.fn<typeof fetch>(async (input) => {
+  it('seeds the per-slug cache so a later Cerita read needs no second request', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
-      if (url === '/api/pages') {
-        return json({
-          pages: [
-            {
-              id: 'p1',
-              slug: 'kependudukan',
-              title: 'Kependudukan',
-              sortOrder: 0,
-              chapterCount: 1,
-            },
-          ],
-        });
-      }
-      if (url === '/api/pages/kependudukan') {
-        detailFetches += 1;
-        return json({
-          page: {
-            id: 'p1',
-            slug: 'kependudukan',
-            title: 'Kependudukan',
-            sortOrder: 0,
-            chapters: [
-              {
-                id: 'c1',
-                slug: 'jumlah-penduduk',
-                number: null,
-                title: 'Jumlah Penduduk',
-                sortOrder: 0,
-                sections: [{ id: 's1', slug: 'ringkasan', title: null, sortOrder: 0 }],
-              },
-            ],
-            createdAt: '2026-01-01T00:00:00.000Z',
-            updatedAt: '2026-01-01T00:00:00.000Z',
-          },
-        });
+      if (url === '/api/pages?include=sections') {
+        return json({ pages: [samplePage] });
       }
       throw new Error(`unexpected fetch: ${url}`);
     }) as typeof fetch;
+    globalThis.fetch = fetchMock;
 
     const store = usePagesStore();
-    await store.fetchPageBySlug('kependudukan');
+    await store.fetchHierarchy();
+    const page = await store.fetchPageBySlug('kependudukan');
+
+    expect(page?.id).toBe('page-1');
+    expect(store.pagesBySlug['kependudukan']?.id).toBe('page-1');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(store.sections.map((section) => section.sectionId)).toEqual(['sec-1']);
+  });
+
+  it('records an error when the hierarchy request fails', async () => {
+    globalThis.fetch = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(json({ error: 'boom' }, false, 500)) as typeof fetch;
+
+    const store = usePagesStore();
     await store.fetchHierarchy();
 
-    expect(detailFetches).toBe(1);
-    expect(store.sections.map((section) => section.sectionId)).toEqual(['s1']);
+    expect(store.hierarchyError).toBe('boom');
+    expect(store.isLoaded).toBe(false);
   });
 
   it('falls back to a neutral label for unknown sections', () => {
@@ -179,55 +150,6 @@ describe('pages store (CMS hierarchy)', () => {
     expect(store.pageTitleFor('missing')).toBeNull();
     expect(store.labelFor('missing')).toBe('Tanpa bagian');
     expect(store.labelFor(null)).toBe('Tanpa bagian');
-  });
-
-  it('keeps the rest of the hierarchy when one page detail fails', async () => {
-    globalThis.fetch = vi.fn<typeof fetch>(async (input) => {
-      const url = String(input);
-      if (url === '/api/pages') {
-        return json({
-          pages: [
-            {
-              id: 'p1',
-              slug: 'kependudukan',
-              title: 'Kependudukan',
-              sortOrder: 0,
-              chapterCount: 1,
-            },
-            { id: 'p2', slug: 'rusak', title: 'Rusak', sortOrder: 1, chapterCount: 1 },
-          ],
-        });
-      }
-      if (url === '/api/pages/rusak') {
-        return json({ error: 'Terjadi kesalahan internal server' }, false, 500);
-      }
-      return json({
-        page: {
-          id: 'p1',
-          slug: 'kependudukan',
-          title: 'Kependudukan',
-          sortOrder: 0,
-          chapters: [
-            {
-              id: 'c1',
-              slug: 'jumlah-penduduk',
-              number: null,
-              title: 'Jumlah Penduduk',
-              sortOrder: 0,
-              sections: [{ id: 's1', slug: 'ringkasan', title: 'Ringkasan', sortOrder: 0 }],
-            },
-          ],
-          createdAt: '2026-01-01T00:00:00.000Z',
-          updatedAt: '2026-01-01T00:00:00.000Z',
-        },
-      });
-    }) as typeof fetch;
-
-    const store = usePagesStore();
-    await store.fetchHierarchy();
-
-    expect(store.sections.map((section) => section.sectionId)).toEqual(['s1']);
-    expect(store.isLoaded).toBe(true);
   });
 });
 
