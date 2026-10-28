@@ -71,12 +71,16 @@ function createDraft(indicator: Indicator): DraftState {
   };
 }
 
+// Drafts belong to an indicator, not to a snapshot of it. Keying the watcher on the id means a
+// background refetch of the same indicator (a retry, a store refresh) cannot wipe unsaved input,
+// while opening a different indicator still resets. TableIndicatorForm does the same.
 watch(
-  () => props.indicator,
-  (next) => {
-    draft.value = createDraft(next);
+  () => props.indicator.id,
+  () => {
+    draft.value = createDraft(props.indicator);
     submitted.value = false;
   },
+  { immediate: true },
 );
 
 const fieldId = (name: string): string => `${props.idPrefix}-${name}`;
