@@ -42,11 +42,13 @@ describe('PublikasiView', () => {
     expect(wrapper.text()).toContain('Manggar dalam Angka 2026');
   });
 
-  it('marks unavailable documents clearly without rendering fake download links', () => {
+  it('marks unavailable documents clearly without rendering fake download links or status live regions', () => {
     const { wrapper } = mountPublikasiView();
 
-    expect(wrapper.findAll('[data-test="publication-status"]')).toHaveLength(4);
-    expect(wrapper.findAll('[data-test="publication-status"]')[0]?.text()).toBe('Segera hadir');
+    const statusBadges = wrapper.findAll('[data-test="publication-status"]');
+    expect(statusBadges).toHaveLength(4);
+    expect(statusBadges[0]?.text()).toBe('Segera hadir');
+    expect(wrapper.findAll('[role="status"]')).toHaveLength(0);
     expect(wrapper.text()).toContain('Tautan unduhan akan ditampilkan setelah dokumen resmi tersedia.');
     expect(wrapper.findAll('a[download]')).toHaveLength(0);
     expect(wrapper.findAll('a[href$=".pdf"]')).toHaveLength(0);

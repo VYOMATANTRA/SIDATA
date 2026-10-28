@@ -91,7 +91,6 @@ const publications = [
 
               <span
                 class="inline-flex w-fit items-center rounded-btn border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700"
-                role="status"
                 data-test="publication-status"
               >
                 Segera hadir
