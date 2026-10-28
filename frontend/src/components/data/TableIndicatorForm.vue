@@ -124,11 +124,14 @@ function validateLength(value: string, max: number, label: string): string | und
   return value.trim().length > max ? `${label} maksimal ${max} karakter.` : undefined;
 }
 
-/** Mirrors the service's `nonnegInt` cell rule (integer, 0..2147483647). */
-function validateCell(value: string, required: boolean, label: string): string | undefined {
+/**
+ * Mirrors the service's `nonnegInt` cell rule (integer, 0..2147483647). A blank cell is valid:
+ * it is stored as `null` ("not recorded yet"), not zero.
+ */
+function validateCell(value: string, label: string): string | undefined {
   const trimmed = value.trim();
   if (trimmed === '') {
-    return required ? `${label} wajib diisi.` : undefined;
+    return undefined;
   }
   if (!/^\d+$/.test(trimmed)) {
     return `${label} harus berupa bilangan bulat 0 atau lebih.`;
@@ -174,13 +177,13 @@ const errorEntries = computed<ErrorEntry[]>(() => {
         validateLength(draft.label, 255, 'Label baris'),
     );
     if (sexSplit.value) {
-      push(rowFieldId(row.id, 'male'), validateCell(draft.male, true, `Laki-laki (${rowLabel})`));
+      push(rowFieldId(row.id, 'male'), validateCell(draft.male, `Laki-laki (${rowLabel})`));
       push(
         rowFieldId(row.id, 'female'),
-        validateCell(draft.female, true, `Perempuan (${rowLabel})`),
+        validateCell(draft.female, `Perempuan (${rowLabel})`),
       );
     } else {
-      push(rowFieldId(row.id, 'total'), validateCell(draft.total, true, `Total (${rowLabel})`));
+      push(rowFieldId(row.id, 'total'), validateCell(draft.total, `Total (${rowLabel})`));
     }
   }
 
@@ -216,8 +219,10 @@ function derivedRowTotal(row: IndicatorTableRow): number | null {
   if (!draft) return row.total;
   const male = parseCell(draft.male);
   const female = parseCell(draft.female);
-  if (male === null && female === null) return null;
-  return (male ?? 0) + (female ?? 0);
+  // A total built from only one sex would understate the row on a public page — show nothing
+  // until both parts are filled in.
+  if (male === null || female === null) return null;
+  return male + female;
 }
 
 function buildTablePatch(): IndicatorTablePatch {
@@ -383,6 +388,8 @@ function handleSubmit(): void {
           Total tiap baris dihitung dari laki-laki + perempuan dan tidak disimpan terpisah.
         </template>
         <template v-else>Setiap baris memakai satu nilai total.</template>
+        Sel angka boleh dikosongkan bila data belum tersedia; sel kosong disimpan sebagai tidak
+        ada data, bukan nol.
       </p>
 
       <div class="mt-3 overflow-x-auto rounded-card border border-slate-200">
