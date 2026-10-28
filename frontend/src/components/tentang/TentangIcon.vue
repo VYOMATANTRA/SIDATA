@@ -1,13 +1,6 @@
 <script setup lang="ts">
 export type TentangIconName =
-  | 'coast'
-  | 'people'
-  | 'leaf'
-  | 'chart'
-  | 'document'
-  | 'map'
-  | 'system'
-  | 'info';
+  'coast' | 'people' | 'leaf' | 'chart' | 'document' | 'map' | 'system' | 'info';
 
 const ICON_PATHS: Record<TentangIconName, string[]> = {
   coast: [
@@ -45,10 +38,6 @@ withDefaults(defineProps<{ name?: TentangIconName }>(), { name: 'info' });
     aria-hidden="true"
     focusable="false"
   >
-    <path
-      v-for="(path, index) in ICON_PATHS[name] ?? ICON_PATHS.info"
-      :key="index"
-      :d="path"
-    />
+    <path v-for="(path, index) in ICON_PATHS[name]" :key="index" :d="path" />
   </svg>
 </template>

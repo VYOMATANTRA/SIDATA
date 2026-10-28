@@ -976,6 +976,39 @@ describe('indicators.service getIndicatorById', () => {
     assert.equal(indicatorByIdCache.has('ind-1'), false);
     assert.equal(indicatorByIdCache.has('jumlah-penduduk'), false);
   });
+
+  it('drops the slug cache entry when invalidating by id only', async () => {
+    let dbCallCount = 0;
+    indicatorImpl['findUnique'] = async (args: AnyRecord) => {
+      dbCallCount++;
+      const where = args['where'] as { id?: string; slug?: string };
+      if (where.id === 'ind-1' || where.slug === 'jumlah-penduduk') {
+        return indicatorRow({ id: 'ind-1', slug: 'jumlah-penduduk' });
+      }
+      return null;
+    };
+
+    // 1. Read by slug first (populates cache only under 'jumlah-penduduk')
+    const first = await getIndicatorById('jumlah-penduduk');
+    assert.equal(first?.id, 'ind-1');
+    assert.equal(dbCallCount, 2); // 1 id query (miss) + 1 slug query (hit)
+    assert.equal(indicatorByIdCache.has('jumlah-penduduk'), true);
+    assert.equal(indicatorByIdCache.has('ind-1'), false);
+
+    // Reading again hits cache without querying DB
+    await getIndicatorById('jumlah-penduduk');
+    assert.equal(dbCallCount, 2);
+
+    // 2. Invalidate by ID only (no slug parameter provided)
+    invalidateIndicatorsCache('ind-1');
+    assert.equal(indicatorByIdCache.has('jumlah-penduduk'), false);
+    assert.equal(indicatorByIdCache.has('ind-1'), false);
+
+    // 3. Next slug read must go back to the database
+    const second = await getIndicatorById('jumlah-penduduk');
+    assert.equal(second?.id, 'ind-1');
+    assert.equal(dbCallCount, 4); // 2 more queries since cache was evicted
+  });
 });
 
 // ---------------------------------------------------------------------------

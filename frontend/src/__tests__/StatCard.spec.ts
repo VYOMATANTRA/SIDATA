@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
-import StatCard from '@/components/common/StatCard.vue';
+import StatCard, { type StatItem } from '@/components/common/StatCard.vue';
 
 describe('StatCard.vue', () => {
   it('renders empty state when no props are passed', () => {
@@ -15,7 +15,7 @@ describe('StatCard.vue', () => {
   });
 
   it('renders custom items array dynamically', () => {
-    const customStats = [
+    const customStats: StatItem[] = [
       { icon: 'person', value: '12.500', label: 'Warga Terdaftar' },
       { icon: 'house', value: '45', label: 'RT Aktif' },
     ];
@@ -53,7 +53,7 @@ describe('StatCard.vue', () => {
   });
 
   it('implements semantic description list markup (dl, dt, dd) per accessibility guidelines', () => {
-    const sampleStats = [
+    const sampleStats: StatItem[] = [
       { icon: 'person', value: '53.098', label: 'Penduduk' },
       { icon: 'house', value: '100', label: 'Rukun Tetangga' },
       { icon: 'density', value: '2 jiwa/km²', label: 'Kepadatan Penduduk' },
@@ -166,7 +166,7 @@ describe('StatCard.vue', () => {
   });
 
   it('applies responsive 2x2 flexbox layout classes on mobile and tablet for 4 items', () => {
-    const fourStats = [
+    const fourStats: StatItem[] = [
       { icon: 'house', value: '100', label: 'Rukun Tetangga terdaftar' },
       { icon: 'density', value: 'Balikpapan Timur', label: 'Kecamatan, Kota Balikpapan' },
       { icon: 'ratio', value: 'Pesisir & Dataran', label: 'Potensi pantai & pertanian' },
