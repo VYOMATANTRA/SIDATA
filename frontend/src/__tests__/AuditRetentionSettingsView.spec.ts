@@ -82,12 +82,69 @@ describe('AuditRetentionSettingsView Accessibility & Markup', () => {
     expect(skipLink.exists()).toBe(true);
     expect(skipLink.text()).toContain('Lewati ke konten utama');
   });
+
+  it('renders technical terms with <em> tags instead of literal markdown asterisks in header description', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        retention: { info: 30, warning: 60, critical: 90 },
+      }),
+    } as Response);
+
+    const router = createTestRouter();
+    const wrapper = mount(AuditRetentionSettingsView, {
+      global: { plugins: [router] },
+    });
+    await flushPromises();
+
+    const header = wrapper.find('header');
+    expect(header.exists()).toBe(true);
+    const headerHtml = header.html();
+
+    // Literal markdown asterisks should not show on screen
+    expect(headerHtml).not.toContain('*severity*');
+    expect(headerHtml).not.toContain('*critical*');
+
+    // Emphasized HTML tags should be used
+    const emTags = header.findAll('em');
+    const emTexts = emTags.map((em) => em.text());
+    expect(emTexts).toContain('severity');
+    expect(emTexts).toContain('critical');
+  });
 });
 
 describe('AuditRetentionSettingsView Client-Side Validation & Error Handling (Non-Happy Path)', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.restoreAllMocks();
+  });
+
+  it('renders dash placeholder "—" in duration badge when number input is cleared', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        retention: { info: 30, warning: 60, critical: 90 },
+      }),
+    } as Response);
+
+    const router = createTestRouter();
+    const wrapper = mount(AuditRetentionSettingsView, {
+      global: { plugins: [router] },
+    });
+    await flushPromises();
+
+    const infoInput = wrapper.find('input#retention-info');
+    const badge = wrapper.find('[data-test="badge-info"]');
+    expect(badge.text()).toBe('1 Bulan (30 hari)');
+
+    // Clear input
+    await infoInput.setValue('');
+
+    // Must show dash '—', and not glitch with "0 Tahun ( hari)"
+    expect(badge.text()).toBe('—');
+    expect(badge.text()).not.toContain('0 Tahun');
   });
 
   it('blocks submit and displays validation error when info > warning (0 = infinite)', async () => {

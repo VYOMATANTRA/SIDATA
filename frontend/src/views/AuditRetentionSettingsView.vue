@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router';
 import {
   useAuditRetentionStore,
   validateRetentionPolicy,
+  formatDurationLabel,
   MAX_RETENTION_DAYS,
   type AuditRetentionPolicy,
 } from '../stores/auditRetention.store';
@@ -34,13 +35,6 @@ const validationError = computed(() => {
 const isSubmitDisabled = computed(() => {
   return !isLoaded.value || store.isSaving || store.isLoading || validationError.value !== null;
 });
-
-function formatDurationLabel(days: number): string {
-  if (days === 0) return 'Selamanya (Keep Forever)';
-  if (days % 365 === 0) return `${days / 365} Tahun (${days} hari)`;
-  if (days % 30 === 0) return `${days / 30} Bulan (${days} hari)`;
-  return `${days} Hari`;
-}
 
 function syncFormFromStore() {
   form.value = {
@@ -133,9 +127,9 @@ function handleReset() {
             </span>
           </div>
           <p class="mt-1 max-w-2xl text-sm leading-relaxed text-slate-400">
-            Atur masa penyimpanan log audit sistem berdasarkan tingkat keparahan (*severity*).
-            Perubahan kebijakan retensi akan dicatat pada riwayat audit sebagai kejadian
-            berkepentingan tinggi (*critical*).
+            Atur masa penyimpanan log audit sistem berdasarkan tingkat keparahan
+            (<em>severity</em>). Perubahan kebijakan retensi akan dicatat pada riwayat audit sebagai
+            kejadian berkepentingan tinggi (<em>critical</em>).
           </p>
         </div>
 

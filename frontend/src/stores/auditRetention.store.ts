@@ -82,6 +82,24 @@ export function parseRetention(raw: unknown): AuditRetentionPolicy | null {
   return policy;
 }
 
+/**
+ * Formats a retention period (in days) into human-readable Indonesian text:
+ * - Returns '—' for non-number, NaN, nullish, or negative inputs.
+ * - Returns 'Selamanya (Keep Forever)' for 0.
+ * - Multiples of 365 -> 'X Tahun (Y hari)'.
+ * - Multiples of 30 -> 'X Bulan (Y hari)'.
+ * - Other positive integers -> 'X Hari'.
+ */
+export function formatDurationLabel(days: number | unknown): string {
+  if (typeof days !== 'number' || Number.isNaN(days) || days < 0) {
+    return '—';
+  }
+  if (days === 0) return 'Selamanya (Keep Forever)';
+  if (days % 365 === 0) return `${days / 365} Tahun (${days} hari)`;
+  if (days % 30 === 0) return `${days / 30} Bulan (${days} hari)`;
+  return `${days} Hari`;
+}
+
 export const useAuditRetentionStore = defineStore('auditRetention', () => {
   const retention = ref<AuditRetentionPolicy>({
     info: 0,

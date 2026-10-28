@@ -4,6 +4,7 @@ import {
   useAuditRetentionStore,
   validateRetentionPolicy,
   parseRetention,
+  formatDurationLabel,
   type AuditRetentionPolicy,
 } from '../stores/auditRetention.store';
 import { useAuthStore } from '../stores/auth';
@@ -300,5 +301,38 @@ describe('useAuditRetentionStore', () => {
     expect(store.error).toMatch(/tidak valid/i);
     expect(store.retention).toEqual({ info: 10, warning: 20, critical: 30 });
     expect(store.isSaving).toBe(false);
+  });
+});
+
+describe('formatDurationLabel helper', () => {
+  it('returns "—" for non-number, NaN, nullish, or negative inputs', () => {
+    expect(formatDurationLabel('')).toBe('—');
+    expect(formatDurationLabel(NaN)).toBe('—');
+    expect(formatDurationLabel(null)).toBe('—');
+    expect(formatDurationLabel(undefined)).toBe('—');
+    expect(formatDurationLabel('365')).toBe('—');
+    expect(formatDurationLabel(-1)).toBe('—');
+    expect(formatDurationLabel(-365)).toBe('—');
+  });
+
+  it('returns "Selamanya (Keep Forever)" for 0', () => {
+    expect(formatDurationLabel(0)).toBe('Selamanya (Keep Forever)');
+  });
+
+  it('formats multiples of 365 as years and days', () => {
+    expect(formatDurationLabel(365)).toBe('1 Tahun (365 hari)');
+    expect(formatDurationLabel(730)).toBe('2 Tahun (730 hari)');
+  });
+
+  it('formats multiples of 30 as months and days', () => {
+    expect(formatDurationLabel(30)).toBe('1 Bulan (30 hari)');
+    expect(formatDurationLabel(60)).toBe('2 Bulan (60 hari)');
+    expect(formatDurationLabel(90)).toBe('3 Bulan (90 hari)');
+  });
+
+  it('formats other positive days count as days', () => {
+    expect(formatDurationLabel(1)).toBe('1 Hari');
+    expect(formatDurationLabel(15)).toBe('15 Hari');
+    expect(formatDurationLabel(45)).toBe('45 Hari');
   });
 });
