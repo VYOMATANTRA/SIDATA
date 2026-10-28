@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import TentangKelurahanManggarView from '../views/TentangKelurahanManggarView.vue';
-import { useIndicatorsStore } from '../stores/indicators.store';
+import { useIndicatorsStore, type IndicatorDto } from '../stores/indicators.store';
 
 function mountView() {
   const pinia = createPinia();
@@ -72,20 +72,29 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
   it('shows the Sekilas Manggar population figure when indicator is available', async () => {
     const { pinia, router } = mountView();
     const indicatorsStore = useIndicatorsStore();
-    indicatorsStore.indicators = [
-      {
-        id: 'ind-1',
-        sectionId: 'sec-1',
-        slug: 'jumlah-penduduk',
-        label: 'Jumlah Penduduk',
-        unit: 'jiwa',
-        valueCurrent: '125000',
-        valuePrevious: null,
-        periodCurrent: '2025',
-        isStale: false,
-        hedgeNote: 'Estimasi Semester I',
-      },
-    ];
+    const sampleIndicator: IndicatorDto = {
+      id: 'ind-1',
+      sectionId: 'sec-1',
+      slug: 'jumlah-penduduk',
+      label: 'Jumlah Penduduk',
+      unit: 'jiwa',
+      valueCurrent: '125000',
+      valuePrevious: null,
+      periodCurrent: '2025',
+      periodPrevious: null,
+      isComputedComparison: false,
+      isStale: false,
+      source: null,
+      hedgeNote: 'Estimasi Semester I',
+      sortOrder: 0,
+      comparisonTemplateId: null,
+      comparison: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    indicatorsStore.bySlug = {
+      'jumlah-penduduk': sampleIndicator,
+    };
 
     await router.push('/tentang/kelurahan-manggar');
     await router.isReady();
@@ -105,7 +114,7 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
   it('renders "Data Belum Tersedia" empty state when population indicator is missing', async () => {
     const { pinia, router } = mountView();
     const indicatorsStore = useIndicatorsStore();
-    indicatorsStore.indicators = [];
+    indicatorsStore.bySlug = {};
 
     await router.push('/tentang/kelurahan-manggar');
     await router.isReady();
@@ -124,8 +133,8 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
   it('renders the population loading state without flashing an empty state', async () => {
     const { pinia, router } = mountView();
     const indicatorsStore = useIndicatorsStore();
-    indicatorsStore.indicators = [];
-    indicatorsStore.isLoading = true;
+    indicatorsStore.bySlug = {};
+    indicatorsStore.loadingBySlug['jumlah-penduduk'] = true;
     vi.spyOn(indicatorsStore, 'fetchBySlug').mockResolvedValue(null);
 
     await router.push('/tentang/kelurahan-manggar');

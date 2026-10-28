@@ -101,7 +101,7 @@ const wilayahStats = computed<StatItem[]>(() => [
 
     <!-- 1. Loading state: skeleton pulse to prevent layout shift & false-empty flash -->
     <section
-      v-if="indicatorsStore.isLoading && !formattedPopulation"
+      v-if="indicatorsStore.loadingBySlug[POPULATION_INDICATOR_SLUG] && !formattedPopulation"
       class="bg-white px-4 py-10 sm:px-6 sm:py-12"
       aria-label="Memuat data kependudukan"
     >
