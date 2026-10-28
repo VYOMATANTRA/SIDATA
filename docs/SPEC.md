@@ -158,7 +158,9 @@ service rejects a computed flag with no pair. Clearing the pair also detaches an
 in the same request, as §5 requires. Saves survive the 15-minute access-token lifetime: the
 shared API client refreshes the session once via `POST /api/auth/refresh` and replays the request,
 so a form left open does not lose its draft; if the refresh is denied, the save fails with an
-explicit session-ended message and the open form keeps its contents.
+explicit session-ended message and the open form keeps its contents. A background refetch of the
+same indicator also leaves the open draft untouched — both forms key their draft on the record
+id, so only opening a different record resets it.
 
 A matrix-table save is one atomic request: `PATCH /api/indicator-tables/:id` carries the table
 header plus every changed row (at most 500) and applies them in a single transaction, mirroring
