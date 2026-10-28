@@ -4,6 +4,7 @@ import { extractRequestActor } from '../utils/actor.js';
 import { extractRequestContext } from '../utils/requestContext.js';
 import {
   getPages,
+  getPagesWithSections,
   getPageBySlug,
   createPage,
   deletePage,
@@ -12,9 +13,16 @@ import {
   isValidPageSlug,
 } from '../services/pages.service.js';
 
-export const listPages = async (_req: Request, res: Response): Promise<Response> => {
+export const listPages = async (req: Request, res: Response): Promise<Response> => {
   try {
-    const pages = await getPages();
+    const include = req.query?.include;
+    if (include !== undefined && include !== 'sections') {
+      return res
+        .status(400)
+        .json({ error: 'Parameter include tidak valid. Gunakan include=sections.' });
+    }
+
+    const pages = include === 'sections' ? await getPagesWithSections() : await getPages();
     return res.status(200).json({ pages, total: pages.length });
   } catch (error) {
     console.error('Error saat mengambil daftar halaman:', error);

@@ -219,17 +219,16 @@ describe('indicatorTables.service createIndicatorTable', () => {
     assert.equal(txCalls.length, 0);
   });
 
-  it('rejects sex-split rows missing male/female with 400', async () => {
-    await assertServiceError(
-      createIndicatorTable(
-        tablePayload({ rows: [{ rowKey: '0-4', label: 'Usia 0-4', male: 10 }] }),
-        ACTOR,
-        CONTEXT,
-      ),
-      400,
-      'male dan female',
+  it('accepts a sex-split row with an empty cell and keeps it null', async () => {
+    const result = await createIndicatorTable(
+      tablePayload({ rows: [{ rowKey: '0-4', label: 'Usia 0-4', male: 10 }] }),
+      ACTOR,
+      CONTEXT,
     );
-    assert.equal(txCalls.length, 0);
+
+    assert.equal(result.rows[0]!.male, 10);
+    assert.equal(result.rows[0]!.female, null);
+    assert.equal(result.rows[0]!.total, null);
   });
 
   it('rejects stored total on sex-split rows with 400', async () => {
@@ -247,21 +246,11 @@ describe('indicatorTables.service createIndicatorTable', () => {
     assert.equal(txCalls.length, 0);
   });
 
-  it('rejects single-value rows with male/female or missing total with 400', async () => {
-    const ethnicity = { kind: 'ethnicity' };
-    await assertServiceError(
-      createIndicatorTable(
-        tablePayload({ ...ethnicity, rows: [{ rowKey: 'jawa', label: 'Jawa' }] }),
-        ACTOR,
-        CONTEXT,
-      ),
-      400,
-      'membutuhkan total',
-    );
+  it('rejects single-value rows that carry male/female with 400', async () => {
     await assertServiceError(
       createIndicatorTable(
         tablePayload({
-          ...ethnicity,
+          kind: 'ethnicity',
           rows: [{ rowKey: 'jawa', label: 'Jawa', male: 5, total: 5 }],
         }),
         ACTOR,
@@ -271,6 +260,16 @@ describe('indicatorTables.service createIndicatorTable', () => {
       'tidak memakai male',
     );
     assert.equal(txCalls.length, 0);
+  });
+
+  it('accepts a single-value row with an empty total', async () => {
+    const result = await createIndicatorTable(
+      tablePayload({ kind: 'ethnicity', rows: [{ rowKey: 'jawa', label: 'Jawa' }] }),
+      ACTOR,
+      CONTEXT,
+    );
+
+    assert.equal(result.rows[0]!.total, null);
   });
 
   it('rejects duplicate rowKey within the payload with 400', async () => {
@@ -287,6 +286,21 @@ describe('indicatorTables.service createIndicatorTable', () => {
       ),
       400,
       'duplikat',
+    );
+    assert.equal(txCalls.length, 0);
+  });
+
+  it('rejects a rowKey using the reserved tmp: prefix with 400', async () => {
+    await assertServiceError(
+      createIndicatorTable(
+        tablePayload({
+          rows: [{ rowKey: 'tmp:row-1', label: 'A', male: 1, female: 1 }],
+        }),
+        ACTOR,
+        CONTEXT,
+      ),
+      400,
+      'dicadangkan',
     );
     assert.equal(txCalls.length, 0);
   });
@@ -523,6 +537,218 @@ describe('indicatorTables.service updateIndicatorTable', () => {
     const changes = (audit['metadata'] as AnyRecord)['changes'] as AnyRecord;
     assert.deepStrictEqual(changes['title'], { before: 'Piramida Usia', after: 'Piramida Anyar' });
   });
+
+  it('applies table fields and nested rows in one transaction, auditing each change', async () => {
+    rowImpl['findMany'] = async () => [
+      cellRow(),
+      cellRow({ id: 'row-2', rowKey: '5-9', label: 'Usia 5-9 tahun', male: 80, female: 70 }),
+    ];
+    rowImpl['update'] = async (...args: never[]) => {
+      const { data } = args[0] as unknown as { data: AnyRecord };
+      return { ...cellRow(), ...data };
+    };
+
+    await updateIndicatorTable(
+      'tbl-1',
+      {
+        title: 'Piramida Anyar',
+        rows: [
+          { id: 'row-1', male: 130 },
+          { id: 'row-2', female: 75 },
+        ],
+      },
+      ACTOR,
+      CONTEXT,
+    );
+
+    assert.equal(txTableCalls['update']?.length, 1);
+    assert.equal(txRowCalls['update']?.length, 2);
+    assert.deepStrictEqual(
+      auditRows.map((row) => row['action']),
+      ['indicator_table.updated', 'indicator_table_row.updated', 'indicator_table_row.updated'],
+    );
+    const secondRowAudit = auditRows[2]!;
+    assert.deepStrictEqual((secondRowAudit['metadata'] as AnyRecord)['changes'], {
+      female: { before: 70, after: 75 },
+    });
+  });
+
+  it('rejects the whole batch when a row id does not belong to the table', async () => {
+    rowImpl['findMany'] = async () => [cellRow()];
+
+    await assertServiceError(
+      updateIndicatorTable(
+        'tbl-1',
+        {
+          rows: [
+            { id: 'row-1', male: 130 },
+            { id: 'row-other', male: 5 },
+          ],
+        },
+        ACTOR,
+        CONTEXT,
+      ),
+      404,
+      'tidak ditemukan',
+    );
+    assert.equal(txRowCalls['update']?.length ?? 0, 0);
+    assert.equal(txTableCalls['update']?.length ?? 0, 0);
+    assert.equal(auditRows.length, 0);
+  });
+
+  it('validates every nested row cell shape before applying any update', async () => {
+    rowImpl['findMany'] = async () => [cellRow()];
+
+    await assertServiceError(
+      updateIndicatorTable('tbl-1', { rows: [{ id: 'row-1', total: 190 }] }, ACTOR, CONTEXT),
+      400,
+      'tidak memakai total',
+    );
+    assert.equal(txRowCalls['update']?.length ?? 0, 0);
+    assert.equal(auditRows.length, 0);
+  });
+
+  it('clears a cell to null when a batch row sends null', async () => {
+    rowImpl['findMany'] = async () => [cellRow()];
+    rowImpl['update'] = async (...args: never[]) => {
+      const { data } = args[0] as unknown as { data: AnyRecord };
+      return { ...cellRow(), ...data };
+    };
+
+    await updateIndicatorTable('tbl-1', { rows: [{ id: 'row-1', male: null }] }, ACTOR, CONTEXT);
+
+    assert.equal(txRowCalls['update']?.length, 1);
+    const call = txRowCalls['update']![0] as unknown[];
+    const data = (call[0] as AnyRecord)['data'] as AnyRecord;
+    assert.equal(data['male'], null);
+    assert.deepStrictEqual((auditRows[0]!['metadata'] as AnyRecord)['changes'], {
+      male: { before: 120, after: null },
+    });
+  });
+
+  it('rejects duplicate row ids in one payload with 400 before opening a transaction', async () => {
+    await assertServiceError(
+      updateIndicatorTable(
+        'tbl-1',
+        {
+          rows: [
+            { id: 'row-1', male: 1 },
+            { id: 'row-1', male: 2 },
+          ],
+        },
+        ACTOR,
+        CONTEXT,
+      ),
+      400,
+      'duplikat',
+    );
+    assert.equal(txCalls.length, 0);
+  });
+
+  it('supports swapping two row keys in one batch', async () => {
+    rowImpl['findMany'] = async () => [
+      cellRow(),
+      cellRow({ id: 'row-2', rowKey: '5-9', label: 'Usia 5-9 tahun', male: 80, female: 70 }),
+    ];
+    rowImpl['update'] = async (...args: never[]) => {
+      const { data } = args[0] as unknown as { data: AnyRecord };
+      return { ...cellRow(), ...data };
+    };
+
+    await updateIndicatorTable(
+      'tbl-1',
+      {
+        rows: [
+          { id: 'row-1', rowKey: '5-9' },
+          { id: 'row-2', rowKey: '0-4' },
+        ],
+      },
+      ACTOR,
+      CONTEXT,
+    );
+
+    // Each renamed row is parked on a temporary key first, then written to its final key:
+    // two rows × two writes, otherwise the unique index would reject the swap.
+    assert.equal(txRowCalls['update']?.length, 4);
+    const rowKeyChanges = auditRows.map(
+      (row) => ((row['metadata'] as AnyRecord)['changes'] as AnyRecord)['rowKey'],
+    );
+    assert.deepStrictEqual(rowKeyChanges[0], { before: '0-4', after: '5-9' });
+    assert.deepStrictEqual(rowKeyChanges[1], { before: '5-9', after: '0-4' });
+  });
+
+  it('rejects a rename whose target key is held by a row outside the batch', async () => {
+    rowImpl['findMany'] = async (...args: never[]) => {
+      const { where } = args[0] as unknown as { where: AnyRecord };
+      if (where['rowKey'] !== undefined) {
+        return [cellRow({ id: 'row-other', rowKey: 'dipakai', label: 'Baris lain' })];
+      }
+      return [cellRow()];
+    };
+
+    await assertServiceError(
+      updateIndicatorTable('tbl-1', { rows: [{ id: 'row-1', rowKey: 'dipakai' }] }, ACTOR, CONTEXT),
+      409,
+      'sudah dipakai',
+    );
+    assert.equal(txRowCalls['update']?.length ?? 0, 0);
+    assert.equal(auditRows.length, 0);
+  });
+
+  it('rejects two rows renamed to the same key with 400', async () => {
+    rowImpl['findMany'] = async () => [
+      cellRow(),
+      cellRow({ id: 'row-2', rowKey: '5-9', label: 'Usia 5-9 tahun' }),
+    ];
+
+    await assertServiceError(
+      updateIndicatorTable(
+        'tbl-1',
+        {
+          rows: [
+            { id: 'row-1', rowKey: 'sama' },
+            { id: 'row-2', rowKey: 'sama' },
+          ],
+        },
+        ACTOR,
+        CONTEXT,
+      ),
+      400,
+      'duplikat',
+    );
+  });
+
+  it('rejects a rename to the reserved tmp: prefix with 400', async () => {
+    rowImpl['findMany'] = async () => [cellRow()];
+
+    await assertServiceError(
+      updateIndicatorTable(
+        'tbl-1',
+        { rows: [{ id: 'row-1', rowKey: 'tmp:row-1' }] },
+        ACTOR,
+        CONTEXT,
+      ),
+      400,
+      'dicadangkan',
+    );
+    assert.equal(txRowCalls['update']?.length ?? 0, 0);
+    assert.equal(auditRows.length, 0);
+  });
+
+  it('treats unchanged nested rows as a no-op without an audit row', async () => {
+    rowImpl['findMany'] = async () => [cellRow()];
+
+    const result = await updateIndicatorTable(
+      'tbl-1',
+      { rows: [{ id: 'row-1', male: 120 }] },
+      ACTOR,
+      CONTEXT,
+    );
+
+    assert.equal(result.id, 'tbl-1');
+    assert.equal(txRowCalls['update']?.length ?? 0, 0);
+    assert.equal(auditRows.length, 0);
+  });
 });
 
 describe('indicatorTables.service deleteIndicatorTable', () => {
@@ -597,11 +823,11 @@ describe('indicatorTables.service row mutations', () => {
     assert.equal(auditRows.length, 0);
   });
 
-  it('create rejects cells violating the table kind with 400', async () => {
+  it('create rejects a stored total on a sex-split table with 400', async () => {
     await assertServiceError(
       createIndicatorTableRow('tbl-1', { rowKey: '0-4', label: 'x', total: 5 }, ACTOR, CONTEXT),
       400,
-      'male dan female',
+      'tidak memakai total',
     );
     assert.equal(txRowCalls['create']?.length ?? 0, 0);
   });
@@ -822,6 +1048,14 @@ describe('indicatorTables.service reads', () => {
     assert.equal(result?.rows.length, 1);
     assert.equal(result?.rows[0]!.total, 235);
     assert.deepStrictEqual(result?.totals, { rowCount: 1, male: 120, female: 115, total: 235 });
+  });
+
+  it('leaves the derived row total empty when one sex cell is missing', async () => {
+    rowImpl['findMany'] = async () => [cellRow({ male: 120, female: null })];
+
+    const result = await getIndicatorTableBySlug('piramida-usia');
+
+    assert.equal(result?.rows[0]!.total, null);
   });
 
   it('reads rows with a deterministic (sortOrder, rowKey) order', async () => {
