@@ -46,7 +46,10 @@ export interface IndicatorTableRowDto {
   label: string;
   male: number | null;
   female: number | null;
-  /** Derived (`male + female`) for sex-split kinds; stored for single-value kinds. */
+  /**
+   * Derived (`male + female`) for sex-split kinds — null unless both cells are filled, so an
+   * incomplete row never displays a partial figure as its total. Stored for single-value kinds.
+   */
   total: number | null;
   sortOrder: number;
   createdAt: string;
@@ -259,18 +262,16 @@ function normalizeCells(raw: {
 }
 
 /**
- * Opsi A cell-shape rule: sex-split kinds require male+female with total absent; single-value
- * kinds require total with male/female absent. Storing a total alongside male+female would let
- * the two drift apart, so it is rejected rather than reconciled.
+ * Opsi A cell-shape rule: sex-split kinds store male/female and never a total; single-value
+ * kinds store total and never male/female. Storing a total alongside male+female would let the
+ * two drift apart, so it is rejected rather than reconciled.
+ *
+ * Individual cells are nullable (§7): an empty cell means "not recorded yet", not zero, so a
+ * row may be saved with only part of its data filled in. The form treats every cell as optional
+ * for the same reason — forcing a number would push made-up values onto a public page.
  */
 function assertRowCells(kind: string, cells: NormalizedCells, scope: string = 'Baris'): void {
   if (isSexSplitKind(kind)) {
-    if (cells.male === null || cells.female === null) {
-      throw new IndicatorTableServiceError(
-        `${scope} tabel ${kind} membutuhkan male dan female (keduanya wajib).`,
-        400,
-      );
-    }
     if (cells.total !== null) {
       throw new IndicatorTableServiceError(
         `${scope} tabel ${kind} tidak memakai total tersimpan — total dihitung dari male + female.`,
@@ -278,12 +279,6 @@ function assertRowCells(kind: string, cells: NormalizedCells, scope: string = 'B
       );
     }
     return;
-  }
-  if (cells.total === null) {
-    throw new IndicatorTableServiceError(
-      `${scope} tabel ${kind} membutuhkan total (satu nilai per baris).`,
-      400,
-    );
   }
   if (cells.male !== null || cells.female !== null) {
     throw new IndicatorTableServiceError(
@@ -368,6 +363,7 @@ function formatTable(row: TableRow): IndicatorTableDto {
 }
 
 function formatRow(row: CellRow, kind: string): IndicatorTableRowDto {
+  const derivedTotal = row.male !== null && row.female !== null ? row.male + row.female : null;
   return {
     id: row.id,
     tableId: row.tableId,
@@ -375,7 +371,7 @@ function formatRow(row: CellRow, kind: string): IndicatorTableRowDto {
     label: row.label,
     male: row.male,
     female: row.female,
-    total: isSexSplitKind(kind) ? (row.male ?? 0) + (row.female ?? 0) : row.total,
+    total: isSexSplitKind(kind) ? derivedTotal : row.total,
     sortOrder: row.sortOrder,
     createdAt: toIsoString(row.createdAt),
     updatedAt: toIsoString(row.updatedAt),
