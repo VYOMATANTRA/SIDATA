@@ -354,57 +354,34 @@ const listCachesInvalidator: CacheInvalidator = {
   },
 };
 
+function collectKeysToInvalidate(identifier: string, keys: Set<string>): void {
+  const key = normalizeIndicatorCacheKey(identifier);
+  keys.add(key);
+
+  const directCache = indicatorByIdCache.get(key);
+  const directData = directCache?.get() ?? directCache?.getLastKnownGood(null);
+  if (directData?.id) keys.add(normalizeIndicatorCacheKey(directData.id));
+  if (directData?.slug) keys.add(normalizeIndicatorCacheKey(directData.slug));
+
+  for (const [cachedKey, cache] of indicatorByIdCache.entries()) {
+    const data = cache.get() ?? cache.getLastKnownGood(null);
+    if (data) {
+      const matchesId = data.id === identifier || normalizeIndicatorCacheKey(data.id) === key;
+      const matchesSlug = data.slug === identifier || normalizeIndicatorCacheKey(data.slug) === key;
+      if (matchesId || matchesSlug) {
+        keys.add(cachedKey);
+        if (data.id) keys.add(normalizeIndicatorCacheKey(data.id));
+        if (data.slug) keys.add(normalizeIndicatorCacheKey(data.slug));
+      }
+    }
+  }
+}
+
 export const invalidateIndicatorsCache = (id?: string, slug?: string): void => {
   const keysToInvalidate = new Set<string>();
 
-  if (id) {
-    const key = normalizeIndicatorCacheKey(id);
-    keysToInvalidate.add(key);
-
-    const directCache = indicatorByIdCache.get(key);
-    const directData = directCache?.get() ?? directCache?.getLastKnownGood(null);
-    if (directData?.slug) {
-      keysToInvalidate.add(normalizeIndicatorCacheKey(directData.slug));
-    }
-
-    // Drop any cached indicator matching this id or slug across the cache
-    for (const [cachedKey, cache] of indicatorByIdCache.entries()) {
-      const data = cache.get() ?? cache.getLastKnownGood(null);
-      if (data) {
-        const matchesId = data.id === id || normalizeIndicatorCacheKey(data.id) === key;
-        const matchesSlug = data.slug === id || normalizeIndicatorCacheKey(data.slug) === key;
-        if (matchesId || matchesSlug) {
-          keysToInvalidate.add(cachedKey);
-          if (data.slug) keysToInvalidate.add(normalizeIndicatorCacheKey(data.slug));
-          if (data.id) keysToInvalidate.add(normalizeIndicatorCacheKey(data.id));
-        }
-      }
-    }
-  }
-
-  if (slug) {
-    const key = normalizeIndicatorCacheKey(slug);
-    keysToInvalidate.add(key);
-
-    const directCache = indicatorByIdCache.get(key);
-    const directData = directCache?.get() ?? directCache?.getLastKnownGood(null);
-    if (directData?.id) {
-      keysToInvalidate.add(normalizeIndicatorCacheKey(directData.id));
-    }
-
-    for (const [cachedKey, cache] of indicatorByIdCache.entries()) {
-      const data = cache.get() ?? cache.getLastKnownGood(null);
-      if (data) {
-        const matchesSlug = data.slug === slug || normalizeIndicatorCacheKey(data.slug) === key;
-        const matchesId = data.id === slug || normalizeIndicatorCacheKey(data.id) === key;
-        if (matchesSlug || matchesId) {
-          keysToInvalidate.add(cachedKey);
-          if (data.slug) keysToInvalidate.add(normalizeIndicatorCacheKey(data.slug));
-          if (data.id) keysToInvalidate.add(normalizeIndicatorCacheKey(data.id));
-        }
-      }
-    }
-  }
+  if (id) collectKeysToInvalidate(id, keysToInvalidate);
+  if (slug) collectKeysToInvalidate(slug, keysToInvalidate);
 
   for (const key of keysToInvalidate) {
     indicatorByIdCache.get(key)?.invalidate();
