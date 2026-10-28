@@ -193,6 +193,44 @@ describe('ScalarIndicatorForm.vue', () => {
     wrapper.unmount();
   });
 
+  it('keeps unsaved input when the store refreshes the same indicator', async () => {
+    const wrapper = mount(ScalarIndicatorForm, {
+      props: { indicator: makeIndicator() },
+    });
+
+    await wrapper.find('#indicator-value-current').setValue('54000');
+    await wrapper.setProps({
+      indicator: makeIndicator({ valueCurrent: '99999', label: 'Total Penduduk (baru)' }),
+    });
+
+    expect((wrapper.find('#indicator-value-current').element as HTMLInputElement).value).toBe(
+      '54000',
+    );
+    expect((wrapper.find('#indicator-label').element as HTMLInputElement).value).toBe(
+      'Total Penduduk',
+    );
+
+    wrapper.unmount();
+  });
+
+  it('resets the draft when a different indicator is opened', async () => {
+    const wrapper = mount(ScalarIndicatorForm, {
+      props: { indicator: makeIndicator() },
+    });
+
+    await wrapper.find('#indicator-value-current').setValue('54000');
+    await wrapper.setProps({
+      indicator: makeIndicator({ id: 'ind-2', label: 'Jumlah KK', valueCurrent: '12000' }),
+    });
+
+    expect((wrapper.find('#indicator-label').element as HTMLInputElement).value).toBe('Jumlah KK');
+    expect((wrapper.find('#indicator-value-current').element as HTMLInputElement).value).toBe(
+      '12000',
+    );
+
+    wrapper.unmount();
+  });
+
   it('surfaces a server error through the alert region', () => {
     const wrapper = mount(ScalarIndicatorForm, {
       props: {
