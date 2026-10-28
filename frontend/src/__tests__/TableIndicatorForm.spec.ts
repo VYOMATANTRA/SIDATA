@@ -125,6 +125,50 @@ describe('TableIndicatorForm.vue', () => {
     wrapper.unmount();
   });
 
+  it('saves a row with an empty cell as null instead of blocking the edit', async () => {
+    const wrapper = mount(TableIndicatorForm, { props: { table: makeTable('age_pyramid') } });
+
+    await wrapper.find('#table-row-row-1-female').setValue('');
+    await wrapper.find('#table-title').setValue('Piramida Penduduk');
+    await wrapper.find('form').trigger('submit');
+
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    const payload = wrapper.emitted('submit')?.[0]?.[0] as {
+      table: Record<string, unknown>;
+      rows: Array<{ rowId: string; patch: Record<string, unknown> }>;
+    };
+    expect(payload.table).toEqual({ title: 'Piramida Penduduk' });
+    expect(payload.rows).toEqual([{ rowId: 'row-1', patch: { female: null } }]);
+
+    wrapper.unmount();
+  });
+
+  it('clears a single-value cell to null', async () => {
+    const wrapper = mount(TableIndicatorForm, { props: { table: makeTable('ethnicity') } });
+
+    await wrapper.find('#table-row-row-1-total').setValue('');
+    await wrapper.find('form').trigger('submit');
+
+    const payload = wrapper.emitted('submit')?.[0]?.[0] as {
+      rows: Array<{ rowId: string; patch: Record<string, unknown> }>;
+    };
+    expect(payload.rows).toEqual([{ rowId: 'row-1', patch: { total: null } }]);
+
+    wrapper.unmount();
+  });
+
+  it('shows no derived total until both sex cells are filled', async () => {
+    const wrapper = mount(TableIndicatorForm, { props: { table: makeTable('age_pyramid') } });
+
+    await wrapper.find('#table-row-row-1-female').setValue('');
+
+    const totals = wrapper.findAll('[data-test="derived-total"]');
+    expect(totals[0]?.text()).toBe('—');
+    expect(totals[1]?.text()).toBe('205');
+
+    wrapper.unmount();
+  });
+
   it('rejects a non-integer cell before sending anything', async () => {
     const wrapper = mount(TableIndicatorForm, { props: { table: makeTable('ethnicity') } });
 
