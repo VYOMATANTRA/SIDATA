@@ -362,4 +362,19 @@ describe('indicators store (single indicator reads by slug)', () => {
 
     expect(store.bySlug['total-penduduk']?.valueCurrent).toBe('60000');
   });
+
+  it('drops the old slug key and caches under the new slug key when an indicator slug changes', () => {
+    const store = useIndicatorsStore();
+    const oldIndicator = makeIndicator({ id: 'ind-1', slug: 'old-slug', valueCurrent: '100' });
+    store.bySlug['old-slug'] = oldIndicator;
+    store.indicators = [oldIndicator];
+
+    const updatedIndicator = makeIndicator({ id: 'ind-1', slug: 'new-slug', valueCurrent: '200' });
+    store.replaceIndicator(updatedIndicator);
+
+    expect(store.bySlug['old-slug']).toBeUndefined();
+    expect(store.bySlug['new-slug']?.valueCurrent).toBe('200');
+    expect(store.findBySlug('old-slug')).toBeNull();
+    expect(store.findBySlug('new-slug')?.valueCurrent).toBe('200');
+  });
 });

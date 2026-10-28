@@ -108,10 +108,24 @@ export const useIndicatorsStore = defineStore('indicators', () => {
 
   function replaceIndicator(updated: Indicator): void {
     invalidateSectionCache(updated.sectionId);
-    const slugKey = updated.slug.trim().toLowerCase();
-    if (bySlug.value[slugKey]) {
-      bySlug.value = { ...bySlug.value, [slugKey]: updated };
+
+    const newSlugKey = updated.slug.trim().toLowerCase();
+    const nextBySlug = { ...bySlug.value };
+    let bySlugChanged = false;
+
+    // If this indicator was cached under an older/different slug, remove the stale key
+    for (const [k, v] of Object.entries(nextBySlug)) {
+      if (v.id === updated.id && k !== newSlugKey) {
+        delete nextBySlug[k];
+        bySlugChanged = true;
+      }
     }
+
+    if (bySlugChanged || nextBySlug[newSlugKey]) {
+      nextBySlug[newSlugKey] = updated;
+      bySlug.value = nextBySlug;
+    }
+
     const index = indicators.value.findIndex((item) => item.id === updated.id);
     if (index === -1) {
       indicators.value = [...indicators.value, updated];
