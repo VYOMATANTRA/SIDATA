@@ -25,6 +25,7 @@ const mapContainer = ref<HTMLElement | null>(null);
 let map: L.Map | null = null;
 let markerLayerGroup: L.MarkerClusterGroup | null = null;
 let sizeInvalidationTimer: number | null = null;
+let isUnmounted = false;
 const markers = new Map<string, L.Marker>();
 /**
  * The first data load frames the map on the surveyed extent; later changes (a
@@ -126,7 +127,9 @@ function revealSelectedPoint() {
   if (!map || !markerLayerGroup || !props.selectedPointId) return;
   const marker = markers.get(props.selectedPointId);
   if (!marker) return;
-  const zoom = Math.max(map.getZoom(), map.getMaxZoom() ?? 19);
+  const TARGET_SELECTION_ZOOM = 16;
+  const maxZoom = map.getMaxZoom() ?? 19;
+  const zoom = Math.min(Math.max(map.getZoom(), TARGET_SELECTION_ZOOM), maxZoom);
 
   const reveal = () => {
     markerLayerGroup?.zoomToShowLayer(marker, () => {
@@ -169,8 +172,9 @@ function framePoints() {
 }
 
 onMounted(() => {
+  isUnmounted = false;
   nextTick(() => {
-    if (typeof window === 'undefined' || !mapContainer.value) return;
+    if (isUnmounted || typeof window === 'undefined' || !mapContainer.value) return;
 
     map = L.map(mapContainer.value, {
       zoomControl: false,
@@ -237,6 +241,7 @@ watch(() => props.selectedPointId, (id) => {
 });
 
 onUnmounted(() => {
+  isUnmounted = true;
   window.removeEventListener('resize', handleResize);
   if (sizeInvalidationTimer !== null) {
     window.clearTimeout(sizeInvalidationTimer);

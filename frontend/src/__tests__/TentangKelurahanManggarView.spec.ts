@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import TentangKelurahanManggarView from '../views/TentangKelurahanManggarView.vue';
-import { useIndicatorsStore } from '../stores/indicators.store';
+import { useIndicatorsStore, type IndicatorDto } from '../stores/indicators.store';
 
 function mountView() {
   const pinia = createPinia();
@@ -72,20 +72,29 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
   it('shows the Sekilas Manggar population figure when indicator is available', async () => {
     const { pinia, router } = mountView();
     const indicatorsStore = useIndicatorsStore();
-    indicatorsStore.indicators = [
-      {
-        id: 'ind-1',
-        sectionId: 'sec-1',
-        slug: 'jumlah-penduduk',
-        label: 'Jumlah Penduduk',
-        unit: 'jiwa',
-        valueCurrent: '125000',
-        valuePrevious: null,
-        periodCurrent: '2025',
-        isStale: false,
-        hedgeNote: 'Estimasi Semester I',
-      },
-    ];
+    const sampleIndicator: IndicatorDto = {
+      id: 'ind-1',
+      sectionId: 'sec-1',
+      slug: 'jumlah-penduduk',
+      label: 'Jumlah Penduduk',
+      unit: 'jiwa',
+      valueCurrent: '125000',
+      valuePrevious: null,
+      periodCurrent: '2025',
+      periodPrevious: null,
+      isComputedComparison: false,
+      isStale: false,
+      source: null,
+      hedgeNote: 'Estimasi Semester I',
+      sortOrder: 0,
+      comparisonTemplateId: null,
+      comparison: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    indicatorsStore.bySlug = {
+      'jumlah-penduduk': sampleIndicator,
+    };
 
     await router.push('/tentang/kelurahan-manggar');
     await router.isReady();
@@ -105,7 +114,7 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
   it('renders "Data Belum Tersedia" empty state when population indicator is missing', async () => {
     const { pinia, router } = mountView();
     const indicatorsStore = useIndicatorsStore();
-    indicatorsStore.indicators = [];
+    indicatorsStore.bySlug = {};
 
     await router.push('/tentang/kelurahan-manggar');
     await router.isReady();
@@ -124,8 +133,8 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
   it('renders the population loading state without flashing an empty state', async () => {
     const { pinia, router } = mountView();
     const indicatorsStore = useIndicatorsStore();
-    indicatorsStore.indicators = [];
-    indicatorsStore.isLoading = true;
+    indicatorsStore.bySlug = {};
+    indicatorsStore.loadingBySlug['jumlah-penduduk'] = true;
     vi.spyOn(indicatorsStore, 'fetchBySlug').mockResolvedValue(null);
 
     await router.push('/tentang/kelurahan-manggar');
@@ -248,7 +257,10 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(table.exists()).toBe(true);
 
     // Caption check
-    expect(table.find('caption').exists()).toBe(true);
+    const caption = table.find('caption');
+    expect(caption.exists()).toBe(true);
+    expect(caption.text()).toBe('Daftar Struktur Organisasi dan Tata Kerja Kelurahan Manggar');
+    expect(caption.text()).not.toContain('tugas pokok dan fungsi');
 
     // Header column scopes
     const colHeaders = table.findAll('th[scope="col"]');
@@ -293,6 +305,8 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(wrapper.text()).toContain('Kelurahan Manggar Baru');
     expect(wrapper.text()).toContain('Selat Makassar');
     expect(wrapper.text()).toContain('Kelurahan Sepinggan dan Sepinggan Baru');
+    expect(wrapper.text()).toContain('Batas wilayah: Manggar Dalam Angka 2026, Tabel 1.1.2');
+    expect(wrapper.text()).toContain('hlm. 18 versi cetak, hlm. 19 PDF');
   });
 
   it('does not publish an unverified vision or mission statement', async () => {
@@ -307,5 +321,33 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(wrapper.text()).not.toContain('Visi dan Misi Pelayanan');
     expect(wrapper.text()).not.toContain('Terwujudnya Pelayanan Publik Kelurahan Manggar');
     expect(wrapper.text()).not.toContain('Mengoptimalkan pemanfaatan data statistik');
+  });
+
+  it('renders general area statistics and profile content from tentang content module', async () => {
+    const { pinia, router } = mountView();
+    await router.push('/tentang/kelurahan-manggar');
+    await router.isReady();
+
+    const wrapper = mount(TentangKelurahanManggarView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    const statCard = wrapper.find('[data-test="stat-card"]');
+    expect(statCard.exists()).toBe(true);
+    expect(statCard.text()).toContain('100');
+    expect(statCard.text()).toContain('Rukun Tetangga terdaftar');
+    expect(statCard.text()).toContain('Balikpapan Timur');
+    expect(statCard.text()).toContain('Kecamatan, Kota Balikpapan');
+    expect(statCard.text()).toContain('Pesisir & Dataran');
+    expect(statCard.text()).toContain('Potensi pantai & pertanian');
+    expect(statCard.text()).toContain('Desa Cantik');
+    expect(statCard.text()).toContain('Kelurahan Cinta Statistik');
+
+    // RT count in prose
+    expect(wrapper.text()).toContain('bersama 100 Rukun Tetangga (RT)');
+
+    // Typo fix assertion: "berupaya menyediakan" instead of "strive menyediakan"
+    expect(wrapper.text()).toContain('Kelurahan Manggar berupaya menyediakan');
+    expect(wrapper.text()).not.toContain('strive menyediakan');
   });
 });

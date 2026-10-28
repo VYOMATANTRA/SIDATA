@@ -31,12 +31,26 @@ export interface RtLeaderSeedClient {
         metadata: Record<string, string>;
       };
     }): Promise<unknown>;
+    deleteMany?(args: {
+      where: {
+        type: 'ketua_rt';
+        id: { startsWith: string };
+      };
+    }): Promise<unknown>;
   };
   spatialPointRt: {
     upsert(args: {
       where: { pointId_rtNumber: { pointId: string; rtNumber: number } };
       update: Record<string, never>;
       create: { pointId: string; rtNumber: number };
+    }): Promise<unknown>;
+    deleteMany?(args: {
+      where: {
+        point: {
+          type: 'ketua_rt';
+          id: { startsWith: string };
+        };
+      };
     }): Promise<unknown>;
   };
 }
@@ -48,12 +62,35 @@ export interface RtLeaderSeedClient {
  * in rows that are missing; passing the stored values in `update` would silently
  * revert any correction an editor has already made, which SPEC §2 forbids.
  *
+ * Cleans up any legacy sample ketua_rt points (`00000000-0000-0000-0000-*`) so
+ * databases already seeded with previous development seeds do not end up with
+ * duplicate ketua_rt points assigned to the same RT (SPEC §7 integrity conflict).
+ *
  * Returns the number of RTs processed.
  */
 export async function seedRtLeaders(
   client: RtLeaderSeedClient,
   data: RtSeedRecord[] = RT_LEADERS_DATA,
 ): Promise<number> {
+  if (client.spatialPointRt.deleteMany) {
+    await client.spatialPointRt.deleteMany({
+      where: {
+        point: {
+          type: 'ketua_rt',
+          id: { startsWith: '00000000-0000-0000-0000-' },
+        },
+      },
+    });
+  }
+  if (client.spatialPoint.deleteMany) {
+    await client.spatialPoint.deleteMany({
+      where: {
+        type: 'ketua_rt',
+        id: { startsWith: '00000000-0000-0000-0000-' },
+      },
+    });
+  }
+
   for (const rt of data) {
     await client.rtLeader.upsert({
       where: { rtNumber: rt.rtNumber },

@@ -11,10 +11,14 @@ function recordingClient() {
     rtLeader: UpsertCall[];
     spatialPoint: UpsertCall[];
     spatialPointRt: UpsertCall[];
+    deleteSpatialPoint: unknown[];
+    deleteSpatialPointRt: unknown[];
   } = {
     rtLeader: [],
     spatialPoint: [],
     spatialPointRt: [],
+    deleteSpatialPoint: [],
+    deleteSpatialPointRt: [],
   };
 
   const client: RtLeaderSeedClient = {
@@ -29,11 +33,19 @@ function recordingClient() {
         calls.spatialPoint.push(args);
         return args;
       },
+      async deleteMany(args) {
+        calls.deleteSpatialPoint.push(args);
+        return { count: 0 };
+      },
     },
     spatialPointRt: {
       async upsert(args) {
         calls.spatialPointRt.push(args);
         return args;
+      },
+      async deleteMany(args) {
+        calls.deleteSpatialPointRt.push(args);
+        return { count: 0 };
       },
     },
   };
@@ -103,6 +115,29 @@ describe('seedRtLeaders', () => {
   it('returns the number of RTs processed', async () => {
     const { client } = recordingClient();
     assert.equal(await seedRtLeaders(client, RT_LEADERS_DATA), RT_LEADERS_DATA.length);
+  });
+
+  it('cleans up legacy sample ketua_rt points matching legacy prefix to prevent duplicate RT points', async () => {
+    const { client, calls } = recordingClient();
+    await seedRtLeaders(client, RT_LEADERS_DATA);
+
+    assert.equal(calls.deleteSpatialPointRt.length, 1);
+    assert.deepEqual(calls.deleteSpatialPointRt[0], {
+      where: {
+        point: {
+          type: 'ketua_rt',
+          id: { startsWith: '00000000-0000-0000-0000-' },
+        },
+      },
+    });
+
+    assert.equal(calls.deleteSpatialPoint.length, 1);
+    assert.deepEqual(calls.deleteSpatialPoint[0], {
+      where: {
+        type: 'ketua_rt',
+        id: { startsWith: '00000000-0000-0000-0000-' },
+      },
+    });
   });
 });
 
