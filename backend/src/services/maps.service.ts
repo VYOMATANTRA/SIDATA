@@ -752,8 +752,21 @@ const longitudeField = z.number().refine((v) => v >= -180 && v <= 180, {
   message: 'Longitude harus antara -180 dan 180',
 });
 
-/** `metadata` stores a JSON object (SPEC §7) or null — arrays/scalars are not point metadata. */
-const metadataField = z.record(z.string(), z.unknown()).nullable().optional();
+/**
+ * `metadata` stores a JSON object (SPEC §7) or null — arrays/scalars are not point metadata.
+ * Size fence: whatever an editor saves here is echoed back in every public points payload,
+ * so an unbounded object would silently tax every map load (the request body limit alone is
+ * far too loose to be the only guard).
+ */
+const MAX_METADATA_SERIALIZED_LENGTH = 8_000;
+const metadataField = z
+  .record(z.string(), z.unknown())
+  .refine(
+    (v) => JSON.stringify(v).length <= MAX_METADATA_SERIALIZED_LENGTH,
+    `Metadata terlalu besar (maksimal ${MAX_METADATA_SERIALIZED_LENGTH} karakter setelah serialisasi JSON)`,
+  )
+  .nullable()
+  .optional();
 
 const coverageSetField = z
   .array(rtNumberField)

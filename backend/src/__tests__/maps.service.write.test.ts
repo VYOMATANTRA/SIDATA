@@ -463,6 +463,26 @@ describe('maps.service createSpatialPoint', () => {
     assert.equal(auditRows.length, 0);
   });
 
+  it('rejects oversized metadata with 400 before opening a transaction', async () => {
+    // Hardening fence: metadata is echoed back in every public points payload, so its
+    // serialized size is capped (8 000 chars) at the schema level.
+    const oversized = { catatan: 'x'.repeat(8100) };
+    await assertServiceError(
+      createSpatialPoint(pointPayload({ metadata: oversized, rts: [5] }), ACTOR, CONTEXT),
+      400,
+      'Metadata terlalu besar',
+    );
+    assert.equal(txCalls.length, 0);
+
+    const withinCap = { catatan: 'x'.repeat(7000) };
+    const dto = await createSpatialPoint(
+      pointPayload({ metadata: withinCap, rts: [5] }),
+      ACTOR,
+      CONTEXT,
+    );
+    assert.deepEqual(dto.metadata, withinCap);
+  });
+
   it('creates a bank_sampah point spanning several RTs without any invariant check', async () => {
     const dto = await createSpatialPoint(
       pointPayload({ name: 'Bank Sampah Sejahtera', type: 'bank_sampah', rts: [30, 72, 60] }),
@@ -670,6 +690,21 @@ describe('maps.service updateSpatialPoint', () => {
     const updateArgs = pointCalls['update']?.[0]?.[0] as AnyRecord | undefined;
     assert.ok(updateArgs);
     assert.equal((updateArgs['data'] as AnyRecord)['metadata'], Prisma.DbNull);
+  });
+
+  it('rejects oversized metadata with 400 before opening the transaction', async () => {
+    seed();
+    await assertServiceError(
+      updateSpatialPoint(
+        'point-ketua-1',
+        { metadata: { catatan: 'x'.repeat(8100) } },
+        ACTOR,
+        CONTEXT,
+      ),
+      400,
+      'Metadata terlalu besar',
+    );
+    assert.equal(auditRows.length, 0);
   });
 
   it('returns 404 for an unknown point id', async () => {
