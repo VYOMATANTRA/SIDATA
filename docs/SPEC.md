@@ -84,7 +84,9 @@ Notes:
 - Every RT-leader seed upsert carries `update: {}`. Re-running the seed fills in rows that are
   missing and nothing else; it must never revert a correction an editor has already made.
 - `GET /api/pages` and `GET /api/pages/:slug` expose the hierarchy publicly (page → chapters →
-  sections, each ordered by `sort_order`).
+  sections, each ordered by `sort_order`). `GET /api/pages?include=sections` returns every page
+  with its chapters and sections in one request (one nested query), so a caller that needs all
+  section labels — the CMS hierarchy — does not fire one detail request per page.
 - `POST /api/pages`, `DELETE /api/pages/:slug`, and `PUT /api/pages/reorder` manage the Cerita page list
   (restricted to Editor and Admin roles, audited via `audit_logs`). Reordering updates page `sort_order`
   values in a single atomic database transaction with deterministic lock ordering to prevent deadlocks.
@@ -165,6 +167,48 @@ Hybrid model:
   4 fixed-shape tables) — manual, form-based entry only. Bulk import is explicitly out of scope
   for these.
 - **Prose** — field-by-field forms (tier-1 builder or tier-2 free text; see §5).
+
+The frontend surface for the first two is a single `/data` view (editor/admin only, no CMS
+sidebar shell): a searchable, type-filterable card list of every scalar indicator and matrix
+table, each opening an accessible edit dialog. It is edit-only — an indicator or table must
+attach to a `section`, and no section-management surface exists, so create/delete are not in the
+UI rather than shipped as forms that cannot submit. "Import From" from the wireframe is not
+built, consistent with the scope above. The previous-year pair is edited independently of
+`is_computed_comparison`: a pair alone does not promote an indicator into the tier-1 computed set
+(§5), so the flag is preserved as stored and is only cleared when the pair is cleared, since the
+service rejects a computed flag with no pair. Clearing the pair also detaches any tier-1 template
+in the same request, as §5 requires. Saves survive the 15-minute access-token lifetime: the
+shared API client refreshes the session once via `POST /api/auth/refresh` and replays the request,
+so a form left open does not lose its draft; if the refresh is denied, the save fails with an
+explicit session-ended message and the open form keeps its contents. A background refetch of the
+same indicator also leaves the open draft untouched — both forms key their draft on the record
+id, so only opening a different record resets it.
+
+A matrix-table save is one atomic request: `PATCH /api/indicator-tables/:id` carries the table
+header plus every changed row (at most 500) and applies them in a single transaction, mirroring
+the nested `rows` that `POST /` already accepts. A rejected row therefore leaves the table
+untouched — never a sex-split row with a new `male` and the old `female` — and the dialog keeps
+every draft, including rows that were not part of the failed save.
+
+A cell may be left empty. The cell columns are nullable, and an empty cell means "not recorded
+yet", not zero — so the form treats every number cell as optional and sends `null` for a blank
+one, letting an editor save a header or label change without inventing a figure. A sex-split
+row's derived `total` is `null` until both `male` and `female` are filled, never a partial sum
+that would understate the row on a public page.
+
+Two consequences of the batch shape are deliberate. First, a large save is audited per row: 500
+changed rows produce 500 `indicator_table_row.updated` entries inside that one transaction, so
+the audit trail stays row-granular rather than collapsing into a single summary. Second,
+`rowKey` renames are validated against the final key set, not the current one, so a swap
+(`A→b`, `B→a`) succeeds; the service parks renamed rows on a temporary key before writing the
+final ones, because `UNIQUE (table_id, row_key)` is enforced per statement. The CMS does not
+expose `rowKey` editing today — this is an API-level capability. Keys beginning with `tmp:` are
+reserved for that temporary parking and rejected by the row-key schema, so a real row can never
+occupy one.
+
+The Cerita view and the CMS keep separate caches over the same rows, so a successful save
+invalidates the Cerita entry for the affected section (both the old and the new section when a
+save moves a row), forcing the next Cerita visit to refetch rather than render pre-edit values.
 
 ## 5. Prose Rules
 
