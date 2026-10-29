@@ -258,6 +258,26 @@ describe('PetaView accessibility, filtering, and point selection', () => {
     expect(wrapper.text()).toContain('Titik terdekat');
   });
 
+  it('clears the selected point when a category filter hides it', async () => {
+    const wrapper = await mountReady();
+
+    // Select the first point (ketua_rt)
+    await wrapper.findAll('[data-test="peta-result"]')[0]?.trigger('click');
+    await flushPromises();
+    expect(wrapper.text()).toContain('Pos Ketua RT 01');
+
+    // Filter to Bank Sampah only
+    const { useMapsStore } = await import('../stores/maps');
+    const store = useMapsStore();
+    store.setTypeFilter('bank_sampah');
+    await flushPromises();
+
+    // The drawer should be closed and the results list restored
+    expect(store.selectedPoint).toBeNull();
+    expect(wrapper.text()).toContain('Titik terdekat');
+    expect(wrapper.text()).not.toContain('Kontak Ketua RT');
+  });
+
   it('shows a retryable error state instead of an empty map', async () => {
     vi.stubGlobal(
       'fetch',

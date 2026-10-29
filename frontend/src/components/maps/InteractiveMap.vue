@@ -75,26 +75,37 @@ function createCustomPin(type: SpatialPointType, isSelected: boolean, rtNumber?:
   });
 }
 
+function applyMarkerA11y(marker: L.Marker, point: SpatialPointDTO) {
+  const markerElement = marker.getElement();
+  if (markerElement) {
+    markerElement.setAttribute('aria-label', markerLabel(point));
+    markerElement.setAttribute('role', 'button');
+  }
+}
+
+function updateMarkerIcon(marker: L.Marker, point: SpatialPointDTO, isSelected: boolean) {
+  marker.setIcon(createCustomPin(point.type, isSelected, point.rts[0]));
+  applyMarkerA11y(marker, point);
+}
+
 function createMarker(point: SpatialPointDTO) {
-    const primaryRt = point.rts[0];
-    const icon = createCustomPin(point.type, point.id === props.selectedPointId, primaryRt);
+  const primaryRt = point.rts[0];
+  const icon = createCustomPin(point.type, point.id === props.selectedPointId, primaryRt);
 
-    const marker = L.marker([point.latitude, point.longitude], {
-      icon,
-      title: markerLabel(point),
-    });
+  const marker = L.marker([point.latitude, point.longitude], {
+    icon,
+    title: markerLabel(point),
+  });
 
-    marker.on('click', () => {
-      emit('select-point', point);
-      map?.panTo([point.latitude, point.longitude], { animate: true });
-    });
+  marker.on('click', () => {
+    emit('select-point', point);
+    map?.panTo([point.latitude, point.longitude], { animate: true });
+  });
 
-    marker.on('add', () => {
-      const markerElement = marker.getElement();
-      markerElement?.setAttribute('aria-label', markerLabel(point));
-      markerElement?.setAttribute('role', 'button');
-    });
-    return marker;
+  marker.on('add', () => {
+    applyMarkerA11y(marker, point);
+  });
+  return marker;
 }
 
 function renderMarkers() {
@@ -112,7 +123,7 @@ function renderMarkers() {
     const current = markers.get(point.id);
     if (current) {
       current.setLatLng([point.latitude, point.longitude]);
-      current.setIcon(createCustomPin(point.type, point.id === props.selectedPointId, point.rts[0]));
+      updateMarkerIcon(current, point, point.id === props.selectedPointId);
       current.setZIndexOffset(point.id === props.selectedPointId ? 1000 : 0);
       continue;
     }
@@ -123,18 +134,28 @@ function renderMarkers() {
   }
 }
 
+let activeZoomendHandler: (() => void) | null = null;
+
 function revealSelectedPoint() {
   if (!map || !markerLayerGroup || !props.selectedPointId) return;
-  const marker = markers.get(props.selectedPointId);
+  const targetId = props.selectedPointId;
+  const marker = markers.get(targetId);
   if (!marker) return;
   const TARGET_SELECTION_ZOOM = 16;
   const maxZoom = map.getMaxZoom() ?? 19;
   const zoom = Math.min(Math.max(map.getZoom(), TARGET_SELECTION_ZOOM), maxZoom);
 
+  if (activeZoomendHandler && map) {
+    map.off('zoomend', activeZoomendHandler);
+    activeZoomendHandler = null;
+  }
+
   const reveal = () => {
+    if (props.selectedPointId !== targetId) return;
     markerLayerGroup?.zoomToShowLayer(marker, () => {
-      const point = props.points.find((item) => item.id === props.selectedPointId);
-      if (point) marker.setIcon(createCustomPin(point.type, true, point.rts[0]));
+      if (props.selectedPointId !== targetId) return;
+      const point = props.points.find((item) => item.id === targetId);
+      if (point) updateMarkerIcon(marker, point, true);
       marker.setZIndexOffset(1000);
       marker.openTooltip();
     });
@@ -143,7 +164,11 @@ function revealSelectedPoint() {
   if (map.getZoom() >= zoom) {
     reveal();
   } else {
-    map.once('zoomend', reveal);
+    activeZoomendHandler = () => {
+      activeZoomendHandler = null;
+      reveal();
+    };
+    map.once('zoomend', activeZoomendHandler);
     map.setView(marker.getLatLng(), zoom, {
       animate: !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
     });
@@ -199,7 +224,9 @@ onMounted(() => {
         position: 'bottomleft',
         prefix: false,
       })
-      .addAttribution('© OpenStreetMap')
+      .addAttribution(
+        '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
+      )
       .addTo(map);
 
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -230,15 +257,22 @@ onMounted(() => {
   });
 });
 
-watch(() => props.points, () => {
-  renderMarkers();
-  framePoints();
-}, { deep: true });
+watch(
+  () => props.points,
+  () => {
+    renderMarkers();
+    framePoints();
+  },
+  { deep: true },
+);
 
-watch(() => props.selectedPointId, (id) => {
-  renderMarkers();
-  if (id) revealSelectedPoint();
-});
+watch(
+  () => props.selectedPointId,
+  (id) => {
+    renderMarkers();
+    if (id) revealSelectedPoint();
+  },
+);
 
 onUnmounted(() => {
   isUnmounted = true;
@@ -257,7 +291,7 @@ onUnmounted(() => {
 
 <template>
   <div
-    class="relative h-[420px] w-full overflow-hidden rounded-btn border border-gray-300 bg-gray-100 sm:h-[520px] lg:h-[640px]"
+    class="rounded-btn relative h-[420px] w-full overflow-hidden border border-gray-300 bg-gray-100 sm:h-[520px] lg:h-[640px]"
   >
     <div ref="mapContainer" class="h-full w-full" />
   </div>
@@ -281,7 +315,9 @@ onUnmounted(() => {
   font-size: 10px;
   font-weight: 700;
   box-shadow: 0 1px 4px rgb(10 35 83 / 32%);
-  transition: box-shadow 120ms ease-out, transform 120ms ease-out;
+  transition:
+    box-shadow 120ms ease-out,
+    transform 120ms ease-out;
 }
 
 .custom-map-marker--selected {

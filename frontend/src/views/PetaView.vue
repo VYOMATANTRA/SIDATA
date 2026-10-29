@@ -4,6 +4,7 @@ import TentangPageLayout from '../components/tentang/TentangPageLayout.vue';
 import TentangBreadcrumb from '../components/tentang/TentangBreadcrumb.vue';
 import TentangHeroPanel from '../components/tentang/TentangHeroPanel.vue';
 import InteractiveMap from '../components/maps/InteractiveMap.vue';
+import MapFilterBar from '../components/maps/MapFilterBar.vue';
 import MapSummaryDropdown from '../components/maps/MapSummaryDropdown.vue';
 import SpatialPointDrawer from '../components/maps/SpatialPointDrawer.vue';
 import { useMapsStore } from '../stores/maps';
@@ -96,6 +97,12 @@ watch(
   },
 );
 
+watch(visiblePoints, (points) => {
+  if (mapsStore.selectedPoint && !points.some((p) => p.id === mapsStore.selectedPoint?.id)) {
+    mapsStore.clearSelection();
+  }
+});
+
 watch(totalPages, (pages) => {
   if (currentPage.value > pages) currentPage.value = pages;
 });
@@ -120,9 +127,19 @@ function requestUserLocation() {
         longitude: position.coords.longitude,
       };
     },
-    () => {
-      locationError.value = 'Izin lokasi tidak diberikan, jarak tetap dihitung dari pusat kelurahan.';
+    (err) => {
+      if (err.code === err.PERMISSION_DENIED) {
+        locationError.value =
+          'Izin lokasi tidak diberikan, jarak tetap dihitung dari pusat kelurahan.';
+      } else if (err.code === err.TIMEOUT) {
+        locationError.value =
+          'Waktu permintaan lokasi habis; coba lagi atau gunakan jarak dari pusat kelurahan.';
+      } else {
+        locationError.value =
+          'Lokasi tidak dapat ditentukan saat ini; jarak tetap dihitung dari pusat kelurahan.';
+      }
     },
+    { timeout: 10000 },
   );
 }
 </script>
@@ -138,7 +155,7 @@ function requestUserLocation() {
 
     <section class="bg-white px-4 py-8 sm:px-6 sm:py-10" aria-labelledby="peta-title">
       <div class="mx-auto max-w-6xl">
-        <h2 id="peta-title" class="text-lg font-bold text-brand-navy">Sebaran Titik Spasial</h2>
+        <h2 id="peta-title" class="text-brand-navy text-lg font-bold">Sebaran Titik Spasial</h2>
 
         <div class="mt-4 flex justify-end">
           <MapSummaryDropdown :summary="mapsStore.summary" />
@@ -150,14 +167,14 @@ function requestUserLocation() {
 
         <div
           v-if="mapsStore.error"
-          class="mt-4 rounded-btn border border-gray-400 bg-white p-5"
+          class="rounded-btn mt-4 border border-gray-400 bg-white p-5"
           role="alert"
           data-test="peta-error"
         >
-          <p class="text-base text-brand-navy">{{ mapsStore.error }}</p>
+          <p class="text-brand-navy text-base">{{ mapsStore.error }}</p>
           <button
             type="button"
-            class="mt-3 rounded-btn bg-brand-navy px-4 py-2.5 text-base font-medium text-white hover:bg-brand-navy-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+            class="rounded-btn bg-brand-navy hover:bg-brand-navy-deep focus-visible:outline-brand-navy mt-3 px-4 py-2.5 text-base font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2"
             @click="mapsStore.loadPoints()"
           >
             Coba lagi
@@ -176,140 +193,150 @@ function requestUserLocation() {
           />
 
           <section
-              class="flex max-h-[640px] flex-col overflow-hidden rounded-btn border border-gray-300 bg-white"
-              aria-labelledby="terdekat-title"
-            >
-              <div class="border-b border-gray-200 p-5 pb-4">
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h3 id="terdekat-title" class="text-base font-bold text-brand-navy">Titik terdekat</h3>
-                    <p class="mt-1 text-sm text-gray-600">Jarak dihitung dari {{ originLabel }}.</p>
-                  </div>
-                  <button
-                    v-if="mapsStore.selectedPoint"
-                    type="button"
-                    class="min-h-11 rounded-btn border border-gray-300 px-3 py-2 text-sm font-medium text-brand-navy hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
-                    @click="mapsStore.clearSelection"
-                  >
-                    Kembali ke hasil
-                  </button>
-                  <button
-                    v-else
-                    type="button"
-                    class="min-h-11 rounded-btn border border-brand-navy px-3 py-2 text-sm font-medium text-brand-navy transition-colors hover:bg-brand-navy hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy active:scale-[0.98]"
-                    @click="requestUserLocation"
-                  >
-                    Dekat saya
-                  </button>
+            class="rounded-btn flex max-h-[640px] flex-col overflow-hidden border border-gray-300 bg-white"
+            aria-labelledby="terdekat-title"
+          >
+            <div class="border-b border-gray-200 p-5 pb-4">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 id="terdekat-title" class="text-brand-navy text-base font-bold">
+                    Titik terdekat
+                  </h3>
+                  <p class="mt-1 text-sm text-gray-600">Jarak dihitung dari {{ originLabel }}.</p>
                 </div>
-
-                <label for="peta-search" class="sr-only">Cari nama titik, nomor RT, atau nama ketua RT</label>
-                <input
-                  id="peta-search"
-                  v-model="search"
-                  type="search"
-                  name="peta-search"
-                  placeholder="Cari lokasi, nama, atau nomor RT"
-                  autocomplete="off"
-                  class="mt-4 min-h-11 w-full rounded-btn border border-gray-400 bg-white px-4 py-2.5 text-base text-brand-navy placeholder:text-gray-500 focus-visible:border-brand-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
-                  data-test="peta-search"
-                />
-                <div class="mt-3 flex flex-wrap gap-2" role="group" aria-label="Filter kategori titik">
-                  <button
-                    v-for="filter in [
-                      { type: 'all', label: 'Semua' },
-                      { type: 'ketua_rt', label: 'Ketua RT' },
-                      { type: 'bank_sampah', label: 'Bank Sampah' },
-                      { type: 'fasilitas_umum', label: 'Fasilitas umum' },
-                    ] as const"
-                    :key="filter.type"
-                    type="button"
-                    class="min-h-11 rounded-btn border px-3 py-1.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy active:scale-[0.98]"
-                    :class="mapsStore.activeTypeFilter === filter.type ? 'border-brand-navy bg-brand-navy text-white' : 'border-gray-300 bg-white text-brand-navy hover:border-brand-navy'"
-                    :aria-pressed="mapsStore.activeTypeFilter === filter.type"
-                    @click="mapsStore.setTypeFilter(filter.type)"
-                  >
-                    {{ filter.label }}
-                  </button>
-                </div>
-                <p class="mt-3 text-sm text-gray-600" aria-live="polite" data-test="peta-list-count">
-                  {{ nearbyPoints.length }} lokasi ditemukan
-                </p>
+                <button
+                  v-if="mapsStore.selectedPoint"
+                  type="button"
+                  class="rounded-btn text-brand-navy focus-visible:outline-brand-navy min-h-11 border border-gray-300 px-3 py-2 text-sm font-medium hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2"
+                  @click="mapsStore.clearSelection"
+                >
+                  Kembali ke hasil
+                </button>
+                <button
+                  v-else
+                  type="button"
+                  class="rounded-btn border-brand-navy text-brand-navy hover:bg-brand-navy focus-visible:outline-brand-navy min-h-11 border px-3 py-2 text-sm font-medium transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98]"
+                  @click="requestUserLocation"
+                >
+                  Dekat saya
+                </button>
               </div>
 
-              <p v-if="locationError" role="alert" class="mt-2 text-sm text-brand-navy">
-                {{ locationError }}
-              </p>
-
-              <SpatialPointDrawer
-                v-if="mapsStore.selectedPoint"
-                class="min-h-0 flex-1 overflow-y-auto"
-                :point="mapsStore.selectedPoint"
-                :leader="mapsStore.selectedLeader"
-                close-label="Tutup detail"
-                @close="mapsStore.clearSelection"
+              <label for="peta-search" class="sr-only"
+                >Cari nama titik, nomor RT, atau nama ketua RT</label
+              >
+              <input
+                id="peta-search"
+                v-model="search"
+                type="search"
+                name="peta-search"
+                placeholder="Cari lokasi, nama, atau nomor RT"
+                autocomplete="off"
+                class="rounded-btn text-brand-navy focus-visible:border-brand-navy focus-visible:outline-brand-navy mt-4 min-h-11 w-full border border-gray-400 bg-white px-4 py-2.5 text-base placeholder:text-gray-500 focus-visible:outline-2 focus-visible:outline-offset-2"
+                data-test="peta-search"
               />
-
-              <ol v-else-if="nearbyPoints.length > 0" class="min-h-0 flex-1 divide-y divide-gray-200 overflow-y-auto px-5">
-                <li v-for="item in paginatedNearbyPoints" :key="item.point.id">
-                  <button
-                    type="button"
-                    class="flex min-h-[68px] w-full cursor-pointer items-start justify-between gap-3 py-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
-                    :aria-label="`Tampilkan ${item.point.name} pada peta`"
-                    data-test="peta-result"
-                    @click="mapsStore.selectPoint(item.point)"
-                  >
-                    <span>
-                      <span class="block text-base font-semibold text-brand-navy">
-                        {{ item.point.type === 'ketua_rt' && item.point.rts[0] ? `RT ${item.point.rts[0]}` : item.point.name }}
-                      </span>
-                      <span class="block text-sm text-gray-600">
-                        {{ TYPE_LABELS[item.point.type] }}
-                        <template v-if="item.point.rtLeader">&middot; {{ item.point.rtLeader.name }}</template>
-                        <template v-if="item.point.rts.length > 0">
-                          &middot; RT {{ item.point.rts.join(', ') }}
-                        </template>
-                      </span>
-                    </span>
-                    <span class="shrink-0 text-sm font-medium text-brand-navy">
-                      {{ formatDistance(item.distanceKm) }}
-                    </span>
-                  </button>
-                </li>
-              </ol>
-
-              <p v-else-if="!mapsStore.selectedPoint" class="mt-3 text-base text-gray-800" data-test="peta-empty">
-                Tidak ada titik yang cocok dengan pencarian atau filter saat ini.
-              </p>
-
-              <div v-if="!mapsStore.selectedPoint && nearbyPoints.length > PAGE_SIZE" class="flex items-center justify-between gap-2 border-t border-gray-200 px-5 py-3">
-                <p class="text-sm tabular-nums text-gray-600" data-test="peta-pagination-summary">
-                  {{ paginationStart }}–{{ paginationEnd }} dari {{ nearbyPoints.length }} lokasi
-                </p>
-                <nav aria-label="Halaman hasil peta" class="flex items-center gap-2">
-                  <button
-                    type="button"
-                    class="min-h-11 min-w-11 rounded-btn border border-gray-300 px-3 text-sm font-medium text-brand-navy hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy disabled:cursor-not-allowed disabled:opacity-50"
-                    aria-label="Halaman sebelumnya"
-                    data-test="peta-previous-page"
-                    :disabled="currentPage === 1"
-                    @click="currentPage -= 1"
-                  >
-                    Sebelumnya
-                  </button>
-                  <span class="text-sm tabular-nums text-gray-700" aria-current="page">{{ currentPage }} / {{ totalPages }}</span>
-                  <button
-                    type="button"
-                    class="min-h-11 min-w-11 rounded-btn border border-gray-300 px-3 text-sm font-medium text-brand-navy hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy disabled:cursor-not-allowed disabled:opacity-50"
-                    aria-label="Halaman selanjutnya"
-                    data-test="peta-next-page"
-                    :disabled="currentPage === totalPages"
-                    @click="currentPage += 1"
-                  >
-                    Selanjutnya
-                  </button>
-                </nav>
+              <div class="mt-3">
+                <MapFilterBar
+                  :active-type="mapsStore.activeTypeFilter"
+                  @update:type="mapsStore.setTypeFilter"
+                />
               </div>
+              <p class="mt-3 text-sm text-gray-600" aria-live="polite" data-test="peta-list-count">
+                {{ nearbyPoints.length }} lokasi ditemukan
+              </p>
+            </div>
+
+            <p v-if="locationError" role="alert" class="text-brand-navy mt-2 text-sm">
+              {{ locationError }}
+            </p>
+
+            <SpatialPointDrawer
+              v-if="mapsStore.selectedPoint"
+              class="min-h-0 flex-1 overflow-y-auto"
+              :point="mapsStore.selectedPoint"
+              :leader="mapsStore.selectedLeader"
+              close-label="Tutup detail"
+              @close="mapsStore.clearSelection"
+            />
+
+            <ol
+              v-else-if="nearbyPoints.length > 0"
+              class="min-h-0 flex-1 divide-y divide-gray-200 overflow-y-auto px-5"
+            >
+              <li v-for="item in paginatedNearbyPoints" :key="item.point.id">
+                <button
+                  type="button"
+                  class="focus-visible:outline-brand-navy flex min-h-[68px] w-full cursor-pointer items-start justify-between gap-3 py-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2"
+                  :aria-label="`Tampilkan ${item.point.name} pada peta`"
+                  data-test="peta-result"
+                  @click="mapsStore.selectPoint(item.point)"
+                >
+                  <span>
+                    <span class="text-brand-navy block text-base font-semibold">
+                      {{
+                        item.point.type === 'ketua_rt' && item.point.rts[0]
+                          ? `RT ${item.point.rts[0]}`
+                          : item.point.name
+                      }}
+                    </span>
+                    <span class="block text-sm text-gray-600">
+                      {{ TYPE_LABELS[item.point.type] }}
+                      <template v-if="item.point.rtLeader"
+                        >&middot; {{ item.point.rtLeader.name }}</template
+                      >
+                      <template v-if="item.point.rts.length > 0">
+                        &middot; RT {{ item.point.rts.join(', ') }}
+                      </template>
+                    </span>
+                  </span>
+                  <span class="text-brand-navy shrink-0 text-sm font-medium">
+                    {{ formatDistance(item.distanceKm) }}
+                  </span>
+                </button>
+              </li>
+            </ol>
+
+            <p
+              v-else-if="!mapsStore.selectedPoint"
+              class="mt-3 text-base text-gray-800"
+              data-test="peta-empty"
+            >
+              Tidak ada titik yang cocok dengan pencarian atau filter saat ini.
+            </p>
+
+            <div
+              v-if="!mapsStore.selectedPoint && nearbyPoints.length > PAGE_SIZE"
+              class="flex items-center justify-between gap-2 border-t border-gray-200 px-5 py-3"
+            >
+              <p class="text-sm text-gray-600 tabular-nums" data-test="peta-pagination-summary">
+                {{ paginationStart }}–{{ paginationEnd }} dari {{ nearbyPoints.length }} lokasi
+              </p>
+              <nav aria-label="Halaman hasil peta" class="flex items-center gap-2">
+                <button
+                  type="button"
+                  class="rounded-btn text-brand-navy focus-visible:outline-brand-navy min-h-11 min-w-11 border border-gray-300 px-3 text-sm font-medium hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Halaman sebelumnya"
+                  data-test="peta-previous-page"
+                  :disabled="currentPage === 1"
+                  @click="currentPage -= 1"
+                >
+                  Sebelumnya
+                </button>
+                <span class="text-sm text-gray-700 tabular-nums" aria-current="page"
+                  >{{ currentPage }} / {{ totalPages }}</span
+                >
+                <button
+                  type="button"
+                  class="rounded-btn text-brand-navy focus-visible:outline-brand-navy min-h-11 min-w-11 border border-gray-300 px-3 text-sm font-medium hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Halaman selanjutnya"
+                  data-test="peta-next-page"
+                  :disabled="currentPage === totalPages"
+                  @click="currentPage += 1"
+                >
+                  Selanjutnya
+                </button>
+              </nav>
+            </div>
           </section>
         </div>
       </div>
