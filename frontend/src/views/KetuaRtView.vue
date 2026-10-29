@@ -163,7 +163,7 @@ const hasAddressData = computed(() =>
 
 const isSampleRoster = computed(() => {
   if (rtLeadersStore.rtLeaders.length === 0) return false;
-  return rtLeadersStore.rtLeaders.some(
+  return rtLeadersStore.rtLeaders.every(
     (leader) => !isDialable(leader.phone) || /^Ketua RT 0*\d+$/i.test(leader.name),
   );
 });
@@ -471,12 +471,16 @@ function formatPhone(value: string): string {
             >
               <button
                 type="button"
-                :disabled="currentPage === 1"
                 :aria-disabled="currentPage === 1"
                 aria-label="Halaman sebelumnya"
-                class="rounded-btn text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 border border-gray-300 px-3 py-2 text-sm font-medium transition-colors duration-150 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:active:scale-100 motion-reduce:transform-none"
+                class="rounded-btn text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 border border-gray-300 px-3 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] motion-reduce:transform-none"
+                :class="
+                  currentPage === 1
+                    ? 'cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400 active:scale-100'
+                    : 'hover:bg-gray-100'
+                "
                 data-test="pagination-prev"
-                @click="goToPage(currentPage - 1)"
+                @click="currentPage > 1 && goToPage(currentPage - 1)"
               >
                 <svg
                   class="h-4 w-4"
@@ -529,12 +533,16 @@ function formatPhone(value: string): string {
 
               <button
                 type="button"
-                :disabled="currentPage === totalPages"
                 :aria-disabled="currentPage === totalPages"
                 aria-label="Halaman selanjutnya"
-                class="rounded-btn text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 border border-gray-300 px-3 py-2 text-sm font-medium transition-colors duration-150 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:active:scale-100 motion-reduce:transform-none"
+                class="rounded-btn text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 border border-gray-300 px-3 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] motion-reduce:transform-none"
+                :class="
+                  currentPage === totalPages
+                    ? 'cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400 active:scale-100'
+                    : 'hover:bg-gray-100'
+                "
                 data-test="pagination-next"
-                @click="goToPage(currentPage + 1)"
+                @click="currentPage < totalPages && goToPage(currentPage + 1)"
               >
                 <span class="hidden sm:inline">Selanjutnya</span>
                 <svg
