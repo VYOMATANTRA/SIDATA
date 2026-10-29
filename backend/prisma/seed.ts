@@ -39,10 +39,14 @@ async function main() {
     },
   });
 
-  // Seed all 100 RT Leaders and their 1:1 Spatial Points.
+  // Seed all 100 RT Leaders and their 1:1 Spatial Points (in non-production environments only).
   // `update: {}` throughout: seeding must never overwrite a correction an editor
   // has already made (SPEC §2). Re-running the seed only fills in missing rows.
-  await seedRtLeaders(prisma, RT_LEADERS_DATA);
+  // In production, the operational roster must be loaded from an official import (SPEC §10),
+  // never populated with placeholder synthetic data.
+  if (process.env.NODE_ENV !== 'production') {
+    await seedRtLeaders(prisma, RT_LEADERS_DATA);
+  }
 
   const pointBankSampah = await prisma.spatialPoint.upsert({
     where: { id: '00000000-0000-0000-0000-000000000002' },
