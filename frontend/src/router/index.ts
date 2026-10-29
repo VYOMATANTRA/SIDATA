@@ -49,6 +49,12 @@ const router = createRouter({
       meta: { requiresAuth: true, requiresAdmin: true, title: 'Log Sistem dan Audit Trail' },
     },
     {
+      path: '/settings/audit-retention',
+      name: 'audit-retention-settings',
+      component: () => import('../views/AuditRetentionSettingsView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true, title: 'Pengaturan Retensi Audit' },
+    },
+    {
       path: '/cerita/:slug',
       name: 'cerita-page',
       component: () => import('../views/CeritaPageView.vue'),
