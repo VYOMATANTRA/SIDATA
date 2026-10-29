@@ -9,15 +9,15 @@ const ROSTER_SIZE = 100;
 /** The page's default page size, matching the view's initial `pageSize`. */
 const DEFAULT_PAGE_SIZE = 10;
 
-function buildRoster(): RtLeader[] {
+function buildRoster(sample = false): RtLeader[] {
   return Array.from({ length: ROSTER_SIZE }, (_, index) => {
     const rtNumber = index + 1;
     return {
       rtNumber,
-      name: `Ketua RT ${rtNumber}`,
-      // International format, as stored by the survey import.
-      phone: `+62 811-0000-${String(rtNumber).padStart(4, '0')}`,
-      phoneIsWhatsapp: rtNumber % 2 === 1,
+      name: sample ? `Ketua RT ${String(rtNumber).padStart(2, '0')}` : `Ketua RT ${rtNumber}`,
+      // When sample=true, phone is non-dialable placeholder
+      phone: sample ? '—' : `+62 811-0000-${String(rtNumber).padStart(4, '0')}`,
+      phoneIsWhatsapp: !sample && rtNumber % 2 === 1,
       alamat: rtNumber % 3 === 0 ? null : `Jl. Mulawarman RT ${rtNumber}`,
       coordinates: null,
       createdAt: '2026-01-01T00:00:00.000Z',
@@ -177,6 +177,42 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
     expect(wrapper.text()).not.toContain('Direktori 100 Rukun Tetangga');
   });
 
+  it('hides sample notice and uses neutral hero subtitle when roster contains real data', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          leaders: [
+            {
+              rtNumber: 1,
+              name: 'Pak Budi Santoso',
+              phone: '081234567890',
+              phoneIsWhatsapp: true,
+              alamat: 'Jl. Manggar No. 10',
+            },
+            {
+              rtNumber: 2,
+              name: 'Ibu Siti Rahma',
+              phone: '081298765432',
+              phoneIsWhatsapp: false,
+              alamat: 'Jl. Manggar No. 20',
+            },
+          ],
+        }),
+      } as Response),
+    );
+
+    const { useRtLeadersStore } = await import('../stores/rtLeaders.store');
+    const store = useRtLeadersStore();
+    await store.fetchRtLeaders(true);
+
+    const wrapper = await mountReady();
+    expect(wrapper.text()).not.toContain('Data contoh, bukan daftar resmi');
+    expect(wrapper.text()).toContain('Daftar Ketua RT Kelurahan Manggar');
+    expect(wrapper.text()).not.toContain('Contoh data daftar Ketua RT');
+  });
+
   it('filters by RT number, including zero-padded input', async () => {
     const wrapper = await mountReady();
     const search = wrapper.find('[data-test="rt-search"]');
@@ -229,6 +265,41 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
 
     // RT 2 is not flagged as WhatsApp; preserves leading + from international format
     expect(wrapper.find('a[href="tel:+6281100000002"]').exists()).toBe(true);
+  });
+
+  it('handles multi-number phone values by linking only the first number', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          leaders: [
+            {
+              rtNumber: 1,
+              name: 'Ketua RT 01',
+              phone: '08123456789 / 08129999888',
+              phoneIsWhatsapp: true,
+              alamat: null,
+            },
+            {
+              rtNumber: 2,
+              name: 'Ketua RT 02',
+              phone: '+62 811 222 333, 0815 444 555',
+              phoneIsWhatsapp: false,
+              alamat: null,
+            },
+          ],
+        }),
+      } as Response),
+    );
+
+    const { useRtLeadersStore } = await import('../stores/rtLeaders.store');
+    const store = useRtLeadersStore();
+    await store.fetchRtLeaders(true);
+
+    const wrapper = await mountReady();
+    expect(wrapper.find('a[href="https://wa.me/628123456789"]').exists()).toBe(true);
+    expect(wrapper.find('a[href="tel:+62811222333"]').exists()).toBe(true);
   });
 
   it('renders a placeholder phone as plain text instead of a dead link', async () => {
@@ -416,9 +487,9 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
     expect(error.attributes('role')).toBe('alert');
     expect(error.text()).toContain('Gagal memuat data Ketua RT');
     expect(error.find('button').text()).toContain('Coba lagi');
-    // The table is not rendered while errored, nor is the count announced
+    // The table is not rendered while errored, and count text is empty
     expect(wrapper.find('table').exists()).toBe(false);
-    expect(wrapper.find('[data-test="rt-count"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="rt-count"]').text()).toBe('');
   });
 
   it('clears stale roster and rejected count when a forced refresh fails', async () => {
