@@ -371,9 +371,11 @@ results change ("Menampilkan N dari 100 RT"; a paginated slice is announced as
 "Menampilkan 1–10 dari 100 RT"). Rows remain sorted by `rt_number` and the unfiltered table is
 the default state, so the page is fully usable with JavaScript-driven filtering ignored. The
 `Alamat` column is automatically hidden when no leader in the displayed dataset has an address
-value. A prominent sample-data notice is displayed explaining that the roster contains placeholder
-names and contacts pending official publication. No RT-range grouping or collapsible bands —
-flat table only.
+value. When the displayed dataset is detected as synthetic/sample data (i.e. every leader is
+non-dialable or carries a placeholder name), a prominent sample-data notice is displayed explaining
+that the roster contains placeholder names and contacts pending official publication; when real
+operational contacts are loaded, this notice is suppressed. No RT-range grouping or collapsible
+bands — flat table only.
 
 Accessibility implications, per `docs/ACCESSIBILITY.md`: the input needs a real `<label>` (not
 placeholder-only), the result count belongs in an `aria-live="polite"` region, and the table
