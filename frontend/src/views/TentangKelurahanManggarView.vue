@@ -81,6 +81,7 @@ function retryPopulation() {
 }
 
 const formattedPopulation = computed(() => {
+  if (populationError.value) return null;
   const indicator = populationIndicator.value;
   if (!indicator) return null;
   const num = Number(indicator.valueCurrent);
