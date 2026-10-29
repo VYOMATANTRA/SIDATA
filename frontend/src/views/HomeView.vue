@@ -216,18 +216,9 @@ async function handleLogout() {
             <span v-else>Keluar (Logout)</span>
           </button>
         </template>
-
-        <template v-else>
-          <router-link
-            to="/login"
-            class="rounded-btn bg-brand-cyan text-brand-navy focus-visible:outline-brand-cyan px-4 py-2 text-xs font-semibold shadow-md shadow-black/20 transition-all hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 sm:text-sm"
-          >
-            Masuk (Login)
-          </router-link>
-        </template>
       </template>
 
-      <!-- Mobile Menu Slot -->
+      <!-- Navigation & Auth Dropdown Menu Slot -->
       <template #menu="{ close }">
         <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <router-link
@@ -263,8 +254,8 @@ async function handleLogout() {
           </router-link>
         </div>
 
-        <!-- Mobile Auth Actions inside Drawer -->
-        <div class="mt-4 border-t border-white/10 pt-4 md:hidden">
+        <!-- Auth Actions inside Dropdown Drawer -->
+        <div class="mt-4 border-t border-white/10 pt-4">
           <template v-if="authStore.isAuthenticated">
             <div class="mb-3 space-y-0.5">
               <p class="text-xs font-semibold text-slate-200">{{ authStore.user?.email }}</p>
@@ -272,7 +263,15 @@ async function handleLogout() {
                 Peran: {{ authStore.user?.role }}
               </p>
             </div>
-            <div class="flex flex-col gap-2">
+            <div class="flex flex-wrap gap-2">
+              <router-link
+                v-if="authStore.canEditData"
+                to="/data"
+                class="rounded-btn block bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20"
+                @click="close"
+              >
+                Kelola Data
+              </router-link>
               <router-link
                 v-if="authStore.isAdmin"
                 to="/users"
@@ -281,6 +280,22 @@ async function handleLogout() {
                 @click="close"
               >
                 Manajemen Pengguna
+              </router-link>
+              <router-link
+                v-if="authStore.isAdmin"
+                to="/audit-logs"
+                class="rounded-btn block bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20"
+                @click="close"
+              >
+                Log Sistem
+              </router-link>
+              <router-link
+                v-if="authStore.isAdmin"
+                to="/settings/audit-retention"
+                class="rounded-btn block bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20"
+                @click="close"
+              >
+                Retensi Audit
               </router-link>
               <button
                 type="button"
@@ -292,63 +307,24 @@ async function handleLogout() {
                 "
                 :disabled="isLoggingOut"
                 data-test="mobile-logout-btn"
-                class="rounded-btn hover:text-brand-navy w-full border border-white/20 bg-white/10 px-4 py-2 text-left text-sm font-medium text-white transition-colors hover:bg-white disabled:opacity-50"
+                class="rounded-btn hover:text-brand-navy border border-white/20 bg-white/10 px-4 py-2 text-left text-sm font-medium text-white transition-colors hover:bg-white disabled:opacity-50"
               >
                 <span v-if="isLoggingOut">Memproses...</span>
                 <span v-else>Keluar (Logout)</span>
               </button>
             </div>
-
-            <router-link
-              v-if="authStore.canEditData"
-              to="/data"
-              class="rounded-lg bg-slate-100 px-3.5 py-1.5 text-xs font-medium text-slate-800 transition-colors hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-slate-500 sm:text-sm"
-            >
-              Kelola Data
-            </router-link>
-
-            <router-link
-              v-if="authStore.isAdmin"
-              to="/users"
-              class="rounded-lg bg-slate-100 px-3.5 py-1.5 text-xs font-medium text-slate-800 transition-colors hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-slate-500 sm:text-sm"
-            >
-              Manajemen Pengguna
-            </router-link>
-
-            <router-link
-              v-if="authStore.isAdmin"
-              to="/audit-logs"
-              class="rounded-lg bg-slate-100 px-3.5 py-1.5 text-xs font-medium text-slate-800 transition-colors hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-slate-500 sm:text-sm"
-            >
-              Log Sistem
-            </router-link>
-
-            <router-link
-              v-if="authStore.isAdmin"
-              to="/settings/audit-retention"
-              class="rounded-lg bg-slate-100 px-3.5 py-1.5 text-xs font-medium text-slate-800 transition-colors hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-slate-500 sm:text-sm"
-            >
-              Retensi Audit
-            </router-link>
-
-            <button
-              @click="handleLogout"
-              :disabled="isLoggingOut"
-              class="cursor-pointer rounded-lg bg-slate-900 px-3.5 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-slate-900 disabled:opacity-50 sm:text-sm"
-            >
-              <span v-if="isLoggingOut">Memproses...</span>
-              <span v-else>Keluar (Logout)</span>
-            </button>
           </template>
           <template v-else>
-            <router-link
-              to="/login"
-              data-test="mobile-login-link"
-              class="rounded-btn bg-brand-cyan text-brand-navy block w-full px-4 py-2 text-center text-sm font-semibold transition-colors hover:bg-white"
-              @click="close"
-            >
-              Masuk (Login)
-            </router-link>
+            <div class="pt-1">
+              <router-link
+                to="/login"
+                data-test="login-link mobile-login-link"
+                class="rounded-btn bg-white text-brand-navy border-2 border-brand-navy hover:bg-brand-navy hover:text-white hover:border-white active:bg-brand-navy-overlay active:text-white inline-flex w-full sm:w-auto items-center justify-center px-5 py-2.5 text-center text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-brand-cyan shadow-sm"
+                @click="close"
+              >
+                Masuk (Login)
+              </router-link>
+            </div>
           </template>
         </div>
       </template>
