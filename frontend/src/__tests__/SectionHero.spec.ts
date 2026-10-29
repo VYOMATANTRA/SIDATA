@@ -93,7 +93,7 @@ describe('SectionHero ctaLink security', () => {
     const section = wrapper.find('section#hero');
     const style = section.attributes('style');
     expect(style).toContain('linear-gradient');
-    expect(style).toContain('background_laman_depan_kelurahan.png');
+    expect(style).toContain('background_laman_depan_kelurahan.webp');
   });
 });
 
@@ -185,7 +185,7 @@ describe('Common SectionHero.vue', () => {
     const section = wrapper.find('[data-test="section-hero"]');
     const style = section.attributes('style');
     expect(style).toContain('linear-gradient');
-    expect(style).toContain('background_laman_depan_kelurahan.png');
+    expect(style).toContain('background_laman_depan_kelurahan.webp');
   });
 
   it('applies dark gradient background overlay when custom backgroundImage is passed', () => {
