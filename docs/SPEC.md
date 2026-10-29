@@ -320,6 +320,7 @@ caching live in `system_settings` as a separate operational concern.
    hero's institutional voice.
 3. Cerita preview — cards for the stat pages, each showing a few representative figures + link.
    Data-caveat/provenance handling is deferred to the full stat pages, not shown on the cards.
+4. Widget Cuaca — current weather conditions in Manggar from BMKG (description, temperature Celsius, humidity percent, wind speed, wind direction). This widget is to be implemented in a separate PR.
 
 SOTK and "who is the lurah" content is **not** on the landing page — it lives on the existing
 "Tentang Kelurahan Manggar" page instead.
