@@ -20,7 +20,7 @@ export const DEFAULT_HERO_BLOCK: ContentBlock = {
   sectionId: null,
   type: 'hero',
   slug: 'landing-hero',
-  title: 'Portal Data Terpadu Kelurahan Manggar',
+  title: 'Sistem Informasi Data Terpadu Kelurahan',
   body: 'Pusat integrasi data kependudukan, potensi wilayah, layanan publik, dan pemetaan geospasial Kelurahan Manggar, Balikpapan Timur.',
   metadata: {
     ctaText: 'Jelajahi Potensi',

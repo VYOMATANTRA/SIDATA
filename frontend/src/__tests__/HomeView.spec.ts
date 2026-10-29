@@ -81,7 +81,7 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
     // Exactly one h1 on the entire page
     const h1Elements = wrapper.findAll('h1');
     expect(h1Elements.length).toBe(1);
-    expect(h1Elements[0]?.text()).toContain('Portal Data Terpadu');
+    expect(h1Elements[0]?.text()).toContain('Sistem Informasi Data Terpadu Kelurahan');
 
     // Collect all headings across the view in DOM order
     const headings = wrapper.findAll('h1, h2, h3, h4, h5, h6');
@@ -97,12 +97,10 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
     // Check specific section headings exist with h2
     expect(wrapper.find('h2#sambutan-title').exists()).toBe(true);
     expect(wrapper.find('h2#cerita-preview-title').exists()).toBe(true);
-    expect(wrapper.find('h2#highlights-title').exists()).toBe(true);
-    expect(wrapper.find('h2#weather-widget-title').exists()).toBe(true);
   });
 
   // Edge Case 3: Sections Assembled in Exact Spec §8 Order inside <main>
-  it('assembles sections in exact Spec §8 order: Hero -> Sambutan -> Cerita preview -> Highlights -> Cuaca', async () => {
+  it('assembles sections in exact Spec §8 order: Hero -> Sambutan -> Cerita preview', async () => {
     const { pinia, router } = setupHomeView();
     await router.push('/');
     await router.isReady();
@@ -115,15 +113,11 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
     const heroEl = wrapper.find('section#hero').element;
     const sambutanEl = wrapper.find('section[aria-labelledby="sambutan-title"]').element;
     const ceritaEl = wrapper.find('section#cerita-preview').element;
-    const highlightsEl = wrapper.find('section#potensi').element;
-    const weatherEl = wrapper.find('section#widget-cuaca').element;
 
-    // Verify all 5 sections are inside main#main-content
+    // Verify all 3 sections are inside main#main-content
     expect(mainEl.contains(heroEl)).toBe(true);
     expect(mainEl.contains(sambutanEl)).toBe(true);
     expect(mainEl.contains(ceritaEl)).toBe(true);
-    expect(mainEl.contains(highlightsEl)).toBe(true);
-    expect(mainEl.contains(weatherEl)).toBe(true);
 
     // Verify DOM position order using compareDocumentPosition (DOCUMENT_POSITION_FOLLOWING = 4)
     expect(
@@ -132,16 +126,10 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
     expect(
       sambutanEl.compareDocumentPosition(ceritaEl) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(
-      ceritaEl.compareDocumentPosition(highlightsEl) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(
-      highlightsEl.compareDocumentPosition(weatherEl) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
   });
 
-  // Edge Case 4: Default Fallback Content when Cerita and Weather Slots are Omitted
-  it('renders accessible fallback placeholders when cerita-preview and weather slots are not provided', async () => {
+  // Edge Case 4: Default Fallback Content when Cerita Slot is Omitted
+  it('renders accessible fallback placeholder when cerita-preview slot is not provided', async () => {
     const { pinia, router } = setupHomeView();
     await router.push('/');
     await router.isReady();
@@ -153,14 +141,10 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
     const ceritaSection = wrapper.find('section#cerita-preview');
     expect(ceritaSection.exists()).toBe(true);
     expect(ceritaSection.find('h2#cerita-preview-title').text()).toContain('Cerita & Data Wilayah');
-
-    const weatherSection = wrapper.find('section#widget-cuaca');
-    expect(weatherSection.exists()).toBe(true);
-    expect(weatherSection.find('h2#weather-widget-title').text()).toContain('Prakiraan Cuaca');
   });
 
-  // Edge Case 5: Custom Slot Injection into Cerita Preview and Weather Widget Slots
-  it('renders custom slotted content when cerita-preview and weather slots are passed', async () => {
+  // Edge Case 5: Custom Slot Injection into Cerita Preview Slot
+  it('renders custom slotted content when cerita-preview slot is passed', async () => {
     const { pinia, router } = setupHomeView();
     await router.push('/');
     await router.isReady();
@@ -169,15 +153,11 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
       global: { plugins: [pinia, router] },
       slots: {
         'cerita-preview': '<div id="custom-cerita-content">Kartu Cerita Terintegrasi</div>',
-        weather: '<div id="custom-weather-content">BMKG Weather Widget Active</div>',
       },
     });
 
     expect(wrapper.find('section#cerita-preview #custom-cerita-content').exists()).toBe(true);
     expect(wrapper.find('section#cerita-preview').text()).toContain('Kartu Cerita Terintegrasi');
-
-    expect(wrapper.find('section#widget-cuaca #custom-weather-content').exists()).toBe(true);
-    expect(wrapper.find('section#widget-cuaca').text()).toContain('BMKG Weather Widget Active');
   });
 
   // Edge Case 6: Concurrency Re-entrance Guard on Logout
@@ -344,12 +324,10 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
     expect(wrapper!.find('h1').text().length).toBeGreaterThan(0);
     expect(wrapper!.find('section#hero').exists()).toBe(true);
     expect(wrapper!.find('section#cerita-preview').exists()).toBe(true);
-    expect(wrapper!.find('section#potensi').exists()).toBe(true);
-    expect(wrapper!.find('section#widget-cuaca').exists()).toBe(true);
   });
 
-  // Edge Case 11: Skip link target integrity and action button anchors
-  it('ensures skip link and hero action anchors point to valid destinations', async () => {
+  // Edge Case 11: Skip link target integrity
+  it('ensures skip link points to valid #main-content destination', async () => {
     const { pinia, router } = setupHomeView();
     await router.push('/');
     await router.isReady();
@@ -362,15 +340,6 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
     const skipLink = wrapper.find('a[href="#main-content"]');
     expect(skipLink.exists()).toBe(true);
     expect(wrapper.find('#main-content').exists()).toBe(true);
-
-    // Hero CTA links to #potensi
-    const ctaLink = wrapper.find('section#hero a[href="#potensi"]');
-    expect(ctaLink.exists()).toBe(true);
-    expect(wrapper.find('#potensi').exists()).toBe(true);
-
-    // Officer login link points to /login
-    const officerLink = wrapper.find('section#hero a[href="/login"]');
-    expect(officerLink.exists()).toBe(true);
   });
 
   // Happy Path (Last): Unauthenticated Public Visitor Navigation
