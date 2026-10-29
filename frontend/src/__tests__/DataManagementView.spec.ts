@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import DataManagementView from '../views/DataManagementView.vue';
 import type { Indicator } from '../stores/indicators.store';
 import type { IndicatorTable } from '../stores/indicatorTables.store';
+import { useAuthStore } from '../stores/auth';
 
 const CREATED = '2026-01-01T00:00:00.000Z';
 
@@ -334,8 +335,36 @@ describe('DataManagementView.vue', () => {
     wrapper.unmount();
   });
 
-  it('switches to public settings tab and displays public settings card', async () => {
-    const wrapper = mountView();
+  it('hides public settings tab from non-admin editors', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore();
+    authStore.setAuth({ id: '2', email: 'editor@example.com', role: 'editor' }, 'token');
+
+    const wrapper = mount(DataManagementView, {
+      global: {
+        plugins: [pinia],
+        stubs: { RouterLink: true, teleport: true },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="tab-pengaturan"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('switches to public settings tab and displays public settings card for admins', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore();
+    authStore.setAuth({ id: '1', email: 'admin@example.com', role: 'admin' }, 'token');
+
+    const wrapper = mount(DataManagementView, {
+      global: {
+        plugins: [pinia],
+        stubs: { RouterLink: true, teleport: true },
+      },
+    });
     await flushPromises();
 
     await wrapper.find('[data-test="tab-pengaturan"]').trigger('click');

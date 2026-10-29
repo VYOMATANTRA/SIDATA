@@ -46,7 +46,7 @@ describe('PublicSettingsForm.vue', () => {
     expect(wrapper.text()).toContain('Format email tidak valid.');
   });
 
-  it('validates coordinate range limits', async () => {
+  it('validates coordinate range limits and empty string', async () => {
     const wrapper = mount(PublicSettingsForm, {
       props: {
         settings: DEFAULT_PUBLIC_SETTINGS,
@@ -56,6 +56,11 @@ describe('PublicSettingsForm.vue', () => {
     await wrapper.find('input#settings-lat').setValue(150);
     await wrapper.find('form').trigger('submit.prevent');
 
+    expect(wrapper.emitted('submit')).toBeFalsy();
+    expect(wrapper.text()).toContain('Latitude harus berupa angka antara -90 dan 90.');
+
+    await wrapper.find('input#settings-lat').setValue('');
+    await wrapper.find('form').trigger('submit.prevent');
     expect(wrapper.emitted('submit')).toBeFalsy();
     expect(wrapper.text()).toContain('Latitude harus berupa angka antara -90 dan 90.');
   });

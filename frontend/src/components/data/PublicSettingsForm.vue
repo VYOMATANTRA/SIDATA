@@ -37,9 +37,9 @@ const contactWhatsapp = ref(props.settings.contactWhatsapp ?? '');
 const contactEmail = ref(props.settings.contactEmail ?? '');
 const contactAddress = ref(props.settings.contactAddress ?? '');
 
-const lat = ref(props.settings.defaultCoordinates?.lat ?? -1.2235);
-const lon = ref(props.settings.defaultCoordinates?.lon ?? 116.9521);
-const zoom = ref(props.settings.defaultCoordinates?.zoom ?? 14);
+const lat = ref<number | string>(props.settings.defaultCoordinates?.lat ?? -1.2235);
+const lon = ref<number | string>(props.settings.defaultCoordinates?.lon ?? 116.9521);
+const zoom = ref<number | string>(props.settings.defaultCoordinates?.zoom ?? 14);
 
 const submitted = ref(false);
 
@@ -58,13 +58,31 @@ const fieldErrors = computed<Record<string, string | undefined>>(() => {
     errors.contactEmail = 'Format email tidak valid.';
   }
 
-  if (Number.isNaN(Number(lat.value)) || Number(lat.value) < -90 || Number(lat.value) > 90) {
+  if (
+    lat.value === '' ||
+    lat.value === null ||
+    Number.isNaN(Number(lat.value)) ||
+    Number(lat.value) < -90 ||
+    Number(lat.value) > 90
+  ) {
     errors.lat = 'Latitude harus berupa angka antara -90 dan 90.';
   }
-  if (Number.isNaN(Number(lon.value)) || Number(lon.value) < -180 || Number(lon.value) > 180) {
+  if (
+    lon.value === '' ||
+    lon.value === null ||
+    Number.isNaN(Number(lon.value)) ||
+    Number(lon.value) < -180 ||
+    Number(lon.value) > 180
+  ) {
     errors.lon = 'Longitude harus berupa angka antara -180 dan 180.';
   }
-  if (Number.isNaN(Number(zoom.value)) || Number(zoom.value) < 1 || Number(zoom.value) > 20) {
+  if (
+    zoom.value === '' ||
+    zoom.value === null ||
+    Number.isNaN(Number(zoom.value)) ||
+    Number(zoom.value) < 1 ||
+    Number(zoom.value) > 20
+  ) {
     errors.zoom = 'Zoom harus berupa bilangan bulat antara 1 dan 20.';
   }
 

@@ -24,6 +24,7 @@ import {
 import { usePagesStore } from '../stores/pages.store';
 import { useContentBlocksStore, type ContentBlock } from '../stores/contentBlocks.store';
 import { useSettingsStore, type PublicSettings } from '../stores/settings.store';
+import { useAuthStore } from '../stores/auth';
 import { formatDecimalId } from '../utils/formatNumber';
 import { INPUT_CLASSES } from '../utils/formStyles';
 
@@ -34,10 +35,10 @@ import { INPUT_CLASSES } from '../utils/formStyles';
  * - Scalar indicators (ScalarIndicatorForm)
  * - Matrix tables (TableIndicatorForm)
  * - Content blocks (ContentBlockForm)
- * - Public portal settings (PublicSettingsForm)
+ * - Public portal settings (PublicSettingsForm, admin-only)
  */
 
-type TypeFilter = 'all' | 'skalar' | 'matriks' | 'konten' | 'pengaturan';
+type TypeFilter = 'all' | 'skalar' | 'matriks';
 type ActiveTab = 'indikator' | 'konten' | 'pengaturan';
 
 const indicatorsStore = useIndicatorsStore();
@@ -45,10 +46,22 @@ const tablesStore = useIndicatorTablesStore();
 const pagesStore = usePagesStore();
 const contentBlocksStore = useContentBlocksStore();
 const settingsStore = useSettingsStore();
+const authStore = useAuthStore();
 
 const activeTab = ref<ActiveTab>('indikator');
 const searchQuery = ref('');
 const typeFilter = ref<TypeFilter>('all');
+
+const availableTabs = computed(() => {
+  const tabs: { id: ActiveTab; label: string }[] = [
+    { id: 'indikator', label: 'Indikator & Tabel' },
+    { id: 'konten', label: 'Blok Konten & Profil' },
+  ];
+  if (authStore.isAdmin) {
+    tabs.push({ id: 'pengaturan', label: 'Pengaturan Publik Portal' });
+  }
+  return tabs;
+});
 
 const activeScalar = ref<Indicator | null>(null);
 const activeTableId = ref<string | null>(null);
@@ -159,6 +172,7 @@ const cards = computed<IndicatorCardModel[]>(() => {
   }
 
   if (activeTab.value === 'pengaturan') {
+    if (!authStore.isAdmin) return [];
     return [
       {
         id: 'public-settings',
@@ -280,7 +294,9 @@ function handleEdit(card: IndicatorCardModel): void {
   }
 
   if (card.type === 'pengaturan') {
-    isEditingSettings.value = true;
+    if (authStore.isAdmin) {
+      isEditingSettings.value = true;
+    }
     return;
   }
 }
@@ -442,61 +458,27 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
 
       <div class="mt-6 flex border-b border-slate-200" role="tablist" aria-label="Kategori CMS">
         <button
+          v-for="tab in availableTabs"
+          :key="tab.id"
+          :id="`tab-${tab.id}`"
           type="button"
           role="tab"
-          :aria-selected="activeTab === 'indikator'"
+          :aria-selected="activeTab === tab.id"
+          :aria-controls="`panel-${tab.id}`"
           class="border-b-2 px-4 py-2.5 text-sm font-medium transition-colors"
           :class="
-            activeTab === 'indikator'
+            activeTab === tab.id
               ? 'border-brand-navy text-brand-navy font-semibold'
               : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
           "
-          data-test="tab-indikator"
+          :data-test="`tab-${tab.id}`"
           @click="
-            activeTab = 'indikator';
+            activeTab = tab.id;
             typeFilter = 'all';
             searchQuery = '';
           "
         >
-          Indikator &amp; Tabel
-        </button>
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="activeTab === 'konten'"
-          class="border-b-2 px-4 py-2.5 text-sm font-medium transition-colors"
-          :class="
-            activeTab === 'konten'
-              ? 'border-brand-navy text-brand-navy font-semibold'
-              : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
-          "
-          data-test="tab-konten"
-          @click="
-            activeTab = 'konten';
-            typeFilter = 'all';
-            searchQuery = '';
-          "
-        >
-          Blok Konten &amp; Profil
-        </button>
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="activeTab === 'pengaturan'"
-          class="border-b-2 px-4 py-2.5 text-sm font-medium transition-colors"
-          :class="
-            activeTab === 'pengaturan'
-              ? 'border-brand-navy text-brand-navy font-semibold'
-              : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
-          "
-          data-test="tab-pengaturan"
-          @click="
-            activeTab = 'pengaturan';
-            typeFilter = 'all';
-            searchQuery = '';
-          "
-        >
-          Pengaturan Publik Portal
+          {{ tab.label }}
         </button>
       </div>
 
@@ -557,53 +539,55 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
         data tetap dapat diedit.
       </p>
 
-      <p
-        v-if="isLoading && cards.length === 0"
-        class="mt-10 text-sm text-slate-600"
-        aria-live="polite"
-      >
-        Memuat data…
-      </p>
-
-      <div
-        v-else-if="filteredCards.length === 0"
-        class="rounded-card mt-10 border border-dashed border-slate-300 bg-white px-6 py-12 text-center"
-      >
-        <p class="text-base font-semibold text-slate-800">
-          {{ cards.length === 0 ? 'Belum ada data indikator' : 'Tidak ada data yang cocok' }}
-        </p>
-        <p class="mx-auto mt-2 max-w-md text-sm text-slate-600">
-          <template v-if="cards.length === 0">
-            Data indikator dan tabel matriks belum tersedia untuk lingkungan ini. Setelah datanya
-            diisi, kartunya akan muncul di sini dan bisa diedit.
-          </template>
-          <template v-else>
-            Ubah kata kunci pencarian atau pilih tipe data lain untuk melihat data yang lain.
-          </template>
-        </p>
-        <BaseButton
-          v-if="cards.length > 0"
-          variant="secondary"
-          size="sm"
-          class="mt-4"
-          @click="
-            searchQuery = '';
-            typeFilter = 'all';
-          "
+      <div role="tabpanel" :id="`panel-${activeTab}`" :aria-labelledby="`tab-${activeTab}`">
+        <p
+          v-if="isLoading && cards.length === 0"
+          class="mt-10 text-sm text-slate-600"
+          aria-live="polite"
         >
-          Kosongkan filter
-        </BaseButton>
+          Memuat data…
+        </p>
+
+        <div
+          v-else-if="filteredCards.length === 0"
+          class="rounded-card mt-10 border border-dashed border-slate-300 bg-white px-6 py-12 text-center"
+        >
+          <p class="text-base font-semibold text-slate-800">
+            {{ cards.length === 0 ? 'Belum ada data indikator' : 'Tidak ada data yang cocok' }}
+          </p>
+          <p class="mx-auto mt-2 max-w-md text-sm text-slate-600">
+            <template v-if="cards.length === 0">
+              Data indikator dan tabel matriks belum tersedia untuk lingkungan ini. Setelah datanya
+              diisi, kartunya akan muncul di sini dan bisa diedit.
+            </template>
+            <template v-else>
+              Ubah kata kunci pencarian atau pilih tipe data lain untuk melihat data yang lain.
+            </template>
+          </p>
+          <BaseButton
+            v-if="cards.length > 0"
+            variant="secondary"
+            size="sm"
+            class="mt-4"
+            @click="
+              searchQuery = '';
+              typeFilter = 'all';
+            "
+          >
+            Kosongkan filter
+          </BaseButton>
+        </div>
+
+        <template v-else>
+          <h2 class="sr-only">Daftar data</h2>
+
+          <ul class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <li v-for="card in filteredCards" :key="`${card.type}-${card.id}`" class="h-full">
+              <IndicatorCard :card="card" @edit="handleEdit(card)" />
+            </li>
+          </ul>
+        </template>
       </div>
-
-      <template v-else>
-        <h2 class="sr-only">Daftar data</h2>
-
-        <ul class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <li v-for="card in filteredCards" :key="`${card.type}-${card.id}`" class="h-full">
-            <IndicatorCard :card="card" @edit="handleEdit(card)" />
-          </li>
-        </ul>
-      </template>
 
       <p class="sr-only" aria-live="polite">{{ statusMessage }}</p>
     </main>

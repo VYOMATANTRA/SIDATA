@@ -100,6 +100,7 @@ describe('AppFooter.vue', () => {
     });
 
     expect(wrapper.text()).toContain('Sumber Daya');
+    expect(wrapper.text()).toContain('Publikasi');
     expect(wrapper.text()).toContain('Peta');
     expect(wrapper.text()).toContain('Permintaan Data');
     expect(wrapper.text()).toContain('Ketua RT');
@@ -192,26 +193,15 @@ describe('AppFooter.vue', () => {
     expect(copyrightContainer?.classList.contains('sm:text-sm')).toBe(true);
   });
 
-  it('omits Publikasi from footer when no publication has an online URL, and includes it when one exists', async () => {
+  it('always includes Publikasi link in the footer per SPEC §8', async () => {
     const router = createMockRouter();
     await router.push('/');
     await router.isReady();
 
-    const wrapperWithoutPublicDocs = mount(AppFooter, {
+    const wrapper = mount(AppFooter, {
       global: { plugins: [router] },
     });
-    expect(wrapperWithoutPublicDocs.find('a[href="/publikasi"]').exists()).toBe(false);
-
-    const { PUBLICATIONS } = await import('../content/publikasi');
-    const originalHref = PUBLICATIONS[0]?.href;
-    PUBLICATIONS[0]!.href = 'https://example.com/publikasi.pdf';
-
-    const wrapperWithPublicDocs = mount(AppFooter, {
-      global: { plugins: [router] },
-    });
-    expect(wrapperWithPublicDocs.find('a[href="/publikasi"]').exists()).toBe(true);
-
-    // Restore
-    PUBLICATIONS[0]!.href = originalHref;
+    expect(wrapper.find('a[href="/publikasi"]').exists()).toBe(true);
+    expect(wrapper.find('a[href="/publikasi"]').text()).toBe('Publikasi');
   });
 });

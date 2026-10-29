@@ -9,9 +9,7 @@ import logoSdgs17 from '@/assets/img/17_kemitraan_pembangunan_desa.png';
 import logoBps from '@/assets/img/logo_bps.png';
 import logoItk from '@/assets/img/logo_itk.png';
 import logoVyomatantra from '@/assets/img/logo_vyomatantra.png';
-import { hasPublicPublication, type PublicationItem } from '../../content/publikasi';
 import { useSettingsStore } from '../../stores/settings.store';
-import { useContentBlocksStore } from '../../stores/contentBlocks.store';
 
 export interface FooterProps {
   year?: number | string;
@@ -31,7 +29,6 @@ const props = withDefaults(defineProps<FooterProps>(), {
 });
 
 const settingsStore = getActivePinia() ? useSettingsStore() : null;
-const contentBlocksStore = getActivePinia() ? useContentBlocksStore() : null;
 
 const displayPhone = computed(() => {
   if (props.phone !== '(0542) 772158') return props.phone;
@@ -54,24 +51,12 @@ const displayAddressLines = computed(() => {
 });
 
 // Resource Links (Sumber Daya)
-const allResourceLinks = [
-  { label: 'Publikasi', to: '/publikasi', requiresPublicDocument: true },
+const resourceLinks = [
+  { label: 'Publikasi', to: '/publikasi' },
   { label: 'Peta', to: '/peta' },
   { label: 'Permintaan Data', to: '/permintaan-data' },
   { label: 'Ketua RT', to: '/ketua-rt' },
 ];
-
-const resourceLinks = computed(() => {
-  const custom = contentBlocksStore?.publikasiKatalog?.metadata?.publications;
-  const list =
-    Array.isArray(custom) && custom.length > 0 ? (custom as PublicationItem[]) : undefined;
-  return allResourceLinks.filter((link) => {
-    if (link.requiresPublicDocument) {
-      return hasPublicPublication(list);
-    }
-    return true;
-  });
-});
 
 // Story & Statistics Links (Cerita)
 const storyLinks = [

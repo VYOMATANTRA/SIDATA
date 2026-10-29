@@ -289,6 +289,96 @@ export const highlightMetadataSchema = z
   })
   .passthrough();
 
+const publikasiItemSchema = z
+  .object({
+    category: z
+      .string()
+      .trim()
+      .min(1, 'Kategori publikasi wajib diisi')
+      .max(100, 'Kategori maksimal 100 karakter'),
+    title: z
+      .string()
+      .trim()
+      .min(1, 'Judul publikasi wajib diisi')
+      .max(255, 'Judul maksimal 255 karakter'),
+    description: z
+      .string()
+      .trim()
+      .min(1, 'Deskripsi publikasi wajib diisi')
+      .max(1000, 'Deskripsi maksimal 1000 karakter'),
+    href: z
+      .string()
+      .trim()
+      .url('URL publikasi tidak valid')
+      .refine((url) => url.startsWith('https://'), {
+        message: 'Tautan publikasi wajib menggunakan protokol https://',
+      })
+      .optional(),
+    isAvailableOnline: z.boolean().optional(),
+  })
+  .passthrough();
+
+export const publikasiKatalogMetadataSchema = z
+  .object({
+    publications: z.array(publikasiItemSchema).max(25, 'Maksimal 25 item publikasi').optional(),
+  })
+  .passthrough();
+
+const batasWilayahItemSchema = z
+  .object({
+    arah: z
+      .string()
+      .trim()
+      .min(1, 'Arah batas wilayah wajib diisi')
+      .max(100, 'Arah maksimal 100 karakter'),
+    wilayah: z
+      .string()
+      .trim()
+      .min(1, 'Nama wilayah batas wajib diisi')
+      .max(255, 'Nama wilayah batas maksimal 255 karakter'),
+  })
+  .passthrough();
+
+const sotkMemberSchema = z
+  .object({
+    role: z
+      .string()
+      .trim()
+      .min(1, 'Jabatan SOTK wajib diisi')
+      .max(100, 'Jabatan SOTK maksimal 100 karakter'),
+    officialName: z
+      .string()
+      .trim()
+      .max(150, 'Nama pejabat maksimal 150 karakter')
+      .nullable()
+      .optional(),
+    duties: z
+      .string()
+      .trim()
+      .max(1000, 'Tugas pejabat maksimal 1000 karakter')
+      .nullable()
+      .optional(),
+  })
+  .passthrough();
+
+export const tentangProfilMetadataSchema = z
+  .object({
+    rtCount: z
+      .number()
+      .int('Jumlah RT harus bilangan bulat')
+      .min(1, 'Jumlah RT minimal 1')
+      .max(1000, 'Jumlah RT maksimal 1000')
+      .optional(),
+    kecamatan: z.string().trim().max(100, 'Nama kecamatan maksimal 100 karakter').optional(),
+    kota: z.string().trim().max(100, 'Nama kota maksimal 100 karakter').optional(),
+    landscape: z.string().trim().max(100, 'Karakteristik wilayah maksimal 100 karakter').optional(),
+    lurahName: z.string().trim().max(150, 'Nama lurah maksimal 150 karakter').optional(),
+    lurahTitle: z.string().trim().max(150, 'Gelar lurah maksimal 150 karakter').optional(),
+    batasWilayah: z.array(batasWilayahItemSchema).max(10, 'Maksimal 10 batas wilayah').optional(),
+    sotkMembers: z.array(sotkMemberSchema).max(30, 'Maksimal 30 anggota SOTK').optional(),
+  })
+  .passthrough();
+
 export function validateBlockMetadata(slug: string, metadata: unknown): void {
   if (metadata === undefined || metadata === null) return;
   if (typeof metadata !== 'object' || Array.isArray(metadata)) {
@@ -302,7 +392,11 @@ export function validateBlockMetadata(slug: string, metadata: unknown): void {
         ? sambutanLurahMetadataSchema.safeParse(metadata)
         : slug === 'landing-highlights'
           ? highlightMetadataSchema.safeParse(metadata)
-          : null;
+          : slug === 'publikasi-katalog'
+            ? publikasiKatalogMetadataSchema.safeParse(metadata)
+            : slug === 'tentang-kelurahan-profil'
+              ? tentangProfilMetadataSchema.safeParse(metadata)
+              : null;
 
   if (!result) {
     return;
