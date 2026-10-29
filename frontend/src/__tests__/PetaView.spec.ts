@@ -246,7 +246,7 @@ describe('PetaView accessibility, filtering, and point selection', () => {
     // Detail view replaces the list
     expect(wrapper.text()).toContain('Pos Ketua RT 01');
     expect(wrapper.text()).toContain('Kontak Ketua RT');
-    expect(wrapper.text()).toContain('SUWARJO');
+    expect(wrapper.text()).toContain('Suwarjo Manggar');
 
     const ketuaRtLink = wrapper.find('a[href="/ketua-rt"]');
     expect(ketuaRtLink.exists()).toBe(true);

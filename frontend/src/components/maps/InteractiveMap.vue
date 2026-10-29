@@ -157,7 +157,6 @@ function revealSelectedPoint() {
       const point = props.points.find((item) => item.id === targetId);
       if (point) updateMarkerIcon(marker, point, true);
       marker.setZIndexOffset(1000);
-      marker.openTooltip();
     });
   };
 

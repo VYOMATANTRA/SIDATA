@@ -52,6 +52,19 @@ export const useMapsStore = defineStore('maps', () => {
     selectedLeader.value = null;
 
     if (point && point.type === 'ketua_rt' && point.rts.length > 0) {
+      if (point.rtLeader) {
+        selectedLeader.value = {
+          ...point.rtLeader,
+          coordinates: {
+            latitude: point.latitude,
+            longitude: point.longitude,
+            pointId: point.id,
+          },
+          createdAt: point.createdAt,
+          updatedAt: point.updatedAt,
+        };
+        return;
+      }
       const primaryRt = point.rts[0];
       if (typeof primaryRt === 'number') {
         try {
