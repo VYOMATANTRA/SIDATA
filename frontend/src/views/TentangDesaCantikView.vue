@@ -73,19 +73,21 @@ const collaborationLogos = [
 
       <TentangInfoCard heading="Mewujudkan Sadar Statistik di Manggar" icon="chart">
         <p>
-          Pendampingan ini membantu perangkat Kelurahan Manggar mengumpulkan, mengolah, dan menyajikan
-          data statistik. Publikasi Manggar Dalam Angka 2026 menghimpun data geografi, pemerintahan,
-          kependudukan, sosial, ekonomi, dan infrastruktur untuk menjadi rujukan perencanaan.
+          Pendampingan ini membantu perangkat Kelurahan Manggar mengumpulkan, mengolah, dan
+          menyajikan data statistik. Publikasi Manggar Dalam Angka 2026 menghimpun data geografi,
+          pemerintahan, kependudukan, sosial, ekonomi, dan infrastruktur untuk menjadi rujukan
+          perencanaan.
         </p>
       </TentangInfoCard>
     </div>
 
     <TentangFeatureBand heading="Luaran dan Kegiatan Desa Cantik di Manggar">
-      <div class="mt-4 flex flex-col gap-5 md:flex-row items-stretch">
+      <div class="mt-4 flex flex-col items-stretch gap-5 md:flex-row">
         <TentangResourceCard
           title="Manggar Dalam Angka 2026"
           icon="document"
-          cta-label="Segera hadir"
+          to="/publikasi"
+          cta-label="Lihat Publikasi"
           class="flex-1"
         >
           Kompilasi statistik sektoral tahunan kelurahan yang memuat demografi, ekonomi
@@ -95,14 +97,21 @@ const collaborationLogos = [
         <TentangResourceCard
           title="Peta Spasial RT dan Bank Sampah Unit"
           icon="map"
-          cta-label="Segera hadir"
+          to="/peta"
+          cta-label="Lihat Peta"
           class="flex-1"
         >
           Peta lokasi rumah ketua RT dan bank sampah aktif di Kelurahan Manggar, Kecamatan
           Balikpapan Timur.
         </TentangResourceCard>
 
-        <TentangResourceCard title="Portal SIDATA" icon="system" class="flex-1">
+        <TentangResourceCard
+          title="Portal SIDATA"
+          icon="system"
+          to="/"
+          cta-label="Beranda"
+          class="flex-1"
+        >
           Solusi terpadu untuk menyimpan dan menyajikan data kelurahan secara terstruktur.
         </TentangResourceCard>
       </div>
@@ -111,7 +120,7 @@ const collaborationLogos = [
     <!-- Empat pilar implementasi -->
     <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="pilar-title">
       <div class="mx-auto max-w-5xl">
-        <h2 id="pilar-title" class="text-lg font-bold text-brand-navy">
+        <h2 id="pilar-title" class="text-brand-navy text-lg font-bold">
           Implementasi di Kelurahan Manggar
         </h2>
         <p class="mt-2 max-w-3xl text-base text-gray-700">
@@ -135,10 +144,10 @@ const collaborationLogos = [
     <!-- Rujukan resmi -->
     <section class="bg-brand-cyan px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="rujukan-title">
       <div class="mx-auto max-w-5xl text-center">
-        <h2 id="rujukan-title" class="text-lg font-bold text-brand-navy">
+        <h2 id="rujukan-title" class="text-brand-navy text-lg font-bold">
           Informasi Lebih Lanjut Mengenai Desa Cantik
         </h2>
-        <p class="mx-auto mt-2 max-w-2xl text-base text-brand-navy/90">
+        <p class="text-brand-navy/90 mx-auto mt-2 max-w-2xl text-base">
           Untuk mempelajari pedoman teknis nasional, publikasi metodologi, dan praktik baik program
           Desa Cantik di seluruh Indonesia, kunjungi portal resmi Badan Pusat Statistik.
         </p>
@@ -147,7 +156,7 @@ const collaborationLogos = [
             href="https://www.bps.go.id"
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-flex items-center gap-2 rounded-btn bg-brand-navy px-5 py-2.5 text-base font-medium text-white transition-colors hover:bg-brand-navy-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+            class="rounded-btn bg-brand-navy hover:bg-brand-navy-deep focus-visible:outline-brand-navy inline-flex items-center gap-2 px-5 py-2.5 text-base font-medium text-white transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
           >
             <span>Kunjungi Portal Resmi BPS RI</span>
             <span class="sr-only">Tautan eksternal</span>
@@ -173,7 +182,7 @@ const collaborationLogos = [
     <!-- Didukung oleh -->
     <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="didukung-title">
       <div class="mx-auto max-w-5xl">
-        <h2 id="didukung-title" class="text-lg font-bold text-brand-navy">Didukung Oleh</h2>
+        <h2 id="didukung-title" class="text-brand-navy text-lg font-bold">Didukung Oleh</h2>
         <div class="mt-5">
           <TentangLogoRow :logos="collaborationLogos" />
         </div>

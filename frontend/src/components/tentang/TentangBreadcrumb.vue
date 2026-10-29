@@ -8,7 +8,7 @@ withDefaults(
     parentLabel?: string;
     parentTo?: string;
   }>(),
-  { parentLabel: 'Tentang', parentTo: '/' },
+  { parentLabel: 'Tentang', parentTo: '/tentang' },
 );
 </script>
 
@@ -18,14 +18,12 @@ withDefaults(
       <li>
         <RouterLink
           :to="parentTo"
-          class="font-medium text-brand-navy hover:underline focus-visible:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+          class="text-brand-navy focus-visible:outline-brand-navy font-medium hover:underline focus-visible:underline focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           {{ parentLabel }}
         </RouterLink>
       </li>
-      <li aria-hidden="true" class="text-gray-400">
-        &gt;
-      </li>
+      <li aria-hidden="true" class="text-gray-400">&gt;</li>
       <li>
         <span class="text-gray-700" aria-current="page">{{ label }}</span>
       </li>
