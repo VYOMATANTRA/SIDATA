@@ -213,6 +213,50 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
     expect(wrapper.text()).not.toContain('Contoh data daftar Ketua RT');
   });
 
+  it('hides sample notice when 99 rows are real and only 1 row is a placeholder', async () => {
+    const mixedRoster = Array.from({ length: 100 }, (_, index) => {
+      const rtNumber = index + 1;
+      if (rtNumber === 50) {
+        return {
+          rtNumber,
+          name: 'Ketua RT 50',
+          phone: '—',
+          phoneIsWhatsapp: false,
+          alamat: null,
+          coordinates: null,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        };
+      }
+      return {
+        rtNumber,
+        name: `Warga RT ${rtNumber} S.Pd.`,
+        phone: `+62 812 3456 ${String(rtNumber).padStart(4, '0')}`,
+        phoneIsWhatsapp: true,
+        alamat: `Jl. RT ${rtNumber}`,
+        coordinates: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      };
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue({
+        ok: true,
+        json: async () => ({ leaders: mixedRoster }),
+      } as Response),
+    );
+
+    const { useRtLeadersStore } = await import('../stores/rtLeaders.store');
+    const store = useRtLeadersStore();
+    await store.fetchRtLeaders(true);
+
+    const wrapper = await mountReady();
+    expect(wrapper.text()).not.toContain('Data contoh, bukan daftar resmi');
+    expect(wrapper.text()).toContain('Daftar Ketua RT Kelurahan Manggar');
+  });
+
   it('filters by RT number, including zero-padded input', async () => {
     const wrapper = await mountReady();
     const search = wrapper.find('[data-test="rt-search"]');
