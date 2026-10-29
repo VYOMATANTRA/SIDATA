@@ -146,3 +146,4 @@ vite.config.ts.timestamp-*
 # (JetBrains: WebStorm/IntelliJ; regenerates on next project open)
 .idea/
 *.iml
+/docs/Descan manggar 2026/
