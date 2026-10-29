@@ -161,12 +161,32 @@ const hasAddressData = computed(() =>
   rtLeadersStore.rtLeaders.some((leader) => (leader.alamat ?? '').trim() !== ''),
 );
 
+const isSampleRoster = computed(() => {
+  if (rtLeadersStore.rtLeaders.length === 0) return false;
+  return rtLeadersStore.rtLeaders.some(
+    (leader) => !isDialable(leader.phone) || /^Ketua RT 0*\d+$/i.test(leader.name),
+  );
+});
+
+const heroSubtitle = computed(() => {
+  if (isSampleRoster.value) {
+    return 'Contoh data daftar Ketua RT. Cari langsung di tabel berdasarkan nomor RT atau nama ketua.';
+  }
+  return 'Daftar Ketua RT Kelurahan Manggar. Cari langsung di tabel berdasarkan nomor RT atau nama ketua.';
+});
+
 function clearFilter() {
   query.value = '';
 }
 
+function primaryPhone(value: string): string {
+  // If the field contains multiple numbers (e.g. separated by comma, slash, semicolon), take the first
+  const parts = value.split(/[/,;]/);
+  return parts[0]?.trim() ?? value;
+}
+
 function digitsOnly(value: string): string {
-  return value.replace(/[^0-9]/g, '');
+  return primaryPhone(value).replace(/[^0-9]/g, '');
 }
 
 /**
@@ -198,11 +218,12 @@ function whatsappNumber(value: string): string {
  * recognisable mobile number is shown exactly as recorded.
  */
 function formatPhone(value: string): string {
-  const digits = digitsOnly(value);
+  const primary = primaryPhone(value);
+  const digits = digitsOnly(primary);
 
   if (digits.startsWith('62')) {
     const rest = digits.slice(2);
-    if (rest.length < 9) return value;
+    if (rest.length < 9) return primary;
     return `+62 ${rest.slice(0, 3)} ${rest.slice(3, 7)} ${rest.slice(7)}`;
   }
 
@@ -213,7 +234,7 @@ function formatPhone(value: string): string {
     return rest === '' ? `${head} ${middle}` : `${head} ${middle} ${rest}`;
   }
 
-  return value;
+  return primary;
 }
 </script>
 
@@ -221,12 +242,9 @@ function formatPhone(value: string): string {
   <TentangPageLayout>
     <TentangBreadcrumb label="Ketua RT" parent-label="Beranda" parent-to="/" />
 
-    <TentangHeroPanel
-      title="Ketua RT Kelurahan Manggar"
-      subtitle="Contoh data daftar Ketua RT. Cari langsung di tabel berdasarkan nomor RT atau nama ketua."
-    />
+    <TentangHeroPanel title="Ketua RT Kelurahan Manggar" :subtitle="heroSubtitle" />
 
-    <TentangNotice heading="Data contoh, bukan daftar resmi">
+    <TentangNotice v-if="isSampleRoster" heading="Data contoh, bukan daftar resmi">
       <p>
         Isi tabel di bawah ini adalah <strong>data contoh</strong>, bukan data resmi dari kelurahan.
         Nama dan kontak yang tampil belum mewakili ketua RT yang sebenarnya.
@@ -253,13 +271,8 @@ function formatPhone(value: string): string {
             class="rounded-btn text-brand-navy focus-visible:border-brand-navy focus-visible:outline-brand-navy mt-2 w-full max-w-md border border-gray-400 bg-white px-4 py-2.5 text-base placeholder:text-gray-500 focus-visible:outline-2 focus-visible:outline-offset-2"
             data-test="rt-search"
           />
-          <p
-            v-if="!rtLeadersStore.isLoading && !rtLeadersStore.error"
-            class="mt-3 text-base text-gray-700"
-            aria-live="polite"
-            data-test="rt-count"
-          >
-            {{ countSummary }}
+          <p class="mt-3 text-base text-gray-700" aria-live="polite" data-test="rt-count">
+            {{ !rtLeadersStore.isLoading && !rtLeadersStore.error ? countSummary : '' }}
           </p>
         </div>
 
