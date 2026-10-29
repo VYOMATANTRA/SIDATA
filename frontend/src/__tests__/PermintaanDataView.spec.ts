@@ -333,4 +333,19 @@ describe('PermintaanDataView accessibility and content', () => {
     expect(keberatanPdfLink.attributes('target')).toBe('_blank');
     expect(keberatanPdfLink.attributes('rel')).toContain('noopener');
   });
+
+  it('lists matching Pasal 35–36 citations for keberatan filing and atasan reply', async () => {
+    const { pinia, router } = mountView();
+    await router.push('/permintaan-data');
+    await router.isReady();
+
+    const wrapper = mount(PermintaanDataView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    const text = wrapper.text();
+    expect(text).toContain('Pasal 35 ayat (1) dan Pasal 36 ayat (1)');
+    expect(text).toContain('Pasal 36 ayat (2)');
+    expect(text).toContain('Pasal 35 ayat (1) dan Pasal 36 ayat (1)–(2)');
+  });
 });

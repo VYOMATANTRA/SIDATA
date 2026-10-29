@@ -89,10 +89,16 @@ const slaRules: SlaItem[] = [
       'Pasal 22 ayat (8) UU No. 14 Tahun 2008 (disertai surat pemberitahuan alasan perpanjangan)',
   },
   {
-    stage: 'Pengajuan Keberatan atas Tanggapan PPID',
+    stage: 'Pengajuan Keberatan kepada Atasan PPID',
     duration: 'Maksimal 30 Hari Kerja',
     regulation:
-      'Pasal 36 ayat (1) UU No. 14 Tahun 2008 (diajukan tertulis kepada Atasan PPID Kota Balikpapan)',
+      'Pasal 35 ayat (1) dan Pasal 36 ayat (1) UU No. 14 Tahun 2008 (diajukan tertulis kepada Atasan PPID Kota Balikpapan sejak ditemukannya alasan keberatan)',
+  },
+  {
+    stage: 'Tanggapan Atasan PPID atas Keberatan',
+    duration: 'Maksimal 30 Hari Kerja',
+    regulation:
+      'Pasal 36 ayat (2) UU No. 14 Tahun 2008 (tanggapan tertulis paling lambat 30 hari kerja sejak keberatan diterima)',
   },
   {
     stage: 'Biaya Layanan Informasi Publik',
@@ -129,7 +135,7 @@ const escalationPath = [
   {
     title: 'Keberatan',
     target: 'Atasan PPID Kota Balikpapan',
-    note: 'Diajukan tertulis paling lambat 30 hari kerja sejak ditemukannya alasan keberatan, misalnya permohonan ditolak, tidak ditanggapi, atau tidak dipenuhi. Atasan PPID memberikan tanggapan tertulis paling lambat 30 hari kerja sejak keberatan diterima. Dasar hukum: Pasal 35 ayat (1) dan Pasal 36 ayat (1)–(2) UU No. 14 Tahun 2008.',
+    note: 'Diajukan tertulis paling lambat 30 hari kerja sejak ditemukannya alasan keberatan sebagaimana Pasal 35 ayat (1) (misalnya permohonan ditolak, tidak ditanggapi, atau tidak dipenuhi). Atasan PPID memberikan tanggapan tertulis paling lambat 30 hari kerja sejak keberatan diterima. Dasar hukum: Pasal 35 ayat (1) dan Pasal 36 ayat (1)–(2) UU No. 14 Tahun 2008.',
   },
   {
     title: 'Sengketa',
@@ -260,17 +266,17 @@ const officialSopDocuments: SopDocument[] = [
     <!-- Jenis informasi publik -->
     <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="jenis-title">
       <div class="mx-auto max-w-5xl">
-        <h2 id="jenis-title" class="text-lg font-bold text-brand-navy">Jenis Informasi Publik</h2>
+        <h2 id="jenis-title" class="text-brand-navy text-lg font-bold">Jenis Informasi Publik</h2>
         <p class="mt-2 max-w-3xl text-base text-gray-700">
           Kenali tiga kelas informasi sebelum mengajukan permohonan.
         </p>
 
-        <div class="mt-5 rounded-btn border border-gray-300 bg-white">
+        <div class="rounded-btn mt-5 border border-gray-300 bg-white">
           <dl
             class="grid grid-cols-1 divide-y divide-gray-200 sm:grid-cols-3 sm:divide-x sm:divide-y-0"
           >
             <div v-for="item in informationClasses" :key="item.title" class="p-5">
-              <dt class="text-base font-bold text-brand-navy">{{ item.title }}</dt>
+              <dt class="text-brand-navy text-base font-bold">{{ item.title }}</dt>
               <dd class="mt-1 text-base leading-relaxed text-gray-800">
                 {{ item.description }}
               </dd>
@@ -287,14 +293,14 @@ const officialSopDocuments: SopDocument[] = [
     <!-- Alur permohonan -->
     <section class="bg-brand-cyan px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="alur-title">
       <div class="mx-auto max-w-5xl">
-        <h2 id="alur-title" class="text-lg font-bold text-brand-navy">
+        <h2 id="alur-title" class="text-brand-navy text-lg font-bold">
           Alur Pengajuan Permohonan Informasi
         </h2>
-        <p class="mt-2 max-w-3xl text-base text-brand-navy/90">
+        <p class="text-brand-navy/90 mt-2 max-w-3xl text-base">
           Lima tahapan resmi permohonan data dan dokumen publik.
         </p>
 
-        <div class="mt-5 rounded-btn bg-white p-5 sm:p-6">
+        <div class="rounded-btn mt-5 bg-white p-5 sm:p-6">
           <TentangStepList :steps="steps" />
         </div>
       </div>
@@ -303,7 +309,7 @@ const officialSopDocuments: SopDocument[] = [
     <!-- Jalur eskalasi -->
     <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="eskalasi-title">
       <div class="mx-auto max-w-5xl">
-        <h2 id="eskalasi-title" class="text-lg font-bold text-brand-navy">
+        <h2 id="eskalasi-title" class="text-brand-navy text-lg font-bold">
           Jika Permohonan Ditolak atau Tidak Dijawab
         </h2>
         <p class="mt-2 max-w-3xl text-base text-gray-700">
@@ -315,27 +321,27 @@ const officialSopDocuments: SopDocument[] = [
           <li
             v-for="(stage, index) in escalationPath"
             :key="stage.title"
-            class="flex flex-col justify-between rounded-btn border border-gray-300 bg-white p-5"
+            class="rounded-btn flex flex-col justify-between border border-gray-300 bg-white p-5"
           >
             <div>
               <div class="flex items-center gap-3">
                 <span
-                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-navy text-base font-bold text-white"
+                  class="bg-brand-navy flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base font-bold text-white"
                   aria-hidden="true"
                 >
                   {{ index + 1 }}
                 </span>
-                <h3 class="text-base font-bold text-brand-navy">{{ stage.title }}</h3>
+                <h3 class="text-brand-navy text-base font-bold">{{ stage.title }}</h3>
               </div>
-              <p class="mt-2 text-xs font-semibold text-brand-indigo">{{ stage.target }}</p>
+              <p class="text-brand-indigo mt-2 text-xs font-semibold">{{ stage.target }}</p>
               <p class="mt-2 text-sm leading-relaxed text-gray-800">{{ stage.note }}</p>
             </div>
           </li>
         </ol>
 
         <!-- 7 Alasan Sah Keberatan -->
-        <div class="mt-6 rounded-btn border border-brand-navy/20 bg-brand-cyan/10 p-5 sm:p-6">
-          <h3 class="text-base font-bold text-brand-navy">
+        <div class="rounded-btn border-brand-navy/20 bg-brand-cyan/10 mt-6 border p-5 sm:p-6">
+          <h3 class="text-brand-navy text-base font-bold">
             7 Alasan Sah Pengajuan Keberatan (Perki No. 1/2021 &amp; SOP PPID)
           </h3>
           <p class="mt-1 text-sm text-gray-700">
@@ -349,7 +355,7 @@ const officialSopDocuments: SopDocument[] = [
               class="flex items-start gap-2"
             >
               <span
-                class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-navy text-[10px] font-bold text-white"
+                class="bg-brand-navy mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
                 aria-hidden="true"
               >
                 ✓
@@ -363,7 +369,7 @@ const officialSopDocuments: SopDocument[] = [
               href="https://ppid.balikpapan.go.id/ppid/keberatan"
               target="_blank"
               rel="noopener noreferrer"
-              class="inline-flex min-h-[44px] items-center gap-1.5 font-semibold text-brand-navy underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+              class="text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] items-center gap-1.5 font-semibold underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               <span>Formulir Keberatan PPID Balikpapan</span>
               <span class="sr-only">Tautan eksternal, terbuka di tab baru</span>
@@ -373,7 +379,7 @@ const officialSopDocuments: SopDocument[] = [
               href="https://ppid.balikpapan.go.id/assets/content_pdf/1699149426486.pdf"
               target="_blank"
               rel="noopener noreferrer"
-              class="inline-flex min-h-[44px] items-center gap-1.5 font-medium text-gray-700 underline hover:text-brand-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+              class="hover:text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] items-center gap-1.5 font-medium text-gray-700 underline focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               <span>Unduh Tata Cara Keberatan (PDF)</span>
               <span class="sr-only"
@@ -389,14 +395,14 @@ const officialSopDocuments: SopDocument[] = [
     <!-- Standar waktu layanan -->
     <section class="bg-brand-cyan px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="sla-title">
       <div class="mx-auto max-w-5xl">
-        <h2 id="sla-title" class="text-lg font-bold text-brand-navy">
+        <h2 id="sla-title" class="text-brand-navy text-lg font-bold">
           Standar Waktu Layanan dan Ketentuan Biaya
         </h2>
-        <p class="mt-2 max-w-3xl text-base text-brand-navy/90">
+        <p class="text-brand-navy/90 mt-2 max-w-3xl text-base">
           Jaminan kepastian tenggat pemrosesan permohonan informasi publik.
         </p>
 
-        <div class="mt-5 overflow-x-auto rounded-btn border border-gray-300 bg-white">
+        <div class="rounded-btn mt-5 overflow-x-auto border border-gray-300 bg-white">
           <table class="min-w-full divide-y divide-gray-200 text-left text-sm text-gray-800">
             <caption class="sr-only">
               Tabel Standar Waktu Layanan Informasi Publik dan Ketentuan Biaya Permohonan
@@ -410,10 +416,10 @@ const officialSopDocuments: SopDocument[] = [
             </thead>
             <tbody class="divide-y divide-gray-200 bg-white">
               <tr v-for="rule in slaRules" :key="rule.stage" class="transition-colors">
-                <th scope="row" class="px-4 py-4 align-top font-semibold text-brand-navy sm:px-6">
+                <th scope="row" class="text-brand-navy px-4 py-4 align-top font-semibold sm:px-6">
                   {{ rule.stage }}
                 </th>
-                <td class="px-4 py-4 align-top font-medium text-brand-indigo sm:px-6">
+                <td class="text-brand-indigo px-4 py-4 align-top font-medium sm:px-6">
                   {{ rule.duration }}
                 </td>
                 <td class="px-4 py-4 align-top text-gray-700 sm:px-6">
@@ -425,7 +431,7 @@ const officialSopDocuments: SopDocument[] = [
         </div>
 
         <div
-          class="mt-4 flex flex-col gap-2 text-xs text-brand-navy/80 sm:flex-row sm:items-center sm:justify-between"
+          class="text-brand-navy/80 mt-4 flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:justify-between"
         >
           <p>
             * Standar waktu dan prosedur diselaraskan dengan SOP PPID Kota Balikpapan No.
@@ -437,7 +443,7 @@ const officialSopDocuments: SopDocument[] = [
             href="https://ppid.balikpapan.go.id/assets/global_file/SOP_PPID/SOP_Pelayanan%20Permohonan%20Informasi%20Publik%20di%20PPID.pdf"
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-flex shrink-0 items-center gap-1.5 font-semibold text-brand-navy underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+            class="text-brand-navy focus-visible:outline-brand-navy inline-flex shrink-0 items-center gap-1.5 font-semibold underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2"
           >
             <span>Unduh SOP PPID (PDF)</span>
             <span class="sr-only"
@@ -454,7 +460,7 @@ const officialSopDocuments: SopDocument[] = [
       <div class="mx-auto max-w-5xl">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 id="sop-title" class="text-lg font-bold text-brand-navy">
+            <h2 id="sop-title" class="text-brand-navy text-lg font-bold">
               Dokumen Standar Operasional Prosedur (SOP) &amp; Regulasi Resmi
             </h2>
             <p class="mt-2 max-w-3xl text-base text-gray-700">
@@ -465,7 +471,7 @@ const officialSopDocuments: SopDocument[] = [
             href="https://ppid.balikpapan.go.id"
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-btn border border-brand-navy/30 bg-white px-4 py-2 text-xs font-semibold text-brand-navy transition-colors hover:border-brand-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+            class="rounded-btn border-brand-navy/30 text-brand-navy hover:border-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] shrink-0 items-center gap-1.5 border bg-white px-4 py-2 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
           >
             <span>Portal PPID Balikpapan</span>
             <span class="sr-only"
@@ -479,28 +485,28 @@ const officialSopDocuments: SopDocument[] = [
           <article
             v-for="doc in officialSopDocuments"
             :key="doc.id"
-            class="flex flex-col justify-between rounded-btn border border-gray-300 bg-white p-5 transition-shadow hover:shadow-md"
+            class="rounded-btn flex flex-col justify-between border border-gray-300 bg-white p-5 transition-shadow hover:shadow-md"
           >
             <div>
               <div class="flex items-center justify-between gap-2">
                 <span
-                  class="inline-block rounded-[5px] bg-brand-cyan/40 px-2 py-0.5 text-xs font-semibold text-brand-navy"
+                  class="bg-brand-cyan/40 text-brand-navy inline-block rounded-[5px] px-2 py-0.5 text-xs font-semibold"
                 >
                   {{ doc.category }}
                 </span>
                 <span
-                  class="flex h-7 w-7 items-center justify-center rounded-full bg-brand-navy/10 text-brand-navy"
+                  class="bg-brand-navy/10 text-brand-navy flex h-7 w-7 items-center justify-center rounded-full"
                   aria-hidden="true"
                 >
                   <TentangIcon name="document" />
                 </span>
               </div>
 
-              <h3 class="mt-3 text-base font-bold text-brand-navy">
+              <h3 class="text-brand-navy mt-3 text-base font-bold">
                 {{ doc.title }}
               </h3>
 
-              <p class="mt-1 text-xs font-medium text-brand-indigo">
+              <p class="text-brand-indigo mt-1 text-xs font-medium">
                 {{ doc.refNumber }}
               </p>
 
@@ -513,11 +519,11 @@ const officialSopDocuments: SopDocument[] = [
               :href="doc.url"
               target="_blank"
               rel="noopener noreferrer"
-              class="group mt-4 inline-flex min-h-[44px] items-center justify-between rounded-btn border border-brand-navy/20 bg-brand-cyan/10 px-3.5 py-2 text-sm font-semibold text-brand-navy transition-colors hover:bg-brand-navy hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+              class="group rounded-btn border-brand-navy/20 bg-brand-cyan/10 text-brand-navy hover:bg-brand-navy focus-visible:outline-brand-navy mt-4 inline-flex min-h-[44px] items-center justify-between border px-3.5 py-2 text-sm font-semibold transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               <span class="inline-flex items-center gap-2">
                 <span
-                  class="rounded bg-brand-navy px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase transition-colors group-hover:bg-white group-hover:text-brand-navy"
+                  class="bg-brand-navy group-hover:text-brand-navy rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase transition-colors group-hover:bg-white"
                 >
                   PDF
                 </span>
@@ -535,7 +541,7 @@ const officialSopDocuments: SopDocument[] = [
 
     <!-- Ajukan permohonan -->
     <TentangFeatureBand heading="Ajukan Permohonan Informasi">
-      <p class="mt-2 max-w-3xl text-base text-brand-navy/90">
+      <p class="text-brand-navy/90 mt-2 max-w-3xl text-base">
         Pendaftaran, pengisian formulir daring, dan pelacakan status permohonan dilakukan di portal
         resmi PPID Kota Balikpapan.
       </p>
@@ -545,7 +551,7 @@ const officialSopDocuments: SopDocument[] = [
           href="https://ppid.balikpapan.go.id/ppid/permohonan"
           target="_blank"
           rel="noopener noreferrer"
-          class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-btn bg-brand-navy px-5 py-2.5 text-base font-medium text-white transition-colors hover:bg-brand-navy-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+          class="rounded-btn bg-brand-navy hover:bg-brand-navy-deep focus-visible:outline-brand-navy inline-flex min-h-[44px] items-center justify-center gap-2 px-5 py-2.5 text-base font-medium text-white transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           Isi Formulir Permohonan
           <span class="sr-only">Tautan eksternal, terbuka di tab baru</span>
@@ -556,7 +562,7 @@ const officialSopDocuments: SopDocument[] = [
           href="https://ppid.balikpapan.go.id/ppid/keberatan"
           target="_blank"
           rel="noopener noreferrer"
-          class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-btn border-2 border-brand-navy bg-white px-5 py-2.5 text-base font-medium text-brand-navy transition-colors hover:bg-brand-navy hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+          class="rounded-btn border-brand-navy text-brand-navy hover:bg-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] items-center justify-center gap-2 border-2 bg-white px-5 py-2.5 text-base font-medium transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           Formulir Keberatan Daring
           <span class="sr-only"
@@ -569,7 +575,7 @@ const officialSopDocuments: SopDocument[] = [
           href="https://ppid.balikpapan.go.id"
           target="_blank"
           rel="noopener noreferrer"
-          class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-btn border border-brand-navy/40 bg-brand-cyan/20 px-4 py-2.5 text-base font-medium text-brand-navy transition-colors hover:border-brand-navy hover:bg-brand-cyan/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+          class="rounded-btn border-brand-navy/40 bg-brand-cyan/20 text-brand-navy hover:border-brand-navy hover:bg-brand-cyan/40 focus-visible:outline-brand-navy inline-flex min-h-[44px] items-center justify-center gap-2 border px-4 py-2.5 text-base font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           Portal PPID Balikpapan
           <span class="sr-only">Tautan eksternal, terbuka di tab baru</span>
