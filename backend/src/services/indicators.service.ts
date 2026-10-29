@@ -549,12 +549,6 @@ export const getIndicatorById = async (
       where: { id: normalizedId },
       include: WITH_TEMPLATE,
     });
-    if (!row && normalizedId.toLowerCase() !== normalizedId) {
-      row = await db.indicator.findUnique({
-        where: { id: normalizedId.toLowerCase() },
-        include: WITH_TEMPLATE,
-      });
-    }
     if (!row) {
       row = await db.indicator.findUnique({
         where: { slug: normalizedId.toLowerCase() },

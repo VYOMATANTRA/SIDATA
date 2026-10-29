@@ -19,9 +19,11 @@ Balikpapan. It is:
   tied to that program, branded separately.
 - **Not** a civil-administration system — no citizen-service transactions, no internal workflow
   tooling. Profile/info only.
-- **Not** a PPID document host. The footer's "Permintaan Data" page explains the PPID request
-  procedure for data not published on the site and links to the official PPID website/forms. It
-  never hosts PPID documents or labels Kelurahan public-setting contacts as PPID channels.
+- **Not** a PPID document host. The footer's **Permintaan Data** page (`/permintaan-data`) explains
+  the public request path for data not published on the site: step-by-step guidance, a working-day
+  timetable (UU 14/2008 Pasal 22 / 35–36 and local SOP), escalation (permohonan → keberatan →
+  sengketa), and **links only** to official PPID Balikpapan forms. It never uploads, mirrors, or
+  hosts PPID documents, and never labels Kelurahan public-setting contacts as PPID channels.
 
 Frontend markup must use semantic HTML and target WCAG 2.1 Level A conformance — see
 [`docs/ACCESSIBILITY.md`](ACCESSIBILITY.md) for the rules this implies.
@@ -391,7 +393,8 @@ to interacting with the map.
 **Footer:**
 
 - **Sumber Daya** — Publikasi (Prodeskel publications, infographics, Eco Boba booklet, etc.), Peta
-  (interactive, QGIS-derived), Permintaan Data (PPID external pointer with request steps), Ketua RT.
+  (interactive, QGIS-derived), Permintaan Data (in-app guide + timetable; PPID forms stay external),
+  Ketua RT.
 - **Cerita** — links to the Cerita-labeled pages. Confirmed: the 7 stat pages + Persampahan & Bank
   Sampah Unit.
 - **Tentang** — Kelurahan Manggar, Program Desa/Kelurahan Cantik, Inovasi Sosial VYOMATANTRA.
@@ -451,7 +454,7 @@ Monografi, the map, and the booklet for the field record.
   jumlah kasus pengaduan), not budget content.
 - **UMKM curation** — not included.
 - **Guestbook** — excluded.
-- **PPID document hosting** — never; external pointer only (§1).
+- **PPID document hosting** — never; forms stay on the official PPID site; SIDATA only explains and links (§1).
 - **Data-collection instrumentation** (RT sweep design, one-instrument-vs-one-occasion) — out of
   scope for this site. The site only consumes Prodeskel's already-published output; data
   collection is a Prodeskel-stage concern.
@@ -496,3 +499,10 @@ Single register — unresolved questions live here and nowhere else.
 - **Public visibility of Ketua RT contacts:** The page publishes names, phone numbers, and addresses
   for private individuals. Confirm with the kelurahan whether the directory is published as-is, or
   needs a reduced field set (for example address withheld, or contact only on request).
+- **Permintaan Data / UU 14/2008 citations (settled 2026-10-30):** Public copy on `/permintaan-data`
+  uses Pasal 22 ayat (7)–(8) for the 10+7 working-day PPID reply window; Pasal 35 ayat (1) for
+  keberatan grounds; Pasal 36 ayat (1) for the 30 working-day window to *file* keberatan; Pasal 36
+  ayat (2) for the 30 working-day *atasan PPID* reply; Pasal 37–38 (+ PerKI No. 1/2013 Pasal 13)
+  for sengketa to Komisi Informasi. Verified against pasal.id Pasal 35–36 pages and the UU 14/2008
+  text mirrors at Bank Indonesia and e-PPID Komisi Informasi (links in the PR / this bullet).
+  SOP PPID Balikpapan remains a local procedure reference alongside the statute — not a substitute.
