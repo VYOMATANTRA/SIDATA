@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import BaseLink from './BaseLink.vue';
-import logoBalikpapan from '@/assets/img/logo_balikpapan.png';
-import logoDesaCantik from '@/assets/img/logo_desa_cantik.png';
-import logoSdgsDesa from '@/assets/img/sdgs_desa.png';
-import logoSdgs17 from '@/assets/img/17_kemitraan_pembangunan_desa.png';
-import logoBps from '@/assets/img/logo_bps.png';
-import logoItk from '@/assets/img/logo_itk.png';
-import logoVyomatantra from '@/assets/img/logo_vyomatantra.png';
+import logoBalikpapan from '@/assets/img/logo_balikpapan.webp';
+import logoDesaCantik from '@/assets/img/logo_desa_cantik.webp';
+import logoSdgsDesa from '@/assets/img/sdgs_desa.webp';
+import logoSdgs17 from '@/assets/img/17_kemitraan_pembangunan_desa.webp';
+import logoBps from '@/assets/img/logo_bps.webp';
+import logoItk from '@/assets/img/logo_itk.webp';
+import logoVyomatantra from '@/assets/img/logo_vyomatantra.webp';
 
 export interface FooterProps {
   year?: number | string;

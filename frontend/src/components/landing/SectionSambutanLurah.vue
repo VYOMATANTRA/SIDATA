@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import { DEFAULT_SAMBUTAN_BLOCK, useContentBlocksStore } from '../../stores/contentBlocks.store';
 import HugeQuote from '../common/HugeQuote.vue';
-import defaultLurahPhoto from '@/assets/img/lurah_placeholder_sample.png';
+import defaultLurahPhoto from '@/assets/img/lurah_placeholder_sample.webp';
 
 const contentBlocksStore = useContentBlocksStore();
 
