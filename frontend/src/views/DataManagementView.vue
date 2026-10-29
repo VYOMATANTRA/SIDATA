@@ -8,6 +8,8 @@ import ScalarIndicatorForm from '../components/data/ScalarIndicatorForm.vue';
 import TableIndicatorForm, {
   type TableSavePayload,
 } from '../components/data/TableIndicatorForm.vue';
+import ContentBlockForm from '../components/data/ContentBlockForm.vue';
+import PublicSettingsForm from '../components/data/PublicSettingsForm.vue';
 import {
   INDICATOR_TABLE_KIND_META,
   useIndicatorTablesStore,
@@ -20,47 +22,73 @@ import {
   type IndicatorPatch,
 } from '../stores/indicators.store';
 import { usePagesStore } from '../stores/pages.store';
+import { useContentBlocksStore, type ContentBlock } from '../stores/contentBlocks.store';
+import { useSettingsStore, type PublicSettings } from '../stores/settings.store';
 import { formatDecimalId } from '../utils/formatNumber';
 import { INPUT_CLASSES } from '../utils/formStyles';
 
 /**
- * CMS entry point for indicator data (issue: "CMS forms for indicators", SPEC §3/§4).
+ * CMS entry point for indicator data, content blocks, and public settings (SPEC §3/§4).
  *
- * Deliberately scoped: no app-wide sidebar shell, no create/delete, no bulk import. It lists
- * whatever scalar indicators and matrix tables already exist and opens a single accessible
- * edit dialog per type. Creating new rows needs a `sections` management surface that does not
- * exist yet (the seed creates pages and chapters, not sections), so it stays out of this view.
+ * Scoped CMS editing:
+ * - Scalar indicators (ScalarIndicatorForm)
+ * - Matrix tables (TableIndicatorForm)
+ * - Content blocks (ContentBlockForm)
+ * - Public portal settings (PublicSettingsForm)
  */
 
-type TypeFilter = 'all' | 'skalar' | 'matriks';
+type TypeFilter = 'all' | 'skalar' | 'matriks' | 'konten' | 'pengaturan';
+type ActiveTab = 'indikator' | 'konten' | 'pengaturan';
 
 const indicatorsStore = useIndicatorsStore();
 const tablesStore = useIndicatorTablesStore();
 const pagesStore = usePagesStore();
+const contentBlocksStore = useContentBlocksStore();
+const settingsStore = useSettingsStore();
 
+const activeTab = ref<ActiveTab>('indikator');
 const searchQuery = ref('');
 const typeFilter = ref<TypeFilter>('all');
 
 const activeScalar = ref<Indicator | null>(null);
 const activeTableId = ref<string | null>(null);
 const activeTable = ref<IndicatorTableDetail | null>(null);
+const activeContentBlock = ref<ContentBlock | null>(null);
+const isEditingSettings = ref(false);
+
 const isTableDetailLoading = ref(false);
 const saving = ref(false);
 const serverError = ref('');
 const statusMessage = ref('');
 
-const isEditorOpen = computed(() => activeScalar.value !== null || activeTableId.value !== null);
+const isEditorOpen = computed(
+  () =>
+    activeScalar.value !== null ||
+    activeTableId.value !== null ||
+    activeContentBlock.value !== null ||
+    isEditingSettings.value,
+);
 
-const isLoading = computed(() => indicatorsStore.isLoading || tablesStore.isLoading);
+const isLoading = computed(() => {
+  if (activeTab.value === 'konten') return contentBlocksStore.isLoading;
+  if (activeTab.value === 'pengaturan') return settingsStore.isLoading;
+  return indicatorsStore.isLoading || tablesStore.isLoading;
+});
 
-const loadError = computed(() => indicatorsStore.error || tablesStore.error);
+const loadError = computed(() => {
+  if (activeTab.value === 'konten') return contentBlocksStore.error;
+  if (activeTab.value === 'pengaturan') return settingsStore.error;
+  return indicatorsStore.error || tablesStore.error;
+});
 
 function compareCards(a: IndicatorCardModel, b: IndicatorCardModel): number {
+  if (a.type === 'pengaturan') return 1;
+  if (b.type === 'pengaturan') return -1;
   const pageA = a.kicker ?? '\uffff';
   const pageB = b.kicker ?? '\uffff';
   const byPage = pageA.localeCompare(pageB, 'id');
   if (byPage !== 0) return byPage;
-  if (a.type !== b.type) return a.type === 'skalar' ? -1 : 1;
+  if (a.type !== b.type) return a.type === 'skalar' ? -1 : b.type === 'skalar' ? 1 : a.type.localeCompare(b.type, 'id');
   return a.title.localeCompare(b.title, 'id');
 }
 
@@ -108,6 +136,47 @@ const cards = computed<IndicatorCardModel[]>(() => {
     isStale: false,
   }));
 
+  if (activeTab.value === 'konten') {
+    return Object.values(contentBlocksStore.blocks)
+      .map((block) => ({
+        id: block.slug,
+        type: 'konten' as const,
+        title: block.title ?? block.slug,
+        kicker: 'Blok Konten',
+        sectionLabel: `Tipe: ${block.type} · Slug: ${block.slug}`,
+        stats: [
+          { label: 'Tipe blok', value: block.type },
+          {
+            label: 'Terakhir diperbarui',
+            value: new Date(block.updatedAt).toLocaleDateString('id-ID'),
+          },
+        ],
+        source: null,
+        hedgeNote: null,
+        isStale: false,
+      }))
+      .sort(compareCards);
+  }
+
+  if (activeTab.value === 'pengaturan') {
+    return [
+      {
+        id: 'public-settings',
+        type: 'pengaturan' as const,
+        title: 'Pengaturan Publik Portal',
+        kicker: 'Sistem',
+        sectionLabel: settingsStore.appName,
+        stats: [
+          { label: 'Nama Institusi', value: settingsStore.institutionName },
+          { label: 'Kontak Telepon', value: settingsStore.contactPhone || '—' },
+        ],
+        source: null,
+        hedgeNote: null,
+        isStale: false,
+      },
+    ];
+  }
+
   return [...scalarCards, ...tableCards].sort(compareCards);
 });
 
@@ -121,13 +190,27 @@ const filteredCards = computed(() => {
   });
 });
 
-const modalTitle = computed(() =>
-  activeTableId.value ? 'Edit Tabel Matriks' : 'Edit Angka Indikator Skalar',
+const modalTitle = computed(() => {
+  if (activeContentBlock.value) {
+    return `Edit Blok Konten: ${activeContentBlock.value.title ?? activeContentBlock.value.slug}`;
+  }
+  if (isEditingSettings.value) {
+    return 'Edit Pengaturan Publik Portal';
+  }
+  return activeTableId.value ? 'Edit Tabel Matriks' : 'Edit Angka Indikator Skalar';
+});
+
+const modalSize = computed<'md' | 'xl'>(() =>
+  activeTableId.value || activeContentBlock.value || isEditingSettings.value ? 'xl' : 'md',
 );
 
-const modalSize = computed<'md' | 'xl'>(() => (activeTableId.value ? 'xl' : 'md'));
-
 const modalDescription = computed(() => {
+  if (activeContentBlock.value) {
+    return `Slug: ${activeContentBlock.value.slug} · Tipe: ${activeContentBlock.value.type}`;
+  }
+  if (isEditingSettings.value) {
+    return 'Pengaturan profil institusi, kontak pelayanan, dan titik koordinat peta default.';
+  }
   const sectionId = activeScalar.value?.sectionId ?? activeTable.value?.sectionId;
   if (!sectionId) return undefined;
   const parts = pagesStore.breadcrumbParts(sectionId);
@@ -148,6 +231,8 @@ async function loadAll(): Promise<void> {
     indicatorsStore.fetchIndicators(true),
     tablesStore.fetchTables(true),
   ]);
+  void contentBlocksStore.fetchBlocks().catch(() => {});
+  void settingsStore.fetchPublicSettings().catch(() => {});
 }
 
 onMounted(loadAll);
@@ -156,6 +241,8 @@ function openScalar(indicator: Indicator): void {
   serverError.value = '';
   activeTableId.value = null;
   activeTable.value = null;
+  activeContentBlock.value = null;
+  isEditingSettings.value = false;
   activeScalar.value = indicator;
 }
 
@@ -165,20 +252,45 @@ function openScalar(indicator: Indicator): void {
  * nothing instead of dereferencing `undefined`.
  */
 function handleEdit(card: IndicatorCardModel): void {
+  serverError.value = '';
+  activeScalar.value = null;
+  activeTableId.value = null;
+  activeTable.value = null;
+  activeContentBlock.value = null;
+  isEditingSettings.value = false;
+
   if (card.type === 'skalar') {
     const indicator = indicatorsStore.indicators.find((item: Indicator) => item.id === card.id);
     if (indicator) openScalar(indicator);
     return;
   }
 
-  const table = tablesStore.tables.find((item) => item.id === card.id);
-  if (table) void openTable(table);
+  if (card.type === 'matriks') {
+    const table = tablesStore.tables.find((item) => item.id === card.id);
+    if (table) void openTable(table);
+    return;
+  }
+
+  if (card.type === 'konten') {
+    const block = contentBlocksStore.blocks[card.id];
+    if (block) {
+      activeContentBlock.value = block;
+    }
+    return;
+  }
+
+  if (card.type === 'pengaturan') {
+    isEditingSettings.value = true;
+    return;
+  }
 }
 
 async function openTable(table: IndicatorTable): Promise<void> {
   serverError.value = '';
   activeScalar.value = null;
   activeTable.value = null;
+  activeContentBlock.value = null;
+  isEditingSettings.value = false;
   activeTableId.value = table.id;
   isTableDetailLoading.value = true;
   try {
@@ -194,8 +306,45 @@ function resetEditor(): void {
   activeScalar.value = null;
   activeTableId.value = null;
   activeTable.value = null;
+  activeContentBlock.value = null;
+  isEditingSettings.value = false;
   isTableDetailLoading.value = false;
   serverError.value = '';
+}
+
+async function handleContentBlockSubmit(payload: {
+  title: string | null;
+  body: string;
+  metadata: Record<string, unknown> | null;
+}): Promise<void> {
+  const target = activeContentBlock.value;
+  if (!target) return;
+
+  saving.value = true;
+  serverError.value = '';
+  try {
+    const updated = await contentBlocksStore.updateBlock(target.slug, payload);
+    resetEditor();
+    announce(`Perubahan blok konten “${updated.title ?? updated.slug}” disimpan.`);
+  } catch (error) {
+    serverError.value = errorMessage(error, 'Gagal menyimpan perubahan blok konten.');
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function handleSettingsSubmit(patch: Partial<PublicSettings>): Promise<void> {
+  saving.value = true;
+  serverError.value = '';
+  try {
+    await settingsStore.updatePublicSettings(patch);
+    resetEditor();
+    announce('Pengaturan publik portal berhasil disimpan.');
+  } catch (error) {
+    serverError.value = errorMessage(error, 'Gagal menyimpan pengaturan publik.');
+  } finally {
+    saving.value = false;
+  }
 }
 
 async function handleScalarSubmit(patch: IndicatorPatch): Promise<void> {
@@ -281,12 +430,74 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
 
     <main id="main-content" class="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
       <div>
-        <p class="text-xs font-semibold tracking-widest text-slate-500 uppercase">CMS Data</p>
-        <h1 class="text-brand-navy mt-1 text-xl font-bold">Data</h1>
-        <p class="mt-1 max-w-2xl text-sm text-slate-600">
-          Kelola angka indikator skalar dan empat tabel matriks. Angka dimasukkan manual; impor
-          massal belum tersedia.
+        <p class="text-xs font-semibold tracking-widest text-slate-500 uppercase">
+          CMS Data &amp; Konten
         </p>
+        <h1 class="text-brand-navy mt-1 text-xl font-bold">Data &amp; Konten Portal</h1>
+        <p class="mt-1 max-w-2xl text-sm text-slate-600">
+          Kelola angka indikator skalar, tabel matriks, narasi blok konten, dan pengaturan publik
+          portal.
+        </p>
+      </div>
+
+      <div class="mt-6 flex border-b border-slate-200" role="tablist" aria-label="Kategori CMS">
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === 'indikator'"
+          class="border-b-2 px-4 py-2.5 text-sm font-medium transition-colors"
+          :class="
+            activeTab === 'indikator'
+              ? 'border-brand-navy text-brand-navy font-semibold'
+              : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
+          "
+          data-test="tab-indikator"
+          @click="
+            activeTab = 'indikator';
+            typeFilter = 'all';
+            searchQuery = '';
+          "
+        >
+          Indikator &amp; Tabel
+        </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === 'konten'"
+          class="border-b-2 px-4 py-2.5 text-sm font-medium transition-colors"
+          :class="
+            activeTab === 'konten'
+              ? 'border-brand-navy text-brand-navy font-semibold'
+              : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
+          "
+          data-test="tab-konten"
+          @click="
+            activeTab = 'konten';
+            typeFilter = 'all';
+            searchQuery = '';
+          "
+        >
+          Blok Konten &amp; Profil
+        </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === 'pengaturan'"
+          class="border-b-2 px-4 py-2.5 text-sm font-medium transition-colors"
+          :class="
+            activeTab === 'pengaturan'
+              ? 'border-brand-navy text-brand-navy font-semibold'
+              : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
+          "
+          data-test="tab-pengaturan"
+          @click="
+            activeTab = 'pengaturan';
+            typeFilter = 'all';
+            searchQuery = '';
+          "
+        >
+          Pengaturan Publik Portal
+        </button>
       </div>
 
       <div class="mt-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -310,7 +521,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
             />
           </div>
 
-          <div class="w-full sm:w-52">
+          <div v-if="activeTab === 'indikator'" class="w-full sm:w-52">
             <label for="data-type" class="block text-xs font-medium text-slate-600">
               Tipe data
             </label>
@@ -424,6 +635,24 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
         :busy="saving"
         :server-error="serverError"
         @submit="handleTableSubmit"
+        @cancel="resetEditor"
+      />
+
+      <ContentBlockForm
+        v-else-if="activeContentBlock"
+        :block="activeContentBlock"
+        :busy="saving"
+        :server-error="serverError"
+        @submit="handleContentBlockSubmit"
+        @cancel="resetEditor"
+      />
+
+      <PublicSettingsForm
+        v-else-if="isEditingSettings"
+        :settings="settingsStore.settings"
+        :busy="saving"
+        :server-error="serverError"
+        @submit="handleSettingsSubmit"
         @cancel="resetEditor"
       />
 

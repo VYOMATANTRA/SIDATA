@@ -314,4 +314,36 @@ describe('DataManagementView.vue', () => {
 
     wrapper.unmount();
   });
+
+  it('switches to content blocks tab and lists editable content blocks', async () => {
+    const wrapper = mountView();
+    await flushPromises();
+
+    await wrapper.find('[data-test="tab-konten"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Portal Data Terpadu Kelurahan Manggar');
+    expect(wrapper.text()).toContain('Sambutan Lurah Manggar');
+    expect(wrapper.text()).toContain('Profil Kelurahan Manggar');
+
+    const editHeroBtn = wrapper
+      .findAll('button')
+      .find((b) => b.text().includes('Portal Data Terpadu'));
+    expect(editHeroBtn).toBeDefined();
+
+    wrapper.unmount();
+  });
+
+  it('switches to public settings tab and displays public settings card', async () => {
+    const wrapper = mountView();
+    await flushPromises();
+
+    await wrapper.find('[data-test="tab-pengaturan"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Pengaturan Publik Portal');
+    expect(wrapper.text()).toContain('Kelurahan Manggar');
+
+    wrapper.unmount();
+  });
 });

@@ -36,6 +36,6 @@ export const PUBLICATIONS: PublicationItem[] = [
   },
 ];
 
-export function hasPublicPublication(): boolean {
-  return PUBLICATIONS.some((p) => typeof p.href === 'string' && p.href.startsWith('https://'));
+export function hasPublicPublication(list: PublicationItem[] = PUBLICATIONS): boolean {
+  return list.some((p) => typeof p.href === 'string' && p.href.startsWith('https://'));
 }

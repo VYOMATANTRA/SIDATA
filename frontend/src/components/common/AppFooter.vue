@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed } from 'vue';
+import { getActivePinia } from 'pinia';
 import BaseLink from './BaseLink.vue';
 import logoBalikpapan from '@/assets/img/logo_balikpapan.png';
 import logoDesaCantik from '@/assets/img/logo_desa_cantik.png';
@@ -7,7 +9,9 @@ import logoSdgs17 from '@/assets/img/17_kemitraan_pembangunan_desa.png';
 import logoBps from '@/assets/img/logo_bps.png';
 import logoItk from '@/assets/img/logo_itk.png';
 import logoVyomatantra from '@/assets/img/logo_vyomatantra.png';
-import { hasPublicPublication } from '../../content/publikasi';
+import { hasPublicPublication, type PublicationItem } from '../../content/publikasi';
+import { useSettingsStore } from '../../stores/settings.store';
+import { useContentBlocksStore } from '../../stores/contentBlocks.store';
 
 export interface FooterProps {
   year?: number | string;
@@ -15,7 +19,7 @@ export interface FooterProps {
   addressLines?: string[];
 }
 
-withDefaults(defineProps<FooterProps>(), {
+const props = withDefaults(defineProps<FooterProps>(), {
   year: 2026,
   phone: '(0542) 772158',
   addressLines: () => [
@@ -26,6 +30,29 @@ withDefaults(defineProps<FooterProps>(), {
   ],
 });
 
+const settingsStore = getActivePinia() ? useSettingsStore() : null;
+const contentBlocksStore = getActivePinia() ? useContentBlocksStore() : null;
+
+const displayPhone = computed(() => {
+  if (props.phone !== '(0542) 772158') return props.phone;
+  return settingsStore?.isLoaded && settingsStore.contactPhone
+    ? settingsStore.contactPhone
+    : props.phone;
+});
+
+const displayAddressLines = computed(() => {
+  if (props.addressLines.length !== 4) return props.addressLines;
+  if (settingsStore?.isLoaded && settingsStore.contactAddress) {
+    const parts = settingsStore.contactAddress
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (parts.length >= 2) return parts;
+    return [settingsStore.contactAddress];
+  }
+  return props.addressLines;
+});
+
 // Resource Links (Sumber Daya)
 const allResourceLinks = [
   { label: 'Publikasi', to: '/publikasi', requiresPublicDocument: true },
@@ -34,11 +61,16 @@ const allResourceLinks = [
   { label: 'Ketua RT', to: '/ketua-rt' },
 ];
 
-const resourceLinks = allResourceLinks.filter((link) => {
-  if (link.requiresPublicDocument) {
-    return hasPublicPublication();
-  }
-  return true;
+const resourceLinks = computed(() => {
+  const custom = contentBlocksStore?.publikasiKatalog?.metadata?.publications;
+  const list =
+    Array.isArray(custom) && custom.length > 0 ? (custom as PublicationItem[]) : undefined;
+  return allResourceLinks.filter((link) => {
+    if (link.requiresPublicDocument) {
+      return hasPublicPublication(list);
+    }
+    return true;
+  });
 });
 
 // Story & Statistics Links (Cerita)
@@ -106,7 +138,7 @@ const aboutLinks = [
             class="space-y-1 text-xs leading-relaxed text-slate-200/90 not-italic sm:text-sm"
           >
             <p
-              v-for="(line, idx) in addressLines"
+              v-for="(line, idx) in displayAddressLines"
               :key="idx"
               :class="{ 'font-medium text-white': idx === 0 }"
             >
@@ -115,13 +147,13 @@ const aboutLinks = [
             <p class="pt-0.5">
               Telp.
               <BaseLink
-                :href="`tel:${phone.replace(/[^0-9]/g, '')}`"
+                :href="`tel:${displayPhone.replace(/[^0-9]/g, '')}`"
                 variant="white"
                 size="sm"
                 class="text-xs sm:text-sm"
                 :with-arrow="false"
               >
-                {{ phone }}
+                {{ displayPhone }}
               </BaseLink>
             </p>
           </address>

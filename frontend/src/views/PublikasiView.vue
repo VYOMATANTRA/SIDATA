@@ -1,8 +1,22 @@
 <script setup lang="ts">
+import { computed, onMounted } from 'vue';
 import TentangPageLayout from '../components/tentang/TentangPageLayout.vue';
 import TentangBreadcrumb from '../components/tentang/TentangBreadcrumb.vue';
 import TentangHeroPanel from '../components/tentang/TentangHeroPanel.vue';
-import { PUBLICATIONS } from '../content/publikasi';
+import { PUBLICATIONS, type PublicationItem } from '../content/publikasi';
+import { useContentBlocksStore } from '../stores/contentBlocks.store';
+
+const contentBlocksStore = useContentBlocksStore();
+
+onMounted(() => {
+  void contentBlocksStore.fetchBlocks();
+});
+
+const publikasiCatalog = computed<PublicationItem[]>(() => {
+  const custom = contentBlocksStore.publikasiKatalog.metadata?.publications;
+  if (Array.isArray(custom) && custom.length > 0) return custom as PublicationItem[];
+  return PUBLICATIONS;
+});
 </script>
 
 <template>
@@ -23,11 +37,11 @@ import { PUBLICATIONS } from '../content/publikasi';
               Sumber daya untuk warga
             </h2>
           </div>
-          <p class="text-sm text-gray-600">{{ PUBLICATIONS.length }} kategori</p>
+          <p class="text-sm text-gray-600">{{ publikasiCatalog.length }} kategori</p>
         </div>
 
         <ul class="mt-2 divide-y divide-gray-200" data-test="publication-list">
-          <li v-for="(publication, index) in PUBLICATIONS" :key="publication.title">
+          <li v-for="(publication, index) in publikasiCatalog" :key="publication.title">
             <article
               class="grid gap-3 py-6 sm:grid-cols-[3rem_minmax(0,1fr)_auto] sm:items-center sm:gap-5"
             >
@@ -47,7 +61,18 @@ import { PUBLICATIONS } from '../content/publikasi';
                 </p>
               </div>
 
+              <a
+                v-if="publication.href"
+                :href="publication.href"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="rounded-btn border-brand-navy bg-brand-navy hover:bg-brand-navy-deep inline-flex w-fit items-center border px-3 py-2 text-sm font-medium text-white"
+                data-test="publication-link"
+              >
+                Unduh Dokumen
+              </a>
               <span
+                v-else
                 class="rounded-btn inline-flex w-fit items-center border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700"
                 data-test="publication-status"
               >
