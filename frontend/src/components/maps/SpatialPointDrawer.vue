@@ -68,16 +68,16 @@ onUnmounted(() => {
     void nextTick(() => {
       if (pointId) {
         const itemBtn = document.querySelector<HTMLElement>(
-          `[data-test="peta-result-${pointId}"] button, [data-test="peta-result-${pointId}"]`,
+          `[data-test="peta-result-${pointId}"] button`,
         );
         if (itemBtn) {
           itemBtn.focus();
-          return;
+          if (document.activeElement === itemBtn) return;
         }
       }
       if (previouslyFocused && document.body.contains(previouslyFocused)) {
         previouslyFocused.focus();
-        return;
+        if (document.activeElement === previouslyFocused) return;
       }
       const fallback = document.querySelector<HTMLElement>(
         '#peta-search, [data-test="peta-search"]',

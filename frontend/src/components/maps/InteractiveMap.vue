@@ -98,8 +98,8 @@ function createMarker(point: SpatialPointDTO) {
   });
 
   marker.on('click', () => {
-    emit('select-point', point);
-    map?.panTo([point.latitude, point.longitude], { animate: true });
+    const fresh = props.points.find((item) => item.id === point.id) ?? point;
+    emit('select-point', fresh);
   });
 
   marker.on('add', () => {
@@ -123,6 +123,7 @@ function renderMarkers() {
     const current = markers.get(point.id);
     if (current) {
       current.setLatLng([point.latitude, point.longitude]);
+      current.options.title = markerLabel(point);
       updateMarkerIcon(current, point, point.id === props.selectedPointId);
       current.setZIndexOffset(point.id === props.selectedPointId ? 1000 : 0);
       continue;
@@ -238,7 +239,7 @@ onMounted(() => {
       iconCreateFunction: (cluster) => {
         const count = cluster.getChildCount();
         return L.divIcon({
-          html: `<span class="map-cluster__count">${count}</span>`,
+          html: `<span class="map-cluster__count" role="button" tabindex="0" aria-label="Kelompok ${count} titik, tekan untuk memperbesar">${count}</span>`,
           className: 'map-cluster',
           iconSize: [42, 42],
         });
@@ -276,6 +277,10 @@ watch(
 onUnmounted(() => {
   isUnmounted = true;
   window.removeEventListener('resize', handleResize);
+  if (activeZoomendHandler && map) {
+    map.off('zoomend', activeZoomendHandler);
+    activeZoomendHandler = null;
+  }
   if (sizeInvalidationTimer !== null) {
     window.clearTimeout(sizeInvalidationTimer);
     sizeInvalidationTimer = null;
