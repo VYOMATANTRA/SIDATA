@@ -45,7 +45,11 @@ watch(
 );
 
 function handleKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') {
+  if (event.key === 'Escape' && !event.defaultPrevented) {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('[data-test="peta-search"], [data-test="map-summary-dropdown"]')) {
+      return;
+    }
     emit('close');
   }
 }
@@ -60,8 +64,26 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown);
   if (restoreFocusOnUnmount) {
-    const target = previouslyFocused;
-    void nextTick(() => target?.focus());
+    const pointId = props.point?.id;
+    void nextTick(() => {
+      if (pointId) {
+        const itemBtn = document.querySelector<HTMLElement>(
+          `[data-test="peta-result-${pointId}"] button, [data-test="peta-result-${pointId}"]`,
+        );
+        if (itemBtn) {
+          itemBtn.focus();
+          return;
+        }
+      }
+      if (previouslyFocused && document.body.contains(previouslyFocused)) {
+        previouslyFocused.focus();
+        return;
+      }
+      const fallback = document.querySelector<HTMLElement>(
+        '#peta-search, [data-test="peta-search"]',
+      );
+      fallback?.focus();
+    });
   }
 });
 
@@ -79,7 +101,10 @@ const typeBadge = computed(() => {
         class: 'bg-brand-cyan/20 text-brand-navy border-brand-navy/30',
       };
     case 'fasilitas_umum':
-      return { label: 'Fasilitas Umum', class: 'bg-brand-violet/10 text-brand-violet border-brand-violet/30' };
+      return {
+        label: 'Fasilitas Umum',
+        class: 'bg-brand-violet/10 text-brand-violet border-brand-violet/30',
+      };
     default:
       return { label: props.point.type, class: 'bg-slate-100 text-slate-700 border-slate-200' };
   }
@@ -136,7 +161,7 @@ const metadataEntries = computed(() => {
       <button
         ref="closeButtonEl"
         type="button"
-        class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-btn border border-gray-300 px-3 text-sm font-medium text-brand-navy transition-colors hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+        class="rounded-btn text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-11 shrink-0 items-center justify-center gap-2 border border-gray-300 px-3 text-sm font-medium transition-colors hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2"
         :aria-label="closeLabel ?? 'Tutup'"
         @click="emit('close')"
       >
@@ -146,7 +171,7 @@ const metadataEntries = computed(() => {
 
     <!-- Title & Location -->
     <div class="mt-3">
-      <h3 class="text-base font-semibold text-brand-navy">
+      <h3 class="text-brand-navy text-base font-semibold">
         {{ point.name }}
       </h3>
       <div class="mt-1 flex items-center gap-2 text-xs text-slate-500">
@@ -179,7 +204,12 @@ const metadataEntries = computed(() => {
       class="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800"
       role="alert"
     >
-      <svg class="mt-0.5 h-4 w-4 shrink-0 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg
+        class="mt-0.5 h-4 w-4 shrink-0 text-amber-600"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
         <path
           stroke-linecap="round"
           stroke-linejoin="round"
@@ -215,7 +245,7 @@ const metadataEntries = computed(() => {
       class="mt-4 space-y-2 rounded-xl border border-slate-200/80 bg-slate-50 p-3.5"
     >
       <div class="flex items-center justify-between">
-        <span class="text-xs font-semibold tracking-wider text-brand-navy uppercase">
+        <span class="text-brand-navy text-xs font-semibold tracking-wider uppercase">
           Kontak Ketua RT
         </span>
         <span class="text-xs font-medium text-slate-500">
@@ -255,12 +285,7 @@ const metadataEntries = computed(() => {
           Chat WhatsApp
         </BaseButton>
 
-        <BaseButton
-          v-else
-          variant="primary"
-          :href="phoneTelUrl"
-          class="w-full text-white"
-        >
+        <BaseButton v-else variant="primary" :href="phoneTelUrl" class="w-full text-white">
           <template #leftIcon>
             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
@@ -278,7 +303,7 @@ const metadataEntries = computed(() => {
       <!-- The map is an entry point to the dedicated Ketua RT page (SPEC §8) -->
       <RouterLink
         to="/ketua-rt"
-        class="inline-flex items-center gap-1 pt-1 text-xs font-medium text-brand-navy underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+        class="text-brand-navy focus-visible:outline-brand-navy inline-flex items-center gap-1 pt-1 text-xs font-medium underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2"
       >
         Lihat seluruh daftar Ketua RT
         <span aria-hidden="true">&rarr;</span>

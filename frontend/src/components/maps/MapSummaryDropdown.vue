@@ -43,7 +43,7 @@ onUnmounted(() => {
     <!-- Dropdown Trigger Button -->
     <button
       type="button"
-      class="text-brand-navy text-sm inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200/90 bg-white/95 px-3.5 py-2 font-medium shadow-md backdrop-blur-md transition-all hover:bg-white"
+      class="text-brand-navy inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200/90 bg-white/95 px-3.5 py-2 text-sm font-medium shadow-md backdrop-blur-md transition-all hover:bg-white"
       :class="{ 'ring-brand-indigo/30 border-brand-indigo ring-2': isOpen }"
       aria-haspopup="true"
       :aria-expanded="isOpen"
@@ -72,7 +72,7 @@ onUnmounted(() => {
     >
       <div
         v-if="isOpen"
-        class="text-sm absolute left-0 z-50 mt-2 w-64 divide-y divide-slate-100 rounded-2xl border border-slate-200/90 bg-white/95 p-3.5 shadow-xl backdrop-blur-md"
+        class="absolute left-0 z-50 mt-2 w-64 divide-y divide-slate-100 rounded-2xl border border-slate-200/90 bg-white/95 p-3.5 text-sm shadow-xl backdrop-blur-md"
       >
         <div class="pb-2.5">
           <span class="block text-xs font-semibold tracking-wider text-slate-400 uppercase">
@@ -92,7 +92,7 @@ onUnmounted(() => {
 
           <li class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <span class="h-2.5 w-2.5 rounded-full bg-brand-indigo" />
+              <span class="bg-brand-indigo h-2.5 w-2.5 rounded-full" />
               <span>Pos / Ketua RT</span>
             </div>
             <span class="font-semibold text-slate-800">{{
@@ -102,7 +102,7 @@ onUnmounted(() => {
 
           <li class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <span class="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+              <span class="bg-brand-navy-deep h-2.5 w-2.5 rounded-full" />
               <span>Bank Sampah Unit</span>
             </div>
             <span class="font-semibold text-slate-800">{{
@@ -112,7 +112,7 @@ onUnmounted(() => {
 
           <li class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <span class="h-2.5 w-2.5 rounded-full bg-brand-violet" />
+              <span class="bg-brand-violet h-2.5 w-2.5 rounded-full" />
               <span>Fasilitas Umum</span>
             </div>
             <span class="font-semibold text-slate-800">{{
@@ -130,7 +130,7 @@ onUnmounted(() => {
           </div>
           <div
             v-if="summary.rtLeadersWithIntegrityConflicts > 0"
-            class="flex items-center justify-between text-amber-700 font-medium"
+            class="flex items-center justify-between font-medium text-amber-700"
           >
             <span>Konflik Integritas:</span>
             <span>{{ summary.rtLeadersWithIntegrityConflicts }} RT</span>
