@@ -1,6 +1,40 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { setActivePinia, createPinia } from 'pinia';
-import { useIndicatorsStore, type IndicatorDto, type IndicatorItem } from '../stores/indicators.store';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
+import {
+  useIndicatorsStore,
+  type Indicator,
+  type IndicatorDto,
+  type IndicatorItem,
+} from '../stores/indicators.store';
+import { useAuthStore } from '../stores/auth';
+
+function json(body: unknown, ok = true, status = ok ? 200 : 500): Response {
+  return { ok, status, json: async () => body } as Response;
+}
+
+function makeIndicator(overrides: Partial<Indicator> = {}): Indicator {
+  return {
+    id: 'ind-1',
+    sectionId: 'sec-1',
+    slug: 'total-penduduk',
+    label: 'Total Penduduk',
+    unit: 'jiwa',
+    valueCurrent: '53098',
+    valuePrevious: '52386',
+    periodCurrent: '2026',
+    periodPrevious: '2025',
+    isComputedComparison: true,
+    isStale: false,
+    source: 'Prodeskel',
+    hedgeNote: null,
+    sortOrder: 0,
+    comparisonTemplateId: null,
+    comparison: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
 
 const sampleIndicator: IndicatorDto = {
   id: 'ind-1',
@@ -23,190 +57,321 @@ const sampleIndicator: IndicatorDto = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
-describe('indicators store', () => {
+describe('indicators store (CMS list and edits)', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.restoreAllMocks();
   });
 
-  describe('global / landing page indicators', () => {
-    it('initializes with empty indicators and clean default state', () => {
-      const store = useIndicatorsStore();
-      expect(store.indicators).toEqual([]);
-      expect(store.isLoading).toBe(false);
-      expect(store.isLoaded).toBe(false);
-      expect(store.error).toBeNull();
+  it('loads the first 200 indicators', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (!url.startsWith('/api/indicators?pageSize=200')) {
+        throw new Error(`unexpected fetch: ${url}`);
+      }
+      return json({ indicators: [makeIndicator()], total: 1, page: 1, pageSize: 200 });
     });
+    globalThis.fetch = fetchMock as typeof fetch;
 
-    it('returns empty stats array when no indicators exist for a page slug', () => {
-      const store = useIndicatorsStore();
-      expect(store.getStatsForPage('kependudukan')).toEqual([]);
-      expect(store.getStatsForPage('pendidikan')).toEqual([]);
-      expect(store.getStatsForPage('kesehatan')).toEqual([]);
-    });
+    const store = useIndicatorsStore();
+    await store.fetchIndicators();
 
-    it('fetches indicators from /api/indicators successfully', async () => {
-      const sampleIndicators: IndicatorItem[] = [
-        {
-          id: '1',
-          slug: 'jumlah-penduduk',
-          label: 'Penduduk',
-          unit: 'jiwa',
-          valueCurrent: '53.098',
-          valuePrevious: null,
-          periodCurrent: '2026',
-          periodPrevious: null,
-          isComputedComparison: false,
-          isStale: false,
-          source: null,
-          hedgeNote: null,
-          pageSlug: 'kependudukan',
-          sortOrder: 1,
-        },
-        {
-          id: '2',
-          slug: 'rukun-tetangga',
-          label: 'Rukun Tetangga',
-          unit: 'RT',
-          valueCurrent: '100',
-          valuePrevious: null,
-          periodCurrent: '2026',
-          periodPrevious: null,
-          isComputedComparison: false,
-          isStale: false,
-          source: null,
-          hedgeNote: null,
-          pageSlug: 'kependudukan',
-          sortOrder: 2,
-        },
-      ];
+    expect(store.indicators).toHaveLength(1);
+    expect(store.total).toBe(1);
+    expect(store.isLoaded).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 
-      globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => ({ indicators: sampleIndicators }),
-      } as Response);
+  it('sends both the CSRF token and the bearer token on PATCH, then replaces the row', async () => {
+    let patchInit: RequestInit | undefined;
 
-      const store = useIndicatorsStore();
-      await store.fetchIndicators();
+    globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
+      if (url === '/api/indicators?pageSize=200') {
+        return json({ indicators: [makeIndicator()], total: 1 });
+      }
+      if (url === '/api/indicators/ind-1') {
+        patchInit = init;
+        return json({
+          message: 'Indikator diperbarui',
+          indicator: makeIndicator({ valueCurrent: '54000' }),
+        });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as typeof fetch;
 
-      expect(store.indicators).toHaveLength(2);
-      expect(store.isLoaded).toBe(true);
-      expect(store.isLoading).toBe(false);
+    const authStore = useAuthStore();
+    authStore.accessToken = 'token-1';
 
-      const stats = store.getStatsForPage('kependudukan');
-      expect(stats).toHaveLength(2);
-      expect(stats[0]).toEqual({
-        icon: 'person',
-        value: '53.098',
+    const store = useIndicatorsStore();
+    await store.fetchIndicators();
+
+    const updated = await store.updateIndicator('ind-1', { valueCurrent: '54000' });
+
+    expect(updated.valueCurrent).toBe('54000');
+    expect(store.indicators[0]?.valueCurrent).toBe('54000');
+
+    expect(patchInit?.method).toBe('PATCH');
+    const headers = new Headers(patchInit?.headers);
+    expect(headers.get('Authorization')).toBe('Bearer token-1');
+    expect(headers.get('x-csrf-token')).toBe('csrf-1');
+    expect(headers.get('Content-Type')).toBe('application/json');
+    expect(JSON.parse(String(patchInit?.body))).toEqual({ valueCurrent: '54000' });
+  });
+
+  it('surfaces the backend error message and keeps the previous state', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
+      if (url === '/api/indicators?pageSize=200') {
+        return json({ indicators: [makeIndicator()], total: 1 });
+      }
+      return json({ error: 'value_previous dan period_previous harus diisi bersama' }, false, 400);
+    }) as typeof fetch;
+
+    const store = useIndicatorsStore();
+    await store.fetchIndicators();
+
+    await expect(store.updateIndicator('ind-1', { valuePrevious: null })).rejects.toThrow(
+      'value_previous dan period_previous harus diisi bersama',
+    );
+
+    expect(store.indicators[0]?.valuePrevious).toBe('52386');
+  });
+
+  it('reports a list failure instead of throwing', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>(async () =>
+      json({ error: 'Gagal' }, false, 500),
+    ) as typeof fetch;
+
+    const store = useIndicatorsStore();
+    await store.fetchIndicators();
+
+    expect(store.error).toBe('Gagal');
+    expect(store.isLoaded).toBe(false);
+    expect(store.indicators).toEqual([]);
+  });
+});
+
+describe('indicators store (global / landing page indicators)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.restoreAllMocks();
+  });
+
+  it('initializes with empty indicators and clean default state', () => {
+    const store = useIndicatorsStore();
+    expect(store.indicators).toEqual([]);
+    expect(store.isLoading).toBe(false);
+    expect(store.isLoaded).toBe(false);
+    expect(store.error).toBeNull();
+  });
+
+  it('returns empty stats array when no indicators exist for a page slug', () => {
+    const store = useIndicatorsStore();
+    expect(store.getStatsForPage('kependudukan')).toEqual([]);
+    expect(store.getStatsForPage('pendidikan')).toEqual([]);
+    expect(store.getStatsForPage('kesehatan')).toEqual([]);
+  });
+
+  it('fetches indicators from /api/indicators successfully', async () => {
+    const sampleIndicators: IndicatorItem[] = [
+      {
+        id: '1',
+        slug: 'jumlah-penduduk',
         label: 'Penduduk',
         unit: 'jiwa',
-      });
-      expect(stats[1]).toEqual({
-        icon: 'house',
-        value: '100',
+        valueCurrent: '53.098',
+        valuePrevious: null,
+        periodCurrent: '2026',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'kependudukan',
+        sortOrder: 1,
+      },
+      {
+        id: '2',
+        slug: 'rukun-tetangga',
         label: 'Rukun Tetangga',
         unit: 'RT',
-      });
+        valueCurrent: '100',
+        valuePrevious: null,
+        periodCurrent: '2026',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'kependudukan',
+        sortOrder: 2,
+      },
+    ];
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ indicators: sampleIndicators }),
+    } as Response);
+
+    const store = useIndicatorsStore();
+    await store.fetchIndicators();
+
+    expect(store.indicators).toHaveLength(2);
+    expect(store.isLoaded).toBe(true);
+    expect(store.isLoading).toBe(false);
+
+    const stats = store.getStatsForPage('kependudukan');
+    expect(stats).toHaveLength(2);
+    expect(stats[0]).toEqual({
+      icon: 'person',
+      value: '53.098',
+      label: 'Penduduk',
+      unit: 'jiwa',
     });
-
-    it('handles 404 endpoint not found gracefully without throwing or corrupting state', async () => {
-      globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
-        ok: false,
-        status: 404,
-        json: async () => ({ error: 'Not Found' }),
-      } as Response);
-
-      const store = useIndicatorsStore();
-      await store.fetchIndicators();
-
-      expect(store.indicators).toEqual([]);
-      expect(store.isLoaded).toBe(true);
-      expect(store.isLoading).toBe(false);
-      expect(store.error).toBeNull();
-    });
-
-    it('handles network failure gracefully without throwing and leaves stats empty', async () => {
-      globalThis.fetch = vi.fn<typeof fetch>().mockRejectedValue(new Error('Network offline'));
-
-      const store = useIndicatorsStore();
-      await store.fetchIndicators();
-
-      expect(store.indicators).toEqual([]);
-      expect(store.isLoading).toBe(false);
-      expect(store.getStatsForPage('kependudukan')).toEqual([]);
+    expect(stats[1]).toEqual({
+      icon: 'house',
+      value: '100',
+      label: 'Rukun Tetangga',
+      unit: 'RT',
     });
   });
 
-  describe('section-based indicator queries', () => {
-    it('fetches indicators for a section and caches them by sectionId', async () => {
-      const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-        ok: true,
-        json: async () => ({ indicators: [sampleIndicator], total: 1, page: 1, pageSize: 50 }),
-      } as Response);
-      globalThis.fetch = fetchMock;
+  it('handles 404 endpoint not found gracefully without throwing or corrupting state', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: async () => ({ error: 'Not Found' }),
+    } as Response);
 
-      const store = useIndicatorsStore();
-      const result = await store.fetchBySectionId('sec-1');
+    const store = useIndicatorsStore();
+    await store.fetchIndicators();
 
-      expect(result).toEqual([sampleIndicator]);
-      expect(store.bySectionId['sec-1']).toEqual([sampleIndicator]);
-      expect(fetchMock).toHaveBeenCalledWith('/api/indicators?sectionId=sec-1&pageSize=200');
+    expect(store.indicators).toEqual([]);
+    expect(store.isLoaded).toBe(true);
+    expect(store.isLoading).toBe(false);
+    expect(store.error).toBeNull();
+  });
+
+  it('handles network failure gracefully without throwing and leaves stats empty', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>().mockRejectedValue(new Error('Network offline'));
+
+    const store = useIndicatorsStore();
+    await store.fetchIndicators();
+
+    expect(store.indicators).toEqual([]);
+    expect(store.isLoading).toBe(false);
+    expect(store.getStatsForPage('kependudukan')).toEqual([]);
+  });
+});
+
+describe('indicators store (public per-section reads)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.restoreAllMocks();
+  });
+
+  it('fetches indicators for a section and caches them by sectionId', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({ indicators: [sampleIndicator], total: 1, page: 1, pageSize: 50 }),
+    } as Response);
+    globalThis.fetch = fetchMock;
+
+    const store = useIndicatorsStore();
+    const result = await store.fetchBySectionId('sec-1');
+
+    expect(result).toEqual([sampleIndicator]);
+    expect(store.bySectionId['sec-1']).toEqual([sampleIndicator]);
+    expect(fetchMock).toHaveBeenCalledWith('/api/indicators?sectionId=sec-1&pageSize=200');
+  });
+
+  it('does not refetch an already-cached sectionId', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({ indicators: [sampleIndicator] }),
+    } as Response);
+    globalThis.fetch = fetchMock;
+
+    const store = useIndicatorsStore();
+    await store.fetchBySectionId('sec-1');
+    await store.fetchBySectionId('sec-1');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops the section cache after an edit so the Cerita view refetches', async () => {
+    let sectionValue = '100';
+
+    globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
+      if (url.startsWith('/api/indicators?sectionId=sec-1')) {
+        return json({ indicators: [makeIndicator({ valueCurrent: sectionValue })] });
+      }
+      if (url === '/api/indicators/ind-1') {
+        sectionValue = '200';
+        return json({ indicator: makeIndicator({ valueCurrent: '200' }) });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    const store = useIndicatorsStore();
+
+    const before = await store.fetchBySectionId('sec-1');
+    expect(before[0]?.valueCurrent).toBe('100');
+
+    await store.updateIndicator('ind-1', { valueCurrent: '200' });
+
+    // The CMS list holds the new value, and the Cerita cache must not keep serving the old one.
+    expect(store.indicators[0]?.valueCurrent).toBe('200');
+    expect(store.bySectionId['sec-1']).toBeUndefined();
+
+    const after = await store.fetchBySectionId('sec-1');
+    expect(after[0]?.valueCurrent).toBe('200');
+  });
+
+  it('returns an empty list and records the error against that sectionId, not globally', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: 'boom' }),
+    } as Response);
+    globalThis.fetch = fetchMock;
+
+    const store = useIndicatorsStore();
+    const result = await store.fetchBySectionId('sec-1');
+
+    expect(result).toEqual([]);
+    expect(store.errorsBySectionId['sec-1']).toContain('500');
+    // A failed fetch must never be written into bySectionId as [] — that would be
+    // indistinguishable from a section that genuinely has no indicators.
+    expect(store.bySectionId['sec-1']).toBeUndefined();
+  });
+
+  it('keeps one section error from clobbering a sibling section in-flight at the same time', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('sectionId=sec-fail')) {
+        return { ok: false, status: 500, json: async () => ({ error: 'boom' }) } as Response;
+      }
+      return { ok: true, json: async () => ({ indicators: [sampleIndicator] }) } as Response;
     });
+    globalThis.fetch = fetchMock;
 
-    it('does not refetch an already-cached sectionId', async () => {
-      const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-        ok: true,
-        json: async () => ({ indicators: [sampleIndicator] }),
-      } as Response);
-      globalThis.fetch = fetchMock;
+    const store = useIndicatorsStore();
+    await Promise.all([
+      store.fetchBySectionId('sec-fail'),
+      store.fetchBySectionId('sec-ok'),
+    ]);
 
-      const store = useIndicatorsStore();
-      await store.fetchBySectionId('sec-1');
-      await store.fetchBySectionId('sec-1');
-
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-    });
-
-    it('returns an empty list and records the error against that sectionId, not globally', async () => {
-      const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-        ok: false,
-        status: 500,
-        json: async () => ({ error: 'boom' }),
-      } as Response);
-      globalThis.fetch = fetchMock;
-
-      const store = useIndicatorsStore();
-      const result = await store.fetchBySectionId('sec-1');
-
-      expect(result).toEqual([]);
-      expect(store.errorsBySectionId['sec-1']).toContain('500');
-      // A failed fetch must never be written into bySectionId as [] — that would be
-      // indistinguishable from a section that genuinely has no indicators.
-      expect(store.bySectionId['sec-1']).toBeUndefined();
-    });
-
-    it('keeps one section error from clobbering a sibling section in-flight at the same time', async () => {
-      const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
-        const url = String(input);
-        if (url.includes('sectionId=sec-fail')) {
-          return { ok: false, status: 500, json: async () => ({ error: 'boom' }) } as Response;
-        }
-        return { ok: true, json: async () => ({ indicators: [sampleIndicator] }) } as Response;
-      });
-      globalThis.fetch = fetchMock;
-
-      const store = useIndicatorsStore();
-      await Promise.all([
-        store.fetchBySectionId('sec-fail'),
-        store.fetchBySectionId('sec-ok'),
-      ]);
-
-      expect(store.errorsBySectionId['sec-fail']).toContain('500');
-      expect(store.errorsBySectionId['sec-ok']).toBeNull();
-      expect(store.bySectionId['sec-ok']).toEqual([sampleIndicator]);
-      expect(store.loadingBySectionId['sec-fail']).toBe(false);
-      expect(store.loadingBySectionId['sec-ok']).toBe(false);
-    });
+    expect(store.errorsBySectionId['sec-fail']).toContain('500');
+    expect(store.errorsBySectionId['sec-ok']).toBeNull();
+    expect(store.bySectionId['sec-ok']).toEqual([sampleIndicator]);
+    expect(store.loadingBySectionId['sec-fail']).toBe(false);
+    expect(store.loadingBySectionId['sec-ok']).toBe(false);
   });
 });

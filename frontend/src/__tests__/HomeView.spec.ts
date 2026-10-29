@@ -16,6 +16,8 @@ function setupHomeView() {
       { path: '/login', component: { template: '<div>login</div>' } },
       { path: '/users', component: { template: '<div>users</div>' } },
       { path: '/dashboard', component: { template: '<div>dashboard</div>' } },
+      { path: '/data', component: { template: '<div>data</div>' } },
+      { path: '/settings/audit-retention', component: { template: '<div>retention</div>' } },
     ],
   });
 

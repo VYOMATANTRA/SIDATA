@@ -281,6 +281,14 @@ async function handleLogout() {
             </div>
 
             <router-link
+              v-if="authStore.canEditData"
+              to="/data"
+              class="rounded-lg bg-slate-100 px-3.5 py-1.5 text-xs font-medium text-slate-800 transition-colors hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-slate-500 sm:text-sm"
+            >
+              Kelola Data
+            </router-link>
+
+            <router-link
               v-if="authStore.isAdmin"
               to="/users"
               class="rounded-lg bg-slate-100 px-3.5 py-1.5 text-xs font-medium text-slate-800 transition-colors hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-slate-500 sm:text-sm"
@@ -294,6 +302,14 @@ async function handleLogout() {
               class="rounded-lg bg-slate-100 px-3.5 py-1.5 text-xs font-medium text-slate-800 transition-colors hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-slate-500 sm:text-sm"
             >
               Log Sistem
+            </router-link>
+
+            <router-link
+              v-if="authStore.isAdmin"
+              to="/settings/audit-retention"
+              class="rounded-lg bg-slate-100 px-3.5 py-1.5 text-xs font-medium text-slate-800 transition-colors hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-slate-500 sm:text-sm"
+            >
+              Retensi Audit
             </router-link>
 
             <button

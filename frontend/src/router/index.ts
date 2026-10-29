@@ -43,10 +43,22 @@ const router = createRouter({
       meta: { requiresAuth: true, title: 'Dasbor' },
     },
     {
+      path: '/data',
+      name: 'data-management',
+      component: () => import('../views/DataManagementView.vue'),
+      meta: { requiresAuth: true, requiresEditor: true, title: 'Data' },
+    },
+    {
       path: '/audit-logs',
       name: 'audit-log-viewer',
       component: () => import('../views/AuditLogView.vue'),
       meta: { requiresAuth: true, requiresAdmin: true, title: 'Log Sistem dan Audit Trail' },
+    },
+    {
+      path: '/settings/audit-retention',
+      name: 'audit-retention-settings',
+      component: () => import('../views/AuditRetentionSettingsView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true, title: 'Pengaturan Retensi Audit' },
     },
     {
       path: '/cerita/:slug',
@@ -91,6 +103,10 @@ router.beforeEach(async (to) => {
   }
 
   if (to.meta.requiresAdmin && !authStore.isAdmin) {
+    return { name: 'home' };
+  }
+
+  if (to.meta.requiresEditor && !authStore.canEditData) {
     return { name: 'home' };
   }
 
