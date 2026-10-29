@@ -167,7 +167,10 @@ describe('indicators store (public per-section reads)', () => {
 
     expect(result).toEqual([sampleIndicator]);
     expect(store.bySectionId['sec-1']).toEqual([sampleIndicator]);
-    expect(fetchMock).toHaveBeenCalledWith('/api/indicators?sectionId=sec-1&pageSize=200');
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/indicators?sectionId=sec-1&pageSize=200',
+      expect.objectContaining({ credentials: 'include' }),
+    );
   });
 
   it('does not refetch an already-cached sectionId', async () => {
@@ -244,10 +247,7 @@ describe('indicators store (public per-section reads)', () => {
     globalThis.fetch = fetchMock;
 
     const store = useIndicatorsStore();
-    await Promise.all([
-      store.fetchBySectionId('sec-fail'),
-      store.fetchBySectionId('sec-ok'),
-    ]);
+    await Promise.all([store.fetchBySectionId('sec-fail'), store.fetchBySectionId('sec-ok')]);
 
     expect(store.errorsBySectionId['sec-fail']).toContain('500');
     expect(store.errorsBySectionId['sec-ok']).toBeNull();
@@ -276,7 +276,10 @@ describe('indicators store (single indicator reads by slug)', () => {
     expect(result).toEqual(sampleIndicator);
     expect(store.bySlug['jumlah-penduduk']).toEqual(sampleIndicator);
     expect(store.findBySlug('jumlah-penduduk')).toEqual(sampleIndicator);
-    expect(fetchMock).toHaveBeenCalledWith('/api/indicators/jumlah-penduduk');
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/indicators/jumlah-penduduk',
+      expect.objectContaining({ credentials: 'include' }),
+    );
 
     // Subsequent call should return cached instance without extra fetch
     const cached = await store.fetchBySlug('jumlah-penduduk');
@@ -333,10 +336,7 @@ describe('indicators store (single indicator reads by slug)', () => {
     globalThis.fetch = fetchMock;
 
     const store = useIndicatorsStore();
-    await Promise.all([
-      store.fetchBySlug('fail-slug'),
-      store.fetchBySlug('ok-slug'),
-    ]);
+    await Promise.all([store.fetchBySlug('fail-slug'), store.fetchBySlug('ok-slug')]);
 
     expect(store.errorsBySlug['fail-slug']).toContain('500');
     expect(store.errorsBySlug['ok-slug']).toBeNull();
@@ -350,13 +350,18 @@ describe('indicators store (single indicator reads by slug)', () => {
       const url = String(input);
       if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
       if (url.startsWith('/api/indicators/ind-1')) {
-        return json({ indicator: makeIndicator({ slug: 'total-penduduk', valueCurrent: '60000' }) });
+        return json({
+          indicator: makeIndicator({ slug: 'total-penduduk', valueCurrent: '60000' }),
+        });
       }
       throw new Error(`unexpected fetch: ${url}`);
     }) as typeof fetch;
 
     const store = useIndicatorsStore();
-    store.bySlug['total-penduduk'] = makeIndicator({ slug: 'total-penduduk', valueCurrent: '53098' });
+    store.bySlug['total-penduduk'] = makeIndicator({
+      slug: 'total-penduduk',
+      valueCurrent: '53098',
+    });
 
     await store.updateIndicator('ind-1', { valueCurrent: '60000' });
 

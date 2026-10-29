@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
-import { apiRequestJson } from '../utils/apiClient';
+import { apiFetch, apiRequestJson } from '../utils/apiClient';
 
 /**
  * Scalar indicator figures (SPEC §7). Read is public; writes need an editor/admin token.
@@ -190,7 +190,7 @@ export const useIndicatorsStore = defineStore('indicators', () => {
     const task = (async () => {
       try {
         const params = new URLSearchParams({ sectionId, pageSize: '200' });
-        const response = await fetch(`/api/indicators?${params.toString()}`);
+        const response = await apiFetch(`/api/indicators?${params.toString()}`);
         if (!response.ok) {
           throw new Error(`Gagal memuat indikator (status ${response.status})`);
         }
@@ -240,7 +240,7 @@ export const useIndicatorsStore = defineStore('indicators', () => {
 
     const task = (async () => {
       try {
-        const response = await fetch(`/api/indicators/${encodeURIComponent(normalized)}`);
+        const response = await apiFetch(`/api/indicators/${encodeURIComponent(normalized)}`);
         if (!response.ok) {
           throw new Error(`Gagal memuat indikator (status ${response.status})`);
         }
