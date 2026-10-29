@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue';
 import {
-  HomeIcon,
-  Cog6ToothIcon,
   ListBulletIcon,
   ExclamationTriangleIcon,
   UserIcon,
@@ -10,15 +8,15 @@ import {
   PencilSquareIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-} from '@heroicons/vue/24/outline'
-import { useAuditStore, type AuditLogItem } from '../stores/audit.store'
+} from '@heroicons/vue/24/outline';
+import { useAuditStore, type AuditLogItem } from '../stores/audit.store';
 
-const auditStore = useAuditStore()
+const auditStore = useAuditStore();
 
-const searchQuery = ref('')
-const severityFilter = ref<'' | 'info' | 'warning' | 'critical'>('')
-const acknowledgingId = ref<string | null>(null)
-const acknowledgeError = ref<string | null>(null)
+const searchQuery = ref('');
+const severityFilter = ref<'' | 'info' | 'warning' | 'critical'>('');
+const acknowledgingId = ref<string | null>(null);
+const acknowledgeError = ref<string | null>(null);
 
 /**
  * Indonesian labels for every action code audit.service.ts can emit, so the "Kejadian"
@@ -61,22 +59,22 @@ const ACTION_LABELS: Record<string, string> = {
   'indicator_table_row.updated': 'Baris tabel indikator diperbarui',
   'indicator_table_row.deleted': 'Baris tabel indikator dihapus',
   'audit.pruned': 'Log audit dipangkas',
-}
+};
 
 function eventLabel(log: AuditLogItem): string {
-  const base = ACTION_LABELS[log.action] || log.action
+  const base = ACTION_LABELS[log.action] || log.action;
   // Mirror the wireframe's "Ganti role user (Admin to Editor)" detail from the
   // before/after metadata recorded by users.service.ts.
   if (log.action === 'user.role_changed' && log.metadata) {
-    const md = log.metadata as Record<string, unknown>
-    const from = typeof md.fromRoleName === 'string' ? md.fromRoleName : ''
-    const to = typeof md.toRoleName === 'string' ? md.toRoleName : ''
-    if (from && to) return `${base} (${from} to ${to})`
+    const md = log.metadata as Record<string, unknown>;
+    const from = typeof md.fromRoleName === 'string' ? md.fromRoleName : '';
+    const to = typeof md.toRoleName === 'string' ? md.toRoleName : '';
+    if (from && to) return `${base} (${from} to ${to})`;
   }
-  return base
+  return base;
 }
 
-const totalPages = computed(() => Math.max(1, Math.ceil(auditStore.total / auditStore.pageSize)))
+const totalPages = computed(() => Math.max(1, Math.ceil(auditStore.total / auditStore.pageSize)));
 
 /**
  * Client-side search over the loaded page (same pattern as UserManagement's search) —
@@ -84,24 +82,24 @@ const totalPages = computed(() => Math.max(1, Math.ceil(auditStore.total / audit
  * narrows what is already on screen rather than issuing a query the backend can't honor.
  */
 const visibleLogs = computed(() => {
-  const q = searchQuery.value.trim().toLowerCase()
-  if (!q) return auditStore.logs
+  const q = searchQuery.value.trim().toLowerCase();
+  if (!q) return auditStore.logs;
   return auditStore.logs.filter(
     (l) =>
       eventLabel(l).toLowerCase().includes(q) ||
       l.action.toLowerCase().includes(q) ||
       (l.actorEmail || '').toLowerCase().includes(q) ||
       (l.targetLabel || '').toLowerCase().includes(q),
-  )
-})
+  );
+});
 
 const totalLogCount = computed(() => {
-  const c = auditStore.summary?.counts
-  return c ? c.info + c.warning + c.critical : 0
-})
+  const c = auditStore.summary?.counts;
+  return c ? c.info + c.warning + c.critical : 0;
+});
 
 // Wireframe asks for WITA; render the instant in that zone so label and clock agree.
-const WITA = 'Asia/Makassar'
+const WITA = 'Asia/Makassar';
 
 function formatDate(iso: string): string {
   return new Intl.DateTimeFormat('en-GB', {
@@ -109,7 +107,7 @@ function formatDate(iso: string): string {
     month: 'short',
     year: 'numeric',
     timeZone: WITA,
-  }).format(new Date(iso))
+  }).format(new Date(iso));
 }
 
 function formatTime(iso: string): string {
@@ -119,171 +117,148 @@ function formatTime(iso: string): string {
     second: '2-digit',
     hour12: false,
     timeZone: WITA,
-  }).format(new Date(iso))
-  return `${time} WITA`
+  }).format(new Date(iso));
+  return `${time} WITA`;
 }
 
 function severityLabel(severity: string): string {
   switch (severity) {
     case 'critical':
-      return 'Kritis'
+      return 'Kritis';
     case 'warning':
-      return 'Peringatan'
+      return 'Peringatan';
     default:
-      return 'Info'
+      return 'Info';
   }
 }
 
 function severityClasses(severity: string): string {
   switch (severity) {
     case 'critical':
-      return 'bg-red-600 text-white border-transparent'
+      return 'bg-red-600 text-white border-transparent';
     case 'warning':
-      return 'bg-amber-600 text-white border-transparent'
+      return 'bg-amber-600 text-white border-transparent';
     default:
-      return 'bg-emerald-600 text-white border-transparent'
+      return 'bg-emerald-600 text-white border-transparent';
   }
 }
 
 function targetText(log: AuditLogItem): string {
   if (log.targetType === 'user' && log.targetId) {
-    const id = `#${log.targetId.substring(0, 8)}`
-    return log.targetLabel ? `User ID: ${id} (${log.targetLabel})` : `User ID: ${id}`
+    const id = `#${log.targetId.substring(0, 8)}`;
+    return log.targetLabel ? `User ID: ${id} (${log.targetLabel})` : `User ID: ${id}`;
   }
-  if (log.targetLabel) return log.targetLabel
-  return log.targetType || '-'
+  if (log.targetLabel) return log.targetLabel;
+  return log.targetType || '-';
 }
 
 function capitalize(value: string | null): string {
-  if (!value) return '-'
-  return value.charAt(0).toUpperCase() + value.slice(1)
+  if (!value) return '-';
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function isOpenCritical(log: AuditLogItem): boolean {
-  return log.severity === 'critical' && log.acknowledgedAt == null
+  return log.severity === 'critical' && log.acknowledgedAt == null;
 }
 
 function applySeverity() {
-  auditStore.applyFilters({ severity: severityFilter.value })
+  auditStore.applyFilters({ severity: severityFilter.value });
 }
 
 async function handleAcknowledge(log: AuditLogItem) {
-  acknowledgingId.value = log.id
-  acknowledgeError.value = null
+  acknowledgingId.value = log.id;
+  acknowledgeError.value = null;
   try {
-    await auditStore.acknowledgeLog(log.id)
+    await auditStore.acknowledgeLog(log.id);
   } catch (err: unknown) {
     acknowledgeError.value =
-      err instanceof Error ? err.message : 'Gagal meng-acknowledge audit log.'
+      err instanceof Error ? err.message : 'Gagal meng-acknowledge audit log.';
   } finally {
-    acknowledgingId.value = null
+    acknowledgingId.value = null;
   }
 }
 
 onMounted(async () => {
-  const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   await Promise.all([
     auditStore.fetchLogs(),
     auditStore.fetchSummary(oneMonthAgo),
     auditStore.fetchAdminActionCount(24),
-  ])
-})
+  ]);
+});
 </script>
 
 <template>
-  <main class="min-h-screen bg-slate-50 text-slate-900 p-6 md:p-10 font-sans">
-    <div class="max-w-7xl mx-auto space-y-6">
-      <!-- Page Title -->
-      <header class="border-b border-slate-200 pb-6">
+  <div>
+    <div class="space-y-6">
+      <!-- Page Title: AdminLayout's header already renders the page <h1>/breadcrumb. -->
+      <div class="border-b border-slate-200 pb-6">
         <div
-          class="h-1.5 w-28 rounded-full bg-linear-to-r from-brand-indigo via-brand-violet to-brand-cyan mb-4"
+          class="from-brand-indigo via-brand-violet to-brand-cyan mb-4 h-1.5 w-28 rounded-full bg-linear-to-r"
           aria-hidden="true"
         ></div>
-        <h1 class="font-extrabold tracking-tight text-brand-navy">Log Sistem dan Audit Trail</h1>
-        <p class="text-slate-600 mt-1">
+        <h2 class="text-brand-navy font-extrabold tracking-tight">Log Sistem dan Audit Trail</h2>
+        <p class="mt-1 text-slate-600">
           Pantau seluruh aktivitas yang terjadi di sistem, mulai dari autentikasi hingga riwayat
           konfigurasi admin.
         </p>
-      </header>
-
-      <!-- Breadcrumb -->
-      <nav aria-label="Breadcrumb">
-        <ol class="flex flex-wrap items-center gap-2 text-sm text-slate-500">
-          <li class="flex items-center gap-1.5">
-            <router-link to="/" class="flex items-center gap-1.5 hover:text-slate-800">
-              <HomeIcon class="w-4 h-4" aria-hidden="true" />
-              <span>Beranda</span>
-            </router-link>
-          </li>
-          <li aria-hidden="true" class="text-slate-400">›</li>
-          <li class="flex items-center gap-1.5">
-            <Cog6ToothIcon class="w-4 h-4" aria-hidden="true" />
-            <span>Sistem</span>
-          </li>
-          <li aria-hidden="true" class="text-slate-400">›</li>
-          <li>
-            <span aria-current="page" class="font-semibold text-brand-navy">
-              Log Sistem dan Audit Trail
-            </span>
-          </li>
-        </ol>
-      </nav>
+      </div>
 
       <!-- Stat Cards -->
       <section aria-label="Ringkasan log audit">
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <!-- Total Log -->
           <div
-            class="rounded-card bg-linear-to-br from-brand-navy to-brand-navy-deep border border-white/10 text-white p-5 shadow-lg shadow-brand-navy/20"
+            class="rounded-card from-brand-navy to-brand-navy-deep shadow-brand-navy/20 border border-white/10 bg-linear-to-br p-5 text-white shadow-lg"
           >
             <div class="flex items-start justify-between">
               <span class="text-sm font-medium text-white/80">Total Log</span>
               <span class="rounded-xl bg-white/10 p-2">
-                <ListBulletIcon class="w-5 h-5 text-brand-cyan" aria-hidden="true" />
+                <ListBulletIcon class="text-brand-cyan h-5 w-5" aria-hidden="true" />
               </span>
             </div>
-            <p class="text-3xl font-bold mt-2">{{ totalLogCount }}</p>
-            <p class="text-xs text-white/70 mt-1">Dalam Sebulan</p>
+            <p class="mt-2 text-3xl font-bold">{{ totalLogCount }}</p>
+            <p class="mt-1 text-xs text-white/70">Dalam Sebulan</p>
           </div>
 
           <!-- Kejadian Kritis -->
           <div
-            class="rounded-card bg-linear-to-br from-red-500 to-rose-600 border border-white/10 text-white p-5 shadow-lg shadow-red-600/25"
+            class="rounded-card border border-white/10 bg-linear-to-br from-red-500 to-rose-600 p-5 text-white shadow-lg shadow-red-600/25"
           >
             <div class="flex items-start justify-between">
               <span class="text-sm font-medium text-white/80">Kejadian Kritis</span>
               <span class="rounded-xl bg-white/15 p-2">
-                <ExclamationTriangleIcon class="w-5 h-5 text-white" aria-hidden="true" />
+                <ExclamationTriangleIcon class="h-5 w-5 text-white" aria-hidden="true" />
               </span>
             </div>
-            <p class="text-3xl font-bold mt-2">{{ auditStore.summary?.openCritical ?? 0 }}</p>
-            <p class="text-xs text-white/75 mt-1">Butuh Review</p>
+            <p class="mt-2 text-3xl font-bold">{{ auditStore.summary?.openCritical ?? 0 }}</p>
+            <p class="mt-1 text-xs text-white/75">Butuh Review</p>
           </div>
 
           <!-- Aksi Admin -->
           <div
-            class="rounded-card bg-linear-to-br from-brand-indigo to-brand-violet border border-white/10 text-white p-5 shadow-lg shadow-brand-indigo/25"
+            class="rounded-card from-brand-indigo to-brand-violet shadow-brand-indigo/25 border border-white/10 bg-linear-to-br p-5 text-white shadow-lg"
           >
             <div class="flex items-start justify-between">
               <span class="text-sm font-medium text-white/80">Aksi Admin</span>
               <span class="rounded-xl bg-white/15 p-2">
-                <UserIcon class="w-5 h-5 text-white" aria-hidden="true" />
+                <UserIcon class="h-5 w-5 text-white" aria-hidden="true" />
               </span>
             </div>
-            <p class="text-3xl font-bold mt-2">{{ auditStore.adminActionCount }}</p>
-            <p class="text-xs text-white/75 mt-1">24 Jam Terakhir</p>
+            <p class="mt-2 text-3xl font-bold">{{ auditStore.adminActionCount }}</p>
+            <p class="mt-1 text-xs text-white/75">24 Jam Terakhir</p>
           </div>
         </div>
       </section>
 
       <!-- Toolbar: Search + Severity Filter. The fieldset groups both controls under one
            label so AT announces them as a "Filter log audit" group, not loose inputs. -->
-      <fieldset class="flex flex-col sm:flex-row sm:items-center justify-end gap-3">
+      <fieldset class="flex flex-col justify-end gap-3 sm:flex-row sm:items-center">
         <legend class="sr-only">Filter log audit</legend>
         <div class="relative w-full sm:w-64">
           <label for="audit-search" class="sr-only">Cari log audit</label>
           <MagnifyingGlassIcon
-            class="w-4 h-4 text-slate-400 absolute left-2 top-2.5"
+            class="absolute top-2.5 left-2 h-4 w-4 text-slate-400"
             aria-hidden="true"
           />
           <input
@@ -291,7 +266,7 @@ onMounted(async () => {
             v-model="searchQuery"
             type="search"
             placeholder="Cari"
-            class="w-full pl-8 pr-3 py-2 bg-white border border-slate-300 rounded-btn text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-brand-navy focus:ring-1 focus:ring-brand-navy transition"
+            class="rounded-btn focus:border-brand-navy focus:ring-brand-navy w-full border border-slate-300 bg-white py-2 pr-3 pl-8 text-sm text-slate-900 placeholder-slate-400 transition focus:ring-1 focus:outline-none"
           />
         </div>
 
@@ -301,7 +276,7 @@ onMounted(async () => {
             id="severity-filter"
             v-model="severityFilter"
             @change="applySeverity"
-            class="px-3 py-2 bg-white border border-slate-300 rounded-btn text-sm text-slate-900 focus:outline-none focus:border-brand-navy focus:ring-1 focus:ring-brand-navy"
+            class="rounded-btn focus:border-brand-navy focus:ring-brand-navy border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:ring-1 focus:outline-none"
           >
             <option value="">Semua Keparahan</option>
             <option value="info">Info</option>
@@ -314,36 +289,36 @@ onMounted(async () => {
       <!-- Error States -->
       <div
         v-if="auditStore.error"
-        class="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm"
+        class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
         role="alert"
       >
         {{ auditStore.error }}
       </div>
       <div
         v-if="auditStore.summaryError"
-        class="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm"
+        class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
         role="alert"
       >
         Ringkasan tidak tersedia: {{ auditStore.summaryError }}
       </div>
       <div
         v-if="acknowledgeError"
-        class="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm"
+        class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
         role="alert"
       >
         {{ acknowledgeError }}
       </div>
 
       <!-- Table -->
-      <div class="bg-white border border-slate-200 rounded-card overflow-hidden shadow-xs">
+      <div class="rounded-card overflow-hidden border border-slate-200 bg-white shadow-xs">
         <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse text-sm">
+          <table class="w-full border-collapse text-left text-sm">
             <caption class="sr-only">
               Daftar log sistem dan audit trail, diurutkan dari yang terbaru. Setiap baris memuat
               waktu, kejadian, nama aktor, role, target, tingkat keparahan, dan aksi.
             </caption>
             <thead>
-              <tr class="bg-brand-navy text-white font-semibold text-xs uppercase tracking-wider">
+              <tr class="bg-brand-navy text-xs font-semibold tracking-wider text-white uppercase">
                 <th scope="col" class="px-4 py-3">Waktu</th>
                 <th scope="col" class="px-4 py-3">Kejadian</th>
                 <th scope="col" class="px-4 py-3">Nama</th>
@@ -357,9 +332,9 @@ onMounted(async () => {
               <template v-if="auditStore.loading && !auditStore.logs.length">
                 <tr>
                   <td colspan="7" class="px-4 py-12 text-center text-slate-500">
-                    <div class="flex justify-center items-center gap-2">
+                    <div class="flex items-center justify-center gap-2">
                       <svg
-                        class="animate-spin h-5 w-5 text-slate-400"
+                        class="h-5 w-5 animate-spin text-slate-400"
                         viewBox="0 0 24 24"
                         fill="none"
                         aria-hidden="true"
@@ -387,7 +362,11 @@ onMounted(async () => {
               <template v-else-if="!visibleLogs.length">
                 <tr>
                   <td colspan="7" class="px-4 py-12 text-center text-slate-500">
-                    {{ auditStore.logs.length ? 'Tidak ada log yang cocok dengan pencarian.' : 'Tidak ada data log.' }}
+                    {{
+                      auditStore.logs.length
+                        ? 'Tidak ada log yang cocok dengan pencarian.'
+                        : 'Tidak ada data log.'
+                    }}
                   </td>
                 </tr>
               </template>
@@ -395,7 +374,7 @@ onMounted(async () => {
               <tr
                 v-for="log in visibleLogs"
                 :key="log.id"
-                class="hover:bg-slate-50 transition duration-150 align-top"
+                class="align-top transition duration-150 hover:bg-slate-50"
               >
                 <!-- Waktu -->
                 <td class="px-4 py-3 whitespace-nowrap">
@@ -419,7 +398,7 @@ onMounted(async () => {
                 <td class="px-4 py-3">
                   <span
                     :class="[
-                      'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border',
+                      'inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold',
                       severityClasses(log.severity),
                     ]"
                   >
@@ -434,10 +413,12 @@ onMounted(async () => {
                     type="button"
                     :disabled="acknowledgingId === log.id"
                     @click="handleAcknowledge(log)"
-                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-xs font-medium bg-white text-brand-navy border border-brand-navy transition hover:bg-brand-navy hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="rounded-btn text-brand-navy border-brand-navy hover:bg-brand-navy inline-flex items-center gap-1.5 border bg-white px-3 py-1.5 text-xs font-medium transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <PencilSquareIcon class="w-3.5 h-3.5" aria-hidden="true" />
-                    <span>{{ acknowledgingId === log.id ? 'Memproses...' : 'Tandai Telah Dibaca' }}</span>
+                    <PencilSquareIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>{{
+                      acknowledgingId === log.id ? 'Memproses...' : 'Tandai Telah Dibaca'
+                    }}</span>
                   </button>
                 </td>
               </tr>
@@ -447,22 +428,17 @@ onMounted(async () => {
       </div>
 
       <!-- Pagination Footer -->
-      <nav
-        class="flex items-center justify-between"
-        aria-label="Navigasi halaman log audit"
-      >
+      <nav class="flex items-center justify-between" aria-label="Navigasi halaman log audit">
         <!-- Always-mounted polite live region: filter/page/search changes alter this text,
              so AT announces the new result count. The sr-only page span guarantees a page
              change is announced even when the visible row counts happen to match. -->
         <p role="status" aria-live="polite" class="text-sm text-slate-600">
           Menampilkan
-          <span class="font-bold text-brand-navy">{{ visibleLogs.length }}</span>
+          <span class="text-brand-navy font-bold">{{ visibleLogs.length }}</span>
           dari
-          <span class="font-bold text-brand-navy">{{ auditStore.total }}</span>
+          <span class="text-brand-navy font-bold">{{ auditStore.total }}</span>
           data
-          <span class="sr-only">
-            , halaman {{ auditStore.page }} dari {{ totalPages }}
-          </span>
+          <span class="sr-only"> , halaman {{ auditStore.page }} dari {{ totalPages }} </span>
         </p>
         <div class="flex items-center gap-2">
           <button
@@ -470,22 +446,22 @@ onMounted(async () => {
             type="button"
             :disabled="auditStore.loading"
             @click="auditStore.goToPage(auditStore.page - 1)"
-            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-btn text-xs font-medium bg-white text-brand-navy border border-brand-navy transition hover:bg-brand-navy hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            class="rounded-btn text-brand-navy border-brand-navy hover:bg-brand-navy inline-flex items-center gap-1.5 border bg-white px-4 py-2 text-xs font-medium transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <ChevronLeftIcon class="w-4 h-4" aria-hidden="true" />
+            <ChevronLeftIcon class="h-4 w-4" aria-hidden="true" />
             <span>Sebelumnya</span>
           </button>
           <button
             type="button"
             :disabled="auditStore.page >= totalPages || auditStore.loading"
             @click="auditStore.goToPage(auditStore.page + 1)"
-            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-btn text-xs font-medium bg-brand-navy text-white border border-transparent transition hover:bg-white hover:text-brand-navy hover:border-brand-navy disabled:bg-gray-300 disabled:text-gray-600 disabled:border-transparent disabled:cursor-not-allowed"
+            class="rounded-btn bg-brand-navy hover:text-brand-navy hover:border-brand-navy inline-flex items-center gap-1.5 border border-transparent px-4 py-2 text-xs font-medium text-white transition hover:bg-white disabled:cursor-not-allowed disabled:border-transparent disabled:bg-gray-300 disabled:text-gray-600"
           >
             <span>Selanjutnya</span>
-            <ChevronRightIcon class="w-4 h-4" aria-hidden="true" />
+            <ChevronRightIcon class="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
       </nav>
     </div>
-  </main>
+  </div>
 </template>

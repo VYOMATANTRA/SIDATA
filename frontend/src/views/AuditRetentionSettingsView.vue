@@ -81,45 +81,19 @@ function handleReset() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-950 p-6 font-sans text-slate-100 md:p-10">
-    <!-- Skip to Content Link per docs/ACCESSIBILITY.md §3 (2.4.1) -->
-    <a
-      href="#main-content"
-      class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-lg focus:bg-indigo-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
-    >
-      Lewati ke konten utama
-    </a>
-
-    <!-- Main Landmark -->
-    <main id="main-content" class="mx-auto max-w-4xl space-y-8">
-      <!-- Breadcrumb & Navigation -->
-      <nav aria-label="Breadcrumb" class="flex items-center gap-2 text-sm text-slate-400">
-        <RouterLink
-          to="/"
-          class="rounded transition hover:text-slate-200 focus-visible:ring-1 focus-visible:ring-indigo-500 focus-visible:outline-none"
-        >
-          Beranda
-        </RouterLink>
-        <span aria-hidden="true" class="text-slate-600">&gt;</span>
-        <RouterLink
-          to="/users"
-          class="rounded transition hover:text-slate-200 focus-visible:ring-1 focus-visible:ring-indigo-500 focus-visible:outline-none"
-        >
-          Admin Portal
-        </RouterLink>
-        <span aria-hidden="true" class="text-slate-600">&gt;</span>
-        <span class="font-medium text-slate-200" aria-current="page">Retensi Audit</span>
-      </nav>
-
+  <!-- AdminLayout supplies the page's skip link, <main>, <h1>, and breadcrumb; this view
+       keeps its own dark panel styling, demoted to <h2>. -->
+  <div class="space-y-8 rounded-2xl bg-slate-950 p-6 font-sans text-slate-100 md:p-10">
+    <div class="mx-auto max-w-4xl space-y-8">
       <!-- Page Header -->
-      <header
+      <div
         class="flex flex-col justify-between gap-4 border-b border-slate-800 pb-6 md:flex-row md:items-center"
       >
         <div>
           <div class="flex items-center gap-3">
-            <h1 class="text-2xl font-extrabold tracking-tight text-white md:text-3xl">
+            <h2 class="text-2xl font-extrabold tracking-tight text-white md:text-3xl">
               Pengaturan Retensi Audit Log
-            </h1>
+            </h2>
             <span
               class="rounded-full border border-indigo-500/40 bg-indigo-500/20 px-2.5 py-1 text-xs font-semibold tracking-wider text-indigo-300 uppercase"
             >
@@ -139,7 +113,7 @@ function handleReset() {
         >
           &larr; Kembali ke Manajemen Pengguna
         </RouterLink>
-      </header>
+      </div>
 
       <!-- Feedback Banners -->
       <!-- Success Banner -->
@@ -407,6 +381,6 @@ function handleReset() {
           </div>
         </form>
       </section>
-    </main>
+    </div>
   </div>
 </template>

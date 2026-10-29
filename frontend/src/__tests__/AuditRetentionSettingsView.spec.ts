@@ -22,7 +22,9 @@ describe('AuditRetentionSettingsView Accessibility & Markup', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders required semantic landmarks, exactly one h1, and paired label controls (docs/ACCESSIBILITY.md)', async () => {
+  // The page's <main>, <h1>, and skip link are now owned by AdminLayout.vue (which this view
+  // mounts inside) — covered by AdminLayout.spec.ts. This view keeps its own heading as <h2>.
+  it('renders exactly one h2 page heading and paired label controls (docs/ACCESSIBILITY.md)', async () => {
     globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
       ok: true,
       status: 200,
@@ -41,17 +43,13 @@ describe('AuditRetentionSettingsView Accessibility & Markup', () => {
 
     await flushPromises();
 
-    // 1. Exactly one <main> landmark
-    const mains = wrapper.findAll('main');
-    expect(mains.length).toBe(1);
-    expect(mains[0]?.attributes('id')).toBe('main-content');
+    expect(wrapper.find('main').exists()).toBe(false);
 
-    // 2. Exactly one <h1> heading
-    const h1s = wrapper.findAll('h1');
-    expect(h1s.length).toBe(1);
-    expect(h1s[0]?.text()).toContain('Pengaturan Retensi Audit Log');
+    const h2s = wrapper.findAll('h2');
+    expect(h2s.length).toBe(1);
+    expect(h2s[0]?.text()).toContain('Pengaturan Retensi Audit Log');
 
-    // 3. Form controls must have matching <label for="..."> and id
+    // Form controls must have matching <label for="..."> and id
     const inputIds = ['retention-info', 'retention-warning', 'retention-critical'];
     for (const id of inputIds) {
       const input = wrapper.find(`input#${id}`);
@@ -63,27 +61,7 @@ describe('AuditRetentionSettingsView Accessibility & Markup', () => {
     }
   });
 
-  it('provides a skip to content link matching WCAG 2.4.1', async () => {
-    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        retention: { info: 0, warning: 0, critical: 0 },
-      }),
-    } as Response);
-
-    const router = createTestRouter();
-    const wrapper = mount(AuditRetentionSettingsView, {
-      global: { plugins: [router] },
-    });
-    await flushPromises();
-
-    const skipLink = wrapper.find('a[href="#main-content"]');
-    expect(skipLink.exists()).toBe(true);
-    expect(skipLink.text()).toContain('Lewati ke konten utama');
-  });
-
-  it('renders technical terms with <em> tags instead of literal markdown asterisks in header description', async () => {
+  it('renders technical terms with <em> tags instead of literal markdown asterisks in the description', async () => {
     globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
       ok: true,
       status: 200,
@@ -98,16 +76,14 @@ describe('AuditRetentionSettingsView Accessibility & Markup', () => {
     });
     await flushPromises();
 
-    const header = wrapper.find('header');
-    expect(header.exists()).toBe(true);
-    const headerHtml = header.html();
+    const wrapperHtml = wrapper.html();
 
     // Literal markdown asterisks should not show on screen
-    expect(headerHtml).not.toContain('*severity*');
-    expect(headerHtml).not.toContain('*critical*');
+    expect(wrapperHtml).not.toContain('*severity*');
+    expect(wrapperHtml).not.toContain('*critical*');
 
     // Emphasized HTML tags should be used
-    const emTags = header.findAll('em');
+    const emTags = wrapper.findAll('em');
     const emTexts = emTags.map((em) => em.text());
     expect(emTexts).toContain('severity');
     expect(emTexts).toContain('critical');
