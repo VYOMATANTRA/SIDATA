@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import { DEFAULT_SAMBUTAN_BLOCK, useContentBlocksStore } from '../../stores/contentBlocks.store';
 import HugeQuote from '../common/HugeQuote.vue';
-import defaultLurahPhoto from '@/assets/img/lurah_placeholder_sample.webp';
+import defaultLurahPhoto from '@/assets/img/landing-page/wajah_lurah.webp';
 
 const contentBlocksStore = useContentBlocksStore();
 
@@ -26,9 +26,8 @@ const authorTitle = computed(() => {
 
 const photoUrl = computed(() => {
   const meta = sambutan.value.metadata;
-  // If metadata is explicitly null or authorName/photoUrl not specified in dynamic store, use defaultLurahPhoto
   if (!meta) {
-    return null;
+    return defaultLurahPhoto;
   }
   if ('photoUrl' in meta) {
     const rawPhoto = meta.photoUrl;
@@ -42,7 +41,7 @@ const photoUrl = computed(() => {
       }
       return null;
     }
-    return null;
+    return defaultLurahPhoto;
   }
   return defaultLurahPhoto;
 });
@@ -50,9 +49,9 @@ const photoUrl = computed(() => {
 
 <template>
   <div
-    class="border-b border-white/10 bg-gradient-to-b from-brand-navy to-brand-navy-deep px-4 pt-12 pb-8 text-white sm:px-6 sm:pt-16 sm:pb-12 lg:px-8"
+    class="relative overflow-hidden border-b border-white/10 bg-gradient-to-b from-brand-navy to-brand-navy-deep px-4 pt-12 pb-0 text-white sm:px-6 sm:pt-16 sm:pb-0 lg:px-8"
   >
-    <div class="mx-auto flex max-w-4xl justify-center">
+    <div class="mx-auto flex w-full max-w-5xl justify-center">
       <HugeQuote
         id="sambutan-lurah"
         aria-labelledby="sambutan-title"
