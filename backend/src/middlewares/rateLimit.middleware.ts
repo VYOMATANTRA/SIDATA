@@ -80,6 +80,11 @@ export const indicatorTablesWriteLimiter = createUserKeyedLimiter(100);
 // separate from userManagementWriteLimiter so settings edits and user management do not drain each other)
 export const settingsWriteLimiter = createUserKeyedLimiter(100);
 
+// Spatial point / RT coverage / RT leader CMS write operations rate limiter (dedicated 100
+// req/15min bucket keyed by user ID, separate from indicatorsWriteLimiter etc. so map survey
+// data entry does not drain other CMS edit budgets)
+export const mapsWriteLimiter = createUserKeyedLimiter(100);
+
 // Self-service password change: runs bcrypt.compare + bcrypt.hash on every request.
 // Budget matches loginLimiter (same security weight — both gatekeep credential changes).
 export const changePasswordLimiter = createLimiter(10);
