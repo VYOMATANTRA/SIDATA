@@ -55,7 +55,7 @@ export const useRtLeadersStore = defineStore('rtLeaders', () => {
   let inFlight: Promise<void> | null = null;
 
   async function fetchRtLeaders(force = false): Promise<void> {
-    if (inFlight) return inFlight;
+    if (!force && inFlight) return inFlight;
     if (!force && rtLeaders.value.length > 0) return;
 
     if (force) {

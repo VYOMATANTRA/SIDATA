@@ -23,6 +23,7 @@ function handleClickOutside(event: MouseEvent) {
 
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && isOpen.value) {
+    event.preventDefault();
     isOpen.value = false;
   }
 }
@@ -39,7 +40,12 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="summary" ref="dropdownRef" class="relative inline-block text-left select-none">
+  <div
+    v-if="summary"
+    ref="dropdownRef"
+    class="relative inline-block text-left select-none"
+    data-test="map-summary-dropdown"
+  >
     <!-- Dropdown Trigger Button -->
     <button
       type="button"

@@ -12,6 +12,7 @@ import heroImage from '@/assets/img/background_laman_depan_kelurahan.png';
 import prokerPlaceholder from '@/assets/img/proker-placeholder.svg';
 import logoVyomatantra from '@/assets/img/logo_vyomatantra.png';
 import logoItk from '@/assets/img/logo_itk.png';
+import logoDesaCantik from '@/assets/img/logo_desa_cantik.png';
 import logoSdgsDesa from '@/assets/img/sdgs_desa.png';
 import logoSdgs17 from '@/assets/img/17_kemitraan_pembangunan_desa.png';
 
@@ -43,6 +44,7 @@ const initiatives: InitiativeItem[] = [
 ];
 
 const collaborationLogos = [
+  { src: logoDesaCantik, alt: 'Logo Program Desa Cantik' },
   { src: logoItk, alt: 'Logo Institut Teknologi Kalimantan (ITK)' },
   { src: logoVyomatantra, alt: 'Logo Tim Inovasi Sosial VYOMATANTRA' },
 ];
@@ -184,53 +186,53 @@ const supervisor = {
     <section class="bg-white px-4 py-12 sm:px-6 sm:py-16" aria-labelledby="proker-title">
       <div class="mx-auto max-w-5xl">
         <p
-          class="flex items-center justify-end gap-2 text-xs font-bold uppercase tracking-[0.2em] text-brand-navy"
+          class="text-brand-navy flex items-center justify-end gap-2 text-xs font-bold tracking-[0.2em] uppercase"
         >
-          <span class="h-5 w-0.5 bg-brand-cyan" aria-hidden="true"></span>
+          <span class="bg-brand-cyan h-5 w-0.5" aria-hidden="true"></span>
           Program Kerja
         </p>
 
         <h2
           id="proker-title"
-          class="mt-3 text-3xl font-bold uppercase leading-[1.05] tracking-tight text-brand-navy sm:text-4xl"
+          class="text-brand-navy mt-3 text-3xl leading-[1.05] font-bold tracking-tight uppercase sm:text-4xl"
         >
           Perjalanan <span class="font-normal">Program Kerja</span>
         </h2>
 
-        <p
-          class="mt-4 text-sm font-bold uppercase tracking-[0.18em] text-brand-teal-deep"
-        >
+        <p class="text-brand-teal-deep mt-4 text-sm font-bold tracking-[0.18em] uppercase">
           Empat bab dalam satu semester
         </p>
 
         <div class="mt-6 grid gap-8 lg:grid-cols-[1.7fr_1fr] lg:items-start lg:gap-12">
-          <div class="space-y-4 text-base leading-relaxed text-brand-navy/90">
+          <div class="text-brand-navy/90 space-y-4 text-base leading-relaxed">
             <p>
-              <strong class="font-bold text-brand-navy">{{ prokerIntro.lead }}</strong>
+              <strong class="text-brand-navy font-bold">{{ prokerIntro.lead }}</strong>
               {{ prokerIntro.body }}
             </p>
             <p>
               Setiap bab diuraikan sebagai rangkaian kerja, dari penyusunan rencana di meja hingga
-              penyerahan laporan kepada mitra. Nama kegiatan diambil dari proposal, sementara catatan
-              lapangan merujuk pada Monografi, peta, dan booklet pelatihan.
+              penyerahan laporan kepada mitra. Nama kegiatan diambil dari proposal, sementara
+              catatan lapangan merujuk pada Monografi, peta, dan booklet pelatihan.
             </p>
           </div>
 
           <figure class="relative mx-auto w-52 sm:w-60">
             <span
-              class="absolute -top-6 -right-6 h-24 w-24 rounded-full bg-brand-cyan/30"
+              class="bg-brand-cyan/30 absolute -top-6 -right-6 h-24 w-24 rounded-full"
               aria-hidden="true"
             ></span>
-            <div class="relative aspect-square overflow-hidden rounded-full ring-8 ring-brand-cyan/25">
+            <div
+              class="ring-brand-cyan/25 relative aspect-square overflow-hidden rounded-full ring-8"
+            >
               <img
                 :src="heroImage"
                 alt="Kantor Kelurahan Manggar, Balikpapan Timur"
                 class="h-full w-full object-cover"
               />
             </div>
-            <figcaption class="mt-4 text-center text-sm leading-snug text-brand-navy">
+            <figcaption class="text-brand-navy mt-4 text-center text-sm leading-snug">
               Kantor Kelurahan Manggar, Balikpapan Timur
-              <span class="block text-xs text-brand-navy/70">
+              <span class="text-brand-navy/70 block text-xs">
                 lokasi koordinasi kegiatan program Desa Cantik
               </span>
             </figcaption>
@@ -238,7 +240,7 @@ const supervisor = {
         </div>
 
         <div
-          class="mt-10 flex flex-col gap-12 border-t border-brand-navy/10 pt-9"
+          class="border-brand-navy/10 mt-10 flex flex-col gap-12 border-t pt-9"
           data-test="proker-acts"
         >
           <article
@@ -248,21 +250,21 @@ const supervisor = {
             :class="index % 2 === 1 ? 'lg:flex-row-reverse' : ''"
           >
             <div class="flex-1">
-              <p class="text-sm font-bold uppercase tracking-[0.18em] text-brand-teal-deep">
+              <p class="text-brand-teal-deep text-sm font-bold tracking-[0.18em] uppercase">
                 {{ act.kicker }}
               </p>
-              <h3 class="mt-2 text-lg font-bold leading-snug text-brand-navy">{{ act.title }}</h3>
-              <p class="mt-3 text-base leading-relaxed text-brand-navy/90">
-                <strong class="font-bold text-brand-navy">{{ act.lead }}</strong>
+              <h3 class="text-brand-navy mt-2 text-lg leading-snug font-bold">{{ act.title }}</h3>
+              <p class="text-brand-navy/90 mt-3 text-base leading-relaxed">
+                <strong class="text-brand-navy font-bold">{{ act.lead }}</strong>
                 {{ act.body }}
               </p>
               <ul class="mt-4 space-y-1.5">
                 <li
                   v-for="activity in act.activities"
                   :key="activity"
-                  class="flex gap-2.5 text-sm leading-relaxed text-brand-navy/80"
+                  class="text-brand-navy/80 flex gap-2.5 text-sm leading-relaxed"
                 >
-                  <span class="mt-2 h-1.5 w-1.5 shrink-0 bg-brand-cyan" aria-hidden="true"></span>
+                  <span class="bg-brand-cyan mt-2 h-1.5 w-1.5 shrink-0" aria-hidden="true"></span>
                   {{ activity }}
                 </li>
               </ul>
@@ -271,23 +273,25 @@ const supervisor = {
             <figure class="w-full shrink-0 lg:w-72">
               <div class="relative">
                 <span
-                  class="absolute -bottom-3 -left-3 h-full w-full rounded-btn bg-brand-cyan/40"
+                  class="rounded-btn bg-brand-cyan/40 absolute -bottom-3 -left-3 h-full w-full"
                   aria-hidden="true"
                 ></span>
                 <img
                   :src="prokerPlaceholder"
                   :alt="`Placeholder foto kegiatan ${act.kicker}`"
-                  class="relative aspect-[4/3] w-full rounded-btn object-cover"
+                  class="rounded-btn relative aspect-[4/3] w-full object-cover"
                 />
               </div>
-              <figcaption class="mt-4 text-xs leading-relaxed text-brand-navy/70">
+              <figcaption class="text-brand-navy/70 mt-4 text-xs leading-relaxed">
                 Foto kegiatan pada bab ini belum tersedia.
               </figcaption>
             </figure>
           </article>
         </div>
 
-        <p class="mt-9 border-t border-brand-navy/10 pt-5 text-sm leading-relaxed text-brand-navy/70">
+        <p
+          class="border-brand-navy/10 text-brand-navy/70 mt-9 border-t pt-5 text-sm leading-relaxed"
+        >
           Program kerja ini disusun dalam Proposal Inovasi Sosial Desa Cantik Kelurahan Manggar
           (Februari 2026). Pelaksanaan di lapangan terdokumentasi dalam Monografi Kelurahan Manggar
           2026, Peta Ketua RT dan BSU Aktif Manggar, serta Booklet Pelatihan BSU.
@@ -296,7 +300,7 @@ const supervisor = {
     </section>
 
     <TentangFeatureBand heading="Inisiatif Unggulan di Kelurahan Manggar">
-      <div class="mt-4 flex flex-col gap-5 lg:flex-row items-stretch">
+      <div class="mt-4 flex flex-col items-stretch gap-5 lg:flex-row">
         <TentangResourceCard
           v-for="item in initiatives"
           :key="item.title"
@@ -317,7 +321,7 @@ const supervisor = {
     <!-- Kontribusi terhadap SDGs -->
     <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="sdgs-title">
       <div class="mx-auto max-w-5xl">
-        <h2 id="sdgs-title" class="text-lg font-bold text-brand-navy">
+        <h2 id="sdgs-title" class="text-brand-navy text-lg font-bold">
           Kontribusi Terhadap SDGs Desa
         </h2>
         <p class="mt-2 max-w-3xl text-base text-gray-700">
@@ -325,14 +329,14 @@ const supervisor = {
         </p>
 
         <div
-          class="mt-5 flex flex-col items-center gap-6 rounded-btn border border-gray-300 bg-white p-5 sm:p-6 lg:flex-row lg:items-start"
+          class="rounded-btn mt-5 flex flex-col items-center gap-6 border border-gray-300 bg-white p-5 sm:p-6 lg:flex-row lg:items-start"
         >
           <div class="flex shrink-0 items-center gap-4">
             <TentangLogoRow :logos="sdgsLogos" />
           </div>
 
           <div class="space-y-3 text-base leading-relaxed text-gray-800">
-            <h3 class="text-lg font-bold text-brand-navy">
+            <h3 class="text-brand-navy text-lg font-bold">
               SDG 17: Kemitraan untuk Mencapai Tujuan (Partnership for the Goals)
             </h3>
             <p>
@@ -358,8 +362,8 @@ const supervisor = {
     <!-- Dosen pembimbing -->
     <section class="bg-brand-cyan px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="tim-title">
       <div class="mx-auto max-w-5xl">
-        <h2 id="tim-title" class="text-lg font-bold text-brand-navy">Dosen Pembimbing</h2>
-        <p class="mt-2 max-w-3xl text-base text-brand-navy/90">
+        <h2 id="tim-title" class="text-brand-navy text-lg font-bold">Dosen Pembimbing</h2>
+        <p class="text-brand-navy/90 mt-2 max-w-3xl text-base">
           Proposal kegiatan mencantumkan dosen pembimbing tim pengusul berikut.
         </p>
 
@@ -376,7 +380,7 @@ const supervisor = {
     <!-- Tim Pelaksana VYOMATANTRA -->
     <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="tim-pelaksana-title">
       <div class="mx-auto max-w-5xl">
-        <h2 id="tim-pelaksana-title" class="text-lg font-bold text-brand-navy">
+        <h2 id="tim-pelaksana-title" class="text-brand-navy text-lg font-bold">
           Tim Pelaksana VYOMATANTRA
         </h2>
         <p class="mt-2 max-w-3xl text-base text-gray-700">
@@ -406,7 +410,7 @@ const supervisor = {
     <!-- Kolaborasi -->
     <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="kolaborasi-title">
       <div class="mx-auto max-w-5xl">
-        <h2 id="kolaborasi-title" class="text-lg font-bold text-brand-navy">Kolaborasi</h2>
+        <h2 id="kolaborasi-title" class="text-brand-navy text-lg font-bold">Kolaborasi</h2>
         <div class="mt-5">
           <TentangLogoRow :logos="collaborationLogos" />
         </div>
