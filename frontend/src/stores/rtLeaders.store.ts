@@ -58,6 +58,11 @@ export const useRtLeadersStore = defineStore('rtLeaders', () => {
     if (inFlight) return inFlight;
     if (!force && rtLeaders.value.length > 0) return;
 
+    if (force) {
+      rtLeaders.value = [];
+      rejectedCount.value = 0;
+    }
+
     isLoading.value = true;
     error.value = null;
 
