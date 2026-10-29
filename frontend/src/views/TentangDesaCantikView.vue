@@ -83,12 +83,24 @@ const collaborationLogos = [
 
     <TentangFeatureBand heading="Luaran dan Kegiatan Desa Cantik di Manggar">
       <div class="mt-4 flex flex-col items-stretch gap-5 md:flex-row">
-        <TentangResourceCard title="Manggar Dalam Angka 2026" icon="document" class="flex-1">
+        <TentangResourceCard
+          title="Manggar Dalam Angka 2026"
+          icon="document"
+          to="/publikasi"
+          cta-label="Lihat Publikasi"
+          class="flex-1"
+        >
           Kompilasi statistik sektoral tahunan kelurahan yang memuat demografi, ekonomi
           nelayan/wisata, dan sarana permukiman.
         </TentangResourceCard>
 
-        <TentangResourceCard title="Peta Spasial RT dan Bank Sampah Unit" icon="map" class="flex-1">
+        <TentangResourceCard
+          title="Peta Spasial RT dan Bank Sampah Unit"
+          icon="map"
+          to="/peta"
+          cta-label="Lihat Peta"
+          class="flex-1"
+        >
           Peta lokasi rumah ketua RT dan bank sampah aktif di Kelurahan Manggar, Kecamatan
           Balikpapan Timur.
         </TentangResourceCard>

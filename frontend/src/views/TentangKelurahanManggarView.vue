@@ -243,7 +243,13 @@ const wilayahStats = computed<StatItem[]>(() => [
     <!-- Rujukan data terpadu -->
     <TentangFeatureBand heading="Jelajahi Data Kelurahan Manggar">
       <div class="mt-4 flex flex-col items-stretch gap-5 sm:flex-row">
-        <TentangResourceCard title="Peta Spasial RT dan Bank Sampah Unit" icon="map" class="flex-1">
+        <TentangResourceCard
+          title="Peta Spasial RT dan Bank Sampah Unit"
+          icon="map"
+          to="/peta"
+          cta-label="Lihat Peta"
+          class="flex-1"
+        >
           Peta lokasi rumah ketua RT dan bank sampah aktif di Kelurahan Manggar, Kecamatan
           {{ KECAMATAN }}.
         </TentangResourceCard>
