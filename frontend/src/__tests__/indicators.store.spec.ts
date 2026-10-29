@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
-import { useIndicatorsStore, type Indicator } from '../stores/indicators.store';
+import { useIndicatorsStore, type Indicator, BY_SLUG_TTL_MS } from '../stores/indicators.store';
 import { useAuthStore } from '../stores/auth';
 
 function json(body: unknown, ok = true, status = ok ? 200 : 500): Response {
@@ -381,5 +381,79 @@ describe('indicators store (single indicator reads by slug)', () => {
     expect(store.bySlug['new-slug']?.valueCurrent).toBe('200');
     expect(store.findBySlug('old-slug')).toBeNull();
     expect(store.findBySlug('new-slug')?.valueCurrent).toBe('200');
+  });
+
+  it('evicts bySlug id and slug keys when deleteIndicator succeeds', async () => {
+    const store = useIndicatorsStore();
+    const sample = makeIndicator({ id: 'ind-1', slug: 'jumlah-penduduk', valueCurrent: '53098' });
+    store.bySlug['jumlah-penduduk'] = sample;
+
+    globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
+      if (url.startsWith('/api/indicators/ind-1')) {
+        return json({ message: 'Indikator berhasil dihapus' });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    await store.deleteIndicator('ind-1');
+    expect(store.bySlug['jumlah-penduduk']).toBeUndefined();
+    expect(store.findBySlug('jumlah-penduduk')).toBeNull();
+  });
+
+  it('refetches after BY_SLUG_TTL_MS even without force', async () => {
+    vi.useFakeTimers();
+    const store = useIndicatorsStore();
+    const fetchMock = vi.fn<typeof fetch>();
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ indicator: makeIndicator({ valueCurrent: '1' }) }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ indicator: makeIndicator({ valueCurrent: '2' }) }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    await store.fetchBySlug('jumlah-penduduk');
+    expect(store.bySlug['jumlah-penduduk']?.valueCurrent).toBe('1');
+
+    await store.fetchBySlug('jumlah-penduduk'); // still fresh — no second network
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(BY_SLUG_TTL_MS + 1);
+    await store.fetchBySlug('jumlah-penduduk');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(store.bySlug['jumlah-penduduk']?.valueCurrent).toBe('2');
+    vi.useRealTimers();
+  });
+
+  it('force=true refetches even when cache is fresh (Tentang page entry)', async () => {
+    const store = useIndicatorsStore();
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ indicator: makeIndicator({ valueCurrent: '1' }) }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ indicator: makeIndicator({ valueCurrent: '9' }) }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    await store.fetchBySlug('jumlah-penduduk');
+    await store.fetchBySlug('jumlah-penduduk', true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(store.bySlug['jumlah-penduduk']?.valueCurrent).toBe('9');
   });
 });

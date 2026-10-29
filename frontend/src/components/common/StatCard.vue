@@ -5,7 +5,7 @@ export type StatCardIconName = 'person' | 'house' | 'density' | 'ratio';
 
 export interface StatItem {
   /** Identifier or built-in icon name ('person' | 'house' | 'density' | 'ratio') */
-  icon?: StatCardIconName;
+  icon?: string;
   /** Primary numeric or text figure (e.g. '53.098', 100, '2 jiwa/km²', '1,06 : 1') */
   value: string | number;
   /** Label description below the figure (e.g. 'Penduduk', 'Rukun Tetangga') */
@@ -24,9 +24,11 @@ export interface StatCardProps {
   /** Single item shorthand: description label */
   label?: string;
   /** Single item shorthand: icon name */
-  icon?: StatCardIconName;
+  icon?: string;
   /** Visual variant: 'dark' (Figma default charcoal) | 'glass' | 'navy' | 'light' */
   variant?: 'dark' | 'glass' | 'navy' | 'light';
+  /** Value typography size variant: 'default' (text-xl sm:text-2xl) | 'compact' */
+  size?: 'default' | 'compact';
   /** Optional title or section heading for the card landmark */
   title?: string;
   /** Optional custom card classes */
@@ -37,6 +39,7 @@ export interface StatCardProps {
 
 const props = withDefaults(defineProps<StatCardProps>(), {
   variant: 'dark',
+  size: 'default',
   title: 'Statistik Wilayah Kelurahan Manggar',
 });
 
@@ -107,6 +110,12 @@ const variantClasses = computed(() => {
       return 'bg-[#232528] border border-white/5 text-white shadow-xl';
   }
 });
+
+const valueSizeClass = computed(() =>
+  props.size === 'compact'
+    ? 'text-base leading-tight font-bold tracking-tight sm:text-lg lg:text-[19px]'
+    : 'text-xl leading-tight font-bold tracking-tight sm:text-2xl',
+);
 </script>
 
 <template>
@@ -238,8 +247,8 @@ const variantClasses = computed(() => {
 
         <!-- Description Details (<dd>): Numeric or text stat value -->
         <dd
-          class="order-1 w-full min-w-0 text-base leading-tight font-bold tracking-tight sm:text-lg lg:text-[19px]"
-          :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
+          class="order-1 w-full min-w-0 font-bold tracking-tight"
+          :class="[valueSizeClass, variant === 'light' ? 'text-brand-navy' : 'text-white']"
           data-test="stat-value"
         >
           {{ item.value
