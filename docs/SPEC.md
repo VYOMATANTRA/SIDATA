@@ -380,10 +380,13 @@ keeps proper `<caption>` / `<th scope>` semantics under filtering.
 **Peta explorer.** The public map shows matching spatial points with zoom-based marker clustering;
 clusters expand as visitors zoom, and overlapping points remain individually selectable at close
 zoom. A coordinated results panel contains one search for point names, RT numbers, and available RT
-leader names, category filters, nearest-first results, and five-result pagination. Pagination only
-changes the list; all filtered points remain on the map. Selecting a result focuses its marker and
-shows its details in the same panel. Search and filters reset the result list to page one. The list
-remains a keyboard-accessible alternative to interacting with the map.
+leader names, category filters, nearest-first results, and five-result pagination. Distance sorting
+optionally uses browser geolocation upon explicit visitor click ("Gunakan lokasi saya"), with
+distances measured from the visitor's detected coordinates; otherwise distances fall back to the
+kelurahan geographic centre as origin. Pagination only changes the list; all filtered points remain
+on the map. Selecting a result focuses its marker and shows its details in the same panel. Search
+and filters reset the result list to page one. The list remains a keyboard-accessible alternative
+to interacting with the map.
 
 **Footer:**
 
