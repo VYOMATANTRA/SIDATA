@@ -185,4 +185,40 @@ describe('settings store', () => {
     expect(store.tagline).toBe('');
     expect(store.administrativeArea).toBe('');
   });
+
+  it('updatePublicSettings sends PATCH request and updates store settings', async () => {
+    const store = useSettingsStore();
+
+    globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/auth/csrf-token') {
+        return { ok: true, json: async () => ({ csrfToken: 'csrf-1' }) } as Response;
+      }
+      if (url === '/api/settings/public' && init?.method === 'PATCH') {
+        return {
+          ok: true,
+          json: async () => ({
+            message: 'Pengaturan berhasil disimpan',
+            settings: {
+              appName: 'SIDATA BARU',
+              institutionName: 'Kelurahan Manggar Baru',
+              contactPhone: '081199998888',
+            },
+          }),
+        } as Response;
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    const result = await store.updatePublicSettings({
+      appName: 'SIDATA BARU',
+      institutionName: 'Kelurahan Manggar Baru',
+      contactPhone: '081199998888',
+    });
+
+    expect(result.appName).toBe('SIDATA BARU');
+    expect(store.appName).toBe('SIDATA BARU');
+    expect(store.institutionName).toBe('Kelurahan Manggar Baru');
+    expect(store.contactPhone).toBe('081199998888');
+  });
 });

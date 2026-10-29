@@ -7,6 +7,7 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster';
 import type { SpatialPointDTO, SpatialPointType } from '../../types/maps';
+import { useSettingsStore } from '../../stores/settings.store';
 
 interface Props {
   points: SpatialPointDTO[];
@@ -195,6 +196,24 @@ function framePoints() {
   hasFramedPoints = true;
 }
 
+const settingsStore = useSettingsStore();
+
+function getInitialCenter(): [number, number] {
+  const coords = settingsStore.defaultCoordinates;
+  if (coords && typeof coords.lat === 'number' && typeof coords.lon === 'number') {
+    return [coords.lat, coords.lon];
+  }
+  return DEFAULT_CENTER;
+}
+
+function getInitialZoom(): number {
+  const coords = settingsStore.defaultCoordinates;
+  if (coords && typeof coords.zoom === 'number') {
+    return coords.zoom;
+  }
+  return DEFAULT_ZOOM;
+}
+
 onMounted(() => {
   isUnmounted = false;
   nextTick(() => {
@@ -203,7 +222,7 @@ onMounted(() => {
     map = L.map(mapContainer.value, {
       zoomControl: false,
       attributionControl: false,
-    }).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+    }).setView(getInitialCenter(), getInitialZoom());
 
     // Standard OpenStreetMap Tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {

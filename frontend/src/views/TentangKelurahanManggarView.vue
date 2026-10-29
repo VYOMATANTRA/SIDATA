@@ -10,6 +10,7 @@ import TentangFeatureBand from '../components/tentang/TentangFeatureBand.vue';
 import TentangResourceCard from '../components/tentang/TentangResourceCard.vue';
 import StatCard, { type StatItem } from '../components/common/StatCard.vue';
 import { useIndicatorsStore } from '../stores/indicators.store';
+import { useContentBlocksStore } from '../stores/contentBlocks.store';
 import type { TentangIconName } from '../components/tentang/TentangIcon.vue';
 import {
   RT_COUNT,
@@ -21,6 +22,8 @@ import {
   LURAH_OFFICIAL,
   SOTK_SOURCE_CITATION,
   BOUNDARY_SOURCE_CITATION,
+  type BatasWilayahItem,
+  type SotkMember,
 } from '../content/tentang';
 import heroImage from '@/assets/img/background_laman_depan_kelurahan.png';
 import lurahPhoto from '@/assets/img/lurah_placeholder_sample.png';
@@ -57,9 +60,36 @@ const potentials: PotentialItem[] = [
 const POPULATION_INDICATOR_SLUG = 'jumlah-penduduk';
 
 const indicatorsStore = useIndicatorsStore();
+const contentBlocksStore = useContentBlocksStore();
 
 onMounted(() => {
   void indicatorsStore.fetchBySlug(POPULATION_INDICATOR_SLUG);
+  void contentBlocksStore.fetchBlocks();
+});
+
+const profileMetadata = computed(() => {
+  return contentBlocksStore.tentangProfil.metadata as Record<string, unknown> | null;
+});
+
+const rtCount = computed(() => Number(profileMetadata.value?.rtCount ?? RT_COUNT));
+const kecamatan = computed(() => String(profileMetadata.value?.kecamatan ?? KECAMATAN));
+const kota = computed(() => String(profileMetadata.value?.kota ?? KOTA));
+const landscape = computed(() => String(profileMetadata.value?.landscape ?? LANDSCAPE));
+
+const batasWilayah = computed<BatasWilayahItem[]>(() => {
+  const custom = profileMetadata.value?.batasWilayah;
+  if (Array.isArray(custom) && custom.length > 0) return custom as BatasWilayahItem[];
+  return BATAS_WILAYAH;
+});
+
+const sotkMembers = computed<SotkMember[]>(() => {
+  const custom = profileMetadata.value?.sotkMembers;
+  if (Array.isArray(custom) && custom.length > 0) return custom as SotkMember[];
+  return SOTK_MEMBERS;
+});
+
+const lurahOfficial = computed<SotkMember | undefined>(() => {
+  return sotkMembers.value.find((m) => m.role === 'Lurah') ?? LURAH_OFFICIAL;
 });
 
 const populationIndicator = computed(() => {
@@ -95,9 +125,9 @@ const formattedPopulation = computed(() => {
 });
 
 const wilayahStats = computed<StatItem[]>(() => [
-  { icon: 'house', value: String(RT_COUNT), label: 'Rukun Tetangga terdaftar' },
-  { icon: 'density', value: KECAMATAN, label: `Kecamatan, ${KOTA}` },
-  { icon: 'person', value: LANDSCAPE, label: 'Potensi pantai & pertanian' },
+  { icon: 'house', value: String(rtCount.value), label: 'Rukun Tetangga terdaftar' },
+  { icon: 'density', value: kecamatan.value, label: `Kecamatan, ${kota.value}` },
+  { icon: 'person', value: landscape.value, label: 'Potensi pantai & pertanian' },
   { icon: 'ratio', value: 'Desa Cantik', label: 'Kelurahan Cinta Statistik' },
 ]);
 </script>
@@ -261,7 +291,7 @@ const wilayahStats = computed<StatItem[]>(() => [
             <!-- Name & Title below the photo -->
             <div class="mt-4 flex flex-col items-center text-center">
               <h3 class="text-brand-navy text-lg font-bold">
-                {{ LURAH_OFFICIAL?.officialName ?? 'Nama pejabat belum tersedia' }}
+                {{ lurahOfficial?.officialName ?? 'Nama pejabat belum tersedia' }}
               </h3>
               <p class="mt-0.5 text-sm font-medium text-gray-700">Lurah Kelurahan Manggar</p>
               <p class="text-xs text-gray-500">Pemerintah Kelurahan Manggar</p>
@@ -277,7 +307,7 @@ const wilayahStats = computed<StatItem[]>(() => [
             <div class="space-y-3 text-base leading-relaxed text-gray-800">
               <p>
                 Sebagai garda terdepan pelayanan pemerintah daerah bagi masyarakat di wilayah
-                {{ KECAMATAN }}, Kelurahan Manggar berupaya menyediakan pelayanan yang ramah,
+                {{ kecamatan }}, Kelurahan Manggar berupaya menyediakan pelayanan yang ramah,
                 akuntabel, dan transparan.
               </p>
               <p>
@@ -287,7 +317,7 @@ const wilayahStats = computed<StatItem[]>(() => [
                 >
                 dan pengembangan portal
                 <strong class="text-brand-navy font-semibold">SIDATA</strong> bersama
-                {{ RT_COUNT }} Rukun Tetangga (RT) diharapkan dapat membantu penyajian informasi
+                {{ rtCount }} Rukun Tetangga (RT) diharapkan dapat membantu penyajian informasi
                 Kelurahan Manggar secara terstruktur dan mendukung pemanfaatan data dalam
                 perencanaan pelayanan masyarakat, seperti dalam program sosial dan penanganan
                 lingkungan.
@@ -314,7 +344,7 @@ const wilayahStats = computed<StatItem[]>(() => [
           <h3 class="text-brand-navy text-base font-bold">Batas-Batas Wilayah Administratif:</h3>
           <ul class="mt-3 flex flex-wrap gap-x-6 gap-y-3 text-base text-gray-800">
             <li
-              v-for="item in BATAS_WILAYAH"
+              v-for="item in batasWilayah"
               :key="item.arah"
               class="flex w-full items-center gap-2 sm:w-[calc(50%-12px)]"
             >
@@ -353,7 +383,7 @@ const wilayahStats = computed<StatItem[]>(() => [
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-200 bg-white">
-              <tr v-for="member in SOTK_MEMBERS" :key="member.role" class="transition-colors">
+              <tr v-for="member in sotkMembers" :key="member.role" class="transition-colors">
                 <th scope="row" class="text-brand-navy px-4 py-4 align-top font-semibold sm:px-6">
                   {{ member.role }}
                 </th>

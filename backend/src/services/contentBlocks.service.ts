@@ -84,6 +84,74 @@ export const DEFAULT_CONTENT_BLOCKS = [
       ],
     },
   },
+  {
+    slug: 'tentang-kelurahan-profil',
+    type: 'prose' as const,
+    title: 'Profil Kelurahan Manggar',
+    body: 'Data, potensi, dan cerita di balik perkembangan Kelurahan Manggar.',
+    metadata: {
+      rtCount: 100,
+      kecamatan: 'Balikpapan Timur',
+      kota: 'Kota Balikpapan',
+      landscape: 'Pesisir & Dataran',
+      lurahName: 'Munir Achmad, S.E.',
+      lurahTitle: 'Lurah Kelurahan Manggar',
+      batasWilayah: [
+        { arah: 'Sebelah Utara', wilayah: 'Kelurahan Karang Joang' },
+        { arah: 'Sebelah Timur', wilayah: 'Kelurahan Manggar Baru' },
+        { arah: 'Sebelah Selatan', wilayah: 'Selat Makassar' },
+        { arah: 'Sebelah Barat', wilayah: 'Kelurahan Sepinggan dan Sepinggan Baru' },
+      ],
+      sotkMembers: [
+        { role: 'Lurah', officialName: 'Munir Achmad, S.E.', duties: null },
+        { role: 'Sekretaris Lurah', officialName: 'Munjiah Puspitawaty. M, S.E', duties: null },
+        { role: 'Kasi Trantib L-H', officialName: 'Nanang Sri Ruriyanto, S.Sos.', duties: null },
+        {
+          role: 'Kasi Pemerintahan dan Pelayanan Publik',
+          officialName: 'Hasiba, S.A.P',
+          duties: null,
+        },
+        { role: 'Kasi Pemberdayaan Masyarakat', officialName: 'Marthen Solly, S.ST', duties: null },
+      ],
+    },
+  },
+  {
+    slug: 'publikasi-katalog',
+    type: 'prose' as const,
+    title: 'Katalog Publikasi Kelurahan Manggar',
+    body: 'Koleksi dokumen, publikasi resmi, dan infografis statistik Kelurahan Manggar.',
+    metadata: {
+      publications: [
+        {
+          category: 'Prodeskel',
+          title: 'Publikasi Prodeskel',
+          description: 'Dokumen dan publikasi resmi Kelurahan Manggar dari sistem Prodeskel.',
+          isAvailableOnline: false,
+        },
+        {
+          category: 'Infografis',
+          title: 'Infografis Kelurahan Manggar',
+          description:
+            'Ringkasan data kependudukan dan statistik Kelurahan Manggar dalam bentuk visual infografis.',
+          isAvailableOnline: false,
+        },
+        {
+          category: 'Lingkungan',
+          title: 'Booklet Eco Boba',
+          description:
+            'Dokumentasi pelatihan pengolahan limbah kemasan plastik menjadi bahan isian bantal (cushion filling) dalam program Eco Boba.',
+          isAvailableOnline: false,
+        },
+        {
+          category: 'Statistik',
+          title: 'Manggar dalam Angka 2026',
+          description:
+            'Kompilasi data statistik sektoral, demografi, dan geografi Kelurahan Manggar. Dokumen fisik telah tercetak; unduhan versi digital (PDF) belum dirilis ke publik.',
+          isAvailableOnline: false,
+        },
+      ],
+    },
+  },
 ];
 
 function hasPrototypePollution(val: unknown, depth = 0): boolean {
