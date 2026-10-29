@@ -59,7 +59,7 @@ const POPULATION_INDICATOR_SLUG = 'jumlah-penduduk';
 const indicatorsStore = useIndicatorsStore();
 
 onMounted(() => {
-  void indicatorsStore.fetchBySlug(POPULATION_INDICATOR_SLUG);
+  void indicatorsStore.fetchBySlug(POPULATION_INDICATOR_SLUG, true);
 });
 
 const populationIndicator = computed(() => {
@@ -97,7 +97,7 @@ const formattedPopulation = computed(() => {
 const wilayahStats = computed<StatItem[]>(() => [
   { icon: 'house', value: String(RT_COUNT), label: 'Rukun Tetangga terdaftar' },
   { icon: 'density', value: KECAMATAN, label: `Kecamatan, ${KOTA}` },
-  { icon: 'person', value: LANDSCAPE, label: 'Potensi pantai & pertanian' },
+  { icon: 'landscape', value: LANDSCAPE, label: 'Potensi pantai & pertanian' },
   { icon: 'ratio', value: 'Desa Cantik', label: 'Kelurahan Cinta Statistik' },
 ]);
 </script>
@@ -213,13 +213,7 @@ const wilayahStats = computed<StatItem[]>(() => [
     <!-- Rujukan data terpadu -->
     <TentangFeatureBand heading="Jelajahi Data Kelurahan Manggar">
       <div class="mt-4 flex flex-col items-stretch gap-5 sm:flex-row">
-        <TentangResourceCard
-          title="Peta Spasial RT dan Bank Sampah Unit"
-          icon="map"
-          to="/peta"
-          cta-label="Lihat Peta"
-          class="flex-1"
-        >
+        <TentangResourceCard title="Peta Spasial RT dan Bank Sampah Unit" icon="map" class="flex-1">
           Peta lokasi rumah ketua RT dan bank sampah aktif di Kelurahan Manggar, Kecamatan
           {{ KECAMATAN }}.
         </TentangResourceCard>
@@ -307,7 +301,12 @@ const wilayahStats = computed<StatItem[]>(() => [
         </p>
 
         <div class="mt-5">
-          <StatCard :items="wilayahStats" variant="light" title="Statistik Umum Wilayah" />
+          <StatCard
+            :items="wilayahStats"
+            variant="light"
+            size="compact"
+            title="Statistik Umum Wilayah"
+          />
         </div>
 
         <div class="rounded-btn border-brand-navy/20 mt-6 border bg-white p-5">

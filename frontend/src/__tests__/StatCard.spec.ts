@@ -198,4 +198,41 @@ describe('StatCard.vue', () => {
     const dl = wrapper.find('[data-test="stat-list"]');
     expect(dl.classes()).toContain('custom-flex-container');
   });
+
+  it('renders generic fallback icon for unknown icon names like landscape', () => {
+    const wrapper = mount(StatCard, {
+      props: {
+        value: '10',
+        label: 'Wilayah',
+        icon: 'landscape',
+      },
+    });
+
+    const iconWrapper = wrapper.find('[data-test="stat-icon-wrapper"]');
+    expect(iconWrapper.exists()).toBe(true);
+    expect(iconWrapper.find('svg').exists()).toBe(true);
+  });
+
+  it('supports size prop for default and compact typography', () => {
+    const defaultWrapper = mount(StatCard, {
+      props: {
+        value: '10',
+        label: 'Default Size',
+      },
+    });
+    const defaultValue = defaultWrapper.find('[data-test="stat-value"]');
+    expect(defaultValue.classes()).toContain('text-xl');
+    expect(defaultValue.classes()).toContain('sm:text-2xl');
+
+    const compactWrapper = mount(StatCard, {
+      props: {
+        value: '10',
+        label: 'Compact Size',
+        size: 'compact',
+      },
+    });
+    const compactValue = compactWrapper.find('[data-test="stat-value"]');
+    expect(compactValue.classes()).toContain('text-base');
+    expect(compactValue.classes()).toContain('sm:text-lg');
+  });
 });
