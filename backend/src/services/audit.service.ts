@@ -76,6 +76,16 @@ export const AUDIT_ACTIONS = {
   INDICATOR_TABLE_ROW_CREATED: defineAction('indicator_table_row.created', 'info'),
   INDICATOR_TABLE_ROW_UPDATED: defineAction('indicator_table_row.updated', 'info'),
   INDICATOR_TABLE_ROW_DELETED: defineAction('indicator_table_row.deleted', 'warning'),
+  // SPEC §7: spatial point / RT coverage / RT leader write paths (editor+admin, CSRF-protected).
+  // Coverage changes made THROUGH the point write endpoints are logged as spatial_point.updated
+  // metadata (added/removed RTs); the spatial_point_rt.* actions below cover the granular
+  // per-coverage subresource endpoints. Deleted rows record their before-state in metadata.
+  SPATIAL_POINT_CREATED: defineAction('spatial_point.created', 'info'),
+  SPATIAL_POINT_UPDATED: defineAction('spatial_point.updated', 'info'),
+  SPATIAL_POINT_DELETED: defineAction('spatial_point.deleted', 'warning'),
+  SPATIAL_POINT_RT_CREATED: defineAction('spatial_point_rt.created', 'info'),
+  SPATIAL_POINT_RT_DELETED: defineAction('spatial_point_rt.deleted', 'warning'),
+  RT_LEADER_UPDATED: defineAction('rt_leader.updated', 'info'),
   AUDIT_PRUNED: defineAction('audit.pruned', 'info'),
 } as const satisfies Record<string, AuditActionDef>;
 

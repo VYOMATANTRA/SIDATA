@@ -158,4 +158,31 @@ describe('router auth guard retry behavior', () => {
     await router.push('/users');
     expect(router.currentRoute.value.name).toBe('user-management');
   });
+
+  it('protects /settings/audit-retention route with authentication and admin role guards (SPEC §3)', async () => {
+    sessionStorage.clear();
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore(pinia);
+    authStore.clearAuth();
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async () => {
+      return { ok: false, status: 401, json: async () => ({}) } as Response;
+    });
+
+    // 1. Unauthenticated -> redirected to login (non-happy path)
+    await router.push('/settings/audit-retention');
+    expect(router.currentRoute.value.name).toBe('login');
+
+    // 2. Authenticated non-admin -> redirected to home (non-happy path)
+    authStore.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'valid-token');
+    await router.push('/settings/audit-retention');
+    expect(router.currentRoute.value.name).toBe('home');
+
+    // 3. Authenticated admin -> allowed to access audit-retention-settings (happy path last)
+    authStore.setAuth({ id: '2', email: 'admin@example.com', role: 'admin' }, 'valid-token');
+    await router.push('/settings/audit-retention');
+    expect(router.currentRoute.value.name).toBe('audit-retention-settings');
+    expect(router.currentRoute.value.meta.title).toBe('Pengaturan Retensi Audit');
+  });
 });
