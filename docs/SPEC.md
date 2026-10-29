@@ -386,9 +386,11 @@ results change ("Menampilkan N dari 100 RT"; a paginated slice is announced as
 "Menampilkan 1–10 dari 100 RT"). Rows remain sorted by `rt_number` and the unfiltered table is
 the default state, so the page is fully usable with JavaScript-driven filtering ignored. The
 `Alamat` column is automatically hidden when no leader in the displayed dataset has an address
-value. A prominent sample-data notice is displayed explaining that the roster contains placeholder
-names and contacts pending official publication. No RT-range grouping or collapsible bands —
-flat table only.
+value. When the displayed dataset is detected as synthetic/sample data (i.e. every leader is
+non-dialable or carries a placeholder name), a prominent sample-data notice is displayed explaining
+that the roster contains placeholder names and contacts pending official publication; when real
+operational contacts are loaded, this notice is suppressed. No RT-range grouping or collapsible
+bands — flat table only.
 
 Accessibility implications, per `docs/ACCESSIBILITY.md`: the input needs a real `<label>` (not
 placeholder-only), the result count belongs in an `aria-live="polite"` region, and the table
@@ -398,9 +400,10 @@ keeps proper `<caption>` / `<th scope>` semantics under filtering.
 clusters expand as visitors zoom, and overlapping points remain individually selectable at close
 zoom. A coordinated results panel contains one search for point names, RT numbers, and available RT
 leader names, category filters, nearest-first results, and five-result pagination. Distance sorting
-optionally uses browser geolocation upon explicit visitor click ("Gunakan lokasi saya"), with
+optionally uses browser geolocation upon explicit visitor click ("Dekat saya"), with
 distances measured from the visitor's detected coordinates; otherwise distances fall back to the
-kelurahan geographic centre as origin. Pagination only changes the list; all filtered points remain
+kelurahan geographic centre as origin. The "Dekat saya" trigger is hidden while a point is selected
+and the results panel switches to the detail view. Pagination only changes the list; all filtered points remain
 on the map. Selecting a result focuses its marker and shows its details in the same panel. Search
 and filters reset the result list to page one. The list remains a keyboard-accessible alternative
 to interacting with the map.
