@@ -31,6 +31,10 @@ export const useMapsStore = defineStore('maps', () => {
     error.value = null;
     try {
       points.value = await fetchSpatialPoints();
+      if (selectedPoint.value) {
+        const fresh = points.value.find((p) => p.id === selectedPoint.value?.id) ?? null;
+        void selectPoint(fresh);
+      }
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Gagal memuat titik peta';
     } finally {
