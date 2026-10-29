@@ -49,6 +49,9 @@ export interface Indicator {
 export type IndicatorDto = Indicator;
 export type IndicatorComparison = RenderedComparison;
 
+/** Public hero figures: short TTL so SPA sessions do not keep deleted/edited values forever. */
+export const BY_SLUG_TTL_MS = 60_000;
+
 /** Only the fields the CMS form can change; the API rejects unknown keys (`.strict()`). */
 export interface IndicatorPatch {
   label?: string;
@@ -92,6 +95,48 @@ export const useIndicatorsStore = defineStore('indicators', () => {
 
   const sectionInFlight: Record<string, Promise<Indicator[]> | undefined> = {};
 
+  // Slug-keyed cache & fetch for single-indicator lookups (e.g. hero figures)
+  const bySlug = ref<Record<string, IndicatorDto>>({});
+  const bySlugFetchedAt = ref<Record<string, number>>({});
+  const loadingBySlug = ref<Record<string, boolean>>({});
+  const errorsBySlug = ref<Record<string, string | null>>({});
+
+  const inFlightBySlug: Record<string, Promise<IndicatorDto | null> | undefined> = {};
+
+  function isSlugCacheFresh(normalized: string): boolean {
+    const at = bySlugFetchedAt.value[normalized];
+    return typeof at === 'number' && Date.now() - at < BY_SLUG_TTL_MS;
+  }
+
+  function stampSlugCache(normalized: string, item: IndicatorDto): void {
+    bySlug.value = { ...bySlug.value, [normalized]: item };
+    bySlugFetchedAt.value = { ...bySlugFetchedAt.value, [normalized]: Date.now() };
+  }
+
+  /** Drop every bySlug entry for this indicator id and/or slug key. */
+  function evictSlugCacheForIndicator(id: string, slug?: string | null): void {
+    const slugKey = typeof slug === 'string' ? slug.trim().toLowerCase() : null;
+    const next = { ...bySlug.value };
+    const nextAt = { ...bySlugFetchedAt.value };
+    let changed = false;
+    for (const [k, v] of Object.entries(next)) {
+      if (v.id === id || (slugKey !== null && k === slugKey)) {
+        delete next[k];
+        delete nextAt[k];
+        changed = true;
+      }
+    }
+    if (slugKey && next[slugKey]) {
+      delete next[slugKey];
+      delete nextAt[slugKey];
+      changed = true;
+    }
+    if (changed) {
+      bySlug.value = next;
+      bySlugFetchedAt.value = nextAt;
+    }
+  }
+
   const staleCount = computed(() => indicators.value.filter((item) => item.isStale).length);
 
   /**
@@ -111,20 +156,20 @@ export const useIndicatorsStore = defineStore('indicators', () => {
 
     const newSlugKey = updated.slug.trim().toLowerCase();
     const nextBySlug = { ...bySlug.value };
-    let bySlugChanged = false;
+    const nextAt = { ...bySlugFetchedAt.value };
 
-    // If this indicator was cached under an older/different slug, remove the stale key
     for (const [k, v] of Object.entries(nextBySlug)) {
       if (v.id === updated.id && k !== newSlugKey) {
         delete nextBySlug[k];
-        bySlugChanged = true;
+        delete nextAt[k];
       }
     }
 
-    if (bySlugChanged || nextBySlug[newSlugKey]) {
-      nextBySlug[newSlugKey] = updated;
-      bySlug.value = nextBySlug;
-    }
+    // Always upsert — even if this slug was never cached (Tentang may fetch later).
+    nextBySlug[newSlugKey] = updated;
+    nextAt[newSlugKey] = Date.now();
+    bySlug.value = nextBySlug;
+    bySlugFetchedAt.value = nextAt;
 
     const index = indicators.value.findIndex((item) => item.id === updated.id);
     if (index === -1) {
@@ -219,19 +264,30 @@ export const useIndicatorsStore = defineStore('indicators', () => {
     return task;
   }
 
-  // Slug-keyed cache & fetch for single-indicator lookups (e.g. hero figures)
-  const bySlug = ref<Record<string, IndicatorDto>>({});
-  const loadingBySlug = ref<Record<string, boolean>>({});
-  const errorsBySlug = ref<Record<string, string | null>>({});
-
-  const inFlightBySlug: Record<string, Promise<IndicatorDto | null> | undefined> = {};
+  async function deleteIndicator(id: string): Promise<void> {
+    const existing =
+      indicators.value.find((item) => item.id === id) ??
+      Object.values(bySlug.value).find((item) => item.id === id) ??
+      null;
+    await apiRequestJson(`/api/indicators/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    evictSlugCacheForIndicator(id, existing?.slug ?? null);
+    if (existing) invalidateSectionCache(existing.sectionId);
+    const next = indicators.value.filter((item) => item.id !== id);
+    if (next.length !== indicators.value.length) {
+      indicators.value = next;
+      total.value = Math.max(0, total.value - 1);
+    }
+  }
 
   async function fetchBySlug(slug: string, force = false): Promise<IndicatorDto | null> {
     const normalized = slug.trim().toLowerCase();
-    if (!force && bySlug.value[normalized]) {
+
+    if (force) {
+      // Drop any in-flight so a forced retry cannot return a stale promise.
+      delete inFlightBySlug[normalized];
+    } else if (bySlug.value[normalized] && isSlugCacheFresh(normalized)) {
       return bySlug.value[normalized]!;
-    }
-    if (inFlightBySlug[normalized]) {
+    } else if (inFlightBySlug[normalized]) {
       return inFlightBySlug[normalized]!;
     }
 
@@ -250,10 +306,16 @@ export const useIndicatorsStore = defineStore('indicators', () => {
           typeof data.indicator === 'object' &&
           typeof data.indicator.slug === 'string'
         ) {
-          const item = data.indicator;
-          bySlug.value = { ...bySlug.value, [normalized]: item };
-          return item;
+          stampSlugCache(normalized, data.indicator);
+          return data.indicator;
         }
+        // Valid empty / unpublished / invalid format: clear any stale hit.
+        const next = { ...bySlug.value };
+        const nextAt = { ...bySlugFetchedAt.value };
+        delete next[normalized];
+        delete nextAt[normalized];
+        bySlug.value = next;
+        bySlugFetchedAt.value = nextAt;
         throw new Error('Format data indikator tidak valid');
       } catch (err) {
         errorsBySlug.value = {
@@ -288,12 +350,15 @@ export const useIndicatorsStore = defineStore('indicators', () => {
     errorsBySectionId,
     fetchIndicators,
     updateIndicator,
+    deleteIndicator,
     replaceIndicator,
     fetchBySectionId,
     bySlug,
+    bySlugFetchedAt,
     loadingBySlug,
     errorsBySlug,
     fetchBySlug,
     findBySlug,
+    evictSlugCacheForIndicator,
   };
 });
