@@ -95,6 +95,7 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     indicatorsStore.bySlug = {
       'jumlah-penduduk': sampleIndicator,
     };
+    vi.spyOn(indicatorsStore, 'fetchBySlug').mockResolvedValue(sampleIndicator);
 
     await router.push('/tentang/kelurahan-manggar');
     await router.isReady();
@@ -161,6 +162,46 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(retryBtn.text()).toContain('Coba Lagi');
     await retryBtn.trigger('click');
     expect(fetchSpy).toHaveBeenCalledWith('jumlah-penduduk', true);
+  });
+
+  it('renders error state even if bySlug contained a previous value before the failed refetch', async () => {
+    const { pinia, router } = mountView();
+    const indicatorsStore = useIndicatorsStore();
+    indicatorsStore.bySlug = {
+      'jumlah-penduduk': {
+        id: 'ind-1',
+        sectionId: 'sec-1',
+        slug: 'jumlah-penduduk',
+        label: 'Jumlah Penduduk',
+        unit: 'jiwa',
+        valueCurrent: '125000',
+        valuePrevious: null,
+        periodCurrent: '2025',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        sortOrder: 0,
+        comparisonTemplateId: null,
+        comparison: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    };
+    indicatorsStore.loadingBySlug['jumlah-penduduk'] = false;
+    indicatorsStore.errorsBySlug['jumlah-penduduk'] = 'Gagal memuat indikator (status 404)';
+
+    await router.push('/tentang/kelurahan-manggar');
+    await router.isReady();
+
+    const wrapper = mount(TentangKelurahanManggarView, {
+      global: { plugins: [pinia, router] },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(wrapper.find('[data-test="population-error"]').exists()).toBe(true);
+    expect(wrapper.text()).not.toContain('125.000');
   });
 
   it('renders the population loading state without flashing an empty state', async () => {

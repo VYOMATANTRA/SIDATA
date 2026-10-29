@@ -126,11 +126,6 @@ export const useIndicatorsStore = defineStore('indicators', () => {
         changed = true;
       }
     }
-    if (slugKey && next[slugKey]) {
-      delete next[slugKey];
-      delete nextAt[slugKey];
-      changed = true;
-    }
     if (changed) {
       bySlug.value = next;
       bySlugFetchedAt.value = nextAt;
@@ -298,6 +293,14 @@ export const useIndicatorsStore = defineStore('indicators', () => {
       try {
         const response = await apiFetch(`/api/indicators/${encodeURIComponent(normalized)}`);
         if (!response.ok) {
+          if (response.status === 404 || force) {
+            const next = { ...bySlug.value };
+            const nextAt = { ...bySlugFetchedAt.value };
+            delete next[normalized];
+            delete nextAt[normalized];
+            bySlug.value = next;
+            bySlugFetchedAt.value = nextAt;
+          }
           throw new Error(`Gagal memuat indikator (status ${response.status})`);
         }
         const data = (await response.json()) as { indicator?: IndicatorDto };
