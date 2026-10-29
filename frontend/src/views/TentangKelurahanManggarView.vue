@@ -66,6 +66,20 @@ const populationIndicator = computed(() => {
   return indicatorsStore.findBySlug(POPULATION_INDICATOR_SLUG);
 });
 
+const isPopulationLoading = computed(() => {
+  const loading = indicatorsStore.loadingBySlug[POPULATION_INDICATOR_SLUG];
+  // If undefined (not loaded yet) or true (in flight), treat as loading to avoid first-paint empty flash
+  return loading !== false && !populationIndicator.value;
+});
+
+const populationError = computed(() => {
+  return indicatorsStore.errorsBySlug[POPULATION_INDICATOR_SLUG] ?? null;
+});
+
+function retryPopulation() {
+  void indicatorsStore.fetchBySlug(POPULATION_INDICATOR_SLUG, true);
+}
+
 const formattedPopulation = computed(() => {
   const indicator = populationIndicator.value;
   if (!indicator) return null;
@@ -101,7 +115,7 @@ const wilayahStats = computed<StatItem[]>(() => [
 
     <!-- 1. Loading state: skeleton pulse to prevent layout shift & false-empty flash -->
     <section
-      v-if="indicatorsStore.loadingBySlug[POPULATION_INDICATOR_SLUG] && !formattedPopulation"
+      v-if="isPopulationLoading"
       class="bg-white px-4 py-10 sm:px-6 sm:py-12"
       aria-label="Memuat data kependudukan"
     >
@@ -123,7 +137,37 @@ const wilayahStats = computed<StatItem[]>(() => [
       :hedge-note="formattedPopulation.hedgeNote"
     />
 
-    <!-- 3. Error / missing state: explicit data-unavailable card -->
+    <!-- 3. Error state: network or server failure with retry button -->
+    <section
+      v-else-if="populationError"
+      class="bg-white px-4 py-10 sm:px-6 sm:py-12"
+      aria-labelledby="error-pop-title"
+    >
+      <div class="mx-auto max-w-5xl">
+        <p
+          id="error-pop-title"
+          class="text-brand-navy text-sm font-semibold tracking-[0.25em] uppercase"
+        >
+          Sekilas Manggar
+        </p>
+        <div
+          class="mt-3 rounded-lg border border-red-200 bg-red-50 p-6 text-red-700"
+          data-test="population-error"
+        >
+          <p class="font-medium text-red-900">Gagal Memuat Data</p>
+          <p class="mt-1 text-sm text-red-700">{{ populationError }}</p>
+          <button
+            type="button"
+            class="bg-brand-navy hover:bg-brand-navy/90 mt-3 inline-flex items-center rounded px-3 py-1.5 text-xs font-semibold text-white"
+            @click="retryPopulation"
+          >
+            Coba Lagi
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Missing state: indicator genuinely not published yet -->
     <section v-else class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="empty-pop-title">
       <div class="mx-auto max-w-5xl">
         <p
@@ -172,14 +216,21 @@ const wilayahStats = computed<StatItem[]>(() => [
         <TentangResourceCard
           title="Peta Spasial RT dan Bank Sampah Unit"
           icon="map"
-          cta-label="Segera Hadir"
+          to="/peta"
+          cta-label="Lihat Peta"
           class="flex-1"
         >
           Peta lokasi rumah ketua RT dan bank sampah aktif di Kelurahan Manggar, Kecamatan
           {{ KECAMATAN }}.
         </TentangResourceCard>
 
-        <TentangResourceCard title="Portal SIDATA" icon="system" class="flex-1">
+        <TentangResourceCard
+          title="Portal SIDATA"
+          icon="system"
+          to="/"
+          cta-label="Beranda"
+          class="flex-1"
+        >
           Solusi terpadu untuk menyimpan dan menyajikan data kelurahan secara terstruktur.
         </TentangResourceCard>
       </div>
@@ -203,7 +254,7 @@ const wilayahStats = computed<StatItem[]>(() => [
             <div class="bg-brand-cyan h-40 w-40 overflow-hidden rounded-full sm:h-48 sm:w-48">
               <img
                 :src="lurahPhoto"
-                alt="Foto resmi Lurah Kelurahan Manggar"
+                alt=""
                 class="h-40 w-40 object-cover object-top sm:h-48 sm:w-48"
               />
             </div>

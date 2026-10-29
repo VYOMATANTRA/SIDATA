@@ -380,10 +380,13 @@ keeps proper `<caption>` / `<th scope>` semantics under filtering.
 **Peta explorer.** The public map shows matching spatial points with zoom-based marker clustering;
 clusters expand as visitors zoom, and overlapping points remain individually selectable at close
 zoom. A coordinated results panel contains one search for point names, RT numbers, and available RT
-leader names, category filters, nearest-first results, and five-result pagination. Pagination only
-changes the list; all filtered points remain on the map. Selecting a result focuses its marker and
-shows its details in the same panel. Search and filters reset the result list to page one. The list
-remains a keyboard-accessible alternative to interacting with the map.
+leader names, category filters, nearest-first results, and five-result pagination. Distance sorting
+optionally uses browser geolocation upon explicit visitor click ("Gunakan lokasi saya"), with
+distances measured from the visitor's detected coordinates; otherwise distances fall back to the
+kelurahan geographic centre as origin. Pagination only changes the list; all filtered points remain
+on the map. Selecting a result focuses its marker and shows its details in the same panel. Search
+and filters reset the result list to page one. The list remains a keyboard-accessible alternative
+to interacting with the map.
 
 **Footer:**
 
@@ -483,10 +486,13 @@ Single register — unresolved questions live here and nowhere else.
   not infer an appointment process.
 - **Vision and mission statement:** No approved wording was found in the inspected source set. Keep
   this section omitted until the Kelurahan provides an approved vision/mission document.
-- **Operational Ketua RT roster import:** The repository ships a synthetic roster only (§2). Decide
-  and build the path that loads the real roster — a non-committed deploy-time file, or an
-  editor/admin import — before the Ketua RT page carries real contacts. Until then the seeded rows
-  are placeholders and the page must not be presented as the live directory.
+- **Operational Ketua RT roster import:** The repository ships a synthetic roster only (§2). In
+  production environments (`NODE_ENV=production`), `prisma db seed` deliberately skips seeding
+  placeholder Ketua RT rows to avoid exposing fabricated contact data. Production environments
+  ship with an empty Ketua RT roster by default and present the standard "Data belum tersedia"
+  notice until an approved operational import mechanism (such as an administrative CSV import or
+  verified deploy script) is completed. Until then, synthetic data is strictly confined to
+  development and testing environments.
 - **Public visibility of Ketua RT contacts:** The page publishes names, phone numbers, and addresses
   for private individuals. Confirm with the kelurahan whether the directory is published as-is, or
   needs a reduced field set (for example address withheld, or contact only on request).

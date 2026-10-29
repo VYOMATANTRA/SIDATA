@@ -181,11 +181,12 @@ function requestUserLocation() {
           </button>
         </div>
 
-        <p v-else-if="mapsStore.isLoading" class="mt-3 text-base text-gray-700" role="status">
+        <p v-if="mapsStore.isLoading" class="mt-3 text-base text-gray-700" role="status">
           Memuat titik spasial&hellip;
         </p>
 
-        <div v-else class="mt-4 grid items-stretch gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <!-- Keep map + search + panel mounted so retrying or loading doesn't tear down the Leaflet instance or typed search query -->
+        <div class="mt-4 grid items-stretch gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
           <InteractiveMap
             :points="visiblePoints"
             :selected-point-id="mapsStore.selectedPoint?.id ?? null"
@@ -241,7 +242,7 @@ function requestUserLocation() {
                   @update:type="mapsStore.setTypeFilter"
                 />
               </div>
-              <p class="mt-3 text-sm text-gray-600" aria-live="polite" data-test="peta-list-count">
+              <p class="mt-3 text-sm text-gray-600" data-test="peta-list-count">
                 {{ nearbyPoints.length }} lokasi ditemukan
               </p>
             </div>
@@ -263,7 +264,11 @@ function requestUserLocation() {
               v-else-if="nearbyPoints.length > 0"
               class="min-h-0 flex-1 divide-y divide-gray-200 overflow-y-auto px-5"
             >
-              <li v-for="item in paginatedNearbyPoints" :key="item.point.id">
+              <li
+                v-for="item in paginatedNearbyPoints"
+                :key="item.point.id"
+                :data-test="`peta-result-${item.point.id}`"
+              >
                 <button
                   type="button"
                   class="focus-visible:outline-brand-navy flex min-h-[68px] w-full cursor-pointer items-start justify-between gap-3 py-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2"
