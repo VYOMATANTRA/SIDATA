@@ -56,20 +56,32 @@ export function resolveIconForIndicator(
   slug: string,
   label: string,
 ): 'person' | 'house' | 'density' | 'ratio' {
-  const text = `${slug} ${label}`.toLowerCase();
+  // Strip category prefix (e.g. 'kependudukan-', 'pendidikan-', etc.) so substring 'penduduk' inside 'kependudukan' does not cause false positives
+  const normalizedSlug = slug.replace(/^[a-z0-9]+(?:-[a-z0-9]+)*-(?=[a-z0-9]+$)/, '');
+  const text = `${normalizedSlug} ${label}`.toLowerCase();
+
   if (
-    text.includes('penduduk') ||
-    text.includes('warga') ||
-    text.includes('jiwa') ||
-    text.includes('siswa') ||
-    text.includes('peserta') ||
-    text.includes('balita') ||
-    text.includes('guru') ||
-    text.includes('medis') ||
-    text.includes('tenaga') ||
-    text.includes('nasabah')
+    text.includes('rasio') ||
+    text.includes('tingkat') ||
+    text.includes('indeks') ||
+    text.includes('angka') ||
+    text.includes('cakupan')
   ) {
-    return 'person';
+    return 'ratio';
+  }
+  if (
+    text.includes('kepadatan') ||
+    text.includes('luas') ||
+    text.includes('wilayah') ||
+    text.includes('persen') ||
+    text.includes('%') ||
+    text.includes('panjang') ||
+    text.includes('ton') ||
+    text.includes('km') ||
+    text.includes('sampah') ||
+    text.includes('jalan')
+  ) {
+    return 'density';
   }
   if (
     text.includes('rt') ||
@@ -87,27 +99,18 @@ export function resolveIconForIndicator(
     return 'house';
   }
   if (
-    text.includes('kepadatan') ||
-    text.includes('luas') ||
-    text.includes('wilayah') ||
-    text.includes('persen') ||
-    text.includes('%') ||
-    text.includes('panjang') ||
-    text.includes('ton') ||
-    text.includes('km') ||
-    text.includes('sampah') ||
-    text.includes('jalan')
+    text.includes('penduduk') ||
+    text.includes('warga') ||
+    text.includes('jiwa') ||
+    text.includes('siswa') ||
+    text.includes('peserta') ||
+    text.includes('balita') ||
+    text.includes('guru') ||
+    text.includes('medis') ||
+    text.includes('tenaga') ||
+    text.includes('nasabah')
   ) {
-    return 'density';
-  }
-  if (
-    text.includes('rasio') ||
-    text.includes('tingkat') ||
-    text.includes('indeks') ||
-    text.includes('angka') ||
-    text.includes('cakupan')
-  ) {
-    return 'ratio';
+    return 'person';
   }
   return 'person';
 }
@@ -228,7 +231,7 @@ export const useIndicatorsStore = defineStore('indicators', () => {
 
     return matched.map((item) => ({
       icon: resolveIconForIndicator(item.slug, item.label),
-      value: item.valueCurrent,
+      value: item.unit && item.unit.includes(':') ? item.valueCurrent.replace('.', ',') : item.valueCurrent,
       label: item.label,
       unit: item.unit || undefined,
     }));
