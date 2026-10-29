@@ -56,6 +56,7 @@ describe('TentangVyomatantraView accessibility and content', () => {
       global: { plugins: [pinia, router] },
     });
 
+    expect(wrapper.find('img[alt="Logo Program Desa Cantik"]').exists()).toBe(true);
     expect(wrapper.find('img[alt="Logo Tim Inovasi Sosial VYOMATANTRA"]').exists()).toBe(true);
     expect(wrapper.find('img[alt="Logo Institut Teknologi Kalimantan (ITK)"]').exists()).toBe(true);
     expect(wrapper.find('img[alt="Logo SDGs Desa"]').exists()).toBe(true);

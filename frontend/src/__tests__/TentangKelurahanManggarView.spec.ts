@@ -114,7 +114,12 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
   it('renders "Data Belum Tersedia" empty state when population indicator is missing', async () => {
     const { pinia, router } = mountView();
     const indicatorsStore = useIndicatorsStore();
+    vi.spyOn(indicatorsStore, 'fetchBySlug').mockImplementation(async () => {
+      indicatorsStore.loadingBySlug['jumlah-penduduk'] = false;
+      return null;
+    });
     indicatorsStore.bySlug = {};
+    indicatorsStore.loadingBySlug['jumlah-penduduk'] = false;
 
     await router.push('/tentang/kelurahan-manggar');
     await router.isReady();
@@ -128,6 +133,34 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(wrapper.text()).toContain(
       'Informasi agregat jumlah penduduk terkini belum dipublikasikan atau gagal dimuat.',
     );
+  });
+
+  it('renders error state with retry button when indicator fetch fails', async () => {
+    const { pinia, router } = mountView();
+    const indicatorsStore = useIndicatorsStore();
+    indicatorsStore.bySlug = {};
+    indicatorsStore.loadingBySlug['jumlah-penduduk'] = false;
+    indicatorsStore.errorsBySlug['jumlah-penduduk'] = 'Gagal memuat indikator (status 500)';
+
+    const fetchSpy = vi.spyOn(indicatorsStore, 'fetchBySlug').mockResolvedValue(null);
+
+    await router.push('/tentang/kelurahan-manggar');
+    await router.isReady();
+
+    const wrapper = mount(TentangKelurahanManggarView, {
+      global: { plugins: [pinia, router] },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(wrapper.find('[data-test="population-error"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain('Gagal Memuat Data');
+    expect(wrapper.text()).toContain('Gagal memuat indikator (status 500)');
+
+    const retryBtn = wrapper.find('[data-test="population-error"] button');
+    expect(retryBtn.exists()).toBe(true);
+    expect(retryBtn.text()).toContain('Coba Lagi');
+    await retryBtn.trigger('click');
+    expect(fetchSpy).toHaveBeenCalledWith('jumlah-penduduk', true);
   });
 
   it('renders the population loading state without flashing an empty state', async () => {
@@ -203,8 +236,10 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
       global: { plugins: [pinia, router] },
     });
 
-    const lurahImg = wrapper.find('img[alt="Foto resmi Lurah Kelurahan Manggar"]');
+    // The Lurah portrait uses decorative/empty alt per 89-B1 review resolution
+    const lurahImg = wrapper.find('img[src="/src/assets/img/lurah_placeholder_sample.png"]');
     expect(lurahImg.exists()).toBe(true);
+    expect(lurahImg.attributes('alt')).toBe('');
     expect(wrapper.text()).toContain('Pimpinan Kelurahan');
     expect(wrapper.text()).toContain('Lurah Kelurahan Manggar');
     expect(wrapper.text()).toContain('Munir Achmad, S.E.');

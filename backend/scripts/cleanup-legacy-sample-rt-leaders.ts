@@ -28,14 +28,29 @@ async function main() {
   console.log('Memulai pembersihan data sample RT lawas...');
 
   const results = await prisma.$transaction(async (tx) => {
-    // 1. Delete legacy sample spatial point 1 and its RT junction row
-    const deletedJunctions = await tx.spatialPointRt.deleteMany({
-      where: { pointId: LEGACY_SAMPLE_POINT_ID },
-    });
-
-    const deletedPoints = await tx.spatialPoint.deleteMany({
+    // 1. Delete legacy sample spatial point 1 and its RT junction row, only if it still matches the legacy sample fingerprint
+    const legacyPoint = await tx.spatialPoint.findUnique({
       where: { id: LEGACY_SAMPLE_POINT_ID },
     });
+
+    let deletedJunctionsCount = 0;
+    let deletedPointsCount = 0;
+
+    if (
+      legacyPoint &&
+      legacyPoint.type === 'ketua_rt' &&
+      (legacyPoint.name.includes('Pos RT 01') || legacyPoint.latitude === -1.2235)
+    ) {
+      const deletedJunctions = await tx.spatialPointRt.deleteMany({
+        where: { pointId: LEGACY_SAMPLE_POINT_ID },
+      });
+      deletedJunctionsCount = deletedJunctions.count;
+
+      const deletedPoints = await tx.spatialPoint.deleteMany({
+        where: { id: LEGACY_SAMPLE_POINT_ID },
+      });
+      deletedPointsCount = deletedPoints.count;
+    }
 
     // 2. Clean up legacy fixture leaders if they still match the sample names
     let updatedLeaders = 0;
@@ -60,8 +75,8 @@ async function main() {
     }
 
     return {
-      deletedJunctions: deletedJunctions.count,
-      deletedPoints: deletedPoints.count,
+      deletedJunctions: deletedJunctionsCount,
+      deletedPoints: deletedPointsCount,
       updatedLeaders,
     };
   });
