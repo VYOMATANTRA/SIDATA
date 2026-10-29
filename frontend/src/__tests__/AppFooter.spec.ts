@@ -100,7 +100,6 @@ describe('AppFooter.vue', () => {
     });
 
     expect(wrapper.text()).toContain('Sumber Daya');
-    expect(wrapper.text()).toContain('Publikasi');
     expect(wrapper.text()).toContain('Peta');
     expect(wrapper.text()).toContain('Permintaan Data');
     expect(wrapper.text()).toContain('Ketua RT');
@@ -191,5 +190,28 @@ describe('AppFooter.vue', () => {
     const copyrightContainer = wrapper.find('[data-test="copyright-text"]').element.parentElement;
     expect(copyrightContainer?.classList.contains('text-xs')).toBe(true);
     expect(copyrightContainer?.classList.contains('sm:text-sm')).toBe(true);
+  });
+
+  it('omits Publikasi from footer when no publication has an online URL, and includes it when one exists', async () => {
+    const router = createMockRouter();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapperWithoutPublicDocs = mount(AppFooter, {
+      global: { plugins: [router] },
+    });
+    expect(wrapperWithoutPublicDocs.find('a[href="/publikasi"]').exists()).toBe(false);
+
+    const { PUBLICATIONS } = await import('../content/publikasi');
+    const originalHref = PUBLICATIONS[0]?.href;
+    PUBLICATIONS[0]!.href = 'https://example.com/publikasi.pdf';
+
+    const wrapperWithPublicDocs = mount(AppFooter, {
+      global: { plugins: [router] },
+    });
+    expect(wrapperWithPublicDocs.find('a[href="/publikasi"]').exists()).toBe(true);
+
+    // Restore
+    PUBLICATIONS[0]!.href = originalHref;
   });
 });

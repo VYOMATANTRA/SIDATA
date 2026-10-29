@@ -1,22 +1,35 @@
 import { describe, expect, it } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import router from '../router';
+import { createMemoryHistory, createRouter } from 'vue-router';
 import PublikasiView from '../views/PublikasiView.vue';
 
-async function mountPublikasiView() {
+function mountPublikasiView() {
   const pinia = createPinia();
   setActivePinia(pinia);
 
-  await router.push('/publikasi');
-  await router.isReady();
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/', component: { template: '<div>Beranda</div>' } },
+      { path: '/publikasi', component: PublikasiView },
+      { path: '/peta', component: { template: '<div>Peta</div>' } },
+      { path: '/permintaan-data', component: { template: '<div>Permintaan Data</div>' } },
+      { path: '/ketua-rt', component: { template: '<div>Ketua RT</div>' } },
+    ],
+  });
 
-  return { router, wrapper: mount(PublikasiView, { global: { plugins: [pinia, router] } }) };
+  return {
+    router,
+    wrapper: mount(PublikasiView, { global: { plugins: [pinia, router] } }),
+  };
 }
 
 describe('PublikasiView', () => {
   it('renders accessible public landmarks and one page heading using the shared layout', async () => {
-    const { wrapper } = await mountPublikasiView();
+    const { router, wrapper } = mountPublikasiView();
+    await router.push('/publikasi');
+    await router.isReady();
 
     expect(wrapper.find('a[href="#main-content"]').exists()).toBe(true);
     expect(wrapper.find('header').exists()).toBe(true);
@@ -27,12 +40,14 @@ describe('PublikasiView', () => {
 
     const breadcrumb = wrapper.find('nav[aria-label="Breadcrumb"]');
     expect(breadcrumb.exists()).toBe(true);
-    expect(breadcrumb.text()).toContain('Beranda');
+    expect(breadcrumb.text()).toContain('Sumber Daya');
     expect(breadcrumb.text()).toContain('Publikasi');
   });
 
   it('lists the four publication categories with verified descriptions from source documents', async () => {
-    const { wrapper } = await mountPublikasiView();
+    const { router, wrapper } = mountPublikasiView();
+    await router.push('/publikasi');
+    await router.isReady();
 
     expect(wrapper.findAll('[data-test="publication-list"] article')).toHaveLength(4);
     expect(wrapper.text()).toContain('Publikasi Prodeskel');
@@ -40,11 +55,13 @@ describe('PublikasiView', () => {
     expect(wrapper.text()).toContain('Booklet Eco Boba');
     expect(wrapper.text()).toContain('limbah kemasan plastik');
     expect(wrapper.text()).toContain('Manggar dalam Angka 2026');
-    expect(wrapper.text()).toContain('edisi cetak/PDF');
+    expect(wrapper.text()).toContain('unduhan versi digital');
   });
 
   it('marks unavailable documents clearly without rendering fake download links or status live regions', async () => {
-    const { wrapper } = await mountPublikasiView();
+    const { router, wrapper } = mountPublikasiView();
+    await router.push('/publikasi');
+    await router.isReady();
 
     const statusBadges = wrapper.findAll('[data-test="publication-status"]');
     expect(statusBadges).toHaveLength(4);
@@ -58,7 +75,9 @@ describe('PublikasiView', () => {
   });
 
   it('includes working internal navigation for home and resource links', async () => {
-    const { wrapper } = await mountPublikasiView();
+    const { router, wrapper } = mountPublikasiView();
+    await router.push('/publikasi');
+    await router.isReady();
 
     expect(wrapper.find('a[href="/"]').exists()).toBe(true);
     expect(wrapper.find('a[href="/peta"]').exists()).toBe(true);

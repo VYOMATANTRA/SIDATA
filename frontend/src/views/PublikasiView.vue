@@ -2,37 +2,12 @@
 import TentangPageLayout from '../components/tentang/TentangPageLayout.vue';
 import TentangBreadcrumb from '../components/tentang/TentangBreadcrumb.vue';
 import TentangHeroPanel from '../components/tentang/TentangHeroPanel.vue';
-
-const publications = [
-  {
-    category: 'Prodeskel',
-    title: 'Publikasi Prodeskel',
-    description: 'Dokumen dan publikasi resmi Kelurahan Manggar dari sistem Prodeskel.',
-  },
-  {
-    category: 'Infografis',
-    title: 'Infografis Kelurahan Manggar',
-    description:
-      'Ringkasan informasi dan statistik kependudukan Kelurahan Manggar dalam bentuk visual.',
-  },
-  {
-    category: 'Lingkungan',
-    title: 'Booklet Eco Boba',
-    description:
-      'Dokumentasi pelatihan pengolahan limbah kemasan plastik menjadi bahan isian bantal (cushion filling) dalam program Eco Boba.',
-  },
-  {
-    category: 'Statistik',
-    title: 'Manggar dalam Angka 2026',
-    description:
-      'Dokumen kompilasi data statistik, demografi, dan geografi Kelurahan Manggar edisi cetak/PDF tahun 2026.',
-  },
-] as const;
+import { PUBLICATIONS } from '../content/publikasi';
 </script>
 
 <template>
   <TentangPageLayout>
-    <TentangBreadcrumb label="Publikasi" parent-label="Beranda" parent-to="/" />
+    <TentangBreadcrumb label="Publikasi" parent-label="Sumber Daya" parent-to="/" />
 
     <TentangHeroPanel
       title="Publikasi Kelurahan Manggar"
@@ -48,11 +23,11 @@ const publications = [
               Sumber daya untuk warga
             </h2>
           </div>
-          <p class="text-sm text-gray-600">{{ publications.length }} kategori</p>
+          <p class="text-sm text-gray-600">{{ PUBLICATIONS.length }} kategori</p>
         </div>
 
         <ul class="mt-2 divide-y divide-gray-200" data-test="publication-list">
-          <li v-for="(publication, index) in publications" :key="publication.title">
+          <li v-for="(publication, index) in PUBLICATIONS" :key="publication.title">
             <article
               class="grid gap-3 py-6 sm:grid-cols-[3rem_minmax(0,1fr)_auto] sm:items-center sm:gap-5"
             >
