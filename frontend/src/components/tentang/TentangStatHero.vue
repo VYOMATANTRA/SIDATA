@@ -24,7 +24,7 @@ const labelId = useId();
       </p>
       <p class="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <span class="text-xl font-bold text-brand-navy">{{ value }}</span>
-        <span class="text-lg font-semibold text-brand-cyan">{{ unit }}</span>
+        <span class="text-lg font-semibold text-brand-teal-deep">{{ unit }}</span>
       </p>
       <p class="mt-2 max-w-2xl text-base text-gray-700">{{ caption }}</p>
       <p v-if="subcaption" class="mt-1 text-sm text-gray-500">{{ subcaption }}</p>

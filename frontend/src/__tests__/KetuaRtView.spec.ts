@@ -227,8 +227,8 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
     expect(whatsappLink.attributes('rel')).toContain('noopener');
     expect(whatsappLink.attributes('rel')).toContain('noreferrer');
 
-    // RT 2 is not
-    expect(wrapper.find('a[href="tel:6281100000002"]').exists()).toBe(true);
+    // RT 2 is not flagged as WhatsApp; preserves leading + from international format
+    expect(wrapper.find('a[href="tel:+6281100000002"]').exists()).toBe(true);
   });
 
   it('renders a placeholder phone as plain text instead of a dead link', async () => {
@@ -398,7 +398,9 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
 
     // The malformed rows are dropped instead of throwing on a missing name.
     expect(wrapper.findAll('tbody th[scope="row"]')).toHaveLength(2);
-    expect(wrapper.find('[data-test="rt-rejected"]').text()).toContain('2 baris data tidak lengkap');
+    expect(wrapper.find('[data-test="rt-rejected"]').text()).toContain(
+      '2 baris data tidak lengkap',
+    );
   });
 
   it('surfaces a retryable error state instead of an empty table', async () => {
@@ -414,8 +416,29 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
     expect(error.attributes('role')).toBe('alert');
     expect(error.text()).toContain('Gagal memuat data Ketua RT');
     expect(error.find('button').text()).toContain('Coba lagi');
-    // The table is not rendered while errored
+    // The table is not rendered while errored, nor is the count announced
     expect(wrapper.find('table').exists()).toBe(false);
+    expect(wrapper.find('[data-test="rt-count"]').exists()).toBe(false);
+  });
+
+  it('clears stale roster and rejected count when a forced refresh fails', async () => {
+    const wrapper = await mountReady();
+    expect(wrapper.findAll('tbody tr').length).toBe(DEFAULT_PAGE_SIZE);
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue({ ok: false, status: 500 } as Response),
+    );
+
+    const { useRtLeadersStore } = await import('../stores/rtLeaders.store');
+    const store = useRtLeadersStore();
+    await store.fetchRtLeaders(true);
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="rt-error"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="rt-rejected"]').exists()).toBe(false);
+    expect(store.rtLeaders).toHaveLength(0);
+    expect(store.rejectedCount).toBe(0);
   });
 
   it('normalises every accepted phone format for the wa.me link', async () => {

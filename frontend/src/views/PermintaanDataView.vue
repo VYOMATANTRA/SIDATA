@@ -201,7 +201,7 @@ const officialSopDocuments: SopDocument[] = [
     refNumber: 'Nomor 490/378/M/DISKOMINFO',
     description:
       'Pedoman telaah pengujian konsekuensi kepentingan umum vs kerahasiaan sebelum suatu informasi ditetapkan dalam Daftar Informasi Publik Dikecualikan (Pasal 17 UU KIP).',
-    url: 'http://ppid.balikpapan.go.id/assets/global_file/SOP_PPID/SOP%20Uji%20Kosekuensi%20Penetapan%20Informasi%20Dikecualikan.pdf',
+    url: 'https://ppid.balikpapan.go.id/assets/global_file/SOP_PPID/SOP%20Uji%20Kosekuensi%20Penetapan%20Informasi%20Dikecualikan.pdf',
   },
   {
     id: 'sop-pengumpulan-statistik',
@@ -210,7 +210,7 @@ const officialSopDocuments: SopDocument[] = [
     refNumber: 'Penyelenggaraan Satu Data Balikpapan',
     description:
       'Standar pengumpulan data statistik sektoral dari produsen data (OPD dan kelurahan) guna memastikan keterpaduan Satu Data Kota Balikpapan.',
-    url: 'http://ppid.balikpapan.go.id/assets/global_file/SOP_PPID/SOP%20Pengumpulan%20Data%20Statistik%20Sektoral.pdf',
+    url: 'https://ppid.balikpapan.go.id/assets/global_file/SOP_PPID/SOP%20Pengumpulan%20Data%20Statistik%20Sektoral.pdf',
   },
   {
     id: 'sop-pengolahan-statistik',
@@ -219,7 +219,7 @@ const officialSopDocuments: SopDocument[] = [
     refNumber: 'Portal data.balikpapan.go.id',
     description:
       'Tata laksana pengolahan, verifikasi, dan validasi data statistik sektoral sebelum didiseminasikan secara resmi kepada publik.',
-    url: 'http://ppid.balikpapan.go.id/assets/global_file/SOP_PPID/SOP%20Pengolahan%20Data%20Statistik%20Sektoral.pdf',
+    url: 'https://ppid.balikpapan.go.id/assets/global_file/SOP_PPID/SOP%20Pengolahan%20Data%20Statistik%20Sektoral.pdf',
   },
   {
     id: 'maklumat-pelayanan-ppid',
@@ -227,8 +227,8 @@ const officialSopDocuments: SopDocument[] = [
     category: 'Layanan PPID',
     refNumber: 'Pemerintah Kota Balikpapan',
     description:
-      'Pernyataan komitmen aparatur PPID Pemkot Balikpapan dalam memberikan pelayanan informasi yang transparan, mudah diakses, tepat waktu, dan akuntabel.',
-    url: 'http://ppid.balikpapan.go.id/assets/global_file/SOP_PPID/Maklumat%20Pelayanan%20Informasi%20Publik%20Pemkot%20Balikpapan%20-%202021.pdf',
+      'Pernyataan komitmen tertulis seluruh aparatur PPID Kota Balikpapan mengenai standar mutu, kepatuhan jadwal, dan integritas layanan informasi.',
+    url: 'https://ppid.balikpapan.go.id/assets/global_file/SOP_PPID/Maklumat%20Pelayanan%20Informasi%20Publik%20Pemkot%20Balikpapan%20-%202021.pdf',
   },
 ];
 </script>
