@@ -9,7 +9,7 @@ import AppNavbar from '../components/common/AppNavbar.vue';
 import AppFooter from '../components/common/AppFooter.vue';
 import SectionHero from '../components/landing/SectionHero.vue';
 import SectionSambutanLurah from '../components/landing/SectionSambutanLurah.vue';
-// import SectionHighlights from '../components/landing/SectionHighlights.vue';
+import SectionHighlights from '../components/landing/SectionHighlights.vue';
 import StatOverview from '../components/common/StatOverview.vue';
 import bgKependudukan from '@/assets/img/landing-page/demografi_penduduk.webp';
 import bgPendidikan from '@/assets/img/landing-page/pendidikan.webp';
@@ -385,6 +385,60 @@ async function handleLogout() {
         </slot>
       </section>
 
+      <!-- 4. Publikasi / Peta highlights (Spec §8 section 4) -->
+      <SectionHighlights />
+
+      <!-- 5. Widget Cuaca (Spec §8 section 5: slot with accessible fallback) -->
+      <section
+        id="widget-cuaca"
+        aria-labelledby="weather-widget-title"
+        class="border-b border-slate-200/80 bg-slate-50 px-4 py-16 sm:px-6 sm:py-20 lg:px-8"
+      >
+        <div class="mx-auto max-w-6xl space-y-8">
+          <div class="mx-auto max-w-3xl space-y-3 text-center">
+            <h2
+              id="weather-widget-title"
+              class="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl"
+            >
+              Prakiraan Cuaca Manggar
+            </h2>
+            <p class="text-base leading-relaxed text-slate-600 sm:text-lg">
+              Kondisi cuaca terkini dari Badan Meteorologi, Klimatologi, dan Geofisika (BMKG) untuk
+              wilayah Balikpapan Timur.
+            </p>
+          </div>
+
+          <!-- Weather Widget Slot (separate issue will provide live BMKG integration) -->
+          <slot name="weather">
+            <div
+              class="rounded-card mx-auto max-w-xl border border-slate-200/90 bg-white p-8 text-center shadow-xs"
+            >
+              <div
+                class="bg-brand-navy/10 text-brand-navy mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full"
+                aria-hidden="true"
+              >
+                <svg
+                  class="h-6 w-6"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+                </svg>
+              </div>
+              <p class="text-sm font-medium text-slate-700">
+                Data prakiraan cuaca operasional BMKG akan ditampilkan di sini.
+              </p>
+              <p class="mt-1 text-xs text-slate-400">
+                Pembaruan berkala suhu, kelembapan, dan kecepatan angin Balikpapan Timur
+              </p>
+            </div>
+          </slot>
+        </div>
+      </section>
     </main>
 
     <!-- Footer Landmark per SPEC.md §8 using PR #56 AppFooter -->
