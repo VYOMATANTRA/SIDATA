@@ -385,4 +385,19 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(wrapper.text()).toContain('Kelurahan Manggar berupaya menyediakan');
     expect(wrapper.text()).not.toContain('strive menyediakan');
   });
+
+  it('calls fetchBySlug with force=true on mount to guarantee fresh hero data', async () => {
+    const { pinia, router } = mountView();
+    const indicatorsStore = useIndicatorsStore();
+    const fetchSpy = vi.spyOn(indicatorsStore, 'fetchBySlug').mockResolvedValue(null);
+
+    await router.push('/tentang/kelurahan-manggar');
+    await router.isReady();
+
+    mount(TentangKelurahanManggarView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith('jumlah-penduduk', true);
+  });
 });
