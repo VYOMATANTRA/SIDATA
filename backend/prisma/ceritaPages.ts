@@ -105,8 +105,8 @@ export const CERITA_PAGES: readonly CeritaPageSeed[] = [
     ],
   },
   {
-    slug: 'persampahan',
-    title: 'Persampahan',
+    slug: 'persampahan-dan-bank-sampah-unit',
+    title: 'Persampahan & Bank Sampah Unit',
     chapters: [
       { slug: 'bank-sampah-unit', title: 'Bank Sampah Unit' },
       { slug: 'program-eco-boba', title: 'Program Eco Boba' },
