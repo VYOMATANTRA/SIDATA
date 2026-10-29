@@ -9,9 +9,16 @@ import AppNavbar from '../components/common/AppNavbar.vue';
 import AppFooter from '../components/common/AppFooter.vue';
 import SectionHero from '../components/landing/SectionHero.vue';
 import SectionSambutanLurah from '../components/landing/SectionSambutanLurah.vue';
-import SectionHighlights from '../components/landing/SectionHighlights.vue';
+// import SectionHighlights from '../components/landing/SectionHighlights.vue';
 import StatOverview from '../components/common/StatOverview.vue';
-import defaultHeroBg from '@/assets/img/background_laman_depan_kelurahan.png';
+import bgKependudukan from '@/assets/img/landing-page/demografi_penduduk.webp';
+import bgPendidikan from '@/assets/img/landing-page/pendidikan.webp';
+import bgKesehatan from '@/assets/img/landing-page/kesehatan.webp';
+import bgEkonomi from '@/assets/img/landing-page/ekonomi.webp';
+import bgPemerintahan from '@/assets/img/landing-page/pemerintahan_kelembagaan.webp';
+import bgGeografis from '@/assets/img/landing-page/geografis_tata_ruang.webp';
+import bgInfrastruktur from '@/assets/img/landing-page/infrastruktur_perumahan.webp';
+import bgPersampahan from '@/assets/img/landing-page/persampahan.webp';
 
 interface CeritaPreviewCategory {
   slug: string;
@@ -20,7 +27,11 @@ interface CeritaPreviewCategory {
   cardTitle: string;
   to: string;
   bgOverlay: string;
+  bgImage: string;
 }
+
+const CERITA_BG_OVERLAY =
+  'linear-gradient(90deg, rgba(0, 0, 0, 0.75) 40%, rgba(68, 68, 68, 0.75) 100%)';
 
 const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
   {
@@ -30,7 +41,8 @@ const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
       'Komposisi dan kepadatan penduduk, keluarga, persebaran rasio jenis kelamin, umur, pendidikan, dan lainnya',
     cardTitle: 'Ringkasan Statistik Kependudukan Kelurahan Manggar',
     to: '/cerita/kependudukan',
-    bgOverlay: 'linear-gradient(180deg, rgba(8, 20, 42, 0.88) 0%, rgba(6, 15, 32, 0.96) 100%)',
+    bgOverlay: CERITA_BG_OVERLAY,
+    bgImage: bgKependudukan,
   },
   {
     slug: 'pendidikan',
@@ -39,7 +51,8 @@ const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
       'Data sarana prasarana sekolah, angka partisipasi sekolah, dan tingkat kelulusan jenjang pendidikan warga',
     cardTitle: 'Ringkasan Statistik Pendidikan Kelurahan Manggar',
     to: '/cerita/pendidikan',
-    bgOverlay: 'linear-gradient(180deg, rgba(10, 24, 48, 0.88) 0%, rgba(7, 18, 38, 0.96) 100%)',
+    bgOverlay: CERITA_BG_OVERLAY,
+    bgImage: bgPendidikan,
   },
   {
     slug: 'kesehatan',
@@ -48,7 +61,8 @@ const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
       'Layanan posyandu, fasilitas kesehatan tingkat pertama, sebaran tenaga medis, dan derajat kesehatan balita',
     cardTitle: 'Ringkasan Statistik Kesehatan Kelurahan Manggar',
     to: '/cerita/kesehatan',
-    bgOverlay: 'linear-gradient(180deg, rgba(12, 28, 54, 0.88) 0%, rgba(9, 21, 42, 0.96) 100%)',
+    bgOverlay: CERITA_BG_OVERLAY,
+    bgImage: bgKesehatan,
   },
   {
     slug: 'ekonomi-dan-ketertiban',
@@ -57,7 +71,8 @@ const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
       'Potensi perekonomian maritim pesisir, sentra UMKM mandiri, ketertiban lingkungan, dan pos pengamanan wilayah',
     cardTitle: 'Ringkasan Statistik Ekonomi & Ketertiban Kelurahan Manggar',
     to: '/cerita/ekonomi-dan-ketertiban',
-    bgOverlay: 'linear-gradient(180deg, rgba(10, 26, 50, 0.88) 0%, rgba(8, 20, 40, 0.96) 100%)',
+    bgOverlay: CERITA_BG_OVERLAY,
+    bgImage: bgEkonomi,
   },
   {
     slug: 'pemerintahan-dan-kelembagaan',
@@ -66,7 +81,8 @@ const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
       'Struktur kelembagaan perangkat kelurahan, koordinasi 100 RT, LPM, PKK, dan lembaga kemasyarakatan kelurahan',
     cardTitle: 'Ringkasan Statistik Pemerintahan & Kelembagaan Kelurahan Manggar',
     to: '/cerita/pemerintahan-dan-kelembagaan',
-    bgOverlay: 'linear-gradient(180deg, rgba(14, 30, 58, 0.88) 0%, rgba(10, 22, 44, 0.96) 100%)',
+    bgOverlay: CERITA_BG_OVERLAY,
+    bgImage: bgPemerintahan,
   },
   {
     slug: 'geografis-dan-tata-ruang',
@@ -75,7 +91,8 @@ const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
       'Luas wilayah administratif pesisir Balikpapan Timur, pemanfaatan tata guna lahan hijau, dan batas batas wilayah',
     cardTitle: 'Ringkasan Statistik Geografis & Tata Ruang Kelurahan Manggar',
     to: '/cerita/geografis-dan-tata-ruang',
-    bgOverlay: 'linear-gradient(180deg, rgba(11, 25, 52, 0.88) 0%, rgba(7, 19, 41, 0.96) 100%)',
+    bgOverlay: CERITA_BG_OVERLAY,
+    bgImage: bgGeografis,
   },
   {
     slug: 'infrastruktur-dan-perumahan',
@@ -84,7 +101,8 @@ const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
       'Cakupan sambungan air perpipaan PDAM, sanitasi layak, kualitas pemukiman, dan prasarana transportasi jalan',
     cardTitle: 'Ringkasan Statistik Infrastruktur & Perumahan Kelurahan Manggar',
     to: '/cerita/infrastruktur-dan-perumahan',
-    bgOverlay: 'linear-gradient(180deg, rgba(9, 23, 49, 0.88) 0%, rgba(6, 17, 37, 0.96) 100%)',
+    bgOverlay: CERITA_BG_OVERLAY,
+    bgImage: bgInfrastruktur,
   },
   {
     slug: 'persampahan-dan-bank-sampah-unit',
@@ -93,7 +111,8 @@ const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
       'Pengelolaan persampahan berbasis masyarakat, inovasi Eco Boba, dan jaringan Bank Sampah Unit tingkat RT',
     cardTitle: 'Ringkasan Statistik Persampahan & Bank Sampah Unit Kelurahan Manggar',
     to: '/cerita/persampahan-dan-bank-sampah-unit',
-    bgOverlay: 'linear-gradient(180deg, rgba(8, 22, 46, 0.88) 0%, rgba(5, 16, 35, 0.96) 100%)',
+    bgOverlay: CERITA_BG_OVERLAY,
+    bgImage: bgPersampahan,
   },
 ];
 
@@ -377,7 +396,7 @@ async function handleLogout() {
               :show-button="isRouteAvailable(category.to)"
               align="left"
               :is-full-bleed="true"
-              :bg-image="defaultHeroBg"
+              :bg-image="category.bgImage"
               :bg-overlay="category.bgOverlay"
             >
               <template #card-empty>
@@ -390,60 +409,6 @@ async function handleLogout() {
         </slot>
       </section>
 
-      <!-- 4. Publikasi / Peta highlights (Spec §8 section 4) -->
-      <SectionHighlights />
-
-      <!-- 5. Widget Cuaca (Spec §8 section 5: slot with accessible fallback) -->
-      <section
-        id="widget-cuaca"
-        aria-labelledby="weather-widget-title"
-        class="border-b border-slate-200/80 bg-slate-50 px-4 py-16 sm:px-6 sm:py-20 lg:px-8"
-      >
-        <div class="mx-auto max-w-6xl space-y-8">
-          <div class="mx-auto max-w-3xl space-y-3 text-center">
-            <h2
-              id="weather-widget-title"
-              class="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl"
-            >
-              Prakiraan Cuaca Manggar
-            </h2>
-            <p class="text-base leading-relaxed text-slate-600 sm:text-lg">
-              Kondisi cuaca terkini dari Badan Meteorologi, Klimatologi, dan Geofisika (BMKG) untuk
-              wilayah Balikpapan Timur.
-            </p>
-          </div>
-
-          <!-- Weather Widget Slot (separate issue will provide live BMKG integration) -->
-          <slot name="weather">
-            <div
-              class="rounded-card mx-auto max-w-xl border border-slate-200/90 bg-white p-8 text-center shadow-xs"
-            >
-              <div
-                class="bg-brand-navy/10 text-brand-navy mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full"
-                aria-hidden="true"
-              >
-                <svg
-                  class="h-6 w-6"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
-                </svg>
-              </div>
-              <p class="text-sm font-medium text-slate-700">
-                Data prakiraan cuaca operasional BMKG akan ditampilkan di sini.
-              </p>
-              <p class="mt-1 text-xs text-slate-400">
-                Pembaruan berkala suhu, kelembapan, dan kecepatan angin Balikpapan Timur
-              </p>
-            </div>
-          </slot>
-        </div>
-      </section>
     </main>
 
     <!-- Footer Landmark per SPEC.md §8 using PR #56 AppFooter -->

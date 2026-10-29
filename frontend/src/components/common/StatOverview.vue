@@ -65,7 +65,7 @@ const containerStyle = computed(() => {
   if (!props.bgImage) return {};
   const overlay =
     props.bgOverlay ||
-    'linear-gradient(180deg, rgba(10, 25, 47, 0.78) 0%, rgba(10, 20, 40, 0.92) 100%)';
+    'linear-gradient(90deg, rgba(0, 0, 0, 0.75) 40%, rgba(68, 68, 68, 0.75) 100%)';
   return {
     backgroundImage: `${overlay}, url(${props.bgImage})`,
     backgroundSize: 'cover',
