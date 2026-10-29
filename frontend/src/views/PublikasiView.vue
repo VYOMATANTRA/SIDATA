@@ -21,7 +21,7 @@ const publikasiCatalog = computed<PublicationItem[]>(() => {
 
 <template>
   <TentangPageLayout>
-    <TentangBreadcrumb label="Publikasi" parent-label="Sumber Daya" parent-to="/" />
+    <TentangBreadcrumb label="Publikasi" parent-label="Beranda" parent-to="/" />
 
     <TentangHeroPanel
       title="Publikasi Kelurahan Manggar"
@@ -62,7 +62,7 @@ const publikasiCatalog = computed<PublicationItem[]>(() => {
               </div>
 
               <a
-                v-if="publication.href"
+                v-if="publication.href && publication.href.startsWith('https://')"
                 :href="publication.href"
                 target="_blank"
                 rel="noopener noreferrer"

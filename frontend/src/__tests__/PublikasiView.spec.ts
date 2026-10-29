@@ -40,7 +40,7 @@ describe('PublikasiView', () => {
 
     const breadcrumb = wrapper.find('nav[aria-label="Breadcrumb"]');
     expect(breadcrumb.exists()).toBe(true);
-    expect(breadcrumb.text()).toContain('Sumber Daya');
+    expect(breadcrumb.text()).toContain('Beranda');
     expect(breadcrumb.text()).toContain('Publikasi');
   });
 
@@ -83,5 +83,46 @@ describe('PublikasiView', () => {
     expect(wrapper.find('a[href="/peta"]').exists()).toBe(true);
     expect(wrapper.find('a[href="/permintaan-data"]').exists()).toBe(true);
     expect(wrapper.find('a[href="/ketua-rt"]').exists()).toBe(true);
+  });
+
+  it('only renders download links for approved https:// URLs and ignores javascript: schemes', async () => {
+    const { router, wrapper } = mountPublikasiView();
+    await router.push('/publikasi');
+    await router.isReady();
+
+    const { useContentBlocksStore } = await import('../stores/contentBlocks.store');
+    const store = useContentBlocksStore();
+    store.blocks['publikasi-katalog'] = {
+      id: 'block-pub',
+      sectionId: null,
+      type: 'prose',
+      slug: 'publikasi-katalog',
+      title: 'Katalog',
+      body: 'Deskripsi',
+      metadata: {
+        publications: [
+          {
+            category: 'Infografis',
+            title: 'Dokumen Bahaya',
+            description: 'Uji XSS',
+            href: 'javascript:alert(1)',
+          },
+          {
+            category: 'Statistik',
+            title: 'Dokumen Resmi',
+            description: 'Download Resmi',
+            href: 'https://example.com/dokumen.pdf',
+          },
+        ],
+      },
+      sortOrder: null,
+      updatedAt: '2026-09-01T00:00:00.000Z',
+    };
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('a[href^="javascript:"]').exists()).toBe(false);
+    const safeLink = wrapper.find('a[href="https://example.com/dokumen.pdf"]');
+    expect(safeLink.exists()).toBe(true);
+    expect(safeLink.text()).toContain('Unduh Dokumen');
   });
 });

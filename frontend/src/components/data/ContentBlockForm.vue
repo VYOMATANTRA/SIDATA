@@ -101,10 +101,28 @@ const fieldErrors = computed<Record<string, string | undefined>>(() => {
     }
   }
 
+  if (isProfil.value) {
+    if (
+      profilRtCount.value === null ||
+      profilRtCount.value === undefined ||
+      Number.isNaN(Number(profilRtCount.value)) ||
+      Number(profilRtCount.value) < 1 ||
+      !Number.isInteger(Number(profilRtCount.value))
+    ) {
+      errors.rtCount = 'Jumlah RT harus berupa bilangan bulat positif (minimal 1).';
+    }
+    if (!profilKecamatan.value.trim()) {
+      errors.kecamatan = 'Kecamatan tidak boleh kosong.';
+    }
+    if (!profilKota.value.trim()) {
+      errors.kota = 'Kota tidak boleh kosong.';
+    }
+  }
+
   return errors;
 });
 
-const fieldOrder = ['title', 'body', 'metadata'];
+const fieldOrder = ['title', 'body', 'metadata', 'rtCount', 'kecamatan', 'kota'];
 
 const errorEntries = computed(() =>
   fieldOrder
@@ -137,10 +155,10 @@ function handleSubmit(): void {
   } else if (isProfil.value) {
     metadata = {
       ...props.block.metadata,
-      rtCount: Number(profilRtCount.value) || 100,
-      kecamatan: profilKecamatan.value.trim() || 'Balikpapan Timur',
-      kota: profilKota.value.trim() || 'Kota Balikpapan',
-      landscape: profilLandscape.value.trim() || 'Pesisir & Dataran',
+      rtCount: Number(profilRtCount.value),
+      kecamatan: profilKecamatan.value.trim(),
+      kota: profilKota.value.trim(),
+      landscape: profilLandscape.value.trim(),
     };
   } else if (rawMetadataJson.value.trim()) {
     try {
