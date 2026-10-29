@@ -20,7 +20,7 @@ export const DEFAULT_HERO_BLOCK: ContentBlock = {
   sectionId: null,
   type: 'hero',
   slug: 'landing-hero',
-  title: 'Portal Data Terpadu Kelurahan Manggar',
+  title: 'Sistem Informasi Data Terpadu Kelurahan Manggar',
   body: 'Pusat integrasi data kependudukan, potensi wilayah, layanan publik, dan pemetaan geospasial Kelurahan Manggar, Balikpapan Timur.',
   metadata: {
     ctaText: 'Jelajahi Potensi',
@@ -39,8 +39,8 @@ export const DEFAULT_SAMBUTAN_BLOCK: ContentBlock = {
   title: 'Sambutan Lurah Manggar',
   body: 'Selamat datang di Sistem Informasi Data Terpadu (SIDATA) Kelurahan Manggar. Portal ini kami hadirkan sebagai sarana transparansi informasi dan keterpaduan data statistik serta spasial guna mendukung perencanaan wilayah dan pelayanan masyarakat yang lebih efektif.',
   metadata: {
-    authorName: 'Lurah Manggar',
-    authorTitle: 'Kepala Kelurahan Manggar',
+    authorName: 'Munir Achmad, S.E.',
+    authorTitle: 'Lurah Manggar',
     photoUrl: '',
   },
   sortOrder: null,
