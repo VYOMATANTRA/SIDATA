@@ -65,31 +65,33 @@ function compareCards(a: IndicatorCardModel, b: IndicatorCardModel): number {
 }
 
 const cards = computed<IndicatorCardModel[]>(() => {
-  const scalarCards: IndicatorCardModel[] = indicatorsStore.indicators.map((indicator) => {
-    const stats = [
-      {
-        label: `Nilai Sekarang (${indicator.periodCurrent})`,
-        value: formatDecimalId(indicator.valueCurrent),
-      },
-    ];
-    if (indicator.valuePrevious !== null) {
-      stats.push({
-        label: `Nilai Lalu (${indicator.periodPrevious ?? '—'})`,
-        value: formatDecimalId(indicator.valuePrevious),
-      });
-    }
-    return {
-      id: indicator.id,
-      type: 'skalar',
-      title: indicator.label,
-      kicker: pagesStore.pageTitleFor(indicator.sectionId),
-      sectionLabel: pagesStore.labelFor(indicator.sectionId),
-      stats,
-      source: indicator.source,
-      hedgeNote: indicator.hedgeNote,
-      isStale: indicator.isStale,
-    };
-  });
+  const scalarCards: IndicatorCardModel[] = indicatorsStore.indicators.map(
+    (indicator: Indicator) => {
+      const stats = [
+        {
+          label: `Nilai Sekarang (${indicator.periodCurrent})`,
+          value: formatDecimalId(indicator.valueCurrent),
+        },
+      ];
+      if (indicator.valuePrevious !== null) {
+        stats.push({
+          label: `Nilai Lalu (${indicator.periodPrevious ?? '—'})`,
+          value: formatDecimalId(indicator.valuePrevious),
+        });
+      }
+      return {
+        id: indicator.id,
+        type: 'skalar',
+        title: indicator.label,
+        kicker: pagesStore.pageTitleFor(indicator.sectionId),
+        sectionLabel: pagesStore.labelFor(indicator.sectionId),
+        stats,
+        source: indicator.source,
+        hedgeNote: indicator.hedgeNote,
+        isStale: indicator.isStale,
+      };
+    },
+  );
 
   const tableCards: IndicatorCardModel[] = tablesStore.tables.map((table: IndicatorTable) => ({
     id: table.id,
@@ -164,7 +166,7 @@ function openScalar(indicator: Indicator): void {
  */
 function handleEdit(card: IndicatorCardModel): void {
   if (card.type === 'skalar') {
-    const indicator = indicatorsStore.indicators.find((item) => item.id === card.id);
+    const indicator = indicatorsStore.indicators.find((item: Indicator) => item.id === card.id);
     if (indicator) openScalar(indicator);
     return;
   }
@@ -241,7 +243,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
     <!-- Skip link, docs/ACCESSIBILITY.md §3 (2.4.1) -->
     <a
       href="#main-content"
-      class="focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-xl focus:bg-brand-navy focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg"
+      class="focus:bg-brand-navy focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-xl focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg"
     >
       Lewati ke konten utama
     </a>
@@ -252,7 +254,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
       >
         <RouterLink
           to="/"
-          class="focus-visible:outline-brand-navy inline-flex items-center gap-2 rounded-btn px-2 py-1 text-sm font-medium text-brand-navy transition-colors hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2"
+          class="focus-visible:outline-brand-navy rounded-btn text-brand-navy inline-flex items-center gap-2 px-2 py-1 text-sm font-medium transition-colors hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           <svg
             class="h-4 w-4"
@@ -270,7 +272,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
         </RouterLink>
 
         <span
-          class="bg-brand-navy/5 rounded-full px-3 py-1 text-xs font-semibold tracking-wide text-brand-navy uppercase"
+          class="bg-brand-navy/5 text-brand-navy rounded-full px-3 py-1 text-xs font-semibold tracking-wide uppercase"
         >
           Editor / Admin
         </span>
@@ -280,7 +282,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
     <main id="main-content" class="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
       <div>
         <p class="text-xs font-semibold tracking-widest text-slate-500 uppercase">CMS Data</p>
-        <h1 class="mt-1 text-xl font-bold text-brand-navy">Data</h1>
+        <h1 class="text-brand-navy mt-1 text-xl font-bold">Data</h1>
         <p class="mt-1 max-w-2xl text-sm text-slate-600">
           Kelola angka indikator skalar dan empat tabel matriks. Angka dimasukkan manual; impor
           massal belum tersedia.
@@ -328,7 +330,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
       <div
         v-if="loadError"
         role="alert"
-        class="mt-6 rounded-card border border-rose-300 bg-rose-50 px-4 py-3"
+        class="rounded-card mt-6 border border-rose-300 bg-rose-50 px-4 py-3"
       >
         <p class="text-sm font-medium text-rose-900">{{ loadError }}</p>
         <BaseButton variant="secondary" size="sm" class="mt-3" @click="loadAll">
@@ -338,7 +340,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
 
       <p
         v-if="pagesStore.hierarchyError"
-        class="mt-4 rounded-card border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900"
+        class="rounded-card mt-4 border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900"
       >
         Struktur halaman tidak dapat dimuat, jadi asal halaman tiap data tidak ditampilkan. Daftar
         data tetap dapat diedit.
@@ -354,7 +356,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
 
       <div
         v-else-if="filteredCards.length === 0"
-        class="mt-10 rounded-card border border-dashed border-slate-300 bg-white px-6 py-12 text-center"
+        class="rounded-card mt-10 border border-dashed border-slate-300 bg-white px-6 py-12 text-center"
       >
         <p class="text-base font-semibold text-slate-800">
           {{ cards.length === 0 ? 'Belum ada data indikator' : 'Tidak ada data yang cocok' }}
