@@ -228,23 +228,19 @@ function formatPhone(value: string): string {
 
     <TentangNotice heading="Data contoh, bukan daftar resmi">
       <p>
-        Isi tabel di bawah ini adalah <strong>data contoh</strong>, bukan data resmi dari
-        kelurahan. Nama dan kontak yang tampil belum mewakili ketua RT yang sebenarnya.
+        Isi tabel di bawah ini adalah <strong>data contoh</strong>, bukan data resmi dari kelurahan.
+        Nama dan kontak yang tampil belum mewakili ketua RT yang sebenarnya.
       </p>
-      <p>
-        Untuk informasi kontak yang benar, hubungi kantor kelurahan.
-      </p>
+      <p>Untuk informasi kontak yang benar, hubungi kantor kelurahan.</p>
     </TentangNotice>
 
     <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="daftar-rt-title">
       <div class="mx-auto max-w-5xl">
-        <h2 id="daftar-rt-title" class="text-lg font-bold text-brand-navy">
-          Daftar Ketua RT
-        </h2>
+        <h2 id="daftar-rt-title" class="text-brand-navy text-lg font-bold">Daftar Ketua RT</h2>
 
         <!-- In-table search: single labelled input over the full 100-row set -->
         <div class="mt-5">
-          <label for="rt-search" class="block text-base font-medium text-brand-navy">
+          <label for="rt-search" class="text-brand-navy block text-base font-medium">
             Cari nomor RT atau nama ketua
           </label>
           <input
@@ -254,10 +250,15 @@ function formatPhone(value: string): string {
             name="rt-search"
             placeholder="Contoh: 007 atau Andi"
             autocomplete="off"
-            class="mt-2 w-full max-w-md rounded-btn border border-gray-400 bg-white px-4 py-2.5 text-base text-brand-navy placeholder:text-gray-500 focus-visible:border-brand-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+            class="rounded-btn text-brand-navy focus-visible:border-brand-navy focus-visible:outline-brand-navy mt-2 w-full max-w-md border border-gray-400 bg-white px-4 py-2.5 text-base placeholder:text-gray-500 focus-visible:outline-2 focus-visible:outline-offset-2"
             data-test="rt-search"
           />
-          <p class="mt-3 text-base text-gray-700" aria-live="polite" data-test="rt-count">
+          <p
+            v-if="!rtLeadersStore.isLoading && !rtLeadersStore.error"
+            class="mt-3 text-base text-gray-700"
+            aria-live="polite"
+            data-test="rt-count"
+          >
             {{ countSummary }}
           </p>
         </div>
@@ -265,20 +266,25 @@ function formatPhone(value: string): string {
         <!-- Error -->
         <div
           v-if="rtLeadersStore.error"
-          class="mt-5 rounded-btn border border-gray-400 bg-white p-5"
+          class="rounded-btn mt-5 border border-gray-400 bg-white p-5"
           role="alert"
           data-test="rt-error"
         >
-          <p class="text-base text-brand-navy">{{ rtLeadersStore.error }}</p>
+          <p class="text-brand-navy text-base">{{ rtLeadersStore.error }}</p>
           <div class="mt-3">
             <BaseButton label="Coba lagi" size="sm" @click="rtLeadersStore.fetchRtLeaders(true)" />
           </div>
         </div>
 
         <!-- Table -->
-        <div v-else class="mt-5 overflow-hidden rounded-btn border border-gray-300 bg-white shadow-xs">
+        <div
+          v-else
+          class="rounded-btn mt-5 overflow-hidden border border-gray-300 bg-white shadow-xs"
+        >
           <div class="relative overflow-x-auto">
-            <table class="w-full min-w-[600px] table-fixed divide-y divide-gray-200 text-left text-sm text-gray-800">
+            <table
+              class="w-full min-w-[600px] table-fixed divide-y divide-gray-200 text-left text-sm text-gray-800"
+            >
               <caption class="sr-only">
                 <template v-if="hasAddressData">
                   Daftar Ketua RT Kelurahan Manggar beserta nomor RT, nama, kontak, dan alamat
@@ -287,7 +293,7 @@ function formatPhone(value: string): string {
                   Daftar Ketua RT Kelurahan Manggar beserta nomor RT, nama, dan kontak
                 </template>
               </caption>
-              <thead class="bg-brand-navy text-sm sm:text-base font-semibold text-white">
+              <thead class="bg-brand-navy text-sm font-semibold text-white sm:text-base">
                 <tr>
                   <th
                     scope="col"
@@ -323,51 +329,66 @@ function formatPhone(value: string): string {
               <!-- Loading skeleton keeps the table's shape -->
               <tbody v-if="rtLeadersStore.isLoading" class="divide-y divide-gray-200 bg-white">
                 <tr v-for="row in 5" :key="`skeleton-${row}`" aria-hidden="true">
-                  <td class="px-4 py-4 sm:px-6"><span class="block h-4 w-10 animate-pulse rounded bg-gray-200"></span></td>
-                  <td class="px-4 py-4 sm:px-6"><span class="block h-4 w-40 animate-pulse rounded bg-gray-200"></span></td>
-                  <td class="px-4 py-4 sm:px-6"><span class="block h-4 w-32 animate-pulse rounded bg-gray-200"></span></td>
-                  <td v-if="hasAddressData" class="px-4 py-4 sm:px-6"><span class="block h-4 w-48 animate-pulse rounded bg-gray-200"></span></td>
+                  <td class="px-4 py-4 sm:px-6">
+                    <span class="block h-4 w-10 animate-pulse rounded bg-gray-200"></span>
+                  </td>
+                  <td class="px-4 py-4 sm:px-6">
+                    <span class="block h-4 w-40 animate-pulse rounded bg-gray-200"></span>
+                  </td>
+                  <td class="px-4 py-4 sm:px-6">
+                    <span class="block h-4 w-32 animate-pulse rounded bg-gray-200"></span>
+                  </td>
+                  <td v-if="hasAddressData" class="px-4 py-4 sm:px-6">
+                    <span class="block h-4 w-48 animate-pulse rounded bg-gray-200"></span>
+                  </td>
                 </tr>
               </tbody>
 
-              <tbody v-else-if="paginatedLeaders.length > 0" class="divide-y divide-gray-200 bg-white">
+              <tbody
+                v-else-if="paginatedLeaders.length > 0"
+                class="divide-y divide-gray-200 bg-white"
+              >
                 <tr
                   v-for="leader in paginatedLeaders"
                   :key="leader.rtNumber"
                   class="transition-colors hover:bg-gray-50/75"
                 >
-                  <th scope="row" class="px-4 py-4 align-top font-semibold text-brand-navy whitespace-nowrap sm:px-6">
+                  <th
+                    scope="row"
+                    class="text-brand-navy px-4 py-4 align-top font-semibold whitespace-nowrap sm:px-6"
+                  >
                     {{ leader.rtNumber }}
                   </th>
-                  <td class="px-4 py-4 align-top text-gray-800 break-words sm:px-6">{{ leader.name }}</td>
-                  <td class="px-4 py-4 align-top text-gray-800 whitespace-nowrap sm:px-6">
+                  <td class="px-4 py-4 align-top break-words text-gray-800 sm:px-6">
+                    {{ leader.name }}
+                  </td>
+                  <td class="px-4 py-4 align-top whitespace-nowrap text-gray-800 sm:px-6">
                     <a
                       v-if="leader.phoneIsWhatsapp && isDialable(leader.phone)"
                       :href="`https://wa.me/${whatsappNumber(leader.phone)}`"
                       target="_blank"
                       rel="noopener noreferrer"
-                      class="font-medium text-brand-navy underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+                      class="text-brand-navy focus-visible:outline-brand-navy font-medium underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2"
                     >
                       {{ formatPhone(leader.phone) }}
                       <span class="sr-only">(WhatsApp, tautan eksternal, terbuka di tab baru)</span>
                     </a>
                     <a
                       v-else-if="isDialable(leader.phone)"
-                      :href="`tel:${digitsOnly(leader.phone)}`"
-                      class="font-medium text-brand-navy underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+                      :href="`tel:${leader.phone.trim().startsWith('+') ? '+' : ''}${digitsOnly(leader.phone)}`"
+                      class="text-brand-navy focus-visible:outline-brand-navy font-medium underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2"
                     >
                       {{ formatPhone(leader.phone) }}
                       <span class="sr-only">(panggilan telepon)</span>
                     </a>
-                    <span
-                      v-else
-                      class="text-gray-700"
-                      data-test="rt-phone-placeholder"
-                    >
+                    <span v-else class="text-gray-700" data-test="rt-phone-placeholder">
                       {{ leader.phone }}
                     </span>
                   </td>
-                  <td v-if="hasAddressData" class="px-4 py-4 align-top text-gray-700 break-words sm:px-6">
+                  <td
+                    v-if="hasAddressData"
+                    class="px-4 py-4 align-top break-words text-gray-700 sm:px-6"
+                  >
                     {{ leader.alamat ?? '—' }}
                   </td>
                 </tr>
@@ -409,7 +430,7 @@ function formatPhone(value: string): string {
                 <select
                   id="page-size-select"
                   v-model.number="pageSize"
-                  class="rounded-btn border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-medium text-brand-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+                  class="rounded-btn text-brand-navy focus-visible:outline-brand-navy border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
                   data-test="page-size-select"
                 >
                   <option :value="10">10</option>
@@ -421,9 +442,11 @@ function formatPhone(value: string): string {
 
               <p class="text-xs text-gray-600 sm:text-sm" data-test="pagination-summary">
                 Menampilkan
-                <span class="font-semibold text-brand-navy">{{ startRowIndex }}–{{ endRowIndex }}</span>
+                <span class="text-brand-navy font-semibold"
+                  >{{ startRowIndex }}–{{ endRowIndex }}</span
+                >
                 dari
-                <span class="font-semibold text-brand-navy">{{ filteredLeaders.length }}</span>
+                <span class="text-brand-navy font-semibold">{{ filteredLeaders.length }}</span>
                 RT
               </p>
             </div>
@@ -438,12 +461,23 @@ function formatPhone(value: string): string {
                 :disabled="currentPage === 1"
                 :aria-disabled="currentPage === 1"
                 aria-label="Halaman sebelumnya"
-                class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-btn border border-gray-300 px-3 py-2 text-sm font-medium text-brand-navy transition-colors duration-150 motion-reduce:transform-none hover:bg-gray-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:active:scale-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+                class="rounded-btn text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 border border-gray-300 px-3 py-2 text-sm font-medium transition-colors duration-150 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:active:scale-100 motion-reduce:transform-none"
                 data-test="pagination-prev"
                 @click="goToPage(currentPage - 1)"
               >
-                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                <svg
+                  class="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke-width="2"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M15.75 19.5L8.25 12l7.5-7.5"
+                  />
                 </svg>
                 <span class="hidden sm:inline">Sebelumnya</span>
               </button>
@@ -452,7 +486,7 @@ function formatPhone(value: string): string {
                 {{ currentPage }} / {{ totalPages }}
               </span>
 
-              <ul class="hidden items-center gap-1 sm:flex" role="list">
+              <ul class="hidden items-center gap-1 sm:flex">
                 <li v-for="(item, idx) in paginationPages" :key="`page-${idx}`">
                   <span
                     v-if="item === 'ellipsis'"
@@ -466,11 +500,11 @@ function formatPhone(value: string): string {
                     type="button"
                     :aria-current="currentPage === item ? 'page' : undefined"
                     :aria-label="`Halaman ${item}`"
-                    class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-btn text-sm font-medium transition-colors duration-150 motion-reduce:transform-none active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+                    class="rounded-btn focus-visible:outline-brand-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-sm font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] motion-reduce:transform-none"
                     :class="
                       currentPage === item
-                        ? 'bg-brand-navy text-white font-semibold shadow-xs'
-                        : 'border border-gray-300 text-brand-navy hover:bg-gray-100'
+                        ? 'bg-brand-navy font-semibold text-white shadow-xs'
+                        : 'text-brand-navy border border-gray-300 hover:bg-gray-100'
                     "
                     :data-test="`pagination-page-${item}`"
                     @click="goToPage(item)"
@@ -485,13 +519,24 @@ function formatPhone(value: string): string {
                 :disabled="currentPage === totalPages"
                 :aria-disabled="currentPage === totalPages"
                 aria-label="Halaman selanjutnya"
-                class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-btn border border-gray-300 px-3 py-2 text-sm font-medium text-brand-navy transition-colors duration-150 motion-reduce:transform-none hover:bg-gray-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:active:scale-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+                class="rounded-btn text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 border border-gray-300 px-3 py-2 text-sm font-medium transition-colors duration-150 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:active:scale-100 motion-reduce:transform-none"
                 data-test="pagination-next"
                 @click="goToPage(currentPage + 1)"
               >
                 <span class="hidden sm:inline">Selanjutnya</span>
-                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                <svg
+                  class="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke-width="2"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M8.25 4.5l7.5 7.5-7.5 7.5"
+                  />
                 </svg>
               </button>
             </nav>
@@ -516,7 +561,8 @@ function formatPhone(value: string): string {
           <template v-else>
             Gunakan kolom pencarian untuk menyaring nomor RT atau nama ketua secara langsung.
           </template>
-        </p>      </div>
+        </p>
+      </div>
     </section>
   </TentangPageLayout>
 </template>
