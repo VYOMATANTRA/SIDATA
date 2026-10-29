@@ -45,40 +45,49 @@ async function main() {
   // In production, the operational roster must be loaded from an official import (SPEC §10),
   // never populated with placeholder synthetic data.
   if (process.env.NODE_ENV !== 'production') {
+    const legacySamplePoint = await prisma.spatialPoint.findUnique({
+      where: { id: '00000000-0000-0000-0000-000000000001' },
+    });
+    if (legacySamplePoint) {
+      console.warn(
+        '⚠️  Titik sample lama ketua_rt terdeteksi. Jalankan `npm run dev:cleanup-sample-rt` untuk membersihkan data lama.',
+      );
+    }
+
     await seedRtLeaders(prisma, RT_LEADERS_DATA);
-  }
 
-  const pointBankSampah = await prisma.spatialPoint.upsert({
-    where: { id: '00000000-0000-0000-0000-000000000002' },
-    update: {},
-    create: {
-      id: '00000000-0000-0000-0000-000000000002',
-      name: 'Bank Sampah Sejahtera Manggar',
-      type: 'bank_sampah',
-      latitude: -1.225,
-      longitude: 116.955,
-      metadata: {
-        jadwal: 'Sabtu & Minggu 09.00 - 15.00 WITA',
-        pengelola: 'Ibu Rahmawati',
+    const pointBankSampah = await prisma.spatialPoint.upsert({
+      where: { id: '00000000-0000-0000-0000-000000000002' },
+      update: {},
+      create: {
+        id: '00000000-0000-0000-0000-000000000002',
+        name: 'Bank Sampah Sejahtera Manggar',
+        type: 'bank_sampah',
+        latitude: -1.225,
+        longitude: 116.955,
+        metadata: {
+          jadwal: 'Sabtu & Minggu 09.00 - 15.00 WITA',
+          pengelola: 'Ibu Rahmawati',
+        },
       },
-    },
-  });
+    });
 
-  // Bank Sampah covers RT 1, RT 2, RT 3
-  for (const rtNum of [1, 2, 3]) {
-    await prisma.spatialPointRt.upsert({
-      where: {
-        pointId_rtNumber: {
+    // Bank Sampah covers RT 1, RT 2, RT 3
+    for (const rtNum of [1, 2, 3]) {
+      await prisma.spatialPointRt.upsert({
+        where: {
+          pointId_rtNumber: {
+            pointId: pointBankSampah.id,
+            rtNumber: rtNum,
+          },
+        },
+        update: {},
+        create: {
           pointId: pointBankSampah.id,
           rtNumber: rtNum,
         },
-      },
-      update: {},
-      create: {
-        pointId: pointBankSampah.id,
-        rtNumber: rtNum,
-      },
-    });
+      });
+    }
   }
 
   // Audit log retention defaults to "0" (keep forever) for every severity — a fresh install
