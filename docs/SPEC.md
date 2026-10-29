@@ -295,18 +295,6 @@ No indicator-citation-tracking table exists. Cerita-page data citations (e.g. th
 page citing Ekonomi & Ketertiban figures) stay informal/manual in prose text, not structurally
 linked.
 
-`allowPublicKeyRetrieval` is off unless a deployment opts in with `?allowPublicKeyRetrieval=true`
-in the connection string. Fetching the MySQL RSA public key over an unverified channel hands the
-key to whoever is in the middle, and with it the database password. The two database clients
-therefore differ:
-
-- The **app client** (`DATABASE_URL`) opts in through the query parameter, and only through it —
-  `allowPublicKeyRetrievalFrom` returns true only for `?allowPublicKeyRetrieval=true`.
-- The **privileged audit-pruning client** (`AUDIT_ADMIN_DATABASE_URL`, `backend/scripts/prune-audit-logs.ts`)
-  never opts in. It hardcodes `allowPublicKeyRetrieval: false`, and the flag in
-  `AUDIT_ADMIN_DATABASE_URL` is ignored, because this client carries the admin password and a
-  query parameter must not be able to turn the safeguard off for it.
-
 Three more tables exist alongside the auth layer (`Role`, `User`, `RefreshToken`, `EmailOtp`),
 implemented and out of scope for this schema pass in the same way those are:
 
@@ -372,13 +360,18 @@ buried inside a stat page. Entry points:
 
 The page provides **in-table search**: a single labelled text input filtering on both
 `rt_number` and leader `name`, applied client-side over the full 100-row set (no server
-round-trip). The matching rows are then **paginated client-side**, with a page-size control
+round-trip). When the query contains only digits, search matches `rt_number` exactly and does
+not search names (e.g. searching "1" matches RT 1 only, not "RT 10" or a leader named "One").
+The matching rows are then **paginated client-side**, with a page-size control
 (10/25/50/100 rows) and a bounded page-number list, so paging never costs a second request —
 the page already asks for all 100 leaders in one call. The visible row count is announced as
 results change ("Menampilkan N dari 100 RT"; a paginated slice is announced as
 "Menampilkan 1–10 dari 100 RT"). Rows remain sorted by `rt_number` and the unfiltered table is
-the default state, so the page is fully usable with JavaScript-driven filtering ignored. No
-RT-range grouping or collapsible bands — flat table only.
+the default state, so the page is fully usable with JavaScript-driven filtering ignored. The
+`Alamat` column is automatically hidden when no leader in the displayed dataset has an address
+value. A prominent sample-data notice is displayed explaining that the roster contains placeholder
+names and contacts pending official publication. No RT-range grouping or collapsible bands —
+flat table only.
 
 Accessibility implications, per `docs/ACCESSIBILITY.md`: the input needs a real `<label>` (not
 placeholder-only), the result count belongs in an `aria-live="polite"` region, and the table

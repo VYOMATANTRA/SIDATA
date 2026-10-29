@@ -8,7 +8,7 @@ withDefaults(
     parentLabel?: string;
     parentTo?: string;
   }>(),
-  { parentLabel: 'Tentang', parentTo: '/tentang' },
+  { parentLabel: 'Tentang', parentTo: '/' },
 );
 </script>
 
