@@ -7,6 +7,7 @@ import logoSdgs17 from '@/assets/img/17_kemitraan_pembangunan_desa.png';
 import logoBps from '@/assets/img/logo_bps.png';
 import logoItk from '@/assets/img/logo_itk.png';
 import logoVyomatantra from '@/assets/img/logo_vyomatantra.png';
+import { hasPublicPublication } from '../../content/publikasi';
 
 export interface FooterProps {
   year?: number | string;
@@ -26,12 +27,19 @@ withDefaults(defineProps<FooterProps>(), {
 });
 
 // Resource Links (Sumber Daya)
-const resourceLinks = [
-  { label: 'Publikasi', to: '/publikasi' },
+const allResourceLinks = [
+  { label: 'Publikasi', to: '/publikasi', requiresPublicDocument: true },
   { label: 'Peta', to: '/peta' },
   { label: 'Permintaan Data', to: '/permintaan-data' },
   { label: 'Ketua RT', to: '/ketua-rt' },
 ];
+
+const resourceLinks = allResourceLinks.filter((link) => {
+  if (link.requiresPublicDocument) {
+    return hasPublicPublication();
+  }
+  return true;
+});
 
 // Story & Statistics Links (Cerita)
 const storyLinks = [
