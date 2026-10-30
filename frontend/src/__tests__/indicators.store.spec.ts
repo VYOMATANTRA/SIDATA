@@ -584,11 +584,11 @@ describe('indicators store slug cache normalisation', () => {
     const ind = makeIndicator({ slug: 'jumlah-penduduk' });
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (input: RequestInfo) => {
+      vi.fn<typeof fetch>(async (input) => {
         const url = String(input);
         expect(url).toContain('/api/indicators/jumlah-penduduk');
         return json({ indicator: ind });
-      }) as typeof fetch,
+      }),
     );
 
     const store = useIndicatorsStore();
