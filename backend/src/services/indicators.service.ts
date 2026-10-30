@@ -283,8 +283,79 @@ const indicatorListCache = new KeyedLruCache<string, VersionedTtlCache<Indicator
   MAX_CACHE_ENTRIES,
 );
 
+/**
+ * Secondary index so invalidation can resolve the paired id/slug key in O(1)
+ * without scanning the LRU. Kept in sync on warm, drop, invalidate, and LRU eviction.
+ */
+const indicatorIdToSlug = new Map<string, string>();
+const indicatorSlugToId = new Map<string, string>();
+
+function rememberIndicatorIdentity(id: string, slug: string): void {
+  const nid = normalizeIndicatorLookup(id);
+  const nslug = normalizeIndicatorLookup(slug);
+  const prevSlug = indicatorIdToSlug.get(nid);
+  if (prevSlug !== undefined && prevSlug !== nslug) {
+    indicatorSlugToId.delete(prevSlug);
+  }
+  const prevId = indicatorSlugToId.get(nslug);
+  if (prevId !== undefined && prevId !== nid) {
+    indicatorIdToSlug.delete(prevId);
+  }
+  indicatorIdToSlug.set(nid, nslug);
+  indicatorSlugToId.set(nslug, nid);
+}
+
+function partnerCacheKey(cacheKey: string): string | null {
+  if (cacheKey.startsWith('id:')) {
+    const slug = indicatorIdToSlug.get(cacheKey.slice(3));
+    return slug !== undefined ? indicatorCacheKey('slug', slug) : null;
+  }
+  if (cacheKey.startsWith('slug:')) {
+    const id = indicatorSlugToId.get(cacheKey.slice(5));
+    return id !== undefined ? indicatorCacheKey('id', id) : null;
+  }
+  return null;
+}
+
+function forgetIndicatorIdentityByKey(cacheKey: string): void {
+  if (cacheKey.startsWith('id:')) {
+    const nid = cacheKey.slice(3);
+    const slug = indicatorIdToSlug.get(nid);
+    indicatorIdToSlug.delete(nid);
+    if (slug !== undefined && indicatorSlugToId.get(slug) === nid) {
+      indicatorSlugToId.delete(slug);
+    }
+    return;
+  }
+  if (cacheKey.startsWith('slug:')) {
+    const nslug = cacheKey.slice(5);
+    const id = indicatorSlugToId.get(nslug);
+    indicatorSlugToId.delete(nslug);
+    if (id !== undefined && indicatorIdToSlug.get(id) === nslug) {
+      indicatorIdToSlug.delete(id);
+    }
+  }
+}
+
+function clearIndicatorIdentityIndex(): void {
+  indicatorIdToSlug.clear();
+  indicatorSlugToId.clear();
+}
+
 export const indicatorByIdCache = new KeyedLruCache<string, VersionedTtlCache<IndicatorDto | null>>(
-  MAX_CACHE_ENTRIES,
+  {
+    capacity: MAX_CACHE_ENTRIES,
+    onEvict: (key) => {
+      // Drop the dual-written partner so a half-evicted pair cannot leave a stale index entry.
+      const partner = partnerCacheKey(key);
+      forgetIndicatorIdentityByKey(key);
+      if (partner && partner !== key) {
+        indicatorByIdCache.get(partner)?.invalidate();
+        indicatorByIdCache.delete(partner);
+        forgetIndicatorIdentityByKey(partner);
+      }
+    },
+  },
 );
 
 /**
@@ -358,6 +429,7 @@ const getIndicatorEntryCache = (
   );
 
 function warmIndicatorCaches(dto: IndicatorDto): void {
+  rememberIndicatorIdentity(dto.id, dto.slug);
   getIndicatorEntryCache('id', dto.id).setCommitted(dto);
   getIndicatorEntryCache('slug', dto.slug).setCommitted(dto);
   forgetMissing(dto.id);
@@ -368,6 +440,8 @@ function dropIndicatorCacheEntry(kind: IndicatorCacheKind, value: string): void 
   const key = indicatorCacheKey(kind, value);
   indicatorByIdCache.get(key)?.invalidate();
   indicatorByIdCache.delete(key);
+  // Probe slots (id:<slug>) are not indexed; real identity keys are cleaned here too.
+  forgetIndicatorIdentityByKey(key);
 }
 
 /**
@@ -389,24 +463,22 @@ function collectKeysToInvalidate(identifier: string, keys: Set<string>): void {
   keys.add(indicatorCacheKey('id', norm));
   keys.add(indicatorCacheKey('slug', norm));
 
+  // O(1) via the secondary index (no full LRU scan).
+  const pairedSlug = indicatorIdToSlug.get(norm);
+  if (pairedSlug !== undefined) {
+    keys.add(indicatorCacheKey('slug', pairedSlug));
+  }
+  const pairedId = indicatorSlugToId.get(norm);
+  if (pairedId !== undefined) {
+    keys.add(indicatorCacheKey('id', pairedId));
+  }
+
+  // Direct peeks cover lastKnownGood when the index was never warmed for this key.
   for (const kind of ['id', 'slug'] as const) {
-    const directCache = indicatorByIdCache.get(indicatorCacheKey(kind, norm));
+    const directCache = indicatorByIdCache.peek(indicatorCacheKey(kind, norm));
     const directData = directCache?.get() ?? directCache?.getLastKnownGood(null);
     if (directData?.id) keys.add(indicatorCacheKey('id', directData.id));
     if (directData?.slug) keys.add(indicatorCacheKey('slug', directData.slug));
-  }
-
-  for (const [cachedKey, cache] of indicatorByIdCache.entries()) {
-    const data = cache.get() ?? cache.getLastKnownGood(null);
-    if (data) {
-      const matchesId = normalizeIndicatorLookup(data.id) === norm;
-      const matchesSlug = normalizeIndicatorLookup(data.slug) === norm;
-      if (matchesId || matchesSlug) {
-        keys.add(cachedKey);
-        keys.add(indicatorCacheKey('id', data.id));
-        keys.add(indicatorCacheKey('slug', data.slug));
-      }
-    }
   }
 }
 
@@ -419,6 +491,7 @@ export const invalidateIndicatorsCache = (id?: string, slug?: string): void => {
   for (const key of keysToInvalidate) {
     indicatorByIdCache.get(key)?.invalidate();
     indicatorByIdCache.delete(key);
+    forgetIndicatorIdentityByKey(key);
   }
   if (id) forgetMissing(id);
   if (slug) forgetMissing(slug);
@@ -426,6 +499,7 @@ export const invalidateIndicatorsCache = (id?: string, slug?: string): void => {
   if (!id && !slug) {
     indicatorByIdCache.clear();
     missingIndicatorIds.clear();
+    clearIndicatorIdentityIndex();
   }
   for (const cache of indicatorListCache.values()) {
     cache.invalidate();
@@ -567,7 +641,7 @@ export const listIndicators = async (
 
 export const getIndicatorById = async (
   id: unknown,
-  client: { indicator: Pick<typeof prisma.indicator, 'findUnique'> } = prisma,
+  client: { indicator: Pick<typeof prisma.indicator, 'findUnique' | 'findMany'> } = prisma,
 ): Promise<IndicatorDto | null> => {
   if (typeof id !== 'string' || id.trim() === '' || id.length > 191) {
     return null;
@@ -589,17 +663,17 @@ export const getIndicatorById = async (
   }
 
   // Probe under id:lookup; dual-write under the real id + slug keys after a hit.
+  // Single findMany (OR id|slug) so a miss costs one DB round-trip; prefer an id match.
   const result = await getIndicatorEntryCache('id', lookup).getOrFetch(async (db) => {
-    let row = await db.indicator.findUnique({
-      where: { id: lookup },
+    const candidates = await db.indicator.findMany({
+      where: { OR: [{ id: lookup }, { slug: lookup }] },
       include: WITH_TEMPLATE,
+      take: 2,
     });
-    if (!row) {
-      row = await db.indicator.findUnique({
-        where: { slug: lookup },
-        include: WITH_TEMPLATE,
-      });
-    }
+    const row =
+      candidates.find((candidate) => normalizeIndicatorLookup(candidate.id) === lookup) ??
+      candidates[0] ??
+      null;
     if (!row) return null;
     return formatIndicator(row as Parameters<typeof formatIndicator>[0]);
   }, client);
