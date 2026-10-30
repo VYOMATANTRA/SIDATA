@@ -102,6 +102,8 @@ export const useIndicatorsStore = defineStore('indicators', () => {
   const errorsBySlug = ref<Record<string, string | null>>({});
 
   const inFlightBySlug: Record<string, Promise<IndicatorDto | null> | undefined> = {};
+  /** Bumped on each new slug fetch and on CMS write/delete so stale responses cannot write. */
+  const fetchGenBySlug: Record<string, number> = {};
 
   function isSlugCacheFresh(normalized: string): boolean {
     const at = bySlugFetchedAt.value[normalized];
@@ -132,6 +134,15 @@ export const useIndicatorsStore = defineStore('indicators', () => {
     }
   }
 
+  function bumpSlugFetchGeneration(...keys: Array<string | null | undefined>): void {
+    for (const key of keys) {
+      if (typeof key !== 'string') continue;
+      const normalized = key.trim().toLowerCase();
+      if (!normalized) continue;
+      fetchGenBySlug[normalized] = (fetchGenBySlug[normalized] ?? 0) + 1;
+    }
+  }
+
   const staleCount = computed(() => indicators.value.filter((item) => item.isStale).length);
 
   /**
@@ -152,13 +163,16 @@ export const useIndicatorsStore = defineStore('indicators', () => {
     const newSlugKey = updated.slug.trim().toLowerCase();
     const nextBySlug = { ...bySlug.value };
     const nextAt = { ...bySlugFetchedAt.value };
+    const keysToBump: string[] = [newSlugKey];
 
     for (const [k, v] of Object.entries(nextBySlug)) {
       if (v.id === updated.id && k !== newSlugKey) {
+        keysToBump.push(k);
         delete nextBySlug[k];
         delete nextAt[k];
       }
     }
+    bumpSlugFetchGeneration(...keysToBump);
 
     // Always upsert — even if this slug was never cached (Tentang may fetch later).
     nextBySlug[newSlugKey] = updated;
@@ -265,6 +279,10 @@ export const useIndicatorsStore = defineStore('indicators', () => {
       Object.values(bySlug.value).find((item) => item.id === id) ??
       null;
     await apiRequestJson(`/api/indicators/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (existing?.slug) bumpSlugFetchGeneration(existing.slug);
+    for (const [k, v] of Object.entries(bySlug.value)) {
+      if (v.id === id) bumpSlugFetchGeneration(k);
+    }
     evictSlugCacheForIndicator(id, existing?.slug ?? null);
     if (existing) invalidateSectionCache(existing.sectionId);
     const next = indicators.value.filter((item) => item.id !== id);
@@ -277,21 +295,27 @@ export const useIndicatorsStore = defineStore('indicators', () => {
   async function fetchBySlug(slug: string, force = false): Promise<IndicatorDto | null> {
     const normalized = slug.trim().toLowerCase();
 
-    if (force) {
-      // Drop any in-flight so a forced retry cannot return a stale promise.
-      delete inFlightBySlug[normalized];
-    } else if (bySlug.value[normalized] && isSlugCacheFresh(normalized)) {
+    if (!force && bySlug.value[normalized] && isSlugCacheFresh(normalized)) {
       return bySlug.value[normalized]!;
-    } else if (inFlightBySlug[normalized]) {
+    }
+    if (!force && inFlightBySlug[normalized]) {
       return inFlightBySlug[normalized]!;
     }
+
+    // force=true starts a new request; generation bump makes any older in-flight response a no-op.
+    const myGen = (fetchGenBySlug[normalized] = (fetchGenBySlug[normalized] ?? 0) + 1);
 
     loadingBySlug.value = { ...loadingBySlug.value, [normalized]: true };
     errorsBySlug.value = { ...errorsBySlug.value, [normalized]: null };
 
+    const isCurrent = () => fetchGenBySlug[normalized] === myGen;
+
     const task = (async () => {
       try {
         const response = await apiFetch(`/api/indicators/${encodeURIComponent(normalized)}`);
+        if (!isCurrent()) {
+          return bySlug.value[normalized] ?? null;
+        }
         if (!response.ok) {
           if (response.status === 404 || force) {
             const next = { ...bySlug.value };
@@ -304,6 +328,9 @@ export const useIndicatorsStore = defineStore('indicators', () => {
           throw new Error(`Gagal memuat indikator (status ${response.status})`);
         }
         const data = (await response.json()) as { indicator?: IndicatorDto };
+        if (!isCurrent()) {
+          return bySlug.value[normalized] ?? null;
+        }
         if (
           data.indicator &&
           typeof data.indicator === 'object' &&
@@ -321,14 +348,22 @@ export const useIndicatorsStore = defineStore('indicators', () => {
         bySlugFetchedAt.value = nextAt;
         throw new Error('Format data indikator tidak valid');
       } catch (err) {
+        if (!isCurrent()) {
+          return bySlug.value[normalized] ?? null;
+        }
         errorsBySlug.value = {
           ...errorsBySlug.value,
           [normalized]: err instanceof Error ? err.message : 'Terjadi kesalahan jaringan',
         };
         return null;
       } finally {
-        loadingBySlug.value = { ...loadingBySlug.value, [normalized]: false };
-        delete inFlightBySlug[normalized];
+        // Only the current request may clear tracking / loading for this slug.
+        if (inFlightBySlug[normalized] === task) {
+          delete inFlightBySlug[normalized];
+        }
+        if (isCurrent()) {
+          loadingBySlug.value = { ...loadingBySlug.value, [normalized]: false };
+        }
       }
     })();
 

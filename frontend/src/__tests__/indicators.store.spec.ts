@@ -472,4 +472,96 @@ describe('indicators store (single indicator reads by slug)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(store.bySlug['jumlah-penduduk']?.valueCurrent).toBe('9');
   });
+
+  it('old in-flight cleanup does not erase a newer forced request\'s tracking', async () => {
+    let resolveFirst!: (value: Response) => void;
+    let resolveSecond!: (value: Response) => void;
+    const firstPromise = new Promise<Response>((r) => {
+      resolveFirst = r;
+    });
+    const secondPromise = new Promise<Response>((r) => {
+      resolveSecond = r;
+    });
+    let call = 0;
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async () => {
+      call += 1;
+      return call === 1 ? firstPromise : secondPromise;
+    });
+
+    const store = useIndicatorsStore();
+    const first = store.fetchBySlug('jumlah-penduduk');
+    const second = store.fetchBySlug('jumlah-penduduk', true);
+
+    expect(store.loadingBySlug['jumlah-penduduk']).toBe(true);
+
+    resolveFirst(
+      new Response(JSON.stringify({ indicator: makeIndicator({ valueCurrent: '1' }) }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    await first;
+
+    // First request finished, but the forced retry is still in flight — must stay loading.
+    expect(store.loadingBySlug['jumlah-penduduk']).toBe(true);
+
+    resolveSecond(
+      new Response(JSON.stringify({ indicator: makeIndicator({ valueCurrent: '2' }) }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    await second;
+
+    expect(store.loadingBySlug['jumlah-penduduk']).toBe(false);
+    expect(store.bySlug['jumlah-penduduk']?.valueCurrent).toBe('2');
+  });
+
+  it('ignores a slow fetch that finishes after a CMS edit stamped a fresher value', async () => {
+    let resolveFetch!: (value: Response) => void;
+    const fetchPromise = new Promise<Response>((r) => {
+      resolveFetch = r;
+    });
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
+      if (url === '/api/indicators/ind-1' && init?.method === 'PATCH') {
+        return json({
+          indicator: makeIndicator({
+            id: 'ind-1',
+            slug: 'jumlah-penduduk',
+            valueCurrent: '999',
+          }),
+        });
+      }
+      if (url.includes('jumlah-penduduk')) return fetchPromise;
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    const authStore = useAuthStore();
+    authStore.accessToken = 'token-1';
+
+    const store = useIndicatorsStore();
+    const pending = store.fetchBySlug('jumlah-penduduk');
+
+    await store.updateIndicator('ind-1', { valueCurrent: '999' });
+    expect(store.bySlug['jumlah-penduduk']?.valueCurrent).toBe('999');
+
+    resolveFetch(
+      new Response(
+        JSON.stringify({
+          indicator: makeIndicator({
+            id: 'ind-1',
+            slug: 'jumlah-penduduk',
+            valueCurrent: '1',
+          }),
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    await pending;
+
+    expect(store.bySlug['jumlah-penduduk']?.valueCurrent).toBe('999');
+  });
+
 });
