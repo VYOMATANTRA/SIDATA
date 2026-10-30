@@ -144,7 +144,7 @@ Hybrid model:
 - **Matrix/table-shaped data** (age pyramid, 17-group ethnicity, religion×sex, occupation table —
   4 fixed-shape tables) — manual, form-based entry only. Bulk import is explicitly out of scope
   for these.
-- **Prose** — field-by-field forms (tier-1 builder or tier-2 free text; see §5).
+- **Prose & Standalone Content Blocks** — field-by-field forms (tier-1 builder or tier-2 free text; see §5). Standalone landing content blocks (`landing-hero`, `landing-sambutan-lurah`, `landing-highlights`) are managed via `/api/content-blocks`. Specifically, the hero block manages `title`, `body`, and optional `backgroundImage`; `badge` and call-to-action buttons were removed to maintain a clean institutional profile voice without redundant action buttons.
 
 The frontend surface for the first two is a single `/data` view (editor/admin only, no CMS
 sidebar shell): a searchable, type-filterable card list of every scalar indicator and matrix
@@ -320,7 +320,7 @@ caching live in `system_settings` as a separate operational concern.
    hero's institutional voice.
 3. Cerita preview — cards for the stat pages, each showing a few representative figures + link.
    Data-caveat/provenance handling is deferred to the full stat pages, not shown on the cards.
-4. Widget Cuaca (planned / not yet built on landing page) — current weather conditions in Manggar from BMKG (description, temperature Celsius, humidity percent, wind speed, wind direction).
+4. Widget Cuaca — current weather conditions in Manggar from BMKG (description, temperature Celsius, humidity percent, wind speed, wind direction).
 
 The former "Publikasi / Peta highlights" section was dropped from the landing page: Publikasi, Peta, and Ketua RT are publication-class artifacts that live on dedicated pages (`/publikasi`, `/peta`, `/ketua-rt`) reachable directly from navigation and footer (**Sumber Daya**), avoiding redundant highlight cards on the landing page.
 
