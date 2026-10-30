@@ -127,6 +127,32 @@ describe('AdminSidebar.vue', () => {
     expect(wrapper.find('nav').attributes('aria-label')).toBe('Navigasi Admin');
   });
 
+  // Product fix: links that only open a placeholder view ("belum dibangun") used to look
+  // identical to fully built ones, so an editor had no way to tell before clicking. Unbuilt
+  // links now carry a "Segera hadir" badge instead of being hidden, keeping them discoverable.
+  it('marks links that only open a placeholder view with a "Segera hadir" badge', async () => {
+    const { wrapper } = await mountSidebar('admin');
+
+    const unbuilt = [
+      'nav-cerita',
+      'nav-peta',
+      'nav-publikasi',
+      'nav-rukun-tetangga',
+      'nav-sistem-templat-kalimat',
+      'nav-sistem-konfigurasi',
+    ];
+    for (const dataTest of unbuilt) {
+      const link = wrapper.find(`[data-test="${dataTest}"]`);
+      expect(link.text()).toContain('Segera hadir');
+    }
+
+    const built = ['nav-beranda', 'nav-data', 'nav-sistem-akun-pengguna', 'nav-sistem-log'];
+    for (const dataTest of built) {
+      const link = wrapper.find(`[data-test="${dataTest}"]`);
+      expect(link.text()).not.toContain('Segera hadir');
+    }
+  });
+
   // Accessibility fix: collapsing the rail used to remove the label text from the DOM entirely
   // (v-if), leaving every link and the Sistem toggle with no accessible name. Labels now stay in
   // the DOM as sr-only text when collapsed instead of being removed.

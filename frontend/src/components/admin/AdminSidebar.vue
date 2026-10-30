@@ -6,7 +6,7 @@ import {
   ChevronDoubleLeftIcon,
   XMarkIcon,
   GlobeAltIcon,
-  ArrowLeftOnRectangleIcon,
+  ArrowLeftStartOnRectangleIcon,
 } from '@heroicons/vue/24/outline';
 import { useAuthStore } from '../../stores/auth';
 import { useLogout } from '../../composables/useLogout';
@@ -189,7 +189,12 @@ async function handleLogout() {
           @click="closeMobile"
         >
           <component :is="entry.icon" class="h-5 w-5 shrink-0" aria-hidden="true" />
-          <span :class="labelClass(isCollapsed, 'truncate')">{{ entry.label }}</span>
+          <span :class="labelClass(isCollapsed, 'flex min-w-0 flex-1 items-center justify-between gap-2')">
+            <span class="truncate">{{ entry.label }}</span>
+            <span v-if="entry.badge" class="shrink-0 rounded-full border border-white/20 bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white/70 uppercase">
+              {{ entry.badge }}
+            </span>
+          </span>
         </RouterLink>
 
         <div v-else>
@@ -233,7 +238,12 @@ async function handleLogout() {
                 @click="closeMobile"
               >
                 <component :is="item.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span :class="labelClass(isCollapsed, 'truncate')">{{ item.label }}</span>
+                <span :class="labelClass(isCollapsed, 'flex min-w-0 flex-1 items-center justify-between gap-2')">
+                  <span class="truncate">{{ item.label }}</span>
+                  <span v-if="item.badge" class="shrink-0 rounded-full border border-white/20 bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white/70 uppercase">
+                    {{ item.badge }}
+                  </span>
+                </span>
               </RouterLink>
             </li>
           </ul>
@@ -267,7 +277,7 @@ async function handleLogout() {
         :disabled="isLoggingOut"
         @click="handleLogout"
       >
-        <ArrowLeftOnRectangleIcon class="h-5 w-5 shrink-0" aria-hidden="true" />
+        <ArrowLeftStartOnRectangleIcon class="h-5 w-5 shrink-0" aria-hidden="true" />
         <span :class="labelClass(isCollapsed, 'truncate')">
           {{ isLoggingOut ? 'Keluar…' : 'Keluar' }}
         </span>

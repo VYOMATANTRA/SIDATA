@@ -25,6 +25,13 @@ export interface AdminNavLink {
   icon: Component;
   roles: AdminNavRole[];
   dataTest: string;
+  /**
+   * Short pill text shown next to the label — e.g. "Segera hadir" for a link that only opens a
+   * placeholder view (SPEC: "Links to pages that don't exist yet point at placeholders"). Keeps
+   * the link navigable (not hidden/disabled) while telling an editor up front there's nothing
+   * built there yet, rather than them finding out after the click.
+   */
+  badge?: string;
 }
 
 export interface AdminNavGroup {
@@ -66,6 +73,7 @@ export const ADMIN_NAV: (AdminNavLink | AdminNavGroup)[] = [
     icon: BookOpenIcon,
     roles: ['editor', 'admin'],
     dataTest: 'nav-cerita',
+    badge: 'Segera hadir',
   },
   {
     label: 'Peta',
@@ -73,6 +81,7 @@ export const ADMIN_NAV: (AdminNavLink | AdminNavGroup)[] = [
     icon: MapIcon,
     roles: ['editor', 'admin'],
     dataTest: 'nav-peta',
+    badge: 'Segera hadir',
   },
   {
     label: 'Publikasi',
@@ -80,6 +89,7 @@ export const ADMIN_NAV: (AdminNavLink | AdminNavGroup)[] = [
     icon: PresentationChartBarIcon,
     roles: ['editor', 'admin'],
     dataTest: 'nav-publikasi',
+    badge: 'Segera hadir',
   },
   {
     label: 'Rukun Tetangga',
@@ -87,6 +97,7 @@ export const ADMIN_NAV: (AdminNavLink | AdminNavGroup)[] = [
     icon: BuildingLibraryIcon,
     roles: ['editor', 'admin'],
     dataTest: 'nav-rukun-tetangga',
+    badge: 'Segera hadir',
   },
   {
     label: 'Sistem',
@@ -107,6 +118,7 @@ export const ADMIN_NAV: (AdminNavLink | AdminNavGroup)[] = [
         icon: ChatBubbleLeftRightIcon,
         roles: ['admin'],
         dataTest: 'nav-sistem-templat-kalimat',
+        badge: 'Segera hadir',
       },
       {
         label: 'Konfigurasi sistem',
@@ -114,6 +126,7 @@ export const ADMIN_NAV: (AdminNavLink | AdminNavGroup)[] = [
         icon: AdjustmentsHorizontalIcon,
         roles: ['admin'],
         dataTest: 'nav-sistem-konfigurasi',
+        badge: 'Segera hadir',
       },
       {
         label: 'Log sistem',
