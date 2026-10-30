@@ -1,4 +1,5 @@
 import prisma from '../src/utils/prisma.js';
+import { Prisma } from '../generated/prisma/client.js';
 import { buildAuditLog, AUDIT_ACTIONS } from '../src/services/audit.service.js';
 
 interface CategoryConfig {
@@ -32,7 +33,7 @@ const CATEGORY_INDICATORS: Record<string, SeedIndicatorDef[]> = {
     {
       slug: 'kependudukan-penduduk',
       label: 'Penduduk',
-      devValue: '53.098',
+      devValue: '53098',
       unit: 'jiwa',
       periodCurrent: '2024',
       sortOrder: 1,
@@ -365,19 +366,41 @@ const LEGACY_FAKE_SLUGS: string[] = [
   'persampahan-dan-bank-sampah-unit-rasio-kelamin',
 ];
 
-const ALL_SEEDED_SLUGS = Object.values(CATEGORY_INDICATORS).flatMap((defs) =>
-  defs.map((d) => d.slug),
-);
+export function isLegacyPlaceholder(candidate: {
+  slug: string;
+  label: string;
+  valueCurrent: Prisma.Decimal | string;
+}): boolean {
+  try {
+    const dec = new Prisma.Decimal(candidate.valueCurrent);
+    if (candidate.slug.endsWith('-penduduk')) {
+      return candidate.label === 'Penduduk' && (dec.equals('53098') || dec.equals('53.098'));
+    }
+    if (candidate.slug.endsWith('-rukun-tetangga')) {
+      return candidate.label === 'Rukun Tetangga' && dec.equals('100');
+    }
+    if (candidate.slug.endsWith('-kepadatan')) {
+      return candidate.label === 'Kepadatan Penduduk' && dec.equals('2');
+    }
+    if (candidate.slug.endsWith('-rasio-kelamin')) {
+      return candidate.label === 'Rasio Laki-laki & Perempuan' && dec.equals('1.06');
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
 
 async function main() {
-  const isDevMock = process.env.DEV_MOCK_INDICATORS === 'true' || process.argv.includes('--dev');
-  const isReset = process.env.RESET_INDICATORS === 'true' || process.argv.includes('--reset');
-
-  if (isDevMock && process.env.NODE_ENV === 'production') {
+  const env = (process.env.NODE_ENV || '').trim().toLowerCase();
+  if (env === 'production') {
     throw new Error(
-      'Flag --dev / DEV_MOCK_INDICATORS tidak diizinkan pada environment production (NODE_ENV=production).',
+      'seeder_indicator.ts tidak diizinkan pada environment production (NODE_ENV=production).',
     );
   }
+
+  const isDevMock = process.env.DEV_MOCK_INDICATORS === 'true' || process.argv.includes('--dev');
+  const isReset = process.env.RESET_INDICATORS === 'true' || process.argv.includes('--reset');
 
   console.log(
     `Memulai proses seeding indikator (Mode: ${isDevMock ? 'Dev Mock Figures (--dev)' : 'Honest Empty (No mock data)'}, Reset: ${isReset})...`,
@@ -392,16 +415,18 @@ async function main() {
 
   for (const candidate of legacyCandidates) {
     const isUntouched = candidate.createdAt.getTime() === candidate.updatedAt.getTime();
+    const isPlaceholder = isLegacyPlaceholder(candidate);
     const editorAudit = await prisma.auditLog.findFirst({
       where: {
+        targetType: 'indicator',
         targetId: candidate.id,
         actorRole: { not: 'system' },
       },
     });
 
-    if (!isUntouched || editorAudit) {
+    if (!isPlaceholder || !isUntouched || editorAudit) {
       console.warn(
-        `[SKIP CLEANUP] Indikator legacy ${candidate.slug} dilewati karena telah diedit oleh non-system user.`,
+        `[SKIP CLEANUP] Indikator legacy ${candidate.slug} dilewati karena bukan placeholder asli atau telah diedit oleh non-system user.`,
       );
       continue;
     }
@@ -412,7 +437,7 @@ async function main() {
         {
           action: AUDIT_ACTIONS.INDICATOR_DELETED,
           actor: { email: 'system@sidata.internal', role: 'system' },
-          target: { type: 'indicator', id: candidate.id, label: candidate.label },
+          target: { type: 'indicator', id: candidate.id, label: candidate.slug },
           metadata: {
             source: 'seeder_indicator_cleanup',
             slug: candidate.slug,
@@ -425,57 +450,25 @@ async function main() {
     console.log(`✓ Indikator legacy ${candidate.slug} berhasil dihapus dengan baris audit.`);
   }
 
-  // Bersihkan juga indikator bernilai 0 buatan seeder yang sebelumnya dibuat tanpa --dev agar tidak menampilkan angka palsu
-  if (!isDevMock) {
-    const zeroDummyCandidates = await prisma.indicator.findMany({
-      where: {
-        slug: { in: ALL_SEEDED_SLUGS },
-        valueCurrent: 0,
-      },
-    });
-
-    for (const candidate of zeroDummyCandidates) {
-      const isUntouched = candidate.createdAt.getTime() === candidate.updatedAt.getTime();
-      const editorAudit = await prisma.auditLog.findFirst({
-        where: {
-          targetId: candidate.id,
-          actorRole: { not: 'system' },
-        },
-      });
-
-      if (isUntouched && !editorAudit) {
-        await prisma.$transaction(async (tx) => {
-          await tx.indicator.delete({ where: { id: candidate.id } });
-          await buildAuditLog(
-            {
-              action: AUDIT_ACTIONS.INDICATOR_DELETED,
-              actor: { email: 'system@sidata.internal', role: 'system' },
-              target: { type: 'indicator', id: candidate.id, label: candidate.label },
-              metadata: {
-                source: 'seeder_indicator_cleanup',
-                slug: candidate.slug,
-                reason: 'zero_mock_indicator_cleanup',
-              },
-            },
-            tx,
-          );
-        });
-        console.log(`✓ Indikator dummy 0 ${candidate.slug} dibersihkan dengan baris audit.`);
-      }
-    }
-  }
-
   for (const [index, category] of CATEGORIES.entries()) {
     // 1. Dapatkan atau buat Page
     let page = await prisma.page.findUnique({
       where: { slug: category.slug },
-      include: { chapters: true },
+      include: {
+        chapters: {
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
     });
 
     if (!page && category.slug === 'persampahan-dan-bank-sampah-unit') {
       page = await prisma.page.findUnique({
         where: { slug: 'persampahan' },
-        include: { chapters: true },
+        include: {
+          chapters: {
+            orderBy: { sortOrder: 'asc' },
+          },
+        },
       });
     }
 
@@ -493,12 +486,16 @@ async function main() {
             },
           },
         },
-        include: { chapters: true },
+        include: {
+          chapters: {
+            orderBy: { sortOrder: 'asc' },
+          },
+        },
       });
     }
 
     // 2. Dapatkan atau buat Chapter
-    let chapter = page.chapters[0];
+    let chapter = page.chapters.find((c) => c.slug === 'ringkasan-statistik') ?? page.chapters[0];
     if (!chapter) {
       chapter = await prisma.chapter.create({
         data: {
@@ -545,16 +542,22 @@ async function main() {
       const targetSource = isDevMock ? 'Data contoh (dev)' : def.source;
 
       if (existing) {
-        if (
-          isReset &&
-          (existing.valueCurrent.toString() !== valueCurrent || existing.source !== targetSource)
-        ) {
-          // SPEC §3: Hanya reset jika belum pernah diubah oleh editor / non-system user
-          const isTouchedByEditor =
-            existing.createdAt.getTime() !== existing.updatedAt.getTime() ||
-            (await prisma.auditLog.findFirst({
-              where: { targetId: existing.id, actorRole: { not: 'system' } },
-            }));
+        const hasValueChanged = !new Prisma.Decimal(existing.valueCurrent).equals(valueCurrent);
+        const hasSourceChanged = existing.source !== targetSource;
+        if (isReset && (hasValueChanged || hasSourceChanged)) {
+          // SPEC §3: Hanya reset jika belum pernah diubah oleh editor / non-system user.
+          // Cek berdasarkan keberadaan log audit non-system agar subsequent --reset tidak terkunci permanen oleh pergeseran updatedAt.
+          const editorAudit = await prisma.auditLog.findFirst({
+            where: {
+              targetType: 'indicator',
+              targetId: existing.id,
+              OR: [
+                { actorRole: { not: 'system' } },
+                { actorEmail: { not: 'system@sidata.internal' } },
+              ],
+            },
+          });
+          const isTouchedByEditor = Boolean(editorAudit);
 
           if (isTouchedByEditor) {
             console.warn(
@@ -575,7 +578,7 @@ async function main() {
               {
                 action: AUDIT_ACTIONS.INDICATOR_UPDATED,
                 actor: { email: 'system@sidata.internal', role: 'system' },
-                target: { type: 'indicator', id: updated.id, label: updated.label },
+                target: { type: 'indicator', id: updated.id, label: updated.slug },
                 metadata: {
                   source: 'seeder_indicator_reset',
                   slug: updated.slug,
@@ -611,7 +614,7 @@ async function main() {
           {
             action: AUDIT_ACTIONS.INDICATOR_CREATED,
             actor: { email: 'system@sidata.internal', role: 'system' },
-            target: { type: 'indicator', id: created.id, label: created.label },
+            target: { type: 'indicator', id: created.id, label: created.slug },
             metadata: {
               source: 'seeder_indicator',
               slug: created.slug,
@@ -631,11 +634,19 @@ async function main() {
   console.log('Seeding indikator selesai.');
 }
 
-main()
-  .catch((e) => {
-    console.error('Error saat seeding indikator:', e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+const isMainModule = Boolean(
+  process.argv[1] &&
+  (process.argv[1].endsWith('seeder_indicator.ts') ||
+    process.argv[1].endsWith('seeder_indicator.js')),
+);
+
+if (isMainModule) {
+  main()
+    .catch((e) => {
+      console.error('Error saat seeding indikator:', e);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}
