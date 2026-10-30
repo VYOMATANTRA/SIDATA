@@ -7,6 +7,7 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster';
 import type { SpatialPointDTO, SpatialPointType } from '../../types/maps';
+import { MANGGAR_MAP_CENTER, MANGGAR_MAP_DEFAULT_ZOOM } from '../../constants/mapOrigin';
 
 interface Props {
   points: SpatialPointDTO[];
@@ -33,9 +34,8 @@ const markers = new Map<string, L.Marker>();
  */
 let hasFramedPoints = false;
 
-// Default Manggar Coordinates: [-1.2235, 116.9521]
-const DEFAULT_CENTER: [number, number] = [-1.2235, 116.9521];
-const DEFAULT_ZOOM = 14;
+const DEFAULT_CENTER: [number, number] = MANGGAR_MAP_CENTER;
+const DEFAULT_ZOOM = MANGGAR_MAP_DEFAULT_ZOOM;
 
 /**
  * Leaflet makes markers focusable, so each one needs a name a screen reader can

@@ -9,6 +9,7 @@ import MapSummaryDropdown from '../components/maps/MapSummaryDropdown.vue';
 import SpatialPointDrawer from '../components/maps/SpatialPointDrawer.vue';
 import { useMapsStore } from '../stores/maps';
 import type { SpatialPointDTO, SpatialPointType } from '../types/maps';
+import { MANGGAR_MAP_ORIGIN } from '../constants/mapOrigin';
 
 const mapsStore = useMapsStore();
 
@@ -28,7 +29,7 @@ const locationError = ref<string | null>(null);
  * distances are measured from the map's Manggar centre and labelled as such
  * rather than pretending to be measured from the office.
  */
-const KELURAHAN_ORIGIN = { latitude: -1.2235, longitude: 116.9521 };
+const KELURAHAN_ORIGIN = MANGGAR_MAP_ORIGIN;
 
 const TYPE_LABELS: Record<SpatialPointType, string> = {
   ketua_rt: 'Ketua RT',
