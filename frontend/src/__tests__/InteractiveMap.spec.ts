@@ -7,37 +7,40 @@ import { MANGGAR_MAP_CENTER, MANGGAR_MAP_DEFAULT_ZOOM } from '../constants/mapOr
 import type { SpatialPointDTO } from '../types/maps';
 
 const leafletMocks = vi.hoisted(() => {
-  const setView = vi.fn(function (this: unknown) {
+  const setView = vi.fn<(...args: unknown[]) => unknown>(function (this: unknown) {
     return this;
   });
-  const fitBounds = vi.fn(function (this: unknown) {
+  const fitBounds = vi.fn<(...args: unknown[]) => unknown>(function (this: unknown) {
     return this;
   });
-  const getZoom = vi.fn(() => 13);
-  const getMaxZoom = vi.fn(() => 19);
-  const getBounds = vi.fn(() => ({ contains: () => false }));
-  const off = vi.fn();
-  const once = vi.fn();
-  const remove = vi.fn();
-  const invalidateSize = vi.fn();
-  const addToMap = vi.fn().mockReturnThis();
+  const getZoom = vi.fn<() => number>(() => 13);
+  const getMaxZoom = vi.fn<() => number>(() => 19);
+  const getBounds = vi.fn<() => { contains: () => boolean }>(() => ({ contains: () => false }));
+  const off = vi.fn<() => void>();
+  const once = vi.fn<() => void>();
+  const remove = vi.fn<() => void>();
+  const invalidateSize = vi.fn<() => void>();
+  const addToMap = vi.fn<() => unknown>().mockReturnThis();
 
-  const zoomToShowLayer = vi.fn((_marker: unknown, cb?: () => void) => {
+  const zoomToShowLayer = vi.fn<(marker: unknown, cb?: () => void) => void>((_marker, cb) => {
     cb?.();
   });
-  const zoomToBounds = vi.fn();
-  const eachLayer = vi.fn();
-  const clusterOn = vi.fn();
-  const clusterAddTo = vi.fn().mockReturnThis();
-  const clusterRemoveLayer = vi.fn();
-  const clusterAddLayer = vi.fn();
+  const zoomToBounds = vi.fn<() => void>();
+  const eachLayer = vi.fn<() => void>();
+  const clusterOn = vi.fn<(event: string, handler: (...args: never[]) => void) => void>();
+  const clusterAddTo = vi.fn<() => unknown>().mockReturnThis();
+  const clusterRemoveLayer = vi.fn<() => void>();
+  const clusterAddLayer = vi.fn<() => void>();
 
-  const markerOn = vi.fn();
-  const markerSetIcon = vi.fn();
-  const markerSetLatLng = vi.fn();
-  const markerSetZIndexOffset = vi.fn();
-  const markerGetLatLng = vi.fn(() => ({ lat: -1.2251, lng: 116.9438 }));
-  const markerGetElement = vi.fn(() => {
+  const markerOn = vi.fn<() => void>();
+  const markerSetIcon = vi.fn<() => void>();
+  const markerSetLatLng = vi.fn<() => void>();
+  const markerSetZIndexOffset = vi.fn<() => void>();
+  const markerGetLatLng = vi.fn<() => { lat: number; lng: number }>(() => ({
+    lat: -1.2251,
+    lng: 116.9438,
+  }));
+  const markerGetElement = vi.fn<() => HTMLElement>(() => {
     const el = document.createElement('div');
     el.className = 'leaflet-marker-icon';
     return el;
@@ -63,7 +66,7 @@ const leafletMocks = vi.hoisted(() => {
     once,
     remove,
     invalidateSize,
-    addLayer: vi.fn(),
+    addLayer: vi.fn<() => void>(),
   };
   setView.mockImplementation(function (this: unknown) {
     return mapInstance;
@@ -93,16 +96,18 @@ const leafletMocks = vi.hoisted(() => {
   };
 
   const L = {
-    map: vi.fn(() => mapInstance),
-    tileLayer: vi.fn(() => ({ addTo: addToMap })),
+    map: vi.fn<() => Record<string, unknown>>(() => mapInstance),
+    tileLayer: vi.fn<() => { addTo: typeof addToMap }>(() => ({ addTo: addToMap })),
     control: {
-      zoom: vi.fn(() => ({ addTo: addToMap })),
-      attribution: vi.fn(() => ({
-        addAttribution: vi.fn().mockReturnThis(),
+      zoom: vi.fn<() => { addTo: typeof addToMap }>(() => ({ addTo: addToMap })),
+      attribution: vi.fn<
+        () => { addAttribution: ReturnType<typeof vi.fn>; addTo: typeof addToMap }
+      >(() => ({
+        addAttribution: vi.fn<() => unknown>().mockReturnThis(),
         addTo: addToMap,
       })),
     },
-    marker: vi.fn(() => ({
+    marker: vi.fn<() => Record<string, unknown>>(() => ({
       on: markerOn,
       setIcon: markerSetIcon,
       setLatLng: markerSetLatLng,
@@ -111,8 +116,8 @@ const leafletMocks = vi.hoisted(() => {
       getElement: markerGetElement,
       options: {},
     })),
-    divIcon: vi.fn((opts: unknown) => opts),
-    latLngBounds: vi.fn((latlngs: unknown) => latlngs),
+    divIcon: vi.fn<(opts: unknown) => unknown>((opts) => opts),
+    latLngBounds: vi.fn<(latlngs: unknown) => unknown>((latlngs) => latlngs),
     markerClusterGroup,
   };
 
@@ -184,11 +189,15 @@ describe('InteractiveMap.vue', () => {
     });
     vi.stubGlobal(
       'matchMedia',
-      vi.fn().mockReturnValue({
-        matches: true,
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-      }),
+      vi
+        .fn<
+          () => { matches: boolean; addEventListener: () => void; removeEventListener: () => void }
+        >()
+        .mockReturnValue({
+          matches: true,
+          addEventListener: vi.fn<() => void>(),
+          removeEventListener: vi.fn<() => void>(),
+        }),
     );
   });
 
