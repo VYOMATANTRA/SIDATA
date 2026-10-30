@@ -49,6 +49,106 @@ describe('Landing SectionHero.vue', () => {
     expect(style).toContain('linear-gradient');
     expect(style).toContain('background_laman_depan_kelurahan.webp');
   });
+
+  it('sanitizes and safely handles editor background image without CSS breakout or XSS', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const store = useContentBlocksStore(pinia);
+
+    // Malicious injection attempt
+    store.blocks['landing-hero'] = {
+      ...DEFAULT_HERO_BLOCK,
+      metadata: {
+        backgroundImage: "x'), url('https://tracker/p.png",
+      },
+    };
+
+    const wrapper = mount(LandingSectionHero, {
+      global: { plugins: [pinia] },
+    });
+
+    const style = wrapper.find('section#hero').attributes('style') || '';
+    // Must NOT contain the unescaped tracker injection
+    expect(style).not.toContain("url('x')");
+    expect(style).not.toContain("url('https://tracker/p.png");
+    // Should fallback to default image safely
+    expect(style).toContain('background_laman_depan_kelurahan.webp');
+  });
+
+  it('rejects protocol-relative, backslash, and dangerous schemes in background image', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const store = useContentBlocksStore(pinia);
+
+    const dangerousUrls = [
+      '//evil.com/tracker.png',
+      '/uploads\\image.png',
+      'javascript:alert(1)',
+      'data:image/png;base64,AAAA',
+      'http://insecure.com/hero.webp',
+    ];
+
+    for (const dangerous of dangerousUrls) {
+      store.blocks['landing-hero'] = {
+        ...DEFAULT_HERO_BLOCK,
+        metadata: { backgroundImage: dangerous },
+      };
+
+      const wrapper = mount(LandingSectionHero, {
+        global: { plugins: [pinia] },
+      });
+
+      const style = wrapper.find('section#hero').attributes('style') || '';
+      expect(style).toContain('background_laman_depan_kelurahan.webp');
+      expect(style).not.toContain(dangerous);
+    }
+  });
+
+  it('safely applies valid https:// and relative / background image URLs', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const store = useContentBlocksStore(pinia);
+
+    store.blocks['landing-hero'] = {
+      ...DEFAULT_HERO_BLOCK,
+      metadata: {
+        backgroundImage: 'https://cdn.example.com/custom-hero.webp',
+      },
+    };
+
+    const wrapper = mount(LandingSectionHero, {
+      global: { plugins: [pinia] },
+    });
+
+    const style = wrapper.find('section#hero').attributes('style') || '';
+    expect(style).toContain('https://cdn.example.com/custom-hero.webp');
+  });
+
+  it('does not render empty hero-actions container when no actions slot is provided', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+
+    const wrapper = mount(LandingSectionHero, {
+      global: { plugins: [pinia] },
+    });
+
+    expect(wrapper.find('[data-test="hero-actions"]').exists()).toBe(false);
+  });
+
+  it('renders hero-actions container when actions slot is passed', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+
+    const wrapper = mount(LandingSectionHero, {
+      global: { plugins: [pinia] },
+      slots: {
+        actions: '<button id="test-cta">Aksi</button>',
+      },
+    });
+
+    expect(wrapper.find('[data-test="hero-actions"]').exists()).toBe(true);
+    expect(wrapper.find('#test-cta').exists()).toBe(true);
+  });
 });
 
 describe('Common SectionHero.vue', () => {
