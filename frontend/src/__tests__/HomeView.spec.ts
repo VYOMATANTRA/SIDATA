@@ -555,4 +555,86 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
     expect(ceritaSection.text()).toContain('53.120');
     expect(ceritaSection.text()).toContain('Jumlah Penduduk Resmi');
   });
+
+  // Edge Case 16: Weather widget mounts on top of hero background with slot override support
+  it('renders weather widget on top of hero background and supports custom slot override', async () => {
+    const { pinia, router } = setupHomeView();
+    await router.push('/');
+    await router.isReady();
+
+    // Default mount: renders WeatherWidget
+    const wrapper = mount(HomeView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    const heroWeather = wrapper.find('section#hero [data-test="hero-weather"]');
+    expect(heroWeather.exists()).toBe(true);
+    expect(heroWeather.find('[data-test="weather-widget-root"]').exists()).toBe(true);
+
+    // Custom slot mount: overrides weather widget
+    const customWrapper = mount(HomeView, {
+      global: { plugins: [pinia, router] },
+      slots: {
+        weather: '<div id="custom-home-weather">Cuaca Khusus Home</div>',
+      },
+    });
+
+    expect(customWrapper.find('#custom-home-weather').exists()).toBe(true);
+    expect(customWrapper.find('section#hero').text()).toContain('Cuaca Khusus Home');
+  });
+
+  // Edge Case 17: Heading hierarchy with WeatherWidget h2 in DOM order
+  it('preserves strict heading hierarchy across Hero h1, Weather h2, Sambutan h2, and Cerita h2', async () => {
+    const { pinia, router } = setupHomeView();
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/weather')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            location: { desa: 'Manggar', lat: -1.2251, lon: 116.9438 },
+            forecast: [
+              {
+                datetime: '2026-10-30 12:00:00',
+                temperatureCelsius: 24,
+                humidityPercent: 78,
+                description: 'Berawan',
+                windSpeedKmh: 15,
+                windDirection: 'NW',
+              },
+            ],
+            fetchedAt: '2026-10-30T12:00:00.000Z',
+            stale: false,
+          }),
+        } as Response;
+      }
+      return { ok: true, json: async () => ({}) } as Response;
+    });
+
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(HomeView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    await vi.waitUntil(() => wrapper.find('h2#weather-widget-title').exists());
+
+    const heroTitle = wrapper.find('h1#hero-title').element;
+    const weatherTitle = wrapper.find('h2#weather-widget-title').element;
+    const sambutanTitle = wrapper.find('h2#sambutan-title').element;
+    const ceritaTitle = wrapper.find('h2#cerita-preview-title').element;
+
+    expect(
+      heroTitle.compareDocumentPosition(weatherTitle) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      weatherTitle.compareDocumentPosition(sambutanTitle) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      sambutanTitle.compareDocumentPosition(ceritaTitle) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
 });

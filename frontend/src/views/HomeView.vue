@@ -9,6 +9,7 @@ import AppNavbar from '../components/common/AppNavbar.vue';
 import AppFooter from '../components/common/AppFooter.vue';
 import SectionHero from '../components/landing/SectionHero.vue';
 import SectionSambutanLurah from '../components/landing/SectionSambutanLurah.vue';
+import WeatherWidget from '../components/weather/WeatherWidget.vue';
 import StatOverview from '../components/common/StatOverview.vue';
 import bgKependudukan from '@/assets/img/landing-page/demografi_penduduk.webp';
 import bgPendidikan from '@/assets/img/landing-page/pendidikan.webp';
@@ -331,7 +332,13 @@ async function handleLogout() {
     <!-- Main Content Landmark per docs/ACCESSIBILITY.md -->
     <main id="main-content" class="flex-grow">
       <!-- 1. Hero (Spec §8 top section) -->
-      <SectionHero />
+      <SectionHero>
+        <template #weather>
+          <slot name="weather">
+            <WeatherWidget />
+          </slot>
+        </template>
+      </SectionHero>
 
       <!-- 2. Sambutan Lurah (Spec §8 section 2) -->
       <SectionSambutanLurah />
