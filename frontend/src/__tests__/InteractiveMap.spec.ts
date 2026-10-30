@@ -52,7 +52,7 @@ const leafletMocks = vi.hoisted(() => {
     animationendHandler: null as (() => void) | null,
   };
 
-  const on = vi.fn(function (this: unknown) {
+  const on = vi.fn<(...args: unknown[]) => unknown>(function (this: unknown) {
     return this;
   });
   const mapInstance: Record<string, unknown> = {
