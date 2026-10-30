@@ -240,7 +240,7 @@ describe('indicators store (global / landing page indicators)', () => {
     });
   });
 
-  it('handles 404 endpoint not found gracefully without throwing or corrupting state', async () => {
+  it('handles 404 by surfacing error, keeping isLoaded false, and preserving previous state', async () => {
     globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
       ok: false,
       status: 404,
@@ -251,9 +251,111 @@ describe('indicators store (global / landing page indicators)', () => {
     await store.fetchIndicators();
 
     expect(store.indicators).toEqual([]);
-    expect(store.isLoaded).toBe(true);
+    expect(store.isLoaded).toBe(false);
     expect(store.isLoading).toBe(false);
-    expect(store.error).toBeNull();
+    expect(store.error).toBe('Not Found');
+  });
+
+  it('keeps previously loaded indicators on a failed refetch', async () => {
+    const initialIndicators: IndicatorItem[] = [
+      {
+        id: '1',
+        slug: 'penduduk',
+        label: 'Penduduk',
+        unit: 'jiwa',
+        valueCurrent: '53098',
+        valuePrevious: null,
+        periodCurrent: '2026',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'kependudukan',
+        sortOrder: 1,
+      },
+    ];
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ indicators: initialIndicators }),
+    } as Response);
+
+    const store = useIndicatorsStore();
+    await store.fetchIndicators();
+    expect(store.indicators).toHaveLength(1);
+    expect(store.isLoaded).toBe(true);
+
+    // Now refetch fails with 500
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: 'Server error' }),
+    } as Response);
+
+    await store.fetchIndicators(true);
+    expect(store.error).toBe('Server error');
+    // Crucial: old data is preserved, not wiped!
+    expect(store.indicators).toHaveLength(1);
+    expect(store.indicators[0]?.slug).toBe('penduduk');
+  });
+
+  it('handles explicit icon and format fields on indicators', () => {
+    const store = useIndicatorsStore();
+    store.indicators = [
+      {
+        id: '1',
+        slug: 'custom-ratio',
+        label: 'Rasio Khusus',
+        unit: ': 1',
+        valueCurrent: '1.06',
+        valuePrevious: null,
+        periodCurrent: '2024',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'pendidikan',
+        sortOrder: 1,
+        icon: 'ratio',
+        format: 'decimal',
+      },
+      {
+        id: '2',
+        slug: 'kepadatan-wilayah',
+        label: 'Kepadatan Wilayah',
+        unit: 'jiwa/km²',
+        valueCurrent: '2.5',
+        valuePrevious: null,
+        periodCurrent: '2024',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'pendidikan',
+        sortOrder: 2,
+        icon: 'density',
+        format: 'decimal',
+      },
+    ];
+
+    const stats = store.getStatsForPage('pendidikan');
+    expect(stats).toHaveLength(2);
+    expect(stats[0]).toEqual({
+      icon: 'ratio',
+      value: '1,06',
+      label: 'Rasio Khusus',
+      unit: ': 1',
+    });
+    expect(stats[1]).toEqual({
+      icon: 'density',
+      value: '2,5',
+      label: 'Kepadatan Wilayah',
+      unit: 'jiwa/km²',
+    });
   });
 
   it('handles network failure gracefully without throwing and leaves stats empty', async () => {
@@ -363,10 +465,7 @@ describe('indicators store (public per-section reads)', () => {
     globalThis.fetch = fetchMock;
 
     const store = useIndicatorsStore();
-    await Promise.all([
-      store.fetchBySectionId('sec-fail'),
-      store.fetchBySectionId('sec-ok'),
-    ]);
+    await Promise.all([store.fetchBySectionId('sec-fail'), store.fetchBySectionId('sec-ok')]);
 
     expect(store.errorsBySectionId['sec-fail']).toContain('500');
     expect(store.errorsBySectionId['sec-ok']).toBeNull();

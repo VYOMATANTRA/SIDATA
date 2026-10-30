@@ -50,6 +50,7 @@ export interface IndicatorDto {
   comparisonTemplateId: string | null;
   /** Rendered from the template and the paired values; null when there is nothing honest to say. */
   comparison: RenderedComparison | null;
+  pageSlug: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -246,8 +247,23 @@ async function lockAndRequireTemplate(
   }
 }
 
-/** Reads and writes return the related template so the DTO can render its comparison. */
-const WITH_TEMPLATE = { comparisonTemplate: true } as const;
+/** Reads and writes return the related template and page hierarchy so the DTO can render comparison and pageSlug. */
+export const WITH_TEMPLATE = {
+  comparisonTemplate: true,
+  section: {
+    select: {
+      chapter: {
+        select: {
+          page: {
+            select: {
+              slug: true,
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
 
 export const createIndicatorSchema = z.object(baseFields).strict();
 
@@ -386,11 +402,20 @@ function formatIndicator(row: {
   // Absent on rows that were not loaded with `include: { comparisonTemplate: true }`.
   comparisonTemplateId?: string | null;
   comparisonTemplate?: ComparisonTemplateText | null;
+  section?: {
+    chapter?: {
+      page?: {
+        slug: string;
+      } | null;
+    } | null;
+  } | null;
+  pageSlug?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }): IndicatorDto {
   const valueCurrent = decimalToString(row.valueCurrent);
   const valuePrevious = row.valuePrevious === null ? null : decimalToString(row.valuePrevious);
+  const pageSlug = row.section?.chapter?.page?.slug ?? row.pageSlug ?? null;
   // renderComparison refuses unpaired and non-computed rows itself; a missing relation (a
   // dangling id, or a read that did not include it) simply means there is no comparison.
   const comparison = row.comparisonTemplate
@@ -425,6 +450,7 @@ function formatIndicator(row: {
     sortOrder: row.sortOrder,
     comparisonTemplateId: row.comparisonTemplateId ?? null,
     comparison,
+    pageSlug,
     createdAt: toIsoString(row.createdAt),
     updatedAt: toIsoString(row.updatedAt),
   };

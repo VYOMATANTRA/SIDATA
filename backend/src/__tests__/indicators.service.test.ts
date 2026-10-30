@@ -9,6 +9,7 @@ import {
   invalidateIndicatorsCache,
   indicatorByIdCache,
   IndicatorServiceError,
+  WITH_TEMPLATE,
 } from '../services/indicators.service.js';
 import prisma from '../utils/prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
@@ -861,6 +862,7 @@ describe('indicators.service getIndicatorById', () => {
       // Legacy rows (and rows with no template attached) carry no comparison at all.
       comparisonTemplateId: null,
       comparison: null,
+      pageSlug: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-02T00:00:00.000Z',
     });
@@ -1225,8 +1227,24 @@ describe('indicators.service tier-1 comparison templates', () => {
       await listIndicators({});
       await getIndicatorById('ind-1');
 
-      assert.deepEqual(listArgs!['include'], { comparisonTemplate: true });
-      assert.deepEqual(getArgs!['include'], { comparisonTemplate: true });
+      assert.deepEqual(listArgs!['include'], WITH_TEMPLATE);
+      assert.deepEqual(getArgs!['include'], WITH_TEMPLATE);
+    });
+
+    it('resolves pageSlug from section -> chapter -> page hierarchy', async () => {
+      indicatorImpl['findUnique'] = async () =>
+        indicatorRow({
+          section: {
+            chapter: {
+              page: {
+                slug: 'kependudukan',
+              },
+            },
+          },
+        });
+
+      const result = await getIndicatorById('ind-1');
+      assert.equal(result?.pageSlug, 'kependudukan');
     });
 
     it('renders the comparison per row in a list and leaves unattached rows null', async () => {

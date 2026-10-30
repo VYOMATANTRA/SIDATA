@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import type { StatItem } from '../components/common/StatCard.vue';
-import { ApiError, apiRequestJson } from '../utils/apiClient';
+import { apiRequestJson } from '../utils/apiClient';
 
 /**
  * Scalar indicator figures (SPEC §7). Read is public; writes need an editor/admin token.
@@ -45,6 +45,10 @@ export interface Indicator {
   createdAt?: string;
   updatedAt?: string;
   pageSlug?: string | null;
+  /** Explicit icon name ('person' | 'house' | 'density' | 'ratio') */
+  icon?: 'person' | 'house' | 'density' | 'ratio' | string | null;
+  /** Explicit number formatting: 'decimal' | 'integer' | 'ratio' | 'raw' */
+  format?: 'decimal' | 'integer' | 'ratio' | 'raw' | string | null;
 }
 
 /** The public Cerita read names the same shapes `…Dto`; keep both import paths working. */
@@ -52,66 +56,235 @@ export type IndicatorDto = Indicator;
 export type IndicatorComparison = RenderedComparison;
 export type IndicatorItem = IndicatorDto;
 
+export interface IndicatorConfig {
+  icon: 'person' | 'house' | 'density' | 'ratio';
+  format: 'decimal' | 'integer' | 'ratio' | 'raw';
+}
+
+/**
+ * Explicit per-indicator icons and formats to avoid guessing from ambiguous substrings.
+ */
+export const KNOWN_INDICATOR_CONFIGS: Record<string, IndicatorConfig> = {
+  // Kependudukan
+  penduduk: { icon: 'person', format: 'integer' },
+  'kependudukan-penduduk': { icon: 'person', format: 'integer' },
+  'jumlah-penduduk': { icon: 'person', format: 'integer' },
+  'total-penduduk': { icon: 'person', format: 'integer' },
+  'kependudukan-total': { icon: 'person', format: 'integer' },
+  'rukun-tetangga': { icon: 'house', format: 'integer' },
+  'kependudukan-rukun-tetangga': { icon: 'house', format: 'integer' },
+  kepadatan: { icon: 'density', format: 'decimal' },
+  'kependudukan-kepadatan': { icon: 'density', format: 'decimal' },
+  'kepadatan-penduduk': { icon: 'density', format: 'decimal' },
+  'rasio-kelamin': { icon: 'ratio', format: 'ratio' },
+  'kependudukan-rasio-kelamin': { icon: 'ratio', format: 'ratio' },
+  'rasio-jenis-kelamin': { icon: 'ratio', format: 'ratio' },
+
+  // Pendidikan
+  'rasio-guru-murid': { icon: 'ratio', format: 'ratio' },
+  'pendidikan-rasio-guru-murid': { icon: 'ratio', format: 'ratio' },
+  'angka-partisipasi-sekolah': { icon: 'ratio', format: 'decimal' },
+  'pendidikan-angka-partisipasi-sekolah': { icon: 'ratio', format: 'decimal' },
+  'jumlah-sekolah': { icon: 'house', format: 'integer' },
+  'pendidikan-jumlah-sekolah': { icon: 'house', format: 'integer' },
+  'tingkat-kelulusan': { icon: 'ratio', format: 'decimal' },
+  'pendidikan-tingkat-kelulusan': { icon: 'ratio', format: 'decimal' },
+
+  // Kesehatan
+  'posyandu-aktif': { icon: 'house', format: 'integer' },
+  'kesehatan-posyandu-aktif': { icon: 'house', format: 'integer' },
+  'cakupan-imunisasi': { icon: 'ratio', format: 'decimal' },
+  'kesehatan-cakupan-imunisasi': { icon: 'ratio', format: 'decimal' },
+  'tenaga-medis': { icon: 'person', format: 'integer' },
+  'kesehatan-tenaga-medis': { icon: 'person', format: 'integer' },
+  'sarana-kesehatan': { icon: 'house', format: 'integer' },
+  'kesehatan-sarana-kesehatan': { icon: 'house', format: 'integer' },
+
+  // Ekonomi & Ketertiban
+  'sentra-umkm': { icon: 'house', format: 'integer' },
+  'ekonomi-dan-ketertiban-sentra-umkm': { icon: 'house', format: 'integer' },
+  'tingkat-pengangguran': { icon: 'ratio', format: 'decimal' },
+  'ekonomi-dan-ketertiban-tingkat-pengangguran': { icon: 'ratio', format: 'decimal' },
+  'pos-keamanan': { icon: 'house', format: 'integer' },
+  'ekonomi-dan-ketertiban-pos-keamanan': { icon: 'house', format: 'integer' },
+  'keluarga-sejahtera': { icon: 'person', format: 'integer' },
+  'ekonomi-dan-ketertiban-keluarga-sejahtera': { icon: 'person', format: 'integer' },
+
+  // Pemerintahan & Kelembagaan
+  'aparatur-kelurahan': { icon: 'person', format: 'integer' },
+  'pemerintahan-dan-kelembagaan-aparatur-kelurahan': { icon: 'person', format: 'integer' },
+  'jumlah-rt': { icon: 'house', format: 'integer' },
+  'pemerintahan-dan-kelembagaan-jumlah-rt': { icon: 'house', format: 'integer' },
+  'lembaga-kemasyarakatan': { icon: 'house', format: 'integer' },
+  'pemerintahan-dan-kelembagaan-lembaga-kemasyarakatan': { icon: 'house', format: 'integer' },
+  'pos-pelayanan': { icon: 'house', format: 'integer' },
+  'pemerintahan-dan-kelembagaan-pos-pelayanan': { icon: 'house', format: 'integer' },
+
+  // Geografis & Tata Ruang
+  'luas-wilayah': { icon: 'density', format: 'decimal' },
+  'geografis-dan-tata-ruang-luas-wilayah': { icon: 'density', format: 'decimal' },
+  'ruang-terbuka-hijau': { icon: 'density', format: 'decimal' },
+  'geografis-dan-tata-ruang-ruang-terbuka-hijau': { icon: 'density', format: 'decimal' },
+  'panjang-pantai': { icon: 'density', format: 'decimal' },
+  'geografis-dan-tata-ruang-panjang-pantai': { icon: 'density', format: 'decimal' },
+  'kawasan-pemukiman': { icon: 'density', format: 'decimal' },
+  'geografis-dan-tata-ruang-kawasan-pemukiman': { icon: 'density', format: 'decimal' },
+
+  // Infrastruktur & Perumahan
+  'cakupan-air-bersih': { icon: 'density', format: 'decimal' },
+  'infrastruktur-dan-perumahan-cakupan-air-bersih': { icon: 'density', format: 'decimal' },
+  'sanitasi-layak': { icon: 'density', format: 'decimal' },
+  'infrastruktur-dan-perumahan-sanitasi-layak': { icon: 'density', format: 'decimal' },
+  'panjang-jalan': { icon: 'density', format: 'decimal' },
+  'infrastruktur-dan-perumahan-panjang-jalan': { icon: 'density', format: 'decimal' },
+  'rumah-layak-huni': { icon: 'house', format: 'integer' },
+  'infrastruktur-dan-perumahan-rumah-layak-huni': { icon: 'house', format: 'integer' },
+
+  // Persampahan & Bank Sampah Unit
+  'bank-sampah': { icon: 'house', format: 'integer' },
+  'bank-sampah-unit': { icon: 'house', format: 'integer' },
+  'persampahan-dan-bank-sampah-unit-bank-sampah': { icon: 'house', format: 'integer' },
+  'sampah-terkelola': { icon: 'density', format: 'decimal' },
+  'persampahan-dan-bank-sampah-unit-sampah-terkelola': { icon: 'density', format: 'decimal' },
+  'nasabah-bank-sampah': { icon: 'person', format: 'integer' },
+  'persampahan-dan-bank-sampah-unit-nasabah': { icon: 'person', format: 'integer' },
+  'reduksi-sampah': { icon: 'density', format: 'decimal' },
+  'persampahan-dan-bank-sampah-unit-reduksi-sampah': { icon: 'density', format: 'decimal' },
+};
+
+/**
+ * Resolves the explicit or inferred formatting style for an indicator.
+ */
+export function resolveFormatForIndicator(
+  slug: string,
+  label: string,
+  unit?: string | null,
+): 'decimal' | 'integer' | 'ratio' | 'raw' {
+  const normalizedSlug = slug.replace(/^[a-z0-9]+(?:-[a-z0-9]+)*-(?=[a-z0-9]+$)/, '');
+  if (KNOWN_INDICATOR_CONFIGS[slug]?.format) {
+    return KNOWN_INDICATOR_CONFIGS[slug]!.format;
+  }
+  if (KNOWN_INDICATOR_CONFIGS[normalizedSlug]?.format) {
+    return KNOWN_INDICATOR_CONFIGS[normalizedSlug]!.format;
+  }
+
+  if (unit && unit.includes(':')) {
+    return 'ratio';
+  }
+
+  const text = `${slug} ${label}`.toLowerCase();
+  if (/\b(rasio|tingkat|indeks|angka|persentase)\b/i.test(text) || (unit && unit.includes('%'))) {
+    return 'decimal';
+  }
+  if (
+    /\b(kepadatan|luas|panjang|sampah-terkelola|reduksi-sampah)\b/i.test(text) ||
+    (unit && /\b(km²|km|ton\/hari)\b/i.test(unit))
+  ) {
+    return 'decimal';
+  }
+  if (
+    /\b(penduduk|warga|jiwa|siswa|peserta|balita|guru|medis|tenaga|nasabah|orang|kk|rt|rumah|posyandu|sekolah|unit|lembaga|pos)\b/i.test(
+      text,
+    ) ||
+    (unit && /\b(jiwa|orang|kk|rt|unit|pos|lembaga)\b/i.test(unit))
+  ) {
+    return 'integer';
+  }
+
+  return 'raw';
+}
+
+/**
+ * Format an indicator value using Indonesian conventions:
+ * comma for decimal point ('2,5', '1,06'), dot for thousands ('53.098').
+ */
+export function formatIndicatorValue(
+  value: string | number,
+  format?: string | null,
+  unit?: string | null,
+): string {
+  const strVal = String(value).trim();
+  if (!strVal) return '';
+
+  if (format === 'raw') return strVal;
+
+  if (format === 'ratio' || (unit && unit.includes(':'))) {
+    return strVal.replace('.', ',');
+  }
+
+  if (format === 'decimal') {
+    return strVal.replace('.', ',');
+  }
+
+  if (format === 'integer') {
+    // If strVal is already pre-formatted with Indonesian thousand dots, e.g. '53.098' or '53.120'
+    if (/^\d{1,3}(\.\d{3})+$/.test(strVal)) {
+      return strVal;
+    }
+    // Plain digits like '53098' or '100' -> format to Indonesian locale ('53.098')
+    if (/^\d+$/.test(strVal)) {
+      return Number(strVal).toLocaleString('id-ID');
+    }
+    // Stored as Decimal with .0000 -> extract integer part and format
+    if (/^\d+\.0+$/.test(strVal)) {
+      const intPart = strVal.split('.')[0]!;
+      return Number(intPart).toLocaleString('id-ID');
+    }
+    return strVal;
+  }
+
+  // Fallback: If it already matches thousand-separated format, preserve it
+  if (/^\d{1,3}(\.\d{3})+$/.test(strVal)) {
+    return strVal;
+  }
+
+  // Consistent decimal comma fallback for decimal strings (e.g. '2.5' or '1.06')
+  if (/^-?\d+\.\d+$/.test(strVal)) {
+    return strVal.replace('.', ',');
+  }
+
+  return strVal;
+}
+
 export function resolveIconForIndicator(
   slug: string,
   label: string,
 ): 'person' | 'house' | 'density' | 'ratio' {
-  // Strip category prefix (e.g. 'kependudukan-', 'pendidikan-', etc.) so substring 'penduduk' inside 'kependudukan' does not cause false positives
+  // Check known configs first
   const normalizedSlug = slug.replace(/^[a-z0-9]+(?:-[a-z0-9]+)*-(?=[a-z0-9]+$)/, '');
+  if (KNOWN_INDICATOR_CONFIGS[slug]?.icon) {
+    return KNOWN_INDICATOR_CONFIGS[slug]!.icon;
+  }
+  if (KNOWN_INDICATOR_CONFIGS[normalizedSlug]?.icon) {
+    return KNOWN_INDICATOR_CONFIGS[normalizedSlug]!.icon;
+  }
+
   const text = `${normalizedSlug} ${label}`.toLowerCase();
 
-  if (
-    text.includes('rasio') ||
-    text.includes('tingkat') ||
-    text.includes('indeks') ||
-    text.includes('angka') ||
-    text.includes('cakupan')
-  ) {
+  // Use word-boundary checks rather than substring matching
+  if (/\b(rasio|tingkat|indeks|angka|cakupan|persentase)\b/i.test(text)) {
     return 'ratio';
   }
   if (
-    text.includes('kepadatan') ||
-    text.includes('luas') ||
-    text.includes('wilayah') ||
-    text.includes('persen') ||
+    /\b(kepadatan|luas|wilayah|panjang|sampah|jalan)\b/i.test(text) ||
     text.includes('%') ||
-    text.includes('panjang') ||
-    text.includes('ton') ||
-    text.includes('km') ||
-    text.includes('sampah') ||
-    text.includes('jalan')
+    /\b(km²|ton\/hari)\b/i.test(text)
   ) {
     return 'density';
   }
   if (
-    text.includes('rt') ||
-    text.includes('tetangga') ||
-    text.includes('rumah') ||
-    text.includes('posyandu') ||
-    text.includes('sekolah') ||
-    text.includes('satuan') ||
-    text.includes('usaha') ||
-    text.includes('bank') ||
-    text.includes('unit') ||
-    text.includes('fasilitas') ||
-    text.includes('lembaga')
+    /\b(rt|rukun tetangga|rumah|posyandu|sekolah|satuan|usaha|bank|unit|fasilitas|lembaga)\b/i.test(
+      text,
+    )
   ) {
     return 'house';
   }
   if (
-    text.includes('penduduk') ||
-    text.includes('warga') ||
-    text.includes('jiwa') ||
-    text.includes('siswa') ||
-    text.includes('peserta') ||
-    text.includes('balita') ||
-    text.includes('guru') ||
-    text.includes('medis') ||
-    text.includes('tenaga') ||
-    text.includes('nasabah')
+    /\b(penduduk|warga|jiwa|siswa|peserta|balita|guru|medis|tenaga|nasabah|orang|kk)\b/i.test(text)
   ) {
     return 'person';
   }
+
   return 'person';
 }
 
@@ -203,15 +376,8 @@ export const useIndicatorsStore = defineStore('indicators', () => {
         total.value = typeof data.total === 'number' ? data.total : indicators.value.length;
         isLoaded.value = true;
       } catch (err) {
-        if (err instanceof ApiError && err.status === 404) {
-          indicators.value = [];
-          total.value = 0;
-          isLoaded.value = true;
-          error.value = null;
-          return;
-        }
+        // Do NOT treat 404 as loaded or empty — report error and keep existing data on failed refetch
         error.value = err instanceof Error ? err.message : 'Gagal memuat daftar indikator.';
-        indicators.value = [];
       } finally {
         isLoading.value = false;
         inFlight = null;
@@ -229,12 +395,18 @@ export const useIndicatorsStore = defineStore('indicators', () => {
       return item.slug.toLowerCase().startsWith(pageSlug.toLowerCase());
     });
 
-    return matched.map((item) => ({
-      icon: resolveIconForIndicator(item.slug, item.label),
-      value: item.unit && item.unit.includes(':') ? item.valueCurrent.replace('.', ',') : item.valueCurrent,
-      label: item.label,
-      unit: item.unit || undefined,
-    }));
+    return matched.map((item) => {
+      const explicitIcon = item.icon || resolveIconForIndicator(item.slug, item.label);
+      const explicitFormat =
+        item.format || resolveFormatForIndicator(item.slug, item.label, item.unit);
+      const formattedValue = formatIndicatorValue(item.valueCurrent, explicitFormat, item.unit);
+      return {
+        icon: explicitIcon,
+        value: formattedValue,
+        label: item.label,
+        unit: item.unit || undefined,
+      };
+    });
   }
 
   async function updateIndicator(id: string, patch: IndicatorPatch): Promise<Indicator> {
