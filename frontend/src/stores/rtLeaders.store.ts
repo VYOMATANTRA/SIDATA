@@ -51,6 +51,8 @@ export const useRtLeadersStore = defineStore('rtLeaders', () => {
   const hasFetched = ref(false);
   /** Rows the API returned that could not be rendered. */
   const rejectedCount = ref(0);
+  /** From system_settings via the list API — not inferred from phone placeholders. */
+  const isSampleRoster = ref(false);
 
   let inFlight: Promise<void> | null = null;
   let activeRequestId = 0;
@@ -73,12 +75,16 @@ export const useRtLeadersStore = defineStore('rtLeaders', () => {
           throw new Error(`Gagal memuat data Ketua RT (status ${response.status})`);
         }
 
-        const data = (await response.json()) as { leaders?: unknown };
+        const data = (await response.json()) as {
+          leaders?: unknown;
+          isSampleRoster?: unknown;
+        };
         const rows = Array.isArray(data.leaders) ? data.leaders : [];
         const valid = rows.filter(isRtLeader);
         if (currentRequestId !== activeRequestId) return;
         rejectedCount.value = rows.length - valid.length;
         rtLeaders.value = [...valid].sort((a, b) => a.rtNumber - b.rtNumber);
+        isSampleRoster.value = data.isSampleRoster === true;
       } catch (err) {
         if (currentRequestId !== activeRequestId) return;
         error.value = err instanceof Error ? err.message : 'Terjadi kesalahan jaringan';
@@ -100,6 +106,7 @@ export const useRtLeadersStore = defineStore('rtLeaders', () => {
     error,
     hasFetched,
     rejectedCount,
+    isSampleRoster,
     fetchRtLeaders,
   };
 });
