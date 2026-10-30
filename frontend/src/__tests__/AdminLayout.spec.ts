@@ -96,3 +96,66 @@ describe('AdminLayout.vue', () => {
     expect(wrapper.find('[data-test="admin-header"] h1').text()).toBe('Cerita');
   });
 });
+
+describe('AdminLayout.vue — mobile sidebar drawer', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    setActivePinia(createPinia());
+    const authStore = useAuthStore();
+    authStore.user = { id: 'u1', email: 'admin@example.com', role: 'admin' };
+    authStore.accessToken = 'token';
+  });
+
+  it('is closed by default: no backdrop, sidebar translated off-screen', async () => {
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
+
+    expect(wrapper.find('[data-test="admin-sidebar-backdrop"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="admin-sidebar"]').classes()).toContain('-translate-x-full');
+  });
+
+  it('opens the sidebar and shows a backdrop when the header menu button is clicked', async () => {
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
+
+    await wrapper.find('[data-test="admin-mobile-menu-toggle"]').trigger('click');
+
+    expect(wrapper.find('[data-test="admin-sidebar-backdrop"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="admin-sidebar"]').classes()).toContain('translate-x-0');
+  });
+
+  it('closes the sidebar when the backdrop is clicked', async () => {
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
+    await wrapper.find('[data-test="admin-mobile-menu-toggle"]').trigger('click');
+    expect(wrapper.find('[data-test="admin-sidebar-backdrop"]').exists()).toBe(true);
+
+    await wrapper.find('[data-test="admin-sidebar-backdrop"]').trigger('click');
+    expect(wrapper.find('[data-test="admin-sidebar-backdrop"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="admin-sidebar"]').classes()).toContain('-translate-x-full');
+  });
+
+  it('closes the sidebar automatically after navigating to another admin page', async () => {
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
+    await wrapper.find('[data-test="admin-mobile-menu-toggle"]').trigger('click');
+    expect(wrapper.find('[data-test="admin-sidebar-backdrop"]').exists()).toBe(true);
+
+    await router.push('/admin/cerita');
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('[data-test="admin-sidebar-backdrop"]').exists()).toBe(false);
+  });
+});

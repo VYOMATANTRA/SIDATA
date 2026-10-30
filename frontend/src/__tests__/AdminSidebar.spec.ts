@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { setActivePinia, createPinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
@@ -9,6 +9,8 @@ function createTestRouter() {
   return createRouter({
     history: createMemoryHistory(),
     routes: [
+      { path: '/', component: { template: '<div>Public Home</div>' } },
+      { path: '/login', component: { template: '<div>Login</div>' } },
       { path: '/admin', component: { template: '<div>Dashboard</div>' } },
       { path: '/data', component: { template: '<div>Data</div>' } },
       { path: '/users', component: { template: '<div>Users</div>' } },
@@ -123,5 +125,154 @@ describe('AdminSidebar.vue', () => {
   it('renders as a labelled nav landmark', async () => {
     const { wrapper } = await mountSidebar('admin');
     expect(wrapper.find('nav').attributes('aria-label')).toBe('Navigasi Admin');
+  });
+
+  // Accessibility fix: collapsing the rail used to remove the label text from the DOM entirely
+  // (v-if), leaving every link and the Sistem toggle with no accessible name. Labels now stay in
+  // the DOM as sr-only text when collapsed instead of being removed.
+  it('keeps an accessible name on every nav link and the Sistem toggle when the sidebar is collapsed', async () => {
+    const { wrapper } = await mountSidebar('admin');
+
+    await wrapper.find('[data-test="sidebar-collapse-toggle"]').trigger('click');
+
+    const dataLink = wrapper.find('[data-test="nav-data"]');
+    expect(dataLink.text()).toContain('Data');
+    expect(dataLink.find('span').classes()).toContain('sr-only');
+
+    const sistemToggle = wrapper.find('[data-test="nav-sistem"]');
+    expect(sistemToggle.text()).toContain('Sistem');
+    expect(sistemToggle.find('span').classes()).toContain('sr-only');
+
+    const akunPengguna = wrapper.find('[data-test="nav-sistem-akun-pengguna"]');
+    expect(akunPengguna.text()).toContain('Akun pengguna');
+    expect(akunPengguna.find('span').classes()).toContain('sr-only');
+
+    const logoutButton = wrapper.find('[data-test="nav-logout"]');
+    expect(logoutButton.text()).toContain('Keluar');
+    expect(logoutButton.find('span').classes()).toContain('sr-only');
+  });
+
+  it('shows visible (non-sr-only) labels when the sidebar is expanded', async () => {
+    const { wrapper } = await mountSidebar('admin');
+
+    const dataLink = wrapper.find('[data-test="nav-data"]');
+    expect(dataLink.find('span').classes()).not.toContain('sr-only');
+  });
+});
+
+describe('AdminSidebar.vue — navigation out of the admin area', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it('renders a link back to the public site', async () => {
+    const { wrapper } = await mountSidebar('admin');
+    const link = wrapper.find('[data-test="nav-public-site"]');
+    expect(link.exists()).toBe(true);
+    expect(link.attributes('href')).toBe('/');
+    expect(link.text()).toContain('Kembali ke Situs Publik');
+  });
+
+  it('logs out, clears auth state, and redirects to /login on successful logout', async () => {
+    const { wrapper, router } = await mountSidebar('admin');
+    const authStore = useAuthStore();
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response;
+      }
+      return { ok: true, json: async () => ({}) } as Response;
+    });
+
+    await wrapper.find('[data-test="nav-logout"]').trigger('click');
+    await vi.waitUntil(() => !authStore.isAuthenticated);
+
+    expect(authStore.isAuthenticated).toBe(false);
+    expect(router.currentRoute.value.path).toBe('/login');
+  });
+
+  it('keeps the session and shows an inline error when the logout request fails', async () => {
+    const { wrapper } = await mountSidebar('admin');
+    const authStore = useAuthStore();
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response;
+      }
+      return { ok: false, json: async () => ({}) } as Response;
+    });
+
+    await wrapper.find('[data-test="nav-logout"]').trigger('click');
+    await vi.waitUntil(() => wrapper.find('[data-test="logout-error"]').exists());
+
+    expect(authStore.isAuthenticated).toBe(true);
+    expect(wrapper.find('[data-test="logout-error"]').text()).toContain('Gagal keluar');
+  });
+});
+
+describe('AdminSidebar.vue — mobile drawer', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('is translated off-screen by default and shown when mobileOpen is true', async () => {
+    setActivePinia(createPinia());
+    const authStore = useAuthStore();
+    authStore.user = { id: 'u1', email: 'u@example.com', role: 'admin' };
+    authStore.accessToken = 'token';
+
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const closed = mount(AdminSidebar, { global: { plugins: [router] } });
+    expect(closed.find('nav').classes()).toContain('-translate-x-full');
+
+    const open = mount(AdminSidebar, {
+      props: { mobileOpen: true },
+      global: { plugins: [router] },
+    });
+    expect(open.find('nav').classes()).toContain('translate-x-0');
+  });
+
+  it('emits close when the mobile close button is clicked', async () => {
+    const { wrapper } = await mountSidebar('admin');
+    await wrapper.find('[data-test="sidebar-mobile-close"]').trigger('click');
+    expect(wrapper.emitted('close')).toBeTruthy();
+  });
+
+  it('emits close on Escape only while the mobile drawer is open', async () => {
+    setActivePinia(createPinia());
+    const authStore = useAuthStore();
+    authStore.user = { id: 'u1', email: 'u@example.com', role: 'admin' };
+    authStore.accessToken = 'token';
+
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const closedWrapper = mount(AdminSidebar, { global: { plugins: [router] } });
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await closedWrapper.vm.$nextTick();
+    expect(closedWrapper.emitted('close')).toBeFalsy();
+    closedWrapper.unmount();
+
+    const openWrapper = mount(AdminSidebar, {
+      props: { mobileOpen: true },
+      global: { plugins: [router] },
+    });
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await openWrapper.vm.$nextTick();
+    expect(openWrapper.emitted('close')).toBeTruthy();
+    openWrapper.unmount();
+  });
+
+  it('closes the mobile drawer when a nav link is clicked', async () => {
+    const { wrapper } = await mountSidebar('admin');
+    await wrapper.find('[data-test="nav-data"]').trigger('click');
+    expect(wrapper.emitted('close')).toBeTruthy();
   });
 });
