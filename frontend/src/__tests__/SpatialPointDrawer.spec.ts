@@ -6,7 +6,11 @@ import type { SpatialPointDTO, RtLeaderDTO } from '../types/maps';
 
 // The drawer links to the Ketua RT page (SPEC §8), so it always needs a router.
 function mountDrawer(
-  props: { point: SpatialPointDTO | null; leader?: RtLeaderDTO | null },
+  props: {
+    point: SpatialPointDTO | null;
+    leader?: RtLeaderDTO | null;
+    leaderError?: string | null;
+  },
   attachTo?: HTMLElement,
 ) {
   const router = createRouter({
@@ -128,4 +132,25 @@ describe('SpatialPointDrawer.vue', () => {
 
     wrapper.unmount();
   });
+
+  it('shows unpadded RT numbers in coverage chips', () => {
+    const wrapper = mountDrawer({
+      point: { ...samplePoint, rts: [5, 12] },
+    });
+    expect(wrapper.text()).toContain('RT 5');
+    expect(wrapper.text()).toContain('RT 12');
+    expect(wrapper.text()).not.toContain('RT 05');
+  });
+
+  it('shows a retryable message when the leader lookup failed', async () => {
+    const wrapper = mountDrawer({
+      point: samplePoint,
+      leader: null,
+      leaderError: 'Gagal memuat kontak Ketua RT',
+    });
+    expect(wrapper.find('[data-test="drawer-leader-error"]').exists()).toBe(true);
+    await wrapper.find('[data-test="drawer-leader-retry"]').trigger('click');
+    expect(wrapper.emitted('retry-leader')).toBeDefined();
+  });
+
 });

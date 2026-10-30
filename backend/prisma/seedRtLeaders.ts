@@ -19,6 +19,7 @@ export interface RtLeaderSeedClient {
     }): Promise<unknown>;
   };
   spatialPoint: {
+    findUnique(args: { where: { id: string } }): Promise<{ id: string } | null>;
     upsert(args: {
       where: { id: string };
       update: Record<string, never>;
@@ -33,10 +34,8 @@ export interface RtLeaderSeedClient {
     }): Promise<unknown>;
   };
   spatialPointRt: {
-    upsert(args: {
-      where: { pointId_rtNumber: { pointId: string; rtNumber: number } };
-      update: Record<string, never>;
-      create: { pointId: string; rtNumber: number };
+    create(args: {
+      data: { pointId: string; rtNumber: number };
     }): Promise<unknown>;
   };
 }
@@ -44,9 +43,12 @@ export interface RtLeaderSeedClient {
 /**
  * Seeds one RT-leader row per RT together with its 1:1 spatial point.
  *
- * Every upsert carries `update: {}` on purpose. Re-running the seed must only fill
- * in rows that are missing; passing the stored values in `update` would silently
- * revert any correction an editor has already made, which SPEC §2 forbids.
+ * Every leader/point upsert carries `update: {}` on purpose. Re-running the seed
+ * must only fill in rows that are missing; passing the stored values in `update`
+ * would silently revert any correction an editor has already made, which SPEC §2
+ * forbids. The RT-coverage junction is created only when the point itself is new,
+ * so a re-seed cannot restore a coverage row an editor removed (for example after
+ * moving the point to another RT).
  *
  * Returns the number of RTs processed.
  */
@@ -71,6 +73,8 @@ export async function seedRtLeaders(
     const pointName = `Pos RT ${String(rt.rtNumber).padStart(2, '0')} Kelurahan Manggar`;
     const metadata = { keterangan: `Ketua RT ${rt.rtNumber}: ${rt.name}` };
 
+    const existingPoint = await client.spatialPoint.findUnique({ where: { id: pointId } });
+
     await client.spatialPoint.upsert({
       where: { id: pointId },
       update: {},
@@ -84,11 +88,14 @@ export async function seedRtLeaders(
       },
     });
 
-    await client.spatialPointRt.upsert({
-      where: { pointId_rtNumber: { pointId, rtNumber: rt.rtNumber } },
-      update: {},
-      create: { pointId, rtNumber: rt.rtNumber },
-    });
+    // Only attach default coverage when the point is being created. If the point
+    // already exists, an editor may have moved or cleared its RT coverage — do
+    // not put the seed row back.
+    if (!existingPoint) {
+      await client.spatialPointRt.create({
+        data: { pointId, rtNumber: rt.rtNumber },
+      });
+    }
   }
 
   return data.length;

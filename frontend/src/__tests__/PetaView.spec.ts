@@ -321,7 +321,7 @@ describe('PetaView accessibility, filtering, and point selection', () => {
     });
 
     const wrapper = await mountReady();
-    const dekatSayaBtn = wrapper.findAll('button').find((b) => b.text().trim() === 'Dekat saya');
+    const dekatSayaBtn = wrapper.findAll('button').find((b) => b.text().trim() === 'Gunakan lokasi saya');
     expect(dekatSayaBtn).toBeDefined();
 
     await dekatSayaBtn?.trigger('click');

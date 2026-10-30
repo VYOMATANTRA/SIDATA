@@ -536,7 +536,7 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
     expect(wrapper.find('[data-test="rt-count"]').text()).toBe('');
   });
 
-  it('clears stale roster and rejected count when a forced refresh fails', async () => {
+  it('keeps the last good roster when a forced refresh fails', async () => {
     const wrapper = await mountReady();
     expect(wrapper.findAll('tbody tr').length).toBe(DEFAULT_PAGE_SIZE);
 
@@ -547,13 +547,13 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
 
     const { useRtLeadersStore } = await import('../stores/rtLeaders.store');
     const store = useRtLeadersStore();
+    const previousLength = store.rtLeaders.length;
     await store.fetchRtLeaders(true);
     await flushPromises();
 
     expect(wrapper.find('[data-test="rt-error"]').exists()).toBe(true);
-    expect(wrapper.find('[data-test="rt-rejected"]').exists()).toBe(false);
-    expect(store.rtLeaders).toHaveLength(0);
-    expect(store.rejectedCount).toBe(0);
+    expect(store.rtLeaders).toHaveLength(previousLength);
+    expect(wrapper.find('table').exists()).toBe(true);
   });
 
   it('normalises every accepted phone format for the wa.me link', async () => {

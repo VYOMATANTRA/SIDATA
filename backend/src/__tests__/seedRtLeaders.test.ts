@@ -6,15 +6,17 @@ import { seedRtLeaders, type RtLeaderSeedClient } from '../../prisma/seedRtLeade
 
 type UpsertCall = { where: unknown; update: unknown; create: unknown };
 
-function recordingClient() {
+function recordingClient(existingPointIds: Set<string> = new Set()) {
   const calls: {
     rtLeader: UpsertCall[];
     spatialPoint: UpsertCall[];
-    spatialPointRt: UpsertCall[];
+    spatialPointFind: string[];
+    spatialPointRtCreate: Array<{ pointId: string; rtNumber: number }>;
   } = {
     rtLeader: [],
     spatialPoint: [],
-    spatialPointRt: [],
+    spatialPointFind: [],
+    spatialPointRtCreate: [],
   };
 
   const client: RtLeaderSeedClient = {
@@ -25,14 +27,18 @@ function recordingClient() {
       },
     },
     spatialPoint: {
+      async findUnique(args) {
+        calls.spatialPointFind.push(args.where.id);
+        return existingPointIds.has(args.where.id) ? { id: args.where.id } : null;
+      },
       async upsert(args) {
         calls.spatialPoint.push(args);
         return args;
       },
     },
     spatialPointRt: {
-      async upsert(args) {
-        calls.spatialPointRt.push(args);
+      async create(args) {
+        calls.spatialPointRtCreate.push(args.data);
         return args;
       },
     },
@@ -49,9 +55,9 @@ describe('seedRtLeaders', () => {
 
     assert.equal(calls.rtLeader.length, RT_LEADERS_DATA.length);
     assert.equal(calls.spatialPoint.length, RT_LEADERS_DATA.length);
-    assert.equal(calls.spatialPointRt.length, RT_LEADERS_DATA.length);
+    assert.equal(calls.spatialPointRtCreate.length, RT_LEADERS_DATA.length);
 
-    for (const call of [...calls.rtLeader, ...calls.spatialPoint, ...calls.spatialPointRt]) {
+    for (const call of [...calls.rtLeader, ...calls.spatialPoint]) {
       assert.deepEqual(
         call.update,
         {},
@@ -93,11 +99,29 @@ describe('seedRtLeaders', () => {
     const pointIds = new Set(calls.spatialPoint.map((call) => (call.where as { id: string }).id));
     assert.equal(pointIds.size, RT_LEADERS_DATA.length);
 
-    for (const call of calls.spatialPointRt) {
-      const where = call.where as { pointId_rtNumber: { pointId: string; rtNumber: number } };
-      assert.ok(pointIds.has(where.pointId_rtNumber.pointId));
-      assert.equal((call.create as { rtNumber: number }).rtNumber, where.pointId_rtNumber.rtNumber);
+    for (const created of calls.spatialPointRtCreate) {
+      assert.ok(pointIds.has(created.pointId));
     }
+  });
+
+  it('does not recreate RT coverage when the spatial point already exists', async () => {
+    const existingId = '00000000-0000-0000-0001-000000000007';
+    const { client, calls } = recordingClient(new Set([existingId]));
+
+    await seedRtLeaders(client, [
+      {
+        rtNumber: 7,
+        name: 'Ketua RT 07',
+        phone: '—',
+        phoneIsWhatsapp: false,
+        alamat: null,
+        latitude: -1.2,
+        longitude: 116.9,
+      },
+    ]);
+
+    assert.equal(calls.spatialPoint.length, 1);
+    assert.equal(calls.spatialPointRtCreate.length, 0);
   });
 
   it('returns the number of RTs processed', async () => {

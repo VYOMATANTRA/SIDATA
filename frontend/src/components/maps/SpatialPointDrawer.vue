@@ -7,6 +7,7 @@ import BaseButton from '../common/BaseButton.vue';
 interface Props {
   point: SpatialPointDTO | null;
   leader?: RtLeaderDTO | null;
+  leaderError?: string | null;
   closeLabel?: string;
 }
 
@@ -14,6 +15,7 @@ const props = defineProps<Props>();
 
 const emit = defineEmits<{
   (e: 'close'): void;
+  (e: 'retry-leader'): void;
 }>();
 
 const closeButtonEl = ref<HTMLButtonElement | null>(null);
@@ -234,9 +236,26 @@ const metadataEntries = computed(() => {
           :key="rtNum"
           class="rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700"
         >
-          RT {{ rtNum < 10 ? `0${rtNum}` : rtNum }}
+          RT {{ rtNum }}
         </span>
       </div>
+    </div>
+
+    <div
+      v-if="point.type === 'ketua_rt' && leaderError && !(leader || point.rtLeader)"
+      class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3.5"
+      role="alert"
+      data-test="drawer-leader-error"
+    >
+      <p class="text-sm text-slate-800">{{ leaderError }}</p>
+      <button
+        type="button"
+        class="rounded-btn text-brand-navy mt-2 min-h-10 border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-white"
+        data-test="drawer-leader-retry"
+        @click="emit('retry-leader')"
+      >
+        Coba lagi
+      </button>
     </div>
 
     <!-- Special Ketua RT Card Details -->

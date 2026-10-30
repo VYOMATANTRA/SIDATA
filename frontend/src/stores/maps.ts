@@ -8,6 +8,7 @@ export const useMapsStore = defineStore('maps', () => {
   const summary = ref<MapSummaryDTO | null>(null);
   const selectedPoint = ref<SpatialPointDTO | null>(null);
   const selectedLeader = ref<RtLeaderDTO | null>(null);
+  const selectedLeaderError = ref<string | null>(null);
   const activeTypeFilter = ref<SpatialPointType | 'all'>('all');
   const activeRtFilter = ref<number | null>(null);
   const isLoading = ref(false);
@@ -61,6 +62,7 @@ export const useMapsStore = defineStore('maps', () => {
     const requestId = ++selectionRequest;
     selectedPoint.value = point;
     selectedLeader.value = null;
+    selectedLeaderError.value = null;
 
     if (point && point.type === 'ketua_rt' && point.rts.length > 0) {
       if (point.rtLeader) {
@@ -81,10 +83,19 @@ export const useMapsStore = defineStore('maps', () => {
         try {
           const leader = await fetchRtLeaderByRt(primaryRt);
           if (requestId === selectionRequest) selectedLeader.value = leader;
-        } catch {
-          // If RT leader lookup fails, proceed with available point info
+        } catch (err) {
+          if (requestId === selectionRequest) {
+            selectedLeaderError.value =
+              err instanceof Error ? err.message : 'Gagal memuat kontak Ketua RT';
+          }
         }
       }
+    }
+  }
+
+  async function retrySelectedLeader() {
+    if (selectedPoint.value) {
+      await selectPoint(selectedPoint.value);
     }
   }
 
@@ -100,6 +111,7 @@ export const useMapsStore = defineStore('maps', () => {
     selectionRequest += 1;
     selectedPoint.value = null;
     selectedLeader.value = null;
+    selectedLeaderError.value = null;
   }
 
   return {
@@ -107,6 +119,7 @@ export const useMapsStore = defineStore('maps', () => {
     summary,
     selectedPoint,
     selectedLeader,
+    selectedLeaderError,
     activeTypeFilter,
     activeRtFilter,
     isLoading,
@@ -115,6 +128,7 @@ export const useMapsStore = defineStore('maps', () => {
     loadPoints,
     loadSummary,
     selectPoint,
+    retrySelectedLeader,
     setTypeFilter,
     setRtFilter,
     clearSelection,
