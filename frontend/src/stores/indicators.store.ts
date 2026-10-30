@@ -52,6 +52,16 @@ export type IndicatorComparison = RenderedComparison;
 /** Public hero figures: short TTL so SPA sessions do not keep deleted/edited values forever. */
 export const BY_SLUG_TTL_MS = 60_000;
 
+/**
+ * Canonical slug key for every bySlug get / set / invalidate path.
+ * Same normalisation contract as the backend `normalizeIndicatorLookup` —
+ * mixed-case reads must never fork or leave a stale entry.
+ */
+export function normalizeIndicatorSlug(slug: string): string {
+  return slug.trim().toLowerCase();
+}
+
+
 /** Only the fields the CMS form can change; the API rejects unknown keys (`.strict()`). */
 export interface IndicatorPatch {
   label?: string;
@@ -117,7 +127,7 @@ export const useIndicatorsStore = defineStore('indicators', () => {
 
   /** Drop every bySlug entry for this indicator id and/or slug key. */
   function evictSlugCacheForIndicator(id: string, slug?: string | null): void {
-    const slugKey = typeof slug === 'string' ? slug.trim().toLowerCase() : null;
+    const slugKey = typeof slug === 'string' ? normalizeIndicatorSlug(slug) : null;
     const next = { ...bySlug.value };
     const nextAt = { ...bySlugFetchedAt.value };
     let changed = false;
@@ -137,7 +147,7 @@ export const useIndicatorsStore = defineStore('indicators', () => {
   function bumpSlugFetchGeneration(...keys: Array<string | null | undefined>): void {
     for (const key of keys) {
       if (typeof key !== 'string') continue;
-      const normalized = key.trim().toLowerCase();
+      const normalized = normalizeIndicatorSlug(key);
       if (!normalized) continue;
       fetchGenBySlug[normalized] = (fetchGenBySlug[normalized] ?? 0) + 1;
     }
@@ -160,7 +170,7 @@ export const useIndicatorsStore = defineStore('indicators', () => {
   function replaceIndicator(updated: Indicator): void {
     invalidateSectionCache(updated.sectionId);
 
-    const newSlugKey = updated.slug.trim().toLowerCase();
+    const newSlugKey = normalizeIndicatorSlug(updated.slug);
     const nextBySlug = { ...bySlug.value };
     const nextAt = { ...bySlugFetchedAt.value };
     const keysToBump: string[] = [newSlugKey];
@@ -293,7 +303,7 @@ export const useIndicatorsStore = defineStore('indicators', () => {
   }
 
   async function fetchBySlug(slug: string, force = false): Promise<IndicatorDto | null> {
-    const normalized = slug.trim().toLowerCase();
+    const normalized = normalizeIndicatorSlug(slug);
 
     if (!force && bySlug.value[normalized] && isSlugCacheFresh(normalized)) {
       return bySlug.value[normalized]!;
@@ -374,7 +384,7 @@ export const useIndicatorsStore = defineStore('indicators', () => {
   }
 
   function findBySlug(slug: string): IndicatorDto | null {
-    const normalized = slug.trim().toLowerCase();
+    const normalized = normalizeIndicatorSlug(slug);
     return bySlug.value[normalized] ?? null;
   }
 

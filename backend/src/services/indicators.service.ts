@@ -298,10 +298,24 @@ const NEGATIVE_TTL_MS = 10 * 1000; // 10 seconds
 const MAX_NEGATIVE_ENTRIES = 200;
 const missingIndicatorIds = new Map<string, number>();
 
-const normalizeIndicatorCacheKey = (key: string): string => key.trim().toLowerCase();
+export type IndicatorCacheKind = 'id' | 'slug';
 
-function isKnownMissing(id: string): boolean {
-  const key = normalizeIndicatorCacheKey(id);
+/**
+ * Canonical per-entry cache key. Every get / set / invalidate path must go through
+ * this so mixed-case reads cannot fork the cache, and id vs slug never share a key
+ * (Andi review: lowercase-only keys without a kind prefix collide across namespaces).
+ */
+export function indicatorCacheKey(kind: IndicatorCacheKind, value: string): string {
+  return `${kind}:${value.trim().toLowerCase()}`;
+}
+
+/** Normalize a raw id-or-slug lookup string before DB and negative-cache use. */
+export function normalizeIndicatorLookup(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function isKnownMissing(lookup: string): boolean {
+  const key = normalizeIndicatorLookup(lookup);
   const expiresAt = missingIndicatorIds.get(key);
   if (expiresAt === undefined) return false;
   if (Date.now() >= expiresAt) {
@@ -311,8 +325,8 @@ function isKnownMissing(id: string): boolean {
   return true;
 }
 
-function rememberMissing(id: string): void {
-  const key = normalizeIndicatorCacheKey(id);
+function rememberMissing(lookup: string): void {
+  const key = normalizeIndicatorLookup(lookup);
   if (!missingIndicatorIds.has(key)) {
     if (missingIndicatorIds.size >= MAX_NEGATIVE_ENTRIES) {
       const oldest = missingIndicatorIds.keys().next().value;
@@ -324,8 +338,8 @@ function rememberMissing(id: string): void {
   missingIndicatorIds.set(key, Date.now() + NEGATIVE_TTL_MS);
 }
 
-function forgetMissing(id: string): void {
-  missingIndicatorIds.delete(normalizeIndicatorCacheKey(id));
+function forgetMissing(lookup: string): void {
+  missingIndicatorIds.delete(normalizeIndicatorLookup(lookup));
 }
 
 const getListCache = (key: string): VersionedTtlCache<IndicatorListResult> =>
@@ -334,11 +348,27 @@ const getListCache = (key: string): VersionedTtlCache<IndicatorListResult> =>
     () => new VersionedTtlCache<IndicatorListResult>({ ttlMs: CACHE_TTL_MS, baseClient: prisma }),
   );
 
-const getByIdCache = (id: string): VersionedTtlCache<IndicatorDto | null> =>
+const getIndicatorEntryCache = (
+  kind: IndicatorCacheKind,
+  value: string,
+): VersionedTtlCache<IndicatorDto | null> =>
   indicatorByIdCache.getOrCompute(
-    normalizeIndicatorCacheKey(id),
+    indicatorCacheKey(kind, value),
     () => new VersionedTtlCache<IndicatorDto | null>({ ttlMs: CACHE_TTL_MS, baseClient: prisma }),
   );
+
+function warmIndicatorCaches(dto: IndicatorDto): void {
+  getIndicatorEntryCache('id', dto.id).setCommitted(dto);
+  getIndicatorEntryCache('slug', dto.slug).setCommitted(dto);
+  forgetMissing(dto.id);
+  forgetMissing(dto.slug);
+}
+
+function dropIndicatorCacheEntry(kind: IndicatorCacheKind, value: string): void {
+  const key = indicatorCacheKey(kind, value);
+  indicatorByIdCache.get(key)?.invalidate();
+  indicatorByIdCache.delete(key);
+}
 
 /**
  * Adapter so the keyed list caches can ride executeLockedTransaction's `cache` option,
@@ -355,23 +385,26 @@ const listCachesInvalidator: CacheInvalidator = {
 };
 
 function collectKeysToInvalidate(identifier: string, keys: Set<string>): void {
-  const key = normalizeIndicatorCacheKey(identifier);
-  keys.add(key);
+  const norm = normalizeIndicatorLookup(identifier);
+  keys.add(indicatorCacheKey('id', norm));
+  keys.add(indicatorCacheKey('slug', norm));
 
-  const directCache = indicatorByIdCache.get(key);
-  const directData = directCache?.get() ?? directCache?.getLastKnownGood(null);
-  if (directData?.id) keys.add(normalizeIndicatorCacheKey(directData.id));
-  if (directData?.slug) keys.add(normalizeIndicatorCacheKey(directData.slug));
+  for (const kind of ['id', 'slug'] as const) {
+    const directCache = indicatorByIdCache.get(indicatorCacheKey(kind, norm));
+    const directData = directCache?.get() ?? directCache?.getLastKnownGood(null);
+    if (directData?.id) keys.add(indicatorCacheKey('id', directData.id));
+    if (directData?.slug) keys.add(indicatorCacheKey('slug', directData.slug));
+  }
 
   for (const [cachedKey, cache] of indicatorByIdCache.entries()) {
     const data = cache.get() ?? cache.getLastKnownGood(null);
     if (data) {
-      const matchesId = data.id === identifier || normalizeIndicatorCacheKey(data.id) === key;
-      const matchesSlug = data.slug === identifier || normalizeIndicatorCacheKey(data.slug) === key;
+      const matchesId = normalizeIndicatorLookup(data.id) === norm;
+      const matchesSlug = normalizeIndicatorLookup(data.slug) === norm;
       if (matchesId || matchesSlug) {
         keys.add(cachedKey);
-        if (data.id) keys.add(normalizeIndicatorCacheKey(data.id));
-        if (data.slug) keys.add(normalizeIndicatorCacheKey(data.slug));
+        keys.add(indicatorCacheKey('id', data.id));
+        keys.add(indicatorCacheKey('slug', data.slug));
       }
     }
   }
@@ -386,8 +419,9 @@ export const invalidateIndicatorsCache = (id?: string, slug?: string): void => {
   for (const key of keysToInvalidate) {
     indicatorByIdCache.get(key)?.invalidate();
     indicatorByIdCache.delete(key);
-    forgetMissing(key);
   }
+  if (id) forgetMissing(id);
+  if (slug) forgetMissing(slug);
 
   if (!id && !slug) {
     indicatorByIdCache.clear();
@@ -538,30 +572,50 @@ export const getIndicatorById = async (
   if (typeof id !== 'string' || id.trim() === '' || id.length > 191) {
     return null;
   }
-  const normalizedId = id.trim();
-  const cacheKey = normalizeIndicatorCacheKey(normalizedId);
+  // Normalize before cache and DB so `ABC123` / `abc123` never fork entries or hide a hit.
+  const lookup = normalizeIndicatorLookup(id);
   const useSharedCache = client === prisma;
-  if (useSharedCache && isKnownMissing(cacheKey)) {
+  if (useSharedCache && isKnownMissing(lookup)) {
     return null;
   }
-  const result = await getByIdCache(cacheKey).getOrFetch(async (db) => {
+
+  if (useSharedCache) {
+    const idCache = indicatorByIdCache.get(indicatorCacheKey('id', lookup));
+    const fromId = idCache?.get() ?? idCache?.getLastKnownGood(null);
+    if (fromId) return fromId;
+    const slugCache = indicatorByIdCache.get(indicatorCacheKey('slug', lookup));
+    const fromSlug = slugCache?.get() ?? slugCache?.getLastKnownGood(null);
+    if (fromSlug) return fromSlug;
+  }
+
+  // Probe under id:lookup; dual-write under the real id + slug keys after a hit.
+  const result = await getIndicatorEntryCache('id', lookup).getOrFetch(async (db) => {
     let row = await db.indicator.findUnique({
-      where: { id: normalizedId },
+      where: { id: lookup },
       include: WITH_TEMPLATE,
     });
     if (!row) {
       row = await db.indicator.findUnique({
-        where: { slug: normalizedId.toLowerCase() },
+        where: { slug: lookup },
         include: WITH_TEMPLATE,
       });
     }
     if (!row) return null;
     return formatIndicator(row as Parameters<typeof formatIndicator>[0]);
   }, client);
+
   if (result === null && useSharedCache) {
-    // Drop the just-allocated slot instead of retaining the miss in the shared LRU.
-    indicatorByIdCache.delete(cacheKey);
-    rememberMissing(cacheKey);
+    // Drop the probe slot instead of retaining the miss in the shared LRU.
+    dropIndicatorCacheEntry('id', lookup);
+    rememberMissing(lookup);
+    return null;
+  }
+  if (result && useSharedCache) {
+    warmIndicatorCaches(result);
+    // If lookup was a slug, the probe wrote under id:<slug> — drop that mistaken slot.
+    if (normalizeIndicatorLookup(result.id) !== lookup) {
+      dropIndicatorCacheEntry('id', lookup);
+    }
   }
   return result;
 };
@@ -598,10 +652,7 @@ export const createIndicator = async (
       lockQuery,
       cache: [listCachesInvalidator],
       onCommit: (committed) => {
-        getByIdCache(committed.id).setCommitted(committed);
-        getByIdCache(committed.slug).setCommitted(committed);
-        forgetMissing(committed.id);
-        forgetMissing(committed.slug);
+        warmIndicatorCaches(committed);
       },
       execute: async (tx) => {
         const section = await tx.section.findUnique({ where: { id: sectionId } });
@@ -668,7 +719,7 @@ export const updateIndicator = async (
   if (typeof id !== 'string' || id.trim() === '' || id.length > 191) {
     throw new IndicatorServiceError('ID indikator tidak valid.', 400);
   }
-  const normalizedId = id.trim();
+  const normalizedId = normalizeIndicatorLookup(id);
 
   if (typeof rawInput !== 'object' || rawInput === null || Array.isArray(rawInput)) {
     throw new IndicatorServiceError('Payload harus berupa objek JSON.', 400);
@@ -681,7 +732,7 @@ export const updateIndicator = async (
   const input = parsed.data as UpdateIndicatorInput & Record<string, unknown>;
 
   const lockQuery = Prisma.sql`SELECT id FROM indicators WHERE id = ${normalizedId} FOR UPDATE`;
-  const targetCache = getByIdCache(normalizedId);
+  const targetCache = getIndicatorEntryCache('id', normalizedId);
   let oldSlug: string | undefined;
 
   try {
@@ -699,11 +750,10 @@ export const updateIndicator = async (
         forgetMissing(committed.id);
 
         if (oldSlug && oldSlug !== committed.slug) {
-          indicatorByIdCache.get(normalizeIndicatorCacheKey(oldSlug))?.invalidate();
-          indicatorByIdCache.delete(normalizeIndicatorCacheKey(oldSlug));
+          dropIndicatorCacheEntry('slug', oldSlug);
           forgetMissing(oldSlug);
         }
-        const slugCache = getByIdCache(committed.slug);
+        const slugCache = getIndicatorEntryCache('slug', committed.slug);
         slugCache.invalidate();
         slugCache.setCommitted(committed);
         forgetMissing(committed.slug);
@@ -899,7 +949,7 @@ export const deleteIndicator = async (
   if (typeof id !== 'string' || id.trim() === '' || id.length > 191) {
     throw new IndicatorServiceError('ID indikator tidak valid.', 400);
   }
-  const normalizedId = id.trim();
+  const normalizedId = normalizeIndicatorLookup(id);
 
   const lockQuery = Prisma.sql`SELECT id FROM indicators WHERE id = ${normalizedId} FOR UPDATE`;
 
@@ -909,10 +959,8 @@ export const deleteIndicator = async (
       lockQuery,
       cache: [listCachesInvalidator],
       onCommit: (committed) => {
-        indicatorByIdCache.get(normalizeIndicatorCacheKey(committed.id))?.invalidate();
-        indicatorByIdCache.delete(normalizeIndicatorCacheKey(committed.id));
-        indicatorByIdCache.get(normalizeIndicatorCacheKey(committed.slug))?.invalidate();
-        indicatorByIdCache.delete(normalizeIndicatorCacheKey(committed.slug));
+        dropIndicatorCacheEntry('id', committed.id);
+        dropIndicatorCacheEntry('slug', committed.slug);
         forgetMissing(committed.id);
         forgetMissing(committed.slug);
       },

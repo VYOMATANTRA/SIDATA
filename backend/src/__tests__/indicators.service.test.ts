@@ -8,6 +8,8 @@ import {
   deleteIndicator,
   invalidateIndicatorsCache,
   indicatorByIdCache,
+  indicatorCacheKey,
+  normalizeIndicatorLookup,
   IndicatorServiceError,
 } from '../services/indicators.service.js';
 import prisma from '../utils/prisma.js';
@@ -878,12 +880,12 @@ describe('indicators.service getIndicatorById', () => {
 
     assert.equal(await getIndicatorById('ghost-1'), null);
     // The just-allocated slot is dropped instead of caching the miss.
-    assert.equal(indicatorByIdCache.has('ghost-1'), false);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'ghost-1')), false);
 
     // A repeat miss is short-circuited by the negative set: no second DB hit.
     assert.equal(await getIndicatorById('ghost-1'), null);
     assert.equal(queryCount, 2);
-    assert.equal(indicatorByIdCache.has('ghost-1'), false);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'ghost-1')), false);
   });
 
   it('forgets a miss after cache invalidation (row may have been created since)', async () => {
@@ -940,10 +942,12 @@ describe('indicators.service getIndicatorById', () => {
     assert.equal(result?.slug, 'jumlah-penduduk');
   });
 
-  it('normalizes slug lookup to lowercase', async () => {
+  it('normalizes slug lookup to lowercase and dual-writes prefixed keys', async () => {
     let queriedSlug: string | undefined;
+    let queriedId: string | undefined;
     indicatorImpl['findUnique'] = async (args: AnyRecord) => {
       const where = args['where'] as { id?: string; slug?: string };
+      if (where.id) queriedId = where.id;
       if (where.slug) {
         queriedSlug = where.slug;
         return indicatorRow({ id: 'ind-1', slug: 'jumlah-penduduk' });
@@ -952,13 +956,18 @@ describe('indicators.service getIndicatorById', () => {
     };
 
     const result = await getIndicatorById('JUMLAH-PENDUDUK');
+    assert.equal(queriedId, 'jumlah-penduduk');
     assert.equal(queriedSlug, 'jumlah-penduduk');
     assert.equal(result?.id, 'ind-1');
-    assert.equal(indicatorByIdCache.has('jumlah-penduduk'), true);
+    // Prefixed, lowercased keys only — raw / mixed-case keys must not exist.
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('slug', 'jumlah-penduduk')), true);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'ind-1')), true);
+    assert.equal(indicatorByIdCache.has('jumlah-penduduk'), false);
     assert.equal(indicatorByIdCache.has('JUMLAH-PENDUDUK'), false);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'jumlah-penduduk')), false);
   });
 
-  it('invalidates both id and slug cache when requested', async () => {
+  it('invalidates both id and slug prefixed cache entries when requested', async () => {
     indicatorImpl['findUnique'] = async (args: AnyRecord) => {
       const where = args['where'] as { id?: string; slug?: string };
       if (where.id === 'ind-1' || where.slug === 'jumlah-penduduk') {
@@ -969,12 +978,12 @@ describe('indicators.service getIndicatorById', () => {
 
     await getIndicatorById('ind-1');
     await getIndicatorById('jumlah-penduduk');
-    assert.equal(indicatorByIdCache.has('ind-1'), true);
-    assert.equal(indicatorByIdCache.has('jumlah-penduduk'), true);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'ind-1')), true);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('slug', 'jumlah-penduduk')), true);
 
     invalidateIndicatorsCache('ind-1', 'jumlah-penduduk');
-    assert.equal(indicatorByIdCache.has('ind-1'), false);
-    assert.equal(indicatorByIdCache.has('jumlah-penduduk'), false);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'ind-1')), false);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('slug', 'jumlah-penduduk')), false);
   });
 
   it('drops the slug cache entry when invalidating by id only', async () => {
@@ -988,26 +997,64 @@ describe('indicators.service getIndicatorById', () => {
       return null;
     };
 
-    // 1. Read by slug first (populates cache only under 'jumlah-penduduk')
+    // 1. Read by slug first — dual-write warms both id: and slug: entries.
     const first = await getIndicatorById('jumlah-penduduk');
     assert.equal(first?.id, 'ind-1');
     assert.equal(dbCallCount, 2); // 1 id query (miss) + 1 slug query (hit)
-    assert.equal(indicatorByIdCache.has('jumlah-penduduk'), true);
-    assert.equal(indicatorByIdCache.has('ind-1'), false);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('slug', 'jumlah-penduduk')), true);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'ind-1')), true);
+    // Mistaken probe slot id:<slug> must be dropped after dual-write.
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'jumlah-penduduk')), false);
 
-    // Reading again hits cache without querying DB
-    await getIndicatorById('jumlah-penduduk');
+    // Reading again hits cache without querying DB (either id or slug casing)
+    await getIndicatorById('JUMLAH-PENDUDUK');
+    await getIndicatorById('IND-1');
     assert.equal(dbCallCount, 2);
 
-    // 2. Invalidate by ID only (no slug parameter provided)
+    // 2. Invalidate by ID only (no slug parameter provided) — must clear slug entry too
     invalidateIndicatorsCache('ind-1');
-    assert.equal(indicatorByIdCache.has('jumlah-penduduk'), false);
-    assert.equal(indicatorByIdCache.has('ind-1'), false);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('slug', 'jumlah-penduduk')), false);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'ind-1')), false);
 
     // 3. Next slug read must go back to the database
     const second = await getIndicatorById('jumlah-penduduk');
     assert.equal(second?.id, 'ind-1');
     assert.equal(dbCallCount, 4); // 2 more queries since cache was evicted
+  });
+
+  it('keeps id and slug namespaces from colliding', async () => {
+    // Warm id:bar first (indicator whose id equals another indicator's slug string).
+    indicatorImpl['findUnique'] = async (args: AnyRecord) => {
+      const where = args['where'] as { id?: string; slug?: string };
+      if (where.id === 'bar') return indicatorRow({ id: 'bar', slug: 'other' });
+      return null;
+    };
+    assert.equal((await getIndicatorById('bar'))?.slug, 'other');
+    assert.equal(indicatorByIdCache.get(indicatorCacheKey('id', 'bar'))?.get()?.id, 'bar');
+    assert.equal(indicatorByIdCache.get(indicatorCacheKey('slug', 'other'))?.get()?.id, 'bar');
+
+    // Warm slug:bar for a different indicator — must not overwrite id:bar.
+    indicatorImpl['findUnique'] = async (args: AnyRecord) => {
+      const where = args['where'] as { id?: string; slug?: string };
+      if (where.id === 'foo' || where.slug === 'bar') {
+        return indicatorRow({ id: 'foo', slug: 'bar' });
+      }
+      if (where.id === 'bar') return indicatorRow({ id: 'bar', slug: 'other' });
+      return null;
+    };
+    assert.equal((await getIndicatorById('foo'))?.slug, 'bar');
+
+    assert.equal(indicatorByIdCache.get(indicatorCacheKey('id', 'bar'))?.get()?.id, 'bar');
+    assert.equal(indicatorByIdCache.get(indicatorCacheKey('slug', 'bar'))?.get()?.id, 'foo');
+    // Lookup prefers the id: namespace when both kind keys exist for the same string.
+    assert.equal((await getIndicatorById('bar'))?.id, 'bar');
+  });
+
+  it('indicatorCacheKey and normalizeIndicatorLookup are stable', () => {
+    assert.equal(normalizeIndicatorLookup('  AbC  '), 'abc');
+    assert.equal(indicatorCacheKey('id', 'AbC'), 'id:abc');
+    assert.equal(indicatorCacheKey('slug', ' AbC '), 'slug:abc');
+    assert.notEqual(indicatorCacheKey('id', 'x'), indicatorCacheKey('slug', 'x'));
   });
 });
 
