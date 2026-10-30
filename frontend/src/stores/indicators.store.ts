@@ -310,9 +310,9 @@ export const useIndicatorsStore = defineStore('indicators', () => {
 
     const isCurrent = () => fetchGenBySlug[normalized] === myGen;
 
-    // Declared before the IIFE so the finally clause can compare identity without TS2454.
-    let task!: Promise<IndicatorDto | null>;
-    task = (async () => {
+    // Box so the finally clause can compare promise identity without TS2454 / prefer-const.
+    const flight: { task: Promise<IndicatorDto | null> | null } = { task: null };
+    flight.task = (async () => {
       try {
         const response = await apiFetch(`/api/indicators/${encodeURIComponent(normalized)}`);
         if (!isCurrent()) {
@@ -360,7 +360,7 @@ export const useIndicatorsStore = defineStore('indicators', () => {
         return null;
       } finally {
         // Only the current request may clear tracking / loading for this slug.
-        if (inFlightBySlug[normalized] === task) {
+        if (inFlightBySlug[normalized] === flight.task) {
           delete inFlightBySlug[normalized];
         }
         if (isCurrent()) {
@@ -369,8 +369,8 @@ export const useIndicatorsStore = defineStore('indicators', () => {
       }
     })();
 
-    inFlightBySlug[normalized] = task;
-    return task;
+    inFlightBySlug[normalized] = flight.task;
+    return flight.task;
   }
 
   function findBySlug(slug: string): IndicatorDto | null {
