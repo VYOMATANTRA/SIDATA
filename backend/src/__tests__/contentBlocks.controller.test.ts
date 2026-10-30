@@ -1893,7 +1893,6 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
     }
   });
 
-
   it('stores Zod-cleaned publikasi metadata (trimmed https href), not the raw input', async () => {
     invalidateContentBlocksCache();
     const originalTransaction = prisma.$transaction;
