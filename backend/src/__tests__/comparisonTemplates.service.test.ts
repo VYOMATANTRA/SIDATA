@@ -213,9 +213,10 @@ const codeOf = (err: ComparisonTemplateServiceError): unknown =>
 /** Primes the shared per-id indicator cache; the returned fn reports DB reads so far. */
 async function primeIndicatorCache(): Promise<() => number> {
   let dbReads = 0;
-  stubMethod(prisma.indicator as unknown as AnyRecord, 'findUnique', (async () => {
+  // getIndicatorById probes with findMany(OR id|slug); stub that, not findUnique.
+  stubMethod(prisma.indicator as unknown as AnyRecord, 'findMany', (async () => {
     dbReads += 1;
-    return indicatorRow();
+    return [indicatorRow()];
   }) as AsyncFn);
   await getIndicatorById('ind-1');
   await getIndicatorById('ind-1');
