@@ -365,9 +365,20 @@ const LEGACY_FAKE_SLUGS: string[] = [
   'persampahan-dan-bank-sampah-unit-rasio-kelamin',
 ];
 
+const ALL_SEEDED_SLUGS = Object.values(CATEGORY_INDICATORS).flatMap((defs) =>
+  defs.map((d) => d.slug),
+);
+
 async function main() {
   const isDevMock = process.env.DEV_MOCK_INDICATORS === 'true' || process.argv.includes('--dev');
   const isReset = process.env.RESET_INDICATORS === 'true' || process.argv.includes('--reset');
+
+  if (isDevMock && process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'Flag --dev / DEV_MOCK_INDICATORS tidak diizinkan pada environment production (NODE_ENV=production).',
+    );
+  }
+
   console.log(
     `Memulai proses seeding indikator (Mode: ${isDevMock ? 'Dev Mock Figures (--dev)' : 'Honest Empty (No mock data)'}, Reset: ${isReset})...`,
   );
@@ -414,10 +425,11 @@ async function main() {
     console.log(`✓ Indikator legacy ${candidate.slug} berhasil dihapus dengan baris audit.`);
   }
 
-  // Bersihkan juga indikator bernilai 0 yang sebelumnya dibuat tanpa --dev agar tidak menampilkan angka palsu
+  // Bersihkan juga indikator bernilai 0 buatan seeder yang sebelumnya dibuat tanpa --dev agar tidak menampilkan angka palsu
   if (!isDevMock) {
     const zeroDummyCandidates = await prisma.indicator.findMany({
       where: {
+        slug: { in: ALL_SEEDED_SLUGS },
         valueCurrent: 0,
       },
     });
@@ -530,9 +542,13 @@ async function main() {
       });
 
       const valueCurrent = def.devValue;
+      const targetSource = isDevMock ? 'Data contoh (dev)' : def.source;
 
       if (existing) {
-        if (isReset && existing.valueCurrent.toString() !== valueCurrent) {
+        if (
+          isReset &&
+          (existing.valueCurrent.toString() !== valueCurrent || existing.source !== targetSource)
+        ) {
           // SPEC §3: Hanya reset jika belum pernah diubah oleh editor / non-system user
           const isTouchedByEditor =
             existing.createdAt.getTime() !== existing.updatedAt.getTime() ||
@@ -550,7 +566,10 @@ async function main() {
           await prisma.$transaction(async (tx) => {
             const updated = await tx.indicator.update({
               where: { id: existing.id },
-              data: { valueCurrent },
+              data: {
+                valueCurrent,
+                source: targetSource,
+              },
             });
             await buildAuditLog(
               {
@@ -583,7 +602,7 @@ async function main() {
             unit: def.unit,
             periodCurrent: def.periodCurrent,
             sortOrder: def.sortOrder,
-            source: def.source,
+            source: targetSource,
           },
         });
 
