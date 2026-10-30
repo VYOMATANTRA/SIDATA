@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
-import { useIndicatorsStore, type Indicator } from '../stores/indicators.store';
+import { useIndicatorsStore, type Indicator, BY_SLUG_TTL_MS, normalizeIndicatorSlug } from '../stores/indicators.store';
 import { useAuthStore } from '../stores/auth';
 
 function json(body: unknown, ok = true, status = ok ? 200 : 500): Response {
@@ -31,7 +31,7 @@ function makeIndicator(overrides: Partial<Indicator> = {}): Indicator {
   };
 }
 
-const sampleIndicator = {
+const sampleIndicator: Indicator = {
   id: 'ind-1',
   sectionId: 'sec-1',
   slug: 'jumlah-penduduk',
@@ -167,7 +167,10 @@ describe('indicators store (public per-section reads)', () => {
 
     expect(result).toEqual([sampleIndicator]);
     expect(store.bySectionId['sec-1']).toEqual([sampleIndicator]);
-    expect(fetchMock).toHaveBeenCalledWith('/api/indicators?sectionId=sec-1&pageSize=200');
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/indicators?sectionId=sec-1&pageSize=200',
+      expect.objectContaining({ credentials: 'include' }),
+    );
   });
 
   it('does not refetch an already-cached sectionId', async () => {
@@ -244,15 +247,359 @@ describe('indicators store (public per-section reads)', () => {
     globalThis.fetch = fetchMock;
 
     const store = useIndicatorsStore();
-    await Promise.all([
-      store.fetchBySectionId('sec-fail'),
-      store.fetchBySectionId('sec-ok'),
-    ]);
+    await Promise.all([store.fetchBySectionId('sec-fail'), store.fetchBySectionId('sec-ok')]);
 
     expect(store.errorsBySectionId['sec-fail']).toContain('500');
     expect(store.errorsBySectionId['sec-ok']).toBeNull();
     expect(store.bySectionId['sec-ok']).toEqual([sampleIndicator]);
     expect(store.loadingBySectionId['sec-fail']).toBe(false);
     expect(store.loadingBySectionId['sec-ok']).toBe(false);
+  });
+});
+
+describe('indicators store (single indicator reads by slug)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.restoreAllMocks();
+  });
+
+  it('fetches indicator by slug, caches in bySlug, and findBySlug retrieves it', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({ indicator: sampleIndicator }),
+    } as Response);
+    globalThis.fetch = fetchMock;
+
+    const store = useIndicatorsStore();
+    const result = await store.fetchBySlug('jumlah-penduduk');
+
+    expect(result).toEqual(sampleIndicator);
+    expect(store.bySlug['jumlah-penduduk']).toEqual(sampleIndicator);
+    expect(store.findBySlug('jumlah-penduduk')).toEqual(sampleIndicator);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/indicators/jumlah-penduduk',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+
+    // Subsequent call should return cached instance without extra fetch
+    const cached = await store.fetchBySlug('jumlah-penduduk');
+    expect(cached).toEqual(sampleIndicator);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns null and records the error against that slug without caching empty result', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: false,
+      status: 404,
+    } as Response);
+    globalThis.fetch = fetchMock;
+
+    const store = useIndicatorsStore();
+    const result = await store.fetchBySlug('non-existent');
+
+    expect(result).toBeNull();
+    expect(store.errorsBySlug['non-existent']).toContain('404');
+    expect(store.bySlug['non-existent']).toBeUndefined();
+    expect(store.loadingBySlug['non-existent']).toBe(false);
+  });
+
+  it('dedupes concurrent requests for the same slug', async () => {
+    let callCount = 0;
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () => {
+      callCount++;
+      return {
+        ok: true,
+        json: async () => ({ indicator: sampleIndicator }),
+      } as Response;
+    });
+    globalThis.fetch = fetchMock;
+
+    const store = useIndicatorsStore();
+    const [res1, res2] = await Promise.all([
+      store.fetchBySlug('jumlah-penduduk'),
+      store.fetchBySlug('jumlah-penduduk'),
+    ]);
+
+    expect(res1).toEqual(sampleIndicator);
+    expect(res2).toEqual(sampleIndicator);
+    expect(callCount).toBe(1);
+  });
+
+  it('keeps one slug error from clobbering a sibling slug in-flight at the same time', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('fail-slug')) {
+        return { ok: false, status: 500 } as Response;
+      }
+      return { ok: true, json: async () => ({ indicator: sampleIndicator }) } as Response;
+    });
+    globalThis.fetch = fetchMock;
+
+    const store = useIndicatorsStore();
+    await Promise.all([store.fetchBySlug('fail-slug'), store.fetchBySlug('ok-slug')]);
+
+    expect(store.errorsBySlug['fail-slug']).toContain('500');
+    expect(store.errorsBySlug['ok-slug']).toBeNull();
+    expect(store.bySlug['ok-slug']).toEqual(sampleIndicator);
+    expect(store.loadingBySlug['fail-slug']).toBe(false);
+    expect(store.loadingBySlug['ok-slug']).toBe(false);
+  });
+
+  it('updates bySlug cache when an indicator is updated via CMS', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
+      if (url.startsWith('/api/indicators/ind-1')) {
+        return json({
+          indicator: makeIndicator({ slug: 'total-penduduk', valueCurrent: '60000' }),
+        });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    const store = useIndicatorsStore();
+    store.bySlug['total-penduduk'] = makeIndicator({
+      slug: 'total-penduduk',
+      valueCurrent: '53098',
+    });
+
+    await store.updateIndicator('ind-1', { valueCurrent: '60000' });
+
+    expect(store.bySlug['total-penduduk']?.valueCurrent).toBe('60000');
+  });
+
+  it('drops the old slug key and caches under the new slug key when an indicator slug changes', () => {
+    const store = useIndicatorsStore();
+    const oldIndicator = makeIndicator({ id: 'ind-1', slug: 'old-slug', valueCurrent: '100' });
+    store.bySlug['old-slug'] = oldIndicator;
+    store.indicators = [oldIndicator];
+
+    const updatedIndicator = makeIndicator({ id: 'ind-1', slug: 'new-slug', valueCurrent: '200' });
+    store.replaceIndicator(updatedIndicator);
+
+    expect(store.bySlug['old-slug']).toBeUndefined();
+    expect(store.bySlug['new-slug']?.valueCurrent).toBe('200');
+    expect(store.findBySlug('old-slug')).toBeNull();
+    expect(store.findBySlug('new-slug')?.valueCurrent).toBe('200');
+  });
+
+  it('evicts bySlug id and slug keys when deleteIndicator succeeds', async () => {
+    const store = useIndicatorsStore();
+    const sample = makeIndicator({ id: 'ind-1', slug: 'jumlah-penduduk', valueCurrent: '53098' });
+    store.bySlug['jumlah-penduduk'] = sample;
+
+    globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
+      if (url.startsWith('/api/indicators/ind-1')) {
+        return json({ message: 'Indikator berhasil dihapus' });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    await store.deleteIndicator('ind-1');
+    expect(store.bySlug['jumlah-penduduk']).toBeUndefined();
+    expect(store.findBySlug('jumlah-penduduk')).toBeNull();
+  });
+
+  it('evicts cached slug entry when a refetch returns 404', async () => {
+    const store = useIndicatorsStore();
+    const sample = makeIndicator({ id: 'ind-1', slug: 'jumlah-penduduk', valueCurrent: '53098' });
+    store.bySlug['jumlah-penduduk'] = sample;
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: false,
+      status: 404,
+    } as Response);
+
+    const result = await store.fetchBySlug('jumlah-penduduk', true);
+    expect(result).toBeNull();
+    expect(store.bySlug['jumlah-penduduk']).toBeUndefined();
+    expect(store.findBySlug('jumlah-penduduk')).toBeNull();
+  });
+
+  it('refetches after BY_SLUG_TTL_MS even without force', async () => {
+    vi.useFakeTimers();
+    const store = useIndicatorsStore();
+    const fetchMock = vi.fn<typeof fetch>();
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ indicator: makeIndicator({ valueCurrent: '1' }) }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ indicator: makeIndicator({ valueCurrent: '2' }) }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    await store.fetchBySlug('jumlah-penduduk');
+    expect(store.bySlug['jumlah-penduduk']?.valueCurrent).toBe('1');
+
+    await store.fetchBySlug('jumlah-penduduk'); // still fresh — no second network
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(BY_SLUG_TTL_MS + 1);
+    await store.fetchBySlug('jumlah-penduduk');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(store.bySlug['jumlah-penduduk']?.valueCurrent).toBe('2');
+    vi.useRealTimers();
+  });
+
+  it('force=true refetches even when cache is fresh (Tentang page entry)', async () => {
+    const store = useIndicatorsStore();
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ indicator: makeIndicator({ valueCurrent: '1' }) }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ indicator: makeIndicator({ valueCurrent: '9' }) }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    await store.fetchBySlug('jumlah-penduduk');
+    await store.fetchBySlug('jumlah-penduduk', true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(store.bySlug['jumlah-penduduk']?.valueCurrent).toBe('9');
+  });
+
+  it('old in-flight cleanup does not erase a newer forced request\'s tracking', async () => {
+    let resolveFirst!: (value: Response) => void;
+    let resolveSecond!: (value: Response) => void;
+    const firstPromise = new Promise<Response>((r) => {
+      resolveFirst = r;
+    });
+    const secondPromise = new Promise<Response>((r) => {
+      resolveSecond = r;
+    });
+    let call = 0;
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async () => {
+      call += 1;
+      return call === 1 ? firstPromise : secondPromise;
+    });
+
+    const store = useIndicatorsStore();
+    const first = store.fetchBySlug('jumlah-penduduk');
+    const second = store.fetchBySlug('jumlah-penduduk', true);
+
+    expect(store.loadingBySlug['jumlah-penduduk']).toBe(true);
+
+    resolveFirst(
+      new Response(JSON.stringify({ indicator: makeIndicator({ valueCurrent: '1' }) }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    await first;
+
+    // First request finished, but the forced retry is still in flight — must stay loading.
+    expect(store.loadingBySlug['jumlah-penduduk']).toBe(true);
+
+    resolveSecond(
+      new Response(JSON.stringify({ indicator: makeIndicator({ valueCurrent: '2' }) }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    await second;
+
+    expect(store.loadingBySlug['jumlah-penduduk']).toBe(false);
+    expect(store.bySlug['jumlah-penduduk']?.valueCurrent).toBe('2');
+  });
+
+  it('ignores a slow fetch that finishes after a CMS edit stamped a fresher value', async () => {
+    let resolveFetch!: (value: Response) => void;
+    const fetchPromise = new Promise<Response>((r) => {
+      resolveFetch = r;
+    });
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
+      if (url === '/api/indicators/ind-1' && init?.method === 'PATCH') {
+        return json({
+          indicator: makeIndicator({
+            id: 'ind-1',
+            slug: 'jumlah-penduduk',
+            valueCurrent: '999',
+          }),
+        });
+      }
+      if (url.includes('jumlah-penduduk')) return fetchPromise;
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    const authStore = useAuthStore();
+    authStore.accessToken = 'token-1';
+
+    const store = useIndicatorsStore();
+    const pending = store.fetchBySlug('jumlah-penduduk');
+
+    await store.updateIndicator('ind-1', { valueCurrent: '999' });
+    expect(store.bySlug['jumlah-penduduk']?.valueCurrent).toBe('999');
+
+    resolveFetch(
+      new Response(
+        JSON.stringify({
+          indicator: makeIndicator({
+            id: 'ind-1',
+            slug: 'jumlah-penduduk',
+            valueCurrent: '1',
+          }),
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    await pending;
+
+    expect(store.bySlug['jumlah-penduduk']?.valueCurrent).toBe('999');
+  });
+
+});
+
+
+describe('normalizeIndicatorSlug', () => {
+  it('trims and lowercases so mixed-case reads share one cache key', () => {
+    expect(normalizeIndicatorSlug('  JUMLAH-PENDUDUK ')).toBe('jumlah-penduduk');
+    expect(normalizeIndicatorSlug('jumlah-penduduk')).toBe('jumlah-penduduk');
+  });
+});
+
+describe('indicators store slug cache normalisation', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.restoreAllMocks();
+  });
+
+  it('fetchBySlug and findBySlug share one entry across casings', async () => {
+    const ind = makeIndicator({ slug: 'jumlah-penduduk' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(async (input) => {
+        const url = String(input);
+        expect(url).toContain('/api/indicators/jumlah-penduduk');
+        return json({ indicator: ind });
+      }),
+    );
+
+    const store = useIndicatorsStore();
+    const first = await store.fetchBySlug('JUMLAH-PENDUDUK');
+    expect(first?.id).toBe('ind-1');
+    expect(store.findBySlug('Jumlah-Penduduk')?.id).toBe('ind-1');
+    expect(store.bySlug['jumlah-penduduk']?.id).toBe('ind-1');
+    expect(store.bySlug['JUMLAH-PENDUDUK']).toBeUndefined();
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    await store.fetchBySlug('jumlah-penduduk');
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

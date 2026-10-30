@@ -62,6 +62,8 @@ Backend runs on port from `PORT` env var (default 3000). Prisma client is genera
 
 **Keep the spec in sync** — whenever a change settles or revises a product/domain decision (page structure, content model, roles, data-entry rules, schema design intent, scope), update `docs/SPEC.md` in the same PR. Record the decision and the rule it implies, not the deliberation behind it — rationale for settled questions is context every future session pays for. Unresolved questions belong in SPEC.md §10 and nowhere else.
 
+**Ground public content in source material** — before writing or changing factual website copy, read [`docs/CONTENT_SOURCES.md`](docs/CONTENT_SOURCES.md) and verify claims against the cited files in the Google Drive `Descan Manggar 2026` folder. Preserve data/fieldwork periods, cite source pages/tables, and keep unresolved source conflicts in `docs/SPEC.md` §10.
+
 **Accessibility** — frontend markup MUST use semantic HTML and SHOULD conform to WCAG 2.1 Level A. See `docs/ACCESSIBILITY.md` for the concrete rules; apply them while writing a component, not as a retrofit.
 
 ## Architecture

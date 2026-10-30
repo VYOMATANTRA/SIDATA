@@ -8,6 +8,8 @@ import {
   deleteIndicator,
   invalidateIndicatorsCache,
   indicatorByIdCache,
+  indicatorCacheKey,
+  normalizeIndicatorLookup,
   IndicatorServiceError,
 } from '../services/indicators.service.js';
 import prisma from '../utils/prisma.js';
@@ -152,6 +154,37 @@ beforeEach(() => {
       throw new Error('unexpected prisma.indicator.findUnique call');
     return indicatorImpl['findUnique'](...args);
   }) as AsyncFn);
+
+  // Bridge: getIndicatorById now uses a single findMany(OR id|slug). Reuse findUnique
+  // stubs so existing tests keep working unless they override findMany directly.
+  indicatorImpl['findMany'] = async (args: AnyRecord) => {
+    const where = args['where'] as { OR?: Array<{ id?: string; slug?: string }> };
+    if (!Array.isArray(where?.OR)) {
+      throw new Error('unexpected prisma.indicator.findMany where shape');
+    }
+    if (!indicatorImpl['findUnique']) return [];
+    const rows: AnyRecord[] = [];
+    const seen = new Set<string>();
+    for (const clause of where.OR) {
+      const findUnique = indicatorImpl['findUnique'] as (arg: AnyRecord) => Promise<unknown>;
+      const row = (await findUnique({
+        where: clause,
+        include: args['include'],
+      })) as AnyRecord | null;
+      if (row && typeof row.id === 'string' && !seen.has(row.id)) {
+        seen.add(row.id);
+        rows.push(row);
+      }
+    }
+    const idLookup = where.OR.find((clause) => typeof clause.id === 'string')?.id;
+    if (typeof idLookup === 'string') {
+      const preferred = rows.find(
+        (row) => String(row.id).trim().toLowerCase() === idLookup.trim().toLowerCase(),
+      );
+      if (preferred) return [preferred];
+    }
+    return rows.slice(0, 1);
+  };
   stubMethod(prisma.indicator as unknown as AnyRecord, 'count', (async (...args: never[]) => {
     if (!indicatorImpl['count']) throw new Error('unexpected prisma.indicator.count call');
     return indicatorImpl['count'](...args);
@@ -429,6 +462,26 @@ describe('indicators.service createIndicator', () => {
     assert.equal(createdData!['source'], null);
     assert.equal(createdData!['hedgeNote'], null);
   });
+
+  it('clears a mixed-case slug miss when the indicator is created', async () => {
+    let rowExists = false;
+    indicatorImpl['findUnique'] = async (args: AnyRecord) => {
+      const where = args['where'] as AnyRecord;
+      if (where['slug'] === 'new-stat')
+        return rowExists ? indicatorRow({ id: 'ind-new', slug: 'new-stat' }) : null;
+      return null;
+    };
+    indicatorImpl['create'] = async (...args: never[]) => {
+      const { data } = args[0] as unknown as { data: AnyRecord };
+      rowExists = true;
+      return indicatorRow({ ...data, id: 'ind-new' });
+    };
+
+    assert.equal(await getIndicatorById('NEW-STAT'), null);
+    await createIndicator(validPayload({ slug: 'new-stat' }), ACTOR, CONTEXT);
+
+    assert.equal((await getIndicatorById('NEW-STAT'))?.id, 'ind-new');
+  });
 });
 
 describe('indicators.service updateIndicator', () => {
@@ -624,6 +677,26 @@ describe('indicators.service updateIndicator', () => {
     assert.equal(reread?.label, 'Penduduk Anyar');
   });
 
+  it('invalidates a mixed-case slug cache after update', async () => {
+    let current = existing();
+    indicatorImpl['findUnique'] = async (args: AnyRecord) => {
+      const where = args['where'] as AnyRecord;
+      if (where['id'] === 'ind-1') return current;
+      if (where['slug'] === 'jumlah-penduduk') return current;
+      return null;
+    };
+    indicatorImpl['update'] = async (...args: never[]) => {
+      const { data } = args[0] as unknown as { data: AnyRecord };
+      current = { ...current, ...data };
+      return current;
+    };
+
+    assert.equal((await getIndicatorById('JUMLAH-PENDUDUK'))?.label, 'Jumlah Penduduk');
+    await updateIndicator('ind-1', { label: 'Penduduk Manggar' }, ACTOR, CONTEXT);
+
+    assert.equal((await getIndicatorById('JUMLAH-PENDUDUK'))?.label, 'Penduduk Manggar');
+  });
+
   it('leaves list caches intact on no-op updates', async () => {
     let findManyCount = 0;
     indicatorImpl['findMany'] = async () => {
@@ -704,16 +777,36 @@ describe('indicators.service deleteIndicator', () => {
 
     await listIndicators({});
     assert.equal((await getIndicatorById('ind-1'))?.id, 'ind-1');
-    assert.equal(findManyCount, 1);
+    // listIndicators + getIndicatorById each issue one findMany
+    assert.equal(findManyCount, 2);
 
     await deleteIndicator('ind-1', ACTOR, CONTEXT);
 
     rowGone = true;
     const relisted = await listIndicators({});
-    assert.equal(findManyCount, 2);
+    assert.equal(findManyCount, 3);
     assert.equal(relisted.total, 0);
     // Per-id slot was dropped: the re-read goes to the DB and observes the miss.
     assert.equal(await getIndicatorById('ind-1'), null);
+  });
+
+  it('invalidates a mixed-case slug cache after delete', async () => {
+    let rowGone = false;
+    indicatorImpl['findUnique'] = async (args: AnyRecord) => {
+      const where = args['where'] as AnyRecord;
+      if (where['id'] === 'ind-1') return rowGone ? null : indicatorRow();
+      if (where['slug'] === 'jumlah-penduduk') return rowGone ? null : indicatorRow();
+      return null;
+    };
+    indicatorImpl['delete'] = async () => {
+      rowGone = true;
+      return indicatorRow();
+    };
+
+    assert.equal((await getIndicatorById('JUMLAH-PENDUDUK'))?.id, 'ind-1');
+    await deleteIndicator('ind-1', ACTOR, CONTEXT);
+
+    assert.equal(await getIndicatorById('JUMLAH-PENDUDUK'), null);
   });
 
   it('deletes and writes an indicator.deleted warning audit with the before snapshot', async () => {
@@ -805,41 +898,51 @@ describe('indicators.service getIndicatorById', () => {
   });
 
   it('returns null when the row does not exist', async () => {
-    indicatorImpl['findUnique'] = async () => null;
+    indicatorImpl['findMany'] = async () => [];
 
     assert.equal(await getIndicatorById('missing'), null);
   });
 
   it('does not retain misses in the shared per-id LRU', async () => {
     let queryCount = 0;
-    indicatorImpl['findUnique'] = async () => {
+    indicatorImpl['findMany'] = async () => {
       queryCount++;
-      return null;
+      return [];
     };
 
     assert.equal(await getIndicatorById('ghost-1'), null);
     // The just-allocated slot is dropped instead of caching the miss.
-    assert.equal(indicatorByIdCache.has('ghost-1'), false);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'ghost-1')), false);
 
-    // A repeat miss is short-circuited by the negative set: no second DB hit.
+    // A miss is a single findMany; a repeat miss is short-circuited by the negative set.
     assert.equal(await getIndicatorById('ghost-1'), null);
     assert.equal(queryCount, 1);
-    assert.equal(indicatorByIdCache.has('ghost-1'), false);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'ghost-1')), false);
+  });
+
+  it('issues one DB read on a miss', async () => {
+    let findManyCount = 0;
+    indicatorImpl['findMany'] = async () => {
+      findManyCount++;
+      return [];
+    };
+    assert.equal(await getIndicatorById('no-such-indicator'), null);
+    assert.equal(findManyCount, 1);
   });
 
   it('forgets a miss after cache invalidation (row may have been created since)', async () => {
-    indicatorImpl['findUnique'] = async () => null;
+    indicatorImpl['findMany'] = async () => [];
     assert.equal(await getIndicatorById('late-row'), null);
 
     invalidateIndicatorsCache();
-    indicatorImpl['findUnique'] = async () => indicatorRow({ id: 'late-row' });
+    indicatorImpl['findMany'] = async () => [indicatorRow({ id: 'late-row' })];
 
     const result = await getIndicatorById('late-row');
     assert.equal(result?.id, 'late-row');
   });
 
   it('maps a row to the exact DTO shape', async () => {
-    indicatorImpl['findUnique'] = async () => indicatorRow();
+    indicatorImpl['findMany'] = async () => [indicatorRow()];
 
     const result = await getIndicatorById('ind-1');
 
@@ -864,6 +967,181 @@ describe('indicators.service getIndicatorById', () => {
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-02T00:00:00.000Z',
     });
+  });
+
+  it('resolves an indicator by slug when id lookup returns null', async () => {
+    indicatorImpl['findMany'] = async (args: AnyRecord) => {
+      const where = args['where'] as { OR?: Array<{ id?: string; slug?: string }> };
+      const slugVal = where.OR?.find((clause) => clause.slug)?.slug;
+      if (slugVal === 'jumlah-penduduk') {
+        return [indicatorRow({ id: 'ind-1', slug: 'jumlah-penduduk' })];
+      }
+      return [];
+    };
+
+    const result = await getIndicatorById('jumlah-penduduk');
+    assert.equal(result?.id, 'ind-1');
+    assert.equal(result?.slug, 'jumlah-penduduk');
+  });
+
+  it('prefers an id match when both id and slug OR clauses hit', async () => {
+    indicatorImpl['findMany'] = async () => [
+      indicatorRow({ id: 'slug-as-id', slug: 'other' }),
+      indicatorRow({ id: 'real-id', slug: 'slug-as-id' }),
+    ];
+    // lookup === 'slug-as-id' matches first row's id and second row's slug — prefer id.
+    const result = await getIndicatorById('slug-as-id');
+    assert.equal(result?.id, 'slug-as-id');
+    assert.equal(result?.slug, 'other');
+  });
+
+  it('normalizes slug lookup to lowercase and dual-writes prefixed keys', async () => {
+    let queriedLookup: string | undefined;
+    indicatorImpl['findMany'] = async (args: AnyRecord) => {
+      const where = args['where'] as { OR?: Array<{ id?: string; slug?: string }> };
+      queriedLookup = where.OR?.find((clause) => clause.slug)?.slug;
+      const idLookup = where.OR?.find((clause) => clause.id)?.id;
+      if (idLookup) queriedLookup = idLookup;
+      if (queriedLookup === 'jumlah-penduduk') {
+        return [indicatorRow({ id: 'ind-1', slug: 'jumlah-penduduk' })];
+      }
+      return [];
+    };
+
+    const result = await getIndicatorById('JUMLAH-PENDUDUK');
+    assert.equal(queriedLookup, 'jumlah-penduduk');
+    assert.equal(result?.id, 'ind-1');
+    // Prefixed, lowercased keys only — raw / mixed-case keys must not exist.
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('slug', 'jumlah-penduduk')), true);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'ind-1')), true);
+    assert.equal(indicatorByIdCache.has('jumlah-penduduk'), false);
+    assert.equal(indicatorByIdCache.has('JUMLAH-PENDUDUK'), false);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'jumlah-penduduk')), false);
+  });
+
+  it('invalidates both id and slug prefixed cache entries when requested', async () => {
+    indicatorImpl['findMany'] = async (args: AnyRecord) => {
+      const where = args['where'] as { OR?: Array<{ id?: string; slug?: string }> };
+      const idVal = where.OR?.find((clause) => clause.id)?.id;
+      const slugVal = where.OR?.find((clause) => clause.slug)?.slug;
+      if (idVal === 'ind-1' || slugVal === 'jumlah-penduduk' || idVal === 'jumlah-penduduk') {
+        return [indicatorRow({ id: 'ind-1', slug: 'jumlah-penduduk' })];
+      }
+      return [];
+    };
+
+    await getIndicatorById('ind-1');
+    await getIndicatorById('jumlah-penduduk');
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'ind-1')), true);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('slug', 'jumlah-penduduk')), true);
+
+    invalidateIndicatorsCache('ind-1', 'jumlah-penduduk');
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'ind-1')), false);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('slug', 'jumlah-penduduk')), false);
+  });
+
+  it('drops the slug cache entry when invalidating by id only', async () => {
+    let dbCallCount = 0;
+    indicatorImpl['findMany'] = async (args: AnyRecord) => {
+      dbCallCount++;
+      const where = args['where'] as { OR?: Array<{ id?: string; slug?: string }> };
+      const idVal = where.OR?.find((clause) => clause.id)?.id;
+      const slugVal = where.OR?.find((clause) => clause.slug)?.slug;
+      if (idVal === 'ind-1' || slugVal === 'jumlah-penduduk' || idVal === 'jumlah-penduduk') {
+        return [indicatorRow({ id: 'ind-1', slug: 'jumlah-penduduk' })];
+      }
+      return [];
+    };
+
+    // 1. Read by slug first — dual-write warms both id: and slug: entries.
+    const first = await getIndicatorById('jumlah-penduduk');
+    assert.equal(first?.id, 'ind-1');
+    assert.equal(dbCallCount, 1); // single findMany
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('slug', 'jumlah-penduduk')), true);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'ind-1')), true);
+    // Mistaken probe slot id:<slug> must be dropped after dual-write.
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'jumlah-penduduk')), false);
+
+    // Reading again hits cache without querying DB (either id or slug casing)
+    await getIndicatorById('JUMLAH-PENDUDUK');
+    await getIndicatorById('IND-1');
+    assert.equal(dbCallCount, 1);
+
+    // 2. Invalidate by ID only (no slug parameter provided) — must clear slug entry too
+    invalidateIndicatorsCache('ind-1');
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('slug', 'jumlah-penduduk')), false);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'ind-1')), false);
+
+    // 3. Next slug read must go back to the database
+    const second = await getIndicatorById('jumlah-penduduk');
+    assert.equal(second?.id, 'ind-1');
+    assert.equal(dbCallCount, 2); // one more findMany since cache was evicted
+  });
+
+  it('invalidates the paired slug key among many decoy cache entries without a full miss', async () => {
+    // Warm the target, then plant many unrelated decoy entries.
+    indicatorImpl['findMany'] = async (args: AnyRecord) => {
+      const where = args['where'] as { OR?: Array<{ id?: string; slug?: string }> };
+      const idVal = where.OR?.find((clause) => clause.id)?.id;
+      if (idVal === 'ind-target') {
+        return [indicatorRow({ id: 'ind-target', slug: 'target-slug' })];
+      }
+      if (typeof idVal === 'string' && idVal.startsWith('decoy-')) {
+        return [indicatorRow({ id: idVal, slug: `slug-${idVal}` })];
+      }
+      return [];
+    };
+
+    await getIndicatorById('ind-target');
+    for (let i = 0; i < 40; i++) {
+      await getIndicatorById(`decoy-${i}`);
+    }
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('slug', 'target-slug')), true);
+
+    invalidateIndicatorsCache('ind-target');
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'ind-target')), false);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('slug', 'target-slug')), false);
+    // Decoys remain (O(1) invalidation must not clear the whole cache).
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'decoy-0')), true);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('slug', 'slug-decoy-39')), true);
+  });
+
+  it('keeps id and slug namespaces from colliding', async () => {
+    // Warm id:bar first (indicator whose id equals another indicator's slug string).
+    indicatorImpl['findMany'] = async (args: AnyRecord) => {
+      const where = args['where'] as { OR?: Array<{ id?: string; slug?: string }> };
+      const idVal = where.OR?.find((clause) => clause.id)?.id;
+      if (idVal === 'bar') return [indicatorRow({ id: 'bar', slug: 'other' })];
+      return [];
+    };
+    assert.equal((await getIndicatorById('bar'))?.slug, 'other');
+    assert.equal(indicatorByIdCache.get(indicatorCacheKey('id', 'bar'))?.get()?.id, 'bar');
+    assert.equal(indicatorByIdCache.get(indicatorCacheKey('slug', 'other'))?.get()?.id, 'bar');
+
+    // Warm slug:bar for a different indicator — must not overwrite id:bar.
+    indicatorImpl['findMany'] = async (args: AnyRecord) => {
+      const where = args['where'] as { OR?: Array<{ id?: string; slug?: string }> };
+      const idVal = where.OR?.find((clause) => clause.id)?.id;
+      const slugVal = where.OR?.find((clause) => clause.slug)?.slug;
+      if (idVal === 'foo' || slugVal === 'bar') {
+        return [indicatorRow({ id: 'foo', slug: 'bar' })];
+      }
+      if (idVal === 'bar') return [indicatorRow({ id: 'bar', slug: 'other' })];
+      return [];
+    };
+    assert.equal((await getIndicatorById('foo'))?.slug, 'bar');
+
+    assert.equal(indicatorByIdCache.get(indicatorCacheKey('id', 'bar'))?.get()?.id, 'bar');
+    assert.equal(indicatorByIdCache.get(indicatorCacheKey('slug', 'bar'))?.get()?.id, 'foo');
+    // Lookup prefers the id: namespace when both kind keys exist for the same string.
+    assert.equal((await getIndicatorById('bar'))?.id, 'bar');
+  });
+
+  it('indicatorCacheKey and normalizeIndicatorLookup are stable', () => {
+    assert.equal(normalizeIndicatorLookup('  AbC  '), 'abc');
+    assert.equal(indicatorCacheKey('id', 'AbC'), 'id:abc');
+    assert.equal(indicatorCacheKey('slug', ' AbC '), 'slug:abc');
+    assert.notEqual(indicatorCacheKey('id', 'x'), indicatorCacheKey('slug', 'x'));
   });
 });
 
@@ -1213,14 +1491,16 @@ describe('indicators.service tier-1 comparison templates', () => {
       let listArgs: AnyRecord | null = null;
       let getArgs: AnyRecord | null = null;
       indicatorImpl['findMany'] = async (...args: never[]) => {
-        listArgs = args[0] as unknown as AnyRecord;
+        const arg = args[0] as unknown as AnyRecord;
+        const where = arg['where'] as AnyRecord | undefined;
+        if (where && Array.isArray(where['OR'])) {
+          getArgs = arg;
+        } else {
+          listArgs = arg;
+        }
         return [];
       };
       indicatorImpl['count'] = async () => 0;
-      indicatorImpl['findUnique'] = async (...args: never[]) => {
-        getArgs = args[0] as unknown as AnyRecord;
-        return null;
-      };
 
       await listIndicators({});
       await getIndicatorById('ind-1');

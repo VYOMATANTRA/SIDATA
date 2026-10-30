@@ -5,8 +5,10 @@ For setup, dev conventions, and codebase architecture, see [`AGENTS.md`](../AGEN
 [`CONTRIBUTING.md`](../CONTRIBUTING.md) instead.
 
 Status: draft. Captures decisions resolved so far. Actual data values (population figures,
-area, etc.) live in the CMS / Prodeskel exports, not in this document — this document describes
-structure and rules, not content.
+area, etc.) live in the CMS and verified source publications, not in this document — this document
+describes structure and rules, not content. The source index, evidence references, and factual-copy
+rules are in [`CONTENT_SOURCES.md`](CONTENT_SOURCES.md); source files are maintained in the Google
+Drive folder [Descan Manggar 2026](https://drive.google.com/drive/search?q=Descan%20Manggar%202026).
 
 ## 1. Purpose & Scope
 
@@ -17,19 +19,34 @@ Balikpapan. It is:
   tied to that program, branded separately.
 - **Not** a civil-administration system — no citizen-service transactions, no internal workflow
   tooling. Profile/info only.
-- **Not** a PPID document host. The footer's "Permintaan Data" page is an external pointer only —
-  it explains the PPID request procedure for data not published on the site; it never hosts PPID
-  documents (e.g. no Transparansi Keuangan).
+- **Not** a PPID document host. The footer's **Permintaan Data** page (`/permintaan-data`) explains
+  the public request path for data not published on the site: step-by-step guidance, a working-day
+  timetable (UU 14/2008 Pasal 22 / 35–36 and local SOP), escalation (permohonan → keberatan →
+  sengketa), and **links only** to official PPID Balikpapan forms. It never uploads, mirrors, or
+  hosts PPID documents, and never labels Kelurahan public-setting contacts as PPID channels.
 
 Frontend markup must use semantic HTML and target WCAG 2.1 Level A conformance — see
 [`docs/ACCESSIBILITY.md`](ACCESSIBILITY.md) for the rules this implies.
 
 Related but distinct artifacts that feed into the site's content:
 
-- **Eco Boba booklet** — full training-documentation artifact (separate publication). Its content
-  is reused (not duplicated 1:1) into the site's Persampahan & Bank Sampah Unit page.
-- **Manggar dalam Angka 2026** — print/PDF publication. Shares data provenance with the site, but
-  is structured independently of it.
+- **Eco Boba training booklet** — documents plastic-packaging waste converted into cushion filling.
+  Reuse its verified facts (not its full text) in the site's Persampahan & Bank Sampah Unit page.
+- **Manggar Dalam Angka 2026** — print/PDF publication containing primarily 2025 statistics, with
+  metadata specifying 2024–2025 data and 2025/2026 field collection. It shares provenance with the
+  site but is structured independently.
+- **Monografi Kelurahan Manggar 2026** — includes population and active-BSU profiles; one edition
+  documents participatory field data collection and technical assistance.
+- **Peta Ketua RT dan BSU Aktif Manggar** — map publication whose source note credits VYOMATANTRA's
+  July 2026 field survey for RT/BSU locations.
+- **Proposal Inovasi Sosial_Desa Cantik Kelurahan Manggar** — its Lampiran 2 is the source for the
+  eight-student proposal roster and assigned role labels on the VYOMATANTRA page. Group fieldwork
+  is attributed to the team as a whole, not assigned to specific students without evidence.
+
+Public website facts must be checked against their cited source and period in
+[`CONTENT_SOURCES.md`](CONTENT_SOURCES.md). Do not infer that a document's publication year is its
+data year, present potential benefits as measured outcomes, or expose employee identifiers and
+personal contact details from source files.
 
 ## 2. Content Model
 
@@ -262,7 +279,7 @@ implementing.
 | Table                                       | Purpose / key design notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pages`, `chapters`, `sections`             | Hierarchy per §2. No 1:1 constraint between chapter and section.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `indicators`                                | Scalar figures. `value_current` / `value_previous` (nullable — null `value_previous` mechanically gates the tier-1 prose builder), `period_current` / `period_previous`, `is_computed_comparison`, `is_stale` (flags June 2024 Potensi fields), `source`, `hedge_note`. `section_id` required FK to `sections.id` (`ON DELETE RESTRICT` — a section holding indicators cannot be deleted until they are removed through the audited API, consistent with `content_blocks`). Read via public `GET /api/indicators` and `GET /api/indicators/:id` (in-memory cached); mutated via editor/admin-only `POST` / `PATCH /:id` / `DELETE /:id` (CSRF-protected, logged in `audit_logs` as `indicator.created` / `indicator.updated` / `indicator.deleted`). `comparison_template_id` nullable FK to `comparison_templates` (§5 tier-1; the read DTO carries the rendered `comparison`).                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `indicators`                                | Scalar figures. `value_current` / `value_previous` (nullable — null `value_previous` mechanically gates the tier-1 prose builder), `period_current` / `period_previous`, `is_computed_comparison`, `is_stale` (flags June 2024 Potensi fields), `source`, `hedge_note`. `section_id` required FK to `sections.id` (`ON DELETE RESTRICT` — a section holding indicators cannot be deleted until they are removed through the audited API, consistent with `content_blocks`). Read via public `GET /api/indicators` and `GET /api/indicators/:id`; the by-id route resolves an ID first, then falls back to a case-insensitive slug match. Mutated via editor/admin-only `POST` / `PATCH /:id` / `DELETE /:id` (CSRF-protected, logged in `audit_logs` as `indicator.created` / `indicator.updated` / `indicator.deleted`). `comparison_template_id` nullable FK to `comparison_templates` (§5 tier-1; the read DTO carries the rendered `comparison`).                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `indicator_tables` + `indicator_table_rows` | Normalized rows (not a JSON blob) for the 4 fixed-shape matrix tables — cells need to be queryable/computable. Manual entry only (§4). Wide-row shape: one row per logical group with nullable `INT` cells — `male`/`female` for the sex-split kinds (`age_pyramid`, `religion_by_sex`), `total` for the single-value kinds (`ethnicity`, `occupation`); enforced per-kind in the service. `total` for sex-split rows is derived on read (`male + female`), never stored alongside them, so the two cannot drift. Single `period` (June 2024 Potensi point-in-time snapshots, no tahun-lalu pairing — §6). `section_id` required FK to `sections.id` (`ON DELETE RESTRICT`, consistent with `indicators`/`content_blocks`); rows cascade with their table; `UNIQUE (table_id, row_key)`. Read via public `GET /api/indicator-tables` (filterable by `sectionId`/`kind`) and `GET /api/indicator-tables/:key` (slug-or-id, returns rows + SQL-`SUM` totals, in-memory cached); mutated via editor/admin-only `POST /` (optional nested `rows` in one transaction), `PATCH /:id` / `DELETE /:id`, `POST /:id/rows`, `PATCH /rows/:rowId` / `DELETE /rows/:rowId` (CSRF-protected, logged in `audit_logs` as `indicator_table.created` / `indicator_table.updated` / `indicator_table.deleted` and `indicator_table_row.created` / `indicator_table_row.updated` / `indicator_table_row.deleted`). |
 | `spatial_points`                            | Ketua RT and Bank Sampah unit point records (~100, manual field survey). `type` ENUM, lat/lng, `metadata` JSON (MySQL has no JSONB) with a write-path cap of 8 000 characters serialized — saved values are echoed back in every public points payload, so the fence keeps map loads cheap. Feeds the interactive map, which is also an entry point to the Ketua RT page (§8). Write path (editor/admin only, CSRF-protected, user-keyed write rate limit): `POST` / `PATCH /api/maps/points/:id` / `DELETE /api/maps/points/:id` (audited as `spatial_point.created` / `.updated` / `.deleted`), plus the RT coverage subresource `POST` / `DELETE /api/maps/points/:id/rts(/:rtNumber)` (audited as `spatial_point_rt.created` / `.deleted`); coverage can also be replaced wholesale via `rts` on create/PATCH, logged in the `spatial_point.updated` metadata as added/removed RTs. The coverage subresource endpoints exist for `bank_sampah`/`fasilitas_umum` coverage edits (and emergency repair of a legacy `ketua_rt` row): on a well-formed `ketua_rt` point they always fail with 400 — adding one RT would take the point to two coverages, removing its only one to zero — so an in-spec `ketua_rt` RT change goes exclusively through `rts` on PATCH. `rt_number` inputs are validated 1–100 (mirroring the DB CHECK in `20260826000000`; the dropped FK means existence in `rt_leaders` is intentionally NOT required — orphaned coverage is a read-path `integrityWarning`). Each mutation and its audit row share one transaction: the point row is locked `FOR UPDATE` first, then — for a write that is or makes the point `ketua_rt` (a bank_sampah/other point, never exclusive on an RT, skips them) — the touched `rt_leaders` rows (the point's old ∪ new RT set, locked in ascending order, before any coverage write) so that two same-RT writers cannot interleave into a deadlock, with the write-path invariant assert backed by a target-RT-scoped `FOR SHARE` locking read. |
 | `spatial_point_rt`                          | Junction table (`point_id`, `rt_number`). Needed because Ketua RT points are always 1:1 with an RT, but a Bank Sampah unit can cover multiple RTs (e.g. one unit serving RT 30/72/60) — a flat `rt_number` column on `spatial_points` would be lossy. **Enforcement notes**: (1) The 1:1 invariant for `ketua_rt` points cannot be enforced with a partial unique index (`UNIQUE (point_id) WHERE type = 'ketua_rt'`) because MySQL does not support partial unique indexes. The write path now adds the missing enforcement on every type/coverage write (see the `spatial_points` row): before committing, the post-write global `ketua_rt` coverage state is re-derived and run through the same shared resolution rule the read paths use (`resolveRtCoverage` in `maps.service.ts`) — a `ketua_rt` point ending up with more or fewer than exactly one RT is rejected with 400, an RT ending up covered by more than one `ketua_rt` point is rejected with 409. The check is scoped to the point being written and only runs when the write touches the point's type or coverage, so field-only edits on legacy-violating rows stay possible and every violation is repairable via a coverage write; violations untouched by a given write remain read-side `integrityWarning` territory, i.e. the read path is now a safety net rather than the only guard. Unit tests pin the 1:1 invariant (`src/__tests__/maps.service.write.test.ts`). The read path (`maps.service.ts`) detects violations at query time via one shared resolution rule applied on both sides of the join: an RT resolves to a `ketua_rt` point only if exactly one `ketua_rt` point covers it **and** that point covers exactly one RT. On the points side (`GET /api/maps/points`, `/points/:id`) a violation sets `rtLeader` to `null`; on the leaders side (`GET /api/maps/rt-leaders`, `/rt-leaders/:rtNumber`) it sets `coordinates` to `null`. In both cases an `integrityWarning` field describes the anomaly (multiple `ketua_rt` points on one RT, a `ketua_rt` point spanning several RTs, or an RT coverage referencing an RT with no matching `rt_leaders` row), and the anomaly is logged server-side. `GET /api/maps/summary` applies the same rule: conflicted RTs are excluded from `rtLeadersWithCoordinates` (so they fall into `rtLeadersWithoutCoordinates`) and are additionally reported via `rtLeadersWithIntegrityConflicts`, so a data problem is visible from the summary endpoint without cross-referencing the points list. (2) The FK from `rt_number` → `rt_leaders.rt_number` was intentionally dropped (migration `20260820000000`) because Prisma 7 requires a declared back-relation on both sides of a `@relation`, and adding `spatialPointRts SpatialPointRt[]` to the `RtLeader` model has no semantic meaning in this domain — the coordinate join is an asymmetric, query-time filtered read. In place of the FK, migration `20260826000000` adds `CHECK (rt_number BETWEEN 1 AND 100)` to enforce the valid RT range at the DB layer. Manggar has 100 RTs; if this changes, update the `BETWEEN` bounds in that migration and here. |
@@ -350,13 +367,14 @@ keeps proper `<caption>` / `<th scope>` semantics under filtering.
 **Footer:**
 
 - **Sumber Daya** — Publikasi (Prodeskel publications, infographics, Eco Boba booklet, etc.), Peta
-  (interactive, QGIS-derived), Permintaan Data (PPID external pointer with request steps), Ketua RT.
+  (interactive, QGIS-derived), Permintaan Data (in-app guide + timetable; PPID forms stay external),
+  Ketua RT.
 - **Cerita** — links to the Cerita-labeled pages. Confirmed: the 7 stat pages + Persampahan & Bank
   Sampah Unit.
 - **Tentang** — Kelurahan Manggar, Program Desa/Kelurahan Cantik, Inovasi Sosial VYOMATANTRA.
 - **Kolaborasi** — three logos: Desa Cantik/BPS, ITK, Tim Insos VYOMATANTRA.
 
-**Page inventory.** Three classes; this is the full set of pages, not a commitment to URL paths.
+**Page inventory.** Three classes; this is the full set of public pages. Current frontend routes are listed below.
 
 | Class       | Pages                                                                        |
 | ----------- | ---------------------------------------------------------------------------- |
@@ -366,6 +384,42 @@ keeps proper `<caption>` / `<th scope>` semantics under filtering.
 
 Plus the landing page itself.
 
+Implemented frontend routes:
+
+| Page                          | Route                        |
+| ----------------------------- | ---------------------------- |
+| Tentang Kelurahan Manggar     | `/tentang/kelurahan-manggar` |
+| Program Desa/Kelurahan Cantik | `/tentang/desa-cantik`       |
+| Inovasi Sosial VYOMATANTRA    | `/tentang/vyomatantra`       |
+| Permintaan Data               | `/permintaan-data`           |
+
+`/tentang` redirects to `/tentang/kelurahan-manggar`.
+
+The Kelurahan Manggar profile publishes **Kelurahan Karang Joang** only as its northern
+administrative boundary, following the 2025 boundary table in `Manggar Dalam Angka 2026`
+(Tabel 1.1.2; printed p. 18, PDF viewer p. 19).
+
+The official-profile paragraphs (the Lurah section) describe intent and expected benefit in
+neutral third-person narration, using "diharapkan" or "dapat membantu". They do not use first-person
+"kami" phrasing and do not state that policies, outcomes, or economic improvements have already
+happened.
+
+The spatial map card uses the same description on both the Kelurahan Manggar and Desa Cantik
+pages: "Peta lokasi rumah ketua RT dan bank sampah aktif di Kelurahan Manggar, Kecamatan Balikpapan
+Timur." Complete coverage of all RT and BSU locations is not established, so the wording must not
+claim it (no "seluruh").
+
+The VYOMATANTRA page publishes the eight-student proposal roster and assigned role labels from
+`Proposal Inovasi Sosial_Desa Cantik Kelurahan Manggar.docx`, Lampiran 2. The page attributes field
+survey, spatial-data collection/compilation, and mapping to the team collectively, not to individual
+members without supporting evidence.
+
+The VYOMATANTRA page also publishes the program kerja as a four-part journey, following the
+proposal's own stages: persiapan, pelaksanaan, monitoring dan evaluasi, and pelaporan dan tindak
+lanjut, with the proposal's scheduled activities listed under each stage. The section presents the
+program work as designed in the proposal and attributes it to that document, pointing to the
+Monografi, the map, and the booklet for the field record.
+
 ## 9. Explicitly Out of Scope
 
 - **Budget/finance (APBDes) surfacing** — dropped entirely; the kelurahan has no APBDes. Note that
@@ -374,7 +428,7 @@ Plus the landing page itself.
   jumlah kasus pengaduan), not budget content.
 - **UMKM curation** — not included.
 - **Guestbook** — excluded.
-- **PPID document hosting** — never; external pointer only (§1).
+- **PPID document hosting** — never; forms stay on the official PPID site; SIDATA only explains and links (§1).
 - **Data-collection instrumentation** (RT sweep design, one-instrument-vs-one-occasion) — out of
   scope for this site. The site only consumes Prodeskel's already-published output; data
   collection is a Prodeskel-stage concern.
@@ -392,4 +446,27 @@ Plus the landing page itself.
 
 Single register — unresolved questions live here and nowhere else.
 
-_None currently open._
+- **Source-version reconciliation (Google Drive: Descan Manggar 2026):** Confirm which of the two
+  `Monografi Kelurahan Manggar 2026` editions is current/approved for public facts. The expanded
+  edition has 14 BSU profiles; another edition has a different page count and content.
+- **BSU RT identity:** The expanded Monografi's BSU identity list includes RT 46, while later
+  profile sections refer to RT 64. Confirm the correct RT and update derived public data consistently.
+- **Cross-publication data conflicts:** Reconcile any conflicting values between the 2025 profile,
+  both Monografi editions, `Manggar Dalam Angka 2026`, and the Excel infographic workbook before
+  publishing affected values. The local working copy of the Drive folder named `Tabel Perbandingan
+  Konsistensi Data Pada Semua Media Publikasi` was empty; check Google Drive for an approved
+  reconciliation before resolving this item.
+- **SOTK names and duties:** Monografi Kelurahan Manggar lists several current office roles and
+  names (PDF viewer pp. 8–9), but does not document the detailed duties previously shown on the
+  profile page. Keep those duties unavailable until an approved SOTK or job-description source is
+  supplied. When a name is absent from an approved source, render “Nama pejabat belum tersedia”; do
+  not infer an appointment process.
+- **Vision and mission statement:** No approved wording was found in the inspected source set. Keep
+  this section omitted until the Kelurahan provides an approved vision/mission document.
+- **Permintaan Data / UU 14/2008 citations (settled 2026-10-30):** Public copy on `/permintaan-data`
+  uses Pasal 22 ayat (7)–(8) for the 10+7 working-day PPID reply window; Pasal 35 ayat (1) for
+  keberatan grounds; Pasal 36 ayat (1) for the 30 working-day window to *file* keberatan; Pasal 36
+  ayat (2) for the 30 working-day *atasan PPID* reply; Pasal 37–38 (+ PerKI No. 1/2013 Pasal 13)
+  for sengketa to Komisi Informasi. Verified against pasal.id Pasal 35–36 pages and the UU 14/2008
+  text mirrors at Bank Indonesia and e-PPID Komisi Informasi (links in the PR / this bullet).
+  SOP PPID Balikpapan remains a local procedure reference alongside the statute — not a substitute.

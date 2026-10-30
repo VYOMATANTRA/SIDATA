@@ -9,7 +9,7 @@ export type { FooterProps } from './AppFooter.vue';
 export { default as BarDiagram } from './BarDiagram.vue';
 export type { BarDiagramProps, BarDiagramItem } from './BarDiagram.vue';
 export { default as StatCard } from './StatCard.vue';
-export type { StatCardProps, StatItem } from './StatCard.vue';
+export type { StatCardProps, StatItem, StatCardIconName } from './StatCard.vue';
 export { default as SectionTextArea } from './SectionTextArea.vue';
 export type { SectionTextAreaProps } from './SectionTextArea.vue';
 export { default as StatOverview } from './StatOverview.vue';

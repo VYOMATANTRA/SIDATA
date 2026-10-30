@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
-import { apiRequestJson } from '../utils/apiClient';
+import { apiFetch, apiRequestJson } from '../utils/apiClient';
 
 /**
  * Scalar indicator figures (SPEC §7). Read is public; writes need an editor/admin token.
@@ -49,6 +49,19 @@ export interface Indicator {
 export type IndicatorDto = Indicator;
 export type IndicatorComparison = RenderedComparison;
 
+/** Public hero figures: short TTL so SPA sessions do not keep deleted/edited values forever. */
+export const BY_SLUG_TTL_MS = 60_000;
+
+/**
+ * Canonical slug key for every bySlug get / set / invalidate path.
+ * Same normalisation contract as the backend `normalizeIndicatorLookup` —
+ * mixed-case reads must never fork or leave a stale entry.
+ */
+export function normalizeIndicatorSlug(slug: string): string {
+  return slug.trim().toLowerCase();
+}
+
+
 /** Only the fields the CMS form can change; the API rejects unknown keys (`.strict()`). */
 export interface IndicatorPatch {
   label?: string;
@@ -92,6 +105,54 @@ export const useIndicatorsStore = defineStore('indicators', () => {
 
   const sectionInFlight: Record<string, Promise<Indicator[]> | undefined> = {};
 
+  // Slug-keyed cache & fetch for single-indicator lookups (e.g. hero figures)
+  const bySlug = ref<Record<string, IndicatorDto>>({});
+  const bySlugFetchedAt = ref<Record<string, number>>({});
+  const loadingBySlug = ref<Record<string, boolean>>({});
+  const errorsBySlug = ref<Record<string, string | null>>({});
+
+  const inFlightBySlug: Record<string, Promise<IndicatorDto | null> | undefined> = {};
+  /** Bumped on each new slug fetch and on CMS write/delete so stale responses cannot write. */
+  const fetchGenBySlug: Record<string, number> = {};
+
+  function isSlugCacheFresh(normalized: string): boolean {
+    const at = bySlugFetchedAt.value[normalized];
+    return typeof at === 'number' && Date.now() - at < BY_SLUG_TTL_MS;
+  }
+
+  function stampSlugCache(normalized: string, item: IndicatorDto): void {
+    bySlug.value = { ...bySlug.value, [normalized]: item };
+    bySlugFetchedAt.value = { ...bySlugFetchedAt.value, [normalized]: Date.now() };
+  }
+
+  /** Drop every bySlug entry for this indicator id and/or slug key. */
+  function evictSlugCacheForIndicator(id: string, slug?: string | null): void {
+    const slugKey = typeof slug === 'string' ? normalizeIndicatorSlug(slug) : null;
+    const next = { ...bySlug.value };
+    const nextAt = { ...bySlugFetchedAt.value };
+    let changed = false;
+    for (const [k, v] of Object.entries(next)) {
+      if (v.id === id || (slugKey !== null && k === slugKey)) {
+        delete next[k];
+        delete nextAt[k];
+        changed = true;
+      }
+    }
+    if (changed) {
+      bySlug.value = next;
+      bySlugFetchedAt.value = nextAt;
+    }
+  }
+
+  function bumpSlugFetchGeneration(...keys: Array<string | null | undefined>): void {
+    for (const key of keys) {
+      if (typeof key !== 'string') continue;
+      const normalized = normalizeIndicatorSlug(key);
+      if (!normalized) continue;
+      fetchGenBySlug[normalized] = (fetchGenBySlug[normalized] ?? 0) + 1;
+    }
+  }
+
   const staleCount = computed(() => indicators.value.filter((item) => item.isStale).length);
 
   /**
@@ -108,6 +169,27 @@ export const useIndicatorsStore = defineStore('indicators', () => {
 
   function replaceIndicator(updated: Indicator): void {
     invalidateSectionCache(updated.sectionId);
+
+    const newSlugKey = normalizeIndicatorSlug(updated.slug);
+    const nextBySlug = { ...bySlug.value };
+    const nextAt = { ...bySlugFetchedAt.value };
+    const keysToBump: string[] = [newSlugKey];
+
+    for (const [k, v] of Object.entries(nextBySlug)) {
+      if (v.id === updated.id && k !== newSlugKey) {
+        keysToBump.push(k);
+        delete nextBySlug[k];
+        delete nextAt[k];
+      }
+    }
+    bumpSlugFetchGeneration(...keysToBump);
+
+    // Always upsert — even if this slug was never cached (Tentang may fetch later).
+    nextBySlug[newSlugKey] = updated;
+    nextAt[newSlugKey] = Date.now();
+    bySlug.value = nextBySlug;
+    bySlugFetchedAt.value = nextAt;
+
     const index = indicators.value.findIndex((item) => item.id === updated.id);
     if (index === -1) {
       indicators.value = [...indicators.value, updated];
@@ -172,7 +254,7 @@ export const useIndicatorsStore = defineStore('indicators', () => {
     const task = (async () => {
       try {
         const params = new URLSearchParams({ sectionId, pageSize: '200' });
-        const response = await fetch(`/api/indicators?${params.toString()}`);
+        const response = await apiFetch(`/api/indicators?${params.toString()}`);
         if (!response.ok) {
           throw new Error(`Gagal memuat indikator (status ${response.status})`);
         }
@@ -201,6 +283,111 @@ export const useIndicatorsStore = defineStore('indicators', () => {
     return task;
   }
 
+  async function deleteIndicator(id: string): Promise<void> {
+    const existing =
+      indicators.value.find((item) => item.id === id) ??
+      Object.values(bySlug.value).find((item) => item.id === id) ??
+      null;
+    await apiRequestJson(`/api/indicators/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (existing?.slug) bumpSlugFetchGeneration(existing.slug);
+    for (const [k, v] of Object.entries(bySlug.value)) {
+      if (v.id === id) bumpSlugFetchGeneration(k);
+    }
+    evictSlugCacheForIndicator(id, existing?.slug ?? null);
+    if (existing) invalidateSectionCache(existing.sectionId);
+    const next = indicators.value.filter((item) => item.id !== id);
+    if (next.length !== indicators.value.length) {
+      indicators.value = next;
+      total.value = Math.max(0, total.value - 1);
+    }
+  }
+
+  async function fetchBySlug(slug: string, force = false): Promise<IndicatorDto | null> {
+    const normalized = normalizeIndicatorSlug(slug);
+
+    if (!force && bySlug.value[normalized] && isSlugCacheFresh(normalized)) {
+      return bySlug.value[normalized]!;
+    }
+    if (!force && inFlightBySlug[normalized]) {
+      return inFlightBySlug[normalized]!;
+    }
+
+    // force=true starts a new request; generation bump makes any older in-flight response a no-op.
+    const myGen = (fetchGenBySlug[normalized] = (fetchGenBySlug[normalized] ?? 0) + 1);
+
+    loadingBySlug.value = { ...loadingBySlug.value, [normalized]: true };
+    errorsBySlug.value = { ...errorsBySlug.value, [normalized]: null };
+
+    const isCurrent = () => fetchGenBySlug[normalized] === myGen;
+
+    // Box so the finally clause can compare promise identity without TS2454 / prefer-const.
+    const flight: { task: Promise<IndicatorDto | null> | null } = { task: null };
+    flight.task = (async () => {
+      try {
+        const response = await apiFetch(`/api/indicators/${encodeURIComponent(normalized)}`);
+        if (!isCurrent()) {
+          return bySlug.value[normalized] ?? null;
+        }
+        if (!response.ok) {
+          if (response.status === 404 || force) {
+            const next = { ...bySlug.value };
+            const nextAt = { ...bySlugFetchedAt.value };
+            delete next[normalized];
+            delete nextAt[normalized];
+            bySlug.value = next;
+            bySlugFetchedAt.value = nextAt;
+          }
+          throw new Error(`Gagal memuat indikator (status ${response.status})`);
+        }
+        const data = (await response.json()) as { indicator?: IndicatorDto };
+        if (!isCurrent()) {
+          return bySlug.value[normalized] ?? null;
+        }
+        if (
+          data.indicator &&
+          typeof data.indicator === 'object' &&
+          typeof data.indicator.slug === 'string'
+        ) {
+          stampSlugCache(normalized, data.indicator);
+          return data.indicator;
+        }
+        // Valid empty / unpublished / invalid format: clear any stale hit.
+        const next = { ...bySlug.value };
+        const nextAt = { ...bySlugFetchedAt.value };
+        delete next[normalized];
+        delete nextAt[normalized];
+        bySlug.value = next;
+        bySlugFetchedAt.value = nextAt;
+        throw new Error('Format data indikator tidak valid');
+      } catch (err) {
+        if (!isCurrent()) {
+          return bySlug.value[normalized] ?? null;
+        }
+        errorsBySlug.value = {
+          ...errorsBySlug.value,
+          [normalized]: err instanceof Error ? err.message : 'Terjadi kesalahan jaringan',
+        };
+        return null;
+      } finally {
+        // Only the current request may clear tracking / loading for this slug.
+        if (inFlightBySlug[normalized] === flight.task) {
+          delete inFlightBySlug[normalized];
+        }
+        if (isCurrent()) {
+          loadingBySlug.value = { ...loadingBySlug.value, [normalized]: false };
+        }
+      }
+    })();
+
+    inFlightBySlug[normalized] = flight.task;
+    return flight.task;
+  }
+
+  function findBySlug(slug: string): IndicatorDto | null {
+    const normalized = normalizeIndicatorSlug(slug);
+    return bySlug.value[normalized] ?? null;
+  }
+
   return {
     indicators,
     total,
@@ -213,7 +400,15 @@ export const useIndicatorsStore = defineStore('indicators', () => {
     errorsBySectionId,
     fetchIndicators,
     updateIndicator,
+    deleteIndicator,
     replaceIndicator,
     fetchBySectionId,
+    bySlug,
+    bySlugFetchedAt,
+    loadingBySlug,
+    errorsBySlug,
+    fetchBySlug,
+    findBySlug,
+    evictSlugCacheForIndicator,
   };
 });
