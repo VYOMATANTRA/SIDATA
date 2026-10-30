@@ -4,14 +4,15 @@ import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import PetaView from '../views/PetaView.vue';
 import type { MapSummaryDTO, RtLeaderDTO, SpatialPointDTO } from '../types/maps';
+import { MANGGAR_MAP_ORIGIN } from '../constants/mapOrigin';
 
 const POINTS: SpatialPointDTO[] = [
   {
     id: 'point-1',
     name: 'Pos Ketua RT 01',
     type: 'ketua_rt',
-    latitude: -1.2235,
-    longitude: 116.9521,
+    latitude: MANGGAR_MAP_ORIGIN.latitude,
+    longitude: MANGGAR_MAP_ORIGIN.longitude,
     metadata: null,
     rts: [1],
     rtLeader: {
@@ -63,7 +64,7 @@ const LEADER: RtLeaderDTO = {
   phone: '08125356695',
   phoneIsWhatsapp: true,
   alamat: null,
-  coordinates: { latitude: -1.2235, longitude: 116.9521, pointId: 'point-1' },
+  coordinates: { latitude: MANGGAR_MAP_ORIGIN.latitude, longitude: MANGGAR_MAP_ORIGIN.longitude, pointId: 'point-1' },
   createdAt: '2026-08-01T00:00:00Z',
   updatedAt: '2026-08-01T00:00:00Z',
 };
@@ -212,7 +213,7 @@ describe('PetaView accessibility, filtering, and point selection', () => {
       id: `rt-${index + 1}`,
       name: `Pos Ketua RT ${index + 1}`,
       rts: [index + 1],
-      latitude: -1.2235 + index * 0.001,
+      latitude: MANGGAR_MAP_ORIGIN.latitude + index * 0.001,
     }));
     vi.stubGlobal(
       'fetch',

@@ -11,6 +11,10 @@ import { DEFAULT_COMPARISON_TEMPLATES } from '../src/services/comparisonTemplate
 import { CERITA_PAGES } from './ceritaPages.js';
 import { RT_LEADERS_DATA } from './rtLeadersData.js';
 import { seedRtLeaders } from './seedRtLeaders.js';
+import {
+  LEGACY_SAMPLE_LEADERS,
+  matchesLegacySampleLeader,
+} from '../src/utils/legacySampleRtFingerprints.js';
 
 async function main() {
   console.log('Memulai proses seeding...');
@@ -71,21 +75,14 @@ async function main() {
 
     // Legacy seed used real-looking names and dialable phones for RT 1–3. Those
     // rows survive `update: {}` on the new placeholders, so reset them when they
-    // still match the old fingerprint (same rule as scripts/cleanup-legacy-sample-rt-leaders.ts).
-    //
-    // Recognition fingerprints only — never write these phones (or names) to new
-    // rows, and never display them in the UI. Matcher values must stay unchanged
-    // so existing legacy DB rows are still found and rewritten to placeholders.
-    const LEGACY_SAMPLE_LEADERS: Record<number, { name: string; phone: string }> = {
-      1: { name: 'Bambang Supriyanto', phone: '081234567801' },
-      2: { name: 'Hj. Siti Aminah', phone: '081234567802' },
-      3: { name: 'Ahmad Dahlan', phone: '081234567803' },
-    };
+    // still match the recognition fingerprint (same rule as
+    // scripts/cleanup-legacy-sample-rt-leaders.ts). Phones are matched by sha256
+    // digest — raw dialable values are not stored in source.
     let resetLegacyLeaders = 0;
     for (const [rtNumStr, expected] of Object.entries(LEGACY_SAMPLE_LEADERS)) {
       const rtNumber = Number(rtNumStr);
       const existing = await prisma.rtLeader.findUnique({ where: { rtNumber } });
-      if (existing && existing.name === expected.name && existing.phone === expected.phone) {
+      if (existing && matchesLegacySampleLeader(existing, expected)) {
         await prisma.rtLeader.update({
           where: { rtNumber },
           data: {

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { RT_LEADERS_DATA } from '../../prisma/rtLeadersData.js';
 import { seedRtLeaders, type RtLeaderSeedClient } from '../../prisma/seedRtLeaders.js';
+import { LEGACY_SAMPLE_LEADERS, phoneSha256 } from '../utils/legacySampleRtFingerprints.js';
 
 type UpsertCall = { where: unknown; update: unknown; create: unknown };
 
@@ -154,15 +155,16 @@ describe('RT_LEADERS_DATA', () => {
   });
 
   it('never seeds the legacy sample phones (recognition fingerprints only)', async () => {
-    // Keep in sync with LEGACY_SAMPLE_LEADERS in prisma/seed.ts and
-    // scripts/cleanup-legacy-sample-rt-leaders.ts — those constants identify old
-    // rows; they must not appear in any create payload.
-    const legacyPhones = new Set(['081234567801', '081234567802', '081234567803']);
-    const legacyNames = new Set(['Bambang Supriyanto', 'Hj. Siti Aminah', 'Ahmad Dahlan']);
+    // Fingerprints live in legacySampleRtFingerprints.ts (sha256 digests). A create
+    // payload must never hash to one of those digests or reuse a fingerprint name.
+    const legacyPhoneDigests = new Set(
+      Object.values(LEGACY_SAMPLE_LEADERS).map((entry) => entry.phoneSha256),
+    );
+    const legacyNames = new Set(Object.values(LEGACY_SAMPLE_LEADERS).map((entry) => entry.name));
 
     for (const rt of RT_LEADERS_DATA) {
       assert.equal(
-        legacyPhones.has(rt.phone),
+        legacyPhoneDigests.has(phoneSha256(rt.phone)),
         false,
         `RT ${rt.rtNumber} must not use a legacy phone`,
       );
@@ -175,7 +177,7 @@ describe('RT_LEADERS_DATA', () => {
     for (const call of calls.rtLeader) {
       const create = call.create as { phone?: string; name?: string };
       assert.equal(
-        legacyPhones.has(create.phone ?? ''),
+        legacyPhoneDigests.has(phoneSha256(create.phone ?? '')),
         false,
         'seedRtLeaders must never write a legacy fingerprint phone',
       );

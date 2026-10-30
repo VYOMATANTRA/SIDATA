@@ -137,44 +137,45 @@ function renderMarkers() {
   }
 }
 
-let activeZoomendHandler: (() => void) | null = null;
+/**
+ * Make a cluster icon keyboard-operable (Enter/Space zooms like a click).
+ * Leaflet markers are focusable by default; clusters need explicit role + keydown.
+ */
+function decorateClusterIcon(cluster: L.MarkerCluster) {
+  const el = cluster.getElement();
+  if (!el) return;
+  const count = cluster.getChildCount();
+  el.setAttribute('role', 'button');
+  el.setAttribute('tabindex', '0');
+  el.setAttribute('aria-label', `Kelompok ${count} titik, tekan Enter untuk memperbesar`);
+  if (el.dataset.sidataKeybound === '1') return;
+  el.dataset.sidataKeybound = '1';
+  el.addEventListener('keydown', (ev: KeyboardEvent) => {
+    if (ev.key === 'Enter' || ev.key === ' ') {
+      ev.preventDefault();
+      ev.stopPropagation();
+      cluster.zoomToBounds({ padding: [28, 28] });
+    }
+  });
+}
 
+/**
+ * Single viewport move when a point is selected. Previously setView ran first and
+ * zoomToShowLayer ran on zoomend — two animations. zoomToShowLayer alone covers
+ * both clustered and already-visible markers.
+ */
 function revealSelectedPoint() {
   if (!map || !markerLayerGroup || !props.selectedPointId) return;
   const targetId = props.selectedPointId;
   const marker = markers.get(targetId);
   if (!marker) return;
-  const TARGET_SELECTION_ZOOM = 16;
-  const maxZoom = map.getMaxZoom() ?? 19;
-  const zoom = Math.min(Math.max(map.getZoom(), TARGET_SELECTION_ZOOM), maxZoom);
 
-  if (activeZoomendHandler && map) {
-    map.off('zoomend', activeZoomendHandler);
-    activeZoomendHandler = null;
-  }
-
-  const reveal = () => {
+  markerLayerGroup.zoomToShowLayer(marker, () => {
     if (props.selectedPointId !== targetId) return;
-    markerLayerGroup?.zoomToShowLayer(marker, () => {
-      if (props.selectedPointId !== targetId) return;
-      const point = props.points.find((item) => item.id === targetId);
-      if (point) updateMarkerIcon(marker, point, true);
-      marker.setZIndexOffset(1000);
-    });
-  };
-
-  if (map.getZoom() >= zoom) {
-    reveal();
-  } else {
-    activeZoomendHandler = () => {
-      activeZoomendHandler = null;
-      reveal();
-    };
-    map.once('zoomend', activeZoomendHandler);
-    map.setView(marker.getLatLng(), zoom, {
-      animate: !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-    });
-  }
+    const point = props.points.find((item) => item.id === targetId);
+    if (point) updateMarkerIcon(marker, point, true);
+    marker.setZIndexOffset(1000);
+  });
 }
 
 function handleResize() {
@@ -259,12 +260,32 @@ onMounted(() => {
       iconCreateFunction: (cluster) => {
         const count = cluster.getChildCount();
         return L.divIcon({
-          html: `<span class="map-cluster__count" aria-hidden="true">${count}</span><span class="sr-only">Kelompok ${count} titik, tekan untuk memperbesar</span>`,
+          html: `<span class="map-cluster__count" aria-hidden="true">${count}</span><span class="sr-only">Kelompok ${count} titik, tekan Enter untuk memperbesar</span>`,
           className: 'map-cluster',
           iconSize: [42, 42],
         });
       },
     }).addTo(map);
+
+    // Decorate cluster icons once Leaflet has attached their DOM nodes.
+    markerLayerGroup.on('animationend', () => {
+      markerLayerGroup?.eachLayer((layer) => {
+        const maybeCluster = layer as L.Layer & {
+          getChildCount?: () => number;
+          getElement?: () => HTMLElement | undefined;
+        };
+        if (typeof maybeCluster.getChildCount === 'function') {
+          decorateClusterIcon(layer as L.MarkerCluster);
+        }
+      });
+    });
+    markerLayerGroup.on('layeradd', (event) => {
+      const layer = event.layer as L.Layer & { getChildCount?: () => number };
+      if (typeof layer.getChildCount === 'function') {
+        queueMicrotask(() => decorateClusterIcon(layer as L.MarkerCluster));
+      }
+    });
+
     renderMarkers();
     framePoints();
 
@@ -297,10 +318,6 @@ watch(
 onUnmounted(() => {
   isUnmounted = true;
   window.removeEventListener('resize', handleResize);
-  if (activeZoomendHandler && map) {
-    map.off('zoomend', activeZoomendHandler);
-    activeZoomendHandler = null;
-  }
   if (sizeInvalidationTimer !== null) {
     window.clearTimeout(sizeInvalidationTimer);
     sizeInvalidationTimer = null;
