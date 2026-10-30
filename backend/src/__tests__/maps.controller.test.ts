@@ -20,8 +20,8 @@ describe('maps.controller', () => {
     prisma.spatialPointRt.findMany =
       (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
     originalSystemSettingFindUnique = prisma.systemSetting.findUnique;
-    prisma.systemSetting.findUnique =
-      (async () => null) as unknown as typeof prisma.systemSetting.findUnique;
+    prisma.systemSetting.findUnique = (async () =>
+      null) as unknown as typeof prisma.systemSetting.findUnique;
   });
 
   afterEach(() => {
