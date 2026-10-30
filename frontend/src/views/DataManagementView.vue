@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { RouterLink } from 'vue-router';
+import { setAdminHeader } from '../composables/useAdminHeader';
 import BaseButton from '../components/common/BaseButton.vue';
 import BaseModal from '../components/common/BaseModal.vue';
 import IndicatorCard, { type IndicatorCardModel } from '../components/data/IndicatorCard.vue';
@@ -24,12 +24,14 @@ import { formatDecimalId } from '../utils/formatNumber';
 import { INPUT_CLASSES } from '../utils/formStyles';
 
 /**
- * CMS entry point for indicator data (issue: "CMS forms for indicators", SPEC §3/§4).
+ * CMS entry point for indicator data (issue: "CMS forms for indicators", SPEC §3/§4). Mounted
+ * inside AdminLayout, which supplies the page's <main>/<h1>/skip link/breadcrumb — this view
+ * only owns its own content.
  *
- * Deliberately scoped: no app-wide sidebar shell, no create/delete, no bulk import. It lists
- * whatever scalar indicators and matrix tables already exist and opens a single accessible
- * edit dialog per type. Creating new rows needs a `sections` management surface that does not
- * exist yet (the seed creates pages and chapters, not sections), so it stays out of this view.
+ * Deliberately scoped: no create/delete, no bulk import. It lists whatever scalar indicators and
+ * matrix tables already exist and opens a single accessible edit dialog per type. Creating new
+ * rows needs a `sections` management surface that does not exist yet (the seed creates pages and
+ * chapters, not sections), so it stays out of this view.
  */
 
 type TypeFilter = 'all' | 'skalar' | 'matriks';
@@ -148,7 +150,13 @@ async function loadAll(): Promise<void> {
   ]);
 }
 
-onMounted(loadAll);
+onMounted(() => {
+  setAdminHeader(
+    'Data',
+    'Kelola angka indikator skalar dan empat tabel matriks. Angka dimasukkan manual; impor massal belum tersedia.',
+  );
+  void loadAll();
+});
 
 function openScalar(indicator: Indicator): void {
   serverError.value = '';
@@ -237,163 +245,113 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col bg-slate-50">
-    <!-- Skip link, docs/ACCESSIBILITY.md §3 (2.4.1) -->
-    <a
-      href="#main-content"
-      class="focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-xl focus:bg-brand-navy focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg"
+  <div>
+    <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <form
+        role="search"
+        aria-label="Saring daftar data"
+        class="flex w-full flex-col gap-3 sm:flex-row sm:items-end md:w-auto"
+        @submit.prevent
+      >
+        <div class="w-full sm:w-72">
+          <label for="data-search" class="block text-xs font-medium text-slate-600">
+            Cari data
+          </label>
+          <input
+            id="data-search"
+            v-model="searchQuery"
+            type="search"
+            placeholder="Nama indikator, halaman, atau sumber"
+            :class="INPUT_CLASSES"
+            class="mt-1"
+          />
+        </div>
+
+        <div class="w-full sm:w-52">
+          <label for="data-type" class="block text-xs font-medium text-slate-600">
+            Tipe data
+          </label>
+          <select id="data-type" v-model="typeFilter" :class="INPUT_CLASSES" class="mt-1">
+            <option value="all">Semua Tipe Data</option>
+            <option value="skalar">Skalar</option>
+            <option value="matriks">Matriks</option>
+          </select>
+        </div>
+      </form>
+
+      <p class="text-xs text-slate-600 md:text-right" aria-live="polite" data-test="result-count">
+        Menampilkan {{ filteredCards.length }} dari {{ cards.length }} data
+      </p>
+    </div>
+
+    <div
+      v-if="loadError"
+      role="alert"
+      class="rounded-card mt-6 border border-rose-300 bg-rose-50 px-4 py-3"
     >
-      Lewati ke konten utama
-    </a>
+      <p class="text-sm font-medium text-rose-900">{{ loadError }}</p>
+      <BaseButton variant="secondary" size="sm" class="mt-3" @click="loadAll">
+        Coba muat ulang
+      </BaseButton>
+    </div>
 
-    <header class="border-b border-slate-200 bg-white">
-      <div
-        class="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8"
-      >
-        <RouterLink
-          to="/"
-          class="focus-visible:outline-brand-navy inline-flex items-center gap-2 rounded-btn px-2 py-1 text-sm font-medium text-brand-navy transition-colors hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          <svg
-            class="h-4 w-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M19 12H5M12 19l-7-7 7-7" />
-          </svg>
-          Beranda
-        </RouterLink>
+    <p
+      v-if="pagesStore.hierarchyError"
+      class="rounded-card mt-4 border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900"
+    >
+      Struktur halaman tidak dapat dimuat, jadi asal halaman tiap data tidak ditampilkan. Daftar
+      data tetap dapat diedit.
+    </p>
 
-        <span
-          class="bg-brand-navy/5 rounded-full px-3 py-1 text-xs font-semibold tracking-wide text-brand-navy uppercase"
-        >
-          Editor / Admin
-        </span>
-      </div>
-    </header>
+    <p
+      v-if="isLoading && cards.length === 0"
+      class="mt-10 text-sm text-slate-600"
+      aria-live="polite"
+    >
+      Memuat data…
+    </p>
 
-    <main id="main-content" class="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
-      <div>
-        <p class="text-xs font-semibold tracking-widest text-slate-500 uppercase">CMS Data</p>
-        <h1 class="mt-1 text-xl font-bold text-brand-navy">Data</h1>
-        <p class="mt-1 max-w-2xl text-sm text-slate-600">
-          Kelola angka indikator skalar dan empat tabel matriks. Angka dimasukkan manual; impor
-          massal belum tersedia.
-        </p>
-      </div>
-
-      <div class="mt-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <form
-          role="search"
-          aria-label="Saring daftar data"
-          class="flex w-full flex-col gap-3 sm:flex-row sm:items-end md:w-auto"
-          @submit.prevent
-        >
-          <div class="w-full sm:w-72">
-            <label for="data-search" class="block text-xs font-medium text-slate-600">
-              Cari data
-            </label>
-            <input
-              id="data-search"
-              v-model="searchQuery"
-              type="search"
-              placeholder="Nama indikator, halaman, atau sumber"
-              :class="INPUT_CLASSES"
-              class="mt-1"
-            />
-          </div>
-
-          <div class="w-full sm:w-52">
-            <label for="data-type" class="block text-xs font-medium text-slate-600">
-              Tipe data
-            </label>
-            <select id="data-type" v-model="typeFilter" :class="INPUT_CLASSES" class="mt-1">
-              <option value="all">Semua Tipe Data</option>
-              <option value="skalar">Skalar</option>
-              <option value="matriks">Matriks</option>
-            </select>
-          </div>
-        </form>
-
-        <p class="text-xs text-slate-600 md:text-right" aria-live="polite" data-test="result-count">
-          Menampilkan {{ filteredCards.length }} dari {{ cards.length }} data
-        </p>
-      </div>
-
-      <div
-        v-if="loadError"
-        role="alert"
-        class="mt-6 rounded-card border border-rose-300 bg-rose-50 px-4 py-3"
-      >
-        <p class="text-sm font-medium text-rose-900">{{ loadError }}</p>
-        <BaseButton variant="secondary" size="sm" class="mt-3" @click="loadAll">
-          Coba muat ulang
-        </BaseButton>
-      </div>
-
-      <p
-        v-if="pagesStore.hierarchyError"
-        class="mt-4 rounded-card border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900"
-      >
-        Struktur halaman tidak dapat dimuat, jadi asal halaman tiap data tidak ditampilkan. Daftar
-        data tetap dapat diedit.
+    <div
+      v-else-if="filteredCards.length === 0"
+      class="rounded-card mt-10 border border-dashed border-slate-300 bg-white px-6 py-12 text-center"
+    >
+      <p class="text-base font-semibold text-slate-800">
+        {{ cards.length === 0 ? 'Belum ada data indikator' : 'Tidak ada data yang cocok' }}
       </p>
-
-      <p
-        v-if="isLoading && cards.length === 0"
-        class="mt-10 text-sm text-slate-600"
-        aria-live="polite"
-      >
-        Memuat data…
+      <p class="mx-auto mt-2 max-w-md text-sm text-slate-600">
+        <template v-if="cards.length === 0">
+          Data indikator dan tabel matriks belum tersedia untuk lingkungan ini. Setelah datanya
+          diisi, kartunya akan muncul di sini dan bisa diedit.
+        </template>
+        <template v-else>
+          Ubah kata kunci pencarian atau pilih tipe data lain untuk melihat data yang lain.
+        </template>
       </p>
-
-      <div
-        v-else-if="filteredCards.length === 0"
-        class="mt-10 rounded-card border border-dashed border-slate-300 bg-white px-6 py-12 text-center"
+      <BaseButton
+        v-if="cards.length > 0"
+        variant="secondary"
+        size="sm"
+        class="mt-4"
+        @click="
+          searchQuery = '';
+          typeFilter = 'all';
+        "
       >
-        <p class="text-base font-semibold text-slate-800">
-          {{ cards.length === 0 ? 'Belum ada data indikator' : 'Tidak ada data yang cocok' }}
-        </p>
-        <p class="mx-auto mt-2 max-w-md text-sm text-slate-600">
-          <template v-if="cards.length === 0">
-            Data indikator dan tabel matriks belum tersedia untuk lingkungan ini. Setelah datanya
-            diisi, kartunya akan muncul di sini dan bisa diedit.
-          </template>
-          <template v-else>
-            Ubah kata kunci pencarian atau pilih tipe data lain untuk melihat data yang lain.
-          </template>
-        </p>
-        <BaseButton
-          v-if="cards.length > 0"
-          variant="secondary"
-          size="sm"
-          class="mt-4"
-          @click="
-            searchQuery = '';
-            typeFilter = 'all';
-          "
-        >
-          Kosongkan filter
-        </BaseButton>
-      </div>
+        Kosongkan filter
+      </BaseButton>
+    </div>
 
-      <template v-else>
-        <h2 class="sr-only">Daftar data</h2>
+    <template v-else>
+      <h2 class="sr-only">Daftar data</h2>
 
-        <ul class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <li v-for="card in filteredCards" :key="`${card.type}-${card.id}`" class="h-full">
-            <IndicatorCard :card="card" @edit="handleEdit(card)" />
-          </li>
-        </ul>
-      </template>
+      <ul class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <li v-for="card in filteredCards" :key="`${card.type}-${card.id}`" class="h-full">
+          <IndicatorCard :card="card" @edit="handleEdit(card)" />
+        </li>
+      </ul>
+    </template>
 
-      <p class="sr-only" aria-live="polite">{{ statusMessage }}</p>
-    </main>
+    <p class="sr-only" aria-live="polite">{{ statusMessage }}</p>
 
     <BaseModal
       :open="isEditorOpen"
