@@ -48,6 +48,7 @@ Dev server runs on `http://localhost:5173` by default (Vite).
 | Format                  | `npm run format`                  | `backend/` |
 | Run server              | `npx tsx src/index.ts` or similar | `backend/` |
 | Seed dev admin          | `npm run dev:seed`                | `backend/` |
+| Seed indicators         | `npm run seed:indicator`          | `backend/` |
 | Run via Docker          | `docker compose up --build`       | repo root  |
 
 Backend runs on port from `PORT` env var (default 3000). Prisma client is generated to `generated/prisma/`.
@@ -95,6 +96,7 @@ Key details:
 - `src/utils/`: `jwt.ts` (token signing), `oauth.ts` (Google OAuth PKCE & token verification), `otp.ts` (OTP hashing & expiry), `mailer.ts` (transactional email), `turnstile.ts` (Turnstile API client), `prisma.ts` (Prisma instance — wraps `audit_logs` writes in an append-only guard, see Audit Trail below), `bmkg.ts` (BMKG API fetch + response validation), `auditLogGuard.ts` (the append-only guard's pure logic), `actor.ts` / `requestContext.ts` (pull `{id, email, role}` and `{ipAddress, userAgent}` off a request for audit entries), `lockTransactionCache.ts` (versioned TTL cache and row-level lock transaction scaffold), `comparator.ts` (canonicalized JSON deep equality for diffs and mutations), `keyedCache.ts` (generic bounded LRU keyed cache with recency tracking), `comparisonProse.ts` (tier-1 template structure validation and exact-decimal comparison rendering), `trendKeywords.ts` (the code-owned trend/superlative word list, matcher, and per-occurrence acknowledgment key)
 - `prisma/schema.prisma`: ORM schema (MySQL)
 - `prisma/seed.ts`: Seeds default roles (`user`, `admin`, `editor`), default audit retention settings (keep-forever), default public settings (`publicSeedMap`), default operational weather config, default content blocks (`DEFAULT_CONTENT_BLOCKS`), default tier-1 comparison templates (`DEFAULT_COMPARISON_TEMPLATES`), the 8 Cerita pages and their chapters (data in `prisma/ceritaPages.ts`), sample RT leaders, and spatial points
+- `prisma/seeder_indicator.ts`: Seeds sample scalar indicator figures across all 8 Cerita categories (`npm run seed:indicator`)
 - `generated/prisma/`: Auto-generated Prisma client (do not edit)
 - `scripts/grants/audit-logs-grants.sql`, `scripts/prune-audit-logs.ts`: audit trail operations — see Audit Trail below
 

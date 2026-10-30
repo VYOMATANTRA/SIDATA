@@ -5,51 +5,200 @@ import LandingSectionHero from '../components/landing/SectionHero.vue';
 import CommonSectionHero from '@/components/common/SectionHero.vue';
 import { useContentBlocksStore, DEFAULT_HERO_BLOCK } from '../stores/contentBlocks.store';
 
-describe('SectionHero ctaLink security', () => {
-  it('falls back to #potensi when ctaLink contains backslash bypasses (/\\x, /%5cx, /\\t/x)', () => {
+describe('Landing SectionHero.vue', () => {
+  it('falls back to settingsStore tagline and DEFAULT_HERO_BLOCK body when title and body are empty or whitespace-only', () => {
     const pinia = createPinia();
     setActivePinia(pinia);
     const store = useContentBlocksStore(pinia);
 
-    const malicious = ['/\\evil.com', '/\\x', '/%5cx', '/%5Cx', '/%5cevil.com', '/\\t/x'];
+    store.blocks['landing-hero'] = {
+      ...DEFAULT_HERO_BLOCK,
+      title: '   ',
+      body: '   ',
+    };
 
-    for (const link of malicious) {
+    const wrapper = mount(LandingSectionHero, {
+      global: {
+        plugins: [pinia],
+        stubs: { 'router-link': true },
+      },
+    });
+
+    const h1 = wrapper.find('h1');
+    expect(h1.text().trim().length).toBeGreaterThan(0);
+    expect(h1.text()).toBe('Sistem Informasi Data Terpadu Kelurahan Manggar');
+
+    const p = wrapper.find('p');
+    expect(p.text().trim().length).toBeGreaterThan(0);
+    expect(p.text()).toBe(DEFAULT_HERO_BLOCK.body);
+  });
+
+  it('applies the official background_laman_depan_kelurahan image and dark navy gradient overlay', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+
+    const wrapper = mount(LandingSectionHero, {
+      global: {
+        plugins: [pinia],
+        stubs: { 'router-link': true },
+      },
+    });
+
+    const section = wrapper.find('section#hero');
+    const style = section.attributes('style');
+    expect(style).toContain('linear-gradient');
+    expect(style).toContain('background_laman_depan_kelurahan.webp');
+  });
+
+  it('sanitizes and safely handles editor background image without CSS breakout or XSS', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const store = useContentBlocksStore(pinia);
+
+    // Malicious injection attempt
+    store.blocks['landing-hero'] = {
+      ...DEFAULT_HERO_BLOCK,
+      metadata: {
+        backgroundImage: "x'), url('https://tracker/p.png",
+      },
+    };
+
+    const wrapper = mount(LandingSectionHero, {
+      global: { plugins: [pinia] },
+    });
+
+    const style = wrapper.find('section#hero').attributes('style') || '';
+    // Must NOT contain the unescaped tracker injection
+    expect(style).not.toContain("url('x')");
+    expect(style).not.toContain("url('https://tracker/p.png");
+    // Should fallback to default image safely
+    expect(style).toContain('background_laman_depan_kelurahan.webp');
+  });
+
+  it('rejects protocol-relative, backslash, and dangerous schemes in background image', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const store = useContentBlocksStore(pinia);
+
+    const dangerousUrls = [
+      '//evil.com/tracker.png',
+      '/uploads\\image.png',
+      'javascript:alert(1)',
+      'data:image/png;base64,AAAA',
+      'http://insecure.com/hero.webp',
+    ];
+
+    for (const dangerous of dangerousUrls) {
       store.blocks['landing-hero'] = {
         ...DEFAULT_HERO_BLOCK,
-        metadata: { ctaLink: link },
+        metadata: { backgroundImage: dangerous },
       };
+
       const wrapper = mount(LandingSectionHero, {
-        global: {
-          plugins: [pinia],
-          stubs: { 'router-link': true },
-        },
+        global: { plugins: [pinia] },
       });
-      const cta = wrapper.find('a.inline-flex');
-      expect(cta.attributes('href')).toBe('#potensi');
+
+      const style = wrapper.find('section#hero').attributes('style') || '';
+      expect(style).toContain('background_laman_depan_kelurahan.webp');
+      expect(style).not.toContain(dangerous);
     }
   });
 
-  it('accepts safe relative paths, anchors, and HTTPS URLs for ctaLink', () => {
+  it('safely applies valid https:// and relative / background image URLs', () => {
     const pinia = createPinia();
     setActivePinia(pinia);
     const store = useContentBlocksStore(pinia);
 
-    const safeLinks = ['#potensi', '/layanan', 'https://kelurahan-manggar.balikpapan.go.id'];
+    store.blocks['landing-hero'] = {
+      ...DEFAULT_HERO_BLOCK,
+      metadata: {
+        backgroundImage: 'https://cdn.example.com/custom-hero.webp',
+      },
+    };
 
-    for (const link of safeLinks) {
-      store.blocks['landing-hero'] = {
-        ...DEFAULT_HERO_BLOCK,
-        metadata: { ctaLink: link },
-      };
-      const wrapper = mount(LandingSectionHero, {
-        global: {
-          plugins: [pinia],
-          stubs: { 'router-link': true },
-        },
-      });
-      const cta = wrapper.find('a.inline-flex');
-      expect(cta.attributes('href')).toBe(link);
-    }
+    const wrapper = mount(LandingSectionHero, {
+      global: { plugins: [pinia] },
+    });
+
+    const style = wrapper.find('section#hero').attributes('style') || '';
+    expect(style).toContain('https://cdn.example.com/custom-hero.webp');
+  });
+
+  it('does not double-encode already percent-encoded background image URLs', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const store = useContentBlocksStore(pinia);
+
+    store.blocks['landing-hero'] = {
+      ...DEFAULT_HERO_BLOCK,
+      metadata: {
+        backgroundImage: 'https://cdn.example.com/custom%20hero.webp',
+      },
+    };
+
+    const wrapper = mount(LandingSectionHero, {
+      global: { plugins: [pinia] },
+    });
+
+    const style = wrapper.find('section#hero').attributes('style') || '';
+    expect(style).toContain('https://cdn.example.com/custom%20hero.webp');
+    expect(style).not.toContain('%2520');
+  });
+
+  it('does not render empty hero-actions container when no actions slot is provided', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+
+    const wrapper = mount(LandingSectionHero, {
+      global: { plugins: [pinia] },
+    });
+
+    expect(wrapper.find('[data-test="hero-actions"]').exists()).toBe(false);
+  });
+
+  it('renders hero-actions container when actions slot is passed', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+
+    const wrapper = mount(LandingSectionHero, {
+      global: { plugins: [pinia] },
+      slots: {
+        actions: '<button id="test-cta">Aksi</button>',
+      },
+    });
+
+    expect(wrapper.find('[data-test="hero-actions"]').exists()).toBe(true);
+    expect(wrapper.find('#test-cta').exists()).toBe(true);
+  });
+
+  it('renders default WeatherWidget inside hero-weather container on top of hero background', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+
+    const wrapper = mount(LandingSectionHero, {
+      global: { plugins: [pinia] },
+    });
+
+    const weatherContainer = wrapper.find('[data-test="hero-weather"]');
+    expect(weatherContainer.exists()).toBe(true);
+    expect(wrapper.find('[data-test="weather-widget-root"]').exists()).toBe(true);
+  });
+
+  it('allows custom slot injection into weather slot in Landing SectionHero', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+
+    const wrapper = mount(LandingSectionHero, {
+      global: { plugins: [pinia] },
+      slots: {
+        weather: '<div id="custom-weather-card">Cuaca Kustom</div>',
+      },
+    });
+
+    const weatherContainer = wrapper.find('[data-test="hero-weather"]');
+    expect(weatherContainer.exists()).toBe(true);
+    expect(weatherContainer.find('#custom-weather-card').exists()).toBe(true);
+    expect(weatherContainer.text()).toContain('Cuaca Kustom');
   });
 });
 
@@ -141,7 +290,7 @@ describe('Common SectionHero.vue', () => {
     const section = wrapper.find('[data-test="section-hero"]');
     const style = section.attributes('style');
     expect(style).toContain('linear-gradient');
-    expect(style).toContain('background_laman_depan_kelurahan.png');
+    expect(style).toContain('background_laman_depan_kelurahan.webp');
   });
 
   it('applies dark gradient background overlay when custom backgroundImage is passed', () => {

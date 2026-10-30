@@ -2,131 +2,139 @@
 import { computed } from 'vue';
 import { DEFAULT_HERO_BLOCK, useContentBlocksStore } from '../../stores/contentBlocks.store';
 import { useSettingsStore } from '../../stores/settings.store';
+import WeatherWidget from '../weather/WeatherWidget.vue';
+import defaultHeroBg from '@/assets/img/background_laman_depan_kelurahan.webp';
 
 const contentBlocksStore = useContentBlocksStore();
 const settingsStore = useSettingsStore();
 
 const hero = computed(() => contentBlocksStore.hero);
 
-const badgeText = computed(() => {
-  const metaBadge = hero.value.metadata?.badge;
-  if (typeof metaBadge === 'string' && metaBadge.trim()) {
-    return metaBadge.trim();
+const titleText = computed(() => {
+  const title = hero.value.title;
+  if (typeof title === 'string' && title.trim()) {
+    return title.trim();
   }
-  return 'Portal Resmi Keterbukaan Informasi';
+  return settingsStore.tagline || DEFAULT_HERO_BLOCK.title;
 });
 
-const ctaText = computed(() => {
-  const metaCta = hero.value.metadata?.ctaText;
-  if (typeof metaCta === 'string' && metaCta.trim()) {
-    return metaCta.trim();
+const bodyText = computed(() => {
+  const body = hero.value.body;
+  if (typeof body === 'string' && body.trim()) {
+    return body.trim();
   }
-  return 'Jelajahi Potensi Wilayah';
+  return DEFAULT_HERO_BLOCK.body;
 });
 
-const ctaLink = computed(() => {
-  const metaLink = hero.value.metadata?.ctaLink;
-  if (typeof metaLink === 'string' && metaLink.trim()) {
-    const trimmed = metaLink.trim();
-    if (trimmed.includes('\\') || /%5c/i.test(trimmed)) {
-      return '#potensi';
-    }
-    if (trimmed.startsWith('#')) {
-      return trimmed;
-    }
-    if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
-      try {
-        const parsed = new URL(trimmed, 'https://placeholder.invalid');
-        if (parsed.origin === 'https://placeholder.invalid' && parsed.protocol === 'https:') {
-          return trimmed;
-        }
-      } catch {
-        return '#potensi';
-      }
-    }
-    if (/^https:\/\/[^/]+/i.test(trimmed)) {
-      try {
-        const parsed = new URL(trimmed);
-        if (parsed.protocol === 'https:') {
-          return trimmed;
-        }
-      } catch {
-        return '#potensi';
-      }
+function hasControlCharacters(str: string): boolean {
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    if ((code >= 0 && code <= 31) || code === 127) {
+      return true;
     }
   }
-  return '#potensi';
+  return false;
+}
+
+/**
+ * Sanitizes and safely encodes an image URL for CSS backgroundImage.
+ * Only permits leading `/` paths and `https://` URLs to prevent CSS breakout and tracking injection.
+ */
+function sanitizeBackgroundImageUrl(url: unknown): string {
+  if (typeof url !== 'string') return defaultHeroBg;
+  const trimmed = url.trim();
+  if (!trimmed) return defaultHeroBg;
+
+  // Disallow line breaks and control characters to prevent header/CSS injection
+  if (hasControlCharacters(trimmed)) return defaultHeroBg;
+
+  // Disallow protocol-relative URLs and backslashes
+  if (trimmed.startsWith('//') || trimmed.includes('\\') || /%5c/i.test(trimmed)) {
+    return defaultHeroBg;
+  }
+
+  // Only allow absolute paths starting with / or secure https: addresses
+  const isPath = trimmed.startsWith('/');
+  const isHttps = trimmed.startsWith('https://');
+  if (!isPath && !isHttps) {
+    return defaultHeroBg;
+  }
+
+  try {
+    if (isHttps) {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol !== 'https:') return defaultHeroBg;
+    } else {
+      const parsed = new URL(trimmed, 'https://placeholder.invalid');
+      if (parsed.origin !== 'https://placeholder.invalid' || parsed.protocol !== 'https:') {
+        return defaultHeroBg;
+      }
+    }
+  } catch {
+    return defaultHeroBg;
+  }
+
+  // Decode first to avoid double-encoding sequences that are already percent-encoded (e.g. %20 -> %2520)
+  let normalized = trimmed;
+  try {
+    normalized = decodeURI(trimmed);
+  } catch {
+    // Keep trimmed if decoding fails due to malformed sequences
+  }
+
+  // Encode URI and escape quotes, parentheses, and backslashes to prevent CSS breakout
+  const escaped = encodeURI(normalized).replace(/['"()\\]/g, (char) => `\\${char}`);
+  return escaped;
+}
+
+const backgroundStyle = computed(() => {
+  const metaBg = hero.value.metadata?.backgroundImage;
+  const image = sanitizeBackgroundImageUrl(metaBg);
+
+  return {
+    backgroundImage: `linear-gradient(rgba(10, 35, 83, 0.84), rgba(0, 27, 72, 0.90)), url('${image}')`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+  };
 });
 </script>
 
 <template>
-  <header
-    class="relative overflow-hidden border-b border-slate-700/60 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 px-4 py-16 text-white sm:px-6 md:py-24 lg:px-8"
+  <section
+    id="hero"
+    class="relative flex min-h-[520px] w-full flex-col justify-center overflow-hidden px-5 py-16 text-white transition-all sm:min-h-[580px] sm:px-12 sm:py-20 md:py-24"
+    :style="backgroundStyle"
     aria-labelledby="hero-title"
+    data-test="section-hero"
   >
-    <!-- Background subtle mesh accents -->
-    <div
-      class="pointer-events-none absolute inset-0 bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:16px_16px] opacity-10"
-      aria-hidden="true"
-    ></div>
-
-    <div class="relative mx-auto max-w-5xl space-y-6 text-center">
-      <!-- Institutional Badge -->
-      <div
-        class="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-1.5 text-xs font-medium text-emerald-300 sm:text-sm"
-      >
-        <span class="h-2 w-2 animate-pulse rounded-full bg-emerald-400" aria-hidden="true"></span>
-        <span>{{ badgeText }}</span>
-        <span class="font-normal text-slate-400">|</span>
-        <span class="text-slate-300">{{ settingsStore.administrativeArea }}</span>
+    <div class="relative z-10 mx-auto flex w-full max-w-5xl flex-col space-y-6 sm:space-y-8">
+      <div class="space-y-4">
+        <h1
+          id="hero-title"
+          class="min-w-0 text-3xl leading-tight font-extrabold tracking-tight text-white sm:text-4xl md:text-5xl"
+        >
+          {{ titleText }}
+        </h1>
+        <p class="max-w-3xl text-sm leading-relaxed text-slate-200/95 sm:text-base md:text-lg">
+          {{ bodyText }}
+        </p>
       </div>
 
-      <!-- Main Headline (Single h1 for the routed view per WCAG & docs/ACCESSIBILITY.md) -->
-      <h1
-        id="hero-title"
-        class="text-3xl leading-tight font-extrabold tracking-tight text-white sm:text-4xl md:text-5xl lg:text-6xl"
+      <!-- Hero Actions slot (renders only when slot content is provided) -->
+      <div
+        v-if="$slots.actions"
+        class="flex flex-wrap items-center gap-3 pt-2 sm:gap-4"
+        data-test="hero-actions"
       >
-        {{ hero.title || settingsStore.tagline }}
-      </h1>
+        <slot name="actions" />
+      </div>
 
-      <!-- Institutional Narrative Body -->
-      <p
-        class="mx-auto max-w-3xl text-base leading-relaxed font-normal text-slate-300 sm:text-lg md:text-xl"
-      >
-        {{ hero.body || DEFAULT_HERO_BLOCK.body }}
-      </p>
-
-      <!-- Action Button -->
-      <div class="flex flex-wrap items-center justify-center gap-4 pt-4">
-        <a
-          :href="ctaLink"
-          class="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-950/40 transition-colors hover:bg-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400 sm:text-base"
-        >
-          <span>{{ ctaText }}</span>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="h-4 w-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M19 14l-7 7m0 0l-7-7m7 7V3"
-            />
-          </svg>
-        </a>
-
-        <router-link
-          to="/login"
-          class="inline-flex items-center justify-center rounded-xl border border-slate-700 bg-slate-800/80 px-6 py-3 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-700/80 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 sm:text-base"
-        >
-          Akses Petugas & Editor
-        </router-link>
+      <!-- Weather Widget slot (Spec §8) -->
+      <div class="w-full pt-2 sm:pt-4" data-test="hero-weather">
+        <slot name="weather">
+          <WeatherWidget />
+        </slot>
       </div>
     </div>
-  </header>
+  </section>
 </template>

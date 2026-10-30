@@ -62,6 +62,10 @@ export const useAuthStore = defineStore('auth', () => {
   // firing on rapid navigations) instead of each firing its own csrf-token + refresh pair.
   let inFlight: Promise<RefreshOutcome> | null = null
 
+  // Monotonically increasing generation counter to invalidate in-flight silent refreshes
+  // when an explicit logout or clearAuth occurs while a request is pending.
+  let authEpoch = 0
+
   const isAuthenticated = computed(() => !!accessToken.value)
   const isAdmin = computed(() => user.value?.role?.toLowerCase() === 'admin')
   const isEditor = computed(() => user.value?.role?.toLowerCase() === 'editor')
@@ -72,9 +76,11 @@ export const useAuthStore = defineStore('auth', () => {
   const canEditData = computed(() => isAdmin.value || isEditor.value)
 
   function setAuth(newUser: UserProfile, token: string) {
+    authEpoch++
     user.value = newUser
     accessToken.value = token
     isInitialized.value = true
+    refreshDenied.value = false
     setupToken.value = null
     mustChangePassword.value = false
     removeStoredSetupToken()
@@ -87,6 +93,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function clearAuth(keepSetup = false) {
+    authEpoch++
     user.value = null
     accessToken.value = null
     isInitialized.value = true
@@ -99,8 +106,12 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function performInitAuth(): Promise<RefreshOutcome> {
+    const currentEpoch = ++authEpoch
     try {
       const csrfToken = await getCsrfToken()
+      if (currentEpoch !== authEpoch) {
+        return 'transient'
+      }
       if (!csrfToken) {
         // getCsrfToken() collapses a network/5xx failure into ''. Sending an empty header would
         // make /refresh answer 403, which this function reads as a dead session — so a brief
@@ -115,6 +126,10 @@ export const useAuthStore = defineStore('auth', () => {
         },
       })
 
+      if (currentEpoch !== authEpoch) {
+        return 'transient'
+      }
+
       if (!res.ok) {
         // 401/403 is the server saying the session is dead. Every other 4xx (400 malformed,
         // CSRF rejection) means the refresh will keep failing the same way, so it is also a
@@ -127,8 +142,10 @@ export const useAuthStore = defineStore('auth', () => {
           (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429);
 
         if (denied) {
-          clearAuth(mustChangePassword.value)
-          refreshDenied.value = true
+          if (currentEpoch === authEpoch) {
+            clearAuth(mustChangePassword.value)
+            refreshDenied.value = true
+          }
           return 'denied'
         }
 
@@ -138,19 +155,27 @@ export const useAuthStore = defineStore('auth', () => {
       }
 
       const data = await res.json()
+      if (currentEpoch !== authEpoch) {
+        return 'transient'
+      }
+
       if (data.accessToken) {
         setAuth(data.user || { id: '', email: '', role: '' }, data.accessToken)
         return 'ok'
       }
 
-      clearAuth(mustChangePassword.value)
+      if (currentEpoch === authEpoch) {
+        clearAuth(mustChangePassword.value)
+      }
       return 'denied'
     } catch {
       // Network failure: transient, exactly like a 5xx. Clearing here would log the user out
       // of a session the server never rejected.
       return 'transient'
     } finally {
-      isInitialized.value = true
+      if (currentEpoch === authEpoch) {
+        isInitialized.value = true
+      }
     }
   }
 
@@ -187,7 +212,51 @@ export const useAuthStore = defineStore('auth', () => {
       return true
     }
 
+    if (refreshDenied.value) {
+      return false
+    }
+
     return (await refreshSession()) === 'ok'
+  }
+
+  /**
+   * Performs explicit user logout: revokes server session, clears memory tokens,
+   * invalidates in-flight refresh requests, and suppresses immediate auto-refresh.
+   */
+  async function logout(): Promise<{ success: boolean; error?: string }> {
+    try {
+      const csrfToken = await getCsrfToken()
+      if (!csrfToken) {
+        return {
+          success: false,
+          error: 'Gagal memvalidasi token keamanan (CSRF). Silakan coba lagi.',
+        }
+      }
+
+      const res = await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'x-csrf-token': csrfToken,
+        },
+      })
+
+      if (!res.ok) {
+        return {
+          success: false,
+          error: 'Gagal keluar dari sesi. Silakan coba lagi.',
+        }
+      }
+
+      clearAuth()
+      refreshDenied.value = true
+      return { success: true }
+    } catch {
+      return {
+        success: false,
+        error: 'Terjadi kesalahan jaringan saat keluar. Silakan coba lagi.',
+      }
+    }
   }
 
   return {
@@ -200,10 +269,12 @@ export const useAuthStore = defineStore('auth', () => {
     canEditData,
     setupToken,
     mustChangePassword,
+    refreshDenied,
     setAuth,
     setSetupAuth,
     clearAuth,
     initAuth,
     refreshSession,
+    logout,
   }
 })

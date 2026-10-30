@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
+import type { StatItem } from '../components/common/StatCard.vue';
 import { apiRequestJson } from '../utils/apiClient';
 
 /**
@@ -25,7 +26,7 @@ export interface RenderedComparison {
 
 export interface Indicator {
   id: string;
-  sectionId: string;
+  sectionId?: string | null;
   slug: string;
   label: string;
   unit: string | null;
@@ -38,16 +39,92 @@ export interface Indicator {
   source: string | null;
   hedgeNote: string | null;
   sortOrder: number;
-  comparisonTemplateId: string | null;
+  comparisonTemplateId?: string | null;
   /** Rendered server-side from the attached tier-1 template; null when there is nothing to say. */
-  comparison: RenderedComparison | null;
-  createdAt: string;
-  updatedAt: string;
+  comparison?: RenderedComparison | null;
+  createdAt?: string;
+  updatedAt?: string;
+  pageSlug?: string | null;
 }
 
 /** The public Cerita read names the same shapes `…Dto`; keep both import paths working. */
 export type IndicatorDto = Indicator;
 export type IndicatorComparison = RenderedComparison;
+export type IndicatorItem = IndicatorDto;
+
+/**
+ * Format an indicator value using Indonesian conventions:
+ * comma for decimal point ('2,5', '1,06'), dot for thousands ('53.098').
+ */
+export function formatIndicatorValue(
+  value: string | number,
+  unit?: string | null,
+): string {
+  const strVal = String(value).trim();
+  if (!strVal) return '';
+
+  if (unit && unit.includes(':')) {
+    return strVal.replace('.', ',');
+  }
+
+  // If strVal is already pre-formatted with Indonesian thousand dots, e.g. '53.098' or '53.120'
+  if (/^\d{1,3}(\.\d{3})+$/.test(strVal)) {
+    return strVal;
+  }
+
+  // Plain digits like '53098' or '100' -> format to Indonesian locale ('53.098')
+  if (/^\d+$/.test(strVal)) {
+    return Number(strVal).toLocaleString('id-ID');
+  }
+
+  // Stored as Decimal with .0000 -> extract integer part and format
+  if (/^\d+\.0+$/.test(strVal)) {
+    const intPart = strVal.split('.')[0]!;
+    return Number(intPart).toLocaleString('id-ID');
+  }
+
+  // Consistent decimal comma fallback for decimal strings (e.g. '2.5' or '1.06')
+  if (/^-?\d+\.\d+$/.test(strVal)) {
+    return strVal.replace('.', ',');
+  }
+
+  return strVal;
+}
+
+export function resolveIconForIndicator(
+  slug: string,
+  label: string,
+): 'person' | 'house' | 'density' | 'ratio' {
+  const normalizedSlug = slug.replace(/^[a-z0-9]+(?:-[a-z0-9]+)*-(?=[a-z0-9]+$)/, '');
+  const text = `${normalizedSlug} ${label}`.toLowerCase();
+
+  // Use word-boundary checks rather than substring matching
+  if (/\b(rasio|tingkat|indeks|angka|cakupan|persentase)\b/i.test(text)) {
+    return 'ratio';
+  }
+  if (
+    /\b(kepadatan|luas|wilayah|panjang|sampah|jalan)\b/i.test(text) ||
+    text.includes('%') ||
+    /\b(km²|ton\/hari)\b/i.test(text)
+  ) {
+    return 'density';
+  }
+  if (
+    /\b(rt|rukun tetangga|rumah|posyandu|sekolah|satuan|usaha|bank|unit|fasilitas|lembaga)\b/i.test(
+      text,
+    )
+  ) {
+    return 'house';
+  }
+  if (
+    /\b(penduduk|warga|jiwa|siswa|peserta|balita|guru|medis|tenaga|nasabah|orang|kk)\b/i.test(text)
+  ) {
+    return 'person';
+  }
+
+  return 'person';
+}
+
 
 /** Only the fields the CMS form can change; the API rejects unknown keys (`.strict()`). */
 export interface IndicatorPatch {
@@ -74,7 +151,7 @@ export interface IndicatorPatch {
 }
 
 export const useIndicatorsStore = defineStore('indicators', () => {
-  // --- CMS: full list + edits ---
+  // CMS & Public indicators state
   const indicators = ref<Indicator[]>([]);
   const total = ref(0);
   const isLoading = ref(false);
@@ -107,7 +184,9 @@ export const useIndicatorsStore = defineStore('indicators', () => {
   }
 
   function replaceIndicator(updated: Indicator): void {
-    invalidateSectionCache(updated.sectionId);
+    if (updated.sectionId) {
+      invalidateSectionCache(updated.sectionId);
+    }
     const index = indicators.value.findIndex((item) => item.id === updated.id);
     if (index === -1) {
       indicators.value = [...indicators.value, updated];
@@ -135,6 +214,7 @@ export const useIndicatorsStore = defineStore('indicators', () => {
         total.value = typeof data.total === 'number' ? data.total : indicators.value.length;
         isLoaded.value = true;
       } catch (err) {
+        // Do NOT treat 404 as loaded or empty — report error and keep existing data on failed refetch
         error.value = err instanceof Error ? err.message : 'Gagal memuat daftar indikator.';
       } finally {
         isLoading.value = false;
@@ -143,6 +223,18 @@ export const useIndicatorsStore = defineStore('indicators', () => {
     })();
 
     return inFlight;
+  }
+
+  function getStatsForPage(pageSlug: string): StatItem[] {
+    const target = pageSlug.toLowerCase();
+    const matched = indicators.value.filter((item) => item.pageSlug?.toLowerCase() === target);
+
+    return matched.map((item) => ({
+      icon: resolveIconForIndicator(item.slug, item.label),
+      value: formatIndicatorValue(item.valueCurrent, item.unit),
+      label: item.label,
+      unit: item.unit || undefined,
+    }));
   }
 
   async function updateIndicator(id: string, patch: IndicatorPatch): Promise<Indicator> {
@@ -208,12 +300,13 @@ export const useIndicatorsStore = defineStore('indicators', () => {
     isLoaded,
     error,
     staleCount,
+    fetchIndicators,
+    getStatsForPage,
+    updateIndicator,
+    replaceIndicator,
     bySectionId,
     loadingBySectionId,
     errorsBySectionId,
-    fetchIndicators,
-    updateIndicator,
-    replaceIndicator,
     fetchBySectionId,
   };
 });
