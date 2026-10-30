@@ -1,50 +1,157 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { getCsrfToken } from '../utils/csrf';
 import { useAuthStore } from '../stores/auth';
 import { useSettingsStore } from '../stores/settings.store';
 import { useContentBlocksStore } from '../stores/contentBlocks.store';
+import { useIndicatorsStore } from '../stores/indicators.store';
+import AppNavbar from '../components/common/AppNavbar.vue';
+import AppFooter from '../components/common/AppFooter.vue';
 import SectionHero from '../components/landing/SectionHero.vue';
 import SectionSambutanLurah from '../components/landing/SectionSambutanLurah.vue';
-import SectionHighlights from '../components/landing/SectionHighlights.vue';
+import StatOverview from '../components/common/StatOverview.vue';
+import bgKependudukan from '@/assets/img/landing-page/demografi_penduduk.webp';
+import bgPendidikan from '@/assets/img/landing-page/pendidikan.webp';
+import bgKesehatan from '@/assets/img/landing-page/kesehatan.webp';
+import bgEkonomi from '@/assets/img/landing-page/ekonomi.webp';
+import bgPemerintahan from '@/assets/img/landing-page/pemerintahan_kelembagaan.webp';
+import bgGeografis from '@/assets/img/landing-page/geografis_tata_ruang.webp';
+import bgInfrastruktur from '@/assets/img/landing-page/infrastruktur_perumahan.webp';
+import bgPersampahan from '@/assets/img/landing-page/persampahan.webp';
+
+interface CeritaPreviewCategory {
+  slug: string;
+  title: string;
+  description: string;
+  cardTitle: string;
+  to: string;
+  bgOverlay: string;
+  bgImage: string;
+}
+
+const CERITA_BG_OVERLAY =
+  'linear-gradient(90deg, rgba(0, 0, 0, 0.75) 40%, rgba(68, 68, 68, 0.75) 100%)';
+
+const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
+  {
+    slug: 'kependudukan',
+    title: 'Kependudukan',
+    description:
+      'Komposisi dan kepadatan penduduk, keluarga, persebaran rasio jenis kelamin, umur, pendidikan, dan lainnya',
+    cardTitle: 'Ringkasan Statistik Kependudukan Kelurahan Manggar',
+    to: '/cerita/kependudukan',
+    bgOverlay: CERITA_BG_OVERLAY,
+    bgImage: bgKependudukan,
+  },
+  {
+    slug: 'pendidikan',
+    title: 'Pendidikan',
+    description:
+      'Data sarana prasarana sekolah, angka partisipasi sekolah, dan tingkat kelulusan jenjang pendidikan warga',
+    cardTitle: 'Ringkasan Statistik Pendidikan Kelurahan Manggar',
+    to: '/cerita/pendidikan',
+    bgOverlay: CERITA_BG_OVERLAY,
+    bgImage: bgPendidikan,
+  },
+  {
+    slug: 'kesehatan',
+    title: 'Kesehatan',
+    description:
+      'Layanan posyandu, fasilitas kesehatan tingkat pertama, sebaran tenaga medis, dan derajat kesehatan balita',
+    cardTitle: 'Ringkasan Statistik Kesehatan Kelurahan Manggar',
+    to: '/cerita/kesehatan',
+    bgOverlay: CERITA_BG_OVERLAY,
+    bgImage: bgKesehatan,
+  },
+  {
+    slug: 'ekonomi-dan-ketertiban',
+    title: 'Ekonomi & Ketertiban',
+    description:
+      'Potensi perekonomian maritim pesisir, sentra UMKM mandiri, ketertiban lingkungan, dan pos pengamanan wilayah',
+    cardTitle: 'Ringkasan Statistik Ekonomi & Ketertiban Kelurahan Manggar',
+    to: '/cerita/ekonomi-dan-ketertiban',
+    bgOverlay: CERITA_BG_OVERLAY,
+    bgImage: bgEkonomi,
+  },
+  {
+    slug: 'pemerintahan-dan-kelembagaan',
+    title: 'Pemerintahan & Kelembagaan',
+    description:
+      'Struktur kelembagaan perangkat kelurahan, koordinasi 100 RT, LPM, PKK, dan lembaga kemasyarakatan kelurahan',
+    cardTitle: 'Ringkasan Statistik Pemerintahan & Kelembagaan Kelurahan Manggar',
+    to: '/cerita/pemerintahan-dan-kelembagaan',
+    bgOverlay: CERITA_BG_OVERLAY,
+    bgImage: bgPemerintahan,
+  },
+  {
+    slug: 'geografis-dan-tata-ruang',
+    title: 'Geografis & Tata Ruang',
+    description:
+      'Luas wilayah administratif pesisir Balikpapan Timur, pemanfaatan tata guna lahan hijau, dan batas batas wilayah',
+    cardTitle: 'Ringkasan Statistik Geografis & Tata Ruang Kelurahan Manggar',
+    to: '/cerita/geografis-dan-tata-ruang',
+    bgOverlay: CERITA_BG_OVERLAY,
+    bgImage: bgGeografis,
+  },
+  {
+    slug: 'infrastruktur-dan-perumahan',
+    title: 'Infrastruktur & Perumahan',
+    description:
+      'Cakupan sambungan air perpipaan PDAM, sanitasi layak, kualitas pemukiman, dan prasarana transportasi jalan',
+    cardTitle: 'Ringkasan Statistik Infrastruktur & Perumahan Kelurahan Manggar',
+    to: '/cerita/infrastruktur-dan-perumahan',
+    bgOverlay: CERITA_BG_OVERLAY,
+    bgImage: bgInfrastruktur,
+  },
+  {
+    slug: 'persampahan-dan-bank-sampah-unit',
+    title: 'Persampahan & Bank Sampah Unit',
+    description:
+      'Pengelolaan persampahan berbasis masyarakat, inovasi Eco Boba, dan jaringan Bank Sampah Unit tingkat RT',
+    cardTitle: 'Ringkasan Statistik Persampahan & Bank Sampah Unit Kelurahan Manggar',
+    to: '/cerita/persampahan-dan-bank-sampah-unit',
+    bgOverlay: CERITA_BG_OVERLAY,
+    bgImage: bgPersampahan,
+  },
+];
 
 const router = useRouter();
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
 const contentBlocksStore = useContentBlocksStore();
+const indicatorsStore = useIndicatorsStore();
 
 const isLoggingOut = ref(false);
 const logoutError = ref('');
 
+function isRouteAvailable(path: string): boolean {
+  return router.resolve(path).matched.length > 0;
+}
+
 onMounted(async () => {
-  await Promise.allSettled([settingsStore.fetchPublicSettings(), contentBlocksStore.fetchBlocks()]);
+  await Promise.allSettled([
+    settingsStore.fetchPublicSettings(),
+    contentBlocksStore.fetchBlocks(),
+    indicatorsStore.fetchIndicators(),
+  ]);
 });
 
 async function handleLogout() {
+  if (isLoggingOut.value) return;
   isLoggingOut.value = true;
   logoutError.value = '';
 
   try {
-    const csrfToken = await getCsrfToken();
+    const result = await authStore.logout();
 
-    const response = await fetch('/api/auth/logout', {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'x-csrf-token': csrfToken,
-      },
-    });
-
-    if (!response.ok) {
-      logoutError.value = 'Gagal keluar dari sesi. Silakan coba lagi.';
+    if (!result.success) {
+      logoutError.value = result.error || 'Gagal keluar dari sesi. Silakan coba lagi.';
       return;
     }
 
-    authStore.clearAuth();
-    router.push('/login');
+    await router.push('/login');
   } catch {
-    logoutError.value = 'Terjadi kesalahan jaringan saat keluar. Silakan coba lagi.';
+    logoutError.value = 'Terjadi kesalahan tidak terduga saat keluar. Silakan coba lagi.';
   } finally {
     isLoggingOut.value = false;
   }
@@ -52,159 +159,223 @@ async function handleLogout() {
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col bg-slate-50 selection:bg-emerald-500 selection:text-white">
+  <div
+    class="selection:bg-brand-cyan selection:text-brand-navy flex min-h-screen flex-col bg-slate-50"
+  >
     <!-- Skip to Content Link per docs/ACCESSIBILITY.md §3 (2.4.1) -->
     <a
       href="#main-content"
-      class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-xl focus:bg-emerald-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
+      class="focus:rounded-btn focus:bg-brand-navy focus-visible:outline-brand-cyan sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2"
     >
       Lewati ke konten utama
     </a>
 
-    <!-- Top Navigation Bar -->
-    <nav
-      class="sticky top-0 z-40 border-b border-slate-200/90 bg-white/95 px-4 py-3.5 backdrop-blur-md transition-all sm:px-6 lg:px-8"
-      aria-label="Navigasi Utama Portal"
+    <!-- Top Navigation Landmark using PR #56 AppNavbar -->
+    <AppNavbar
+      :sticky="true"
+      :title="settingsStore.institutionName"
+      :subtitle="settingsStore.appName"
     >
-      <div class="mx-auto flex max-w-7xl items-center justify-between gap-4">
-        <!-- Logo & Branding -->
-        <router-link
-          to="/"
-          class="group flex items-center gap-3 rounded-lg p-1 focus-visible:outline-2 focus-visible:outline-emerald-500"
-        >
-          <div
-            class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-xl font-black text-white shadow-md shadow-emerald-700/20 transition-transform group-hover:scale-105"
-            aria-hidden="true"
+      <!-- Desktop Actions Slot -->
+      <template #actions>
+        <template v-if="authStore.isAuthenticated">
+          <div class="hidden flex-col text-right sm:flex">
+            <span class="text-xs font-semibold text-slate-100">{{ authStore.user?.email }}</span>
+            <span class="text-brand-cyan text-[11px] font-medium tracking-wider uppercase">
+              Peran: {{ authStore.user?.role }}
+            </span>
+          </div>
+
+          <router-link
+            v-if="authStore.isAdmin"
+            to="/users"
+            class="rounded-btn focus-visible:outline-brand-cyan bg-white/10 px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/20 focus-visible:outline-2 sm:text-sm"
           >
-            S
-          </div>
-          <div class="flex flex-col">
-            <span
-              class="text-lg leading-none font-extrabold tracking-tight text-slate-900 transition-colors group-hover:text-emerald-700"
-            >
-              {{ settingsStore.appName }}
-            </span>
-            <span class="text-xs leading-tight font-medium text-slate-500">
-              {{ settingsStore.institutionName }}
-            </span>
-          </div>
-        </router-link>
+            Manajemen Pengguna
+          </router-link>
 
-        <!-- Right Side: Auth State or Login Link -->
-        <div class="flex items-center gap-3 sm:gap-4">
+          <button
+            type="button"
+            @click="handleLogout"
+            :disabled="isLoggingOut"
+            data-test="logout-btn"
+            class="rounded-btn hover:text-brand-navy focus-visible:outline-brand-cyan cursor-pointer border border-white/20 bg-white/10 px-3.5 py-1.5 text-xs font-medium text-white shadow-xs transition-colors hover:bg-white focus-visible:outline-2 disabled:opacity-50 sm:text-sm"
+          >
+            <span v-if="isLoggingOut">Memproses...</span>
+            <span v-else>Keluar (Logout)</span>
+          </button>
+        </template>
+      </template>
+
+      <!-- Navigation & Auth Dropdown Menu Slot -->
+      <template #menu="{ close }">
+        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <router-link
+            to="/"
+            class="block rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
+            @click="close"
+          >
+            Beranda
+          </router-link>
+          <router-link
+            v-if="isRouteAvailable('/publikasi')"
+            to="/publikasi"
+            class="block rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
+            @click="close"
+          >
+            Publikasi
+          </router-link>
+          <router-link
+            v-if="isRouteAvailable('/peta')"
+            to="/peta"
+            class="block rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
+            @click="close"
+          >
+            Peta
+          </router-link>
+          <router-link
+            v-if="isRouteAvailable('/ketua-rt')"
+            to="/ketua-rt"
+            class="block rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
+            @click="close"
+          >
+            Ketua RT
+          </router-link>
+        </div>
+
+        <!-- Auth Actions inside Dropdown Drawer -->
+        <div class="mt-4 border-t border-white/10 pt-4">
           <template v-if="authStore.isAuthenticated">
-            <div class="hidden flex-col text-right sm:flex">
-              <span class="text-xs font-semibold text-slate-800">{{ authStore.user?.email }}</span>
-              <span class="text-[11px] font-medium tracking-wider text-emerald-600 uppercase">
+            <div class="mb-3 space-y-0.5">
+              <p class="text-xs font-semibold text-slate-200">{{ authStore.user?.email }}</p>
+              <p class="text-brand-cyan text-[11px] font-medium tracking-wider uppercase">
                 Peran: {{ authStore.user?.role }}
-              </span>
+              </p>
             </div>
-
-            <router-link
-              v-if="authStore.canEditData"
-              to="/data"
-              class="rounded-lg bg-slate-100 px-3.5 py-1.5 text-xs font-medium text-slate-800 transition-colors hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-slate-500 sm:text-sm"
-            >
-              Kelola Data
-            </router-link>
-
-            <router-link
-              v-if="authStore.isAdmin"
-              to="/users"
-              class="rounded-lg bg-slate-100 px-3.5 py-1.5 text-xs font-medium text-slate-800 transition-colors hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-slate-500 sm:text-sm"
-            >
-              Manajemen Pengguna
-            </router-link>
-
-            <router-link
-              v-if="authStore.isAdmin"
-              to="/audit-logs"
-              class="rounded-lg bg-slate-100 px-3.5 py-1.5 text-xs font-medium text-slate-800 transition-colors hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-slate-500 sm:text-sm"
-            >
-              Log Sistem
-            </router-link>
-
-            <router-link
-              v-if="authStore.isAdmin"
-              to="/settings/audit-retention"
-              class="rounded-lg bg-slate-100 px-3.5 py-1.5 text-xs font-medium text-slate-800 transition-colors hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-slate-500 sm:text-sm"
-            >
-              Retensi Audit
-            </router-link>
-
-            <button
-              @click="handleLogout"
-              :disabled="isLoggingOut"
-              class="cursor-pointer rounded-lg bg-slate-900 px-3.5 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-slate-900 disabled:opacity-50 sm:text-sm"
-            >
-              <span v-if="isLoggingOut">Memproses...</span>
-              <span v-else>Keluar (Logout)</span>
-            </button>
+            <div class="flex flex-wrap gap-2">
+              <router-link
+                v-if="authStore.canEditData"
+                to="/data"
+                class="rounded-btn block bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20"
+                @click="close"
+              >
+                Kelola Data
+              </router-link>
+              <router-link
+                v-if="authStore.isAdmin"
+                to="/users"
+                data-test="mobile-admin-link"
+                class="rounded-btn block bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20"
+                @click="close"
+              >
+                Manajemen Pengguna
+              </router-link>
+              <router-link
+                v-if="authStore.isAdmin"
+                to="/audit-logs"
+                class="rounded-btn block bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20"
+                @click="close"
+              >
+                Log Sistem
+              </router-link>
+              <router-link
+                v-if="authStore.isAdmin"
+                to="/settings/audit-retention"
+                class="rounded-btn block bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20"
+                @click="close"
+              >
+                Retensi Audit
+              </router-link>
+              <button
+                type="button"
+                @click="
+                  () => {
+                    close();
+                    handleLogout();
+                  }
+                "
+                :disabled="isLoggingOut"
+                data-test="mobile-logout-btn"
+                class="rounded-btn hover:text-brand-navy border border-white/20 bg-white/10 px-4 py-2 text-left text-sm font-medium text-white transition-colors hover:bg-white disabled:opacity-50"
+              >
+                <span v-if="isLoggingOut">Memproses...</span>
+                <span v-else>Keluar (Logout)</span>
+              </button>
+            </div>
           </template>
-
           <template v-else>
-            <router-link
-              to="/login"
-              class="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-emerald-900/10 transition-all hover:bg-emerald-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 sm:text-sm"
-            >
-              Masuk (Login)
-            </router-link>
+            <div class="pt-1">
+              <router-link
+                to="/login"
+                data-test="login-link mobile-login-link"
+                class="rounded-btn text-brand-navy border-brand-navy hover:bg-brand-navy active:bg-brand-navy-overlay focus-visible:outline-brand-cyan inline-flex w-full items-center justify-center border-2 bg-white px-5 py-2.5 text-center text-sm font-semibold shadow-sm transition-colors hover:border-white hover:text-white focus-visible:outline-2 active:text-white sm:w-auto"
+                @click="close"
+              >
+                Masuk (Login)
+              </router-link>
+            </div>
           </template>
         </div>
-      </div>
+      </template>
+    </AppNavbar>
 
-      <!-- Logout Error Notification Banner -->
-      <div
-        v-if="logoutError"
-        class="mx-auto mt-2 max-w-7xl rounded-lg border border-rose-200 bg-rose-50 px-3 py-1 text-center text-xs font-medium text-rose-600 sm:text-sm"
-      >
-        {{ logoutError }}
-      </div>
-    </nav>
+    <!-- Logout Error Notification Banner -->
+    <div
+      v-if="logoutError"
+      class="mx-auto mt-2 max-w-7xl rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-center text-xs font-medium text-rose-600 sm:text-sm"
+      role="alert"
+    >
+      {{ logoutError }}
+    </div>
 
     <!-- Main Content Landmark per docs/ACCESSIBILITY.md -->
     <main id="main-content" class="flex-grow">
+      <!-- 1. Hero (Spec §8 top section) -->
       <SectionHero />
+
+      <!-- 2. Sambutan Lurah (Spec §8 section 2) -->
       <SectionSambutanLurah />
-      <SectionHighlights />
+
+      <!-- 3. Cerita preview (Spec §8 section 3: slot with accessible fallback) -->
+      <section
+        id="cerita-preview"
+        aria-labelledby="cerita-preview-title"
+        class="border-b border-white/10 bg-slate-950"
+      >
+        <h2 id="cerita-preview-title" class="sr-only">Cerita & Data Wilayah</h2>
+
+        <!-- Cerita Preview Slot (Figma StatOverview 8 category sections) -->
+        <slot name="cerita-preview">
+          <div class="flex w-full flex-col divide-y divide-white/10">
+            <StatOverview
+              v-for="category in CERITA_CATEGORIES"
+              :key="category.slug"
+              :title="category.title"
+              :description="category.description"
+              :stats="indicatorsStore.getStatsForPage(category.slug)"
+              :card-title="category.cardTitle"
+              card-variant="glass"
+              heading-tag="h3"
+              button-label="Lihat selengkapnya"
+              :to="category.to"
+              :show-button="isRouteAvailable(category.to)"
+              align="left"
+              :is-full-bleed="true"
+              :bg-image="category.bgImage"
+              :bg-overlay="category.bgOverlay"
+            >
+              <template #card-empty>
+                <div class="flex flex-col items-center justify-center py-6 text-center">
+                  <p class="text-sm text-slate-300 italic">Data belum tersedia</p>
+                </div>
+              </template>
+            </StatOverview>
+          </div>
+        </slot>
+      </section>
     </main>
 
-    <!-- Footer per SPEC.md §8 -->
-    <footer
-      class="border-t border-slate-800 bg-slate-900 px-4 py-12 text-slate-400 sm:px-6 lg:px-8"
-      aria-label="Kaki Halaman"
-    >
-      <div class="mx-auto grid max-w-7xl grid-cols-1 gap-8 text-sm md:grid-cols-3">
-        <div class="space-y-3">
-          <p class="text-base font-bold tracking-tight text-white">{{ settingsStore.appName }}</p>
-          <p class="leading-relaxed text-slate-400">{{ settingsStore.tagline }}</p>
-          <p class="text-xs text-slate-500">{{ settingsStore.administrativeArea }}</p>
-        </div>
-
-        <div class="space-y-3">
-          <p class="font-semibold text-white">Kontak & Pelayanan</p>
-          <p class="leading-relaxed">{{ settingsStore.contactAddress }}</p>
-          <p>
-            Telepon: <span class="text-slate-300">{{ settingsStore.contactPhone }}</span>
-          </p>
-          <p>
-            Email: <span class="text-slate-300">{{ settingsStore.contactEmail }}</span>
-          </p>
-        </div>
-
-        <div class="space-y-3">
-          <p class="font-semibold text-white">Keterbukaan Data</p>
-          <p class="text-xs leading-relaxed text-slate-400">
-            Sistem Informasi Data Terpadu Kelurahan Manggar menyajikan integrasi data statistik,
-            kependudukan, dan spasial yang akurat serta dapat dipertanggungjawabkan untuk kemajuan
-            bersama.
-          </p>
-          <p class="pt-2 text-xs text-slate-600">
-            &copy; {{ new Date().getFullYear() }} {{ settingsStore.institutionName }}. Hak cipta
-            dilindungi.
-          </p>
-        </div>
-      </div>
-    </footer>
+    <!-- Footer Landmark per SPEC.md §8 using PR #56 AppFooter -->
+    <AppFooter />
   </div>
 </template>
