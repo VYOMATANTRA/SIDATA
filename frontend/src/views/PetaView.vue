@@ -220,7 +220,7 @@ function requestUserLocation() {
                   <h3 id="terdekat-title" class="text-brand-navy text-base font-bold">
                     Titik terdekat
                   </h3>
-                  <p class="mt-1 text-sm text-gray-600">Jarak dihitung dari {{ originLabel }}.</p>
+                  <p class="mt-1 text-sm text-gray-600" aria-live="polite">Jarak dihitung dari {{ originLabel }}.</p>
                 </div>
                 <button
                   v-if="mapsStore.selectedPoint"
@@ -246,7 +246,7 @@ function requestUserLocation() {
                     class="rounded-btn border-brand-navy text-brand-navy hover:bg-brand-navy focus-visible:outline-brand-navy min-h-11 border px-3 py-2 text-sm font-medium transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98]"
                     @click="requestUserLocation"
                   >
-                    Dekat saya
+                    Gunakan lokasi saya
                   </button>
                 </div>
               </div>
@@ -284,8 +284,10 @@ function requestUserLocation() {
               class="min-h-0 flex-1 overflow-y-auto"
               :point="mapsStore.selectedPoint"
               :leader="mapsStore.selectedLeader"
+              :leader-error="mapsStore.selectedLeaderError"
               close-label="Tutup detail"
               @close="mapsStore.clearSelection"
+              @retry-leader="mapsStore.retrySelectedLeader"
             />
 
             <ol
