@@ -75,14 +75,14 @@ function toggleSistem() {
 <template>
   <nav
     aria-label="Navigasi Admin"
-    class="flex h-full flex-col border-r border-slate-200 bg-white transition-[width] duration-200"
+    class="bg-brand-navy flex h-full flex-col border-r border-white/10 text-white transition-[width] duration-200"
     :class="isCollapsed ? 'w-20' : 'w-72'"
     data-test="admin-sidebar"
   >
-    <div class="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-5">
+    <div class="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-5">
       <RouterLink
         to="/admin"
-        class="focus-visible:ring-brand-indigo rounded-btn flex min-w-0 items-center gap-3 focus-visible:ring-2 focus-visible:outline-none"
+        class="focus-visible:ring-brand-cyan rounded-btn flex min-w-0 items-center gap-3 focus-visible:ring-2 focus-visible:outline-none"
       >
         <img
           :src="balikpapanLogo"
@@ -90,10 +90,8 @@ function toggleSistem() {
           class="h-9 w-auto shrink-0 object-contain"
         />
         <span v-if="!isCollapsed" class="min-w-0 text-left">
-          <span class="text-brand-navy block truncate text-base leading-tight font-bold">
-            SIDATA
-          </span>
-          <span class="block truncate text-xs leading-tight text-slate-500">
+          <span class="block truncate text-base leading-tight font-bold text-white">SIDATA</span>
+          <span class="block truncate text-xs leading-tight text-white/60">
             Sistem Informasi Data Terpadu Kelurahan
           </span>
         </span>
@@ -101,7 +99,7 @@ function toggleSistem() {
 
       <button
         type="button"
-        class="focus-visible:ring-brand-indigo rounded-btn shrink-0 border border-slate-200 p-1.5 text-slate-500 transition-transform hover:bg-slate-100 focus-visible:ring-2 focus-visible:outline-none"
+        class="focus-visible:ring-brand-cyan rounded-btn shrink-0 border border-white/20 p-1.5 text-white/70 transition-transform hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:outline-none"
         :aria-expanded="!isCollapsed"
         aria-controls="admin-sidebar-nav-list"
         :aria-label="isCollapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'"
@@ -121,11 +119,11 @@ function toggleSistem() {
         <RouterLink
           v-if="!isAdminNavGroup(entry)"
           :to="entry.to"
-          class="focus-visible:ring-brand-indigo rounded-btn flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          class="focus-visible:ring-brand-cyan rounded-btn flex items-center gap-3 border-l-2 border-transparent px-3 py-2.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
           :class="
             route.path === entry.to
-              ? 'bg-brand-navy/10 text-brand-navy'
-              : 'text-slate-700 hover:bg-slate-100'
+              ? 'border-brand-cyan bg-white/10 text-white'
+              : 'text-white/70 hover:bg-white/5 hover:text-white'
           "
           :aria-current="route.path === entry.to ? 'page' : undefined"
           :data-test="entry.dataTest"
@@ -137,7 +135,7 @@ function toggleSistem() {
         <div v-else>
           <button
             type="button"
-            class="focus-visible:ring-brand-indigo rounded-btn flex w-full items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 focus-visible:ring-2 focus-visible:outline-none"
+            class="focus-visible:ring-brand-cyan rounded-btn flex w-full items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white focus-visible:ring-2 focus-visible:outline-none"
             :aria-expanded="isSistemOpen"
             aria-controls="admin-sistem-group"
             :data-test="entry.dataTest"
@@ -162,11 +160,11 @@ function toggleSistem() {
             <li v-for="item in entry.items" :key="item.label">
               <RouterLink
                 :to="item.to"
-                class="focus-visible:ring-brand-indigo rounded-btn flex items-center gap-3 px-3 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                class="focus-visible:ring-brand-cyan rounded-btn flex items-center gap-3 border-l-2 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
                 :class="
                   route.path === item.to
-                    ? 'bg-brand-navy/10 text-brand-navy'
-                    : 'text-slate-600 hover:bg-slate-100'
+                    ? 'border-brand-cyan bg-white/10 text-white'
+                    : 'text-white/60 hover:bg-white/5 hover:text-white'
                 "
                 :aria-current="route.path === item.to ? 'page' : undefined"
                 :data-test="item.dataTest"
