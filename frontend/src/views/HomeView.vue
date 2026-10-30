@@ -125,17 +125,7 @@ const isLoggingOut = ref(false);
 const logoutError = ref('');
 
 function isRouteAvailable(path: string): boolean {
-  const routes = router.getRoutes();
-  return routes.some((r) => {
-    if (r.path === path) return true;
-    if (r.path.includes(':')) {
-      const basePattern = r.path.split('/:')[0];
-      if (basePattern && path.startsWith(`${basePattern}/`)) {
-        return true;
-      }
-    }
-    return false;
-  });
+  return router.resolve(path).matched.length > 0;
 }
 
 onMounted(async () => {
@@ -318,7 +308,7 @@ async function handleLogout() {
               <router-link
                 to="/login"
                 data-test="login-link mobile-login-link"
-                class="rounded-btn bg-white text-brand-navy border-2 border-brand-navy hover:bg-brand-navy hover:text-white hover:border-white active:bg-brand-navy-overlay active:text-white inline-flex w-full sm:w-auto items-center justify-center px-5 py-2.5 text-center text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-brand-cyan shadow-sm"
+                class="rounded-btn text-brand-navy border-brand-navy hover:bg-brand-navy active:bg-brand-navy-overlay focus-visible:outline-brand-cyan inline-flex w-full items-center justify-center border-2 bg-white px-5 py-2.5 text-center text-sm font-semibold shadow-sm transition-colors hover:border-white hover:text-white focus-visible:outline-2 active:text-white sm:w-auto"
                 @click="close"
               >
                 Masuk (Login)
