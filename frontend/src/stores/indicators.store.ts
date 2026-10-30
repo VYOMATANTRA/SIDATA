@@ -310,7 +310,9 @@ export const useIndicatorsStore = defineStore('indicators', () => {
 
     const isCurrent = () => fetchGenBySlug[normalized] === myGen;
 
-    const task = (async () => {
+    // Declared before the IIFE so the finally clause can compare identity without TS2454.
+    let task!: Promise<IndicatorDto | null>;
+    task = (async () => {
       try {
         const response = await apiFetch(`/api/indicators/${encodeURIComponent(normalized)}`);
         if (!isCurrent()) {
