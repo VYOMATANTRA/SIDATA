@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
-import { useIndicatorsStore, type Indicator, BY_SLUG_TTL_MS } from '../stores/indicators.store';
+import { useIndicatorsStore, type Indicator, BY_SLUG_TTL_MS, normalizeIndicatorSlug } from '../stores/indicators.store';
 import { useAuthStore } from '../stores/auth';
 
 function json(body: unknown, ok = true, status = ok ? 200 : 500): Response {
@@ -564,4 +564,42 @@ describe('indicators store (single indicator reads by slug)', () => {
     expect(store.bySlug['jumlah-penduduk']?.valueCurrent).toBe('999');
   });
 
+});
+
+
+describe('normalizeIndicatorSlug', () => {
+  it('trims and lowercases so mixed-case reads share one cache key', () => {
+    expect(normalizeIndicatorSlug('  JUMLAH-PENDUDUK ')).toBe('jumlah-penduduk');
+    expect(normalizeIndicatorSlug('jumlah-penduduk')).toBe('jumlah-penduduk');
+  });
+});
+
+describe('indicators store slug cache normalisation', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.restoreAllMocks();
+  });
+
+  it('fetchBySlug and findBySlug share one entry across casings', async () => {
+    const ind = makeIndicator({ slug: 'jumlah-penduduk' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo) => {
+        const url = String(input);
+        expect(url).toContain('/api/indicators/jumlah-penduduk');
+        return json({ indicator: ind });
+      }) as typeof fetch,
+    );
+
+    const store = useIndicatorsStore();
+    const first = await store.fetchBySlug('JUMLAH-PENDUDUK');
+    expect(first?.id).toBe('ind-1');
+    expect(store.findBySlug('Jumlah-Penduduk')?.id).toBe('ind-1');
+    expect(store.bySlug['jumlah-penduduk']?.id).toBe('ind-1');
+    expect(store.bySlug['JUMLAH-PENDUDUK']).toBeUndefined();
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    await store.fetchBySlug('jumlah-penduduk');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
 });

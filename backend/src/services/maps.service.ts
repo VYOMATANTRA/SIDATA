@@ -11,6 +11,9 @@ import {
 import { executeLockedTransaction, withChangeResult } from '../utils/lockTransactionCache.js';
 import { hasFieldChanged } from '../utils/comparator.js';
 
+/** system_settings key: seed sets true; any editor save of an RT leader clears it. */
+export const RT_LEADERS_SAMPLE_ROSTER_KEY = 'maps.rt_leaders_sample_roster';
+
 export const ALL_SPATIAL_POINT_TYPES: readonly SpatialPointType[] = [
   'ketua_rt',
   'bank_sampah',
@@ -451,6 +454,8 @@ export async function getSpatialPointById(id: string): Promise<SpatialPointDTO |
 export async function getRtLeaders(query?: RtLeaderQuery): Promise<{
   leaders: RtLeaderDTO[];
   total: number;
+  /** True while the roster is still the seeded placeholder set (not live kelurahan data). */
+  isSampleRoster: boolean;
 }> {
   const where: {
     rtNumber?: number;
@@ -486,7 +491,7 @@ export async function getRtLeaders(query?: RtLeaderQuery): Promise<{
     }
   }
 
-  const [total, leaders] = await Promise.all([
+  const [total, leaders, sampleSetting] = await Promise.all([
     prisma.rtLeader.count({ where }),
     prisma.rtLeader.findMany({
       where,
@@ -494,7 +499,9 @@ export async function getRtLeaders(query?: RtLeaderQuery): Promise<{
       ...(typeof query?.limit === 'number' ? { take: query.limit } : {}),
       ...(typeof query?.offset === 'number' ? { skip: query.offset } : {}),
     }),
+    prisma.systemSetting.findUnique({ where: { key: RT_LEADERS_SAMPLE_ROSTER_KEY } }),
   ]);
+  const isSampleRoster = sampleSetting?.value === 'true';
 
   const rtNumbers = leaders.map((l) => l.rtNumber);
   // Note: `_count.rtCoverages` is the point's TOTAL coverage count, not just
@@ -560,6 +567,7 @@ export async function getRtLeaders(query?: RtLeaderQuery): Promise<{
   return {
     leaders: mappedLeaders,
     total,
+    isSampleRoster,
   };
 }
 
@@ -852,8 +860,20 @@ interface SpatialWriteTxClient {
     'findMany' | 'findUnique' | 'create' | 'createMany' | 'delete' | 'deleteMany'
   >;
   rtLeader: Pick<typeof prisma.rtLeader, 'findUnique' | 'update'>;
+  systemSetting: Pick<typeof prisma.systemSetting, 'upsert'>;
   auditLog: Pick<typeof prisma.auditLog, 'create'>;
   $queryRaw: (query: Prisma.Sql) => Promise<unknown>;
+}
+
+/** Clear the seeded-sample flag once an editor saves real leader data. */
+async function clearRtLeadersSampleRosterFlag(
+  tx: Pick<SpatialWriteTxClient, 'systemSetting'>,
+): Promise<void> {
+  await tx.systemSetting.upsert({
+    where: { key: RT_LEADERS_SAMPLE_ROSTER_KEY },
+    create: { key: RT_LEADERS_SAMPLE_ROSTER_KEY, value: 'false' },
+    update: { value: 'false' },
+  });
 }
 
 function isPrismaKnownError(error: unknown, code: string): boolean {
@@ -1666,6 +1686,9 @@ export const updateRtLeader = async (
           },
           tx,
         );
+
+        // Any real edit means the roster is no longer the seeded sample set.
+        await clearRtLeadersSampleRosterFlag(tx);
 
         return formatWrittenLeader(updated);
       },

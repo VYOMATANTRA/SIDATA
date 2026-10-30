@@ -102,6 +102,14 @@ async function main() {
 
     await seedRtLeaders(prisma, RT_LEADERS_DATA);
 
+    // Mark the roster as sample until an editor saves real leaders (maps.service clears it).
+    // create-only: a re-seed must not flip the flag back after an editor has cleared it.
+    await prisma.systemSetting.upsert({
+      where: { key: 'maps.rt_leaders_sample_roster' },
+      create: { key: 'maps.rt_leaders_sample_roster', value: 'true' },
+      update: {},
+    });
+
     const pointBankSampah = await prisma.spatialPoint.upsert({
       where: { id: '00000000-0000-0000-0000-000000000002' },
       update: {},

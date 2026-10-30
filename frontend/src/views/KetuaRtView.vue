@@ -161,12 +161,8 @@ const hasAddressData = computed(() =>
   rtLeadersStore.rtLeaders.some((leader) => (leader.alamat ?? '').trim() !== ''),
 );
 
-const isSampleRoster = computed(() => {
-  if (rtLeadersStore.rtLeaders.length === 0) return false;
-  return rtLeadersStore.rtLeaders.every(
-    (leader) => !isDialable(leader.phone) || /^Ketua RT 0*\d+$/i.test(leader.name),
-  );
-});
+/** Explicit flag from the API (system_settings), not a phone/name heuristic. */
+const isSampleRoster = computed(() => rtLeadersStore.isSampleRoster);
 
 const heroSubtitle = computed(() => {
   if (isSampleRoster.value) {
