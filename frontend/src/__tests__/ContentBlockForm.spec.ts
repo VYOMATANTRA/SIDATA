@@ -31,6 +31,16 @@ const mockProfilBlock: ContentBlock = {
     kecamatan: 'Balikpapan Timur',
     kota: 'Kota Balikpapan',
     landscape: 'Pesisir & Dataran',
+    lurahName: 'Munir Achmad, S.E.',
+    lurahTitle: 'Lurah Kelurahan Manggar',
+    batasWilayah: [
+      { arah: 'Sebelah Utara', wilayah: 'Kelurahan Karang Joang' },
+      { arah: 'Sebelah Timur', wilayah: 'Kelurahan Manggar Baru' },
+    ],
+    sotkMembers: [
+      { role: 'Lurah', officialName: 'Munir Achmad, S.E.', duties: null },
+      { role: 'Sekretaris Lurah', officialName: 'Munjiah Puspitawaty. M, S.E', duties: null },
+    ],
   },
   sortOrder: null,
   updatedAt: '2026-09-01T00:00:00.000Z',
@@ -145,4 +155,47 @@ describe('ContentBlockForm.vue', () => {
       },
     });
   });
+
+  it('edits boundaries, SOTK and Lurah on the profile form without a JSON editor', async () => {
+    const wrapper = mount(ContentBlockForm, {
+      props: { block: mockProfilBlock },
+    });
+
+    expect(wrapper.find('textarea#block-metadata').exists()).toBe(false);
+    expect(wrapper.find('input#block-lurahName').exists()).toBe(true);
+    expect(wrapper.find('input#block-batas-arah-0').exists()).toBe(true);
+    expect(wrapper.find('input#block-sotk-role-0').exists()).toBe(true);
+
+    await wrapper.find('input#block-lurahName').setValue('Nama Lurah Baru');
+    await wrapper.find('input#block-batas-wilayah-0').setValue('Kelurahan Uji Utara');
+    await wrapper.find('input#block-sotk-name-1').setValue('Sekretaris Baru');
+    await wrapper.find('form').trigger('submit.prevent');
+
+    const emitted = wrapper.emitted('submit');
+    expect(emitted).toBeTruthy();
+    const payload = emitted?.[0]?.[0] as {
+      metadata: {
+        lurahName: string;
+        batasWilayah: Array<{ arah: string; wilayah: string }>;
+        sotkMembers: Array<{ role: string; officialName: string | null }>;
+      };
+    };
+    expect(payload.metadata.lurahName).toBe('Nama Lurah Baru');
+    expect(payload.metadata.batasWilayah[0]?.wilayah).toBe('Kelurahan Uji Utara');
+    expect(payload.metadata.sotkMembers[0]?.officialName).toBe('Nama Lurah Baru');
+    expect(payload.metadata.sotkMembers[1]?.officialName).toBe('Sekretaris Baru');
+  });
+
+  it('validates empty boundary arah and blocks submit', async () => {
+    const wrapper = mount(ContentBlockForm, {
+      props: { block: mockProfilBlock },
+    });
+
+    await wrapper.find('input#block-batas-arah-0').setValue('   ');
+    await wrapper.find('form').trigger('submit.prevent');
+
+    expect(wrapper.emitted('submit')).toBeFalsy();
+    expect(wrapper.text()).toContain('Arah batas wilayah wajib diisi');
+  });
+
 });

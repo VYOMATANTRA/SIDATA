@@ -75,7 +75,92 @@ const profilLandscape = ref(
   ),
 );
 
-// Raw JSON fallback for generic/custom blocks
+interface BatasDraft {
+  arah: string;
+  wilayah: string;
+}
+
+interface SotkDraft {
+  role: string;
+  officialName: string;
+  duties: string;
+}
+
+const DEFAULT_BATAS: BatasDraft[] = [
+  { arah: 'Sebelah Utara', wilayah: 'Kelurahan Karang Joang' },
+  { arah: 'Sebelah Timur', wilayah: 'Kelurahan Manggar Baru' },
+  { arah: 'Sebelah Selatan', wilayah: 'Selat Makassar' },
+  { arah: 'Sebelah Barat', wilayah: 'Kelurahan Sepinggan dan Sepinggan Baru' },
+];
+
+function readBatasWilayah(meta: Record<string, unknown> | null): BatasDraft[] {
+  const raw = meta?.batasWilayah;
+  if (!Array.isArray(raw) || raw.length === 0) return DEFAULT_BATAS.map((b) => ({ ...b }));
+  return raw.map((item) => {
+    const row = item as Record<string, unknown>;
+    return {
+      arah: String(row.arah ?? ''),
+      wilayah: String(row.wilayah ?? ''),
+    };
+  });
+}
+
+function readSotkMembers(meta: Record<string, unknown> | null): SotkDraft[] {
+  const raw = meta?.sotkMembers;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return [
+      { role: 'Lurah', officialName: 'Munir Achmad, S.E.', duties: '' },
+      { role: 'Sekretaris Lurah', officialName: 'Munjiah Puspitawaty. M, S.E', duties: '' },
+      { role: 'Kasi Trantib L-H', officialName: 'Nanang Sri Ruriyanto, S.Sos.', duties: '' },
+      {
+        role: 'Kasi Pemerintahan dan Pelayanan Publik',
+        officialName: 'Hasiba, S.A.P',
+        duties: '',
+      },
+      { role: 'Kasi Pemberdayaan Masyarakat', officialName: 'Marthen Solly, S.ST', duties: '' },
+    ];
+  }
+  return raw.map((item) => {
+    const row = item as Record<string, unknown>;
+    return {
+      role: String(row.role ?? ''),
+      officialName: row.officialName == null ? '' : String(row.officialName),
+      duties: row.duties == null ? '' : String(row.duties),
+    };
+  });
+}
+
+const metaRecord = props.block.metadata as Record<string, unknown> | null;
+const profilBatas = ref<BatasDraft[]>(readBatasWilayah(metaRecord));
+const profilSotk = ref<SotkDraft[]>(readSotkMembers(metaRecord));
+const profilLurahName = ref(
+  String(
+    metaRecord?.lurahName ??
+      profilSotk.value.find((m) => m.role === 'Lurah')?.officialName ??
+      '',
+  ),
+);
+const profilLurahTitle = ref(String(metaRecord?.lurahTitle ?? 'Lurah Kelurahan Manggar'));
+
+function addBatasRow(): void {
+  if (profilBatas.value.length >= 10) return;
+  profilBatas.value = [...profilBatas.value, { arah: '', wilayah: '' }];
+}
+
+function removeBatasRow(index: number): void {
+  profilBatas.value = profilBatas.value.filter((_, i) => i !== index);
+}
+
+function addSotkRow(): void {
+  if (profilSotk.value.length >= 30) return;
+  profilSotk.value = [...profilSotk.value, { role: '', officialName: '', duties: '' }];
+}
+
+function removeSotkRow(index: number): void {
+  profilSotk.value = profilSotk.value.filter((_, i) => i !== index);
+}
+
+// Raw JSON fallback for generic/custom blocks (not used for profile — dedicated fields instead)
 const rawMetadataJson = ref(
   props.block.metadata ? JSON.stringify(props.block.metadata, null, 2) : '',
 );
@@ -117,15 +202,65 @@ const fieldErrors = computed<Record<string, string | undefined>>(() => {
     if (!profilKota.value.trim()) {
       errors.kota = 'Kota tidak boleh kosong.';
     }
+    if (profilLurahName.value.length > 150) {
+      errors.lurahName = 'Nama lurah maksimal 150 karakter.';
+    }
+    if (profilLurahTitle.value.length > 150) {
+      errors.lurahTitle = 'Gelar/jabatan lurah maksimal 150 karakter.';
+    }
+    if (profilBatas.value.length === 0) {
+      errors.batasWilayah = 'Minimal satu batas wilayah wajib diisi.';
+    }
+    profilBatas.value.forEach((row, index) => {
+      if (!row.arah.trim()) {
+        errors[`batas-arah-${index}`] = 'Arah batas wilayah wajib diisi.';
+      } else if (row.arah.trim().length > 100) {
+        errors[`batas-arah-${index}`] = 'Arah maksimal 100 karakter.';
+      }
+      if (!row.wilayah.trim()) {
+        errors[`batas-wilayah-${index}`] = 'Nama wilayah batas wajib diisi.';
+      } else if (row.wilayah.trim().length > 255) {
+        errors[`batas-wilayah-${index}`] = 'Nama wilayah batas maksimal 255 karakter.';
+      }
+    });
+    if (profilSotk.value.length === 0) {
+      errors.sotkMembers = 'Minimal satu jabatan SOTK wajib diisi.';
+    }
+    profilSotk.value.forEach((row, index) => {
+      if (!row.role.trim()) {
+        errors[`sotk-role-${index}`] = 'Jabatan SOTK wajib diisi.';
+      } else if (row.role.trim().length > 100) {
+        errors[`sotk-role-${index}`] = 'Jabatan SOTK maksimal 100 karakter.';
+      }
+      if (row.officialName.trim().length > 150) {
+        errors[`sotk-name-${index}`] = 'Nama pejabat maksimal 150 karakter.';
+      }
+      if (row.duties.trim().length > 1000) {
+        errors[`sotk-duties-${index}`] = 'Tugas pejabat maksimal 1000 karakter.';
+      }
+    });
   }
 
   return errors;
 });
 
-const fieldOrder = ['title', 'body', 'metadata', 'rtCount', 'kecamatan', 'kota'];
+const fieldOrder = computed(() => [
+  'title',
+  'body',
+  'metadata',
+  'rtCount',
+  'kecamatan',
+  'kota',
+  'lurahName',
+  'lurahTitle',
+  'batasWilayah',
+  'sotkMembers',
+  ...profilBatas.value.flatMap((_, i) => [`batas-arah-${i}`, `batas-wilayah-${i}`]),
+  ...profilSotk.value.flatMap((_, i) => [`sotk-role-${i}`, `sotk-name-${i}`, `sotk-duties-${i}`]),
+]);
 
 const errorEntries = computed(() =>
-  fieldOrder
+  fieldOrder.value
     .map((name) => ({ fieldId: fieldId(name), message: fieldErrors.value[name] }))
     .filter((entry): entry is { fieldId: string; message: string } => Boolean(entry.message)),
 );
@@ -153,12 +288,39 @@ function handleSubmit(): void {
       photoUrl: authorPhotoUrl.value.trim() || undefined,
     };
   } else if (isProfil.value) {
+    const lurahName = profilLurahName.value.trim();
+    const lurahTitle = profilLurahTitle.value.trim();
+    const batasWilayah = profilBatas.value.map((row) => ({
+      arah: row.arah.trim(),
+      wilayah: row.wilayah.trim(),
+    }));
+    let sotkMembers = profilSotk.value.map((row) => ({
+      role: row.role.trim(),
+      officialName: row.officialName.trim() || null,
+      duties: row.duties.trim() || null,
+    }));
+    // Keep the dedicated Lurah fields and the SOTK Lurah row in sync for the public page.
+    const lurahIdx = sotkMembers.findIndex((m) => m.role === 'Lurah');
+    if (lurahIdx >= 0) {
+      sotkMembers = sotkMembers.map((m, i) =>
+        i === lurahIdx ? { ...m, officialName: lurahName || m.officialName } : m,
+      );
+    } else if (lurahName) {
+      sotkMembers = [
+        { role: 'Lurah', officialName: lurahName, duties: null },
+        ...sotkMembers,
+      ];
+    }
     metadata = {
       ...props.block.metadata,
       rtCount: Number(profilRtCount.value),
       kecamatan: profilKecamatan.value.trim(),
       kota: profilKota.value.trim(),
       landscape: profilLandscape.value.trim(),
+      lurahName: lurahName || undefined,
+      lurahTitle: lurahTitle || undefined,
+      batasWilayah,
+      sotkMembers,
     };
   } else if (rawMetadataJson.value.trim()) {
     try {
@@ -373,6 +535,213 @@ function handleSubmit(): void {
           />
         </FormField>
       </div>
+    </fieldset>
+
+    <!-- Lurah -->
+    <fieldset
+      v-if="isProfil"
+      class="rounded-card space-y-4 border border-slate-200 bg-slate-50 p-4"
+    >
+      <legend class="px-1 text-xs font-semibold tracking-wider text-slate-700 uppercase">
+        Pimpinan (Lurah)
+      </legend>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormField
+          :id="fieldId('lurahName')"
+          label="Nama Lurah"
+          :error="submitted ? fieldErrors.lurahName : undefined"
+          v-slot="{ describedBy, invalid }"
+        >
+          <input
+            :id="fieldId('lurahName')"
+            v-model="profilLurahName"
+            type="text"
+            maxlength="150"
+            :class="INPUT_CLASSES"
+            :aria-describedby="describedBy"
+            :aria-invalid="invalid ? 'true' : undefined"
+          />
+        </FormField>
+        <FormField
+          :id="fieldId('lurahTitle')"
+          label="Jabatan / Gelar Tampil"
+          hint="Contoh: Lurah Kelurahan Manggar"
+          :error="submitted ? fieldErrors.lurahTitle : undefined"
+          v-slot="{ describedBy, invalid }"
+        >
+          <input
+            :id="fieldId('lurahTitle')"
+            v-model="profilLurahTitle"
+            type="text"
+            maxlength="150"
+            :class="INPUT_CLASSES"
+            :aria-describedby="describedBy"
+            :aria-invalid="invalid ? 'true' : undefined"
+          />
+        </FormField>
+      </div>
+    </fieldset>
+
+    <!-- Batas Wilayah -->
+    <fieldset
+      v-if="isProfil"
+      class="rounded-card space-y-4 border border-slate-200 bg-slate-50 p-4"
+    >
+      <legend class="px-1 text-xs font-semibold tracking-wider text-slate-700 uppercase">
+        Batas Wilayah
+      </legend>
+      <p v-if="submitted && fieldErrors.batasWilayah" class="text-sm text-red-700">
+        {{ fieldErrors.batasWilayah }}
+      </p>
+      <div
+        v-for="(row, index) in profilBatas"
+        :key="index"
+        class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto]"
+      >
+        <FormField
+          :id="fieldId(`batas-arah-${index}`)"
+          label="Arah"
+          :error="submitted ? fieldErrors[`batas-arah-${index}`] : undefined"
+          v-slot="{ describedBy, invalid }"
+        >
+          <input
+            :id="fieldId(`batas-arah-${index}`)"
+            v-model="row.arah"
+            type="text"
+            maxlength="100"
+            :class="INPUT_CLASSES"
+            :aria-label="`Arah batas ${index + 1}`"
+            :aria-describedby="describedBy"
+            :aria-invalid="invalid ? 'true' : undefined"
+          />
+        </FormField>
+        <FormField
+          :id="fieldId(`batas-wilayah-${index}`)"
+          label="Wilayah tetangga"
+          :error="submitted ? fieldErrors[`batas-wilayah-${index}`] : undefined"
+          v-slot="{ describedBy, invalid }"
+        >
+          <input
+            :id="fieldId(`batas-wilayah-${index}`)"
+            v-model="row.wilayah"
+            type="text"
+            maxlength="255"
+            :class="INPUT_CLASSES"
+            :aria-label="`Wilayah batas ${index + 1}`"
+            :aria-describedby="describedBy"
+            :aria-invalid="invalid ? 'true' : undefined"
+          />
+        </FormField>
+        <div class="flex items-end pb-1">
+          <BaseButton
+            type="button"
+            variant="secondary"
+            size="sm"
+            :disabled="busy || profilBatas.length <= 1"
+            @click="removeBatasRow(index)"
+          >
+            Hapus
+          </BaseButton>
+        </div>
+      </div>
+      <BaseButton
+        type="button"
+        variant="secondary"
+        size="sm"
+        :disabled="busy || profilBatas.length >= 10"
+        @click="addBatasRow"
+      >
+        Tambah batas
+      </BaseButton>
+    </fieldset>
+
+    <!-- SOTK -->
+    <fieldset
+      v-if="isProfil"
+      class="rounded-card space-y-4 border border-slate-200 bg-slate-50 p-4"
+    >
+      <legend class="px-1 text-xs font-semibold tracking-wider text-slate-700 uppercase">
+        Struktur Organisasi (SOTK)
+      </legend>
+      <p v-if="submitted && fieldErrors.sotkMembers" class="text-sm text-red-700">
+        {{ fieldErrors.sotkMembers }}
+      </p>
+      <div
+        v-for="(row, index) in profilSotk"
+        :key="index"
+        class="space-y-3 rounded-md border border-slate-200 bg-white p-3"
+      >
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <FormField
+            :id="fieldId(`sotk-role-${index}`)"
+            label="Jabatan"
+            :error="submitted ? fieldErrors[`sotk-role-${index}`] : undefined"
+            v-slot="{ describedBy, invalid }"
+          >
+            <input
+              :id="fieldId(`sotk-role-${index}`)"
+              v-model="row.role"
+              type="text"
+              maxlength="100"
+              :class="INPUT_CLASSES"
+              :aria-describedby="describedBy"
+              :aria-invalid="invalid ? 'true' : undefined"
+            />
+          </FormField>
+          <FormField
+            :id="fieldId(`sotk-name-${index}`)"
+            label="Nama pejabat"
+            :error="submitted ? fieldErrors[`sotk-name-${index}`] : undefined"
+            v-slot="{ describedBy, invalid }"
+          >
+            <input
+              :id="fieldId(`sotk-name-${index}`)"
+              v-model="row.officialName"
+              type="text"
+              maxlength="150"
+              :class="INPUT_CLASSES"
+              :aria-describedby="describedBy"
+              :aria-invalid="invalid ? 'true' : undefined"
+            />
+          </FormField>
+        </div>
+        <FormField
+          :id="fieldId(`sotk-duties-${index}`)"
+          label="Tugas (opsional)"
+          :error="submitted ? fieldErrors[`sotk-duties-${index}`] : undefined"
+          v-slot="{ describedBy, invalid }"
+        >
+          <textarea
+            :id="fieldId(`sotk-duties-${index}`)"
+            v-model="row.duties"
+            rows="2"
+            maxlength="1000"
+            :class="INPUT_CLASSES"
+            :aria-describedby="describedBy"
+            :aria-invalid="invalid ? 'true' : undefined"
+          ></textarea>
+        </FormField>
+        <div class="flex justify-end">
+          <BaseButton
+            type="button"
+            variant="secondary"
+            size="sm"
+            :disabled="busy || profilSotk.length <= 1"
+            @click="removeSotkRow(index)"
+          >
+            Hapus jabatan
+          </BaseButton>
+        </div>
+      </div>
+      <BaseButton
+        type="button"
+        variant="secondary"
+        size="sm"
+        :disabled="busy || profilSotk.length >= 30"
+        @click="addSotkRow"
+      >
+        Tambah jabatan
+      </BaseButton>
     </fieldset>
 
     <!-- Generic Metadata JSON Editor -->
