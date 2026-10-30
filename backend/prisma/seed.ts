@@ -69,6 +69,37 @@ async function main() {
       }
     }
 
+    // Legacy seed used real-looking names and dialable phones for RT 1–3. Those
+    // rows survive `update: {}` on the new placeholders, so reset them when they
+    // still match the old fingerprint (same rule as scripts/cleanup-legacy-sample-rt-leaders.ts).
+    const LEGACY_SAMPLE_LEADERS: Record<number, { name: string; phone: string }> = {
+      1: { name: 'Bambang Supriyanto', phone: '081234567801' },
+      2: { name: 'Hj. Siti Aminah', phone: '081234567802' },
+      3: { name: 'Ahmad Dahlan', phone: '081234567803' },
+    };
+    let resetLegacyLeaders = 0;
+    for (const [rtNumStr, expected] of Object.entries(LEGACY_SAMPLE_LEADERS)) {
+      const rtNumber = Number(rtNumStr);
+      const existing = await prisma.rtLeader.findUnique({ where: { rtNumber } });
+      if (existing && existing.name === expected.name && existing.phone === expected.phone) {
+        await prisma.rtLeader.update({
+          where: { rtNumber },
+          data: {
+            name: `Ketua RT ${String(rtNumber).padStart(2, '0')}`,
+            phone: '—',
+            phoneIsWhatsapp: false,
+            alamat: null,
+          },
+        });
+        resetLegacyLeaders += 1;
+      }
+    }
+    if (resetLegacyLeaders > 0) {
+      console.log(
+        `Mengganti ${resetLegacyLeaders} Ketua RT sample lawas (RT 1–3) dengan placeholder.`,
+      );
+    }
+
     await seedRtLeaders(prisma, RT_LEADERS_DATA);
 
     const pointBankSampah = await prisma.spatialPoint.upsert({

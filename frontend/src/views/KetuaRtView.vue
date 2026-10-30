@@ -282,7 +282,7 @@ function formatPhone(value: string): string {
           </p>
         </div>
 
-        <!-- Error -->
+        <!-- Error: blocking empty state when nothing is loaded; banner when a refresh fails -->
         <div
           v-if="rtLeadersStore.error"
           class="rounded-btn mt-5 border border-gray-400 bg-white p-5"
@@ -295,9 +295,9 @@ function formatPhone(value: string): string {
           </div>
         </div>
 
-        <!-- Table -->
+        <!-- Table stays up when a forced refresh fails so the visitor keeps the last good roster -->
         <div
-          v-else
+          v-if="!rtLeadersStore.error || hasRows"
           class="rounded-btn mt-5 overflow-hidden border border-gray-300 bg-white shadow-xs"
         >
           <div class="relative overflow-x-auto">
@@ -477,16 +477,11 @@ function formatPhone(value: string): string {
             >
               <button
                 type="button"
-                :aria-disabled="currentPage === 1"
+                :disabled="currentPage === 1"
                 aria-label="Halaman sebelumnya"
-                class="rounded-btn text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 border border-gray-300 px-3 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] motion-reduce:transform-none"
-                :class="
-                  currentPage === 1
-                    ? 'cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400 active:scale-100'
-                    : 'hover:bg-gray-100'
-                "
+                class="rounded-btn text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] motion-reduce:transform-none disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:active:scale-100 border border-gray-300 hover:bg-gray-100 disabled:hover:bg-gray-50"
                 data-test="pagination-prev"
-                @click="currentPage > 1 && goToPage(currentPage - 1)"
+                @click="goToPage(currentPage - 1)"
               >
                 <svg
                   class="h-4 w-4"
@@ -539,16 +534,11 @@ function formatPhone(value: string): string {
 
               <button
                 type="button"
-                :aria-disabled="currentPage === totalPages"
+                :disabled="currentPage === totalPages"
                 aria-label="Halaman selanjutnya"
-                class="rounded-btn text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 border border-gray-300 px-3 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] motion-reduce:transform-none"
-                :class="
-                  currentPage === totalPages
-                    ? 'cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400 active:scale-100'
-                    : 'hover:bg-gray-100'
-                "
+                class="rounded-btn text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] motion-reduce:transform-none disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:active:scale-100 border border-gray-300 hover:bg-gray-100 disabled:hover:bg-gray-50"
                 data-test="pagination-next"
-                @click="currentPage < totalPages && goToPage(currentPage + 1)"
+                @click="goToPage(currentPage + 1)"
               >
                 <span class="hidden sm:inline">Selanjutnya</span>
                 <svg

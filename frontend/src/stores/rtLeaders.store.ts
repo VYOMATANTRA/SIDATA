@@ -59,11 +59,8 @@ export const useRtLeadersStore = defineStore('rtLeaders', () => {
     if (!force && inFlight) return inFlight;
     if (!force && rtLeaders.value.length > 0) return;
 
-    if (force) {
-      rtLeaders.value = [];
-      rejectedCount.value = 0;
-    }
-
+    // Keep the previously loaded roster visible until a forced refetch succeeds,
+    // so a failed retry does not blank the page.
     const currentRequestId = ++activeRequestId;
     isLoading.value = true;
     error.value = null;
