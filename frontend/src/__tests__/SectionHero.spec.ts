@@ -124,6 +124,27 @@ describe('Landing SectionHero.vue', () => {
     expect(style).toContain('https://cdn.example.com/custom-hero.webp');
   });
 
+  it('does not double-encode already percent-encoded background image URLs', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const store = useContentBlocksStore(pinia);
+
+    store.blocks['landing-hero'] = {
+      ...DEFAULT_HERO_BLOCK,
+      metadata: {
+        backgroundImage: 'https://cdn.example.com/custom%20hero.webp',
+      },
+    };
+
+    const wrapper = mount(LandingSectionHero, {
+      global: { plugins: [pinia] },
+    });
+
+    const style = wrapper.find('section#hero').attributes('style') || '';
+    expect(style).toContain('https://cdn.example.com/custom%20hero.webp');
+    expect(style).not.toContain('%2520');
+  });
+
   it('does not render empty hero-actions container when no actions slot is provided', () => {
     const pinia = createPinia();
     setActivePinia(pinia);

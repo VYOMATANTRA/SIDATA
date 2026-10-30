@@ -73,8 +73,16 @@ function sanitizeBackgroundImageUrl(url: unknown): string {
     return defaultHeroBg;
   }
 
+  // Decode first to avoid double-encoding sequences that are already percent-encoded (e.g. %20 -> %2520)
+  let normalized = trimmed;
+  try {
+    normalized = decodeURI(trimmed);
+  } catch {
+    // Keep trimmed if decoding fails due to malformed sequences
+  }
+
   // Encode URI and escape quotes, parentheses, and backslashes to prevent CSS breakout
-  const escaped = encodeURI(trimmed).replace(/['"()\\]/g, (char) => `\\${char}`);
+  const escaped = encodeURI(normalized).replace(/['"()\\]/g, (char) => `\\${char}`);
   return escaped;
 }
 
