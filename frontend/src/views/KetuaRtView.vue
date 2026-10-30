@@ -272,7 +272,7 @@ function formatPhone(value: string): string {
             data-test="rt-search"
           />
           <p class="mt-3 text-base text-gray-700" aria-live="polite" data-test="rt-count">
-            {{ !rtLeadersStore.isLoading && !rtLeadersStore.error ? countSummary : '' }}
+            {{ rtLeadersStore.hasFetched && !rtLeadersStore.isLoading && !rtLeadersStore.error ? countSummary : '' }}
           </p>
         </div>
 
@@ -388,14 +388,14 @@ function formatPhone(value: string): string {
                     </a>
                     <a
                       v-else-if="isDialable(leader.phone)"
-                      :href="`tel:${leader.phone.trim().startsWith('+') ? '+' : ''}${digitsOnly(leader.phone)}`"
+                      :href="`tel:${primaryPhone(leader.phone).startsWith('+') ? '+' : ''}${digitsOnly(leader.phone)}`"
                       class="text-brand-navy focus-visible:outline-brand-navy font-medium underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2"
                     >
                       {{ formatPhone(leader.phone) }}
                       <span class="sr-only">(panggilan telepon)</span>
                     </a>
                     <span v-else class="text-gray-700" data-test="rt-phone-placeholder">
-                      {{ leader.phone }}
+                      {{ leader.phone.trim() || '—' }}
                     </span>
                   </td>
                   <td

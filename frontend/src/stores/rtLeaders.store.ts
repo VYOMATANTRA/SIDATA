@@ -53,6 +53,7 @@ export const useRtLeadersStore = defineStore('rtLeaders', () => {
   const rejectedCount = ref(0);
 
   let inFlight: Promise<void> | null = null;
+  let activeRequestId = 0;
 
   async function fetchRtLeaders(force = false): Promise<void> {
     if (!force && inFlight) return inFlight;
@@ -63,12 +64,14 @@ export const useRtLeadersStore = defineStore('rtLeaders', () => {
       rejectedCount.value = 0;
     }
 
+    const currentRequestId = ++activeRequestId;
     isLoading.value = true;
     error.value = null;
 
     inFlight = (async () => {
       try {
         const response = await fetch(RT_LEADERS_ENDPOINT);
+        if (currentRequestId !== activeRequestId) return;
         if (!response.ok) {
           throw new Error(`Gagal memuat data Ketua RT (status ${response.status})`);
         }
@@ -76,14 +79,18 @@ export const useRtLeadersStore = defineStore('rtLeaders', () => {
         const data = (await response.json()) as { leaders?: unknown };
         const rows = Array.isArray(data.leaders) ? data.leaders : [];
         const valid = rows.filter(isRtLeader);
+        if (currentRequestId !== activeRequestId) return;
         rejectedCount.value = rows.length - valid.length;
         rtLeaders.value = [...valid].sort((a, b) => a.rtNumber - b.rtNumber);
       } catch (err) {
+        if (currentRequestId !== activeRequestId) return;
         error.value = err instanceof Error ? err.message : 'Terjadi kesalahan jaringan';
       } finally {
-        isLoading.value = false;
-        hasFetched.value = true;
-        inFlight = null;
+        if (currentRequestId === activeRequestId) {
+          isLoading.value = false;
+          hasFetched.value = true;
+          inFlight = null;
+        }
       }
     })();
 

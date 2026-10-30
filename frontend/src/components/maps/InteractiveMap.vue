@@ -104,7 +104,8 @@ function createMarker(point: SpatialPointDTO) {
   });
 
   marker.on('add', () => {
-    applyMarkerA11y(marker, point);
+    const fresh = props.points.find((item) => item.id === point.id) ?? point;
+    applyMarkerA11y(marker, fresh);
   });
   return marker;
 }
