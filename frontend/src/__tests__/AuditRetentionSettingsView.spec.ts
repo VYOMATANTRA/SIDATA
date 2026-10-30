@@ -386,3 +386,27 @@ describe('AuditRetentionSettingsView Submission & Reset (Happy Path)', () => {
     expect((infoInput.element as HTMLInputElement).value).toBe('15');
   });
 });
+
+describe('AuditRetentionSettingsView light theme (matches the shell, no dark panel)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.restoreAllMocks();
+  });
+
+  it('does not wrap its content in a dark panel (bg-slate-950) distinct from the white shell', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ retention: { info: 15, warning: 30, critical: 90 } }),
+    } as Response);
+
+    const router = createTestRouter();
+    const wrapper = mount(AuditRetentionSettingsView, {
+      global: { plugins: [router] },
+    });
+    await flushPromises();
+
+    expect(wrapper.html()).not.toContain('bg-slate-950');
+    expect(wrapper.find('form').exists()).toBe(true);
+  });
+});

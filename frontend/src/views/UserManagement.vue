@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { ClockIcon, MagnifyingGlassIcon, PlusIcon } from '@heroicons/vue/24/outline';
 import { useUsersStore, type UserItem } from '../stores/users.store';
 import { useAuthStore } from '../stores/auth';
 import { setAdminHeader } from '../composables/useAdminHeader';
+import BaseButton from '../components/common/BaseButton.vue';
+import BaseModal from '../components/common/BaseModal.vue';
+import { INPUT_CLASSES } from '../utils/formStyles';
 
 const usersStore = useUsersStore();
 const authStore = useAuthStore();
@@ -87,7 +91,10 @@ const filteredUsers = computed(() => {
 });
 
 onMounted(async () => {
-  setAdminHeader('Manajemen Pengguna', 'Kelola akun pengguna sistem, hak akses, dan status aktivasi.');
+  setAdminHeader(
+    'Manajemen Pengguna',
+    'Kelola akun pengguna sistem, hak akses, dan status aktivasi.',
+  );
   await Promise.all([usersStore.fetchUsers(), usersStore.fetchRoles()]);
 });
 
@@ -133,6 +140,17 @@ function openConfirmModal(user: UserItem, action: 'deactivate' | 'activate') {
   confirmActionType.value = action;
   isConfirmModalOpen.value = true;
 }
+
+const confirmTitle = computed(() =>
+  confirmActionType.value === 'activate' ? 'Aktifkan Pengguna?' : 'Nonaktifkan Pengguna?',
+);
+
+const confirmDescription = computed(() => {
+  const email = selectedUser.value?.email ?? '';
+  return confirmActionType.value === 'activate'
+    ? `Akun ${email} akan diaktifkan kembali dan dapat masuk seperti biasa.`
+    : `Akun ${email} akan dinonaktifkan dan tidak dapat masuk sampai diaktifkan kembali.`;
+});
 
 function generateRandomPassword() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
@@ -227,504 +245,457 @@ async function handleConfirmAction() {
 </script>
 
 <template>
-  <div class="rounded-2xl bg-slate-950 p-6 font-sans text-slate-100 md:p-10">
-    <div class="mx-auto max-w-7xl space-y-6">
-      <!--
-        AdminLayout's header already renders the page's <h1> and subtitle (set via
-        setAdminHeader in onMounted below) — this view only owns the action toolbar.
-      -->
-      <div class="flex flex-wrap items-center justify-end gap-3 border-b border-slate-800 pb-6">
-        <router-link
-          to="/settings/audit-retention"
-          class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-slate-700 active:scale-95"
-        >
-          <svg
-            class="h-4 w-4 text-slate-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-          <span>Retensi Audit</span>
-        </router-link>
-
-        <button
-          @click="openCreateModal"
-          class="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/25 transition hover:bg-indigo-500 active:scale-95"
-        >
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
-          <span>Tambah Pengguna</span>
-        </button>
-      </div>
-
-      <!-- Controls (Search) -->
-      <div class="flex items-center justify-between gap-4">
-        <div class="relative w-full max-w-sm">
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Cari berdasarkan email atau role..."
-            class="w-full rounded-xl border border-slate-800 bg-slate-900 py-2.5 pr-4 pl-10 text-sm text-white placeholder-slate-500 transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-          />
-          <svg
-            class="absolute top-3 left-3 h-5 w-5 text-slate-500"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
-        </div>
-
-        <div class="text-xs font-medium text-slate-400">
-          Total: <span class="font-bold text-white">{{ filteredUsers.length }}</span> akun
-        </div>
-      </div>
-
-      <!-- Error State -->
-      <div
-        v-if="usersStore.error"
-        class="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400"
+  <div class="space-y-6">
+    <!--
+      AdminLayout's header already renders the page's <h1> and subtitle (set via
+      setAdminHeader in onMounted below) — this view only owns the action toolbar.
+    -->
+    <div class="flex flex-wrap items-center justify-end gap-3 border-b border-slate-200 pb-6">
+      <router-link
+        to="/settings/audit-retention"
+        class="rounded-btn border-brand-navy text-brand-navy hover:bg-brand-navy focus-visible:outline-brand-navy inline-flex items-center justify-center gap-2 border-2 bg-white px-4 py-2 text-sm font-medium transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2"
       >
-        {{ usersStore.error }}
+        <ClockIcon class="h-4 w-4" aria-hidden="true" />
+        <span>Retensi Audit</span>
+      </router-link>
+
+      <BaseButton :left-icon="PlusIcon" @click="openCreateModal">Tambah Pengguna</BaseButton>
+    </div>
+
+    <!-- Controls (Search) -->
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div class="w-full max-w-sm">
+        <label for="user-search" class="block text-xs font-medium text-slate-600">
+          Cari pengguna
+        </label>
+        <div class="relative mt-1">
+          <MagnifyingGlassIcon
+            class="pointer-events-none absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 text-slate-400"
+            aria-hidden="true"
+          />
+          <input
+            id="user-search"
+            v-model="searchQuery"
+            type="search"
+            placeholder="Cari berdasarkan email atau role..."
+            :class="INPUT_CLASSES"
+            class="pl-10"
+          />
+        </div>
       </div>
 
-      <!-- Table Container -->
-      <div class="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-xl">
-        <div class="overflow-x-auto">
-          <table class="w-full border-collapse text-left text-sm">
-            <thead>
-              <tr
-                class="border-b border-slate-800 bg-slate-800/60 text-xs font-semibold tracking-wider text-slate-400 uppercase"
-              >
-                <th class="px-6 py-4">Pengguna</th>
-                <th class="px-6 py-4">Penyedia Autentikasi</th>
-                <th class="px-6 py-4">Role</th>
-                <th class="px-6 py-4">Status Akun</th>
-                <th class="px-6 py-4">Verifikasi Email</th>
-                <th class="px-6 py-4 text-right">Aksi</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-800/60 text-slate-300">
-              <tr v-if="usersStore.loading && !filteredUsers.length">
-                <td colspan="6" class="px-6 py-12 text-center text-slate-500">
-                  <div class="flex items-center justify-center gap-2">
-                    <svg
-                      class="h-5 w-5 animate-spin text-indigo-400"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                    >
-                      <circle
-                        class="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        stroke-width="4"
-                      ></circle>
-                      <path
-                        class="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8v8H4z"
-                      ></path>
-                    </svg>
-                    <span>Memuat data pengguna...</span>
-                  </div>
-                </td>
-              </tr>
+      <p class="text-xs text-slate-600" aria-live="polite">
+        Total: <span class="font-semibold text-slate-900">{{ filteredUsers.length }}</span> akun
+      </p>
+    </div>
 
-              <tr v-else-if="!filteredUsers.length">
-                <td colspan="6" class="px-6 py-12 text-center text-slate-500">
-                  Tidak ada data pengguna yang ditemukan.
-                </td>
-              </tr>
+    <!-- Error State -->
+    <div
+      v-if="usersStore.error"
+      role="alert"
+      class="rounded-card border border-rose-300 bg-rose-50 px-4 py-3"
+    >
+      <p class="text-sm font-medium text-rose-900">{{ usersStore.error }}</p>
+    </div>
 
-              <tr
-                v-for="u in filteredUsers"
-                :key="u.id"
-                class="transition duration-150 hover:bg-slate-800/40"
-              >
-                <!-- User Email -->
-                <td class="px-6 py-4">
-                  <div class="font-semibold text-white">{{ u.email }}</div>
-                  <div class="text-xs text-slate-500">ID: {{ u.id.substring(0, 8) }}...</div>
-                </td>
-
-                <!-- Auth Provider -->
-                <td class="px-6 py-4 capitalize">
-                  <span
-                    class="inline-flex items-center rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-300"
+    <!-- Table -->
+    <div class="rounded-card overflow-hidden border border-slate-200 bg-white shadow-xs">
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse text-left text-sm">
+          <caption class="sr-only">
+            Daftar pengguna sistem, lengkap dengan penyedia autentikasi, role, status akun, dan
+            status verifikasi email.
+          </caption>
+          <thead>
+            <tr class="bg-brand-navy text-xs font-semibold tracking-wider text-white uppercase">
+              <th scope="col" class="px-6 py-4">Pengguna</th>
+              <th scope="col" class="px-6 py-4">Penyedia Autentikasi</th>
+              <th scope="col" class="px-6 py-4">Role</th>
+              <th scope="col" class="px-6 py-4">Status Akun</th>
+              <th scope="col" class="px-6 py-4">Verifikasi Email</th>
+              <th scope="col" class="px-6 py-4 text-right">Aksi</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 text-slate-700">
+            <tr v-if="usersStore.loading && !filteredUsers.length">
+              <td colspan="6" class="px-6 py-12 text-center text-slate-500">
+                <div class="flex items-center justify-center gap-2">
+                  <svg
+                    class="text-brand-navy h-5 w-5 animate-spin"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    aria-hidden="true"
                   >
-                    {{ u.auth_provider }}
-                  </span>
-                </td>
+                    <circle
+                      class="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      stroke-width="4"
+                    ></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                  </svg>
+                  <span>Memuat data pengguna...</span>
+                </div>
+              </td>
+            </tr>
 
-                <!-- Role Badge -->
-                <td class="px-6 py-4">
-                  <span
-                    :class="[
-                      'inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold tracking-wider uppercase',
-                      u.role?.name.toLowerCase() === 'admin'
-                        ? 'border-indigo-500/30 bg-indigo-500/10 text-indigo-400'
-                        : 'border-slate-700 bg-slate-800 text-slate-300',
-                    ]"
+            <tr v-else-if="!filteredUsers.length">
+              <td colspan="6" class="px-6 py-12 text-center text-slate-500">
+                Tidak ada data pengguna yang ditemukan.
+              </td>
+            </tr>
+
+            <tr
+              v-for="u in filteredUsers"
+              :key="u.id"
+              class="align-top transition duration-150 hover:bg-slate-50"
+            >
+              <!-- User Email -->
+              <td class="px-6 py-4">
+                <div class="font-semibold text-slate-900">{{ u.email }}</div>
+                <div class="text-xs text-slate-500">ID: {{ u.id.substring(0, 8) }}...</div>
+              </td>
+
+              <!-- Auth Provider -->
+              <td class="px-6 py-4 capitalize">
+                <span
+                  class="inline-flex items-center rounded-md border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
+                >
+                  {{ u.auth_provider }}
+                </span>
+              </td>
+
+              <!-- Role Badge -->
+              <td class="px-6 py-4">
+                <span
+                  :class="[
+                    'inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold tracking-wider uppercase',
+                    u.role?.name.toLowerCase() === 'admin'
+                      ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                      : 'border-slate-200 bg-slate-100 text-slate-700',
+                  ]"
+                >
+                  {{ u.role?.name }}
+                </span>
+              </td>
+
+              <!-- Account Status (Active vs Deactivated) -->
+              <td class="px-6 py-4">
+                <span
+                  v-if="u.deletedAt == null"
+                  class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold tracking-wider text-emerald-700 uppercase"
+                >
+                  Aktif
+                </span>
+                <span
+                  v-else
+                  class="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold tracking-wider text-rose-700 uppercase"
+                >
+                  Nonaktif
+                </span>
+              </td>
+
+              <!-- Email Verification Status -->
+              <td class="px-6 py-4">
+                <span
+                  v-if="u.email_verified"
+                  class="inline-flex items-center text-xs font-medium text-emerald-700"
+                >
+                  Terverifikasi
+                </span>
+                <span v-else class="inline-flex items-center text-xs font-medium text-amber-700">
+                  Belum Verifikasi
+                </span>
+              </td>
+
+              <!-- Actions -->
+              <td class="space-x-2 px-6 py-4 text-right">
+                <template v-if="u.deletedAt == null">
+                  <button
+                    type="button"
+                    @click="openRoleModal(u)"
+                    class="rounded-btn focus-visible:outline-brand-navy border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-1"
                   >
-                    {{ u.role?.name }}
-                  </span>
-                </td>
-
-                <!-- Account Status (Active vs Deactivated) -->
-                <td class="px-6 py-4">
-                  <span
-                    v-if="u.deletedAt == null"
-                    class="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold tracking-wider text-emerald-400 uppercase"
+                    Ubah Role
+                  </button>
+                  <button
+                    type="button"
+                    @click="openPasswordModal(u)"
+                    class="rounded-btn focus-visible:outline-brand-navy border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-1"
                   >
-                    Aktif
-                  </span>
-                  <span
-                    v-else
-                    class="inline-flex items-center rounded-full border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-xs font-semibold tracking-wider text-rose-400 uppercase"
+                    Ganti Password
+                  </button>
+                  <button
+                    v-if="u.id !== authStore.user?.id && u.role?.name.toLowerCase() !== 'admin'"
+                    type="button"
+                    @click="openConfirmModal(u, 'deactivate')"
+                    class="rounded-full border border-rose-200 bg-rose-50 px-3.5 py-1.5 text-xs font-semibold tracking-wide text-rose-700 transition hover:bg-rose-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-rose-600"
                   >
-                    Nonaktif
-                  </span>
-                </td>
+                    Deactivate
+                  </button>
+                </template>
 
-                <!-- Email Verification Status -->
-                <td class="px-6 py-4">
-                  <span
-                    v-if="u.email_verified"
-                    class="inline-flex items-center text-xs font-medium text-emerald-400"
+                <template v-else>
+                  <button
+                    type="button"
+                    @click="openConfirmModal(u, 'activate')"
+                    class="rounded-full border border-emerald-200 bg-emerald-50 px-3.5 py-1.5 text-xs font-semibold tracking-wide text-emerald-700 transition hover:bg-emerald-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-600"
                   >
-                    Terverifikasi
-                  </span>
-                  <span v-else class="inline-flex items-center text-xs font-medium text-amber-400">
-                    Belum Verifikasi
-                  </span>
-                </td>
-
-                <!-- Actions -->
-                <td class="space-x-2 px-6 py-4 text-right">
-                  <template v-if="u.deletedAt == null">
-                    <button
-                      @click="openRoleModal(u)"
-                      class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:bg-slate-700"
-                    >
-                      Ubah Role
-                    </button>
-                    <button
-                      @click="openPasswordModal(u)"
-                      class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:bg-slate-700"
-                    >
-                      Ganti Password
-                    </button>
-                    <button
-                      v-if="u.id !== authStore.user?.id && u.role?.name.toLowerCase() !== 'admin'"
-                      @click="openConfirmModal(u, 'deactivate')"
-                      class="rounded-full border border-rose-500/30 bg-rose-500/10 px-3.5 py-1.5 text-xs font-semibold tracking-wide text-rose-400 transition hover:bg-rose-500/20 active:scale-95"
-                    >
-                      Deactivate
-                    </button>
-                  </template>
-
-                  <template v-else>
-                    <button
-                      @click="openConfirmModal(u, 'activate')"
-                      class="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-1.5 text-xs font-semibold tracking-wide text-emerald-400 transition hover:bg-emerald-500/20 active:scale-95"
-                    >
-                      Activate
-                    </button>
-                  </template>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+                    Activate
+                  </button>
+                </template>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
     <!-- Create User Modal -->
-    <div
-      v-if="isCreateModalOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+    <BaseModal
+      :open="isCreateModalOpen"
+      title="Tambah Pengguna Baru"
+      description="Pengguna yang dibuat oleh Admin langsung terverifikasi dan diwajibkan membuat kata sandi saat pertama kali masuk."
+      :busy="isSubmitting"
+      @close="isCreateModalOpen = false"
     >
       <div
-        class="w-full max-w-md space-y-4 rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl"
+        v-if="createError"
+        role="alert"
+        class="rounded-card mb-4 border border-rose-300 bg-rose-50 px-4 py-3 text-xs text-rose-900"
       >
-        <h2 class="text-xl font-bold text-white">Tambah Pengguna Baru</h2>
-        <p class="text-xs text-slate-400">
-          Pengguna yang dibuat oleh Admin langsung terverifikasi dan diwajibkan membuat kata sandi
-          saat pertama kali masuk.
-        </p>
+        {{ createError }}
+      </div>
+      <div
+        v-if="createSuccess"
+        role="status"
+        class="rounded-card mb-4 border border-emerald-300 bg-emerald-50 px-4 py-3 text-xs text-emerald-900"
+      >
+        {{ createSuccess }}
+      </div>
+      <div
+        v-if="!usersStore.roles.length"
+        class="rounded-card mb-4 border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900"
+      >
+        {{ usersStore.error || 'Daftar role tidak tersedia. Silakan muat ulang halaman.' }}
+      </div>
 
-        <div
-          v-if="createError"
-          class="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-400"
-        >
-          {{ createError }}
+      <form @submit.prevent="handleCreateUser" class="space-y-4">
+        <div>
+          <label for="create-user-email" class="mb-1 block text-xs font-medium text-slate-600">
+            Email
+          </label>
+          <input
+            id="create-user-email"
+            v-model="createForm.email"
+            type="email"
+            placeholder="nama@email.com"
+            required
+            :class="INPUT_CLASSES"
+          />
         </div>
-        <div
-          v-if="createSuccess"
-          class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-400"
-        >
-          {{ createSuccess }}
+
+        <div>
+          <label for="create-user-role" class="mb-1 block text-xs font-medium text-slate-600">
+            Role
+          </label>
+          <select id="create-user-role" v-model="createForm.roleId" required :class="INPUT_CLASSES">
+            <option v-for="r in usersStore.roles" :key="r.id" :value="r.id">
+              {{ r.name }}
+            </option>
+          </select>
         </div>
-        <div
-          v-if="!usersStore.roles.length"
-          class="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-400"
-        >
-          {{ usersStore.error || 'Daftar role tidak tersedia. Silakan muat ulang halaman.' }}
-        </div>
 
-        <form @submit.prevent="handleCreateUser" class="space-y-4">
-          <div>
-            <label class="mb-1 block text-xs font-semibold text-slate-300 uppercase">Email</label>
-            <input
-              v-model="createForm.email"
-              type="email"
-              placeholder="nama@email.com"
-              required
-              class="w-full rounded-lg border border-slate-800 bg-slate-950 px-3.5 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
-            />
-          </div>
-
-          <div>
-            <label class="mb-1 block text-xs font-semibold text-slate-300 uppercase">Role</label>
-            <select
-              v-model="createForm.roleId"
-              required
-              class="w-full rounded-lg border border-slate-800 bg-slate-950 px-3.5 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
-            >
-              <option v-for="r in usersStore.roles" :key="r.id" :value="r.id">
-                {{ r.name }}
-              </option>
-            </select>
-          </div>
-
-          <div>
-            <div class="mb-1 flex items-center justify-between">
-              <label class="block text-xs font-semibold text-slate-300 uppercase"
-                >Kata Sandi Awal</label
-              >
-              <button
-                type="button"
-                @click="createForm.password = generateRandomPassword()"
-                class="text-xs text-indigo-400 hover:underline"
-              >
-                Acak Sandi
-              </button>
-            </div>
-            <input
-              v-model="createForm.password"
-              type="text"
-              required
-              class="w-full rounded-lg border border-slate-800 bg-slate-950 px-3.5 py-2 font-mono text-sm text-white focus:border-indigo-500 focus:outline-none"
-            />
-          </div>
-
-          <div class="flex justify-end gap-3 pt-3">
+        <div>
+          <div class="mb-1 flex items-center justify-between">
+            <label for="create-user-password" class="block text-xs font-medium text-slate-600">
+              Kata Sandi Awal
+            </label>
             <button
               type="button"
-              @click="isCreateModalOpen = false"
-              :disabled="isSubmitting"
-              class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700 disabled:opacity-50"
+              @click="createForm.password = generateRandomPassword()"
+              class="text-brand-navy text-xs font-medium hover:underline"
             >
-              Batal
-            </button>
-            <button
-              type="submit"
-              :disabled="isSubmitting"
-              class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-500 disabled:opacity-50"
-            >
-              Simpan
+              Acak Sandi
             </button>
           </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Update Role Modal -->
-    <div
-      v-if="isRoleModalOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
-    >
-      <div
-        class="w-full max-w-sm space-y-4 rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl"
-      >
-        <h2 class="text-xl font-bold text-white">Ubah Role Pengguna</h2>
-        <p class="text-xs text-slate-400">
-          Pilih role baru untuk <strong class="text-white">{{ selectedUser?.email }}</strong
-          >:
-        </p>
-
-        <div
-          v-if="!usersStore.roles.length"
-          class="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-400"
-        >
-          {{ usersStore.error || 'Daftar role tidak tersedia.' }}
+          <input
+            id="create-user-password"
+            v-model="createForm.password"
+            type="text"
+            required
+            :class="INPUT_CLASSES"
+            class="font-mono"
+          />
         </div>
-
-        <select
-          v-model="newRoleSelection"
-          class="w-full rounded-lg border border-slate-800 bg-slate-950 px-3.5 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
-        >
-          <option v-for="r in usersStore.roles" :key="r.id" :value="r.id">
-            {{ r.name }}
-          </option>
-        </select>
 
         <div class="flex justify-end gap-3 pt-3">
-          <button
+          <BaseButton
             type="button"
-            @click="isRoleModalOpen = false"
+            variant="secondary"
             :disabled="isSubmitting"
-            class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-slate-300 disabled:opacity-50"
+            @click="isCreateModalOpen = false"
           >
             Batal
-          </button>
-          <button
-            @click="handleUpdateRole"
-            :disabled="isSubmitting"
-            class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-600/20 disabled:opacity-50"
-          >
-            Simpan Perubahan
-          </button>
+          </BaseButton>
+          <BaseButton type="submit" :disabled="isSubmitting">Simpan</BaseButton>
         </div>
+      </form>
+    </BaseModal>
+
+    <!-- Update Role Modal -->
+    <BaseModal
+      :open="isRoleModalOpen"
+      title="Ubah Role Pengguna"
+      :description="`Pilih role baru untuk ${selectedUser?.email ?? ''}.`"
+      :busy="isSubmitting"
+      @close="isRoleModalOpen = false"
+    >
+      <div
+        v-if="!usersStore.roles.length"
+        class="rounded-card mb-4 border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900"
+      >
+        {{ usersStore.error || 'Daftar role tidak tersedia.' }}
       </div>
-    </div>
+
+      <label for="update-role-select" class="mb-1 block text-xs font-medium text-slate-600">
+        Role baru
+      </label>
+      <select id="update-role-select" v-model="newRoleSelection" :class="INPUT_CLASSES">
+        <option v-for="r in usersStore.roles" :key="r.id" :value="r.id">
+          {{ r.name }}
+        </option>
+      </select>
+
+      <div class="flex justify-end gap-3 pt-5">
+        <BaseButton
+          type="button"
+          variant="secondary"
+          :disabled="isSubmitting"
+          @click="isRoleModalOpen = false"
+        >
+          Batal
+        </BaseButton>
+        <BaseButton type="button" :disabled="isSubmitting" @click="handleUpdateRole">
+          Simpan Perubahan
+        </BaseButton>
+      </div>
+    </BaseModal>
 
     <!-- Change Password Modal -->
-    <div
-      v-if="isPasswordModalOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+    <BaseModal
+      :open="isPasswordModalOpen"
+      title="Ganti Kata Sandi Pengguna"
+      :description="`Atur kata sandi baru untuk ${selectedUser?.email ?? ''}. Pengguna akan diwajibkan mengganti kata sandi saat pertama kali masuk kembali.`"
+      :busy="isSubmitting"
+      @close="isPasswordModalOpen = false"
     >
       <div
-        class="w-full max-w-md space-y-4 rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl"
+        v-if="passwordError"
+        role="alert"
+        class="rounded-card mb-4 border border-rose-300 bg-rose-50 px-4 py-3 text-xs text-rose-900"
       >
-        <h2 class="text-xl font-bold text-white">Ganti Kata Sandi Pengguna</h2>
-        <p class="text-xs text-slate-400">
-          Atur kata sandi baru untuk <strong class="text-white">{{ selectedUser?.email }}</strong
-          >. Pengguna akan diwajibkan mengganti kata sandi saat pertama kali masuk kembali.
-        </p>
+        {{ passwordError }}
+      </div>
+      <div
+        v-if="passwordSuccess"
+        role="status"
+        class="rounded-card mb-4 border border-emerald-300 bg-emerald-50 px-4 py-3 text-xs text-emerald-900"
+      >
+        {{ passwordSuccess }}
+      </div>
 
-        <div
-          v-if="passwordError"
-          class="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-400"
-        >
-          {{ passwordError }}
-        </div>
-        <div
-          v-if="passwordSuccess"
-          class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-400"
-        >
-          {{ passwordSuccess }}
-        </div>
-
-        <form @submit.prevent="handleChangePassword" class="space-y-4">
-          <div>
-            <div class="mb-1 flex items-center justify-between">
-              <label class="block text-xs font-semibold text-slate-300 uppercase">
-                Kata Sandi Baru
-              </label>
-              <button
-                type="button"
-                @click="
-                  newPassword = generateRandomPassword();
-                  isNewPasswordTouched = true;
-                "
-                class="text-xs text-indigo-400 hover:underline"
-              >
-                Acak Sandi
-              </button>
-            </div>
-            <input
-              v-model="newPassword"
-              type="text"
-              required
-              @blur="isNewPasswordTouched = true"
-              class="w-full rounded-lg border border-slate-800 bg-slate-950 px-3.5 py-2 font-mono text-sm text-white focus:border-indigo-500 focus:outline-none"
-            />
-            <p v-if="newPasswordError" class="mt-1 text-xs text-red-400">
-              {{ newPasswordError }}
-            </p>
-          </div>
-
-          <div class="flex justify-end gap-3 pt-3">
+      <form @submit.prevent="handleChangePassword" class="space-y-4">
+        <div>
+          <div class="mb-1 flex items-center justify-between">
+            <label for="change-password-new" class="block text-xs font-medium text-slate-600">
+              Kata Sandi Baru
+            </label>
             <button
               type="button"
-              @click="isPasswordModalOpen = false"
-              :disabled="isSubmitting"
-              class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700 disabled:opacity-50"
-            >
-              Batal
-            </button>
-            <button
-              type="submit"
-              :disabled="
-                isSubmitting || (isNewPasswordTouched && !isNewPasswordValid) || !newPassword
+              @click="
+                newPassword = generateRandomPassword();
+                isNewPasswordTouched = true;
               "
-              class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-500 disabled:opacity-50"
+              class="text-brand-navy text-xs font-medium hover:underline"
             >
-              Simpan Kata Sandi
+              Acak Sandi
             </button>
           </div>
-        </form>
-      </div>
-    </div>
+          <input
+            id="change-password-new"
+            v-model="newPassword"
+            type="text"
+            required
+            :aria-invalid="!!newPasswordError"
+            :aria-describedby="newPasswordError ? 'change-password-new-error' : undefined"
+            @blur="isNewPasswordTouched = true"
+            :class="INPUT_CLASSES"
+            class="font-mono"
+          />
+          <p
+            v-if="newPasswordError"
+            id="change-password-new-error"
+            class="mt-1 text-xs text-rose-700"
+          >
+            {{ newPasswordError }}
+          </p>
+        </div>
 
-    <!-- Centered Confirmation Modal -->
-    <div
-      v-if="isConfirmModalOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
-    >
-      <div
-        class="w-full max-w-sm space-y-6 rounded-2xl border border-slate-800 bg-slate-900 p-6 text-center shadow-2xl"
-      >
-        <p class="text-base leading-relaxed font-semibold text-white">
-          Apakah anda yakin ingin melakukan aksi ini ?
-        </p>
-
-        <div class="flex justify-center gap-3 pt-2">
-          <button
+        <div class="flex justify-end gap-3 pt-3">
+          <BaseButton
             type="button"
-            @click="isConfirmModalOpen = false"
+            variant="secondary"
             :disabled="isSubmitting"
-            class="rounded-lg bg-slate-800 px-5 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-700 disabled:opacity-50"
+            @click="isPasswordModalOpen = false"
           >
             Batal
-          </button>
-          <button
-            type="button"
-            @click="handleConfirmAction"
-            :disabled="isSubmitting"
-            :class="[
-              'rounded-lg px-5 py-2 text-sm font-semibold text-white shadow-lg transition disabled:opacity-50',
-              confirmActionType === 'activate'
-                ? 'bg-emerald-600 shadow-emerald-600/20 hover:bg-emerald-500'
-                : 'bg-rose-600 shadow-rose-600/20 hover:bg-rose-500',
-            ]"
+          </BaseButton>
+          <BaseButton
+            type="submit"
+            :disabled="
+              isSubmitting || (isNewPasswordTouched && !isNewPasswordValid) || !newPassword
+            "
           >
-            Ya
-          </button>
+            Simpan Kata Sandi
+          </BaseButton>
         </div>
+      </form>
+    </BaseModal>
+
+    <!-- Confirmation Modal (deactivate / activate) -->
+    <BaseModal
+      :open="isConfirmModalOpen"
+      :title="confirmTitle"
+      :description="confirmDescription"
+      :busy="isSubmitting"
+      @close="isConfirmModalOpen = false"
+    >
+      <div class="flex justify-end gap-3">
+        <BaseButton
+          type="button"
+          variant="secondary"
+          :disabled="isSubmitting"
+          @click="isConfirmModalOpen = false"
+        >
+          Batal
+        </BaseButton>
+        <button
+          type="button"
+          @click="handleConfirmAction"
+          :disabled="isSubmitting"
+          :class="[
+            'rounded-btn px-5 py-2.5 text-base font-medium text-white shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50',
+            confirmActionType === 'activate'
+              ? 'bg-emerald-600 hover:bg-emerald-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600'
+              : 'bg-rose-600 hover:bg-rose-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600',
+          ]"
+        >
+          Ya
+        </button>
       </div>
-    </div>
+    </BaseModal>
   </div>
 </template>
