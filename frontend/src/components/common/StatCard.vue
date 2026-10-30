@@ -83,11 +83,11 @@ const variantClasses = computed(() => {
 
     <!--
       Semantic Description List (<dl>) adhering to docs/UI_STYLE_GUIDE.md & docs/ACCESSIBILITY.md
-      Layout: Auto-fit responsive grid with equal columns, ensuring all 4 metrics fit horizontally on a single row as in Figma mobile.
+      Layout: Responsive grid with 2 columns on mobile (grid-cols-2) and 4 columns on sm+ viewports (sm:grid-cols-4) for legible metrics across screen widths.
     -->
     <dl
       v-if="displayedItems.length > 0"
-      class="grid grid-cols-4 items-start gap-1 sm:gap-4 md:gap-6 text-center"
+      class="grid grid-cols-2 sm:grid-cols-4 items-start gap-2 sm:gap-4 md:gap-6 text-center"
       data-test="stat-list"
     >
       <div
@@ -96,109 +96,113 @@ const variantClasses = computed(() => {
         class="flex flex-col items-center text-center px-0.5 sm:px-1"
         data-test="stat-item"
       >
-        <!-- Icon Container -->
-        <div
-          class="mb-1.5 flex h-7 w-7 items-center justify-center sm:mb-2.5 sm:h-9 sm:w-9"
-          aria-hidden="true"
-          data-test="stat-icon-wrapper"
-        >
-          <slot name="icon" :item="item" :index="idx">
-            <!-- 1. Person / Penduduk Icon -->
-            <svg
-              v-if="item.icon === 'person'"
-              class="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8"
-              :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <circle cx="12" cy="7" r="4" />
-              <path d="M5.5 21a6.5 6.5 0 0 1 13 0" />
-            </svg>
-
-            <!-- 2. House / RT Icon -->
-            <svg
-              v-else-if="item.icon === 'house'"
-              class="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8"
-              :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path
-                d="M3 10.5L12 3l9 7.5v9a2 2 0 0 1-2 2h-4v-6a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v6H5a2 2 0 0 1-2-2v-9z"
-              />
-            </svg>
-
-            <!-- 3. Density / Map Flag Icon -->
-            <svg
-              v-else-if="item.icon === 'density'"
-              class="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8"
-              :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <!-- 3D Perspective Base Grid -->
-              <path d="M12 11l8 4.5-8 4.5-8-4.5 8-4.5z" />
-              <path d="M12 15.5l-4-2.25" />
-              <path d="M12 15.5l4-2.25" />
-              <!-- Center Flagpole & Flag -->
-              <path d="M12 11V3" />
-              <path d="M12 3l6 3-6 3" />
-            </svg>
-
-            <!-- 4. Ratio / Pie Chart Icon -->
-            <svg
-              v-else-if="item.icon === 'ratio'"
-              class="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8"
-              :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
-              <path d="M22 12A10 10 0 0 0 12 2v10z" />
-            </svg>
-
-            <!-- Fallback Default Icon -->
-            <svg
-              v-else
-              class="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8"
-              :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <circle cx="12" cy="12" r="9" />
-              <path d="M12 8v8" />
-              <path d="M8 12h8" />
-            </svg>
-          </slot>
-        </div>
-
-        <!-- Description Term (<dt>): Stat Label Description (precedes <dd> in DOM for screen readers) -->
+        <!-- Description Term (<dt>): Stat Label Description & Icon (precedes <dd> in DOM for screen readers) -->
         <dt
-          class="order-2 mt-1 max-w-full text-[10px] leading-tight sm:text-xs md:text-sm"
-          :class="variant === 'light' ? 'font-medium text-slate-600' : 'font-normal text-slate-200'"
+          class="contents"
           data-test="stat-label"
         >
-          {{ item.label }}
+          <!-- Icon Container -->
+          <div
+            class="mb-1.5 flex h-7 w-7 items-center justify-center sm:mb-2.5 sm:h-9 sm:w-9"
+            aria-hidden="true"
+            data-test="stat-icon-wrapper"
+          >
+            <slot name="icon" :item="item" :index="idx">
+              <!-- 1. Person / Penduduk Icon -->
+              <svg
+                v-if="item.icon === 'person'"
+                class="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8"
+                :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="7" r="4" />
+                <path d="M5.5 21a6.5 6.5 0 0 1 13 0" />
+              </svg>
+
+              <!-- 2. House / RT Icon -->
+              <svg
+                v-else-if="item.icon === 'house'"
+                class="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8"
+                :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M3 10.5L12 3l9 7.5v9a2 2 0 0 1-2 2h-4v-6a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v6H5a2 2 0 0 1-2-2v-9z"
+                />
+              </svg>
+
+              <!-- 3. Density / Map Flag Icon -->
+              <svg
+                v-else-if="item.icon === 'density'"
+                class="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8"
+                :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <!-- 3D Perspective Base Grid -->
+                <path d="M12 11l8 4.5-8 4.5-8-4.5 8-4.5z" />
+                <path d="M12 15.5l-4-2.25" />
+                <path d="M12 15.5l4-2.25" />
+                <!-- Center Flagpole & Flag -->
+                <path d="M12 11V3" />
+                <path d="M12 3l6 3-6 3" />
+              </svg>
+
+              <!-- 4. Ratio / Pie Chart Icon -->
+              <svg
+                v-else-if="item.icon === 'ratio'"
+                class="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8"
+                :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+                <path d="M22 12A10 10 0 0 0 12 2v10z" />
+              </svg>
+
+              <!-- Fallback Default Icon -->
+              <svg
+                v-else
+                class="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8"
+                :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 8v8" />
+                <path d="M8 12h8" />
+              </svg>
+            </slot>
+          </div>
+
+          <span
+            class="order-2 mt-1 max-w-full text-[10px] leading-tight sm:text-xs md:text-sm"
+            :class="variant === 'light' ? 'font-medium text-slate-600' : 'font-normal text-slate-200'"
+          >
+            {{ item.label }}
+          </span>
         </dt>
 
         <!-- Description Details (<dd>): Numeric Stat Value -->
