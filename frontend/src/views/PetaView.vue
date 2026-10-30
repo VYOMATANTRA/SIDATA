@@ -47,8 +47,8 @@ const visiblePoints = computed<SpatialPointDTO[]>(() => {
   const asRtNumber = /^\d+$/.test(term) ? Number.parseInt(term, 10) : null;
 
   return mapsStore.filteredPoints.filter((point) => {
-    if (asRtNumber !== null && point.rts.includes(asRtNumber)) {
-      return true;
+    if (asRtNumber !== null) {
+      return point.rts.includes(asRtNumber);
     }
     return (
       point.name.toLowerCase().includes(term) ||
@@ -109,6 +109,18 @@ watch(totalPages, (pages) => {
 
 function formatDistance(km: number): string {
   return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
+}
+
+function goToPreviousPage() {
+  if (currentPage.value > 1) {
+    currentPage.value -= 1;
+  }
+}
+
+function goToNextPage() {
+  if (currentPage.value < totalPages.value) {
+    currentPage.value += 1;
+  }
 }
 
 /** Geolocation is only requested on click — never on load. */
@@ -247,7 +259,7 @@ function requestUserLocation() {
               </p>
             </div>
 
-            <p v-if="locationError" role="alert" class="text-brand-navy mt-2 text-sm">
+            <p v-if="locationError" role="alert" class="text-brand-navy mt-2 px-5 text-sm">
               {{ locationError }}
             </p>
 
@@ -302,8 +314,8 @@ function requestUserLocation() {
             </ol>
 
             <p
-              v-else-if="!mapsStore.selectedPoint"
-              class="mt-3 text-base text-gray-800"
+              v-else-if="!mapsStore.selectedPoint && !mapsStore.isLoading && !mapsStore.error"
+              class="mt-3 px-5 text-base text-gray-800"
               data-test="peta-empty"
             >
               Tidak ada titik yang cocok dengan pencarian atau filter saat ini.
@@ -319,24 +331,24 @@ function requestUserLocation() {
               <nav aria-label="Halaman hasil peta" class="flex items-center gap-2">
                 <button
                   type="button"
-                  class="rounded-btn text-brand-navy focus-visible:outline-brand-navy min-h-11 min-w-11 border border-gray-300 px-3 text-sm font-medium hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  class="rounded-btn text-brand-navy focus-visible:outline-brand-navy min-h-11 min-w-11 border border-gray-300 px-3 text-sm font-medium hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
                   aria-label="Halaman sebelumnya"
                   data-test="peta-previous-page"
-                  :disabled="currentPage === 1"
-                  @click="currentPage -= 1"
+                  :aria-disabled="currentPage === 1"
+                  @click="goToPreviousPage"
                 >
                   Sebelumnya
                 </button>
-                <span class="text-sm text-gray-700 tabular-nums" aria-current="page"
+                <span class="text-sm text-gray-700 tabular-nums"
                   >{{ currentPage }} / {{ totalPages }}</span
                 >
                 <button
                   type="button"
-                  class="rounded-btn text-brand-navy focus-visible:outline-brand-navy min-h-11 min-w-11 border border-gray-300 px-3 text-sm font-medium hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  class="rounded-btn text-brand-navy focus-visible:outline-brand-navy min-h-11 min-w-11 border border-gray-300 px-3 text-sm font-medium hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
                   aria-label="Halaman selanjutnya"
                   data-test="peta-next-page"
-                  :disabled="currentPage === totalPages"
-                  @click="currentPage += 1"
+                  :aria-disabled="currentPage === totalPages"
+                  @click="goToNextPage"
                 >
                   Selanjutnya
                 </button>

@@ -13,6 +13,7 @@ export const useMapsStore = defineStore('maps', () => {
   const isLoading = ref(false);
   const error = ref<string | null>(null);
   let selectionRequest = 0;
+  let loadPointsRequest = 0;
 
   const filteredPoints = computed(() => {
     return points.value.filter((point) => {
@@ -27,18 +28,24 @@ export const useMapsStore = defineStore('maps', () => {
   });
 
   async function loadPoints() {
+    const requestId = ++loadPointsRequest;
     isLoading.value = true;
     error.value = null;
     try {
-      points.value = await fetchSpatialPoints();
+      const fetched = await fetchSpatialPoints();
+      if (requestId !== loadPointsRequest) return;
+      points.value = fetched;
       if (selectedPoint.value) {
         const fresh = points.value.find((p) => p.id === selectedPoint.value?.id) ?? null;
         void selectPoint(fresh);
       }
     } catch (err) {
+      if (requestId !== loadPointsRequest) return;
       error.value = err instanceof Error ? err.message : 'Gagal memuat titik peta';
     } finally {
-      isLoading.value = false;
+      if (requestId === loadPointsRequest) {
+        isLoading.value = false;
+      }
     }
   }
 
