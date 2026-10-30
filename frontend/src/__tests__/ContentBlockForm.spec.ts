@@ -113,4 +113,36 @@ describe('ContentBlockForm.vue', () => {
       ?.trigger('click');
     expect(wrapper.emitted('cancel')).toBeTruthy();
   });
+
+  it('parses and emits raw metadata JSON for generic blocks like publikasi-katalog', async () => {
+    const mockGenericBlock: ContentBlock = {
+      id: 'block-3',
+      sectionId: null,
+      type: 'prose',
+      slug: 'publikasi-katalog',
+      title: 'Katalog',
+      body: 'Deskripsi',
+      metadata: {
+        publications: [{ category: 'A', title: 'B', description: 'C', href: '' }],
+      },
+      sortOrder: null,
+      updatedAt: '2026-09-01T00:00:00.000Z',
+    };
+
+    const wrapper = mount(ContentBlockForm, {
+      props: { block: mockGenericBlock },
+    });
+
+    const textarea = wrapper.find('textarea#block-metadata');
+    expect(textarea.exists()).toBe(true);
+
+    await wrapper.find('form').trigger('submit.prevent');
+    const emitted = wrapper.emitted('submit');
+    expect(emitted).toBeTruthy();
+    expect(emitted?.[0]?.[0]).toMatchObject({
+      metadata: {
+        publications: [{ category: 'A', title: 'B', description: 'C', href: '' }],
+      },
+    });
+  });
 });

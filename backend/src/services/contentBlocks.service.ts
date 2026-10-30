@@ -324,12 +324,13 @@ const publikasiItemSchema = z
   })
   .refine(
     (item) => {
-      if (item.isAvailableOnline && !item.href) return false;
+      if (item.isAvailableOnline === true && !item.href) return false;
+      if (item.href && item.isAvailableOnline === false) return false;
       return true;
     },
     {
-      message: 'Publikasi yang ditandai tersedia online wajib memiliki tautan href',
-      path: ['href'],
+      message: 'Status ketersediaan online harus selaras dengan keberadaan tautan href',
+      path: ['isAvailableOnline'],
     },
   )
   .strip();

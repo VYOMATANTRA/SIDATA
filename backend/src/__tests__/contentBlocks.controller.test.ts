@@ -1821,7 +1821,7 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
     assert.equal(resNoHref.status, 400);
     assert.match(
       (resNoHref.body as { error: string }).error,
-      /Publikasi yang ditandai tersedia online wajib memiliki tautan href/,
+      /Status ketersediaan online harus selaras dengan keberadaan tautan href/,
     );
 
     // 3. Acceptance of valid https:// and empty string href (transformed to undefined)
