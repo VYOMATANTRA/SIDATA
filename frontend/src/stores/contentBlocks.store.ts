@@ -22,9 +22,7 @@ export const DEFAULT_HERO_BLOCK: ContentBlock = {
   slug: 'landing-hero',
   title: 'Sistem Informasi Data Terpadu Kelurahan',
   body: 'Pusat integrasi data kependudukan, potensi wilayah, layanan publik, dan pemetaan geospasial Kelurahan Manggar, Balikpapan Timur.',
-  metadata: {
-    badge: 'Data Akurat & Terbuka',
-  },
+  metadata: null,
   sortOrder: null,
   updatedAt: new Date('2026-09-01').toISOString(),
 };

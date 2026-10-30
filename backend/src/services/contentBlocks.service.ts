@@ -45,9 +45,7 @@ export const DEFAULT_CONTENT_BLOCKS = [
     type: 'hero' as const,
     title: 'Sistem Informasi Data Terpadu Kelurahan',
     body: 'Pusat integrasi data kependudukan, potensi wilayah, layanan publik, dan pemetaan geospasial Kelurahan Manggar, Balikpapan Timur.',
-    metadata: {
-      badge: 'Data Akurat & Terbuka',
-    },
+    metadata: null,
   },
   {
     slug: 'landing-sambutan-lurah',
@@ -171,19 +169,19 @@ export function isSafePhotoUrl(val: string): boolean {
 
 export const heroMetadataSchema = z
   .object({
-    badge: z.string().trim().max(100, 'Badge maksimal 100 karakter').optional(),
-    ctaText: z.string().trim().max(50, 'Teks CTA maksimal 50 karakter').optional(),
-    ctaLink: z
+    backgroundImage: z
       .string()
       .trim()
-      .max(500, 'Link CTA maksimal 500 karakter')
+      .max(500, 'URL background image maksimal 500 karakter')
       .refine(
-        isSafeCtaLink,
-        'Link CTA harus berupa path relatif (dimulai dengan / atau #) atau URL HTTPS yang valid',
+        isSafePhotoUrl,
+        'URL background image harus berupa path relatif (dimulai dengan /) atau URL HTTPS yang valid',
       )
+      .or(z.literal(''))
+      .nullable()
       .optional(),
   })
-  .passthrough();
+  .strict();
 
 export const sambutanLurahMetadataSchema = z
   .object({
@@ -219,8 +217,11 @@ export const highlightMetadataSchema = z
   })
   .passthrough();
 
-export function validateBlockMetadata(slug: string, metadata: unknown): void {
-  if (metadata === undefined || metadata === null) return;
+export function validateBlockMetadata(
+  slug: string,
+  metadata: unknown,
+): Record<string, unknown> | null {
+  if (metadata === undefined || metadata === null) return null;
   if (typeof metadata !== 'object' || Array.isArray(metadata)) {
     throw new ContentBlockServiceError('Metadata harus berupa objek JSON', 400);
   }
@@ -235,13 +236,15 @@ export function validateBlockMetadata(slug: string, metadata: unknown): void {
           : null;
 
   if (!result) {
-    return;
+    return metadata as Record<string, unknown>;
   }
 
   if (!result.success) {
     const errorMsg = result.error.issues.map((i) => i.message).join(', ');
     throw new ContentBlockServiceError(`Validasi metadata gagal: ${errorMsg}`, 400);
   }
+
+  return result.data as Record<string, unknown>;
 }
 
 export const updateContentBlockSchema = z
@@ -467,9 +470,10 @@ export const updateContentBlock = async (
 
   const input = parsed.data;
 
-  if (input.metadata !== undefined && input.metadata !== null) {
-    validateBlockMetadata(normalizedSlug, input.metadata);
-  }
+  const sanitizedMetadata =
+    input.metadata !== undefined && input.metadata !== null
+      ? validateBlockMetadata(normalizedSlug, input.metadata)
+      : input.metadata;
 
   // Sanitize title: whitespace only or empty string becomes null
   const sanitizedTitle =
@@ -514,8 +518,11 @@ export const updateContentBlock = async (
       if (input.body !== undefined && hasFieldChanged(existing.body, input.body)) {
         changes.body = { before: existing.body, after: input.body };
       }
-      if (input.metadata !== undefined && hasFieldChanged(existing.metadata, input.metadata)) {
-        changes.metadata = { before: existing.metadata, after: input.metadata };
+      if (
+        sanitizedMetadata !== undefined &&
+        hasFieldChanged(existing.metadata, sanitizedMetadata)
+      ) {
+        changes.metadata = { before: existing.metadata, after: sanitizedMetadata };
       }
 
       // If nothing changed, return early
@@ -530,12 +537,12 @@ export const updateContentBlock = async (
         data: {
           ...(sanitizedTitle !== undefined ? { title: sanitizedTitle } : {}),
           ...(input.body !== undefined ? { body: input.body } : {}),
-          ...(input.metadata !== undefined
+          ...(sanitizedMetadata !== undefined
             ? {
                 metadata:
-                  input.metadata === null
+                  sanitizedMetadata === null
                     ? Prisma.DbNull
-                    : (input.metadata as Prisma.InputJsonValue),
+                    : (sanitizedMetadata as Prisma.InputJsonValue),
               }
             : {}),
           updatedById: actorId,
