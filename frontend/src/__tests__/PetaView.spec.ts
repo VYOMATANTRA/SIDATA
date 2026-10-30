@@ -292,4 +292,51 @@ describe('PetaView accessibility, filtering, and point selection', () => {
     expect(error.text()).toContain('Gagal memuat titik spasial');
     expect(error.find('button').text()).toContain('Coba lagi');
   });
+
+  it('requests geolocation and allows resetting back to kelurahan origin', async () => {
+    const originalNavigator = globalThis.navigator;
+    const getCurrentPosition = vi.fn<typeof navigator.geolocation.getCurrentPosition>(
+      (success: PositionCallback) => {
+        success({
+          coords: {
+            latitude: -1.22,
+            longitude: 116.95,
+            accuracy: 10,
+            altitude: null,
+            altitudeAccuracy: null,
+            heading: null,
+            speed: null,
+          },
+          timestamp: Date.now(),
+        } as GeolocationPosition);
+      },
+    );
+
+    Object.defineProperty(globalThis, 'navigator', {
+      value: {
+        ...originalNavigator,
+        geolocation: { getCurrentPosition },
+      },
+      configurable: true,
+    });
+
+    const wrapper = await mountReady();
+    const dekatSayaBtn = wrapper.findAll('button').find((b) => b.text().trim() === 'Dekat saya');
+    expect(dekatSayaBtn).toBeDefined();
+
+    await dekatSayaBtn?.trigger('click');
+    expect(wrapper.text()).toContain('Jarak dihitung dari lokasi Anda');
+
+    const resetBtn = wrapper.find('[data-test="peta-reset-origin"]');
+    expect(resetBtn.exists()).toBe(true);
+    expect(resetBtn.text()).toContain('Pusat kelurahan');
+
+    await resetBtn.trigger('click');
+    expect(wrapper.text()).toContain('Jarak dihitung dari pusat kelurahan');
+
+    Object.defineProperty(globalThis, 'navigator', {
+      value: originalNavigator,
+      configurable: true,
+    });
+  });
 });

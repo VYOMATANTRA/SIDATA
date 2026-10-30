@@ -189,6 +189,12 @@ function digitsOnly(value: string): string {
   return primaryPhone(value).replace(/[^0-9]/g, '');
 }
 
+function telHref(value: string): string {
+  const primary = primaryPhone(value);
+  const prefix = primary.startsWith('+') ? '+' : '';
+  return `tel:${prefix}${digitsOnly(value)}`;
+}
+
 /**
  * A placeholder row carries no contact at all — the seeded roster stores a
  * non-dialable marker instead of a number. There is nothing to call or message
@@ -388,7 +394,7 @@ function formatPhone(value: string): string {
                     </a>
                     <a
                       v-else-if="isDialable(leader.phone)"
-                      :href="`tel:${primaryPhone(leader.phone).startsWith('+') ? '+' : ''}${digitsOnly(leader.phone)}`"
+                      :href="telHref(leader.phone)"
                       class="text-brand-navy focus-visible:outline-brand-navy font-medium underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2"
                     >
                       {{ formatPhone(leader.phone) }}

@@ -259,7 +259,7 @@ onMounted(() => {
       iconCreateFunction: (cluster) => {
         const count = cluster.getChildCount();
         return L.divIcon({
-          html: `<span class="map-cluster__count" role="button" tabindex="0" aria-label="Kelompok ${count} titik, tekan untuk memperbesar">${count}</span>`,
+          html: `<span class="map-cluster__count" aria-hidden="true">${count}</span><span class="sr-only">Kelompok ${count} titik, tekan untuk memperbesar</span>`,
           className: 'map-cluster',
           iconSize: [42, 42],
         });
