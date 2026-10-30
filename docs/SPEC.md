@@ -320,7 +320,9 @@ caching live in `system_settings` as a separate operational concern.
    hero's institutional voice.
 3. Cerita preview — cards for the stat pages, each showing a few representative figures + link.
    Data-caveat/provenance handling is deferred to the full stat pages, not shown on the cards.
-4. Widget Cuaca — current weather conditions in Manggar from BMKG (description, temperature Celsius, humidity percent, wind speed, wind direction). This widget is to be implemented in a separate PR.
+4. Widget Cuaca — current weather conditions in Manggar from BMKG (description, temperature Celsius, humidity percent, wind speed, wind direction).
+
+The former "Publikasi / Peta highlights" section was dropped from the landing page: Publikasi, Peta, and Ketua RT are publication-class artifacts that live on dedicated pages (`/publikasi`, `/peta`, `/ketua-rt`) reachable directly from navigation and footer (**Sumber Daya**), avoiding redundant highlight cards on the landing page.
 
 SOTK and "who is the lurah" content is **not** on the landing page — it lives on the existing
 "Tentang Kelurahan Manggar" page instead.
