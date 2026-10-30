@@ -36,6 +36,18 @@ export const PUBLICATIONS: PublicationItem[] = [
   },
 ];
 
+/**
+ * A publication is downloadable only when CMS marks it available online and the
+ * href is an https URL (defense in depth with the contentBlocks schema).
+ */
+export function isDownloadable(item: PublicationItem): boolean {
+  return (
+    item.isAvailableOnline === true &&
+    typeof item.href === 'string' &&
+    item.href.startsWith('https://')
+  );
+}
+
 export function hasPublicPublication(list: PublicationItem[] = PUBLICATIONS): boolean {
-  return list.some((p) => typeof p.href === 'string' && p.href.startsWith('https://'));
+  return list.some(isDownloadable);
 }

@@ -4,6 +4,10 @@ import FormField from '../common/FormField.vue';
 import FormErrorSummary from '../common/FormErrorSummary.vue';
 import BaseButton from '../common/BaseButton.vue';
 import type { PublicSettings } from '../../stores/settings.store';
+import {
+  MANGGAR_MAP_ORIGIN,
+  MANGGAR_MAP_DEFAULT_ZOOM,
+} from '../../constants/mapOrigin';
 import { INPUT_CLASSES } from '../../utils/formStyles';
 
 export interface PublicSettingsFormProps {
@@ -37,9 +41,15 @@ const contactWhatsapp = ref(props.settings.contactWhatsapp ?? '');
 const contactEmail = ref(props.settings.contactEmail ?? '');
 const contactAddress = ref(props.settings.contactAddress ?? '');
 
-const lat = ref<number | string>(props.settings.defaultCoordinates?.lat ?? -1.2235);
-const lon = ref<number | string>(props.settings.defaultCoordinates?.lon ?? 116.9521);
-const zoom = ref<number | string>(props.settings.defaultCoordinates?.zoom ?? 14);
+const lat = ref<number | string>(
+  props.settings.defaultCoordinates?.lat ?? MANGGAR_MAP_ORIGIN.latitude,
+);
+const lon = ref<number | string>(
+  props.settings.defaultCoordinates?.lon ?? MANGGAR_MAP_ORIGIN.longitude,
+);
+const zoom = ref<number | string>(
+  props.settings.defaultCoordinates?.zoom ?? MANGGAR_MAP_DEFAULT_ZOOM,
+);
 
 const submitted = ref(false);
 

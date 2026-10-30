@@ -106,12 +106,14 @@ describe('PublikasiView', () => {
             title: 'Dokumen Bahaya',
             description: 'Uji XSS',
             href: 'javascript:alert(1)',
+            isAvailableOnline: true,
           },
           {
             category: 'Statistik',
             title: 'Dokumen Resmi',
             description: 'Download Resmi',
             href: 'https://example.com/dokumen.pdf',
+            isAvailableOnline: true,
           },
         ],
       },
@@ -124,5 +126,78 @@ describe('PublikasiView', () => {
     const safeLink = wrapper.find('a[href="https://example.com/dokumen.pdf"]');
     expect(safeLink.exists()).toBe(true);
     expect(safeLink.text()).toContain('Unduh Dokumen');
+  });
+
+  it('keeps https href as Segera hadir when isAvailableOnline is false', async () => {
+    const { router, wrapper } = mountPublikasiView();
+    await router.push('/publikasi');
+    await router.isReady();
+
+    const { useContentBlocksStore } = await import('../stores/contentBlocks.store');
+    const store = useContentBlocksStore();
+    store.blocks['publikasi-katalog'] = {
+      id: 'block-pub',
+      sectionId: null,
+      type: 'prose',
+      slug: 'publikasi-katalog',
+      title: 'Katalog',
+      body: 'Deskripsi',
+      metadata: {
+        publications: [
+          {
+            category: 'Statistik',
+            title: 'Dokumen Tertutup',
+            description: 'Ada URL tapi belum dirilis',
+            href: 'https://example.com/tertutup.pdf',
+            isAvailableOnline: false,
+          },
+        ],
+      },
+      sortOrder: null,
+      updatedAt: '2026-09-01T00:00:00.000Z',
+    };
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('a[href="https://example.com/tertutup.pdf"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="publication-status"]').text()).toBe('Segera hadir');
+    expect(wrapper.text()).toContain(
+      'Tautan unduhan akan ditampilkan setelah dokumen resmi tersedia.',
+    );
+  });
+
+  it('shows Unduh when isAvailableOnline is true and href is https', async () => {
+    const { router, wrapper } = mountPublikasiView();
+    await router.push('/publikasi');
+    await router.isReady();
+
+    const { useContentBlocksStore } = await import('../stores/contentBlocks.store');
+    const store = useContentBlocksStore();
+    store.blocks['publikasi-katalog'] = {
+      id: 'block-pub',
+      sectionId: null,
+      type: 'prose',
+      slug: 'publikasi-katalog',
+      title: 'Katalog',
+      body: 'Deskripsi',
+      metadata: {
+        publications: [
+          {
+            category: 'Statistik',
+            title: 'Dokumen Terbuka',
+            description: 'Siap diunduh',
+            href: 'https://example.com/terbuka.pdf',
+            isAvailableOnline: true,
+          },
+        ],
+      },
+      sortOrder: null,
+      updatedAt: '2026-09-01T00:00:00.000Z',
+    };
+    await wrapper.vm.$nextTick();
+
+    const link = wrapper.find('[data-test="publication-link"]');
+    expect(link.exists()).toBe(true);
+    expect(link.attributes('href')).toBe('https://example.com/terbuka.pdf');
+    expect(wrapper.find('[data-test="publication-status"]').exists()).toBe(false);
   });
 });

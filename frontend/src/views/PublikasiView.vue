@@ -3,7 +3,7 @@ import { computed, onMounted } from 'vue';
 import TentangPageLayout from '../components/tentang/TentangPageLayout.vue';
 import TentangBreadcrumb from '../components/tentang/TentangBreadcrumb.vue';
 import TentangHeroPanel from '../components/tentang/TentangHeroPanel.vue';
-import { PUBLICATIONS, type PublicationItem } from '../content/publikasi';
+import { PUBLICATIONS, isDownloadable, type PublicationItem } from '../content/publikasi';
 import { useContentBlocksStore } from '../stores/contentBlocks.store';
 
 const contentBlocksStore = useContentBlocksStore();
@@ -31,7 +31,7 @@ const publikasiCatalog = computed<PublicationItem[]>(() => {
 });
 
 const hasPendingPublication = computed(() =>
-  publikasiCatalog.value.some((item) => !item.href || !item.href.startsWith('https://')),
+  publikasiCatalog.value.some((item) => !isDownloadable(item)),
 );
 </script>
 
@@ -81,7 +81,7 @@ const hasPendingPublication = computed(() =>
               </div>
 
               <a
-                v-if="publication.href && publication.href.startsWith('https://')"
+                v-if="isDownloadable(publication)"
                 :href="publication.href"
                 target="_blank"
                 rel="noopener noreferrer"
