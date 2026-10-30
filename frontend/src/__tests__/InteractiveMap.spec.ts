@@ -239,7 +239,7 @@ describe('InteractiveMap.vue', () => {
 
     leafletMocks.state.layeraddHandler?.({ layer: cluster });
     await flushPromises();
-    await new Promise((r) => queueMicrotask(r));
+    await new Promise<void>((resolve) => { queueMicrotask(() => resolve()); });
 
     expect(iconEl.getAttribute('role')).toBe('button');
     expect(iconEl.getAttribute('tabindex')).toBe('0');
