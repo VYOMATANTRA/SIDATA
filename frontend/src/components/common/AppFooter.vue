@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { getActivePinia } from 'pinia';
 import BaseLink from './BaseLink.vue';
 import logoBalikpapan from '@/assets/img/logo_balikpapan.png';
@@ -33,6 +33,12 @@ const props = withDefaults(defineProps<FooterProps>(), {
 
 // Avoid initializing Pinia store when no active Pinia instance exists (e.g. isolated component unit tests)
 const settingsStore = getActivePinia() ? useSettingsStore() : null;
+
+onMounted(() => {
+  // Footer is on every public page; load contact details once so pages that
+  // never touch the settings store still show the admin-managed values.
+  void settingsStore?.fetchPublicSettings().catch(() => {});
+});
 
 const displayPhone = computed(() => {
   if (props.phone !== undefined) return props.phone;
@@ -136,7 +142,7 @@ const aboutLinks = [
             <p class="pt-0.5">
               Telp.
               <BaseLink
-                :href="`tel:${displayPhone.replace(/[^0-9]/g, '')}`"
+                :href="`tel:${displayPhone.replace(/[^0-9+]/g, '')}`"
                 variant="white"
                 size="sm"
                 class="text-xs sm:text-sm"

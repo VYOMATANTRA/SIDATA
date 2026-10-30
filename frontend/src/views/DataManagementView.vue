@@ -244,9 +244,9 @@ async function loadAll(): Promise<void> {
     pagesStore.fetchHierarchy(),
     indicatorsStore.fetchIndicators(true),
     tablesStore.fetchTables(true),
+    contentBlocksStore.fetchBlocks(true),
+    settingsStore.fetchPublicSettings(true),
   ]);
-  void contentBlocksStore.fetchBlocks().catch(() => {});
-  void settingsStore.fetchPublicSettings().catch(() => {});
 }
 
 onMounted(loadAll);
@@ -294,9 +294,13 @@ function handleEdit(card: IndicatorCardModel): void {
   }
 
   if (card.type === 'pengaturan') {
-    if (authStore.isAdmin) {
-      isEditingSettings.value = true;
+    if (!authStore.isAdmin) return;
+    if (settingsStore.error || !settingsStore.isLoaded) {
+      serverError.value = settingsStore.error
+        || 'Pengaturan publik belum siap. Muat ulang halaman lalu coba lagi.';
+      return;
     }
+    isEditingSettings.value = true;
     return;
   }
 }
