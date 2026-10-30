@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import DataManagementView from '../views/DataManagementView.vue';
 import type { Indicator } from '../stores/indicators.store';
 import type { IndicatorTable } from '../stores/indicatorTables.store';
+import { useAuthStore } from '../stores/auth';
 
 const CREATED = '2026-01-01T00:00:00.000Z';
 
@@ -311,6 +312,66 @@ describe('DataManagementView.vue', () => {
 
     expect(patchBody).toEqual({ rows: [{ id: 'row-1', male: 250 }] });
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  it('switches to content blocks tab and lists editable content blocks', async () => {
+    const wrapper = mountView();
+    await flushPromises();
+
+    await wrapper.find('[data-test="tab-konten"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Portal Data Terpadu Kelurahan Manggar');
+    expect(wrapper.text()).toContain('Sambutan Lurah Manggar');
+    expect(wrapper.text()).toContain('Profil Kelurahan Manggar');
+
+    const editHeroBtn = wrapper
+      .findAll('button')
+      .find((b) => b.text().includes('Portal Data Terpadu'));
+    expect(editHeroBtn).toBeDefined();
+
+    wrapper.unmount();
+  });
+
+  it('hides public settings tab from non-admin editors', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore();
+    authStore.setAuth({ id: '2', email: 'editor@example.com', role: 'editor' }, 'token');
+
+    const wrapper = mount(DataManagementView, {
+      global: {
+        plugins: [pinia],
+        stubs: { RouterLink: true, teleport: true },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="tab-pengaturan"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('switches to public settings tab and displays public settings card for admins', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore();
+    authStore.setAuth({ id: '1', email: 'admin@example.com', role: 'admin' }, 'token');
+
+    const wrapper = mount(DataManagementView, {
+      global: {
+        plugins: [pinia],
+        stubs: { RouterLink: true, teleport: true },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.find('[data-test="tab-pengaturan"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Pengaturan Publik Portal');
+    expect(wrapper.text()).toContain('Kelurahan Manggar');
 
     wrapper.unmount();
   });

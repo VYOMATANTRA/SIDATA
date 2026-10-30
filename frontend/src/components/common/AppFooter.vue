@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed, onMounted } from 'vue';
+import { getActivePinia } from 'pinia';
 import BaseLink from './BaseLink.vue';
 import logoBalikpapan from '@/assets/img/logo_balikpapan.png';
 import logoDesaCantik from '@/assets/img/logo_desa_cantik.png';
@@ -7,6 +9,15 @@ import logoSdgs17 from '@/assets/img/17_kemitraan_pembangunan_desa.png';
 import logoBps from '@/assets/img/logo_bps.png';
 import logoItk from '@/assets/img/logo_itk.png';
 import logoVyomatantra from '@/assets/img/logo_vyomatantra.png';
+import { useSettingsStore } from '../../stores/settings.store';
+
+const DEFAULT_PHONE = '(0542) 772158';
+const DEFAULT_ADDRESS_LINES = [
+  'Kantor Kelurahan Manggar',
+  'Jl. Mulawarman No. 1, RT 39',
+  'Kelurahan Manggar, Kecamatan Balikpapan Timur',
+  'Kota Balikpapan, Kalimantan Timur, 76116',
+];
 
 export interface FooterProps {
   year?: number | string;
@@ -14,15 +25,39 @@ export interface FooterProps {
   addressLines?: string[];
 }
 
-withDefaults(defineProps<FooterProps>(), {
+const props = withDefaults(defineProps<FooterProps>(), {
   year: 2026,
-  phone: '(0542) 772158',
-  addressLines: () => [
-    'Kantor Kelurahan Manggar',
-    'Jl. Mulawarman No. 1, RT 39',
-    'Kelurahan Manggar, Kecamatan Balikpapan Timur',
-    'Kota Balikpapan, Kalimantan Timur, 76116',
-  ],
+  phone: undefined,
+  addressLines: undefined,
+});
+
+// Avoid initializing Pinia store when no active Pinia instance exists (e.g. isolated component unit tests)
+const settingsStore = getActivePinia() ? useSettingsStore() : null;
+
+onMounted(() => {
+  // Footer is on every public page; load contact details once so pages that
+  // never touch the settings store still show the admin-managed values.
+  void settingsStore?.fetchPublicSettings().catch(() => {});
+});
+
+const displayPhone = computed(() => {
+  if (props.phone !== undefined) return props.phone;
+  return settingsStore?.isLoaded && settingsStore.contactPhone
+    ? settingsStore.contactPhone
+    : DEFAULT_PHONE;
+});
+
+const displayAddressLines = computed(() => {
+  if (props.addressLines !== undefined) return props.addressLines;
+  if (settingsStore?.isLoaded && settingsStore.contactAddress) {
+    const parts = settingsStore.contactAddress
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (parts.length >= 2) return parts;
+    return [settingsStore.contactAddress];
+  }
+  return DEFAULT_ADDRESS_LINES;
 });
 
 // Resource Links (Sumber Daya)
@@ -98,7 +133,7 @@ const aboutLinks = [
             class="space-y-1 text-xs leading-relaxed text-slate-200/90 not-italic sm:text-sm"
           >
             <p
-              v-for="(line, idx) in addressLines"
+              v-for="(line, idx) in displayAddressLines"
               :key="idx"
               :class="{ 'font-medium text-white': idx === 0 }"
             >
@@ -107,13 +142,13 @@ const aboutLinks = [
             <p class="pt-0.5">
               Telp.
               <BaseLink
-                :href="`tel:${phone.replace(/[^0-9]/g, '')}`"
+                :href="`tel:${displayPhone.replace(/[^0-9+]/g, '')}`"
                 variant="white"
                 size="sm"
                 class="text-xs sm:text-sm"
                 :with-arrow="false"
               >
-                {{ phone }}
+                {{ displayPhone }}
               </BaseLink>
             </p>
           </address>

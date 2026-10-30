@@ -170,21 +170,36 @@ Hybrid model:
   for these.
 - **Prose** — field-by-field forms (tier-1 builder or tier-2 free text; see §5).
 
-The frontend surface for the first two is a single `/data` view (editor/admin only, no CMS
-sidebar shell): a searchable, type-filterable card list of every scalar indicator and matrix
-table, each opening an accessible edit dialog. It is edit-only — an indicator or table must
-attach to a `section`, and no section-management surface exists, so create/delete are not in the
-UI rather than shipped as forms that cannot submit. "Import From" from the wireframe is not
-built, consistent with the scope above. The previous-year pair is edited independently of
-`is_computed_comparison`: a pair alone does not promote an indicator into the tier-1 computed set
-(§5), so the flag is preserved as stored and is only cleared when the pair is cleared, since the
-service rejects a computed flag with no pair. Clearing the pair also detaches any tier-1 template
-in the same request, as §5 requires. Saves survive the 15-minute access-token lifetime: the
-shared API client refreshes the session once via `POST /api/auth/refresh` and replays the request,
-so a form left open does not lose its draft; if the refresh is denied, the save fails with an
-explicit session-ended message and the open form keeps its contents. A background refetch of the
-same indicator also leaves the open draft untouched — both forms key their draft on the record
-id, so only opening a different record resets it.
+The frontend surface is the `/data` view (`DataManagementView`, editor/admin only, no CMS
+sidebar shell), organized into three accessible tabbed categories:
+
+1. **Indikator & Tabel (default):** A searchable, type-filterable card list of every scalar indicator
+   and matrix table, each opening an accessible edit dialog. It is edit-only — an indicator or table
+   must attach to a `section`, and no section-management surface exists, so create/delete are not in
+   the UI rather than shipped as forms that cannot submit. "Import From" from the wireframe is not
+   built, consistent with the scope above. The previous-year pair is edited independently of
+   `is_computed_comparison`: a pair alone does not promote an indicator into the tier-1 computed set
+   (§5), so the flag is preserved as stored and is only cleared when the pair is cleared, since the
+   service rejects a computed flag with no pair. Clearing the pair also detaches any tier-1 template
+   in the same request, as §5 requires. Saves survive the 15-minute access-token lifetime: the
+   shared API client refreshes the session once via `POST /api/auth/refresh` and replays the request,
+   so a form left open does not lose its draft; if the refresh is denied, the save fails with an
+   explicit session-ended message and the open form keeps its contents. A background refetch of the
+   same indicator also leaves the open draft untouched — both forms key their draft on the record
+   id, so only opening a different record resets it.
+
+2. **Blok Konten & Profil:** Displays editable cards for all standalone content blocks (`landing-hero`,
+   `landing-sambutan-lurah`, `landing-highlights`, `tentang-kelurahan-profil`, `publikasi-katalog`).
+   Opens `ContentBlockForm`, providing accessible inputs for block title, body (up to 50,000 characters),
+   and specialized metadata editors (hero badge/CTA, Lurah title/photo, profile RT count/administrative
+   hierarchy, or raw JSON for structured collections). Mutations use `PATCH /api/content-blocks/:slug`
+   (audited as `content_block.updated`) with prototype pollution guards and URL validation.
+
+3. **Pengaturan Publik Portal:** Displays system portal settings and opens `PublicSettingsForm`. Admins
+   can update identity settings (`public.app_name`, `public.institution_name`, `public.tagline`,
+   `public.administrative_area`), public contact channels (`public.contact_phone`, `public.contact_whatsapp`,
+   `public.contact_email`, `public.contact_address`), and default map coordinates & zoom (`public.default_coordinates`).
+   Mutations use `PATCH /api/settings/public` (audited as `settings.public_updated`).
 
 A matrix-table save is one atomic request: `PATCH /api/indicator-tables/:id` carries the table
 header plus every changed row (at most 500) and applies them in a single transaction, mirroring
@@ -208,9 +223,9 @@ expose `rowKey` editing today — this is an API-level capability. Keys beginnin
 reserved for that temporary parking and rejected by the row-key schema, so a real row can never
 occupy one.
 
-The Cerita view and the CMS keep separate caches over the same rows, so a successful save
-invalidates the Cerita entry for the affected section (both the old and the new section when a
-save moves a row), forcing the next Cerita visit to refetch rather than render pre-edit values.
+The Cerita views, public pages, and the CMS keep separate caches over the same rows. A successful save
+invalidates the Cerita entry for the affected section, updates `bySlug` and local stores, and forces the
+next public visit to refetch rather than render pre-edit values.
 
 ## 5. Prose Rules
 
@@ -421,8 +436,21 @@ Implemented frontend routes:
 | Program Desa/Kelurahan Cantik | `/tentang/desa-cantik`       |
 | Inovasi Sosial VYOMATANTRA    | `/tentang/vyomatantra`       |
 | Permintaan Data               | `/permintaan-data`           |
+| CMS Data & Konten             | `/data`                      |
 
 `/tentang` redirects to `/tentang/kelurahan-manggar`.
+
+**CMS Data & Konten (`/data`).** Accessible to users with `editor` or `admin` roles (`requiresEditor: true`).
+Provides three tabbed operational interfaces:
+1. **Indikator & Tabel**: Searchable and filterable list of all scalar indicators and matrix tables with modal editing forms (`ScalarIndicatorForm` and `TableIndicatorForm`).
+2. **Blok Konten & Profil**: Direct editing of narrative content blocks (`landing-hero`, `landing-sambutan-lurah`, `landing-highlights`, `tentang-kelurahan-profil`, `publikasi-katalog`) using `ContentBlockForm`.
+3. **Pengaturan Publik Portal** (admin only): Management of public metadata (`public.*` keys: app name, institution, tagline, contact channels, default map coordinates and zoom) using `PublicSettingsForm`. Editors do not see this tab; `PATCH /api/settings/public` requires the admin role.
+
+**Dynamic View & Component Integration:**
+- **`AppFooter`**: Dynamically reflects verified public contact numbers (`contactPhone`) and office address lines (`contactAddress`) from `settingsStore` when loaded, falling back gracefully to static defaults. The `/publikasi` link in the "Sumber Daya" navigation is always included to provide public access to municipal reports and booklets.
+- **`InteractiveMap` & `PetaView`**: Initialize initial center and zoom level dynamically from `settingsStore.defaultCoordinates`. Distance calculations in `PetaView` measure from this dynamic kelurahan coordinate origin when browser geolocation is unavailable or ungranted.
+- **`TentangKelurahanManggarView`**: Dynamically renders profile metrics (RT count, kecamatan, kota, landscape), administrative boundaries, and SOTK officials from the `tentang-kelurahan-profil` content block, falling back to verified constants in `content/tentang.ts`.
+- **`PublikasiView`**: Dynamically renders publication entries from the `publikasi-katalog` content block, falling back to `content/publikasi.ts`. Documents with verified `href` URLs expose direct download actions, while others display the honest "Segera hadir" status.
 
 The Kelurahan Manggar profile publishes **Kelurahan Karang Joang** only as its northern
 administrative boundary, following the 2025 boundary table in `Manggar Dalam Angka 2026`

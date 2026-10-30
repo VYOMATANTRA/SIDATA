@@ -7,6 +7,7 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster';
 import type { SpatialPointDTO, SpatialPointType } from '../../types/maps';
+import { useSettingsStore } from '../../stores/settings.store';
 import { MANGGAR_MAP_CENTER, MANGGAR_MAP_DEFAULT_ZOOM } from '../../constants/mapOrigin';
 
 interface Props {
@@ -33,6 +34,8 @@ const markers = new Map<string, L.Marker>();
  * filter, a selection) must not move the viewport out from under the user.
  */
 let hasFramedPoints = false;
+/** True after the user drags the map — settings-driven recentre must not yank them. */
+let userHasPanned = false;
 
 const DEFAULT_CENTER: [number, number] = MANGGAR_MAP_CENTER;
 const DEFAULT_ZOOM = MANGGAR_MAP_DEFAULT_ZOOM;
@@ -198,6 +201,24 @@ function framePoints() {
   hasFramedPoints = true;
 }
 
+const settingsStore = useSettingsStore();
+
+function getInitialCenter(): [number, number] {
+  const coords = settingsStore.defaultCoordinates;
+  if (coords && typeof coords.lat === 'number' && typeof coords.lon === 'number') {
+    return [coords.lat, coords.lon];
+  }
+  return DEFAULT_CENTER;
+}
+
+function getInitialZoom(): number {
+  const coords = settingsStore.defaultCoordinates;
+  if (coords && typeof coords.zoom === 'number') {
+    return coords.zoom;
+  }
+  return DEFAULT_ZOOM;
+}
+
 onMounted(() => {
   isUnmounted = false;
   nextTick(() => {
@@ -206,7 +227,7 @@ onMounted(() => {
     map = L.map(mapContainer.value, {
       zoomControl: false,
       attributionControl: false,
-    }).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+    }).setView(getInitialCenter(), getInitialZoom());
 
     // Standard OpenStreetMap Tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -275,9 +296,29 @@ onMounted(() => {
       map?.invalidateSize();
     }, 150);
 
+    map.on('dragstart', () => {
+      userHasPanned = true;
+    });
+
     window.addEventListener('resize', handleResize);
   });
 });
+
+/**
+ * When public settings arrive after mount (or an admin changes the default
+ * centre), recentre only if the user has not panned and points have not been
+ * framed onto survey data.
+ */
+watch(
+  () => settingsStore.defaultCoordinates,
+  (coords) => {
+    if (!map || hasFramedPoints || userHasPanned) return;
+    if (!coords || typeof coords.lat !== 'number' || typeof coords.lon !== 'number') return;
+    const zoom = typeof coords.zoom === 'number' ? coords.zoom : DEFAULT_ZOOM;
+    map.setView([coords.lat, coords.lon], zoom, { animate: false });
+  },
+  { deep: true },
+);
 
 watch(
   () => props.points,

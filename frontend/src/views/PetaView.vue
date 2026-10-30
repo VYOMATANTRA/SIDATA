@@ -8,14 +8,17 @@ import MapFilterBar from '../components/maps/MapFilterBar.vue';
 import MapSummaryDropdown from '../components/maps/MapSummaryDropdown.vue';
 import SpatialPointDrawer from '../components/maps/SpatialPointDrawer.vue';
 import { useMapsStore } from '../stores/maps';
+import { useSettingsStore } from '../stores/settings.store';
 import type { SpatialPointDTO, SpatialPointType } from '../types/maps';
 import { MANGGAR_MAP_ORIGIN } from '../constants/mapOrigin';
 
 const mapsStore = useMapsStore();
+const settingsStore = useSettingsStore();
 
 onMounted(() => {
   void mapsStore.loadPoints();
   void mapsStore.loadSummary();
+  void settingsStore.fetchPublicSettings();
 });
 
 const search = ref('');
@@ -58,7 +61,15 @@ const visiblePoints = computed<SpatialPointDTO[]>(() => {
   });
 });
 
-const origin = computed(() => userLocation.value ?? KELURAHAN_ORIGIN);
+const defaultOrigin = computed(() => {
+  const coords = settingsStore.defaultCoordinates;
+  if (coords && typeof coords.lat === 'number' && typeof coords.lon === 'number') {
+    return { latitude: coords.lat, longitude: coords.lon };
+  }
+  return KELURAHAN_ORIGIN;
+});
+
+const origin = computed(() => userLocation.value ?? defaultOrigin.value);
 const originLabel = computed(() => (userLocation.value ? 'lokasi Anda' : 'pusat kelurahan'));
 
 function haversineKm(

@@ -53,17 +53,44 @@ async function mountReady() {
   return wrapper;
 }
 
+function findRtLeadersUrl(): string {
+  const calls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls;
+  const hit = calls.find((args) => String(args[0]).includes('/api/maps/rt-leaders'));
+  if (!hit) {
+    throw new Error(`expected an /api/maps/rt-leaders fetch; got ${JSON.stringify(calls.map((c) => String(c[0])))}`);
+  }
+  return String(hit[0]);
+}
+
 beforeEach(() => {
   vi.stubGlobal(
     'fetch',
-    vi.fn<typeof fetch>().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        leaders: buildRoster(),
-        total: ROSTER_SIZE,
-        isSampleRoster: true,
-      }),
-    } as Response),
+    vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/settings/public')) {
+        return {
+          ok: true,
+          json: async () => ({
+            settings: {
+              contactPhone: '+62 811-0000-0000',
+              contactEmail: 'info@example.com',
+              contactAddress: 'Jl. Contoh',
+              socialFacebookUrl: '',
+              socialInstagramUrl: '',
+              socialYoutubeUrl: '',
+            },
+          }),
+        } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          leaders: buildRoster(),
+          total: ROSTER_SIZE,
+          isSampleRoster: true,
+        }),
+      } as Response;
+    }),
   );
 });
 
@@ -93,7 +120,7 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
   it('iterates the roster through one request capped at 100 leaders', async () => {
     await mountReady();
 
-    const calledUrl = String((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]);
+    const calledUrl = findRtLeadersUrl();
     expect(calledUrl).toContain('/api/maps/rt-leaders');
     // DEFAULT_PAGE_SIZE is 10, so the explicit limit is load-bearing.
     expect(calledUrl).toContain('limit=100');
@@ -131,8 +158,8 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
     expect(wrapper.find('nav[aria-label="Navigasi halaman tabel Ketua RT"]').exists()).toBe(true);
 
     // Every leader is still loaded in one request — paging is client-side only.
-    const calledUrl = String((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]);
-    expect(calledUrl).toContain('limit=100');
+    // AppFooter also loads /api/settings/public on mount, so pick the roster call.
+    expect(findRtLeadersUrl()).toContain('limit=100');
 
     // The first page holds 10 rows; the summary names the visible slice.
     expect(wrapper.findAll('tbody th[scope="row"]')).toHaveLength(DEFAULT_PAGE_SIZE);

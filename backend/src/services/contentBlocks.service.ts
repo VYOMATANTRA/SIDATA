@@ -84,6 +84,80 @@ export const DEFAULT_CONTENT_BLOCKS = [
       ],
     },
   },
+  {
+    slug: 'tentang-kelurahan-profil',
+    type: 'prose' as const,
+    title: 'Profil Kelurahan Manggar',
+    body: 'Data, potensi, dan cerita di balik perkembangan Kelurahan Manggar.',
+    metadata: {
+      rtCount: 100,
+      kecamatan: 'Balikpapan Timur',
+      kota: 'Kota Balikpapan',
+      landscape: 'Pesisir & Dataran',
+      lurahName: 'Munir Achmad, S.E.',
+      lurahTitle: 'Lurah Kelurahan Manggar',
+      batasWilayah: [
+        { arah: 'Sebelah Utara', wilayah: 'Kelurahan Karang Joang' },
+        { arah: 'Sebelah Timur', wilayah: 'Kelurahan Manggar Baru' },
+        { arah: 'Sebelah Selatan', wilayah: 'Selat Makassar' },
+        { arah: 'Sebelah Barat', wilayah: 'Kelurahan Sepinggan dan Sepinggan Baru' },
+      ],
+      sotkMembers: [
+        { role: 'Lurah', officialName: 'Munir Achmad, S.E.', duties: null },
+        { role: 'Sekretaris Lurah', officialName: 'Munjiah Puspitawaty. M, S.E', duties: null },
+        { role: 'Kasi Trantib L-H', officialName: 'Nanang Sri Ruriyanto, S.Sos.', duties: null },
+        {
+          role: 'Kasi Pemerintahan dan Pelayanan Publik',
+          officialName: 'Hasiba, S.A.P',
+          duties: null,
+        },
+        { role: 'Kasi Pemberdayaan Masyarakat', officialName: 'Marthen Solly, S.ST', duties: null },
+      ],
+    },
+  },
+  {
+    slug: 'publikasi-katalog',
+    type: 'prose' as const,
+    title: 'Katalog Publikasi Kelurahan Manggar',
+    body: 'Koleksi dokumen, publikasi resmi, dan infografis statistik Kelurahan Manggar.',
+    // Keep in sync with frontend/src/content/publikasi.ts PUBLICATIONS
+    // (asserted by backend/src/__tests__/publikasiCatalog.sync.test.ts).
+    metadata: {
+      publications: [
+        {
+          category: 'Prodeskel',
+          title: 'Publikasi Prodeskel',
+          description: 'Dokumen dan publikasi resmi Kelurahan Manggar dari sistem Prodeskel.',
+          isAvailableOnline: false,
+          source: 'Profil Kelurahan Manggar 2026.pdf (data formulir Prodeskel 2025)',
+        },
+        {
+          category: 'Infografis',
+          title: 'Infografis Kelurahan Manggar',
+          description:
+            'Ringkasan data kependudukan dan statistik Kelurahan Manggar dalam bentuk visual infografis.',
+          isAvailableOnline: false,
+          source: 'Data Kependudukan 2026.xlsx',
+        },
+        {
+          category: 'Lingkungan',
+          title: 'Booklet Eco Boba',
+          description:
+            'Dokumentasi pelatihan pengolahan limbah kemasan plastik menjadi bahan isian bantal (cushion filling) dalam program Eco Boba.',
+          isAvailableOnline: false,
+          source: 'Booklet Pelatihan BSU.pdf',
+        },
+        {
+          category: 'Statistik',
+          title: 'Manggar dalam Angka 2026',
+          description:
+            'Kompilasi data statistik sektoral, demografi, dan geografi Kelurahan Manggar. Dokumen fisik telah tercetak; unduhan versi digital (PDF) belum dirilis ke publik.',
+          isAvailableOnline: false,
+          source: 'Manggar Dalam Angka 2026.pdf',
+        },
+      ],
+    },
+  },
 ];
 
 function hasPrototypePollution(val: unknown, depth = 0): boolean {
@@ -221,8 +295,123 @@ export const highlightMetadataSchema = z
   })
   .passthrough();
 
-export function validateBlockMetadata(slug: string, metadata: unknown): void {
-  if (metadata === undefined || metadata === null) return;
+const publikasiItemSchema = z
+  .object({
+    category: z
+      .string()
+      .trim()
+      .min(1, 'Kategori publikasi wajib diisi')
+      .max(100, 'Kategori maksimal 100 karakter'),
+    title: z
+      .string()
+      .trim()
+      .min(1, 'Judul publikasi wajib diisi')
+      .max(255, 'Judul maksimal 255 karakter'),
+    description: z
+      .string()
+      .trim()
+      .min(1, 'Deskripsi publikasi wajib diisi')
+      .max(1000, 'Deskripsi maksimal 1000 karakter'),
+    href: z
+      .string()
+      .trim()
+      .transform((val) => (val === '' ? undefined : val))
+      .pipe(
+        z
+          .string()
+          .url('URL publikasi tidak valid')
+          .refine((url) => url.startsWith('https://'), {
+            message: 'Tautan publikasi wajib menggunakan protokol https://',
+          })
+          .optional(),
+      )
+      .optional(),
+    source: z.string().trim().max(500, 'Sumber maksimal 500 karakter').optional(),
+    isAvailableOnline: z.boolean().default(false),
+  })
+  .refine(
+    (item) => {
+      if (item.isAvailableOnline === true && !item.href) return false;
+      if (item.href && item.isAvailableOnline === false) return false;
+      return true;
+    },
+    {
+      message: 'Status ketersediaan online harus selaras dengan keberadaan tautan href',
+      path: ['isAvailableOnline'],
+    },
+  )
+  .strip();
+
+export const publikasiKatalogMetadataSchema = z
+  .object({
+    publications: z.array(publikasiItemSchema).max(25, 'Maksimal 25 item publikasi').optional(),
+  })
+  .strip();
+
+const batasWilayahItemSchema = z
+  .object({
+    arah: z
+      .string()
+      .trim()
+      .min(1, 'Arah batas wilayah wajib diisi')
+      .max(100, 'Arah maksimal 100 karakter'),
+    wilayah: z
+      .string()
+      .trim()
+      .min(1, 'Nama wilayah batas wajib diisi')
+      .max(255, 'Nama wilayah batas maksimal 255 karakter'),
+  })
+  .passthrough();
+
+const sotkMemberSchema = z
+  .object({
+    role: z
+      .string()
+      .trim()
+      .min(1, 'Jabatan SOTK wajib diisi')
+      .max(100, 'Jabatan SOTK maksimal 100 karakter'),
+    officialName: z
+      .string()
+      .trim()
+      .max(150, 'Nama pejabat maksimal 150 karakter')
+      .nullable()
+      .optional(),
+    duties: z
+      .string()
+      .trim()
+      .max(1000, 'Tugas pejabat maksimal 1000 karakter')
+      .nullable()
+      .optional(),
+  })
+  .passthrough();
+
+export const tentangProfilMetadataSchema = z
+  .object({
+    rtCount: z
+      .number()
+      .int('Jumlah RT harus bilangan bulat')
+      .min(1, 'Jumlah RT minimal 1')
+      .max(1000, 'Jumlah RT maksimal 1000')
+      .optional(),
+    kecamatan: z.string().trim().max(100, 'Nama kecamatan maksimal 100 karakter').optional(),
+    kota: z.string().trim().max(100, 'Nama kota maksimal 100 karakter').optional(),
+    landscape: z.string().trim().max(100, 'Karakteristik wilayah maksimal 100 karakter').optional(),
+    lurahName: z.string().trim().max(150, 'Nama lurah maksimal 150 karakter').optional(),
+    lurahTitle: z.string().trim().max(150, 'Gelar lurah maksimal 150 karakter').optional(),
+    batasWilayah: z.array(batasWilayahItemSchema).max(10, 'Maksimal 10 batas wilayah').optional(),
+    sotkMembers: z.array(sotkMemberSchema).max(30, 'Maksimal 30 anggota SOTK').optional(),
+  })
+  .passthrough();
+
+/**
+ * Validates slug-specific metadata and returns the Zod-cleaned value so trimmed
+ * URLs and normalised fields are what get stored (not the raw input).
+ */
+export function validateBlockMetadata(
+  slug: string,
+  metadata: unknown,
+): Record<string, unknown> | null {
+  if (metadata === undefined || metadata === null) return null;
   if (typeof metadata !== 'object' || Array.isArray(metadata)) {
     throw new ContentBlockServiceError('Metadata harus berupa objek JSON', 400);
   }
@@ -234,16 +423,22 @@ export function validateBlockMetadata(slug: string, metadata: unknown): void {
         ? sambutanLurahMetadataSchema.safeParse(metadata)
         : slug === 'landing-highlights'
           ? highlightMetadataSchema.safeParse(metadata)
-          : null;
+          : slug === 'publikasi-katalog'
+            ? publikasiKatalogMetadataSchema.safeParse(metadata)
+            : slug === 'tentang-kelurahan-profil'
+              ? tentangProfilMetadataSchema.safeParse(metadata)
+              : null;
 
   if (!result) {
-    return;
+    return metadata as Record<string, unknown>;
   }
 
   if (!result.success) {
     const errorMsg = result.error.issues.map((i) => i.message).join(', ');
     throw new ContentBlockServiceError(`Validasi metadata gagal: ${errorMsg}`, 400);
   }
+
+  return result.data as Record<string, unknown>;
 }
 
 export const updateContentBlockSchema = z
@@ -469,8 +664,11 @@ export const updateContentBlock = async (
 
   const input = parsed.data;
 
-  if (input.metadata !== undefined && input.metadata !== null) {
-    validateBlockMetadata(normalizedSlug, input.metadata);
+  let sanitizedMetadata: Record<string, unknown> | null | undefined = undefined;
+  if (input.metadata === null) {
+    sanitizedMetadata = null;
+  } else if (input.metadata !== undefined) {
+    sanitizedMetadata = validateBlockMetadata(normalizedSlug, input.metadata);
   }
 
   // Sanitize title: whitespace only or empty string becomes null
@@ -516,8 +714,11 @@ export const updateContentBlock = async (
       if (input.body !== undefined && hasFieldChanged(existing.body, input.body)) {
         changes.body = { before: existing.body, after: input.body };
       }
-      if (input.metadata !== undefined && hasFieldChanged(existing.metadata, input.metadata)) {
-        changes.metadata = { before: existing.metadata, after: input.metadata };
+      if (
+        sanitizedMetadata !== undefined &&
+        hasFieldChanged(existing.metadata, sanitizedMetadata)
+      ) {
+        changes.metadata = { before: existing.metadata, after: sanitizedMetadata };
       }
 
       // If nothing changed, return early
@@ -532,12 +733,12 @@ export const updateContentBlock = async (
         data: {
           ...(sanitizedTitle !== undefined ? { title: sanitizedTitle } : {}),
           ...(input.body !== undefined ? { body: input.body } : {}),
-          ...(input.metadata !== undefined
+          ...(sanitizedMetadata !== undefined
             ? {
                 metadata:
-                  input.metadata === null
+                  sanitizedMetadata === null
                     ? Prisma.DbNull
-                    : (input.metadata as Prisma.InputJsonValue),
+                    : (sanitizedMetadata as Prisma.InputJsonValue),
               }
             : {}),
           updatedById: actorId,

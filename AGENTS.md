@@ -74,7 +74,9 @@ Backend runs on port from `PORT` env var (default 3000). Prisma client is genera
 - `src/App.vue`: Root component
 - `src/main.ts`: Entry point (Vue app initialization)
 - `src/router/`: Vue Router routes
-- `src/stores/`: Pinia state management
+- `src/stores/`: Pinia state management (`auth.ts`, `settings.store.ts`, `contentBlocks.store.ts`, `indicators.store.ts`, `indicatorTables.store.ts`, `pages.store.ts`, `maps.ts`, `rtLeaders.store.ts`, `audit.store.ts`)
+- `src/components/data/`: CMS forms and cards (`ScalarIndicatorForm.vue`, `TableIndicatorForm.vue`, `ContentBlockForm.vue`, `PublicSettingsForm.vue`, `IndicatorCard.vue`)
+- `src/views/DataManagementView.vue`: Consolidated `/data` CMS view with tabbed management of indicators, content blocks, and settings
 - `src/__tests__/`: Unit tests with Vitest
 - `src/assets/`: Static assets, including `main.css` (Tailwind entry, imported in `main.ts`)
 - Styling: Tailwind CSS via Vite plugin
