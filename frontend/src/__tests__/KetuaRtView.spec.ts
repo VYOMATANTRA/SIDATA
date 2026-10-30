@@ -58,7 +58,11 @@ beforeEach(() => {
     'fetch',
     vi.fn<typeof fetch>().mockResolvedValue({
       ok: true,
-      json: async () => ({ leaders: buildRoster(), total: ROSTER_SIZE }),
+      json: async () => ({
+        leaders: buildRoster(),
+        total: ROSTER_SIZE,
+        isSampleRoster: true,
+      }),
     } as Response),
   );
 });
@@ -199,6 +203,7 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
               alamat: 'Jl. Manggar No. 20',
             },
           ],
+          isSampleRoster: false,
         }),
       } as Response),
     );
@@ -211,6 +216,41 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
     expect(wrapper.text()).not.toContain('Data contoh, bukan daftar resmi');
     expect(wrapper.text()).toContain('Daftar Ketua RT Kelurahan Manggar');
     expect(wrapper.text()).not.toContain('Contoh data daftar Ketua RT');
+  });
+
+
+  it('shows sample notice from the API flag even when phones look dialable', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          leaders: [
+            {
+              rtNumber: 1,
+              name: 'Pak Budi',
+              phone: '081234567890',
+              phoneIsWhatsapp: true,
+              alamat: null,
+              coordinates: null,
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          total: 1,
+          isSampleRoster: true,
+        }),
+      } as Response),
+    );
+
+    const { useRtLeadersStore } = await import('../stores/rtLeaders.store');
+    const store = useRtLeadersStore();
+    await store.fetchRtLeaders(true);
+    expect(store.isSampleRoster).toBe(true);
+
+    const wrapper = await mountReady();
+    expect(wrapper.text()).toContain('Data contoh, bukan daftar resmi');
+    expect(wrapper.text()).toContain('Contoh data daftar Ketua RT');
   });
 
   it('hides sample notice when 99 rows are real and only 1 row is a placeholder', async () => {
@@ -244,7 +284,7 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
       'fetch',
       vi.fn<typeof fetch>().mockResolvedValue({
         ok: true,
-        json: async () => ({ leaders: mixedRoster }),
+        json: async () => ({ leaders: mixedRoster, isSampleRoster: false }),
       } as Response),
     );
 
