@@ -123,6 +123,11 @@ function goToNextPage() {
   }
 }
 
+function resetUserLocation() {
+  userLocation.value = null;
+  locationError.value = null;
+}
+
 /** Geolocation is only requested on click — never on load. */
 function requestUserLocation() {
   locationError.value = null;
@@ -225,14 +230,25 @@ function requestUserLocation() {
                 >
                   Kembali ke hasil
                 </button>
-                <button
-                  v-else
-                  type="button"
-                  class="rounded-btn border-brand-navy text-brand-navy hover:bg-brand-navy focus-visible:outline-brand-navy min-h-11 border px-3 py-2 text-sm font-medium transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98]"
-                  @click="requestUserLocation"
-                >
-                  Dekat saya
-                </button>
+                <div v-else class="flex items-center gap-2">
+                  <button
+                    v-if="userLocation"
+                    type="button"
+                    class="rounded-btn text-brand-navy focus-visible:outline-brand-navy min-h-11 border border-gray-300 px-3 py-2 text-sm font-medium hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2"
+                    data-test="peta-reset-origin"
+                    @click="resetUserLocation"
+                  >
+                    Pusat kelurahan
+                  </button>
+                  <button
+                    v-else
+                    type="button"
+                    class="rounded-btn border-brand-navy text-brand-navy hover:bg-brand-navy focus-visible:outline-brand-navy min-h-11 border px-3 py-2 text-sm font-medium transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98]"
+                    @click="requestUserLocation"
+                  >
+                    Dekat saya
+                  </button>
+                </div>
               </div>
 
               <label for="peta-search" class="sr-only"
@@ -284,7 +300,6 @@ function requestUserLocation() {
                 <button
                   type="button"
                   class="focus-visible:outline-brand-navy flex min-h-[68px] w-full cursor-pointer items-start justify-between gap-3 py-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2"
-                  :aria-label="`Tampilkan ${item.point.name} pada peta`"
                   data-test="peta-result"
                   @click="mapsStore.selectPoint(item.point)"
                 >
@@ -325,7 +340,11 @@ function requestUserLocation() {
               v-if="!mapsStore.selectedPoint && nearbyPoints.length > PAGE_SIZE"
               class="flex items-center justify-between gap-2 border-t border-gray-200 px-5 py-3"
             >
-              <p class="text-sm text-gray-600 tabular-nums" data-test="peta-pagination-summary">
+              <p
+                class="text-sm text-gray-600 tabular-nums"
+                aria-live="polite"
+                data-test="peta-pagination-summary"
+              >
                 {{ paginationStart }}–{{ paginationEnd }} dari {{ nearbyPoints.length }} lokasi
               </p>
               <nav aria-label="Halaman hasil peta" class="flex items-center gap-2">
