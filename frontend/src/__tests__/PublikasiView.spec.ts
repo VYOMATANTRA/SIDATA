@@ -56,6 +56,10 @@ describe('PublikasiView', () => {
     expect(wrapper.text()).toContain('limbah kemasan plastik');
     expect(wrapper.text()).toContain('Manggar dalam Angka 2026');
     expect(wrapper.text()).toContain('unduhan versi digital');
+    // Citations from docs/CONTENT_SOURCES.md
+    expect(wrapper.findAll('[data-test="publication-source"]')).toHaveLength(4);
+    expect(wrapper.text()).toContain('Booklet Pelatihan BSU.pdf');
+    expect(wrapper.text()).toContain('Manggar Dalam Angka 2026.pdf');
   });
 
   it('marks unavailable documents clearly without rendering fake download links or status live regions', async () => {

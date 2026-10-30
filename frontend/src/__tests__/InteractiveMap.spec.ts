@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { nextTick } from 'vue';
+import { createPinia, setActivePinia } from 'pinia';
+import { useSettingsStore } from '../stores/settings.store';
 import { MANGGAR_MAP_CENTER, MANGGAR_MAP_DEFAULT_ZOOM } from '../constants/mapOrigin';
 import type { SpatialPointDTO } from '../types/maps';
 
@@ -47,12 +49,16 @@ const leafletMocks = vi.hoisted(() => {
     animationendHandler: null as (() => void) | null,
   };
 
+  const on = vi.fn(function (this: unknown) {
+    return this;
+  });
   const mapInstance: Record<string, unknown> = {
     setView,
     fitBounds,
     getZoom,
     getMaxZoom,
     getBounds,
+    on,
     off,
     once,
     remove,
@@ -150,11 +156,14 @@ const point = (overrides: Partial<SpatialPointDTO> = {}): SpatialPointDTO => ({
 async function mountMap(
   props: { points?: SpatialPointDTO[]; selectedPointId?: string | null } = {},
 ) {
+  const pinia = createPinia();
+  setActivePinia(pinia);
   const wrapper = mount(InteractiveMap, {
     props: {
       points: props.points ?? [point()],
       selectedPointId: props.selectedPointId ?? null,
     },
+    global: { plugins: [pinia] },
     attachTo: document.body,
   });
   await flushPromises();
@@ -190,10 +199,7 @@ describe('InteractiveMap.vue', () => {
 
   it('initialises the map on the shared Manggar origin', async () => {
     await mountMap();
-    expect(leafletMocks.setView).toHaveBeenCalledWith(
-      MANGGAR_MAP_CENTER,
-      MANGGAR_MAP_DEFAULT_ZOOM,
-    );
+    expect(leafletMocks.setView).toHaveBeenCalledWith(MANGGAR_MAP_CENTER, MANGGAR_MAP_DEFAULT_ZOOM);
   });
 
   it('reveals a selected point with a single zoomToShowLayer and no competing setView', async () => {
@@ -220,9 +226,7 @@ describe('InteractiveMap.vue', () => {
       ],
     });
 
-    expect(typeof leafletMocks.state.lastClusterGroupOptions?.iconCreateFunction).toBe(
-      'function',
-    );
+    expect(typeof leafletMocks.state.lastClusterGroupOptions?.iconCreateFunction).toBe('function');
     expect(leafletMocks.state.layeraddHandler).toBeTypeOf('function');
 
     const iconEl = document.createElement('div');
@@ -247,5 +251,32 @@ describe('InteractiveMap.vue', () => {
     leafletMocks.zoomToBounds.mockClear();
     iconEl.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
     expect(leafletMocks.zoomToBounds).toHaveBeenCalledTimes(1);
+  });
+
+  it('recentres when settings arrive after mount if the user has not panned or framed points', async () => {
+    // Mount with no points so framePoints never sets hasFramedPoints.
+    await mountMap({ points: [] });
+    leafletMocks.setView.mockClear();
+
+    const store = useSettingsStore();
+    store.settings.defaultCoordinates = { lat: -1.23, lon: 116.95, zoom: 14 };
+    await flushPromises();
+    await nextTick();
+
+    expect(leafletMocks.setView).toHaveBeenCalledWith([-1.23, 116.95], 14, { animate: false });
+  });
+
+  it('does not yank the viewport when points have already been framed', async () => {
+    await mountMap({
+      points: [point(), point({ id: 'p2', latitude: -1.23, longitude: 116.96 })],
+    });
+    leafletMocks.setView.mockClear();
+
+    const store = useSettingsStore();
+    store.settings.defaultCoordinates = { lat: -1.24, lon: 116.97, zoom: 12 };
+    await flushPromises();
+    await nextTick();
+
+    expect(leafletMocks.setView).not.toHaveBeenCalled();
   });
 });

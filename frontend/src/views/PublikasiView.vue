@@ -78,6 +78,13 @@ const hasPendingPublication = computed(() =>
                 <p class="mt-1 max-w-2xl text-sm leading-relaxed text-gray-700 sm:text-base">
                   {{ publication.description }}
                 </p>
+                <p
+                  v-if="publication.source"
+                  class="mt-1 text-xs text-gray-600 italic"
+                  data-test="publication-source"
+                >
+                  Sumber: {{ publication.source }}
+                </p>
               </div>
 
               <a

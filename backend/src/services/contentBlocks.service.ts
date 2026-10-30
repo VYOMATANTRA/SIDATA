@@ -120,6 +120,8 @@ export const DEFAULT_CONTENT_BLOCKS = [
     type: 'prose' as const,
     title: 'Katalog Publikasi Kelurahan Manggar',
     body: 'Koleksi dokumen, publikasi resmi, dan infografis statistik Kelurahan Manggar.',
+    // Keep in sync with frontend/src/content/publikasi.ts PUBLICATIONS
+    // (asserted by backend/src/__tests__/publikasiCatalog.sync.test.ts).
     metadata: {
       publications: [
         {
@@ -127,6 +129,7 @@ export const DEFAULT_CONTENT_BLOCKS = [
           title: 'Publikasi Prodeskel',
           description: 'Dokumen dan publikasi resmi Kelurahan Manggar dari sistem Prodeskel.',
           isAvailableOnline: false,
+          source: 'Profil Kelurahan Manggar 2026.pdf (data formulir Prodeskel 2025)',
         },
         {
           category: 'Infografis',
@@ -134,6 +137,7 @@ export const DEFAULT_CONTENT_BLOCKS = [
           description:
             'Ringkasan data kependudukan dan statistik Kelurahan Manggar dalam bentuk visual infografis.',
           isAvailableOnline: false,
+          source: 'Data Kependudukan 2026.xlsx',
         },
         {
           category: 'Lingkungan',
@@ -141,6 +145,7 @@ export const DEFAULT_CONTENT_BLOCKS = [
           description:
             'Dokumentasi pelatihan pengolahan limbah kemasan plastik menjadi bahan isian bantal (cushion filling) dalam program Eco Boba.',
           isAvailableOnline: false,
+          source: 'Booklet Pelatihan BSU.pdf',
         },
         {
           category: 'Statistik',
@@ -148,6 +153,7 @@ export const DEFAULT_CONTENT_BLOCKS = [
           description:
             'Kompilasi data statistik sektoral, demografi, dan geografi Kelurahan Manggar. Dokumen fisik telah tercetak; unduhan versi digital (PDF) belum dirilis ke publik.',
           isAvailableOnline: false,
+          source: 'Manggar Dalam Angka 2026.pdf',
         },
       ],
     },
@@ -320,7 +326,8 @@ const publikasiItemSchema = z
           .optional(),
       )
       .optional(),
-    isAvailableOnline: z.boolean().optional(),
+    source: z.string().trim().max(500, 'Sumber maksimal 500 karakter').optional(),
+    isAvailableOnline: z.boolean().default(false),
   })
   .refine(
     (item) => {

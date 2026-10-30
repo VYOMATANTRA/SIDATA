@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { useAuthStore } from './auth';
 import { getCsrfToken } from '../utils/csrf';
+import { PUBLICATIONS } from '../content/publikasi';
 
 export interface ContentBlock {
   id: string;
@@ -118,35 +119,8 @@ export const DEFAULT_PUBLIKASI_KATALOG_BLOCK: ContentBlock = {
   title: 'Katalog Publikasi Kelurahan Manggar',
   body: 'Koleksi dokumen, publikasi resmi, dan infografis statistik Kelurahan Manggar.',
   metadata: {
-    publications: [
-      {
-        category: 'Prodeskel',
-        title: 'Publikasi Prodeskel',
-        description: 'Dokumen dan publikasi resmi Kelurahan Manggar dari sistem Prodeskel.',
-        isAvailableOnline: false,
-      },
-      {
-        category: 'Infografis',
-        title: 'Infografis Kelurahan Manggar',
-        description:
-          'Ringkasan data kependudukan dan statistik Kelurahan Manggar dalam bentuk visual infografis.',
-        isAvailableOnline: false,
-      },
-      {
-        category: 'Lingkungan',
-        title: 'Booklet Eco Boba',
-        description:
-          'Dokumentasi pelatihan pengolahan limbah kemasan plastik menjadi bahan isian bantal (cushion filling) dalam program Eco Boba.',
-        isAvailableOnline: false,
-      },
-      {
-        category: 'Statistik',
-        title: 'Manggar dalam Angka 2026',
-        description:
-          'Kompilasi data statistik sektoral, demografi, dan geografi Kelurahan Manggar. Dokumen fisik telah tercetak; unduhan versi digital (PDF) belum dirilis ke publik.',
-        isAvailableOnline: false,
-      },
-    ],
+    // Single source of truth: frontend/src/content/publikasi.ts
+    publications: PUBLICATIONS.map((item) => ({ ...item })),
   },
   sortOrder: null,
   updatedAt: new Date('2026-09-01').toISOString(),

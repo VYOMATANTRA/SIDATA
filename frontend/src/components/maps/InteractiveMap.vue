@@ -34,6 +34,8 @@ const markers = new Map<string, L.Marker>();
  * filter, a selection) must not move the viewport out from under the user.
  */
 let hasFramedPoints = false;
+/** True after the user drags the map — settings-driven recentre must not yank them. */
+let userHasPanned = false;
 
 const DEFAULT_CENTER: [number, number] = MANGGAR_MAP_CENTER;
 const DEFAULT_ZOOM = MANGGAR_MAP_DEFAULT_ZOOM;
@@ -294,9 +296,29 @@ onMounted(() => {
       map?.invalidateSize();
     }, 150);
 
+    map.on('dragstart', () => {
+      userHasPanned = true;
+    });
+
     window.addEventListener('resize', handleResize);
   });
 });
+
+/**
+ * When public settings arrive after mount (or an admin changes the default
+ * centre), recentre only if the user has not panned and points have not been
+ * framed onto survey data.
+ */
+watch(
+  () => settingsStore.defaultCoordinates,
+  (coords) => {
+    if (!map || hasFramedPoints || userHasPanned) return;
+    if (!coords || typeof coords.lat !== 'number' || typeof coords.lon !== 'number') return;
+    const zoom = typeof coords.zoom === 'number' ? coords.zoom : DEFAULT_ZOOM;
+    map.setView([coords.lat, coords.lon], zoom, { animate: false });
+  },
+  { deep: true },
+);
 
 watch(
   () => props.points,
