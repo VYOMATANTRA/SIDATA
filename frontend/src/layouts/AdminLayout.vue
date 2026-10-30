@@ -13,8 +13,10 @@ const isMobileSidebarOpen = ref(false);
 // Seeds the header from route meta on every navigation so there is never a stale title; the
 // routed view can still override with a dynamic subtitle in its own onMounted (runs after this).
 // Also closes the mobile sidebar drawer so a tapped link doesn't leave it open over the new page.
+// Watches route.path (not fullPath) so a view that syncs filters/search to the query string or
+// hash doesn't retrigger this and wipe out the subtitle the view already set.
 watch(
-  () => route.fullPath,
+  () => route.path,
   () => {
     const title = typeof route.meta.title === 'string' ? route.meta.title : '';
     setAdminHeader(title, '');

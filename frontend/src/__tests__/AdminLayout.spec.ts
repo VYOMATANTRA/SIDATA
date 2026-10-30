@@ -4,6 +4,7 @@ import { setActivePinia, createPinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import AdminLayout from '../layouts/AdminLayout.vue';
 import { useAuthStore } from '../stores/auth';
+import { setAdminHeader } from '../composables/useAdminHeader';
 
 function createTestRouter() {
   return createRouter({
@@ -94,6 +95,26 @@ describe('AdminLayout.vue', () => {
     await router.push('/admin/cerita');
     await wrapper.vm.$nextTick();
     expect(wrapper.find('[data-test="admin-header"] h1').text()).toBe('Cerita');
+  });
+
+  it('keeps the header subtitle when only the query string changes (e.g. a view syncing search filters to the URL)', async () => {
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
+    setAdminHeader('Beranda', 'Ringkasan aktivitas dan pintasan menuju modul admin.');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('[data-test="admin-header"] p').text()).toBe(
+      'Ringkasan aktivitas dan pintasan menuju modul admin.',
+    );
+
+    await router.push('/admin?q=term');
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('[data-test="admin-header"] p').text()).toBe(
+      'Ringkasan aktivitas dan pintasan menuju modul admin.',
+    );
   });
 });
 
