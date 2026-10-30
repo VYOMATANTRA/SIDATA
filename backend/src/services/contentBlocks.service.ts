@@ -396,8 +396,15 @@ export const tentangProfilMetadataSchema = z
   })
   .passthrough();
 
-export function validateBlockMetadata(slug: string, metadata: unknown): void {
-  if (metadata === undefined || metadata === null) return;
+/**
+ * Validates slug-specific metadata and returns the Zod-cleaned value so trimmed
+ * URLs and normalised fields are what get stored (not the raw input).
+ */
+export function validateBlockMetadata(
+  slug: string,
+  metadata: unknown,
+): Record<string, unknown> | null {
+  if (metadata === undefined || metadata === null) return null;
   if (typeof metadata !== 'object' || Array.isArray(metadata)) {
     throw new ContentBlockServiceError('Metadata harus berupa objek JSON', 400);
   }
@@ -416,13 +423,15 @@ export function validateBlockMetadata(slug: string, metadata: unknown): void {
               : null;
 
   if (!result) {
-    return;
+    return metadata as Record<string, unknown>;
   }
 
   if (!result.success) {
     const errorMsg = result.error.issues.map((i) => i.message).join(', ');
     throw new ContentBlockServiceError(`Validasi metadata gagal: ${errorMsg}`, 400);
   }
+
+  return result.data as Record<string, unknown>;
 }
 
 export const updateContentBlockSchema = z
@@ -648,8 +657,11 @@ export const updateContentBlock = async (
 
   const input = parsed.data;
 
-  if (input.metadata !== undefined && input.metadata !== null) {
-    validateBlockMetadata(normalizedSlug, input.metadata);
+  let sanitizedMetadata: Record<string, unknown> | null | undefined = undefined;
+  if (input.metadata === null) {
+    sanitizedMetadata = null;
+  } else if (input.metadata !== undefined) {
+    sanitizedMetadata = validateBlockMetadata(normalizedSlug, input.metadata);
   }
 
   // Sanitize title: whitespace only or empty string becomes null
@@ -695,8 +707,11 @@ export const updateContentBlock = async (
       if (input.body !== undefined && hasFieldChanged(existing.body, input.body)) {
         changes.body = { before: existing.body, after: input.body };
       }
-      if (input.metadata !== undefined && hasFieldChanged(existing.metadata, input.metadata)) {
-        changes.metadata = { before: existing.metadata, after: input.metadata };
+      if (
+        sanitizedMetadata !== undefined &&
+        hasFieldChanged(existing.metadata, sanitizedMetadata)
+      ) {
+        changes.metadata = { before: existing.metadata, after: sanitizedMetadata };
       }
 
       // If nothing changed, return early
@@ -711,12 +726,12 @@ export const updateContentBlock = async (
         data: {
           ...(sanitizedTitle !== undefined ? { title: sanitizedTitle } : {}),
           ...(input.body !== undefined ? { body: input.body } : {}),
-          ...(input.metadata !== undefined
+          ...(sanitizedMetadata !== undefined
             ? {
                 metadata:
-                  input.metadata === null
+                  sanitizedMetadata === null
                     ? Prisma.DbNull
-                    : (input.metadata as Prisma.InputJsonValue),
+                    : (sanitizedMetadata as Prisma.InputJsonValue),
               }
             : {}),
           updatedById: actorId,

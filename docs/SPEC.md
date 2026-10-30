@@ -444,7 +444,7 @@ Implemented frontend routes:
 Provides three tabbed operational interfaces:
 1. **Indikator & Tabel**: Searchable and filterable list of all scalar indicators and matrix tables with modal editing forms (`ScalarIndicatorForm` and `TableIndicatorForm`).
 2. **Blok Konten & Profil**: Direct editing of narrative content blocks (`landing-hero`, `landing-sambutan-lurah`, `landing-highlights`, `tentang-kelurahan-profil`, `publikasi-katalog`) using `ContentBlockForm`.
-3. **Pengaturan Publik Portal**: Management of public metadata (`public.*` keys: app name, institution, tagline, contact channels, default map coordinates and zoom) using `PublicSettingsForm`.
+3. **Pengaturan Publik Portal** (admin only): Management of public metadata (`public.*` keys: app name, institution, tagline, contact channels, default map coordinates and zoom) using `PublicSettingsForm`. Editors do not see this tab; `PATCH /api/settings/public` requires the admin role.
 
 **Dynamic View & Component Integration:**
 - **`AppFooter`**: Dynamically reflects verified public contact numbers (`contactPhone`) and office address lines (`contactAddress`) from `settingsStore` when loaded, falling back gracefully to static defaults. The `/publikasi` link in the "Sumber Daya" navigation is always included to provide public access to municipal reports and booklets.

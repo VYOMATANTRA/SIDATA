@@ -1893,6 +1893,74 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
     }
   });
 
+
+  it('stores Zod-cleaned publikasi metadata (trimmed https href), not the raw input', async () => {
+    invalidateContentBlocksCache();
+    const originalTransaction = prisma.$transaction;
+    const existingBlock = {
+      id: 'uuid-pub-2',
+      sectionId: null,
+      type: 'prose',
+      slug: 'publikasi-katalog',
+      title: 'Katalog Publikasi',
+      body: 'Koleksi dokumen',
+      metadata: null,
+      sortOrder: null,
+      updatedById: null,
+      createdAt: new Date('2026-09-01'),
+      updatedAt: new Date('2026-09-01'),
+    };
+
+    let savedMetadata: unknown;
+    prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+      const mockTx = {
+        $queryRaw: async () => [],
+        contentBlock: {
+          findUnique: async () => existingBlock,
+          update: async (args: { data: Record<string, unknown> }) => {
+            savedMetadata = args.data.metadata;
+            return { ...existingBlock, ...args.data };
+          },
+        },
+        auditLog: {
+          create: async () => ({ id: 'audit-2' }),
+        },
+      };
+      return fn(mockTx as unknown as typeof prisma);
+    }) as unknown as typeof prisma.$transaction;
+
+    try {
+      const res = fakeRes();
+      await updateContentBlockHandler(
+        makeReq({
+          params: { slug: 'publikasi-katalog' },
+          body: {
+            metadata: {
+              publications: [
+                {
+                  category: ' Infografis ',
+                  title: ' Dokumen ',
+                  description: ' Deskripsi ',
+                  href: '  https://example.com/dokumen.pdf  ',
+                  isAvailableOnline: true,
+                },
+              ],
+            },
+          },
+        }),
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 200);
+      const pubs = (savedMetadata as { publications: Array<Record<string, unknown>> }).publications;
+      assert.equal(pubs[0]?.href, 'https://example.com/dokumen.pdf');
+      assert.equal(pubs[0]?.category, 'Infografis');
+      assert.equal(pubs[0]?.title, 'Dokumen');
+    } finally {
+      prisma.$transaction = originalTransaction;
+      invalidateContentBlocksCache();
+    }
+  });
+
   it('validates rtCount in tentang-kelurahan-profil metadata', async () => {
     for (const badRt of [0, -5, 1.5, 9999]) {
       const res = fakeRes();
