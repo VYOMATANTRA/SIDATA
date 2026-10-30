@@ -301,7 +301,52 @@ describe('indicators store (global / landing page indicators)', () => {
     expect(store.indicators[0]?.slug).toBe('penduduk');
   });
 
-  it('handles explicit icon and format fields on indicators', () => {
+  it('keeps previously loaded indicators on a failed refetch with 404', async () => {
+    const initialIndicators: IndicatorItem[] = [
+      {
+        id: '1',
+        slug: 'penduduk',
+        label: 'Penduduk',
+        unit: 'jiwa',
+        valueCurrent: '53098',
+        valuePrevious: null,
+        periodCurrent: '2026',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'kependudukan',
+        sortOrder: 1,
+      },
+    ];
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ indicators: initialIndicators }),
+    } as Response);
+
+    const store = useIndicatorsStore();
+    await store.fetchIndicators();
+    expect(store.indicators).toHaveLength(1);
+    expect(store.isLoaded).toBe(true);
+
+    // Now refetch fails with 404
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      json: async () => ({ error: 'Not Found' }),
+    } as Response);
+
+    await store.fetchIndicators(true);
+    expect(store.error).toBe('Not Found');
+    // Old data is preserved, not wiped!
+    expect(store.indicators).toHaveLength(1);
+    expect(store.indicators[0]?.slug).toBe('penduduk');
+  });
+
+  it('formats indicator values and resolves icons by matching pageSlug without prefix fallback', () => {
     const store = useIndicatorsStore();
     store.indicators = [
       {
@@ -319,8 +364,6 @@ describe('indicators store (global / landing page indicators)', () => {
         hedgeNote: null,
         pageSlug: 'pendidikan',
         sortOrder: 1,
-        icon: 'ratio',
-        format: 'decimal',
       },
       {
         id: '2',
@@ -337,12 +380,27 @@ describe('indicators store (global / landing page indicators)', () => {
         hedgeNote: null,
         pageSlug: 'pendidikan',
         sortOrder: 2,
-        icon: 'density',
-        format: 'decimal',
+      },
+      {
+        id: '3',
+        slug: 'pendidikan-fake-prefix',
+        label: 'Item Di Halaman Lain',
+        unit: 'unit',
+        valueCurrent: '10',
+        valuePrevious: null,
+        periodCurrent: '2024',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'kesehatan', // Has slug starting with 'pendidikan' but pageSlug is 'kesehatan'!
+        sortOrder: 3,
       },
     ];
 
     const stats = store.getStatsForPage('pendidikan');
+    // Exactly matches pageSlug 'pendidikan', never matches 'pendidikan-fake-prefix' belonging to 'kesehatan'
     expect(stats).toHaveLength(2);
     expect(stats[0]).toEqual({
       icon: 'ratio',
