@@ -12,10 +12,10 @@
  */
 import prisma from '../src/utils/prisma.js';
 
-const LEGACY_SAMPLE_LEADERS: Record<number, string> = {
-  1: 'Bambang Supriyanto',
-  2: 'Hj. Siti Aminah',
-  3: 'Ahmad Dahlan',
+const LEGACY_SAMPLE_LEADERS: Record<number, { name: string; phone: string }> = {
+  1: { name: 'Bambang Supriyanto', phone: '081234567801' },
+  2: { name: 'Hj. Siti Aminah', phone: '081234567802' },
+  3: { name: 'Ahmad Dahlan', phone: '081234567803' },
 };
 
 const LEGACY_SAMPLE_POINT_ID = '00000000-0000-0000-0000-000000000001';
@@ -39,7 +39,9 @@ async function main() {
     if (
       legacyPoint &&
       legacyPoint.type === 'ketua_rt' &&
-      (legacyPoint.name.includes('Pos RT 01') || legacyPoint.latitude === -1.2235)
+      legacyPoint.name.includes('Pos RT 01') &&
+      legacyPoint.latitude === -1.2235 &&
+      legacyPoint.longitude === 116.9521
     ) {
       const deletedJunctions = await tx.spatialPointRt.deleteMany({
         where: { pointId: LEGACY_SAMPLE_POINT_ID },
@@ -52,15 +54,15 @@ async function main() {
       deletedPointsCount = deletedPoints.count;
     }
 
-    // 2. Clean up legacy fixture leaders if they still match the sample names
+    // 2. Clean up legacy fixture leaders if they still match the sample fingerprint (name and phone)
     let updatedLeaders = 0;
-    for (const [rtNumStr, expectedName] of Object.entries(LEGACY_SAMPLE_LEADERS)) {
+    for (const [rtNumStr, expected] of Object.entries(LEGACY_SAMPLE_LEADERS)) {
       const rtNumber = Number(rtNumStr);
       const existing = await tx.rtLeader.findUnique({
         where: { rtNumber },
       });
 
-      if (existing && existing.name === expectedName) {
+      if (existing && existing.name === expected.name && existing.phone === expected.phone) {
         await tx.rtLeader.update({
           where: { rtNumber },
           data: {
