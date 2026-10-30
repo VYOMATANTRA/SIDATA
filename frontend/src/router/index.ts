@@ -17,6 +17,25 @@ const adminNavLinks = ADMIN_NAV.flatMap((entry) =>
 );
 const rolesByPath = new Map(adminNavLinks.map((item) => [item.to, item.roles]));
 
+/**
+ * Looks up the roles ADMIN_NAV declares for a path, throwing instead of silently falling back if
+ * the path isn't found. A `path` here is a literal copied from `adminNav.ts`'s `to` field — if it
+ * drifts out of sync (a nav path renamed without updating this string, or vice versa), a silent
+ * fallback would let the route quietly guard with the wrong roles, defeating SPEC §3's "nav and
+ * routes can't disagree" invariant. Throwing at module load time (this runs as soon as
+ * router/index.ts is imported, which every test file and the app itself does) turns that drift
+ * into an immediate, loud failure instead of a hidden permissions bug.
+ */
+function rolesFor(path: string): AdminNavRole[] {
+  const roles = rolesByPath.get(path);
+  if (!roles) {
+    throw new Error(
+      `router/index.ts: no ADMIN_NAV entry with to: "${path}" — add one in adminNav.ts or fix this path so routes and the sidebar stay in sync.`,
+    );
+  }
+  return roles;
+}
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -61,7 +80,7 @@ const router = createRouter({
           name: 'user-management',
           component: () => import('../views/UserManagement.vue'),
           meta: {
-            ...metaForRoles(rolesByPath.get('/users') ?? ['admin']),
+            ...metaForRoles(rolesFor('/users')),
             title: 'Manajemen Pengguna',
             breadcrumb: ['Sistem', 'Akun pengguna'],
           },
@@ -95,7 +114,7 @@ const router = createRouter({
           name: 'admin-templat-kalimat',
           component: () => import('../views/AdminTemplatKalimatView.vue'),
           meta: {
-            ...metaForRoles(rolesByPath.get('/admin/sistem/templat-kalimat') ?? ['admin']),
+            ...metaForRoles(rolesFor('/admin/sistem/templat-kalimat')),
             title: 'Templat kalimat',
             breadcrumb: ['Sistem', 'Templat kalimat'],
           },
@@ -105,7 +124,7 @@ const router = createRouter({
           name: 'admin-konfigurasi-sistem',
           component: () => import('../views/AdminKonfigurasiSistemView.vue'),
           meta: {
-            ...metaForRoles(rolesByPath.get('/admin/sistem/konfigurasi') ?? ['admin']),
+            ...metaForRoles(rolesFor('/admin/sistem/konfigurasi')),
             title: 'Konfigurasi sistem',
             breadcrumb: ['Sistem', 'Konfigurasi sistem'],
           },
@@ -115,7 +134,7 @@ const router = createRouter({
           name: 'data-management',
           component: () => import('../views/DataManagementView.vue'),
           meta: {
-            ...metaForRoles(rolesByPath.get('/data') ?? ['editor', 'admin']),
+            ...metaForRoles(rolesFor('/data')),
             title: 'Data',
             breadcrumb: ['Data'],
           },
@@ -125,7 +144,7 @@ const router = createRouter({
           name: 'audit-log-viewer',
           component: () => import('../views/AuditLogView.vue'),
           meta: {
-            ...metaForRoles(rolesByPath.get('/audit-logs') ?? ['admin']),
+            ...metaForRoles(rolesFor('/audit-logs')),
             title: 'Log Sistem dan Audit Trail',
             breadcrumb: ['Sistem', 'Log sistem'],
           },
