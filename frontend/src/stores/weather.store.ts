@@ -67,6 +67,11 @@ export function parseForecastDatetime(datetime: string): number {
   const trimmed = datetime.trim();
   if (!trimmed) return 0;
 
+  // Forecast datetimes must begin with a valid date pattern YYYY-MM-DD
+  if (!/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+    return 0;
+  }
+
   // If already contains timezone offset (+08:00, Z, etc.), parse directly
   if (/[+-]\d{2}:?\d{2}$|Z$/i.test(trimmed)) {
     const parsed = Date.parse(trimmed);
@@ -109,8 +114,8 @@ export function findCurrentForecastIndex(
     return activeIndex;
   }
 
-  // If all entries are in the future, pick the first one (closest future)
-  return 0;
+  // If all entries are in the future, pick the first valid entry (closest future)
+  return forecast.findIndex((entry) => parseForecastDatetime(entry.datetime) > 0);
 }
 
 export const WEATHER_CLIENT_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes client cache TTL
@@ -132,7 +137,11 @@ export const useWeatherStore = defineStore('weather', () => {
 
   const sortedForecast = computed<WeatherForecastEntry[]>(() => {
     if (!data.value?.forecast || data.value.forecast.length === 0) return [];
-    const sorted = [...data.value.forecast].sort(
+    // Discard entries with invalid timestamps before sorting and indexing
+    const validEntries = data.value.forecast.filter(
+      (entry) => parseForecastDatetime(entry.datetime) > 0,
+    );
+    const sorted = [...validEntries].sort(
       (a, b) => parseForecastDatetime(a.datetime) - parseForecastDatetime(b.datetime),
     );
     // Deduplicate any consecutive entries with identical datetime timestamps

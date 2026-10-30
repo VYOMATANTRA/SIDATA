@@ -126,7 +126,7 @@ describe('Weather Pinia Store & Utilities (weather.store.ts)', () => {
       expect(idx).toBe(sampleForecast.length - 1);
     });
 
-    it('ignores entries with invalid dates without erroneously treating them as past timestamps', () => {
+    it('skips malformed datetime rows at beginning and selects the first valid future slot', () => {
       const forecastWithInvalid: WeatherForecastEntry[] = [
         {
           datetime: 'invalid-date',
@@ -147,7 +147,31 @@ describe('Weather Pinia Store & Utilities (weather.store.ts)', () => {
       ];
       // Time is before 18:00
       const early = new Date('2026-10-30T10:00:00+08:00');
-      expect(findCurrentForecastIndex(forecastWithInvalid, early)).toBe(0);
+      // Should pick index 1 (the first valid entry), not index 0 (corrupted)
+      expect(findCurrentForecastIndex(forecastWithInvalid, early)).toBe(1);
+    });
+
+    it('returns -1 when all entries in the list have invalid timestamps', () => {
+      const allInvalid: WeatherForecastEntry[] = [
+        {
+          datetime: 'invalid-date-1',
+          temperatureCelsius: 20,
+          humidityPercent: 50,
+          description: 'Unknown',
+          windSpeedKmh: 5,
+          windDirection: 'N',
+        },
+        {
+          datetime: '',
+          temperatureCelsius: 21,
+          humidityPercent: 55,
+          description: 'Unknown',
+          windSpeedKmh: 5,
+          windDirection: 'N',
+        },
+      ];
+      const early = new Date('2026-10-30T10:00:00+08:00');
+      expect(findCurrentForecastIndex(allInvalid, early)).toBe(-1);
     });
   });
 
@@ -454,6 +478,43 @@ describe('Weather Pinia Store & Utilities (weather.store.ts)', () => {
       // Now fetchWeather should refetch even without force=true
       await store.fetchWeather(false);
       expect(callCount).toBe(2);
+    });
+
+    it('discards entries with unparseable datetime so they never contaminate currentEntry or upcomingEntries', async () => {
+      globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ...mockApiResponse,
+          forecast: [
+            {
+              datetime: 'malformed-date-string',
+              temperatureCelsius: 99,
+              humidityPercent: 99,
+              description: 'Malformed',
+              windSpeedKmh: 99,
+              windDirection: 'N',
+            },
+            {
+              datetime: '2026-10-30 15:00:00',
+              temperatureCelsius: 29,
+              humidityPercent: 75,
+              description: 'Cerah Berawan',
+              windSpeedKmh: 12,
+              windDirection: 'SE',
+            },
+          ],
+        }),
+      } as Response);
+
+      const store = useWeatherStore();
+      await store.fetchWeather();
+
+      // Malformed row is excluded completely from sortedForecast and currentEntry
+      expect(store.sortedForecast.length).toBe(1);
+      expect(store.sortedForecast[0]?.datetime).toBe('2026-10-30 15:00:00');
+      expect(store.currentEntry?.datetime).toBe('2026-10-30 15:00:00');
+      expect(store.currentEntry?.temperatureCelsius).toBe(29);
     });
   });
 });
