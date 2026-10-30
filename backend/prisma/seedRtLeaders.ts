@@ -34,9 +34,7 @@ export interface RtLeaderSeedClient {
     }): Promise<unknown>;
   };
   spatialPointRt: {
-    create(args: {
-      data: { pointId: string; rtNumber: number };
-    }): Promise<unknown>;
+    create(args: { data: { pointId: string; rtNumber: number } }): Promise<unknown>;
   };
 }
 
