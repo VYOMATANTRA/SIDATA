@@ -9,7 +9,6 @@ import {
   invalidateIndicatorsCache,
   indicatorByIdCache,
   IndicatorServiceError,
-  WITH_TEMPLATE,
 } from '../services/indicators.service.js';
 import prisma from '../utils/prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
@@ -1227,8 +1226,25 @@ describe('indicators.service tier-1 comparison templates', () => {
       await listIndicators({});
       await getIndicatorById('ind-1');
 
-      assert.deepEqual(listArgs!['include'], WITH_TEMPLATE);
-      assert.deepEqual(getArgs!['include'], WITH_TEMPLATE);
+      const expectedInclude = {
+        comparisonTemplate: true,
+        section: {
+          select: {
+            chapter: {
+              select: {
+                page: {
+                  select: {
+                    slug: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      };
+
+      assert.deepEqual(listArgs!['include'], expectedInclude);
+      assert.deepEqual(getArgs!['include'], expectedInclude);
     });
 
     it('resolves pageSlug from section -> chapter -> page hierarchy', async () => {

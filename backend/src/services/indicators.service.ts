@@ -248,7 +248,7 @@ async function lockAndRequireTemplate(
 }
 
 /** Reads and writes return the related template and page hierarchy so the DTO can render comparison and pageSlug. */
-export const WITH_TEMPLATE = {
+const WITH_TEMPLATE = {
   comparisonTemplate: true,
   section: {
     select: {
