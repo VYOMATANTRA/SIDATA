@@ -309,20 +309,36 @@ const publikasiItemSchema = z
     href: z
       .string()
       .trim()
-      .url('URL publikasi tidak valid')
-      .refine((url) => url.startsWith('https://'), {
-        message: 'Tautan publikasi wajib menggunakan protokol https://',
-      })
+      .transform((val) => (val === '' ? undefined : val))
+      .pipe(
+        z
+          .string()
+          .url('URL publikasi tidak valid')
+          .refine((url) => url.startsWith('https://'), {
+            message: 'Tautan publikasi wajib menggunakan protokol https://',
+          })
+          .optional(),
+      )
       .optional(),
     isAvailableOnline: z.boolean().optional(),
   })
-  .passthrough();
+  .refine(
+    (item) => {
+      if (item.isAvailableOnline && !item.href) return false;
+      return true;
+    },
+    {
+      message: 'Publikasi yang ditandai tersedia online wajib memiliki tautan href',
+      path: ['href'],
+    },
+  )
+  .strip();
 
 export const publikasiKatalogMetadataSchema = z
   .object({
     publications: z.array(publikasiItemSchema).max(25, 'Maksimal 25 item publikasi').optional(),
   })
-  .passthrough();
+  .strip();
 
 const batasWilayahItemSchema = z
   .object({

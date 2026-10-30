@@ -1798,7 +1798,33 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
     assert.equal(resBad.status, 400);
     assert.match((resBad.body as { error: string }).error, /https:\/\//);
 
-    // 2. Acceptance of valid https://
+    // 2. Rejection of isAvailableOnline: true without href
+    const resNoHref = fakeRes();
+    await updateContentBlockHandler(
+      makeReq({
+        params: { slug: 'publikasi-katalog' },
+        body: {
+          metadata: {
+            publications: [
+              {
+                category: 'Infografis',
+                title: 'Online Tapi Tanpa Tautan',
+                description: 'Deskripsi',
+                isAvailableOnline: true,
+              },
+            ],
+          },
+        },
+      }),
+      resNoHref as unknown as Response,
+    );
+    assert.equal(resNoHref.status, 400);
+    assert.match(
+      (resNoHref.body as { error: string }).error,
+      /Publikasi yang ditandai tersedia online wajib memiliki tautan href/,
+    );
+
+    // 3. Acceptance of valid https:// and empty string href (transformed to undefined)
     invalidateContentBlocksCache();
     const originalTransaction = prisma.$transaction;
     const existingBlock = {
@@ -1845,6 +1871,14 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
                   title: 'Dokumen Resmi',
                   description: 'Deskripsi',
                   href: 'https://example.com/dokumen.pdf',
+                  isAvailableOnline: true,
+                },
+                {
+                  category: 'Prodeskel',
+                  title: 'Dokumen Cetak',
+                  description: 'Deskripsi cetak',
+                  href: '',
+                  isAvailableOnline: false,
                 },
               ],
             },

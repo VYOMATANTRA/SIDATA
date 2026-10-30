@@ -11,6 +11,14 @@ import logoItk from '@/assets/img/logo_itk.png';
 import logoVyomatantra from '@/assets/img/logo_vyomatantra.png';
 import { useSettingsStore } from '../../stores/settings.store';
 
+const DEFAULT_PHONE = '(0542) 772158';
+const DEFAULT_ADDRESS_LINES = [
+  'Kantor Kelurahan Manggar',
+  'Jl. Mulawarman No. 1, RT 39',
+  'Kelurahan Manggar, Kecamatan Balikpapan Timur',
+  'Kota Balikpapan, Kalimantan Timur, 76116',
+];
+
 export interface FooterProps {
   year?: number | string;
   phone?: string;
@@ -19,26 +27,22 @@ export interface FooterProps {
 
 const props = withDefaults(defineProps<FooterProps>(), {
   year: 2026,
-  phone: '(0542) 772158',
-  addressLines: () => [
-    'Kantor Kelurahan Manggar',
-    'Jl. Mulawarman No. 1, RT 39',
-    'Kelurahan Manggar, Kecamatan Balikpapan Timur',
-    'Kota Balikpapan, Kalimantan Timur, 76116',
-  ],
+  phone: undefined,
+  addressLines: undefined,
 });
 
+// Avoid initializing Pinia store when no active Pinia instance exists (e.g. isolated component unit tests)
 const settingsStore = getActivePinia() ? useSettingsStore() : null;
 
 const displayPhone = computed(() => {
-  if (props.phone !== '(0542) 772158') return props.phone;
+  if (props.phone !== undefined) return props.phone;
   return settingsStore?.isLoaded && settingsStore.contactPhone
     ? settingsStore.contactPhone
-    : props.phone;
+    : DEFAULT_PHONE;
 });
 
 const displayAddressLines = computed(() => {
-  if (props.addressLines.length !== 4) return props.addressLines;
+  if (props.addressLines !== undefined) return props.addressLines;
   if (settingsStore?.isLoaded && settingsStore.contactAddress) {
     const parts = settingsStore.contactAddress
       .split(',')
@@ -47,7 +51,7 @@ const displayAddressLines = computed(() => {
     if (parts.length >= 2) return parts;
     return [settingsStore.contactAddress];
   }
-  return props.addressLines;
+  return DEFAULT_ADDRESS_LINES;
 });
 
 // Resource Links (Sumber Daya)

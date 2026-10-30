@@ -29,6 +29,10 @@ const publikasiCatalog = computed<PublicationItem[]>(() => {
   }
   return PUBLICATIONS;
 });
+
+const hasPendingPublication = computed(() =>
+  publikasiCatalog.value.some((item) => !item.href || !item.href.startsWith('https://')),
+);
 </script>
 
 <template>
@@ -98,6 +102,7 @@ const publikasiCatalog = computed<PublicationItem[]>(() => {
         </ul>
 
         <p
+          v-if="hasPendingPublication"
           class="border-brand-indigo mt-5 max-w-3xl border-l-4 pl-4 text-sm leading-relaxed text-gray-700"
         >
           Publikasi sedang disiapkan. Tautan unduhan akan ditampilkan setelah dokumen resmi
