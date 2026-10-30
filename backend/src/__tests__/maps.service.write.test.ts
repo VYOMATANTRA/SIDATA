@@ -8,6 +8,7 @@ import {
   deleteSpatialPointCoverage,
   updateRtLeader,
   MapsServiceError,
+  RT_LEADERS_SAMPLE_ROSTER_KEY,
 } from '../services/maps.service.js';
 import prisma from '../utils/prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
@@ -102,6 +103,8 @@ let queryRawCalls: unknown[][];
 let pointCalls: Record<string, unknown[][]>;
 let rtsCalls: Record<string, unknown[][]>;
 let leaderCalls: Record<string, unknown[][]>;
+let settingCalls: Record<string, unknown[][]>;
+let settings: Map<string, string>;
 let originals: Array<{ target: AnyRecord; key: string; fn: unknown }>;
 
 function stubMethod(target: AnyRecord, key: string, fn: unknown) {
@@ -158,6 +161,8 @@ beforeEach(() => {
   pointCalls = {};
   rtsCalls = {};
   leaderCalls = {};
+  settingCalls = {};
+  settings = new Map([[RT_LEADERS_SAMPLE_ROSTER_KEY, 'true']]);
   originals = [];
   seedState([], []);
 
@@ -314,6 +319,25 @@ beforeEach(() => {
     spatialPoint: proxied(pointImpl, pointCalls),
     spatialPointRt: proxied(rtsImpl, rtsCalls),
     rtLeader: proxied(leaderImpl, leaderCalls),
+    systemSetting: proxied(
+      {
+        upsert: async (args: AnyRecord) => {
+          const { where, create, update } = args as {
+            where: { key: string };
+            create: { key: string; value: string };
+            update: { value?: string };
+          };
+          const existing = settings.get(where.key);
+          if (existing === undefined) {
+            settings.set(create.key, create.value);
+            return { key: create.key, value: create.value };
+          }
+          if (update.value !== undefined) settings.set(where.key, update.value);
+          return { key: where.key, value: settings.get(where.key) };
+        },
+      },
+      settingCalls,
+    ),
     auditLog: {
       create: (async (...args: never[]) => {
         const { data } = args[0] as unknown as { data: AnyRecord };
@@ -930,6 +954,15 @@ describe('maps.service updateRtLeader', () => {
     const metadata = auditRows[0]?.metadata as AnyRecord;
     assert.deepEqual(metadata['changedFields'], ['name', 'phone', 'phoneIsWhatsapp']);
     assert.equal(metadata['changes'], undefined);
+    assert.ok(settingCalls['upsert'], 'sample-roster flag must be cleared on edit');
+    assert.equal(settings.get(RT_LEADERS_SAMPLE_ROSTER_KEY), 'false');
+  });
+
+  it('does not clear the sample-roster flag on a no-op PATCH', async () => {
+    seedState([], [sampleLeader()], {});
+    await updateRtLeader(5, { name: 'Andi Pratama' }, ACTOR, CONTEXT);
+    assert.equal(settingCalls['upsert'], undefined);
+    assert.equal(settings.get(RT_LEADERS_SAMPLE_ROSTER_KEY), 'true');
   });
 
   it('collapses a blank alamat to null', async () => {

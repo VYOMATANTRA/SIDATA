@@ -13,15 +13,20 @@ import { fakeRes } from './helpers/fakeRes.js';
 
 describe('maps.controller', () => {
   let originalGlobalCoverageFindMany: typeof prisma.spatialPointRt.findMany;
+  let originalSystemSettingFindUnique: typeof prisma.systemSetting.findUnique;
 
   beforeEach(() => {
     originalGlobalCoverageFindMany = prisma.spatialPointRt.findMany;
     prisma.spatialPointRt.findMany =
       (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
+    originalSystemSettingFindUnique = prisma.systemSetting.findUnique;
+    prisma.systemSetting.findUnique = (async () =>
+      null) as unknown as typeof prisma.systemSetting.findUnique;
   });
 
   afterEach(() => {
     prisma.spatialPointRt.findMany = originalGlobalCoverageFindMany;
+    prisma.systemSetting.findUnique = originalSystemSettingFindUnique;
   });
 
   const sampleKetuaRtPoint = {
@@ -761,6 +766,39 @@ describe('maps.controller', () => {
         prisma.rtLeader.count = originalCount;
         prisma.rtLeader.findMany = originalFindMany;
         prisma.spatialPointRt.findMany = originalCoverageFindMany;
+      }
+    });
+
+    it('exposes isSampleRoster from system_settings', async () => {
+      const originalCount = prisma.rtLeader.count;
+      const originalFindMany = prisma.rtLeader.findMany;
+      const originalCoverageFindMany = prisma.spatialPointRt.findMany;
+      const originalFindUnique = prisma.systemSetting.findUnique;
+
+      prisma.rtLeader.count = (async () => 0) as unknown as typeof prisma.rtLeader.count;
+      prisma.rtLeader.findMany = (async () => []) as unknown as typeof prisma.rtLeader.findMany;
+      prisma.spatialPointRt.findMany =
+        (async () => []) as unknown as typeof prisma.spatialPointRt.findMany;
+      prisma.systemSetting.findUnique = (async () => ({
+        key: 'maps.rt_leaders_sample_roster',
+        value: 'true',
+        updatedById: null,
+        updatedAt: new Date(),
+      })) as unknown as typeof prisma.systemSetting.findUnique;
+
+      try {
+        const req = { query: {} } as unknown as Request;
+        const res = fakeRes();
+        await listRtLeaders(req, res as unknown as Response);
+        assert.equal(res.status, 200);
+        const body = res.body as { isSampleRoster: boolean; leaders: unknown[]; total: number };
+        assert.equal(body.isSampleRoster, true);
+        assert.equal(body.total, 0);
+      } finally {
+        prisma.rtLeader.count = originalCount;
+        prisma.rtLeader.findMany = originalFindMany;
+        prisma.spatialPointRt.findMany = originalCoverageFindMany;
+        prisma.systemSetting.findUnique = originalFindUnique;
       }
     });
 

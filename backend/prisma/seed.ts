@@ -9,6 +9,12 @@ import {
 import { DEFAULT_CONTENT_BLOCKS } from '../src/services/contentBlocks.service.js';
 import { DEFAULT_COMPARISON_TEMPLATES } from '../src/services/comparisonTemplates.service.js';
 import { CERITA_PAGES } from './ceritaPages.js';
+import { RT_LEADERS_DATA } from './rtLeadersData.js';
+import { seedRtLeaders } from './seedRtLeaders.js';
+import {
+  LEGACY_SAMPLE_LEADERS,
+  matchesLegacySampleLeader,
+} from '../src/utils/legacySampleRtFingerprints.js';
 
 async function main() {
   console.log('Memulai proses seeding...');
@@ -37,104 +43,106 @@ async function main() {
     },
   });
 
-  // Seed sample RT Leaders (RT 01 - RT 03)
-  const rt1 = await prisma.rtLeader.upsert({
-    where: { rtNumber: 1 },
-    update: {},
-    create: {
-      rtNumber: 1,
-      name: 'Bambang Supriyanto',
-      phone: '081234567801',
-      phoneIsWhatsapp: true,
-      alamat: 'Jl. Mulawarman No. 12, RT 01, Manggar',
-    },
-  });
+  // Seed all 100 RT Leaders and their 1:1 Spatial Points (in non-production environments only).
+  // `update: {}` throughout: seeding must never overwrite a correction an editor
+  // has already made (SPEC §2). Re-running the seed only fills in missing rows.
+  // In production, the operational roster must be loaded from an official import (SPEC §10),
+  // never populated with placeholder synthetic data.
+  if (process.env.NODE_ENV !== 'production') {
+    const legacySamplePoint = await prisma.spatialPoint.findUnique({
+      where: { id: '00000000-0000-0000-0000-000000000001' },
+    });
+    if (legacySamplePoint) {
+      if (
+        legacySamplePoint.type === 'ketua_rt' &&
+        legacySamplePoint.name.includes('Pos RT 01') &&
+        legacySamplePoint.latitude === -1.2235 &&
+        legacySamplePoint.longitude === 116.9521
+      ) {
+        // Automatically remove untouched legacy sample point so RT 1 does not have conflicting points
+        await prisma.spatialPointRt.deleteMany({
+          where: { pointId: '00000000-0000-0000-0000-000000000001' },
+        });
+        await prisma.spatialPoint.deleteMany({
+          where: { id: '00000000-0000-0000-0000-000000000001' },
+        });
+      } else {
+        console.warn(
+          '⚠️  Titik sample lama ketua_rt terdeteksi. Jalankan `npm run dev:cleanup-sample-rt` untuk membersihkan data lama.',
+        );
+      }
+    }
 
-  const rt2 = await prisma.rtLeader.upsert({
-    where: { rtNumber: 2 },
-    update: {},
-    create: {
-      rtNumber: 2,
-      name: 'Hj. Siti Aminah',
-      phone: '081234567802',
-      phoneIsWhatsapp: true,
-      alamat: 'Jl. Pemuda RT 02, Manggar',
-    },
-  });
+    // Legacy seed used real-looking names and dialable phones for RT 1–3. Those
+    // rows survive `update: {}` on the new placeholders, so reset them when they
+    // still match the recognition fingerprint (same rule as
+    // scripts/cleanup-legacy-sample-rt-leaders.ts). Phones are matched by sha256
+    // digest — raw dialable values are not stored in source.
+    let resetLegacyLeaders = 0;
+    for (const [rtNumStr, expected] of Object.entries(LEGACY_SAMPLE_LEADERS)) {
+      const rtNumber = Number(rtNumStr);
+      const existing = await prisma.rtLeader.findUnique({ where: { rtNumber } });
+      if (existing && matchesLegacySampleLeader(existing, expected)) {
+        await prisma.rtLeader.update({
+          where: { rtNumber },
+          data: {
+            name: `Ketua RT ${String(rtNumber).padStart(2, '0')}`,
+            phone: '—',
+            phoneIsWhatsapp: false,
+            alamat: null,
+          },
+        });
+        resetLegacyLeaders += 1;
+      }
+    }
+    if (resetLegacyLeaders > 0) {
+      console.log(
+        `Mengganti ${resetLegacyLeaders} Ketua RT sample lawas (RT 1–3) dengan placeholder.`,
+      );
+    }
 
-  const rt3 = await prisma.rtLeader.upsert({
-    where: { rtNumber: 3 },
-    update: {},
-    create: {
-      rtNumber: 3,
-      name: 'Ahmad Dahlan',
-      phone: '081234567803',
-      phoneIsWhatsapp: false,
-      alamat: 'Jl. Pantai Manggar RT 03',
-    },
-  });
+    await seedRtLeaders(prisma, RT_LEADERS_DATA);
 
-  // Seed sample Spatial Points (Ketua RT points + Bank Sampah Unit)
-  const pointRt1 = await prisma.spatialPoint.upsert({
-    where: { id: '00000000-0000-0000-0000-000000000001' },
-    update: {},
-    create: {
-      id: '00000000-0000-0000-0000-000000000001',
-      name: 'Pos RT 01 Kelurahan Manggar',
-      type: 'ketua_rt',
-      latitude: -1.2235,
-      longitude: 116.9521,
-      metadata: {
-        keterangan: 'Posyandu dan Sekretariat RT 01',
+    // Mark the roster as sample until an editor saves real leaders (maps.service clears it).
+    // create-only: a re-seed must not flip the flag back after an editor has cleared it.
+    await prisma.systemSetting.upsert({
+      where: { key: 'maps.rt_leaders_sample_roster' },
+      create: { key: 'maps.rt_leaders_sample_roster', value: 'true' },
+      update: {},
+    });
+
+    const pointBankSampah = await prisma.spatialPoint.upsert({
+      where: { id: '00000000-0000-0000-0000-000000000002' },
+      update: {},
+      create: {
+        id: '00000000-0000-0000-0000-000000000002',
+        name: 'Bank Sampah Sejahtera Manggar',
+        type: 'bank_sampah',
+        latitude: -1.225,
+        longitude: 116.955,
+        metadata: {
+          jadwal: 'Sabtu & Minggu 09.00 - 15.00 WITA',
+          pengelola: 'Ibu Rahmawati',
+        },
       },
-    },
-  });
+    });
 
-  await prisma.spatialPointRt.upsert({
-    where: {
-      pointId_rtNumber: {
-        pointId: pointRt1.id,
-        rtNumber: 1,
-      },
-    },
-    update: {},
-    create: {
-      pointId: pointRt1.id,
-      rtNumber: 1,
-    },
-  });
-
-  const pointBankSampah = await prisma.spatialPoint.upsert({
-    where: { id: '00000000-0000-0000-0000-000000000002' },
-    update: {},
-    create: {
-      id: '00000000-0000-0000-0000-000000000002',
-      name: 'Bank Sampah Sejahtera Manggar',
-      type: 'bank_sampah',
-      latitude: -1.225,
-      longitude: 116.955,
-      metadata: {
-        jadwal: 'Sabtu & Minggu 09.00 - 15.00 WITA',
-        pengelola: 'Ibu Rahmawati',
-      },
-    },
-  });
-
-  // Bank Sampah covers RT 1, RT 2, RT 3
-  for (const rtNum of [1, 2, 3]) {
-    await prisma.spatialPointRt.upsert({
-      where: {
-        pointId_rtNumber: {
+    // Bank Sampah covers RT 1, RT 2, RT 3
+    for (const rtNum of [1, 2, 3]) {
+      await prisma.spatialPointRt.upsert({
+        where: {
+          pointId_rtNumber: {
+            pointId: pointBankSampah.id,
+            rtNumber: rtNum,
+          },
+        },
+        update: {},
+        create: {
           pointId: pointBankSampah.id,
           rtNumber: rtNum,
         },
-      },
-      update: {},
-      create: {
-        pointId: pointBankSampah.id,
-        rtNumber: rtNum,
-      },
-    });
+      });
+    }
   }
 
   // Audit log retention defaults to "0" (keep forever) for every severity — a fresh install
@@ -251,7 +259,7 @@ async function main() {
     roleUser,
     roleEditor,
     roleAdmin,
-    sampleRt: [rt1.rtNumber, rt2.rtNumber, rt3.rtNumber],
+    totalRtLeaders: RT_LEADERS_DATA.length,
     seededBlocks: DEFAULT_CONTENT_BLOCKS.map((b) => b.slug),
     seededComparisonTemplates: DEFAULT_COMPARISON_TEMPLATES.map((t) => t.slug),
   });

@@ -78,6 +78,13 @@ Notes:
   states: Sosial Kemasyarakatan is the last, unnumbered chapter of Pemerintahan & Kelembagaan, and Persampahan &
   Bank Sampah Unit starts with Bank Sampah Unit, Program Eco Boba and Booklet Eco Boba chapters.
   Seeding never overwrites titles or ordering an editor has since changed.
+- The Ketua RT roster the repository ships is **synthetic only** (`backend/prisma/rtLeadersData.ts`):
+  placeholder names, placeholder phone numbers, and generated coordinates. Real Ketua RT names, phone
+  numbers, and home locations are personal data and must never be committed. The operational roster is
+  loaded from a non-committed source or an admin import at deploy time — see §10 for the open
+  import-path question.
+- Every RT-leader seed upsert carries `update: {}`. Re-running the seed fills in rows that are
+  missing and nothing else; it must never revert a correction an editor has already made.
 - `GET /api/pages` and `GET /api/pages/:slug` expose the hierarchy publicly (page → chapters →
   sections, each ordered by `sort_order`). `GET /api/pages?include=sections` returns every page
   with its chapters and sections in one request (one nested query), so a caller that needs all
@@ -355,10 +362,20 @@ buried inside a stat page. Entry points:
 
 The page provides **in-table search**: a single labelled text input filtering on both
 `rt_number` and leader `name`, applied client-side over the full 100-row set (no server
-round-trip, no pagination). The visible row count is announced as results change
-("Menampilkan N dari 100 RT"). Rows remain sorted by `rt_number` and the unfiltered table is
-the default state, so the page is fully usable with JavaScript-driven filtering ignored. No
-RT-range grouping or collapsible bands — flat table only.
+round-trip). When the query contains only digits, search matches `rt_number` exactly and does
+not search names (e.g. searching "1" matches RT 1 only, not "RT 10" or a leader named "One").
+The matching rows are then **paginated client-side**, with a page-size control
+(10/25/50/100 rows) and a bounded page-number list, so paging never costs a second request —
+the page already asks for all 100 leaders in one call. The visible row count is announced as
+results change ("Menampilkan N dari 100 RT"; a paginated slice is announced as
+"Menampilkan 1–10 dari 100 RT"). Rows remain sorted by `rt_number` and the unfiltered table is
+the default state, so the page is fully usable with JavaScript-driven filtering ignored. The
+`Alamat` column is automatically hidden when no leader in the displayed dataset has an address
+value. When the displayed dataset is detected as synthetic/sample data (i.e. every leader is
+non-dialable or carries a placeholder name), a prominent sample-data notice is displayed explaining
+that the roster contains placeholder names and contacts pending official publication; when real
+operational contacts are loaded, this notice is suppressed. No RT-range grouping or collapsible
+bands — flat table only.
 
 Accessibility implications, per `docs/ACCESSIBILITY.md`: the input needs a real `<label>` (not
 placeholder-only), the result count belongs in an `aria-live="polite"` region, and the table
@@ -463,6 +480,16 @@ Single register — unresolved questions live here and nowhere else.
   not infer an appointment process.
 - **Vision and mission statement:** No approved wording was found in the inspected source set. Keep
   this section omitted until the Kelurahan provides an approved vision/mission document.
+- **Operational Ketua RT roster import:** The repository ships a synthetic roster only (§2). In
+  production environments (`NODE_ENV=production`), `prisma db seed` deliberately skips seeding
+  placeholder Ketua RT rows to avoid exposing fabricated contact data. Production environments
+  ship with an empty Ketua RT roster by default and present the standard "Data belum tersedia"
+  notice until an approved operational import mechanism (such as an administrative CSV import or
+  verified deploy script) is completed. Until then, synthetic data is strictly confined to
+  development and testing environments.
+- **Public visibility of Ketua RT contacts:** The page publishes names, phone numbers, and addresses
+  for private individuals. Confirm with the kelurahan whether the directory is published as-is, or
+  needs a reduced field set (for example address withheld, or contact only on request).
 - **Permintaan Data / UU 14/2008 citations (settled 2026-10-30):** Public copy on `/permintaan-data`
   uses Pasal 22 ayat (7)–(8) for the 10+7 working-day PPID reply window; Pasal 35 ayat (1) for
   keberatan grounds; Pasal 36 ayat (1) for the 30 working-day window to *file* keberatan; Pasal 36

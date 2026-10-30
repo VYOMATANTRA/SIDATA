@@ -87,6 +87,9 @@ export const AUDIT_ACTIONS = {
   SPATIAL_POINT_RT_DELETED: defineAction('spatial_point_rt.deleted', 'warning'),
   RT_LEADER_UPDATED: defineAction('rt_leader.updated', 'info'),
   AUDIT_PRUNED: defineAction('audit.pruned', 'info'),
+  // One-off ops script: cleanup-legacy-sample-rt-leaders.ts --force.
+  // Metadata holds counts only — never names or phone numbers.
+  MAINTENANCE_LEGACY_RT_CLEANUP: defineAction('maintenance.legacy_rt_cleanup', 'info'),
 } as const satisfies Record<string, AuditActionDef>;
 
 export interface AuditActor {
