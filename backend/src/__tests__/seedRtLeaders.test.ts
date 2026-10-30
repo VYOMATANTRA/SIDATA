@@ -152,4 +152,38 @@ describe('RT_LEADERS_DATA', () => {
       assert.ok(rt.longitude > 116 && rt.longitude < 117);
     }
   });
+
+  it('never seeds the legacy sample phones (recognition fingerprints only)', async () => {
+    // Keep in sync with LEGACY_SAMPLE_LEADERS in prisma/seed.ts and
+    // scripts/cleanup-legacy-sample-rt-leaders.ts — those constants identify old
+    // rows; they must not appear in any create payload.
+    const legacyPhones = new Set(['081234567801', '081234567802', '081234567803']);
+    const legacyNames = new Set(['Bambang Supriyanto', 'Hj. Siti Aminah', 'Ahmad Dahlan']);
+
+    for (const rt of RT_LEADERS_DATA) {
+      assert.equal(
+        legacyPhones.has(rt.phone),
+        false,
+        `RT ${rt.rtNumber} must not use a legacy phone`,
+      );
+      assert.equal(legacyNames.has(rt.name), false, `RT ${rt.rtNumber} must not use a legacy name`);
+    }
+
+    const { client, calls } = recordingClient();
+    await seedRtLeaders(client, RT_LEADERS_DATA);
+
+    for (const call of calls.rtLeader) {
+      const create = call.create as { phone?: string; name?: string };
+      assert.equal(
+        legacyPhones.has(create.phone ?? ''),
+        false,
+        'seedRtLeaders must never write a legacy fingerprint phone',
+      );
+      assert.equal(
+        legacyNames.has(create.name ?? ''),
+        false,
+        'seedRtLeaders must never write a legacy fingerprint name',
+      );
+    }
+  });
 });

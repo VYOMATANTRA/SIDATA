@@ -12,6 +12,12 @@
  */
 import prisma from '../src/utils/prisma.js';
 
+/**
+ * Recognition fingerprints only — used to identify leftover development sample
+ * rows so they can be rewritten/removed. Never write these phones (or names) to
+ * new rows, and never display them in the UI. Keep the matcher values unchanged
+ * so existing legacy DB rows are still found.
+ */
 const LEGACY_SAMPLE_LEADERS: Record<number, { name: string; phone: string }> = {
   1: { name: 'Bambang Supriyanto', phone: '081234567801' },
   2: { name: 'Hj. Siti Aminah', phone: '081234567802' },
