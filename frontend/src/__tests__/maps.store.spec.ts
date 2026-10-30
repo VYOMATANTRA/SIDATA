@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useMapsStore } from '../stores/maps';
 import type { SpatialPointDTO, MapSummaryDTO } from '../types/maps';
+import { MANGGAR_MAP_ORIGIN } from '../constants/mapOrigin';
 
 describe('maps.ts Pinia Store', () => {
   beforeEach(() => {
@@ -13,8 +14,8 @@ describe('maps.ts Pinia Store', () => {
       id: 'point-1',
       name: 'Pos RT 01',
       type: 'ketua_rt',
-      latitude: -1.2235,
-      longitude: 116.9521,
+      latitude: MANGGAR_MAP_ORIGIN.latitude,
+      longitude: MANGGAR_MAP_ORIGIN.longitude,
       metadata: null,
       rts: [1],
       createdAt: '2026-08-01T00:00:00Z',

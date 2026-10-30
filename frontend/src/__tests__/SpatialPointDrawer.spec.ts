@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import SpatialPointDrawer from '../components/maps/SpatialPointDrawer.vue';
 import type { SpatialPointDTO, RtLeaderDTO } from '../types/maps';
+import { MANGGAR_MAP_ORIGIN } from '../constants/mapOrigin';
 
 // The drawer links to the Ketua RT page (SPEC §8), so it always needs a router.
 function mountDrawer(
@@ -33,8 +34,8 @@ describe('SpatialPointDrawer.vue', () => {
     id: 'point-1',
     name: 'Pos RT 01',
     type: 'ketua_rt',
-    latitude: -1.2235,
-    longitude: 116.9521,
+    latitude: MANGGAR_MAP_ORIGIN.latitude,
+    longitude: MANGGAR_MAP_ORIGIN.longitude,
     metadata: { note: 'Posyandu' },
     rts: [1],
     createdAt: '2026-08-01T00:00:00Z',
@@ -47,7 +48,7 @@ describe('SpatialPointDrawer.vue', () => {
     phone: '081234567801',
     phoneIsWhatsapp: true,
     alamat: 'Jl. Mulawarman No. 12',
-    coordinates: { latitude: -1.2235, longitude: 116.9521, pointId: 'point-1' },
+    coordinates: { latitude: MANGGAR_MAP_ORIGIN.latitude, longitude: MANGGAR_MAP_ORIGIN.longitude, pointId: 'point-1' },
     createdAt: '2026-08-01T00:00:00Z',
     updatedAt: '2026-08-01T00:00:00Z',
   };
