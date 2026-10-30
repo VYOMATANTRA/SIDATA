@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useUsersStore, type UserItem } from '../stores/users.store';
 import { useAuthStore } from '../stores/auth';
+import { setAdminHeader } from '../composables/useAdminHeader';
 
 const usersStore = useUsersStore();
 const authStore = useAuthStore();
@@ -86,6 +87,7 @@ const filteredUsers = computed(() => {
 });
 
 onMounted(async () => {
+  setAdminHeader('Manajemen Pengguna', 'Kelola akun pengguna sistem, hak akses, dan status aktivasi.');
   await Promise.all([usersStore.fetchUsers(), usersStore.fetchRoles()]);
 });
 
@@ -227,64 +229,45 @@ async function handleConfirmAction() {
 <template>
   <div class="rounded-2xl bg-slate-950 p-6 font-sans text-slate-100 md:p-10">
     <div class="mx-auto max-w-7xl space-y-6">
-      <!-- Top Bar / Header -->
-      <div
-        class="flex flex-col justify-between gap-4 border-b border-slate-800 pb-6 md:flex-row md:items-center"
-      >
-        <div>
-          <!--
-            AdminLayout's header already renders the page's <h1> (SPEC: shell supplies page
-            title/subtitle) — this stays an h2 so the routed view doesn't duplicate the landmark.
-          -->
-          <h2 class="flex items-center gap-3 text-3xl font-extrabold tracking-tight text-white">
-            <span>Manajemen Pengguna</span>
-            <span
-              class="rounded-full border border-indigo-500/40 bg-indigo-500/20 px-2.5 py-1 text-xs font-semibold tracking-wider text-indigo-300 uppercase"
-            >
-              Admin Portal
-            </span>
-          </h2>
-          <p class="mt-1 text-sm text-slate-400">
-            Kelola akun pengguna sistem, hak akses, dan status aktivasi.
-          </p>
-        </div>
-
-        <div class="flex flex-wrap items-center gap-3">
-          <router-link
-            to="/settings/audit-retention"
-            class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-slate-700 active:scale-95"
+      <!--
+        AdminLayout's header already renders the page's <h1> and subtitle (set via
+        setAdminHeader in onMounted below) — this view only owns the action toolbar.
+      -->
+      <div class="flex flex-wrap items-center justify-end gap-3 border-b border-slate-800 pb-6">
+        <router-link
+          to="/settings/audit-retention"
+          class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-slate-700 active:scale-95"
+        >
+          <svg
+            class="h-4 w-4 text-slate-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
           >
-            <svg
-              class="h-4 w-4 text-slate-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <span>Retensi Audit</span>
-          </router-link>
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          <span>Retensi Audit</span>
+        </router-link>
 
-          <button
-            @click="openCreateModal"
-            class="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/25 transition hover:bg-indigo-500 active:scale-95"
-          >
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-            <span>Tambah Pengguna</span>
-          </button>
-        </div>
+        <button
+          @click="openCreateModal"
+          class="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/25 transition hover:bg-indigo-500 active:scale-95"
+        >
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 4v16m8-8H4"
+            />
+          </svg>
+          <span>Tambah Pengguna</span>
+        </button>
       </div>
 
       <!-- Controls (Search) -->

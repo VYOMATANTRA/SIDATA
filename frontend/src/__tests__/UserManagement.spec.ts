@@ -60,7 +60,7 @@ describe('UserManagement inside AdminLayout (shell regression)', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders without errors, contributing exactly one h1 to the page via the shell', async () => {
+  it('renders without errors, contributing exactly one h1 (no duplicate h2 title) via the shell', async () => {
     globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
       ok: true,
       status: 200,
@@ -106,6 +106,12 @@ describe('UserManagement inside AdminLayout (shell regression)', () => {
     expect(wrapper.findAll('h1').length).toBe(1);
     expect(wrapper.find('h1').text()).toBe('Manajemen Pengguna');
     expect(wrapper.findComponent(UserManagement).exists()).toBe(true);
-    expect(wrapper.find('h2').text()).toContain('Manajemen Pengguna');
+    // The view no longer renders its own duplicate <h2> title — only the shell's <h1> and the
+    // subtitle it set via setAdminHeader onMounted (a screen reader would otherwise read the
+    // page title twice).
+    expect(wrapper.find('h2').exists()).toBe(false);
+    expect(wrapper.find('[data-test="admin-header"] p').text()).toContain(
+      'Kelola akun pengguna sistem',
+    );
   });
 });

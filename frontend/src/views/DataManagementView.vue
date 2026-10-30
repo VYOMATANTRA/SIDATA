@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { setAdminHeader } from '../composables/useAdminHeader';
 import BaseButton from '../components/common/BaseButton.vue';
 import BaseModal from '../components/common/BaseModal.vue';
 import IndicatorCard, { type IndicatorCardModel } from '../components/data/IndicatorCard.vue';
@@ -149,7 +150,13 @@ async function loadAll(): Promise<void> {
   ]);
 }
 
-onMounted(loadAll);
+onMounted(() => {
+  setAdminHeader(
+    'Data',
+    'Kelola angka indikator skalar dan empat tabel matriks. Angka dimasukkan manual; impor massal belum tersedia.',
+  );
+  void loadAll();
+});
 
 function openScalar(indicator: Indicator): void {
   serverError.value = '';
@@ -239,16 +246,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
 
 <template>
   <div>
-    <div>
-      <p class="text-xs font-semibold tracking-widest text-slate-500 uppercase">CMS Data</p>
-      <h2 class="text-brand-navy mt-1 text-xl font-bold">Data</h2>
-      <p class="mt-1 max-w-2xl text-sm text-slate-600">
-        Kelola angka indikator skalar dan empat tabel matriks. Angka dimasukkan manual; impor massal
-        belum tersedia.
-      </p>
-    </div>
-
-    <div class="mt-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <form
         role="search"
         aria-label="Saring daftar data"

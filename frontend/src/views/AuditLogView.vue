@@ -10,6 +10,7 @@ import {
   ChevronRightIcon,
 } from '@heroicons/vue/24/outline';
 import { useAuditStore, type AuditLogItem } from '../stores/audit.store';
+import { setAdminHeader } from '../composables/useAdminHeader';
 
 const auditStore = useAuditStore();
 
@@ -179,6 +180,10 @@ async function handleAcknowledge(log: AuditLogItem) {
 }
 
 onMounted(async () => {
+  setAdminHeader(
+    'Log Sistem dan Audit Trail',
+    'Pantau seluruh aktivitas yang terjadi di sistem, mulai dari autentikasi hingga riwayat konfigurasi admin.',
+  );
   const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   await Promise.all([
     auditStore.fetchLogs(),
@@ -191,18 +196,10 @@ onMounted(async () => {
 <template>
   <div>
     <div class="space-y-6">
-      <!-- Page Title: AdminLayout's header already renders the page <h1>/breadcrumb. -->
-      <div class="border-b border-slate-200 pb-6">
-        <div
-          class="from-brand-indigo via-brand-violet to-brand-cyan mb-4 h-1.5 w-28 rounded-full bg-linear-to-r"
-          aria-hidden="true"
-        ></div>
-        <h2 class="text-brand-navy font-extrabold tracking-tight">Log Sistem dan Audit Trail</h2>
-        <p class="mt-1 text-slate-600">
-          Pantau seluruh aktivitas yang terjadi di sistem, mulai dari autentikasi hingga riwayat
-          konfigurasi admin.
-        </p>
-      </div>
+      <!--
+        AdminLayout's header already renders the page's <h1> and subtitle (set via
+        setAdminHeader in onMounted below) — this view only owns its own content.
+      -->
 
       <!-- Stat Cards -->
       <section aria-label="Ringkasan log audit">
