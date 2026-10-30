@@ -369,15 +369,88 @@ async function main() {
   const isDevMock = process.env.DEV_MOCK_INDICATORS === 'true' || process.argv.includes('--dev');
   const isReset = process.env.RESET_INDICATORS === 'true' || process.argv.includes('--reset');
   console.log(
-    `Memulai proses seeding indikator (Mode: ${isDevMock ? 'Dev Mock Figures' : 'Mock to 0'}, Reset: ${isReset})...`,
+    `Memulai proses seeding indikator (Mode: ${isDevMock ? 'Dev Mock Figures (--dev)' : 'Honest Empty (No mock data)'}, Reset: ${isReset})...`,
   );
 
-  // 0. Bersihkan indikator legacy buatan seeder lama yang salah sasaran di halaman non-kependudukan
-  const cleaned = await prisma.indicator.deleteMany({
+  // 0. Bersihkan indikator legacy buatan seeder lama yang salah sasaran di halaman non-kependudukan.
+  // SPEC §3: Hanya hapus jika row masih dalam state seeded (tidak pernah diubah oleh editor)
+  // dan catat log audit indicator.deleted dalam transaksi yang sama.
+  const legacyCandidates = await prisma.indicator.findMany({
     where: { slug: { in: LEGACY_FAKE_SLUGS } },
   });
-  if (cleaned.count > 0) {
-    console.log(`✓ Berhasil membersihkan ${cleaned.count} indikator legacy buatan seeder lama.`);
+
+  for (const candidate of legacyCandidates) {
+    const isUntouched = candidate.createdAt.getTime() === candidate.updatedAt.getTime();
+    const editorAudit = await prisma.auditLog.findFirst({
+      where: {
+        targetId: candidate.id,
+        actorRole: { not: 'system' },
+      },
+    });
+
+    if (!isUntouched || editorAudit) {
+      console.warn(
+        `[SKIP CLEANUP] Indikator legacy ${candidate.slug} dilewati karena telah diedit oleh non-system user.`,
+      );
+      continue;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.indicator.delete({ where: { id: candidate.id } });
+      await buildAuditLog(
+        {
+          action: AUDIT_ACTIONS.INDICATOR_DELETED,
+          actor: { email: 'system@sidata.internal', role: 'system' },
+          target: { type: 'indicator', id: candidate.id, label: candidate.label },
+          metadata: {
+            source: 'seeder_indicator_cleanup',
+            slug: candidate.slug,
+            reason: 'legacy_fake_indicator_cleanup',
+          },
+        },
+        tx,
+      );
+    });
+    console.log(`✓ Indikator legacy ${candidate.slug} berhasil dihapus dengan baris audit.`);
+  }
+
+  // Bersihkan juga indikator bernilai 0 yang sebelumnya dibuat tanpa --dev agar tidak menampilkan angka palsu
+  if (!isDevMock) {
+    const zeroDummyCandidates = await prisma.indicator.findMany({
+      where: {
+        valueCurrent: 0,
+      },
+    });
+
+    for (const candidate of zeroDummyCandidates) {
+      const isUntouched = candidate.createdAt.getTime() === candidate.updatedAt.getTime();
+      const editorAudit = await prisma.auditLog.findFirst({
+        where: {
+          targetId: candidate.id,
+          actorRole: { not: 'system' },
+        },
+      });
+
+      if (isUntouched && !editorAudit) {
+        await prisma.$transaction(async (tx) => {
+          await tx.indicator.delete({ where: { id: candidate.id } });
+          await buildAuditLog(
+            {
+              action: AUDIT_ACTIONS.INDICATOR_DELETED,
+              actor: { email: 'system@sidata.internal', role: 'system' },
+              target: { type: 'indicator', id: candidate.id, label: candidate.label },
+              metadata: {
+                source: 'seeder_indicator_cleanup',
+                slug: candidate.slug,
+                reason: 'zero_mock_indicator_cleanup',
+              },
+            },
+            tx,
+          );
+        });
+        console.log(`✓ Indikator dummy 0 ${candidate.slug} dibersihkan dengan baris audit.`);
+      }
+    }
   }
 
   for (const [index, category] of CATEGORIES.entries()) {
@@ -442,7 +515,13 @@ async function main() {
       },
     });
 
-    // 4. Seeding indikator per kategori dengan data spesifik
+    // 4. Seeding indikator per kategori
+    // Tanpa --dev, jangan buat indikator jika belum ada data riil yang bersumber valid.
+    // Kartu Cerita memiliki empty state "Data belum tersedia", sehingga tidak adanya baris adalah default yang jujur.
+    if (!isDevMock) {
+      continue;
+    }
+
     const indicatorDefs = CATEGORY_INDICATORS[category.slug] || [];
 
     for (const def of indicatorDefs) {
@@ -450,11 +529,24 @@ async function main() {
         where: { slug: def.slug },
       });
 
-      // Gunakan nilai 0 secara default, atau angka dev mock jika flag eksplisit diaktifkan
-      const valueCurrent = isDevMock ? def.devValue : '0';
+      const valueCurrent = def.devValue;
 
       if (existing) {
         if (isReset && existing.valueCurrent.toString() !== valueCurrent) {
+          // SPEC §3: Hanya reset jika belum pernah diubah oleh editor / non-system user
+          const isTouchedByEditor =
+            existing.createdAt.getTime() !== existing.updatedAt.getTime() ||
+            (await prisma.auditLog.findFirst({
+              where: { targetId: existing.id, actorRole: { not: 'system' } },
+            }));
+
+          if (isTouchedByEditor) {
+            console.warn(
+              `[SKIP RESET] Indikator ${existing.slug} dilewati dari --reset karena telah diedit oleh editor.`,
+            );
+            continue;
+          }
+
           await prisma.$transaction(async (tx) => {
             const updated = await tx.indicator.update({
               where: { id: existing.id },
