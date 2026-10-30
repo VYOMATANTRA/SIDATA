@@ -14,7 +14,19 @@ onMounted(() => {
 
 const publikasiCatalog = computed<PublicationItem[]>(() => {
   const custom = contentBlocksStore.publikasiKatalog.metadata?.publications;
-  if (Array.isArray(custom) && custom.length > 0) return custom as PublicationItem[];
+  if (Array.isArray(custom) && custom.length > 0) {
+    const valid = custom.filter((item): item is PublicationItem => {
+      return (
+        typeof item === 'object' &&
+        item !== null &&
+        typeof (item as PublicationItem).title === 'string' &&
+        (item as PublicationItem).title.trim() !== '' &&
+        typeof (item as PublicationItem).category === 'string' &&
+        typeof (item as PublicationItem).description === 'string'
+      );
+    });
+    if (valid.length > 0) return valid;
+  }
   return PUBLICATIONS;
 });
 </script>
@@ -41,7 +53,10 @@ const publikasiCatalog = computed<PublicationItem[]>(() => {
         </div>
 
         <ul class="mt-2 divide-y divide-gray-200" data-test="publication-list">
-          <li v-for="(publication, index) in publikasiCatalog" :key="publication.title">
+          <li
+            v-for="(publication, index) in publikasiCatalog"
+            :key="`${publication.category}-${publication.title}-${index}`"
+          >
             <article
               class="grid gap-3 py-6 sm:grid-cols-[3rem_minmax(0,1fr)_auto] sm:items-center sm:gap-5"
             >

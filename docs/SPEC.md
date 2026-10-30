@@ -195,8 +195,8 @@ sidebar shell), organized into three accessible tabbed categories:
    hierarchy, or raw JSON for structured collections). Mutations use `PATCH /api/content-blocks/:slug`
    (audited as `content_block.updated`) with prototype pollution guards and URL validation.
 
-3. **Pengaturan Publik Portal:** Displays system portal settings and opens `PublicSettingsForm`. Editors
-   and admins can update identity settings (`public.app_name`, `public.institution_name`, `public.tagline`,
+3. **Pengaturan Publik Portal:** Displays system portal settings and opens `PublicSettingsForm`. Admins
+   can update identity settings (`public.app_name`, `public.institution_name`, `public.tagline`,
    `public.administrative_area`), public contact channels (`public.contact_phone`, `public.contact_whatsapp`,
    `public.contact_email`, `public.contact_address`), and default map coordinates & zoom (`public.default_coordinates`).
    Mutations use `PATCH /api/settings/public` (audited as `settings.public_updated`).
@@ -447,7 +447,7 @@ Provides three tabbed operational interfaces:
 3. **Pengaturan Publik Portal**: Management of public metadata (`public.*` keys: app name, institution, tagline, contact channels, default map coordinates and zoom) using `PublicSettingsForm`.
 
 **Dynamic View & Component Integration:**
-- **`AppFooter`**: Dynamically reflects verified public contact numbers (`contactPhone`) and office address lines (`contactAddress`) from `settingsStore` when loaded, falling back gracefully to static defaults. The `/publikasi` link in the "Sumber Daya" navigation is conditionally shown only when at least one publication has a confirmed online public URL (`hasPublicPublication()`).
+- **`AppFooter`**: Dynamically reflects verified public contact numbers (`contactPhone`) and office address lines (`contactAddress`) from `settingsStore` when loaded, falling back gracefully to static defaults. The `/publikasi` link in the "Sumber Daya" navigation is always included to provide public access to municipal reports and booklets.
 - **`InteractiveMap` & `PetaView`**: Initialize initial center and zoom level dynamically from `settingsStore.defaultCoordinates`. Distance calculations in `PetaView` measure from this dynamic kelurahan coordinate origin when browser geolocation is unavailable or ungranted.
 - **`TentangKelurahanManggarView`**: Dynamically renders profile metrics (RT count, kecamatan, kota, landscape), administrative boundaries, and SOTK officials from the `tentang-kelurahan-profil` content block, falling back to verified constants in `content/tentang.ts`.
 - **`PublikasiView`**: Dynamically renders publication entries from the `publikasi-katalog` content block, falling back to `content/publikasi.ts`. Documents with verified `href` URLs expose direct download actions, while others display the honest "Segera hadir" status.
