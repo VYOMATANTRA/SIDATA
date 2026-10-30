@@ -122,6 +122,37 @@ beforeEach(() => {
     }) as AsyncFn);
   }
 
+  // Bridge: getIndicatorById now uses a single findMany(OR id|slug). Reuse findUnique
+  // stubs so existing controller tests keep working unless they override findMany.
+  indicatorImpl['findMany'] = async (args: AnyRecord) => {
+    const where = args['where'] as { OR?: Array<{ id?: string; slug?: string }> };
+    if (!Array.isArray(where?.OR)) {
+      throw new Error('unexpected prisma.indicator.findMany where shape');
+    }
+    if (!indicatorImpl['findUnique']) return [];
+    const rows: AnyRecord[] = [];
+    const seen = new Set<string>();
+    for (const clause of where.OR) {
+      const findUnique = indicatorImpl['findUnique'] as (arg: AnyRecord) => Promise<unknown>;
+      const row = (await findUnique({
+        where: clause,
+        include: args['include'],
+      })) as AnyRecord | null;
+      if (row && typeof row.id === 'string' && !seen.has(row.id)) {
+        seen.add(row.id);
+        rows.push(row);
+      }
+    }
+    const idLookup = where.OR.find((clause) => typeof clause.id === 'string')?.id;
+    if (typeof idLookup === 'string') {
+      const preferred = rows.find(
+        (row) => String(row.id).trim().toLowerCase() === idLookup.trim().toLowerCase(),
+      );
+      if (preferred) return [preferred];
+    }
+    return rows.slice(0, 1);
+  };
+
   sectionImpl['findUnique'] = async () => ({ id: 'sec-1' });
 });
 
