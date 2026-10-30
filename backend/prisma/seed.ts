@@ -49,9 +49,24 @@ async function main() {
       where: { id: '00000000-0000-0000-0000-000000000001' },
     });
     if (legacySamplePoint) {
-      console.warn(
-        '⚠️  Titik sample lama ketua_rt terdeteksi. Jalankan `npm run dev:cleanup-sample-rt` untuk membersihkan data lama.',
-      );
+      if (
+        legacySamplePoint.type === 'ketua_rt' &&
+        legacySamplePoint.name.includes('Pos RT 01') &&
+        legacySamplePoint.latitude === -1.2235 &&
+        legacySamplePoint.longitude === 116.9521
+      ) {
+        // Automatically remove untouched legacy sample point so RT 1 does not have conflicting points
+        await prisma.spatialPointRt.deleteMany({
+          where: { pointId: '00000000-0000-0000-0000-000000000001' },
+        });
+        await prisma.spatialPoint.deleteMany({
+          where: { id: '00000000-0000-0000-0000-000000000001' },
+        });
+      } else {
+        console.warn(
+          '⚠️  Titik sample lama ketua_rt terdeteksi. Jalankan `npm run dev:cleanup-sample-rt` untuk membersihkan data lama.',
+        );
+      }
     }
 
     await seedRtLeaders(prisma, RT_LEADERS_DATA);

@@ -99,7 +99,7 @@ Key details:
 - `prisma/schema.prisma`: ORM schema (MySQL)
 - `prisma/seed.ts`: Seeds default roles (`user`, `admin`, `editor`), default audit retention settings (keep-forever), default public settings (`publicSeedMap`), default operational weather config, default content blocks (`DEFAULT_CONTENT_BLOCKS`), default tier-1 comparison templates (`DEFAULT_COMPARISON_TEMPLATES`), the 8 Cerita pages and their chapters (data in `prisma/ceritaPages.ts`), sample RT leaders (development/testing only, skipped when NODE_ENV=production), and spatial points
 - `generated/prisma/`: Auto-generated Prisma client (do not edit)
-- `scripts/grants/audit-logs-grants.sql`, `scripts/prune-audit-logs.ts`: audit trail operations — see Audit Trail below
+- `scripts/grants/audit-logs-grants.sql`, `scripts/prune-audit-logs.ts`, `scripts/cleanup-legacy-sample-rt-leaders.ts`: audit trail operations and development sample cleanup — see Audit Trail below
 
 Key details:
 
