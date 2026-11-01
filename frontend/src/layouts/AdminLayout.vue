@@ -46,7 +46,7 @@ watch(
     <AdminSidebar :mobile-open="isMobileSidebarOpen" @close="isMobileSidebarOpen = false" />
 
     <div class="flex min-w-0 flex-1 flex-col overflow-y-auto">
-      <AdminHeader @open-menu="isMobileSidebarOpen = true" />
+      <AdminHeader :mobile-open="isMobileSidebarOpen" @open-menu="isMobileSidebarOpen = true" />
 
       <main id="admin-main-content" class="flex-1 px-6 py-6 md:px-10 md:py-8" tabindex="-1">
         <div class="rounded-card border border-slate-200 bg-white p-6 shadow-sm md:p-8">

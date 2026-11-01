@@ -179,4 +179,47 @@ describe('AdminLayout.vue — mobile sidebar drawer', () => {
 
     expect(wrapper.find('[data-test="admin-sidebar-backdrop"]').exists()).toBe(false);
   });
+
+  // Accessibility fix: the hamburger button had no aria-expanded, so screen-reader users had no
+  // way to know whether the drawer it controls was open or closed (WCAG 2.1 §4.1.2 Name, Role,
+  // Value).
+  it('reflects drawer state on the hamburger button via aria-expanded', async () => {
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
+    const toggle = wrapper.find('[data-test="admin-mobile-menu-toggle"]');
+    expect(toggle.attributes('aria-expanded')).toBe('false');
+
+    await toggle.trigger('click');
+    expect(wrapper.find('[data-test="admin-mobile-menu-toggle"]').attributes('aria-expanded')).toBe(
+      'true',
+    );
+  });
+
+  // Accessibility fix: closing the drawer (from any trigger — its own close button, Escape, or
+  // the backdrop) must return focus to the control that opened it, rather than dropping focus
+  // into the document body (WCAG 2.1 §2.4.3 Focus Order).
+  it('returns focus to the hamburger toggle when the drawer closes via the backdrop', async () => {
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, {
+      global: { plugins: [router] },
+      attachTo: document.body,
+    });
+
+    const toggle = wrapper.find('[data-test="admin-mobile-menu-toggle"]');
+    await toggle.trigger('click');
+    await wrapper.find('[data-test="admin-sidebar-backdrop"]').trigger('click');
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    expect(document.activeElement).toBe(
+      wrapper.find('[data-test="admin-mobile-menu-toggle"]').element,
+    );
+    wrapper.unmount();
+  });
 });

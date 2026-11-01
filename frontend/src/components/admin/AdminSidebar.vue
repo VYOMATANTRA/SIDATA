@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watchEffect } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, watchEffect, nextTick } from 'vue';
 import { useRoute, RouterLink } from 'vue-router';
 import {
   ChevronDownIcon,
@@ -67,12 +67,27 @@ function toggleCollapse() {
 
 // Collapsing the rail still removes `entry.label` text visually, but the label stays in the DOM
 // as sr-only so links and buttons keep an accessible name for keyboard/screen-reader users.
+// "Collapsed" is a desktop-rail preference (persisted in localStorage) — it must never apply to
+// the mobile drawer, which is a separate full-width overlay with its own open/close state, or
+// someone who collapsed the rail on desktop would open the app on a phone to a drawer of
+// unlabeled icons with no way to undo it (the collapse toggle is desktop-only). `md:sr-only`
+// instead of bare `sr-only` keeps labels visible at every width below the md breakpoint.
 function labelClass(collapsed: boolean, expandedClass: string): string {
-  return collapsed ? 'sr-only' : expandedClass;
+  return collapsed ? `${expandedClass} md:sr-only` : expandedClass;
+}
+
+// A route "belongs" to a nav entry either by exact path match, or by declaring
+// `meta.navActiveFor` (see router/index.ts) when it's a child page reached by some other means
+// than clicking this entry (e.g. /settings/audit-retention, linked from inside UserManagement.vue
+// rather than the sidebar). Plain path-prefix matching isn't safe here: most ADMIN_NAV entries are
+// /admin/* siblings, so prefix-matching against '/admin' would also light up Beranda everywhere.
+function isNavActive(to: string): boolean {
+  if (route.path === to) return true;
+  return typeof route.meta.navActiveFor === 'string' && route.meta.navActiveFor === to;
 }
 
 function isGroupActive(group: AdminNavGroup) {
-  return group.items.some((item) => route.path === item.to);
+  return group.items.some((item) => isNavActive(item.to));
 }
 
 const isSistemOpen = ref(false);
@@ -106,6 +121,20 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown);
 });
 
+// Moves focus into the drawer when it opens on mobile, so keyboard users land on its content
+// instead of staying wherever focus was on the page behind it (WCAG 2.1 §2.4.3 Focus Order).
+// Returning focus to the toggle button on close is AdminHeader.vue's job — it owns that button.
+const mobileCloseButtonRef = ref<HTMLButtonElement | null>(null);
+
+watch(
+  () => props.mobileOpen,
+  (open) => {
+    if (open) {
+      void nextTick(() => mobileCloseButtonRef.value?.focus());
+    }
+  },
+);
+
 const isLoggingOut = ref(false);
 const logoutError = ref('');
 
@@ -123,8 +152,11 @@ async function handleLogout() {
 <template>
   <nav
     aria-label="Navigasi Admin"
-    class="bg-brand-navy fixed inset-y-0 left-0 z-40 flex h-full w-72 flex-col border-r border-white/10 text-white transition-all duration-200 md:static md:translate-x-0"
-    :class="[mobileOpen ? 'translate-x-0' : '-translate-x-full', isCollapsed ? 'md:w-20' : 'md:w-72']"
+    class="bg-brand-navy fixed inset-y-0 left-0 z-40 flex h-full w-72 flex-col border-r border-white/10 text-white transition-all duration-200 md:visible md:static md:translate-x-0"
+    :class="[
+      mobileOpen ? 'visible translate-x-0' : 'invisible -translate-x-full',
+      isCollapsed ? 'md:w-20' : 'md:w-72',
+    ]"
     data-test="admin-sidebar"
   >
     <div class="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-5">
@@ -147,6 +179,7 @@ async function handleLogout() {
 
       <!-- Mobile: close the drawer. Desktop: collapse the rail. Never both at once. -->
       <button
+        ref="mobileCloseButtonRef"
         type="button"
         class="focus-visible:ring-brand-cyan rounded-btn shrink-0 border border-white/20 p-1.5 text-white/70 transition-transform hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:outline-none md:hidden"
         aria-label="Tutup menu navigasi"
@@ -180,18 +213,25 @@ async function handleLogout() {
           :to="entry.to"
           class="focus-visible:ring-brand-cyan rounded-btn flex items-center gap-3 border-l-2 border-transparent px-3 py-2.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
           :class="
-            route.path === entry.to
+            isNavActive(entry.to)
               ? 'border-brand-cyan bg-white/10 text-white'
               : 'text-white/70 hover:bg-white/5 hover:text-white'
           "
-          :aria-current="route.path === entry.to ? 'page' : undefined"
+          :aria-current="isNavActive(entry.to) ? 'page' : undefined"
           :data-test="entry.dataTest"
           @click="closeMobile"
         >
           <component :is="entry.icon" class="h-5 w-5 shrink-0" aria-hidden="true" />
-          <span :class="labelClass(isCollapsed, 'flex min-w-0 flex-1 items-center justify-between gap-2')">
+          <span
+            :class="
+              labelClass(isCollapsed, 'flex min-w-0 flex-1 items-center justify-between gap-2')
+            "
+          >
             <span class="truncate">{{ entry.label }}</span>
-            <span v-if="entry.badge" class="shrink-0 rounded-full border border-white/20 bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white/70 uppercase">
+            <span
+              v-if="entry.badge"
+              class="shrink-0 rounded-full border border-white/20 bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white/70 uppercase"
+            >
               {{ entry.badge }}
             </span>
           </span>
@@ -229,18 +269,28 @@ async function handleLogout() {
                 :to="item.to"
                 class="focus-visible:ring-brand-cyan rounded-btn flex items-center gap-3 border-l-2 border-transparent px-3 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
                 :class="
-                  route.path === item.to
+                  isNavActive(item.to)
                     ? 'border-brand-cyan bg-white/10 text-white'
                     : 'text-white/60 hover:bg-white/5 hover:text-white'
                 "
-                :aria-current="route.path === item.to ? 'page' : undefined"
+                :aria-current="isNavActive(item.to) ? 'page' : undefined"
                 :data-test="item.dataTest"
                 @click="closeMobile"
               >
                 <component :is="item.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span :class="labelClass(isCollapsed, 'flex min-w-0 flex-1 items-center justify-between gap-2')">
+                <span
+                  :class="
+                    labelClass(
+                      isCollapsed,
+                      'flex min-w-0 flex-1 items-center justify-between gap-2',
+                    )
+                  "
+                >
                   <span class="truncate">{{ item.label }}</span>
-                  <span v-if="item.badge" class="shrink-0 rounded-full border border-white/20 bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white/70 uppercase">
+                  <span
+                    v-if="item.badge"
+                    class="shrink-0 rounded-full border border-white/20 bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white/70 uppercase"
+                  >
                     {{ item.badge }}
                   </span>
                 </span>

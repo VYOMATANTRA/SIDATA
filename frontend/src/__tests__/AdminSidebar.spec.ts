@@ -15,6 +15,11 @@ function createTestRouter() {
       { path: '/data', component: { template: '<div>Data</div>' } },
       { path: '/users', component: { template: '<div>Users</div>' } },
       { path: '/audit-logs', component: { template: '<div>Audit</div>' } },
+      {
+        path: '/settings/audit-retention',
+        component: { template: '<div>Retention</div>' },
+        meta: { navActiveFor: '/users' },
+      },
       { path: '/admin/:pathMatch(.*)*', component: { template: '<div>Admin Page</div>' } },
     ],
   });
@@ -111,6 +116,33 @@ describe('AdminSidebar.vue', () => {
     );
   });
 
+  // Bug fix: /settings/audit-retention is a child page reached via a link inside
+  // UserManagement.vue, not directly from the sidebar, so its path never matches any ADMIN_NAV
+  // `to`. It declares meta.navActiveFor: '/users' so the sidebar can still orient the user:
+  // "Akun pengguna" highlighted, aria-current set, and the Sistem group auto-expanded.
+  it('highlights "Akun pengguna" and expands the Sistem group on /settings/audit-retention via meta.navActiveFor', async () => {
+    const { wrapper } = await mountSidebar('admin', '/settings/audit-retention');
+
+    const akunPengguna = wrapper.find('[data-test="nav-sistem-akun-pengguna"]');
+    expect(akunPengguna.attributes('aria-current')).toBe('page');
+
+    const sistemToggle = wrapper.find('[data-test="nav-sistem"]');
+    expect(sistemToggle.attributes('aria-expanded')).toBe('true');
+
+    // Beranda's `to` is '/admin' — naive prefix-matching against '/settings/audit-retention'
+    // would not accidentally match it either way, but this pins that only the declared target
+    // lights up, not every other item.
+    const beranda = wrapper.find('[data-test="nav-beranda"]');
+    expect(beranda.attributes('aria-current')).toBeUndefined();
+  });
+
+  it('does not let prefix-like paths under /admin/* cross-highlight each other (e.g. Beranda vs Cerita)', async () => {
+    const { wrapper } = await mountSidebar('admin', '/admin/cerita');
+
+    expect(wrapper.find('[data-test="nav-cerita"]').attributes('aria-current')).toBe('page');
+    expect(wrapper.find('[data-test="nav-beranda"]').attributes('aria-current')).toBeUndefined();
+  });
+
   it('toggles collapse state via the collapse button with aria-expanded', async () => {
     const { wrapper } = await mountSidebar('admin');
 
@@ -163,19 +195,19 @@ describe('AdminSidebar.vue', () => {
 
     const dataLink = wrapper.find('[data-test="nav-data"]');
     expect(dataLink.text()).toContain('Data');
-    expect(dataLink.find('span').classes()).toContain('sr-only');
+    expect(dataLink.find('span').classes()).toContain('md:sr-only');
 
     const sistemToggle = wrapper.find('[data-test="nav-sistem"]');
     expect(sistemToggle.text()).toContain('Sistem');
-    expect(sistemToggle.find('span').classes()).toContain('sr-only');
+    expect(sistemToggle.find('span').classes()).toContain('md:sr-only');
 
     const akunPengguna = wrapper.find('[data-test="nav-sistem-akun-pengguna"]');
     expect(akunPengguna.text()).toContain('Akun pengguna');
-    expect(akunPengguna.find('span').classes()).toContain('sr-only');
+    expect(akunPengguna.find('span').classes()).toContain('md:sr-only');
 
     const logoutButton = wrapper.find('[data-test="nav-logout"]');
     expect(logoutButton.text()).toContain('Keluar');
-    expect(logoutButton.find('span').classes()).toContain('sr-only');
+    expect(logoutButton.find('span').classes()).toContain('md:sr-only');
   });
 
   it('shows visible (non-sr-only) labels when the sidebar is expanded', async () => {
@@ -183,6 +215,22 @@ describe('AdminSidebar.vue', () => {
 
     const dataLink = wrapper.find('[data-test="nav-data"]');
     expect(dataLink.find('span').classes()).not.toContain('sr-only');
+    expect(dataLink.find('span').classes()).not.toContain('md:sr-only');
+  });
+
+  // Bug fix: "collapsed" is a desktop-rail preference persisted in localStorage. It used to apply
+  // bare `sr-only` regardless of viewport, so someone who collapsed the rail on desktop would open
+  // the app on a phone to a drawer of unlabeled icons with no way to undo it (the collapse toggle
+  // is desktop-only, md:inline-flex). The label classes must use the `md:` variant so they stay
+  // visible below that breakpoint even when isCollapsed is true.
+  it('never applies bare sr-only to labels — only the md: variant, so a collapsed desktop preference cannot hide labels on the mobile drawer', async () => {
+    const { wrapper } = await mountSidebar('admin');
+    await wrapper.find('[data-test="sidebar-collapse-toggle"]').trigger('click');
+
+    const classLists = wrapper.findAll('span').map((s) => s.classes());
+    for (const classes of classLists) {
+      expect(classes).not.toContain('sr-only');
+    }
   });
 });
 
@@ -262,6 +310,57 @@ describe('AdminSidebar.vue — mobile drawer', () => {
       global: { plugins: [router] },
     });
     expect(open.find('nav').classes()).toContain('translate-x-0');
+  });
+
+  // Accessibility fix: -translate-x-full only moves the closed drawer off-screen visually —
+  // every link inside stays focusable and screen-reader-announced, so tabbing on a phone walks
+  // through invisible links (WCAG 2.1 §4.1.2). `invisible` (visibility:hidden) removes focusability
+  // and AT announcement; `md:visible` keeps the desktop rail (always "open" there) unaffected.
+  it('marks the closed drawer invisible (not just translated off-screen) below md, but always visible at md+', async () => {
+    const { wrapper: closedWrapper } = await mountSidebar('admin');
+    const closedClasses = closedWrapper.find('nav').classes();
+    expect(closedClasses).toContain('invisible');
+    expect(closedClasses).toContain('md:visible');
+
+    setActivePinia(createPinia());
+    const authStore = useAuthStore();
+    authStore.user = { id: 'u1', email: 'u@example.com', role: 'admin' };
+    authStore.accessToken = 'token';
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const openWrapper = mount(AdminSidebar, {
+      props: { mobileOpen: true },
+      global: { plugins: [router] },
+    });
+    expect(openWrapper.find('nav').classes()).toContain('visible');
+    expect(openWrapper.find('nav').classes()).not.toContain('invisible');
+  });
+
+  // Accessibility fix: opening the drawer must move focus into it (WCAG 2.1 §2.4.3), rather than
+  // leaving focus wherever it was on the page behind the now-visible overlay.
+  it('moves focus to the mobile close button when the drawer opens', async () => {
+    setActivePinia(createPinia());
+    const authStore = useAuthStore();
+    authStore.user = { id: 'u1', email: 'u@example.com', role: 'admin' };
+    authStore.accessToken = 'token';
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminSidebar, {
+      props: { mobileOpen: false },
+      global: { plugins: [router] },
+      attachTo: document.body,
+    });
+
+    await wrapper.setProps({ mobileOpen: true });
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    expect(document.activeElement).toBe(wrapper.find('[data-test="sidebar-mobile-close"]').element);
+    wrapper.unmount();
   });
 
   it('emits close when the mobile close button is clicked', async () => {

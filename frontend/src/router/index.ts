@@ -160,6 +160,12 @@ const router = createRouter({
             requiresAuth: true,
             requiresAdmin: true,
             title: 'Pengaturan Retensi Audit',
+            // Declares which sidebar item this child page belongs to, since its own path
+            // doesn't match any ADMIN_NAV `to` (naive path-prefix matching would be unsafe here —
+            // most ADMIN_NAV entries are /admin/* siblings, so prefix matching against '/admin'
+            // would wrongly also light up Beranda). AdminSidebar.vue reads this to highlight
+            // "Akun pengguna" and keep the Sistem group expanded while on this page.
+            navActiveFor: '/users',
             breadcrumb: ['Sistem', 'Akun pengguna', 'Retensi Audit'],
           },
         },

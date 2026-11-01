@@ -1,10 +1,27 @@
 <script setup lang="ts">
+import { ref, watch, nextTick } from 'vue';
 import { Bars3Icon } from '@heroicons/vue/24/outline';
 import { useAdminHeader } from '../../composables/useAdminHeader';
 
+const props = withDefaults(defineProps<{ mobileOpen?: boolean }>(), { mobileOpen: false });
 defineEmits<{ (e: 'openMenu'): void }>();
 
 const { title, subtitle } = useAdminHeader();
+
+// Owns the toggle button (not AdminSidebar.vue) so focus can return here when the drawer closes,
+// wherever the close came from — the drawer's own close button, Escape, or the backdrop click
+// (WCAG 2.1 §2.4.3 Focus Order). AdminSidebar.vue handles the opposite direction: moving focus
+// into the drawer when it opens.
+const menuToggleRef = ref<HTMLButtonElement | null>(null);
+
+watch(
+  () => props.mobileOpen,
+  (open, wasOpen) => {
+    if (!open && wasOpen) {
+      void nextTick(() => menuToggleRef.value?.focus());
+    }
+  },
+);
 </script>
 
 <template>
@@ -13,10 +30,12 @@ const { title, subtitle } = useAdminHeader();
     data-test="admin-header"
   >
     <button
+      ref="menuToggleRef"
       type="button"
       class="focus-visible:ring-brand-indigo rounded-btn mt-0.5 inline-flex shrink-0 items-center justify-center border border-slate-300 p-2 text-slate-600 transition-colors hover:bg-slate-100 focus-visible:ring-2 focus-visible:outline-none md:hidden"
-      aria-label="Buka menu navigasi"
+      :aria-expanded="mobileOpen"
       aria-controls="admin-sidebar-nav-list"
+      :aria-label="mobileOpen ? 'Tutup menu navigasi' : 'Buka menu navigasi'"
       data-test="admin-mobile-menu-toggle"
       @click="$emit('openMenu')"
     >
