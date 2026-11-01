@@ -20,7 +20,10 @@ const trail = computed<string[]>(() => {
   <nav aria-label="Breadcrumb" data-test="admin-breadcrumb">
     <ol class="flex flex-wrap items-center gap-1.5 text-sm text-slate-500">
       <li class="flex items-center gap-1.5">
-        <RouterLink to="/admin" class="hover:text-brand-navy hover:underline">Beranda</RouterLink>
+        <RouterLink v-if="trail.length" to="/admin" class="hover:text-brand-navy hover:underline">
+          Beranda
+        </RouterLink>
+        <span v-else aria-current="page">Beranda</span>
         <span v-if="trail.length" aria-hidden="true">/</span>
       </li>
       <li v-for="(segment, index) in trail" :key="segment" class="flex items-center gap-1.5">

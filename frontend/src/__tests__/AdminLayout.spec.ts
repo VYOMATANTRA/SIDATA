@@ -72,6 +72,27 @@ describe('AdminLayout.vue', () => {
     expect(breadcrumb.exists()).toBe(true);
     expect(breadcrumb.text()).toContain('Beranda');
     expect(breadcrumb.text()).toContain('Cerita');
+
+    // Beranda is a real link to a different page here (/admin/cerita -> /admin).
+    expect(breadcrumb.find('a').exists()).toBe(true);
+  });
+
+  // Accessibility fix: on the dashboard itself (empty trail), "Beranda" was rendered as a link
+  // to the page the user is already on, with no aria-current, giving a screen reader no hint
+  // about the current location. It must render as plain text with aria-current="page" instead.
+  it('renders "Beranda" as plain text with aria-current="page" when the trail is empty (the dashboard itself)', async () => {
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
+
+    const breadcrumb = wrapper.find('[data-test="admin-breadcrumb"]');
+    expect(breadcrumb.find('a').exists()).toBe(false);
+
+    const beranda = breadcrumb.find('span[aria-current="page"]');
+    expect(beranda.exists()).toBe(true);
+    expect(beranda.text()).toBe('Beranda');
   });
 
   it('renders the routed child view inside the main content panel', async () => {
