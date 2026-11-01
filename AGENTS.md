@@ -71,6 +71,10 @@ Backend runs on port from `PORT` env var (default 3000). Prisma client is genera
 - `src/App.vue`: Root component
 - `src/main.ts`: Entry point (Vue app initialization)
 - `src/router/`: Vue Router routes
+- `src/layouts/`: `AdminLayout.vue` — the admin/CMS base layout shell (sidebar, header, breadcrumb) every `/admin`, `/data`, `/users`, `/audit-logs`, and `/settings/audit-retention` route is mounted inside
+- `src/components/admin/`: Admin shell components — `AdminSidebar.vue`, `AdminHeader.vue`, `AdminBreadcrumb.vue`
+- `src/config/adminNav.ts`: Single role-to-items source of truth for the admin sidebar, also read by the router guards (`src/router/index.ts`) so sidebar visibility and route access can't drift apart
+- `src/composables/`: `useAdminHeader.ts` (admin shell header title/subtitle channel), `useLogout.ts` (shared logout flow)
 - `src/stores/`: Pinia state management
 - `src/__tests__/`: Unit tests with Vitest
 - `src/assets/`: Static assets, including `main.css` (Tailwind entry, imported in `main.ts`)

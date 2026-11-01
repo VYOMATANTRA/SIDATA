@@ -146,11 +146,11 @@ Hybrid model:
   for these.
 - **Prose** — field-by-field forms (tier-1 builder or tier-2 free text; see §5).
 
-The frontend surface for the first two is a single `/data` view (editor/admin only, no CMS
-sidebar shell): a searchable, type-filterable card list of every scalar indicator and matrix
-table, each opening an accessible edit dialog. It is edit-only — an indicator or table must
-attach to a `section`, and no section-management surface exists, so create/delete are not in the
-UI rather than shipped as forms that cannot submit. "Import From" from the wireframe is not
+The frontend surface for the first two is a single `/data` view (editor/admin only, mounted
+inside the admin base layout shell — see §8), a searchable, type-filterable card list of every
+scalar indicator and matrix table, each opening an accessible edit dialog. It is edit-only — an
+indicator or table must attach to a `section`, and no section-management surface exists, so
+create/delete are not in the UI rather than shipped as forms that cannot submit. "Import From" from the wireframe is not
 built, consistent with the scope above. The previous-year pair is edited independently of
 `is_computed_comparison`: a pair alone does not promote an indicator into the tier-1 computed set
 (§5), so the flag is preserved as stored and is only cleared when the pair is cleared, since the
@@ -365,6 +365,20 @@ keeps proper `<caption>` / `<th scope>` semantics under filtering.
 | Tentang     | Kelurahan Manggar, Program Desa/Kelurahan Cantik, Inovasi Sosial VYOMATANTRA |
 
 Plus the landing page itself.
+
+**Admin base layout shell.** Every admin/CMS route (`/admin`, `/data`, `/users`, `/audit-logs`,
+`/settings/audit-retention`, and the `/admin/*` placeholder destinations named below) is mounted
+inside one shared layout (`AdminLayout.vue`): a collapsible sidebar, a header showing the page
+title and a one-line subtitle the view supplies, and a breadcrumb. Shell access requires Editor or
+Admin; individual routes still layer their own `requiresAdmin` guard where SPEC §3 restricts them
+to Admin. The sidebar lists Beranda, Data, Cerita, Peta, Publikasi, Rukun Tetangga, and an
+Admin-only **Sistem** group (Akun pengguna, Templat kalimat, Konfigurasi sistem, Log sistem).
+Visibility is driven by a single role-to-items map (`frontend/src/config/adminNav.ts`) that the
+route guards also read from, so the sidebar and the guards cannot disagree about who can reach a
+given page — a resource a role isn't authorized for is absent from the sidebar entirely, not
+merely disabled. Cerita, Peta, Publikasi, Rukun Tetangga, Templat kalimat, and Konfigurasi sistem
+are not built yet; their sidebar entries carry a "Segera hadir" badge and open a minimal
+placeholder view rather than being hidden, so they stay discoverable while unbuilt.
 
 ## 9. Explicitly Out of Scope
 
