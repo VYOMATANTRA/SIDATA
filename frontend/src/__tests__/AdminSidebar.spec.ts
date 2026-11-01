@@ -267,7 +267,7 @@ describe('AdminSidebar.vue — navigation out of the admin area', () => {
     expect(router.currentRoute.value.path).toBe('/login');
   });
 
-  it('keeps the session and shows an inline error when the logout request fails', async () => {
+  it('keeps the session and shows an inline error when the logout request fails with a server error', async () => {
     const { wrapper } = await mountSidebar('admin');
     const authStore = useAuthStore();
 
@@ -276,7 +276,7 @@ describe('AdminSidebar.vue — navigation out of the admin area', () => {
       if (url.includes('csrf-token')) {
         return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response;
       }
-      return { ok: false, json: async () => ({}) } as Response;
+      return { ok: false, status: 500, json: async () => ({}) } as Response;
     });
 
     await wrapper.find('[data-test="nav-logout"]').trigger('click');
@@ -284,6 +284,30 @@ describe('AdminSidebar.vue — navigation out of the admin area', () => {
 
     expect(authStore.isAuthenticated).toBe(true);
     expect(wrapper.find('[data-test="logout-error"]').text()).toContain('Gagal keluar');
+  });
+
+  // Bug fix: a 401/403 from /api/auth/logout means the server already considers the session
+  // dead (e.g. the refresh token already expired), not that logout failed. Treating it as a
+  // failure trapped the user: every retry hit the same already-expired session and failed the
+  // same way, so there was no way to actually sign out.
+  it('clears auth state and redirects to /login even when the logout request itself returns 401 (session already expired)', async () => {
+    const { wrapper, router } = await mountSidebar('admin');
+    const authStore = useAuthStore();
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response;
+      }
+      return { ok: false, status: 401, json: async () => ({ error: 'Unauthorized' }) } as Response;
+    });
+
+    await wrapper.find('[data-test="nav-logout"]').trigger('click');
+    await vi.waitUntil(() => !authStore.isAuthenticated);
+
+    expect(authStore.isAuthenticated).toBe(false);
+    expect(router.currentRoute.value.path).toBe('/login');
+    expect(wrapper.find('[data-test="logout-error"]').exists()).toBe(false);
   });
 });
 

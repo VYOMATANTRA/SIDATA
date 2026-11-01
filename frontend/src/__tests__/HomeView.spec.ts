@@ -103,7 +103,7 @@ describe('HomeView logout', () => {
     expect(router.currentRoute.value.path).toBe('/login');
   });
 
-  it('keeps the session and shows an error when the server logout call fails', async () => {
+  it('keeps the session and shows an error when the server logout call fails with a server error', async () => {
     const { pinia, router } = mountHomeView();
     await router.push('/');
     await router.isReady();
@@ -116,7 +116,7 @@ describe('HomeView logout', () => {
       if (url.includes('csrf-token')) {
         return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response;
       }
-      return { ok: false, json: async () => ({}) } as Response;
+      return { ok: false, status: 500, json: async () => ({}) } as Response;
     });
 
     const wrapper = mount(HomeView, { global: { plugins: [pinia, router] } });
@@ -125,5 +125,32 @@ describe('HomeView logout', () => {
 
     expect(authStore.isAuthenticated).toBe(true);
     expect(router.currentRoute.value.path).toBe('/');
+  });
+
+  // Bug fix: a 401/403 from /api/auth/logout means the session was already dead server-side
+  // (e.g. the refresh token had already expired), not that the logout attempt failed. Treating
+  // it as an error trapped the user in a session they could never leave by retrying.
+  it('clears auth state and redirects to /login even when the logout request itself returns 401', async () => {
+    const { pinia, router } = mountHomeView();
+    await router.push('/');
+    await router.isReady();
+
+    const authStore = useAuthStore(pinia);
+    authStore.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'access-token');
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response;
+      }
+      return { ok: false, status: 401, json: async () => ({ error: 'Unauthorized' }) } as Response;
+    });
+
+    const wrapper = mount(HomeView, { global: { plugins: [pinia, router] } });
+    await wrapper.find('button').trigger('click');
+    await vi.waitUntil(() => !authStore.isAuthenticated);
+
+    expect(authStore.isAuthenticated).toBe(false);
+    expect(router.currentRoute.value.path).toBe('/login');
   });
 });

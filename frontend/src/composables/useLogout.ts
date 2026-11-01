@@ -23,7 +23,12 @@ export function useLogout() {
         },
       });
 
-      if (!response.ok) {
+      // A 401/403 means the server already considers the session dead (e.g. the refresh token
+      // expired or was already revoked) — that is the outcome logout was trying to reach, not a
+      // failure of it. Treating it as an error here would trap the user in a session they can
+      // never leave, since every retry hits the same already-expired session and fails the same
+      // way. Only a genuine server error (5xx) or network failure keeps the local session intact.
+      if (!response.ok && response.status !== 401 && response.status !== 403) {
         return { ok: false, error: 'Gagal keluar dari sesi. Silakan coba lagi.' };
       }
 
