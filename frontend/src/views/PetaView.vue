@@ -353,10 +353,10 @@ function requestUserLocation() {
               <nav aria-label="Halaman hasil peta" class="flex items-center gap-2">
                 <button
                   type="button"
-                  class="rounded-btn text-brand-navy focus-visible:outline-brand-navy min-h-11 min-w-11 border border-gray-300 px-3 text-sm font-medium hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+                  class="rounded-btn text-brand-navy focus-visible:outline-brand-navy min-h-11 min-w-11 border border-gray-300 px-3 text-sm font-medium hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:hover:bg-gray-50"
                   aria-label="Halaman sebelumnya"
                   data-test="peta-previous-page"
-                  :aria-disabled="currentPage === 1"
+                  :disabled="currentPage === 1"
                   @click="goToPreviousPage"
                 >
                   Sebelumnya
@@ -366,10 +366,10 @@ function requestUserLocation() {
                 >
                 <button
                   type="button"
-                  class="rounded-btn text-brand-navy focus-visible:outline-brand-navy min-h-11 min-w-11 border border-gray-300 px-3 text-sm font-medium hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+                  class="rounded-btn text-brand-navy focus-visible:outline-brand-navy min-h-11 min-w-11 border border-gray-300 px-3 text-sm font-medium hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:hover:bg-gray-50"
                   aria-label="Halaman selanjutnya"
                   data-test="peta-next-page"
-                  :aria-disabled="currentPage === totalPages"
+                  :disabled="currentPage === totalPages"
                   @click="goToNextPage"
                 >
                   Selanjutnya

@@ -91,6 +91,27 @@ describe('SpatialPointDrawer.vue', () => {
     expect(button.attributes('href')).toBe('tel:081234567802');
   });
 
+  it('does not render contact buttons when phone is a placeholder like "-"', () => {
+    const wrapper = mountDrawer({
+      point: samplePoint,
+      leader: { ...sampleLeaderWa, phone: '-' },
+    });
+
+    expect(wrapper.find('a[href^="https://wa.me/"]').exists()).toBe(false);
+    expect(wrapper.find('a[href^="tel:"]').exists()).toBe(false);
+  });
+
+  it('extracts primary number for WhatsApp when phone contains multiple numbers', () => {
+    const wrapper = mountDrawer({
+      point: samplePoint,
+      leader: { ...sampleLeaderWa, phone: '081234567801 / 081987654321' },
+    });
+
+    const button = wrapper.find('a[href^="https://wa.me/"]');
+    expect(button.exists()).toBe(true);
+    expect(button.attributes('href')).toContain('https://wa.me/6281234567801');
+  });
+
   it('emits close event when close button is clicked', async () => {
     const wrapper = mountDrawer({ point: samplePoint });
 
