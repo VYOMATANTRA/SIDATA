@@ -125,23 +125,29 @@ export const useIndicatorsStore = defineStore('indicators', () => {
     bySlugFetchedAt.value = { ...bySlugFetchedAt.value, [normalized]: Date.now() };
   }
 
-  /** Drop every bySlug entry for this indicator id and/or slug key. */
-  function evictSlugCacheForIndicator(id: string, slug?: string | null): void {
+  /** Drop every bySlug entry for this indicator id and/or slug key. Returns evicted slug keys. */
+  function evictSlugCacheForIndicator(id: string, slug?: string | null): string[] {
     const slugKey = typeof slug === 'string' ? normalizeIndicatorSlug(slug) : null;
     const next = { ...bySlug.value };
     const nextAt = { ...bySlugFetchedAt.value };
-    let changed = false;
+    const evicted: string[] = [];
+    if (slugKey !== null) {
+      evicted.push(slugKey);
+    }
     for (const [k, v] of Object.entries(next)) {
       if (v.id === id || (slugKey !== null && k === slugKey)) {
         delete next[k];
         delete nextAt[k];
-        changed = true;
+        if (!evicted.includes(k)) {
+          evicted.push(k);
+        }
       }
     }
-    if (changed) {
+    if (evicted.length > 0) {
       bySlug.value = next;
       bySlugFetchedAt.value = nextAt;
     }
+    return evicted;
   }
 
   function bumpSlugFetchGeneration(...keys: Array<string | null | undefined>): void {
@@ -300,13 +306,8 @@ export const useIndicatorsStore = defineStore('indicators', () => {
       Object.values(bySlug.value).find((item) => item.id === id) ??
       null;
     await apiRequestJson(`/api/indicators/${encodeURIComponent(id)}`, { method: 'DELETE' });
-    const keysToBump = new Set<string>();
-    if (existing?.slug) keysToBump.add(normalizeIndicatorSlug(existing.slug));
-    for (const [k, v] of Object.entries(bySlug.value)) {
-      if (v.id === id) keysToBump.add(k);
-    }
-    bumpSlugFetchGeneration(...keysToBump);
-    evictSlugCacheForIndicator(id, existing?.slug ?? null);
+    const evicted = evictSlugCacheForIndicator(id, existing?.slug ?? null);
+    bumpSlugFetchGeneration(...evicted);
     if (existing) invalidateSectionCache(existing.sectionId);
     const next = indicators.value.filter((item) => item.id !== id);
     if (next.length !== indicators.value.length) {
