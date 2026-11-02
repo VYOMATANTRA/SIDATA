@@ -238,6 +238,14 @@ describe('InteractiveMap.vue', () => {
     expect(typeof leafletMocks.state.lastClusterGroupOptions?.iconCreateFunction).toBe('function');
     expect(leafletMocks.state.layeraddHandler).toBeTypeOf('function');
 
+    const iconCreate = leafletMocks.state.lastClusterGroupOptions?.iconCreateFunction as (
+      cluster: { getChildCount: () => number },
+    ) => { html: string; className: string };
+    const created = iconCreate({ getChildCount: () => 2 });
+    expect(created.className).toBe('map-cluster');
+    expect(created.html).toContain('sr-only');
+    expect(created.html).toContain('Kelompok 2 titik');
+
     const iconEl = document.createElement('div');
     iconEl.className = 'map-cluster leaflet-marker-icon';
     const cluster = {

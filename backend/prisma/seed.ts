@@ -10,7 +10,11 @@ import { DEFAULT_CONTENT_BLOCKS } from '../src/services/contentBlocks.service.js
 import { DEFAULT_COMPARISON_TEMPLATES } from '../src/services/comparisonTemplates.service.js';
 import { CERITA_PAGES } from './ceritaPages.js';
 import { RT_LEADERS_DATA } from './rtLeadersData.js';
-import { seedRtLeaders } from './seedRtLeaders.js';
+import {
+  parseSeedPointTombstones,
+  RT_SEED_POINT_TOMBSTONES_KEY,
+  seedRtLeaders,
+} from './seedRtLeaders.js';
 import {
   LEGACY_SAMPLE_LEADERS,
   matchesLegacySampleLeader,
@@ -101,7 +105,11 @@ async function main() {
       );
     }
 
-    await seedRtLeaders(prisma, RT_LEADERS_DATA);
+    const tombstoneSetting = await prisma.systemSetting.findUnique({
+      where: { key: RT_SEED_POINT_TOMBSTONES_KEY },
+    });
+    const skippedPointIds = parseSeedPointTombstones(tombstoneSetting?.value);
+    await seedRtLeaders(prisma, RT_LEADERS_DATA, { skippedPointIds });
 
     // Mark the roster as sample until an editor saves real leaders (maps.service clears it).
     // create-only: a re-seed must not flip the flag back after an editor has cleared it.

@@ -654,29 +654,42 @@ export const getIndicatorById = async (
   }
 
   if (useSharedCache) {
+    // Fresh (unexpired) hits only. Do not serve getLastKnownGood here — that would
+    // skip DB refresh forever after TTL expiry. LKG is reserved for the catch path.
     const idCache = indicatorByIdCache.get(indicatorCacheKey('id', lookup));
-    const fromId = idCache?.get() ?? idCache?.getLastKnownGood(null);
+    const fromId = idCache?.get();
     if (fromId) return fromId;
     const slugCache = indicatorByIdCache.get(indicatorCacheKey('slug', lookup));
-    const fromSlug = slugCache?.get() ?? slugCache?.getLastKnownGood(null);
+    const fromSlug = slugCache?.get();
     if (fromSlug) return fromSlug;
   }
 
   // Probe under id:lookup; dual-write under the real id + slug keys after a hit.
   // Single findMany (OR id|slug) so a miss costs one DB round-trip; prefer an id match.
-  const result = await getIndicatorEntryCache('id', lookup).getOrFetch(async (db) => {
-    const candidates = await db.indicator.findMany({
-      where: { OR: [{ id: lookup }, { slug: lookup }] },
-      include: WITH_TEMPLATE,
-      take: 2,
-    });
-    const row =
-      candidates.find((candidate) => normalizeIndicatorLookup(candidate.id) === lookup) ??
-      candidates[0] ??
-      null;
-    if (!row) return null;
-    return formatIndicator(row as Parameters<typeof formatIndicator>[0]);
-  }, client);
+  let result: IndicatorDto | null;
+  try {
+    result = await getIndicatorEntryCache('id', lookup).getOrFetch(async (db) => {
+      const candidates = await db.indicator.findMany({
+        where: { OR: [{ id: lookup }, { slug: lookup }] },
+        include: WITH_TEMPLATE,
+        take: 2,
+      });
+      const row =
+        candidates.find((candidate) => normalizeIndicatorLookup(candidate.id) === lookup) ??
+        candidates[0] ??
+        null;
+      if (!row) return null;
+      return formatIndicator(row as Parameters<typeof formatIndicator>[0]);
+    }, client);
+  } catch (err) {
+    if (useSharedCache) {
+      const idCache = indicatorByIdCache.get(indicatorCacheKey('id', lookup));
+      const slugCache = indicatorByIdCache.get(indicatorCacheKey('slug', lookup));
+      const lkg = idCache?.getLastKnownGood(null) ?? slugCache?.getLastKnownGood(null) ?? null;
+      if (lkg) return lkg;
+    }
+    throw err;
+  }
 
   if (result === null && useSharedCache) {
     // Drop the probe slot instead of retaining the miss in the shared LRU.

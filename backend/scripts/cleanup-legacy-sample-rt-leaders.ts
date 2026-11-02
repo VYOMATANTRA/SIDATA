@@ -11,8 +11,9 @@
  *   npx tsx scripts/cleanup-legacy-sample-rt-leaders.ts
  *   npx tsx scripts/cleanup-legacy-sample-rt-leaders.ts --force   # required in production
  */
+import { pathToFileURL } from 'node:url';
 import prisma from '../src/utils/prisma.js';
-import { recordAuditLog, AUDIT_ACTIONS } from '../src/services/audit.service.js';
+import { buildAuditLog, recordAuditLog, AUDIT_ACTIONS } from '../src/services/audit.service.js';
 import {
   LEGACY_SAMPLE_LEADERS,
   LEGACY_SAMPLE_POINT_ID,
@@ -117,11 +118,17 @@ export type CleanupAuditDeps = {
   recordAudit?: typeof recordAuditLog;
   log?: (line: string) => void;
   now?: () => Date;
+  /** When set, the audit row is written with this client (same transaction as the cleanup). */
+  tx?: { auditLog: { create: typeof prisma.auditLog.create } };
 };
 
+function cleanupChangedData(result: LegacySampleCleanupResult): boolean {
+  return result.deletedJunctions > 0 || result.deletedPoints > 0 || result.updatedLeaders > 0;
+}
+
 /**
- * Structured audit trail for a successful `--force` run. Counts and timestamp only —
- * never names or phone numbers.
+ * Structured audit trail for a cleanup run that changed data. Counts and timestamp only —
+ * never names or phone numbers. Console log always; DB audit when data changed.
  */
 export async function recordLegacySampleCleanupAudit(
   result: LegacySampleCleanupResult,
@@ -140,12 +147,11 @@ export async function recordLegacySampleCleanupAudit(
   };
   (deps.log ?? console.log)(JSON.stringify(payload));
 
-  if (!opts.force) return;
+  if (!cleanupChangedData(result)) return;
 
-  const record = deps.recordAudit ?? recordAuditLog;
-  await record({
+  const entry = {
     action: AUDIT_ACTIONS.MAINTENANCE_LEGACY_RT_CLEANUP,
-    outcome: 'success',
+    outcome: 'success' as const,
     actor: {
       id: null,
       email: 'script:cleanup-legacy-sample-rt-leaders',
@@ -160,11 +166,19 @@ export async function recordLegacySampleCleanupAudit(
       deletedJunctions: result.deletedJunctions,
       deletedPoints: result.deletedPoints,
       updatedLeaders: result.updatedLeaders,
-      force: true,
+      force: opts.force,
       at,
       nodeEnv: opts.nodeEnv ?? null,
     },
-  });
+  };
+
+  if (deps.tx) {
+    await buildAuditLog(entry, deps.tx);
+    return;
+  }
+
+  const record = deps.recordAudit ?? recordAuditLog;
+  await record(entry);
 }
 
 async function main() {
@@ -175,18 +189,21 @@ async function main() {
 
   console.log('Memulai pembersihan data sample RT lawas...');
 
-  const results = await prisma.$transaction(async (tx) => runLegacySampleRtCleanup(tx));
+  const results = await prisma.$transaction(async (tx) => {
+    const cleanupResult = await runLegacySampleRtCleanup(tx);
+    await recordLegacySampleCleanupAudit(
+      cleanupResult,
+      { force, nodeEnv: process.env.NODE_ENV },
+      { tx },
+    );
+    return cleanupResult;
+  });
 
   console.log('Pembersihan selesai:');
   console.log(results);
-
-  await recordLegacySampleCleanupAudit(results, {
-    force,
-    nodeEnv: process.env.NODE_ENV,
-  });
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === pathToFileURL(process.argv[1]!).href) {
   main()
     .catch((e) => {
       console.error('Error saat pembersihan data sample RT:', e);
