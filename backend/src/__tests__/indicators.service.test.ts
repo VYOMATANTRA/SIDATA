@@ -1171,6 +1171,38 @@ describe('indicators.service getIndicatorById', () => {
     assert.equal(indicatorByIdCache.has(indicatorCacheKey('slug', 'slug-decoy-39')), true);
   });
 
+  it('evicts partner key and cleans up identity index when capacity is exceeded', async () => {
+    let dbQueries = 0;
+    indicatorImpl['findMany'] = async (args: AnyRecord) => {
+      dbQueries++;
+      const where = args['where'] as { OR?: Array<{ id?: string; slug?: string }> };
+      const idVal = where.OR?.find((clause) => clause.id)?.id;
+      const slugVal = where.OR?.find((clause) => clause.slug)?.slug;
+      const key = idVal ?? slugVal ?? 'unknown';
+      return [indicatorRow({ id: key, slug: `slug-${key}` })];
+    };
+
+    // Warm the target indicator first (occupies 2 slots: id:target and slug:slug-target)
+    await getIndicatorById('target');
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'target')), true);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('slug', 'slug-target')), true);
+
+    // Fill the cache beyond capacity (200 entries = 100 distinct indicators)
+    for (let i = 0; i < 110; i++) {
+      await getIndicatorById(`filler-${i}`);
+    }
+
+    // Target must have been evicted along with its partner slug key
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'target')), false);
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('slug', 'slug-target')), false);
+
+    // Reading the slug again goes back to the DB cleanly
+    const reReadQueries = dbQueries;
+    const reFetched = await getIndicatorById('slug-target');
+    assert.equal(reFetched?.id, 'slug-target');
+    assert.equal(dbQueries > reReadQueries, true);
+  });
+
   it('keeps id and slug namespaces from colliding', async () => {
     // Warm id:bar first (indicator whose id equals another indicator's slug string).
     indicatorImpl['findMany'] = async (args: AnyRecord) => {
