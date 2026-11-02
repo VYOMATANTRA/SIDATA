@@ -193,7 +193,6 @@ function hasControlCharacters(str: string): boolean {
   return false;
 }
 
-
 export function isSafePhotoUrl(val: string): boolean {
   if (typeof val !== 'string') return false;
   const trimmed = val.trim();

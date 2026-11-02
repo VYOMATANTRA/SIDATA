@@ -1642,7 +1642,11 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
     }) as unknown as typeof prisma.$transaction;
 
     try {
-      for (const safe of ['/assets/hero.webp', 'https://kelurahan-manggar.balikpapan.go.id/hero.jpg', '']) {
+      for (const safe of [
+        '/assets/hero.webp',
+        'https://kelurahan-manggar.balikpapan.go.id/hero.jpg',
+        '',
+      ]) {
         const res = fakeRes();
         await updateContentBlockHandler(
           makeReq({
