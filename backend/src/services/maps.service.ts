@@ -897,6 +897,14 @@ function matchesSeedPlaceholderLeader(row: {
 async function maybeClearRtLeadersSampleRosterFlag(
   tx: Pick<SpatialWriteTxClient, 'systemSetting' | 'rtLeader'>,
 ): Promise<void> {
+  const currentSetting = await tx.systemSetting.findUnique({
+    where: { key: RT_LEADERS_SAMPLE_ROSTER_KEY },
+  });
+  // If the sample roster flag is already cleared (or not set to 'true'), no full scan is needed.
+  if (currentSetting?.value !== 'true') {
+    return;
+  }
+
   const rows = await tx.rtLeader.findMany({
     select: { rtNumber: true, name: true, phone: true, phoneIsWhatsapp: true },
   });
