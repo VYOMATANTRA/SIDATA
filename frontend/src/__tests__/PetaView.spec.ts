@@ -228,10 +228,17 @@ describe('PetaView accessibility, filtering, and point selection', () => {
     const wrapper = await mountReady();
     expect(wrapper.findAll('[data-test="peta-result"]')).toHaveLength(5);
     expect(wrapper.find('[data-test="peta-pagination-summary"]').text()).toContain('1–5 dari 12');
+    expect(wrapper.find<HTMLButtonElement>('[data-test="peta-previous-page"]').element.disabled).toBe(true);
+    expect(wrapper.find<HTMLButtonElement>('[data-test="peta-next-page"]').element.disabled).toBe(false);
 
     await wrapper.find('[data-test="peta-next-page"]').trigger('click');
     expect(wrapper.findAll('[data-test="peta-result"]')).toHaveLength(5);
     expect(wrapper.find('[data-test="peta-pagination-summary"]').text()).toContain('6–10 dari 12');
+    expect(wrapper.find<HTMLButtonElement>('[data-test="peta-previous-page"]').element.disabled).toBe(false);
+    expect(wrapper.find<HTMLButtonElement>('[data-test="peta-next-page"]').element.disabled).toBe(false);
+
+    await wrapper.find('[data-test="peta-next-page"]').trigger('click');
+    expect(wrapper.find<HTMLButtonElement>('[data-test="peta-next-page"]').element.disabled).toBe(true);
 
     await wrapper.find('[data-test="peta-search"]').setValue('RT');
     expect(wrapper.findAll('[data-test="peta-result"]')).toHaveLength(5);

@@ -112,12 +112,38 @@ const typeBadge = computed(() => {
   }
 });
 
+function primaryPhone(value: string): string {
+  const parts = value.split(/[/,;]|\batau\b|\bdan\b/i);
+  return parts[0]?.trim() ?? value;
+}
+
+function digitsOnly(value: string): string {
+  return primaryPhone(value).replace(/[^0-9]/g, '');
+}
+
+/** Valid contact runs are 7 to 15 digits; placeholder '-' or single chars are not dialable. */
+function isPlausiblePhoneDigitRun(digits: string): boolean {
+  return digits.length >= 7 && digits.length <= 15;
+}
+
+const contactPhone = computed(() => props.leader?.phone || props.point?.rtLeader?.phone || '');
+
+const hasDialableContact = computed(() => {
+  return isPlausiblePhoneDigitRun(digitsOnly(contactPhone.value));
+});
+
 const whatsappUrl = computed(() => {
-  const phone = props.leader?.phone || props.point?.rtLeader?.phone;
+  const phone = contactPhone.value;
   if (!phone) return '';
-  // Normalize Indonesian mobile number: e.g. 08123456789 -> 628123456789
-  const cleaned = phone.replace(/\D/g, '');
-  const formatted = cleaned.startsWith('0') ? `62${cleaned.slice(1)}` : cleaned;
+  const digits = digitsOnly(phone);
+  if (!isPlausiblePhoneDigitRun(digits)) return '';
+  const formatted = digits.startsWith('62')
+    ? digits
+    : digits.startsWith('0')
+      ? `62${digits.slice(1)}`
+      : digits.startsWith('8')
+        ? `62${digits}`
+        : digits;
   const rtNum = props.leader?.rtNumber || props.point?.rts[0] || '';
   const text = encodeURIComponent(
     `Halo Bapak/Ibu Ketua RT ${rtNum} Kelurahan Manggar, saya ingin bertanya terkait data/layanan wilayah.`,
@@ -126,8 +152,13 @@ const whatsappUrl = computed(() => {
 });
 
 const phoneTelUrl = computed(() => {
-  const phone = props.leader?.phone || props.point?.rtLeader?.phone;
-  return phone ? `tel:${phone}` : '';
+  const phone = contactPhone.value;
+  if (!phone) return '';
+  const primary = primaryPhone(phone);
+  const digits = digitsOnly(phone);
+  if (!isPlausiblePhoneDigitRun(digits)) return '';
+  const prefix = primary.startsWith('+') ? '+' : '';
+  return `tel:${prefix}${digits}`;
 });
 
 const isWhatsapp = computed(() => {
@@ -285,7 +316,7 @@ const metadataEntries = computed(() => {
       </div>
 
       <!-- Action Button: WhatsApp vs Phone Call -->
-      <div class="pt-2">
+      <div v-if="hasDialableContact" class="pt-2">
         <BaseButton
           v-if="isWhatsapp"
           variant="primary"
