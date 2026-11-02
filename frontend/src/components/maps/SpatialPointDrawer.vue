@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 import type { SpatialPointDTO, RtLeaderDTO } from '../../types/maps';
 import BaseButton from '../common/BaseButton.vue';
+import { isDialable, telHref, whatsappNumber } from '../../utils/phone';
 
 interface Props {
   point: SpatialPointDTO | null;
@@ -19,6 +20,7 @@ const emit = defineEmits<{
 }>();
 
 const closeButtonEl = ref<HTMLButtonElement | null>(null);
+const drawerRootEl = ref<HTMLElement | null>(null);
 let previouslyFocused: HTMLElement | null = null;
 let restoreFocusOnUnmount = false;
 
@@ -49,10 +51,12 @@ watch(
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && !event.defaultPrevented) {
     const target = event.target as HTMLElement | null;
-    if (target?.closest('[data-test="peta-search"], [data-test="map-summary-dropdown"]')) {
-      return;
+    // Scope Escape handling: close only if focus/origin is within the drawer itself.
+    // Escape pressed elsewhere (e.g. search box, header menu) must not trigger drawer close.
+    if (drawerRootEl.value?.contains(target)) {
+      event.preventDefault();
+      emit('close');
     }
-    emit('close');
   }
 }
 
@@ -112,38 +116,17 @@ const typeBadge = computed(() => {
   }
 });
 
-function primaryPhone(value: string): string {
-  const parts = value.split(/[/,;]|\batau\b|\bdan\b/i);
-  return parts[0]?.trim() ?? value;
-}
-
-function digitsOnly(value: string): string {
-  return primaryPhone(value).replace(/[^0-9]/g, '');
-}
-
-/** Valid contact runs are 7 to 15 digits; placeholder '-' or single chars are not dialable. */
-function isPlausiblePhoneDigitRun(digits: string): boolean {
-  return digits.length >= 7 && digits.length <= 15;
-}
-
 const contactPhone = computed(() => props.leader?.phone || props.point?.rtLeader?.phone || '');
 
 const hasDialableContact = computed(() => {
-  return isPlausiblePhoneDigitRun(digitsOnly(contactPhone.value));
+  return isDialable(contactPhone.value);
 });
 
 const whatsappUrl = computed(() => {
   const phone = contactPhone.value;
   if (!phone) return '';
-  const digits = digitsOnly(phone);
-  if (!isPlausiblePhoneDigitRun(digits)) return '';
-  const formatted = digits.startsWith('62')
-    ? digits
-    : digits.startsWith('0')
-      ? `62${digits.slice(1)}`
-      : digits.startsWith('8')
-        ? `62${digits}`
-        : digits;
+  const formatted = whatsappNumber(phone);
+  if (!formatted) return '';
   const rtNum = props.leader?.rtNumber || props.point?.rts[0] || '';
   const text = encodeURIComponent(
     `Halo Bapak/Ibu Ketua RT ${rtNum} Kelurahan Manggar, saya ingin bertanya terkait data/layanan wilayah.`,
@@ -152,13 +135,7 @@ const whatsappUrl = computed(() => {
 });
 
 const phoneTelUrl = computed(() => {
-  const phone = contactPhone.value;
-  if (!phone) return '';
-  const primary = primaryPhone(phone);
-  const digits = digitsOnly(phone);
-  if (!isPlausiblePhoneDigitRun(digits)) return '';
-  const prefix = primary.startsWith('+') ? '+' : '';
-  return `tel:${prefix}${digits}`;
+  return telHref(contactPhone.value);
 });
 
 const isWhatsapp = computed(() => {
@@ -178,6 +155,7 @@ const metadataEntries = computed(() => {
 <template>
   <section
     v-if="point"
+    ref="drawerRootEl"
     role="region"
     aria-label="Detail Titik Spasial"
     class="w-full min-w-0 flex-1 overflow-y-auto p-5"
