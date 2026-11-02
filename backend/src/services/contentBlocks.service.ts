@@ -45,11 +45,7 @@ export const DEFAULT_CONTENT_BLOCKS = [
     type: 'hero' as const,
     title: 'Portal Data Terpadu Kelurahan Manggar',
     body: 'Pusat integrasi data kependudukan, potensi wilayah, layanan publik, dan pemetaan geospasial Kelurahan Manggar, Balikpapan Timur.',
-    metadata: {
-      ctaText: 'Jelajahi Potensi',
-      ctaLink: '#potensi',
-      badge: 'Data Akurat & Terbuka',
-    },
+    metadata: null,
   },
   {
     slug: 'landing-sambutan-lurah',
@@ -197,29 +193,6 @@ function hasControlCharacters(str: string): boolean {
   return false;
 }
 
-export function isSafeCtaLink(val: string): boolean {
-  if (typeof val !== 'string') return false;
-  const trimmed = val.trim();
-  if (!trimmed || trimmed.length > 500) return false;
-  if (hasControlCharacters(trimmed)) return false;
-  if (trimmed.includes('\\') || /%5c/i.test(trimmed)) return false;
-  if (trimmed.startsWith('//')) return false;
-  if (trimmed.startsWith('#')) return true;
-  if (trimmed.startsWith('/')) {
-    try {
-      const parsed = new URL(trimmed, 'https://placeholder.invalid');
-      return parsed.origin === 'https://placeholder.invalid' && parsed.protocol === 'https:';
-    } catch {
-      return false;
-    }
-  }
-  try {
-    const parsed = new URL(trimmed);
-    return parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
 
 export function isSafePhotoUrl(val: string): boolean {
   if (typeof val !== 'string') return false;
@@ -247,16 +220,16 @@ export function isSafePhotoUrl(val: string): boolean {
 
 export const heroMetadataSchema = z
   .object({
-    badge: z.string().trim().max(100, 'Badge maksimal 100 karakter').optional(),
-    ctaText: z.string().trim().max(50, 'Teks CTA maksimal 50 karakter').optional(),
-    ctaLink: z
+    backgroundImage: z
       .string()
       .trim()
-      .max(500, 'Link CTA maksimal 500 karakter')
+      .max(500, 'URL background image maksimal 500 karakter')
       .refine(
-        isSafeCtaLink,
-        'Link CTA harus berupa path relatif (dimulai dengan / atau #) atau URL HTTPS yang valid',
+        isSafePhotoUrl,
+        'URL background image harus berupa path relatif (dimulai dengan /) atau URL HTTPS yang valid',
       )
+      .or(z.literal(''))
+      .nullable()
       .optional(),
   })
   .passthrough();

@@ -12,7 +12,6 @@ import {
   getSlugCache,
   invalidateContentBlocksCache,
   contentBlocksCache,
-  isSafeCtaLink,
   isSafePhotoUrl,
 } from '../services/contentBlocks.service.js';
 import prisma from '../utils/prisma.js';
@@ -1581,39 +1580,29 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
     }
   });
 
-  it('rejects stored XSS payloads and dangerous schemes in ctaLink for landing-hero', async () => {
+  it('rejects dangerous backgroundImage values for landing-hero and accepts safe ones', async () => {
     invalidateContentBlocksCache();
-    const dangerousLinks = [
-      'javascript:alert(document.cookie)',
-      'JAVASCRIPT:alert(1)',
-      'javascript:void(0)',
-      'data:text/html,<script>alert(1)</script>',
-      'vbscript:msgbox(1)',
-      '//attacker.com/evil',
+    const dangerousImages = [
+      'javascript:alert(1)',
+      'data:image/svg+xml;utf8,<svg onload=alert(1)>',
+      'http://insecure.com/hero.jpg',
+      '//evil.com/hero.jpg',
       '/\\evil.com',
-      '/\\x',
-      '/%5cx',
-      '/%5Ce',
-      '/\\t/x',
-      'http://insecure.com/page',
-      'https://valid.com\r\njavascript:alert(1)',
-      'https://valid.com\t/path',
     ];
 
-    for (const dangerous of dangerousLinks) {
+    for (const dangerous of dangerousImages) {
       const res = fakeRes();
       await updateContentBlockHandler(
         makeReq({
           params: { slug: 'landing-hero' },
-          body: { metadata: { ctaLink: dangerous } },
+          body: { metadata: { backgroundImage: dangerous } },
         }),
         res as unknown as Response,
       );
-      assert.equal(res.status, 400, `Expected 400 for dangerous ctaLink: ${dangerous}`);
+      assert.equal(res.status, 400, `Expected 400 for dangerous backgroundImage: ${dangerous}`);
       assert.match(String((res.body as { error: string }).error), /Validasi metadata gagal/i);
     }
 
-    // Safe links must pass validation
     const originalTransaction = prisma.$transaction;
     prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
       const mockTx = {
@@ -1653,16 +1642,16 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
     }) as unknown as typeof prisma.$transaction;
 
     try {
-      for (const safe of ['#potensi', '/layanan', 'https://kelurahan-manggar.balikpapan.go.id']) {
+      for (const safe of ['/assets/hero.webp', 'https://kelurahan-manggar.balikpapan.go.id/hero.jpg', '']) {
         const res = fakeRes();
         await updateContentBlockHandler(
           makeReq({
             params: { slug: 'landing-hero' },
-            body: { metadata: { ctaLink: safe } },
+            body: { metadata: { backgroundImage: safe } },
           }),
           res as unknown as Response,
         );
-        assert.equal(res.status, 200, `Expected 200 for safe ctaLink: ${safe}`);
+        assert.equal(res.status, 200, `Expected 200 for safe backgroundImage: ${safe}`);
       }
     } finally {
       prisma.$transaction = originalTransaction;
@@ -1758,22 +1747,16 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
     }
   });
 
-  it('isSafeCtaLink and isSafePhotoUrl reject protocol-relative backslash bypasses (/\\x, /%5cx, /\\t/x)', () => {
+  it('isSafePhotoUrl rejects protocol-relative backslash bypasses (/\\x, /%5cx, /\\t/x)', () => {
     const malicious = ['/\\evil.com', '/\\x', '/%5cx', '/%5Cx', '/%5cevil.com', '/\\t/x'];
 
     for (const link of malicious) {
-      assert.equal(isSafeCtaLink(link), false, `isSafeCtaLink must reject: ${link}`);
       assert.equal(isSafePhotoUrl(link), false, `isSafePhotoUrl must reject: ${link}`);
     }
-
-    assert.equal(isSafeCtaLink('#potensi'), true);
-    assert.equal(isSafeCtaLink('/layanan'), true);
-    assert.equal(isSafeCtaLink('https://kelurahan-manggar.balikpapan.go.id'), true);
 
     assert(isSafePhotoUrl('/images/lurah.jpg'), 'expected true');
     assert(isSafePhotoUrl('https://cdn.balikpapan.go.id/lurah.jpg'), 'expected true');
   });
-
   it('rejects dangerous javascript: URLs in publikasi-katalog metadata and accepts https://', async () => {
     // 1. Rejection of javascript:
     const resBad = fakeRes();

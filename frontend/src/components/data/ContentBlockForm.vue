@@ -40,16 +40,6 @@ const isHero = computed(() => props.block.slug === 'landing-hero');
 const isSambutan = computed(() => props.block.slug === 'landing-sambutan-lurah');
 const isProfil = computed(() => props.block.slug === 'tentang-kelurahan-profil');
 
-const heroBadge = ref(
-  String((props.block.metadata as Record<string, unknown> | null)?.badge ?? ''),
-);
-const heroCtaText = ref(
-  String((props.block.metadata as Record<string, unknown> | null)?.ctaText ?? ''),
-);
-const heroCtaLink = ref(
-  String((props.block.metadata as Record<string, unknown> | null)?.ctaLink ?? ''),
-);
-
 const authorName = ref(
   String((props.block.metadata as Record<string, unknown> | null)?.authorName ?? ''),
 );
@@ -140,6 +130,17 @@ const profilLurahName = ref(
       '',
   ),
 );
+/** Which Lurah name control the editor last changed ('field' | 'sotk' | 'none'). */
+const lurahEditSource = ref<'none' | 'field' | 'sotk'>('none');
+
+function markLurahFieldEdited(): void {
+  lurahEditSource.value = 'field';
+}
+
+function markSotkLurahEdited(role: string): void {
+  if (role.trim() === 'Lurah') lurahEditSource.value = 'sotk';
+}
+
 const profilLurahTitle = ref(String(metaRecord?.lurahTitle ?? 'Lurah Kelurahan Manggar'));
 
 function addBatasRow(): void {
@@ -274,12 +275,11 @@ function handleSubmit(): void {
   let metadata: Record<string, unknown> | null = null;
 
   if (isHero.value) {
-    metadata = {
-      ...props.block.metadata,
-      badge: heroBadge.value.trim() || undefined,
-      ctaText: heroCtaText.value.trim() || undefined,
-      ctaLink: heroCtaLink.value.trim() || undefined,
-    };
+    // Align with landing PR #86: hero metadata is backgroundImage only (no badge/CTA).
+    const prev = props.block.metadata as Record<string, unknown> | null;
+    const bg =
+      typeof prev?.backgroundImage === 'string' ? prev.backgroundImage.trim() : '';
+    metadata = bg ? { backgroundImage: bg } : null;
   } else if (isSambutan.value) {
     metadata = {
       ...props.block.metadata,
@@ -299,17 +299,24 @@ function handleSubmit(): void {
       officialName: row.officialName.trim() || null,
       duties: row.duties.trim() || null,
     }));
-    // Keep the dedicated Lurah fields and the SOTK Lurah row in sync for the public page.
+    // Copy only the Lurah name control the editor actually changed (Andi #112).
     const lurahIdx = sotkMembers.findIndex((m) => m.role === 'Lurah');
-    if (lurahIdx >= 0) {
-      sotkMembers = sotkMembers.map((m, i) =>
-        i === lurahIdx ? { ...m, officialName: lurahName || m.officialName } : m,
-      );
-    } else if (lurahName) {
-      sotkMembers = [
-        { role: 'Lurah', officialName: lurahName, duties: null },
-        ...sotkMembers,
-      ];
+    let resolvedLurahName = lurahName;
+    if (lurahEditSource.value === 'field') {
+      if (lurahIdx >= 0) {
+        sotkMembers = sotkMembers.map((m, i) =>
+          i === lurahIdx ? { ...m, officialName: lurahName || m.officialName } : m,
+        );
+      } else if (lurahName) {
+        sotkMembers = [
+          { role: 'Lurah', officialName: lurahName, duties: null },
+          ...sotkMembers,
+        ];
+      }
+    } else if (lurahEditSource.value === 'sotk') {
+      const fromSotk =
+        lurahIdx >= 0 ? (sotkMembers[lurahIdx]?.officialName ?? '').trim() : '';
+      resolvedLurahName = fromSotk || lurahName;
     }
     metadata = {
       ...props.block.metadata,
@@ -317,7 +324,7 @@ function handleSubmit(): void {
       kecamatan: profilKecamatan.value.trim(),
       kota: profilKota.value.trim(),
       landscape: profilLandscape.value.trim(),
-      lurahName: lurahName || undefined,
+      lurahName: resolvedLurahName || undefined,
       lurahTitle: lurahTitle || undefined,
       batasWilayah,
       sotkMembers,
@@ -382,54 +389,6 @@ function handleSubmit(): void {
       ></textarea>
     </FormField>
 
-    <!-- Hero Metadata -->
-    <fieldset v-if="isHero" class="rounded-card space-y-4 border border-slate-200 bg-slate-50 p-4">
-      <legend class="px-1 text-xs font-semibold tracking-wider text-slate-700 uppercase">
-        Pengaturan Hero
-      </legend>
-
-      <FormField
-        :id="fieldId('hero-badge')"
-        label="Teks Badge"
-        hint="Teks lencana di atas judul"
-        v-slot="{ describedBy }"
-      >
-        <input
-          :id="fieldId('hero-badge')"
-          v-model="heroBadge"
-          type="text"
-          :class="INPUT_CLASSES"
-          :aria-describedby="describedBy"
-        />
-      </FormField>
-
-      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField :id="fieldId('hero-cta-text')" label="Teks Tombol CTA" v-slot="{ describedBy }">
-          <input
-            :id="fieldId('hero-cta-text')"
-            v-model="heroCtaText"
-            type="text"
-            :class="INPUT_CLASSES"
-            :aria-describedby="describedBy"
-          />
-        </FormField>
-
-        <FormField
-          :id="fieldId('hero-cta-link')"
-          label="Tautan CTA"
-          hint="Contoh: #potensi atau /peta"
-          v-slot="{ describedBy }"
-        >
-          <input
-            :id="fieldId('hero-cta-link')"
-            v-model="heroCtaLink"
-            type="text"
-            :class="INPUT_CLASSES"
-            :aria-describedby="describedBy"
-          />
-        </FormField>
-      </div>
-    </fieldset>
 
     <!-- Sambutan Lurah Metadata -->
     <fieldset
@@ -556,6 +515,7 @@ function handleSubmit(): void {
             :id="fieldId('lurahName')"
             v-model="profilLurahName"
             type="text"
+            @input="markLurahFieldEdited"
             maxlength="150"
             :class="INPUT_CLASSES"
             :aria-describedby="describedBy"
@@ -698,6 +658,7 @@ function handleSubmit(): void {
               :id="fieldId(`sotk-name-${index}`)"
               v-model="row.officialName"
               type="text"
+              @input="markSotkLurahEdited(row.role)"
               maxlength="150"
               :class="INPUT_CLASSES"
               :aria-describedby="describedBy"

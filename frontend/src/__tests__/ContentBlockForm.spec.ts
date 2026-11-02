@@ -10,11 +10,7 @@ const mockHeroBlock: ContentBlock = {
   slug: 'landing-hero',
   title: 'Judul Hero',
   body: 'Isi teks hero',
-  metadata: {
-    badge: 'Lencana',
-    ctaText: 'Tombol',
-    ctaLink: '#potensi',
-  },
+  metadata: null,
   sortOrder: null,
   updatedAt: '2026-09-01T00:00:00.000Z',
 };
@@ -47,7 +43,7 @@ const mockProfilBlock: ContentBlock = {
 };
 
 describe('ContentBlockForm.vue', () => {
-  it('renders hero fields for landing-hero block and emits submit payload on save', async () => {
+  it('renders hero title/body for landing-hero and emits null metadata without badge/CTA', async () => {
     const wrapper = mount(ContentBlockForm, {
       props: {
         block: mockHeroBlock,
@@ -56,10 +52,11 @@ describe('ContentBlockForm.vue', () => {
 
     expect(wrapper.find('input#block-title').exists()).toBe(true);
     expect(wrapper.find('textarea#block-body').exists()).toBe(true);
-    expect(wrapper.find('input#block-hero-badge').exists()).toBe(true);
+    expect(wrapper.find('input#block-hero-badge').exists()).toBe(false);
+    expect(wrapper.find('input#block-hero-cta-text').exists()).toBe(false);
+    expect(wrapper.find('input#block-hero-cta-link').exists()).toBe(false);
 
     await wrapper.find('input#block-title').setValue('Judul Hero Baru');
-    await wrapper.find('input#block-hero-badge').setValue('Lencana Baru');
     await wrapper.find('form').trigger('submit.prevent');
 
     const emitted = wrapper.emitted('submit');
@@ -67,9 +64,7 @@ describe('ContentBlockForm.vue', () => {
     expect(emitted?.[0]?.[0]).toMatchObject({
       title: 'Judul Hero Baru',
       body: 'Isi teks hero',
-      metadata: expect.objectContaining({
-        badge: 'Lencana Baru',
-      }),
+      metadata: null,
     });
   });
 
@@ -196,6 +191,26 @@ describe('ContentBlockForm.vue', () => {
 
     expect(wrapper.emitted('submit')).toBeFalsy();
     expect(wrapper.text()).toContain('Arah batas wilayah wajib diisi');
+  });
+
+  it('persists SOTK Lurah name when only that row is edited (does not overwrite from top field)', async () => {
+    const wrapper = mount(ContentBlockForm, {
+      props: { block: mockProfilBlock },
+    });
+
+    await wrapper.find('input#block-sotk-name-0').setValue('Nama Dari SOTK');
+    await wrapper.find('form').trigger('submit.prevent');
+
+    const emitted = wrapper.emitted('submit');
+    expect(emitted).toBeTruthy();
+    const payload = emitted?.[0]?.[0] as {
+      metadata: {
+        lurahName: string;
+        sotkMembers: Array<{ role: string; officialName: string | null }>;
+      };
+    };
+    expect(payload.metadata.sotkMembers[0]?.officialName).toBe('Nama Dari SOTK');
+    expect(payload.metadata.lurahName).toBe('Nama Dari SOTK');
   });
 
 });

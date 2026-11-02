@@ -47,17 +47,13 @@ const displayPhone = computed(() => {
     : DEFAULT_PHONE;
 });
 
-const displayAddressLines = computed(() => {
-  if (props.addressLines !== undefined) return props.addressLines;
+/** Single address string (Andi #112: do not split contactAddress on commas). */
+const displayAddressText = computed(() => {
+  if (props.addressLines !== undefined) return props.addressLines.join(', ');
   if (settingsStore?.isLoaded && settingsStore.contactAddress) {
-    const parts = settingsStore.contactAddress
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (parts.length >= 2) return parts;
-    return [settingsStore.contactAddress];
+    return settingsStore.contactAddress;
   }
-  return DEFAULT_ADDRESS_LINES;
+  return DEFAULT_ADDRESS_LINES.join(', ');
 });
 
 // Resource Links (Sumber Daya)
@@ -132,12 +128,8 @@ const aboutLinks = [
           <address
             class="space-y-1 text-xs leading-relaxed text-slate-200/90 not-italic sm:text-sm"
           >
-            <p
-              v-for="(line, idx) in displayAddressLines"
-              :key="idx"
-              :class="{ 'font-medium text-white': idx === 0 }"
-            >
-              {{ line }}
+            <p class="font-medium text-white">
+              {{ displayAddressText }}
             </p>
             <p class="pt-0.5">
               Telp.
