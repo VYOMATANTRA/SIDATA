@@ -47,8 +47,8 @@ export const useRtLeadersStore = defineStore('rtLeaders', () => {
   const rtLeaders = ref<RtLeader[]>([]);
   const isLoading = ref(false);
   const error = ref<string | null>(null);
-  /** True once a fetch has completed, so the page can tell "not loaded" from "empty". */
-  const hasFetched = ref(false);
+  /** True once a fetch has settled (success or failure), so the page can tell "not loaded" from "empty". */
+  const hasSettled = ref(false);
   /** Rows the API returned that could not be rendered. */
   const rejectedCount = ref(0);
   /** From system_settings via the list API — not inferred from phone placeholders. */
@@ -91,7 +91,7 @@ export const useRtLeadersStore = defineStore('rtLeaders', () => {
       } finally {
         if (currentRequestId === activeRequestId) {
           isLoading.value = false;
-          hasFetched.value = true;
+          hasSettled.value = true;
           inFlight = null;
         }
       }
@@ -104,7 +104,8 @@ export const useRtLeadersStore = defineStore('rtLeaders', () => {
     rtLeaders,
     isLoading,
     error,
-    hasFetched,
+    hasSettled,
+    hasFetched: hasSettled,
     rejectedCount,
     isSampleRoster,
     fetchRtLeaders,
