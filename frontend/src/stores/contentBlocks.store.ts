@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { useAuthStore } from './auth';
 import { getCsrfToken } from '../utils/csrf';
 import { PUBLICATIONS } from '../content/publikasi';
+import { SOTK_MEMBERS } from '../content/tentang';
 
 export interface ContentBlock {
   id: string;
@@ -91,17 +92,8 @@ export const DEFAULT_TENTANG_PROFIL_BLOCK: ContentBlock = {
       { arah: 'Sebelah Selatan', wilayah: 'Selat Makassar' },
       { arah: 'Sebelah Barat', wilayah: 'Kelurahan Sepinggan dan Sepinggan Baru' },
     ],
-    sotkMembers: [
-      { role: 'Lurah', officialName: 'Munir Achmad, S.E.', duties: null },
-      { role: 'Sekretaris Lurah', officialName: 'Munjiah Puspitawaty. M, S.E', duties: null },
-      { role: 'Kasi Trantib L-H', officialName: 'Nanang Sri Ruriyanto, S.Sos.', duties: null },
-      {
-        role: 'Kasi Pemerintahan dan Pelayanan Publik',
-        officialName: 'Hasiba, S.A.P',
-        duties: null,
-      },
-      { role: 'Kasi Pemberdayaan Masyarakat', officialName: 'Marthen Solly, S.ST', duties: null },
-    ],
+    // Single source of truth: frontend/src/content/tentang.ts SOTK_MEMBERS
+    sotkMembers: SOTK_MEMBERS.map((item) => ({ ...item })),
   },
   sortOrder: null,
   updatedAt: new Date('2026-09-01').toISOString(),

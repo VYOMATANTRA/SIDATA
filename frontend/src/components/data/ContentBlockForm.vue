@@ -99,15 +99,11 @@ function readSotkMembers(meta: Record<string, unknown> | null): SotkDraft[] {
   const raw = meta?.sotkMembers;
   if (!Array.isArray(raw) || raw.length === 0) {
     return [
-      { role: 'Lurah', officialName: 'Munir Achmad, S.E.', duties: '' },
-      { role: 'Sekretaris Lurah', officialName: 'Munjiah Puspitawaty. M, S.E', duties: '' },
-      { role: 'Kasi Trantib L-H', officialName: 'Nanang Sri Ruriyanto, S.Sos.', duties: '' },
-      {
-        role: 'Kasi Pemerintahan dan Pelayanan Publik',
-        officialName: 'Hasiba, S.A.P',
-        duties: '',
-      },
-      { role: 'Kasi Pemberdayaan Masyarakat', officialName: 'Marthen Solly, S.ST', duties: '' },
+      { role: 'Lurah', officialName: '', duties: '' },
+      { role: 'Sekretaris Lurah', officialName: '', duties: '' },
+      { role: 'Kasi Trantib L-H', officialName: '', duties: '' },
+      { role: 'Kasi Pemerintahan dan Pelayanan Publik', officialName: '', duties: '' },
+      { role: 'Kasi Pemberdayaan Masyarakat', officialName: '', duties: '' },
     ];
   }
   return raw.map((item) => {
@@ -515,6 +511,7 @@ function handleSubmit(): void {
             :id="fieldId('lurahName')"
             v-model="profilLurahName"
             type="text"
+            placeholder="Nama pejabat belum tersedia"
             @input="markLurahFieldEdited"
             maxlength="150"
             :class="INPUT_CLASSES"
@@ -658,6 +655,7 @@ function handleSubmit(): void {
               :id="fieldId(`sotk-name-${index}`)"
               v-model="row.officialName"
               type="text"
+              placeholder="Nama pejabat belum tersedia"
               @input="markSotkLurahEdited(row.role)"
               maxlength="150"
               :class="INPUT_CLASSES"

@@ -213,4 +213,66 @@ describe('ContentBlockForm.vue', () => {
     expect(payload.metadata.lurahName).toBe('Nama Dari SOTK');
   });
 
+  it('keeps both lurahName and SOTK Lurah unchanged when neither field was edited', async () => {
+    const testProfilBlock: ContentBlock = {
+      ...mockProfilBlock,
+      metadata: {
+        ...mockProfilBlock.metadata,
+        lurahName: 'Nama Uji A',
+        sotkMembers: [
+          { role: 'Lurah', officialName: 'Nama Uji A', duties: null },
+          { role: 'Sekretaris Lurah', officialName: 'Sekretaris Uji', duties: null },
+        ],
+      },
+    };
+
+    const wrapper = mount(ContentBlockForm, {
+      props: { block: testProfilBlock },
+    });
+
+    // Edit an unrelated field
+    await wrapper.find('input#block-rt-count').setValue(110);
+    await wrapper.find('form').trigger('submit.prevent');
+
+    const emitted = wrapper.emitted('submit');
+    expect(emitted).toBeTruthy();
+    const payload = emitted?.[0]?.[0] as {
+      metadata: {
+        rtCount: number;
+        lurahName: string;
+        sotkMembers: Array<{ role: string; officialName: string | null }>;
+      };
+    };
+    expect(payload.metadata.rtCount).toBe(110);
+    expect(payload.metadata.lurahName).toBe('Nama Uji A');
+    expect(payload.metadata.sotkMembers[0]?.officialName).toBe('Nama Uji A');
+    expect(payload.metadata.sotkMembers[1]?.officialName).toBe('Sekretaris Uji');
+  });
+
+  it('starts with empty official names and shows placeholder when profil SOTK metadata is empty', () => {
+    const emptyProfilBlock: ContentBlock = {
+      ...mockProfilBlock,
+      metadata: {
+        ...mockProfilBlock.metadata,
+        lurahName: '',
+        sotkMembers: [],
+      },
+    };
+
+    const wrapper = mount(ContentBlockForm, {
+      props: { block: emptyProfilBlock },
+    });
+
+    const lurahInput = wrapper.find('input#block-lurahName');
+    expect(lurahInput.attributes('placeholder')).toBe('Nama pejabat belum tersedia');
+    expect((lurahInput.element as HTMLInputElement).value).toBe('');
+
+    const sotkName0 = wrapper.find('input#block-sotk-name-0');
+    expect(sotkName0.exists()).toBe(true);
+    expect(sotkName0.attributes('placeholder')).toBe('Nama pejabat belum tersedia');
+    expect((sotkName0.element as HTMLInputElement).value).toBe('');
+
+    const sotkRole0 = wrapper.find('input#block-sotk-role-0');
+    expect((sotkRole0.element as HTMLInputElement).value).toBe('Lurah');
+  });
 });
