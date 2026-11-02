@@ -249,6 +249,46 @@ describe('ContentBlockForm.vue', () => {
     expect(payload.metadata.sotkMembers[1]?.officialName).toBe('Sekretaris Uji');
   });
 
+  it('allows clearing Lurah name via top field and syncs null to SOTK row', async () => {
+    const wrapper = mount(ContentBlockForm, {
+      props: { block: mockProfilBlock },
+    });
+
+    await wrapper.find('input#block-lurahName').setValue('');
+    await wrapper.find('form').trigger('submit.prevent');
+
+    const emitted = wrapper.emitted('submit');
+    expect(emitted).toBeTruthy();
+    const payload = emitted?.[0]?.[0] as {
+      metadata: {
+        lurahName?: string;
+        sotkMembers: Array<{ role: string; officialName: string | null }>;
+      };
+    };
+    expect(payload.metadata.lurahName).toBeUndefined();
+    expect(payload.metadata.sotkMembers[0]?.officialName).toBeNull();
+  });
+
+  it('allows clearing Lurah name via SOTK row and syncs undefined to lurahName', async () => {
+    const wrapper = mount(ContentBlockForm, {
+      props: { block: mockProfilBlock },
+    });
+
+    await wrapper.find('input#block-sotk-name-0').setValue('');
+    await wrapper.find('form').trigger('submit.prevent');
+
+    const emitted = wrapper.emitted('submit');
+    expect(emitted).toBeTruthy();
+    const payload = emitted?.[0]?.[0] as {
+      metadata: {
+        lurahName?: string;
+        sotkMembers: Array<{ role: string; officialName: string | null }>;
+      };
+    };
+    expect(payload.metadata.lurahName).toBeUndefined();
+    expect(payload.metadata.sotkMembers[0]?.officialName).toBeNull();
+  });
+
   it('starts with empty official names and shows placeholder when profil SOTK metadata is empty', () => {
     const emptyProfilBlock: ContentBlock = {
       ...mockProfilBlock,

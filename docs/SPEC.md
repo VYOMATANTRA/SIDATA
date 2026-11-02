@@ -199,8 +199,8 @@ sidebar shell), organized into three accessible tabbed categories:
 2. **Blok Konten & Profil:** Displays editable cards for all standalone content blocks (`landing-hero`,
    `landing-sambutan-lurah`, `landing-highlights`, `tentang-kelurahan-profil`, `publikasi-katalog`).
    Opens `ContentBlockForm`, providing accessible inputs for block title, body (up to 50,000 characters),
-   and specialized metadata editors (hero badge/CTA, Lurah title/photo, profile RT count/administrative
-   hierarchy, or raw JSON for structured collections). Mutations use `PATCH /api/content-blocks/:slug`
+   and specialized metadata editors (Lurah title/photo, profile RT count/administrative hierarchy,
+   boundaries, SOTK roster, or raw JSON for structured collections). Mutations use `PATCH /api/content-blocks/:slug`
    (audited as `content_block.updated`) with prototype pollution guards and URL validation.
 
 3. **Pengaturan Publik Portal:** Displays system portal settings and opens `PublicSettingsForm`. Admins

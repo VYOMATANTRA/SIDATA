@@ -301,7 +301,7 @@ function handleSubmit(): void {
     if (lurahEditSource.value === 'field') {
       if (lurahIdx >= 0) {
         sotkMembers = sotkMembers.map((m, i) =>
-          i === lurahIdx ? { ...m, officialName: lurahName || m.officialName } : m,
+          i === lurahIdx ? { ...m, officialName: lurahName || null } : m,
         );
       } else if (lurahName) {
         sotkMembers = [
@@ -312,7 +312,7 @@ function handleSubmit(): void {
     } else if (lurahEditSource.value === 'sotk') {
       const fromSotk =
         lurahIdx >= 0 ? (sotkMembers[lurahIdx]?.officialName ?? '').trim() : '';
-      resolvedLurahName = fromSotk || lurahName;
+      resolvedLurahName = fromSotk;
     }
     metadata = {
       ...props.block.metadata,
