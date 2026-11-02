@@ -651,4 +651,38 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
     expect(cells[0]).toContain('0812 3456 7801');
     expect(cells[1]).toContain('+62 812 3456 7802');
   });
+
+  it('hands focus to the active page button when Next becomes disabled on the last page', async () => {
+    const { pinia, router } = mountView();
+    await router.push('/ketua-rt');
+    await router.isReady();
+
+    const wrapper = mount(KetuaRtView, {
+      global: { plugins: [pinia, router] },
+      attachTo: document.body,
+    });
+    await flushPromises();
+
+    // Change page size to 50 so totalPages is 2
+    await wrapper.find('[data-test="page-size-select"]').setValue('50');
+    await flushPromises();
+
+    const nextBtn = wrapper.find<HTMLButtonElement>('[data-test="pagination-next"]');
+    expect(nextBtn.element.disabled).toBe(false);
+
+    // Focus and click Next to navigate from page 1 to page 2 (last page)
+    nextBtn.element.focus();
+    expect(document.activeElement).toBe(nextBtn.element);
+
+    await nextBtn.trigger('click');
+    await flushPromises();
+
+    // Next button is now disabled; focus must have been handed off to an interactive element
+    expect(nextBtn.element.disabled).toBe(true);
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).not.toBe(nextBtn.element);
+    expect(document.activeElement?.getAttribute('data-test')).toBe('pagination-page-2');
+
+    wrapper.unmount();
+  });
 });

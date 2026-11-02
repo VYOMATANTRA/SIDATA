@@ -1,11 +1,18 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import TentangPageLayout from '../components/tentang/TentangPageLayout.vue';
 import TentangBreadcrumb from '../components/tentang/TentangBreadcrumb.vue';
 import TentangHeroPanel from '../components/tentang/TentangHeroPanel.vue';
 import TentangNotice from '../components/tentang/TentangNotice.vue';
 import BaseButton from '../components/common/BaseButton.vue';
 import { useRtLeadersStore } from '../stores/rtLeaders.store';
+import {
+  primaryPhone,
+  digitsOnly,
+  isDialable,
+  telHref,
+  whatsappNumber,
+} from '../utils/phone';
 
 const rtLeadersStore = useRtLeadersStore();
 
@@ -93,9 +100,32 @@ const paginationPages = computed<(number | 'ellipsis')[]>(() => {
   return [1, 'ellipsis', current - 1, current, current + 1, 'ellipsis', total];
 });
 
-function goToPage(page: number) {
+async function goToPage(page: number) {
   if (page < 1 || page > totalPages.value) return;
   currentPage.value = page;
+
+  // WCAG 2.4.3: If navigation disables the control that currently holds focus
+  // (e.g. clicking "Selanjutnya" to reach the last page or "Sebelumnya" for page 1),
+  // hand focus to the newly active page button so keyboard focus is not lost to <body>.
+  await nextTick();
+  const activeEl = document.activeElement as HTMLElement | null;
+  if (
+    activeEl &&
+    (activeEl.hasAttribute('disabled') || activeEl.getAttribute('aria-disabled') === 'true')
+  ) {
+    const activePageBtn = document.querySelector<HTMLButtonElement>(
+      `[data-test="pagination-page-${page}"]`,
+    );
+    if (activePageBtn && !activePageBtn.disabled) {
+      activePageBtn.focus();
+    } else {
+      const fallbackBtn =
+        page === 1
+          ? document.querySelector<HTMLButtonElement>('[data-test="pagination-next"]')
+          : document.querySelector<HTMLButtonElement>('[data-test="pagination-prev"]');
+      fallbackBtn?.focus();
+    }
+  }
 }
 
 // A new search or a new page size invalidates the current offset.
@@ -118,7 +148,7 @@ const showEmptyResult = computed(
 const showNoData = computed(
   () =>
     !rtLeadersStore.isLoading &&
-    rtLeadersStore.hasFetched &&
+    rtLeadersStore.hasSettled &&
     !rtLeadersStore.error &&
     !hasRows.value,
 );
@@ -173,50 +203,6 @@ const heroSubtitle = computed(() => {
 
 function clearFilter() {
   query.value = '';
-}
-
-function primaryPhone(value: string): string {
-  // Multiple numbers may be joined with punctuation or Indonesian conjunctions.
-  const parts = value.split(/[/,;]|\batau\b|\bdan\b/i);
-  return parts[0]?.trim() ?? value;
-}
-
-function digitsOnly(value: string): string {
-  return primaryPhone(value).replace(/[^0-9]/g, '');
-}
-
-/** E.164-ish digit runs above 15 are not used as tel/wa links (show plain text instead). */
-function isPlausiblePhoneDigitRun(digits: string): boolean {
-  return digits.length > 0 && digits.length <= 15;
-}
-
-function telHref(value: string): string {
-  const primary = primaryPhone(value);
-  const prefix = primary.startsWith('+') ? '+' : '';
-  return `tel:${prefix}${digitsOnly(value)}`;
-}
-
-/**
- * A placeholder row carries no contact at all — the seeded roster stores a
- * non-dialable marker instead of a number. There is nothing to call or message
- * then, so the cell shows the value as plain text rather than a dead link.
- */
-function isDialable(value: string): boolean {
-  return isPlausiblePhoneDigitRun(digitsOnly(value));
-}
-
-/**
- * WhatsApp requires an international MSISDN. The roster mixes formats — local
- * `08…`, international `+62 8…`, and bare `8…` — so the number is normalised to
- * the `62…` form before building the wa.me link.
- */
-function whatsappNumber(value: string): string {
-  const digits = digitsOnly(value);
-  if (!isPlausiblePhoneDigitRun(digits)) return '';
-  if (digits.startsWith('62')) return digits;
-  if (digits.startsWith('0')) return `62${digits.slice(1)}`;
-  if (digits.startsWith('8')) return `62${digits}`;
-  return digits;
 }
 
 /**
@@ -279,7 +265,7 @@ function formatPhone(value: string): string {
             data-test="rt-search"
           />
           <p class="mt-3 text-base text-gray-700" aria-live="polite" data-test="rt-count">
-            {{ rtLeadersStore.hasFetched && !rtLeadersStore.isLoading && !rtLeadersStore.error ? countSummary : '' }}
+            {{ rtLeadersStore.hasSettled && !rtLeadersStore.isLoading && !rtLeadersStore.error ? countSummary : '' }}
           </p>
         </div>
 
