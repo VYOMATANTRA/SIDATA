@@ -103,7 +103,7 @@ const paginationEnd = computed(() =>
 );
 
 watch(
-  [search, () => mapsStore.activeTypeFilter, () => mapsStore.activeRtFilter, userLocation],
+  [search, () => mapsStore.activeTypeFilter, userLocation],
   () => {
     currentPage.value = 1;
   },

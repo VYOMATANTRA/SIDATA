@@ -63,21 +63,6 @@ describe('maps.ts Pinia Store', () => {
     expect(store.filteredPoints.length).toBe(2);
   });
 
-  it('filters points by RT number', async () => {
-    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
-      ok: true,
-      json: async () => ({ points: mockPoints, total: 2 }),
-    } as Response);
-
-    const store = useMapsStore();
-    await store.loadPoints();
-
-    store.setRtFilter(2);
-    // Only Bank Sampah covers RT 2
-    expect(store.filteredPoints.length).toBe(1);
-    expect(store.filteredPoints[0]?.name).toBe('Bank Sampah');
-  });
-
   it('does not let an older leader lookup overwrite the current selection', async () => {
     let resolveFirst!: (value: import('../types/maps').RtLeaderDTO | null) => void;
     const firstLookup = new Promise<import('../types/maps').RtLeaderDTO | null>((resolve) => {

@@ -581,6 +581,48 @@ describe('indicators store (single indicator reads by slug)', () => {
     expect(store.bySlug['jumlah-penduduk']?.valueCurrent).toBe('999');
   });
 
+  it('does not record an error from an older superseded fetch after a newer forced fetch succeeded', async () => {
+    let resolveFirst!: (value: Response) => void;
+    const firstPromise = new Promise<Response>((r) => {
+      resolveFirst = r;
+    });
+
+    let callIndex = 0;
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async () => {
+      callIndex++;
+      if (callIndex === 1) return firstPromise;
+      return json({
+        indicator: makeIndicator({
+          id: 'ind-1',
+          slug: 'jumlah-penduduk',
+          valueCurrent: '42',
+        }),
+      });
+    }) as typeof fetch;
+
+    const store = useIndicatorsStore();
+    const firstTask = store.fetchBySlug('jumlah-penduduk');
+    const secondTask = store.fetchBySlug('jumlah-penduduk', true);
+
+    const secondResult = await secondTask;
+    expect(secondResult?.valueCurrent).toBe('42');
+    expect(store.bySlug['jumlah-penduduk']?.valueCurrent).toBe('42');
+    expect(store.loadingBySlug['jumlah-penduduk']).toBe(false);
+    expect(store.errorsBySlug['jumlah-penduduk']).toBeNull();
+
+    // Now resolve the first fetch with a failure (e.g. 500)
+    resolveFirst(
+      new Response(JSON.stringify({ error: 'server error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    await firstTask;
+
+    expect(store.bySlug['jumlah-penduduk']?.valueCurrent).toBe('42');
+    expect(store.loadingBySlug['jumlah-penduduk']).toBe(false);
+    expect(store.errorsBySlug['jumlah-penduduk']).toBeNull();
+  });
 });
 
 
