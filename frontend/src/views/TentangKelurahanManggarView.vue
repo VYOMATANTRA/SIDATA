@@ -252,7 +252,7 @@ const wilayahStats = computed<StatItem[]>(() => [
           class="flex-1"
         >
           Peta lokasi rumah ketua RT dan bank sampah aktif di Kelurahan Manggar, Kecamatan
-          {{ KECAMATAN }}.
+          {{ kecamatan }}.
         </TentangResourceCard>
 
         <TentangResourceCard
