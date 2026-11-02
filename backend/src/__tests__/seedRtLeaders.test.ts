@@ -2,22 +2,34 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { RT_LEADERS_DATA } from '../../prisma/rtLeadersData.js';
-import { seedRtLeaders, type RtLeaderSeedClient } from '../../prisma/seedRtLeaders.js';
+import {
+  seedRtLeaders,
+  seededKetuaRtPointId,
+  type RtLeaderSeedClient,
+} from '../../prisma/seedRtLeaders.js';
 import { LEGACY_SAMPLE_LEADERS, phoneSha256 } from '../utils/legacySampleRtFingerprints.js';
 
 type UpsertCall = { where: unknown; update: unknown; create: unknown };
+
+function nestedCoverageCreates(call: UpsertCall): Array<{ pointId: string; rtNumber: number }> {
+  const create = call.create as {
+    id?: string;
+    rtCoverages?: { create?: Array<{ rtNumber: number }> };
+  };
+  const pointId = typeof create.id === 'string' ? create.id : '';
+  const rows = create.rtCoverages?.create ?? [];
+  return rows.map((row) => ({ pointId, rtNumber: row.rtNumber }));
+}
 
 function recordingClient(existingPointIds: Set<string> = new Set()) {
   const calls: {
     rtLeader: UpsertCall[];
     spatialPoint: UpsertCall[];
     spatialPointFind: string[];
-    spatialPointRtCreate: Array<{ pointId: string; rtNumber: number }>;
   } = {
     rtLeader: [],
     spatialPoint: [],
     spatialPointFind: [],
-    spatialPointRtCreate: [],
   };
 
   const client: RtLeaderSeedClient = {
@@ -37,12 +49,6 @@ function recordingClient(existingPointIds: Set<string> = new Set()) {
         return args;
       },
     },
-    spatialPointRt: {
-      async create(args) {
-        calls.spatialPointRtCreate.push(args.data);
-        return args;
-      },
-    },
   };
 
   return { client, calls };
@@ -56,7 +62,8 @@ describe('seedRtLeaders', () => {
 
     assert.equal(calls.rtLeader.length, RT_LEADERS_DATA.length);
     assert.equal(calls.spatialPoint.length, RT_LEADERS_DATA.length);
-    assert.equal(calls.spatialPointRtCreate.length, RT_LEADERS_DATA.length);
+    const coverageCreates = calls.spatialPoint.flatMap(nestedCoverageCreates);
+    assert.equal(coverageCreates.length, RT_LEADERS_DATA.length);
 
     for (const call of [...calls.rtLeader, ...calls.spatialPoint]) {
       assert.deepEqual(
@@ -100,7 +107,9 @@ describe('seedRtLeaders', () => {
     const pointIds = new Set(calls.spatialPoint.map((call) => (call.where as { id: string }).id));
     assert.equal(pointIds.size, RT_LEADERS_DATA.length);
 
-    for (const created of calls.spatialPointRtCreate) {
+    const coverageCreates = calls.spatialPoint.flatMap(nestedCoverageCreates);
+    assert.equal(coverageCreates.length, RT_LEADERS_DATA.length);
+    for (const created of coverageCreates) {
       assert.ok(pointIds.has(created.pointId));
     }
   });
@@ -122,7 +131,52 @@ describe('seedRtLeaders', () => {
     ]);
 
     assert.equal(calls.spatialPoint.length, 1);
-    assert.equal(calls.spatialPointRtCreate.length, 0);
+    assert.equal(nestedCoverageCreates(calls.spatialPoint[0]!).length, 0);
+  });
+
+  it('skips recreating a tombstoned seeded point and its coverage', async () => {
+    const pointId = seededKetuaRtPointId(7);
+    const { client, calls } = recordingClient();
+
+    await seedRtLeaders(
+      client,
+      [
+        {
+          rtNumber: 7,
+          name: 'Ketua RT 07',
+          phone: '—',
+          phoneIsWhatsapp: false,
+          alamat: null,
+          latitude: -1.2,
+          longitude: 116.9,
+        },
+      ],
+      { skippedPointIds: new Set([pointId]) },
+    );
+
+    assert.equal(calls.rtLeader.length, 1, 'leader row is still filled if missing');
+    assert.equal(calls.spatialPoint.length, 0, 'tombstoned point must not be recreated');
+  });
+
+  it('still seeds points when the tombstone set is empty', async () => {
+    const { client, calls } = recordingClient();
+    await seedRtLeaders(
+      client,
+      [
+        {
+          rtNumber: 7,
+          name: 'Ketua RT 07',
+          phone: '—',
+          phoneIsWhatsapp: false,
+          alamat: null,
+          latitude: -1.2,
+          longitude: 116.9,
+        },
+      ],
+      { skippedPointIds: new Set() },
+    );
+    assert.equal(calls.spatialPoint.length, 1);
+    assert.equal(nestedCoverageCreates(calls.spatialPoint[0]!).length, 1);
   });
 
   it('returns the number of RTs processed', async () => {

@@ -145,7 +145,7 @@ describe('runLegacySampleRtCleanup', () => {
 });
 
 describe('recordLegacySampleCleanupAudit', () => {
-  it('writes a structured log always and an audit row only on --force', async () => {
+  it('writes a structured log always and an audit row when data changed (any force flag)', async () => {
     const lines: string[] = [];
     const audits: unknown[] = [];
     const result: LegacySampleCleanupResult = {
@@ -165,12 +165,33 @@ describe('recordLegacySampleCleanupAudit', () => {
         now: () => new Date('2026-10-30T12:00:00.000Z'),
       },
     );
-    assert.equal(audits.length, 0);
+    assert.equal(audits.length, 1);
     assert.equal(lines.length, 1);
     const parsed = JSON.parse(lines[0]!) as Record<string, unknown>;
     assert.equal(parsed['event'], 'maintenance.legacy_rt_cleanup');
     assert.equal(parsed['updatedLeaders'], 2);
     assert.equal(parsed['force'], false);
+    const entryNoForce = audits[0] as {
+      action: { action: string };
+      metadata: Record<string, unknown>;
+    };
+    assert.equal(entryNoForce.action.action, AUDIT_ACTIONS.MAINTENANCE_LEGACY_RT_CLEANUP.action);
+    assert.equal(entryNoForce.metadata['force'], false);
+
+    await recordLegacySampleCleanupAudit(
+      { deletedJunctions: 0, deletedPoints: 0, updatedLeaders: 0 },
+      { force: true, nodeEnv: 'production' },
+      {
+        log: (line) => lines.push(line),
+        recordAudit: async (entry) => {
+          audits.push(entry);
+        },
+        now: () => new Date('2026-10-30T12:00:00.000Z'),
+      },
+    );
+    // No data changed → still log, but no second audit row.
+    assert.equal(audits.length, 1);
+    assert.equal(lines.length, 2);
 
     await recordLegacySampleCleanupAudit(
       result,
@@ -183,8 +204,8 @@ describe('recordLegacySampleCleanupAudit', () => {
         now: () => new Date('2026-10-30T12:00:00.000Z'),
       },
     );
-    assert.equal(audits.length, 1);
-    const entry = audits[0] as {
+    assert.equal(audits.length, 2);
+    const entry = audits[1] as {
       action: { action: string };
       metadata: Record<string, unknown>;
     };
