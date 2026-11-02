@@ -912,10 +912,19 @@ async function maybeClearRtLeadersSampleRosterFlag(
 
 /** Record a deleted seeded point id so re-seed will not recreate it (same tx as delete+audit). */
 async function recordSeededPointTombstone(
-  tx: Pick<SpatialWriteTxClient, 'systemSetting'>,
+  tx: Pick<SpatialWriteTxClient, 'systemSetting' | '$queryRaw'>,
   pointId: string,
 ): Promise<void> {
   if (!isSeededKetuaRtPointId(pointId)) return;
+  // Ensure row exists before taking row-level lock (avoiding gap locks on missing rows)
+  await tx.systemSetting.upsert({
+    where: { key: RT_SEED_POINT_TOMBSTONES_KEY },
+    create: { key: RT_SEED_POINT_TOMBSTONES_KEY, value: '[]' },
+    update: {},
+  });
+  await tx.$queryRaw(
+    Prisma.sql`SELECT setting_key FROM system_settings WHERE setting_key = ${RT_SEED_POINT_TOMBSTONES_KEY} FOR UPDATE`,
+  );
   const existing = await tx.systemSetting.findUnique({
     where: { key: RT_SEED_POINT_TOMBSTONES_KEY },
   });

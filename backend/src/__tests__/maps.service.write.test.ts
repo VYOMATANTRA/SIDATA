@@ -958,6 +958,34 @@ describe('maps.service deleteSpatialPoint seed tombstones', () => {
     await deleteSpatialPoint('point-custom', ACTOR, CONTEXT);
     assert.equal(settings.get(RT_SEED_POINT_TOMBSTONES_KEY), undefined);
   });
+
+  it('locks the tombstone settings row and accumulates multiple deleted seeded point ids', async () => {
+    const id1 = seededKetuaRtPointId(1);
+    const id2 = seededKetuaRtPointId(2);
+    seedState(
+      [
+        ketuaPoint({ id: id1, name: 'Pos RT 01 Kelurahan Manggar' }),
+        ketuaPoint({ id: id2, name: 'Pos RT 02 Kelurahan Manggar' }),
+      ],
+      [],
+      { [id1]: [1], [id2]: [2] },
+    );
+
+    await deleteSpatialPoint(id1, ACTOR, CONTEXT);
+    await deleteSpatialPoint(id2, ACTOR, CONTEXT);
+
+    const sqlOf = (args: unknown) =>
+      ((args as unknown[] | undefined)?.[0] as Prisma.Sql | undefined)?.sql ?? String(args);
+    const tombstoneLocks = queryRawCalls.filter((args) =>
+      sqlOf(args).includes('system_settings WHERE setting_key ='),
+    );
+    assert.equal(tombstoneLocks.length, 2, 'each delete must lock the tombstone settings row');
+
+    const raw = settings.get(RT_SEED_POINT_TOMBSTONES_KEY);
+    assert.ok(raw);
+    const parsed = JSON.parse(raw!) as string[];
+    assert.deepEqual(parsed.sort(), [id1, id2].sort());
+  });
 });
 
 describe('maps.service updateRtLeader', () => {
