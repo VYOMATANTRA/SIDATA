@@ -315,4 +315,42 @@ describe('ContentBlockForm.vue', () => {
     const sotkRole0 = wrapper.find('input#block-sotk-role-0');
     expect((sotkRole0.element as HTMLInputElement).value).toBe('Lurah');
   });
+
+  it('prepends a Lurah SOTK row when editing top Lurah field if no Lurah row previously existed', async () => {
+    const noLurahBlock: ContentBlock = {
+      ...mockProfilBlock,
+      metadata: {
+        ...mockProfilBlock.metadata,
+        lurahName: '',
+        // Explicitly provide sotkMembers without a Lurah role row
+        sotkMembers: [
+          { role: 'Sekretaris Lurah', officialName: 'Munjiah Puspitawaty. M, S.E', duties: null },
+        ],
+      },
+    };
+
+    const wrapper = mount(ContentBlockForm, {
+      props: { block: noLurahBlock },
+    });
+
+    await wrapper.find('input#block-lurahName').setValue('Munir Achmad, S.E.');
+    await wrapper.find('form').trigger('submit.prevent');
+
+    const emitted = wrapper.emitted('submit');
+    expect(emitted).toBeTruthy();
+    const payload = emitted?.[0]?.[0] as {
+      metadata: {
+        lurahName: string;
+        sotkMembers: Array<{ role: string; officialName: string | null }>;
+      };
+    };
+    expect(payload.metadata.lurahName).toBe('Munir Achmad, S.E.');
+    expect(payload.metadata.sotkMembers.length).toBe(2);
+    expect(payload.metadata.sotkMembers[0]).toEqual({
+      role: 'Lurah',
+      officialName: 'Munir Achmad, S.E.',
+      duties: null,
+    });
+    expect(payload.metadata.sotkMembers[1]?.role).toBe('Sekretaris Lurah');
+  });
 });

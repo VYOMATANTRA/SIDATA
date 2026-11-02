@@ -304,6 +304,9 @@ function handleSubmit(): void {
           i === lurahIdx ? { ...m, officialName: lurahName || null } : m,
         );
       } else if (lurahName) {
+        // When no SOTK row for 'Lurah' exists, entering a Lurah name in the dedicated
+        // top input intentionally prepends a new 'Lurah' SOTK row so the SOTK roster
+        // reflects the leadership structure without requiring manual row recreation.
         sotkMembers = [
           { role: 'Lurah', officialName: lurahName, duties: null },
           ...sotkMembers,
