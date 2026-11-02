@@ -402,6 +402,23 @@ describe('indicators store (single indicator reads by slug)', () => {
     expect(store.findBySlug('jumlah-penduduk')).toBeNull();
   });
 
+  it('keeps cached slug entry when a forced refetch returns 500', async () => {
+    const store = useIndicatorsStore();
+    const sample = makeIndicator({ id: 'ind-1', slug: 'jumlah-penduduk', valueCurrent: '53098' });
+    store.bySlug['jumlah-penduduk'] = sample;
+    store.bySlugFetchedAt['jumlah-penduduk'] = Date.now();
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: false,
+      status: 500,
+    } as Response);
+
+    const result = await store.fetchBySlug('jumlah-penduduk', true);
+    expect(result).toBeNull();
+    expect(store.bySlug['jumlah-penduduk']?.valueCurrent).toBe('53098');
+    expect(store.errorsBySlug['jumlah-penduduk']).toContain('500');
+  });
+
   it('evicts cached slug entry when a refetch returns 404', async () => {
     const store = useIndicatorsStore();
     const sample = makeIndicator({ id: 'ind-1', slug: 'jumlah-penduduk', valueCurrent: '53098' });

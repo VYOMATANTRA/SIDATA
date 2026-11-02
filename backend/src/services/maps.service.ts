@@ -10,9 +10,18 @@ import {
 } from './audit.service.js';
 import { executeLockedTransaction, withChangeResult } from '../utils/lockTransactionCache.js';
 import { hasFieldChanged } from '../utils/comparator.js';
+import { RT_LEADERS_DATA } from '../../prisma/rtLeadersData.js';
+import {
+  isSeededKetuaRtPointId,
+  parseSeedPointTombstones,
+  RT_SEED_POINT_TOMBSTONES_KEY,
+  serializeSeedPointTombstones,
+} from '../../prisma/seedRtLeaders.js';
 
-/** system_settings key: seed sets true; any editor save of an RT leader clears it. */
+/** system_settings key: seed sets true; cleared only when no placeholder leaders remain. */
 export const RT_LEADERS_SAMPLE_ROSTER_KEY = 'maps.rt_leaders_sample_roster';
+
+export { RT_SEED_POINT_TOMBSTONES_KEY };
 
 export const ALL_SPATIAL_POINT_TYPES: readonly SpatialPointType[] = [
   'ketua_rt',
@@ -859,20 +868,65 @@ interface SpatialWriteTxClient {
     typeof prisma.spatialPointRt,
     'findMany' | 'findUnique' | 'create' | 'createMany' | 'delete' | 'deleteMany'
   >;
-  rtLeader: Pick<typeof prisma.rtLeader, 'findUnique' | 'update'>;
-  systemSetting: Pick<typeof prisma.systemSetting, 'upsert'>;
+  rtLeader: Pick<typeof prisma.rtLeader, 'findUnique' | 'findMany' | 'update'>;
+  systemSetting: Pick<typeof prisma.systemSetting, 'upsert' | 'findUnique'>;
   auditLog: Pick<typeof prisma.auditLog, 'create'>;
   $queryRaw: (query: Prisma.Sql) => Promise<unknown>;
 }
 
-/** Clear the seeded-sample flag once an editor saves real leader data. */
-async function clearRtLeadersSampleRosterFlag(
-  tx: Pick<SpatialWriteTxClient, 'systemSetting'>,
+/** True when a leader row still matches the synthetic seed placeholder for its RT. */
+function matchesSeedPlaceholderLeader(row: {
+  rtNumber: number;
+  name: string;
+  phone: string;
+  phoneIsWhatsapp: boolean;
+}): boolean {
+  const seed = RT_LEADERS_DATA.find((entry) => entry.rtNumber === row.rtNumber);
+  if (!seed) return false;
+  return (
+    row.name === seed.name &&
+    row.phone === seed.phone &&
+    row.phoneIsWhatsapp === seed.phoneIsWhatsapp
+  );
+}
+
+/**
+ * Clear the seeded-sample flag only when no placeholder leader rows remain.
+ * Editing one of many placeholders must keep the public "data contoh" notice.
+ */
+async function maybeClearRtLeadersSampleRosterFlag(
+  tx: Pick<SpatialWriteTxClient, 'systemSetting' | 'rtLeader'>,
 ): Promise<void> {
+  const rows = await tx.rtLeader.findMany({
+    select: { rtNumber: true, name: true, phone: true, phoneIsWhatsapp: true },
+  });
+  if (rows.some((row) => matchesSeedPlaceholderLeader(row))) {
+    return;
+  }
   await tx.systemSetting.upsert({
     where: { key: RT_LEADERS_SAMPLE_ROSTER_KEY },
     create: { key: RT_LEADERS_SAMPLE_ROSTER_KEY, value: 'false' },
     update: { value: 'false' },
+  });
+}
+
+/** Record a deleted seeded point id so re-seed will not recreate it (same tx as delete+audit). */
+async function recordSeededPointTombstone(
+  tx: Pick<SpatialWriteTxClient, 'systemSetting'>,
+  pointId: string,
+): Promise<void> {
+  if (!isSeededKetuaRtPointId(pointId)) return;
+  const existing = await tx.systemSetting.findUnique({
+    where: { key: RT_SEED_POINT_TOMBSTONES_KEY },
+  });
+  const ids = parseSeedPointTombstones(existing?.value);
+  if (ids.has(pointId)) return;
+  ids.add(pointId);
+  const value = serializeSeedPointTombstones(ids);
+  await tx.systemSetting.upsert({
+    where: { key: RT_SEED_POINT_TOMBSTONES_KEY },
+    create: { key: RT_SEED_POINT_TOMBSTONES_KEY, value },
+    update: { value },
   });
 }
 
@@ -1417,6 +1471,9 @@ export const deleteSpatialPoint = async (
           tx,
         );
 
+        // Editor delete of a seeded Ketua RT point must stick across re-seeds (SPEC §2).
+        await recordSeededPointTombstone(tx, existing.id);
+
         return before;
       },
     });
@@ -1688,7 +1745,7 @@ export const updateRtLeader = async (
         );
 
         // Any real edit means the roster is no longer the seeded sample set.
-        await clearRtLeadersSampleRosterFlag(tx);
+        await maybeClearRtLeadersSampleRosterFlag(tx);
 
         return formatWrittenLeader(updated);
       },

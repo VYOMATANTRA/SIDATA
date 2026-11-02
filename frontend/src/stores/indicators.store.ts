@@ -145,11 +145,22 @@ export const useIndicatorsStore = defineStore('indicators', () => {
   }
 
   function bumpSlugFetchGeneration(...keys: Array<string | null | undefined>): void {
+    let loadingChanged = false;
+    const nextLoading = { ...loadingBySlug.value };
     for (const key of keys) {
       if (typeof key !== 'string') continue;
       const normalized = normalizeIndicatorSlug(key);
       if (!normalized) continue;
       fetchGenBySlug[normalized] = (fetchGenBySlug[normalized] ?? 0) + 1;
+      // A bump supersedes any in-flight fetch for this slug; clear stuck loading so a
+      // replace/delete that never starts a new fetch cannot leave the spinner on.
+      if (nextLoading[normalized]) {
+        nextLoading[normalized] = false;
+        loadingChanged = true;
+      }
+    }
+    if (loadingChanged) {
+      loadingBySlug.value = nextLoading;
     }
   }
 
@@ -289,10 +300,12 @@ export const useIndicatorsStore = defineStore('indicators', () => {
       Object.values(bySlug.value).find((item) => item.id === id) ??
       null;
     await apiRequestJson(`/api/indicators/${encodeURIComponent(id)}`, { method: 'DELETE' });
-    if (existing?.slug) bumpSlugFetchGeneration(existing.slug);
+    const keysToBump = new Set<string>();
+    if (existing?.slug) keysToBump.add(normalizeIndicatorSlug(existing.slug));
     for (const [k, v] of Object.entries(bySlug.value)) {
-      if (v.id === id) bumpSlugFetchGeneration(k);
+      if (v.id === id) keysToBump.add(k);
     }
+    bumpSlugFetchGeneration(...keysToBump);
     evictSlugCacheForIndicator(id, existing?.slug ?? null);
     if (existing) invalidateSectionCache(existing.sectionId);
     const next = indicators.value.filter((item) => item.id !== id);
@@ -329,7 +342,9 @@ export const useIndicatorsStore = defineStore('indicators', () => {
           return bySlug.value[normalized] ?? null;
         }
         if (!response.ok) {
-          if (response.status === 404 || force) {
+          // Evict only on 404 (gone). A forced retry that hits 5xx must keep the
+          // last good cache so the hero does not flash "Data Belum Tersedia".
+          if (response.status === 404) {
             const next = { ...bySlug.value };
             const nextAt = { ...bySlugFetchedAt.value };
             delete next[normalized];
@@ -369,11 +384,15 @@ export const useIndicatorsStore = defineStore('indicators', () => {
         };
         return null;
       } finally {
-        // Only the current request may clear tracking / loading for this slug.
+        // Only this request may drop its own in-flight slot.
         if (inFlightBySlug[normalized] === flight.task) {
           delete inFlightBySlug[normalized];
         }
         if (isCurrent()) {
+          loadingBySlug.value = { ...loadingBySlug.value, [normalized]: false };
+        } else if (!inFlightBySlug[normalized] && loadingBySlug.value[normalized]) {
+          // Superseded and nothing newer is tracked — clear a stuck spinner
+          // (e.g. generation bumped by replace/delete without a new fetch).
           loadingBySlug.value = { ...loadingBySlug.value, [normalized]: false };
         }
       }
@@ -409,6 +428,5 @@ export const useIndicatorsStore = defineStore('indicators', () => {
     errorsBySlug,
     fetchBySlug,
     findBySlug,
-    evictSlugCacheForIndicator,
   };
 });

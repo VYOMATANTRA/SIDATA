@@ -176,13 +176,18 @@ function clearFilter() {
 }
 
 function primaryPhone(value: string): string {
-  // If the field contains multiple numbers (e.g. separated by comma, slash, semicolon), take the first
-  const parts = value.split(/[/,;]/);
+  // Multiple numbers may be joined with punctuation or Indonesian conjunctions.
+  const parts = value.split(/[/,;]|\batau\b|\bdan\b/i);
   return parts[0]?.trim() ?? value;
 }
 
 function digitsOnly(value: string): string {
   return primaryPhone(value).replace(/[^0-9]/g, '');
+}
+
+/** E.164-ish digit runs above 15 are not used as tel/wa links (show plain text instead). */
+function isPlausiblePhoneDigitRun(digits: string): boolean {
+  return digits.length > 0 && digits.length <= 15;
 }
 
 function telHref(value: string): string {
@@ -197,7 +202,7 @@ function telHref(value: string): string {
  * then, so the cell shows the value as plain text rather than a dead link.
  */
 function isDialable(value: string): boolean {
-  return digitsOnly(value) !== '';
+  return isPlausiblePhoneDigitRun(digitsOnly(value));
 }
 
 /**
@@ -207,7 +212,7 @@ function isDialable(value: string): boolean {
  */
 function whatsappNumber(value: string): string {
   const digits = digitsOnly(value);
-  if (digits === '') return '';
+  if (!isPlausiblePhoneDigitRun(digits)) return '';
   if (digits.startsWith('62')) return digits;
   if (digits.startsWith('0')) return `62${digits.slice(1)}`;
   if (digits.startsWith('8')) return `62${digits}`;

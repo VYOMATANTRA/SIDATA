@@ -941,6 +941,71 @@ describe('indicators.service getIndicatorById', () => {
     assert.equal(result?.id, 'late-row');
   });
 
+  it('reloads from DB after TTL expiry instead of serving last-known-good forever', async () => {
+    indicatorImpl['findMany'] = async () => [indicatorRow({ label: 'Fresh' })];
+    assert.equal((await getIndicatorById('ind-1'))?.label, 'Fresh');
+
+    const idCache = indicatorByIdCache.get(indicatorCacheKey('id', 'ind-1'));
+    assert.ok(idCache);
+    // Simulate TTL expiry while preserving LKG (same observable state as has() clearing entry).
+    idCache.invalidate({ preserveLastKnownGood: true });
+    assert.equal(idCache.get(), null);
+    assert.equal(idCache.getLastKnownGood(null)?.label, 'Fresh');
+
+    let dbHits = 0;
+    indicatorImpl['findMany'] = async () => {
+      dbHits += 1;
+      return [indicatorRow({ label: 'After Expiry' })];
+    };
+    const result = await getIndicatorById('ind-1');
+    assert.equal(result?.label, 'After Expiry');
+    assert.ok(dbHits >= 1);
+  });
+
+  it('returns last-known-good when DB refresh throws after expiry', async () => {
+    indicatorImpl['findMany'] = async () => [indicatorRow({ label: 'Cached' })];
+    assert.equal((await getIndicatorById('ind-1'))?.label, 'Cached');
+
+    const idCache = indicatorByIdCache.get(indicatorCacheKey('id', 'ind-1'));
+    assert.ok(idCache);
+    idCache.invalidate({ preserveLastKnownGood: true });
+
+    indicatorImpl['findMany'] = async () => {
+      throw new Error('db unavailable');
+    };
+    const result = await getIndicatorById('ind-1');
+    assert.equal(result?.label, 'Cached');
+  });
+
+  it('slug path also reloads after expiry and falls back to LKG on DB error', async () => {
+    indicatorImpl['findMany'] = async () => [
+      indicatorRow({ id: 'ind-1', slug: 'jumlah-penduduk', label: 'By Slug' }),
+    ];
+    assert.equal((await getIndicatorById('jumlah-penduduk'))?.label, 'By Slug');
+
+    const slugCache = indicatorByIdCache.get(indicatorCacheKey('slug', 'jumlah-penduduk'));
+    assert.ok(slugCache);
+    slugCache.invalidate({ preserveLastKnownGood: true });
+
+    let dbHits = 0;
+    indicatorImpl['findMany'] = async () => {
+      dbHits += 1;
+      return [indicatorRow({ id: 'ind-1', slug: 'jumlah-penduduk', label: 'Slug Reloaded' })];
+    };
+    assert.equal((await getIndicatorById('jumlah-penduduk'))?.label, 'Slug Reloaded');
+    assert.ok(dbHits >= 1);
+
+    slugCache.invalidate({ preserveLastKnownGood: true });
+    // Also expire the id partner so the fresh-hit short-circuit cannot skip the catch path.
+    indicatorByIdCache.get(indicatorCacheKey('id', 'ind-1'))?.invalidate({
+      preserveLastKnownGood: true,
+    });
+    indicatorImpl['findMany'] = async () => {
+      throw new Error('db unavailable');
+    };
+    assert.equal((await getIndicatorById('jumlah-penduduk'))?.label, 'Slug Reloaded');
+  });
+
   it('maps a row to the exact DTO shape', async () => {
     indicatorImpl['findMany'] = async () => [indicatorRow()];
 

@@ -102,7 +102,7 @@ const slaRules: SlaItem[] = [
   },
   {
     stage: 'Biaya Layanan Informasi Publik',
-    duration: 'Bebas Biaya (Gratis)',
+    duration: 'Informasi tanpa biaya; biaya salinan/media ditanggung pemohon',
     regulation:
       'SOP Layanan PPID Balikpapan No. 490/365/M/DISKOMINFO & Prinsip Biaya Ringan Pasal 21 UU No. 14/2008 (biaya salinan fisik/media simpan mandiri)',
   },

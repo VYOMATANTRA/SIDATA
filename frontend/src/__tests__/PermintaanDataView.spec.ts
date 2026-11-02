@@ -100,7 +100,8 @@ describe('PermintaanDataView accessibility and content', () => {
     expect(rowHeaders.length).toBeGreaterThanOrEqual(5);
 
     expect(wrapper.text()).toContain('Maksimal 10 Hari Kerja');
-    expect(wrapper.text()).toContain('Bebas Biaya (Gratis)');
+    expect(wrapper.text()).toContain('Informasi tanpa biaya; biaya salinan/media ditanggung pemohon');
+    expect(wrapper.text()).not.toContain('Bebas Biaya (Gratis)');
     expect(wrapper.text()).toContain(
       'Pasal 22 ayat (7) UU No. 14 Tahun 2008 tentang Keterbukaan Informasi Publik',
     );

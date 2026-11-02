@@ -85,6 +85,14 @@ Notes:
   import-path question.
 - Every RT-leader seed upsert carries `update: {}`. Re-running the seed fills in rows that are
   missing and nothing else; it must never revert a correction an editor has already made.
+- Deleting a **seeded** Ketua RT spatial point (deterministic seed id) is also a correction: the
+  delete path records the point id in `system_settings` key `maps.rt_seed_point_tombstones` (JSON
+  id array) in the **same transaction** as the point delete and its audit row (SPEC §3). Re-seed
+  skips tombstoned ids — it must not recreate the point or its default `spatial_point_rt` coverage.
+  An empty database with no tombstones still seeds the full synthetic roster.
+- The public "data contoh" sample-roster flag (`maps.rt_leaders_sample_roster`) is cleared only when
+  **no** `rt_leaders` row still matches the synthetic placeholder fingerprint for its RT; editing a
+  single placeholder among many must leave the notice visible.
 - `GET /api/pages` and `GET /api/pages/:slug` expose the hierarchy publicly (page → chapters →
   sections, each ordered by `sort_order`). `GET /api/pages?include=sections` returns every page
   with its chapters and sections in one request (one nested query), so a caller that needs all

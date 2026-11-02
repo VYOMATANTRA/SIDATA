@@ -9,7 +9,9 @@ import {
   updateRtLeader,
   MapsServiceError,
   RT_LEADERS_SAMPLE_ROSTER_KEY,
+  RT_SEED_POINT_TOMBSTONES_KEY,
 } from '../services/maps.service.js';
+import { seededKetuaRtPointId } from '../../prisma/seedRtLeaders.js';
 import prisma from '../utils/prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
 
@@ -273,6 +275,18 @@ beforeEach(() => {
       const where = (args as { where: { rtNumber: number } }).where;
       return leaders.get(where.rtNumber) ?? null;
     },
+    findMany: async (args: AnyRecord) => {
+      const select = (args as { select?: Record<string, boolean> }).select;
+      const rows = [...leaders.values()];
+      if (!select) return rows;
+      return rows.map((row) => {
+        const out: AnyRecord = {};
+        for (const key of Object.keys(select)) {
+          if (select[key]) out[key] = (row as AnyRecord)[key];
+        }
+        return out;
+      });
+    },
     update: async (args: AnyRecord) => {
       const { where, data } = args as { where: { rtNumber: number }; data: AnyRecord };
       const found = leaders.get(where.rtNumber);
@@ -321,6 +335,11 @@ beforeEach(() => {
     rtLeader: proxied(leaderImpl, leaderCalls),
     systemSetting: proxied(
       {
+        findUnique: async (args: AnyRecord) => {
+          const where = (args as { where: { key: string } }).where;
+          const value = settings.get(where.key);
+          return value === undefined ? null : { key: where.key, value };
+        },
         upsert: async (args: AnyRecord) => {
           const { where, create, update } = args as {
             where: { key: string };
@@ -918,6 +937,29 @@ describe('maps.service deleteSpatialPointCoverage', () => {
 // updateRtLeader
 // ---------------------------------------------------------------------------
 
+describe('maps.service deleteSpatialPoint seed tombstones', () => {
+  it('records a seeded Ketua RT point id in system_settings inside the delete transaction', async () => {
+    const seededId = seededKetuaRtPointId(5);
+    seedState([ketuaPoint({ id: seededId, name: 'Pos RT 05 Kelurahan Manggar' })], [], {
+      [seededId]: [5],
+    });
+
+    await deleteSpatialPoint(seededId, ACTOR, CONTEXT);
+
+    assert.equal(points.has(seededId), false);
+    assert.equal(auditRows[0]?.action, 'spatial_point.deleted');
+    const raw = settings.get(RT_SEED_POINT_TOMBSTONES_KEY);
+    assert.ok(raw, 'tombstone setting must be written');
+    assert.deepEqual(JSON.parse(raw!), [seededId]);
+  });
+
+  it('does not tombstone a non-seeded point id', async () => {
+    seedState([ketuaPoint({ id: 'point-custom' })], [], { 'point-custom': [5] });
+    await deleteSpatialPoint('point-custom', ACTOR, CONTEXT);
+    assert.equal(settings.get(RT_SEED_POINT_TOMBSTONES_KEY), undefined);
+  });
+});
+
 describe('maps.service updateRtLeader', () => {
   it('rejects out-of-range rtNumber before opening a transaction', async () => {
     await assertServiceError(updateRtLeader(0, { name: 'X' }, ACTOR, CONTEXT), 400);
@@ -954,7 +996,58 @@ describe('maps.service updateRtLeader', () => {
     const metadata = auditRows[0]?.metadata as AnyRecord;
     assert.deepEqual(metadata['changedFields'], ['name', 'phone', 'phoneIsWhatsapp']);
     assert.equal(metadata['changes'], undefined);
-    assert.ok(settingCalls['upsert'], 'sample-roster flag must be cleared on edit');
+    // sampleLeader is already non-placeholder; no placeholders remain → clear flag.
+    assert.ok(
+      settingCalls['upsert'],
+      'sample-roster flag must be cleared when no placeholders remain',
+    );
+    assert.equal(settings.get(RT_LEADERS_SAMPLE_ROSTER_KEY), 'false');
+  });
+
+  it('keeps the sample-roster flag when other placeholder rows remain', async () => {
+    const placeholder1 = sampleLeader({
+      rtNumber: 1,
+      name: 'Ketua RT 01',
+      phone: '—',
+      phoneIsWhatsapp: false,
+      alamat: 'Jl. Contoh RT 01, Manggar',
+    });
+    const placeholder2 = sampleLeader({
+      rtNumber: 2,
+      name: 'Ketua RT 02',
+      phone: '—',
+      phoneIsWhatsapp: false,
+      alamat: 'Jl. Contoh RT 02, Manggar',
+    });
+    seedState([], [placeholder1, placeholder2], {});
+
+    await updateRtLeader(
+      1,
+      { name: 'Ketua Baru', phone: '081200000001', phoneIsWhatsapp: true },
+      ACTOR,
+      CONTEXT,
+    );
+
+    assert.equal(settings.get(RT_LEADERS_SAMPLE_ROSTER_KEY), 'true');
+  });
+
+  it('clears the sample-roster flag when the last placeholder is replaced', async () => {
+    const placeholder1 = sampleLeader({
+      rtNumber: 1,
+      name: 'Ketua RT 01',
+      phone: '—',
+      phoneIsWhatsapp: false,
+      alamat: 'Jl. Contoh RT 01, Manggar',
+    });
+    seedState([], [placeholder1], {});
+
+    await updateRtLeader(
+      1,
+      { name: 'Ketua Baru', phone: '081200000001', phoneIsWhatsapp: true },
+      ACTOR,
+      CONTEXT,
+    );
+
     assert.equal(settings.get(RT_LEADERS_SAMPLE_ROSTER_KEY), 'false');
   });
 
