@@ -28,6 +28,7 @@ let markerLayerGroup: L.MarkerClusterGroup | null = null;
 let sizeInvalidationTimer: number | null = null;
 let isUnmounted = false;
 const markers = new Map<string, L.Marker>();
+const markerSignatures = new Map<string, string>();
 /**
  * The first data load frames the map on the surveyed extent; later changes (a
  * filter, a selection) must not move the viewport out from under the user.
@@ -83,6 +84,10 @@ function applyMarkerA11y(marker: L.Marker, point: SpatialPointDTO) {
   }
 }
 
+function markerSignature(point: SpatialPointDTO, isSelected: boolean): string {
+  return `${point.type}:${point.rts[0] ?? ''}:${isSelected}`;
+}
+
 function updateMarkerIcon(marker: L.Marker, point: SpatialPointDTO, isSelected: boolean) {
   marker.setIcon(createCustomPin(point.type, isSelected, point.rts[0]));
   applyMarkerA11y(marker, point);
@@ -117,21 +122,28 @@ function renderMarkers() {
     if (!nextIds.has(id)) {
       markerLayerGroup.removeLayer(marker);
       markers.delete(id);
+      markerSignatures.delete(id);
     }
   }
 
   for (const point of props.points) {
+    const isSelected = point.id === props.selectedPointId;
+    const sig = markerSignature(point, isSelected);
     const current = markers.get(point.id);
     if (current) {
       current.setLatLng([point.latitude, point.longitude]);
       current.options.title = markerLabel(point);
-      updateMarkerIcon(current, point, point.id === props.selectedPointId);
-      current.setZIndexOffset(point.id === props.selectedPointId ? 1000 : 0);
+      if (markerSignatures.get(point.id) !== sig) {
+        updateMarkerIcon(current, point, isSelected);
+        markerSignatures.set(point.id, sig);
+      }
+      current.setZIndexOffset(isSelected ? 1000 : 0);
       continue;
     }
 
     const marker = createMarker(point);
     markers.set(point.id, marker);
+    markerSignatures.set(point.id, sig);
     markerLayerGroup.addLayer(marker);
   }
 }
@@ -172,7 +184,13 @@ function revealSelectedPoint() {
   markerLayerGroup.zoomToShowLayer(marker, () => {
     if (props.selectedPointId !== targetId) return;
     const point = props.points.find((item) => item.id === targetId);
-    if (point) updateMarkerIcon(marker, point, true);
+    if (point) {
+      const sig = markerSignature(point, true);
+      if (markerSignatures.get(targetId) !== sig) {
+        updateMarkerIcon(marker, point, true);
+        markerSignatures.set(targetId, sig);
+      }
+    }
     marker.setZIndexOffset(1000);
   });
 }
@@ -249,17 +267,6 @@ onMounted(() => {
     }).addTo(map);
 
     // Decorate cluster icons once Leaflet has attached their DOM nodes.
-    markerLayerGroup.on('animationend', () => {
-      markerLayerGroup?.eachLayer((layer) => {
-        const maybeCluster = layer as L.Layer & {
-          getChildCount?: () => number;
-          getElement?: () => HTMLElement | undefined;
-        };
-        if (typeof maybeCluster.getChildCount === 'function') {
-          decorateClusterIcon(layer as L.MarkerCluster);
-        }
-      });
-    });
     markerLayerGroup.on('layeradd', (event) => {
       const layer = event.layer as L.Layer & { getChildCount?: () => number };
       if (typeof layer.getChildCount === 'function') {
@@ -308,6 +315,7 @@ onUnmounted(() => {
     map = null;
   }
   markers.clear();
+  markerSignatures.clear();
 });
 </script>
 

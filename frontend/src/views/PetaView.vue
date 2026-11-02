@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import TentangPageLayout from '../components/tentang/TentangPageLayout.vue';
 import TentangBreadcrumb from '../components/tentang/TentangBreadcrumb.vue';
 import TentangHeroPanel from '../components/tentang/TentangHeroPanel.vue';
@@ -112,15 +112,31 @@ function formatDistance(km: number): string {
   return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
 }
 
-function goToPreviousPage() {
+async function goToPreviousPage() {
   if (currentPage.value > 1) {
     currentPage.value -= 1;
+    // WCAG 2.4.3: If moving to page 1 disables "Sebelumnya", hand focus to "Selanjutnya"
+    // so focus is never lost to document body.
+    await nextTick();
+    const activeEl = document.activeElement as HTMLElement | null;
+    if (activeEl && activeEl.hasAttribute('disabled')) {
+      const nextBtn = document.querySelector<HTMLButtonElement>('[data-test="peta-next-page"]');
+      nextBtn?.focus();
+    }
   }
 }
 
-function goToNextPage() {
+async function goToNextPage() {
   if (currentPage.value < totalPages.value) {
     currentPage.value += 1;
+    // WCAG 2.4.3: If moving to the last page disables "Selanjutnya", hand focus to "Sebelumnya"
+    // so focus is never lost to document body.
+    await nextTick();
+    const activeEl = document.activeElement as HTMLElement | null;
+    if (activeEl && activeEl.hasAttribute('disabled')) {
+      const prevBtn = document.querySelector<HTMLButtonElement>('[data-test="peta-previous-page"]');
+      prevBtn?.focus();
+    }
   }
 }
 

@@ -347,4 +347,73 @@ describe('PetaView accessibility, filtering, and point selection', () => {
       configurable: true,
     });
   });
+
+  it('hands focus to previous/next page button when a pagination button becomes disabled', async () => {
+    const manyPoints: SpatialPointDTO[] = Array.from({ length: 7 }, (_, i) => ({
+      id: `point-${i + 1}`,
+      name: `Titik Uji ${i + 1}`,
+      type: 'fasilitas_umum',
+      latitude: -1.23 + i * 0.001,
+      longitude: 116.96 + i * 0.001,
+      metadata: null,
+      rts: [i + 1],
+      createdAt: '2026-08-01T00:00:00Z',
+      updatedAt: '2026-08-01T00:00:00Z',
+    }));
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input);
+        if (url.includes('/api/maps/summary')) {
+          return { ok: true, json: async () => ({ ...SUMMARY, totalPoints: 7 }) } as Response;
+        }
+        if (url.includes('/api/maps/points')) {
+          return { ok: true, json: async () => ({ points: manyPoints, total: 7 }) } as Response;
+        }
+        return { ok: true, json: async () => ({}) } as Response;
+      }),
+    );
+
+    const { pinia, router } = mountView();
+    await router.push('/peta');
+    await router.isReady();
+
+    const wrapper = mount(PetaView, {
+      global: {
+        plugins: [pinia, router],
+        stubs: { InteractiveMap: { template: '<div data-test="map-stub" />' } },
+      },
+      attachTo: document.body,
+    });
+    await flushPromises();
+
+    const nextBtn = wrapper.find<HTMLButtonElement>('[data-test="peta-next-page"]');
+    const prevBtn = wrapper.find<HTMLButtonElement>('[data-test="peta-previous-page"]');
+    expect(nextBtn.exists()).toBe(true);
+    expect(nextBtn.element.disabled).toBe(false);
+    expect(prevBtn.element.disabled).toBe(true);
+
+    // Focus and click Next to go from page 1 to page 2 (last page)
+    nextBtn.element.focus();
+    expect(document.activeElement).toBe(nextBtn.element);
+
+    await nextBtn.trigger('click');
+    await flushPromises();
+
+    // Next button is now disabled; focus must have been handed off to Previous button
+    expect(nextBtn.element.disabled).toBe(true);
+    expect(prevBtn.element.disabled).toBe(false);
+    expect(document.activeElement).toBe(prevBtn.element);
+
+    // Now test the reverse: clicking previous from page 2 back to page 1
+    await prevBtn.trigger('click');
+    await flushPromises();
+
+    expect(prevBtn.element.disabled).toBe(true);
+    expect(nextBtn.element.disabled).toBe(false);
+    expect(document.activeElement).toBe(nextBtn.element);
+
+    wrapper.unmount();
+  });
 });
