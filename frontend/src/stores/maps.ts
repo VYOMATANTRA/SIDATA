@@ -10,7 +10,6 @@ export const useMapsStore = defineStore('maps', () => {
   const selectedLeader = ref<RtLeaderDTO | null>(null);
   const selectedLeaderError = ref<string | null>(null);
   const activeTypeFilter = ref<SpatialPointType | 'all'>('all');
-  const activeRtFilter = ref<number | null>(null);
   const isLoading = ref(false);
   const error = ref<string | null>(null);
   let selectionRequest = 0;
@@ -19,9 +18,6 @@ export const useMapsStore = defineStore('maps', () => {
   const filteredPoints = computed(() => {
     return points.value.filter((point) => {
       if (activeTypeFilter.value !== 'all' && point.type !== activeTypeFilter.value) {
-        return false;
-      }
-      if (activeRtFilter.value !== null && !point.rts.includes(activeRtFilter.value)) {
         return false;
       }
       return true;
@@ -103,10 +99,6 @@ export const useMapsStore = defineStore('maps', () => {
     activeTypeFilter.value = type;
   }
 
-  function setRtFilter(rt: number | null) {
-    activeRtFilter.value = rt;
-  }
-
   function clearSelection() {
     selectionRequest += 1;
     selectedPoint.value = null;
@@ -121,7 +113,6 @@ export const useMapsStore = defineStore('maps', () => {
     selectedLeader,
     selectedLeaderError,
     activeTypeFilter,
-    activeRtFilter,
     isLoading,
     error,
     filteredPoints,
@@ -130,7 +121,6 @@ export const useMapsStore = defineStore('maps', () => {
     selectPoint,
     retrySelectedLeader,
     setTypeFilter,
-    setRtFilter,
     clearSelection,
   };
 });
