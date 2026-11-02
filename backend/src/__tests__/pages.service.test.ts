@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import {
   getPages,
+  getPagesWithSections,
   getPageBySlug,
   createPage,
   deletePage,
@@ -290,6 +291,81 @@ describe('pages.service', () => {
 
       await assert.rejects(getPages(), (err) => err === boom);
       assert.equal(findManyCalls.length, 1);
+    });
+  });
+
+  describe('getPagesWithSections', () => {
+    const detailRow = (overrides: Record<string, unknown> = {}) => ({
+      id: 'page-1',
+      slug: 'kependudukan',
+      title: 'Kependudukan',
+      sortOrder: 0,
+      createdAt: FIXED_CREATED,
+      updatedAt: FIXED_UPDATED,
+      chapters: [
+        {
+          id: 'chapter-1',
+          slug: 'jumlah-penduduk',
+          number: null,
+          title: 'Jumlah Penduduk',
+          sortOrder: 0,
+          sections: [{ id: 'section-1', slug: 'ringkasan', title: null, sortOrder: 0 }],
+        },
+      ],
+      ...overrides,
+    });
+
+    it('loads every page with chapters and sections in one query', async () => {
+      stubFindMany(async () => [detailRow()]);
+
+      await getPagesWithSections();
+
+      assert.equal(findManyCalls.length, 1);
+      assert.deepStrictEqual(findManyCalls[0]![0], {
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+        include: {
+          chapters: {
+            orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+            include: {
+              sections: {
+                orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+              },
+            },
+          },
+        },
+      });
+      assert.equal(findUniqueCalls.length, 0);
+    });
+
+    it('returns the same detail shape as getPageBySlug', async () => {
+      stubFindMany(async () => [detailRow()]);
+
+      const [page] = await getPagesWithSections();
+
+      assert.deepStrictEqual(page, {
+        id: 'page-1',
+        slug: 'kependudukan',
+        title: 'Kependudukan',
+        sortOrder: 0,
+        chapters: [
+          {
+            id: 'chapter-1',
+            slug: 'jumlah-penduduk',
+            number: null,
+            title: 'Jumlah Penduduk',
+            sortOrder: 0,
+            sections: [{ id: 'section-1', slug: 'ringkasan', title: null, sortOrder: 0 }],
+          },
+        ],
+        createdAt: FIXED_CREATED.toISOString(),
+        updatedAt: FIXED_UPDATED.toISOString(),
+      });
+    });
+
+    it('returns [] for an empty table', async () => {
+      stubFindMany(async () => []);
+
+      assert.deepStrictEqual(await getPagesWithSections(), []);
     });
   });
 

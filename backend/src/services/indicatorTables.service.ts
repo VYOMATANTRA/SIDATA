@@ -46,7 +46,10 @@ export interface IndicatorTableRowDto {
   label: string;
   male: number | null;
   female: number | null;
-  /** Derived (`male + female`) for sex-split kinds; stored for single-value kinds. */
+  /**
+   * Derived (`male + female`) for sex-split kinds — null unless both cells are filled, so an
+   * incomplete row never displays a partial figure as its total. Stored for single-value kinds.
+   */
   total: number | null;
   sortOrder: number;
   createdAt: string;
@@ -116,8 +119,22 @@ const rowCells = {
   total: nonnegInt('total').nullable().optional(),
 };
 
+/**
+ * Prefix reserved for the temporary keys `updateIndicatorTable` parks renamed rows on during a
+ * row-key swap. Rejecting it in the schema means a real row can never occupy a temp key and
+ * collide with an in-flight swap.
+ */
+export const RESERVED_ROW_KEY_PREFIX = 'tmp:';
+
 const rowBaseFields = {
-  rowKey: z.string().trim().min(1, 'rowKey wajib diisi').max(64, 'rowKey maksimal 64 karakter'),
+  rowKey: z
+    .string()
+    .trim()
+    .min(1, 'rowKey wajib diisi')
+    .max(64, 'rowKey maksimal 64 karakter')
+    .refine((value) => !value.startsWith(RESERVED_ROW_KEY_PREFIX), {
+      message: `rowKey tidak boleh diawali "${RESERVED_ROW_KEY_PREFIX}" (prefiks dicadangkan)`,
+    }),
   label: z
     .string()
     .trim()
@@ -148,6 +165,12 @@ const tableBaseFields = {
   sortOrder: rowBaseFields.sortOrder,
 };
 
+/**
+ * Upper bound on rows per table — the 17-group ethnicity table is the largest. Also caps how
+ * many rows one batch PATCH may carry, so a single request cannot rewrite an unbounded set.
+ */
+export const MAX_ROWS_PER_TABLE = 500;
+
 export const createTableRowSchema = z.object(rowBaseFields).strict();
 
 export const updateTableRowSchema = z
@@ -164,10 +187,34 @@ export const updateTableRowSchema = z
     message: 'Setidaknya satu bidang harus disediakan untuk diperbarui',
   });
 
+/**
+ * One row inside a table PATCH. The table PATCH doubles as the batch endpoint (mirroring the
+ * nested `rows` POST accepts): the table header and every row patch are applied in one
+ * transaction, so a failure part-way cannot leave a sex-split row with a new `male` and the old
+ * `female`.
+ */
+export const updateTableRowByIdSchema = z
+  .object({
+    id: z.string().trim().min(1, 'id baris wajib diisi').max(191),
+    rowKey: rowBaseFields.rowKey.optional(),
+    label: rowBaseFields.label.optional(),
+    male: rowBaseFields.male,
+    female: rowBaseFields.female,
+    total: rowBaseFields.total,
+    sortOrder: rowBaseFields.sortOrder,
+  })
+  .strict()
+  .refine((data) => Object.keys(data).length > 1, {
+    message: 'Setiap baris harus menyertakan id dan setidaknya satu bidang untuk diperbarui',
+  });
+
 export const createTableSchema = z
   .object({
     ...tableBaseFields,
-    rows: z.array(createTableRowSchema).max(500, 'Maksimal 500 baris per tabel').optional(),
+    rows: z
+      .array(createTableRowSchema)
+      .max(MAX_ROWS_PER_TABLE, `Maksimal ${MAX_ROWS_PER_TABLE} baris per tabel`)
+      .optional(),
   })
   .strict();
 
@@ -180,6 +227,10 @@ export const updateTableSchema = z
     period: tableBaseFields.period.optional(),
     source: tableBaseFields.source,
     sortOrder: tableBaseFields.sortOrder,
+    rows: z
+      .array(updateTableRowByIdSchema)
+      .max(MAX_ROWS_PER_TABLE, `Maksimal ${MAX_ROWS_PER_TABLE} baris per permintaan`)
+      .optional(),
   })
   .strict()
   .refine((data) => Object.keys(data).length > 0, {
@@ -188,6 +239,7 @@ export const updateTableSchema = z
 
 export type CreateTableRowInput = z.infer<typeof createTableRowSchema>;
 export type UpdateTableRowInput = z.infer<typeof updateTableRowSchema>;
+export type UpdateTableRowByIdInput = z.infer<typeof updateTableRowByIdSchema>;
 export type CreateTableInput = z.infer<typeof createTableSchema>;
 export type UpdateTableInput = z.infer<typeof updateTableSchema>;
 
@@ -210,18 +262,16 @@ function normalizeCells(raw: {
 }
 
 /**
- * Opsi A cell-shape rule: sex-split kinds require male+female with total absent; single-value
- * kinds require total with male/female absent. Storing a total alongside male+female would let
- * the two drift apart, so it is rejected rather than reconciled.
+ * Opsi A cell-shape rule: sex-split kinds store male/female and never a total; single-value
+ * kinds store total and never male/female. Storing a total alongside male+female would let the
+ * two drift apart, so it is rejected rather than reconciled.
+ *
+ * Individual cells are nullable (§7): an empty cell means "not recorded yet", not zero, so a
+ * row may be saved with only part of its data filled in. The form treats every cell as optional
+ * for the same reason — forcing a number would push made-up values onto a public page.
  */
 function assertRowCells(kind: string, cells: NormalizedCells, scope: string = 'Baris'): void {
   if (isSexSplitKind(kind)) {
-    if (cells.male === null || cells.female === null) {
-      throw new IndicatorTableServiceError(
-        `${scope} tabel ${kind} membutuhkan male dan female (keduanya wajib).`,
-        400,
-      );
-    }
     if (cells.total !== null) {
       throw new IndicatorTableServiceError(
         `${scope} tabel ${kind} tidak memakai total tersimpan — total dihitung dari male + female.`,
@@ -229,12 +279,6 @@ function assertRowCells(kind: string, cells: NormalizedCells, scope: string = 'B
       );
     }
     return;
-  }
-  if (cells.total === null) {
-    throw new IndicatorTableServiceError(
-      `${scope} tabel ${kind} membutuhkan total (satu nilai per baris).`,
-      400,
-    );
   }
   if (cells.male !== null || cells.female !== null) {
     throw new IndicatorTableServiceError(
@@ -271,8 +315,6 @@ async function resolveAppendSortOrder(
 const DEFAULT_PAGE_SIZE = 50;
 export const MAX_TABLE_LIST_PAGE = 10_000;
 export const MAX_TABLE_LIST_PAGE_SIZE = 200;
-/** Upper bound on rows served per table detail — the 17-group ethnicity table is the largest. */
-export const MAX_ROWS_PER_TABLE = 500;
 
 function toIsoString(value: unknown): string {
   if (value instanceof Date) return value.toISOString();
@@ -321,6 +363,7 @@ function formatTable(row: TableRow): IndicatorTableDto {
 }
 
 function formatRow(row: CellRow, kind: string): IndicatorTableRowDto {
+  const derivedTotal = row.male !== null && row.female !== null ? row.male + row.female : null;
   return {
     id: row.id,
     tableId: row.tableId,
@@ -328,7 +371,7 @@ function formatRow(row: CellRow, kind: string): IndicatorTableRowDto {
     label: row.label,
     male: row.male,
     female: row.female,
-    total: isSexSplitKind(kind) ? (row.male ?? 0) + (row.female ?? 0) : row.total,
+    total: isSexSplitKind(kind) ? derivedTotal : row.total,
     sortOrder: row.sortOrder,
     createdAt: toIsoString(row.createdAt),
     updatedAt: toIsoString(row.updatedAt),
@@ -786,6 +829,20 @@ export const updateIndicatorTable = async (
     throw new IndicatorTableServiceError(parsed.error.issues.map((i) => i.message).join(', '), 400);
   }
   const input = parsed.data as UpdateTableInput & Record<string, unknown>;
+  const rowUpdates = (input.rows ?? []) as UpdateTableRowByIdInput[];
+
+  // Reject duplicate row ids up front: applying the same row twice in one payload is always a
+  // client bug, and MySQL would silently keep only the last write.
+  const seenRowIds = new Set<string>();
+  for (const rowUpdate of rowUpdates) {
+    if (seenRowIds.has(rowUpdate.id)) {
+      throw new IndicatorTableServiceError(
+        `id baris '${rowUpdate.id}' duplikat dalam payload.`,
+        400,
+      );
+    }
+    seenRowIds.add(rowUpdate.id);
+  }
 
   const lockQuery = Prisma.sql`SELECT id FROM indicator_tables WHERE id = ${normalizedId} FOR UPDATE`;
   const affected: AffectedTable[] = [];
@@ -867,7 +924,106 @@ export const updateIndicatorTable = async (
           );
         if (input.sortOrder !== undefined) track('sortOrder', existing.sortOrder, input.sortOrder);
 
-        if (Object.keys(changes).length === 0) {
+        // Load every row named in the payload before touching anything: a stale id must fail the
+        // whole batch, and validating first keeps the error off a half-applied request.
+        const existingRows = new Map<string, CellRow>();
+        if (seenRowIds.size > 0) {
+          const rows = (await tx.indicatorTableRow.findMany({
+            where: { id: { in: [...seenRowIds] }, tableId: normalizedId },
+          })) as unknown as CellRow[];
+          for (const row of rows) existingRows.set(row.id, row);
+          if (existingRows.size !== seenRowIds.size) {
+            const missing = [...seenRowIds].filter((rowId) => !existingRows.has(rowId));
+            throw new IndicatorTableServiceError(
+              `Baris tidak ditemukan pada tabel ini: ${missing.join(', ')}.`,
+              404,
+            );
+          }
+        }
+
+        interface PendingRowUpdate {
+          existing: CellRow;
+          nextRowKey: string;
+          nextLabel: string;
+          nextSortOrder: number;
+          nextCells: NormalizedCells;
+          changes: Record<string, { before: unknown; after: unknown }>;
+        }
+
+        const pendingRowUpdates: PendingRowUpdate[] = [];
+        const seenNextRowKeys = new Set<string>();
+
+        for (const rowUpdate of rowUpdates) {
+          const row = existingRows.get(rowUpdate.id)!;
+          const nextCells: NormalizedCells = {
+            male: rowUpdate.male !== undefined ? (rowUpdate.male ?? null) : row.male,
+            female: rowUpdate.female !== undefined ? (rowUpdate.female ?? null) : row.female,
+            total: rowUpdate.total !== undefined ? (rowUpdate.total ?? null) : row.total,
+          };
+          assertRowCells(existing.kind, nextCells, `Baris '${row.label}'`);
+
+          const nextRowKey = rowUpdate.rowKey !== undefined ? rowUpdate.rowKey.trim() : row.rowKey;
+          if (nextRowKey !== row.rowKey) {
+            if (seenNextRowKeys.has(nextRowKey)) {
+              throw new IndicatorTableServiceError(
+                `rowKey '${nextRowKey}' duplikat dalam payload.`,
+                400,
+              );
+            }
+            seenNextRowKeys.add(nextRowKey);
+          }
+
+          const rowChanges: Record<string, { before: unknown; after: unknown }> = {};
+          const trackRow = (field: string, before: unknown, after: unknown) => {
+            if (hasFieldChanged(before, after)) {
+              rowChanges[field] = { before, after };
+            }
+          };
+          if (rowUpdate.rowKey !== undefined) trackRow('rowKey', row.rowKey, nextRowKey);
+          if (rowUpdate.label !== undefined) trackRow('label', row.label, rowUpdate.label.trim());
+          if (rowUpdate.male !== undefined) trackRow('male', row.male, nextCells.male);
+          if (rowUpdate.female !== undefined) trackRow('female', row.female, nextCells.female);
+          if (rowUpdate.total !== undefined) trackRow('total', row.total, nextCells.total);
+          if (rowUpdate.sortOrder !== undefined)
+            trackRow('sortOrder', row.sortOrder, rowUpdate.sortOrder);
+
+          if (Object.keys(rowChanges).length > 0) {
+            pendingRowUpdates.push({
+              existing: row,
+              nextRowKey,
+              nextLabel: rowUpdate.label !== undefined ? rowUpdate.label.trim() : row.label,
+              nextSortOrder: rowUpdate.sortOrder ?? row.sortOrder,
+              nextCells,
+              changes: rowChanges,
+            });
+          }
+        }
+
+        // Validate row-key renames against the final key set, not the current one: a swap
+        // (A→b, B→a) or a longer cycle is valid because every current holder is itself being
+        // renamed away in this batch. A target key still held by a row outside the batch is a
+        // genuine 409.
+        const rowsChangingKey = pendingRowUpdates.filter(
+          (pending) => pending.nextRowKey !== pending.existing.rowKey,
+        );
+        if (rowsChangingKey.length > 0) {
+          const targetKeys = [...new Set(rowsChangingKey.map((pending) => pending.nextRowKey))];
+          const holders = (await tx.indicatorTableRow.findMany({
+            where: { tableId: normalizedId, rowKey: { in: targetKeys } },
+          })) as unknown as CellRow[];
+          const changingIds = new Set(rowsChangingKey.map((pending) => pending.existing.id));
+          for (const pending of rowsChangingKey) {
+            const holder = holders.find((row) => row.rowKey === pending.nextRowKey);
+            if (holder && holder.id !== pending.existing.id && !changingIds.has(holder.id)) {
+              throw new IndicatorTableServiceError(
+                `rowKey '${pending.nextRowKey}' sudah dipakai baris lain di tabel ini.`,
+                409,
+              );
+            }
+          }
+        }
+
+        if (Object.keys(changes).length === 0 && pendingRowUpdates.length === 0) {
           const detail = await fetchTableDetail(
             tx as unknown as Pick<TableReadClient, 'indicatorTableRow'>,
             existing,
@@ -875,33 +1031,93 @@ export const updateIndicatorTable = async (
           return withChangeResult(detail, false);
         }
 
-        const updated = (await tx.indicatorTable.update({
-          where: { id: normalizedId },
-          data: {
-            ...(input.sectionId !== undefined
-              ? { sectionId: (input.sectionId as string).trim() }
-              : {}),
-            ...(input.slug !== undefined ? { slug: input.slug } : {}),
-            ...(input.title !== undefined ? { title: (input.title as string).trim() } : {}),
-            ...(input.kind !== undefined ? { kind: input.kind } : {}),
-            ...(input.period !== undefined ? { period: (input.period as string).trim() } : {}),
-            ...(input.source !== undefined
-              ? { source: sanitizeNullableText(input.source as string | null) ?? null }
-              : {}),
-            ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
-          },
-        })) as unknown as TableRow;
+        let updated = existing;
+        if (Object.keys(changes).length > 0) {
+          updated = (await tx.indicatorTable.update({
+            where: { id: normalizedId },
+            data: {
+              ...(input.sectionId !== undefined
+                ? { sectionId: (input.sectionId as string).trim() }
+                : {}),
+              ...(input.slug !== undefined ? { slug: input.slug } : {}),
+              ...(input.title !== undefined ? { title: (input.title as string).trim() } : {}),
+              ...(input.kind !== undefined ? { kind: input.kind } : {}),
+              ...(input.period !== undefined ? { period: (input.period as string).trim() } : {}),
+              ...(input.source !== undefined
+                ? { source: sanitizeNullableText(input.source as string | null) ?? null }
+                : {}),
+              ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
+            },
+          })) as unknown as TableRow;
 
-        await buildAuditLog(
-          {
-            action: AUDIT_ACTIONS.INDICATOR_TABLE_UPDATED,
-            actor,
-            target: { type: 'indicator_table', id: existing.id, label: existing.slug },
-            metadata: { slug: existing.slug, changes },
-            context: reqContext,
-          },
-          tx,
-        );
+          await buildAuditLog(
+            {
+              action: AUDIT_ACTIONS.INDICATOR_TABLE_UPDATED,
+              actor,
+              target: { type: 'indicator_table', id: existing.id, label: existing.slug },
+              metadata: { slug: existing.slug, changes },
+              context: reqContext,
+            },
+            tx,
+          );
+        }
+
+        // Applied after every row has been validated, so the batch either lands whole or not at
+        // all. The transaction is what actually guarantees it; validating first keeps the
+        // failure path free of writes.
+        //
+        // Renamed rows are parked on a temporary key first: MySQL checks the (tableId, rowKey)
+        // unique index per statement, so writing a swap one row at a time would collide even
+        // though the final key set is valid. Row ids are generated (uuid), so `tmp:<id>` is
+        // unique and under the 64-character column limit, and the row-key schema reserves the
+        // `tmp:` prefix so no real row can hold one.
+        if (rowsChangingKey.length > 0) {
+          for (const pending of rowsChangingKey) {
+            await tx.indicatorTableRow.update({
+              where: { id: pending.existing.id },
+              data: { rowKey: `tmp:${pending.existing.id}` },
+            });
+          }
+        }
+
+        for (const pending of pendingRowUpdates) {
+          await tx.indicatorTableRow.update({
+            where: { id: pending.existing.id },
+            data: {
+              ...(pending.nextRowKey !== pending.existing.rowKey
+                ? { rowKey: pending.nextRowKey }
+                : {}),
+              ...(pending.changes['label'] !== undefined ? { label: pending.nextLabel } : {}),
+              ...(pending.changes['male'] !== undefined ? { male: pending.nextCells.male } : {}),
+              ...(pending.changes['female'] !== undefined
+                ? { female: pending.nextCells.female }
+                : {}),
+              ...(pending.changes['total'] !== undefined ? { total: pending.nextCells.total } : {}),
+              ...(pending.changes['sortOrder'] !== undefined
+                ? { sortOrder: pending.nextSortOrder }
+                : {}),
+            },
+          });
+
+          await buildAuditLog(
+            {
+              action: AUDIT_ACTIONS.INDICATOR_TABLE_ROW_UPDATED,
+              actor,
+              target: {
+                type: 'indicator_table_row',
+                id: pending.existing.id,
+                label: pending.existing.rowKey,
+              },
+              metadata: {
+                tableId: normalizedId,
+                tableSlug: existing.slug,
+                changes: pending.changes,
+              },
+              context: reqContext,
+            },
+            tx,
+          );
+        }
 
         affected.push({ id: existing.id, slug: existing.slug });
         if (updated.slug !== existing.slug) {

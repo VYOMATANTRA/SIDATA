@@ -282,6 +282,67 @@ describe('pages.controller', () => {
       assert.equal(body.pages.length, body.total);
     });
 
+    it('returns chapters and sections when include=sections is requested', async () => {
+      stubFindMany(async () => [
+        {
+          id: 'p1',
+          slug: 'kependudukan',
+          title: 'Kependudukan',
+          sortOrder: 0,
+          createdAt: CREATED,
+          updatedAt: UPDATED,
+          chapters: [
+            {
+              id: 'c1',
+              slug: 'jumlah-penduduk',
+              number: null,
+              title: 'Jumlah Penduduk',
+              sortOrder: 0,
+              sections: [{ id: 's1', slug: 'ringkasan', title: null, sortOrder: 0 }],
+            },
+          ],
+        },
+      ]);
+      const res = fakeRes();
+
+      await listPages({ query: { include: 'sections' } } as unknown as Request, res);
+
+      assert.equal(res.status, 200);
+      assert.deepStrictEqual(res.body, {
+        pages: [
+          {
+            id: 'p1',
+            slug: 'kependudukan',
+            title: 'Kependudukan',
+            sortOrder: 0,
+            chapters: [
+              {
+                id: 'c1',
+                slug: 'jumlah-penduduk',
+                number: null,
+                title: 'Jumlah Penduduk',
+                sortOrder: 0,
+                sections: [{ id: 's1', slug: 'ringkasan', title: null, sortOrder: 0 }],
+              },
+            ],
+            createdAt: CREATED.toISOString(),
+            updatedAt: UPDATED.toISOString(),
+          },
+        ],
+        total: 1,
+      });
+      assert.equal(findManyCalls.length, 1);
+    });
+
+    it('rejects an unsupported include value with 400 and does not query', async () => {
+      const res = fakeRes();
+
+      await listPages({ query: { include: 'chapters' } } as unknown as Request, res);
+
+      assert.equal(res.status, 400);
+      assert.equal(findManyCalls.length, 0);
+    });
+
     it('returns 500 with the generic error body and does not leak the error', async () => {
       const boom = new Error('SECRET_DB_HOST mysql://root:hunter2@db');
       stubFindMany(async () => {

@@ -8,6 +8,16 @@ export interface UserProfile {
   role: string
 }
 
+/**
+ * Why a silent refresh did or did not restore the session.
+ *
+ * - `ok` — a new access token was issued.
+ * - `denied` — the server rejected the refresh token (401/403); the session is really over.
+ * - `transient` — the refresh could not be attempted (network) or the server failed (5xx).
+ *   The session may still be valid, so callers must not tell the user to log in again.
+ */
+export type RefreshOutcome = 'ok' | 'denied' | 'transient'
+
 const SETUP_TOKEN_KEY = 'sidata_setup_token'
 
 function getStoredSetupToken(): string | null {
@@ -50,10 +60,16 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Shares one in-flight request across concurrent initAuth() callers (e.g. router guards
   // firing on rapid navigations) instead of each firing its own csrf-token + refresh pair.
-  let inFlight: Promise<boolean> | null = null
+  let inFlight: Promise<RefreshOutcome> | null = null
 
   const isAuthenticated = computed(() => !!accessToken.value)
   const isAdmin = computed(() => user.value?.role?.toLowerCase() === 'admin')
+  const isEditor = computed(() => user.value?.role?.toLowerCase() === 'editor')
+  /**
+   * Content editing is Editor or Admin (SPEC §3). Mirrors the backend's
+   * `requireEditorOrAdmin` guard so the UI does not offer actions the API would reject.
+   */
+  const canEditData = computed(() => isAdmin.value || isEditor.value)
 
   function setAuth(newUser: UserProfile, token: string) {
     user.value = newUser
@@ -82,9 +98,15 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function performInitAuth(): Promise<boolean> {
+  async function performInitAuth(): Promise<RefreshOutcome> {
     try {
       const csrfToken = await getCsrfToken()
+      if (!csrfToken) {
+        // getCsrfToken() collapses a network/5xx failure into ''. Sending an empty header would
+        // make /refresh answer 403, which this function reads as a dead session — so a brief
+        // hiccup on the CSRF endpoint would log the user out. Treat it as transient instead.
+        return 'transient'
+      }
       const res = await fetch('/api/auth/refresh', {
         method: 'POST',
         credentials: 'include',
@@ -94,40 +116,57 @@ export const useAuthStore = defineStore('auth', () => {
       })
 
       if (!res.ok) {
-        clearAuth(mustChangePassword.value)
-        if (res.status === 401 || res.status === 403) {
+        // 401/403 is the server saying the session is dead. Every other 4xx (400 malformed,
+        // CSRF rejection) means the refresh will keep failing the same way, so it is also a
+        // denial — otherwise the user retries forever and is never asked to sign in again.
+        // 408 (timeout) and 429 (rate limited) are failures of this attempt, not of the
+        // session, and stay transient so a busy IP is not logged out.
+        const denied =
+          res.status === 401 ||
+          res.status === 403 ||
+          (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429);
+
+        if (denied) {
+          clearAuth(mustChangePassword.value)
           refreshDenied.value = true
+          return 'denied'
         }
-        return false
+
+        // A 5xx (or a network blip) must not destroy a session that may still be valid: keep
+        // the in-memory token and let the next navigation or request retry.
+        return 'transient'
       }
 
       const data = await res.json()
       if (data.accessToken) {
         setAuth(data.user || { id: '', email: '', role: '' }, data.accessToken)
-        return true
+        return 'ok'
       }
 
       clearAuth(mustChangePassword.value)
-      return false
+      return 'denied'
     } catch {
-      clearAuth(mustChangePassword.value)
-      return false
+      // Network failure: transient, exactly like a 5xx. Clearing here would log the user out
+      // of a session the server never rejected.
+      return 'transient'
     } finally {
       isInitialized.value = true
     }
   }
 
   /**
-   * Performs silent refresh on app boot using the HTTP-only refresh token cookie.
-   * Keeps access token strictly in JavaScript memory without disk persistence.
+   * Forces a refresh even when an access token is already in memory. The 401 retry path in
+   * `utils/apiClient.ts` calls this precisely because the in-memory token is the one the API
+   * just rejected — `initAuth()` cannot be used there, since it short-circuits while a token is
+   * present.
+   *
+   * Concurrent callers (the router guard plus one or more replaying requests) share one request,
+   * and a definitive 401/403 latches `refreshDenied` so a dead session is not hammered. Network
+   * errors and 5xx stay retryable.
    */
-  async function initAuth(): Promise<boolean> {
-    if (isInitialized.value && accessToken.value) {
-      return true
-    }
-
+  async function refreshSession(): Promise<RefreshOutcome> {
     if (refreshDenied.value) {
-      return false
+      return 'denied'
     }
 
     if (!inFlight) {
@@ -139,17 +178,32 @@ export const useAuthStore = defineStore('auth', () => {
     return inFlight
   }
 
+  /**
+   * Performs silent refresh on app boot using the HTTP-only refresh token cookie.
+   * Keeps access token strictly in JavaScript memory without disk persistence.
+   */
+  async function initAuth(): Promise<boolean> {
+    if (isInitialized.value && accessToken.value) {
+      return true
+    }
+
+    return (await refreshSession()) === 'ok'
+  }
+
   return {
     user,
     accessToken,
     isInitialized,
     isAuthenticated,
     isAdmin,
+    isEditor,
+    canEditData,
     setupToken,
     mustChangePassword,
     setAuth,
     setSetupAuth,
     clearAuth,
     initAuth,
+    refreshSession,
   }
 })
