@@ -1086,6 +1086,16 @@ describe('maps.service updateRtLeader', () => {
     assert.equal(settings.get(RT_LEADERS_SAMPLE_ROSTER_KEY), 'true');
   });
 
+  it('skips the full roster scan if the sample-roster flag is already false', async () => {
+    settings.set(RT_LEADERS_SAMPLE_ROSTER_KEY, 'false');
+    seedState([], [sampleLeader()], {});
+
+    await updateRtLeader(5, { name: 'Nama Terverifikasi' }, ACTOR, CONTEXT);
+
+    assert.equal(leaderCalls['findMany'], undefined);
+    assert.equal(settingCalls['upsert'], undefined);
+  });
+
   it('collapses a blank alamat to null', async () => {
     seedState([], [sampleLeader()], {});
 
