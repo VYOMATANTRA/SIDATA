@@ -82,6 +82,13 @@ describe('StatCard.vue', () => {
     statItems.forEach((item) => {
       const itemHtml = item.html();
       expect(itemHtml.indexOf('<dt')).toBeLessThan(itemHtml.indexOf('<dd'));
+
+      // Verify strict W3C HTML5 dl content model: only dt and dd are direct children of the item wrapper
+      const directChildrenTags = Array.from(item.element.children).map((el) => el.tagName.toLowerCase());
+      expect(directChildrenTags).toEqual(['dt', 'dd']);
+
+      // stat-icon-wrapper is nested inside dt
+      expect(item.find('dt [data-test="stat-icon-wrapper"]').exists()).toBe(true);
     });
 
     // Hidden accessible heading
@@ -163,5 +170,25 @@ describe('StatCard.vue', () => {
 
     expect(wrapper.find('.custom-empty-state').exists()).toBe(true);
     expect(wrapper.find('.custom-empty-state').text()).toBe('Data sedang dimuat...');
+  });
+
+  it('applies responsive 2-column mobile and 4-column desktop grid classes', () => {
+    const sampleStats = [
+      { icon: 'person', value: '53.098', label: 'Penduduk' },
+      { icon: 'house', value: '100', label: 'Rukun Tetangga' },
+      { icon: 'density', value: '2 jiwa/km²', label: 'Kepadatan Penduduk' },
+      { icon: 'ratio', value: '1,06 : 1', label: 'Rasio Laki-laki & Perempuan' },
+    ];
+    const wrapper = mount(StatCard, {
+      props: {
+        items: sampleStats,
+      },
+    });
+
+    const dl = wrapper.find('dl[data-test="stat-list"]');
+    expect(dl.exists()).toBe(true);
+    expect(dl.classes()).toContain('grid');
+    expect(dl.classes()).toContain('grid-cols-2');
+    expect(dl.classes()).toContain('sm:grid-cols-4');
   });
 });

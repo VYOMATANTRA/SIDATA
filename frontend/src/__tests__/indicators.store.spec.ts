@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
-import { useIndicatorsStore, type Indicator } from '../stores/indicators.store';
+import {
+  useIndicatorsStore,
+  type Indicator,
+  type IndicatorDto,
+  type IndicatorItem,
+} from '../stores/indicators.store';
 import { useAuthStore } from '../stores/auth';
 
 function json(body: unknown, ok = true, status = ok ? 200 : 500): Response {
@@ -31,7 +36,7 @@ function makeIndicator(overrides: Partial<Indicator> = {}): Indicator {
   };
 }
 
-const sampleIndicator = {
+const sampleIndicator: IndicatorDto = {
   id: 'ind-1',
   sectionId: 'sec-1',
   slug: 'jumlah-penduduk',
@@ -149,6 +154,385 @@ describe('indicators store (CMS list and edits)', () => {
   });
 });
 
+describe('indicators store (global / landing page indicators)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.restoreAllMocks();
+  });
+
+  it('initializes with empty indicators and clean default state', () => {
+    const store = useIndicatorsStore();
+    expect(store.indicators).toEqual([]);
+    expect(store.isLoading).toBe(false);
+    expect(store.isLoaded).toBe(false);
+    expect(store.error).toBeNull();
+  });
+
+  it('returns empty stats array when no indicators exist for a page slug', () => {
+    const store = useIndicatorsStore();
+    expect(store.getStatsForPage('kependudukan')).toEqual([]);
+    expect(store.getStatsForPage('pendidikan')).toEqual([]);
+    expect(store.getStatsForPage('kesehatan')).toEqual([]);
+  });
+
+  it('fetches indicators from /api/indicators successfully', async () => {
+    const sampleIndicators: IndicatorItem[] = [
+      {
+        id: '1',
+        sectionId: 'sec-1',
+        slug: 'jumlah-penduduk',
+        label: 'Penduduk',
+        unit: 'jiwa',
+        valueCurrent: '53.098',
+        valuePrevious: null,
+        periodCurrent: '2026',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'kependudukan',
+        sortOrder: 1,
+      },
+      {
+        id: '2',
+        sectionId: 'sec-1',
+        slug: 'rukun-tetangga',
+        label: 'Rukun Tetangga',
+        unit: 'RT',
+        valueCurrent: '100',
+        valuePrevious: null,
+        periodCurrent: '2026',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'kependudukan',
+        sortOrder: 2,
+      },
+    ];
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ indicators: sampleIndicators }),
+    } as Response);
+
+    const store = useIndicatorsStore();
+    await store.fetchIndicators();
+
+    expect(store.indicators).toHaveLength(2);
+    expect(store.isLoaded).toBe(true);
+    expect(store.isLoading).toBe(false);
+
+    const stats = store.getStatsForPage('kependudukan');
+    expect(stats).toHaveLength(2);
+    expect(stats[0]).toEqual({
+      icon: 'person',
+      value: '53.098',
+      label: 'Penduduk',
+      unit: 'jiwa',
+    });
+    expect(stats[1]).toEqual({
+      icon: 'house',
+      value: '100',
+      label: 'Rukun Tetangga',
+      unit: 'RT',
+    });
+  });
+
+  it('handles 404 by surfacing error, keeping isLoaded false, and preserving previous state', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: async () => ({ error: 'Not Found' }),
+    } as Response);
+
+    const store = useIndicatorsStore();
+    await store.fetchIndicators();
+
+    expect(store.indicators).toEqual([]);
+    expect(store.isLoaded).toBe(false);
+    expect(store.isLoading).toBe(false);
+    expect(store.error).toBe('Not Found');
+  });
+
+  it('keeps previously loaded indicators on a failed refetch', async () => {
+    const initialIndicators: IndicatorItem[] = [
+      {
+        id: '1',
+        sectionId: 'sec-1',
+        slug: 'penduduk',
+        label: 'Penduduk',
+        unit: 'jiwa',
+        valueCurrent: '53098',
+        valuePrevious: null,
+        periodCurrent: '2026',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'kependudukan',
+        sortOrder: 1,
+      },
+    ];
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ indicators: initialIndicators }),
+    } as Response);
+
+    const store = useIndicatorsStore();
+    await store.fetchIndicators();
+    expect(store.indicators).toHaveLength(1);
+    expect(store.isLoaded).toBe(true);
+
+    // Now refetch fails with 500
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: 'Server error' }),
+    } as Response);
+
+    await store.fetchIndicators(true);
+    expect(store.error).toBe('Server error');
+    // Crucial: old data is preserved, not wiped!
+    expect(store.indicators).toHaveLength(1);
+    expect(store.indicators[0]?.slug).toBe('penduduk');
+  });
+
+  it('keeps previously loaded indicators on a failed refetch with 404', async () => {
+    const initialIndicators: IndicatorItem[] = [
+      {
+        id: '1',
+        sectionId: 'sec-1',
+        slug: 'penduduk',
+        label: 'Penduduk',
+        unit: 'jiwa',
+        valueCurrent: '53098',
+        valuePrevious: null,
+        periodCurrent: '2026',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'kependudukan',
+        sortOrder: 1,
+      },
+    ];
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ indicators: initialIndicators }),
+    } as Response);
+
+    const store = useIndicatorsStore();
+    await store.fetchIndicators();
+    expect(store.indicators).toHaveLength(1);
+    expect(store.isLoaded).toBe(true);
+
+    // Now refetch fails with 404
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      json: async () => ({ error: 'Not Found' }),
+    } as Response);
+
+    await store.fetchIndicators(true);
+    expect(store.error).toBe('Not Found');
+    // Old data is preserved, not wiped!
+    expect(store.indicators).toHaveLength(1);
+    expect(store.indicators[0]?.slug).toBe('penduduk');
+  });
+
+  it('formats indicator values and resolves icons by matching pageSlug without prefix fallback', () => {
+    const store = useIndicatorsStore();
+    store.indicators = [
+      {
+        id: '1',
+        sectionId: 'sec-1',
+        slug: 'custom-ratio',
+        label: 'Rasio Khusus',
+        unit: ': 1',
+        valueCurrent: '1.06',
+        valuePrevious: null,
+        periodCurrent: '2024',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'pendidikan',
+        sortOrder: 1,
+      },
+      {
+        id: '2',
+        sectionId: 'sec-1',
+        slug: 'kepadatan-wilayah',
+        label: 'Kepadatan Wilayah',
+        unit: 'jiwa/km²',
+        valueCurrent: '2.5',
+        valuePrevious: null,
+        periodCurrent: '2024',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'pendidikan',
+        sortOrder: 2,
+      },
+      {
+        id: '3',
+        sectionId: 'sec-1',
+        slug: 'pendidikan-fake-prefix',
+        label: 'Item Di Halaman Lain',
+        unit: 'unit',
+        valueCurrent: '10',
+        valuePrevious: null,
+        periodCurrent: '2024',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'kesehatan', // Has slug starting with 'pendidikan' but pageSlug is 'kesehatan'!
+        sortOrder: 3,
+      },
+    ];
+
+    const stats = store.getStatsForPage('pendidikan');
+    // Exactly matches pageSlug 'pendidikan', never matches 'pendidikan-fake-prefix' belonging to 'kesehatan'
+    expect(stats).toHaveLength(2);
+    expect(stats[0]).toEqual({
+      icon: 'ratio',
+      value: '1,06',
+      label: 'Rasio Khusus',
+      unit: ': 1',
+    });
+    expect(stats[1]).toEqual({
+      icon: 'density',
+      value: '2,5',
+      label: 'Kepadatan Wilayah',
+      unit: 'jiwa/km²',
+    });
+  });
+
+  it('deterministically sorts indicators by sortOrder in getStatsForPage', () => {
+    const store = useIndicatorsStore();
+    store.indicators = [
+      {
+        id: 'ind-3',
+        sectionId: 'sec-1',
+        slug: 'pendidikan-ketiga',
+        label: 'Stat Ketiga',
+        unit: null,
+        valueCurrent: '30',
+        valuePrevious: null,
+        periodCurrent: '2024',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'pendidikan',
+        sortOrder: 3,
+      },
+      {
+        id: 'ind-1',
+        sectionId: 'sec-1',
+        slug: 'pendidikan-pertama',
+        label: 'Stat Pertama',
+        unit: null,
+        valueCurrent: '10',
+        valuePrevious: null,
+        periodCurrent: '2024',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'pendidikan',
+        sortOrder: 1,
+      },
+      {
+        id: 'ind-2',
+        sectionId: 'sec-1',
+        slug: 'pendidikan-kedua',
+        label: 'Stat Kedua',
+        unit: null,
+        valueCurrent: '20',
+        valuePrevious: null,
+        periodCurrent: '2024',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'pendidikan',
+        sortOrder: 2,
+      },
+    ];
+
+    const stats = store.getStatsForPage('pendidikan');
+    expect(stats.map((s) => s.label)).toEqual(['Stat Pertama', 'Stat Kedua', 'Stat Ketiga']);
+  });
+
+  it('supports slug aliasing between persampahan-dan-bank-sampah-unit and persampahan in getStatsForPage', () => {
+    const store = useIndicatorsStore();
+    store.indicators = [
+      {
+        id: 'waste-1',
+        sectionId: 'sec-waste',
+        slug: 'persampahan-bank-sampah',
+        label: 'Bank Sampah Unit',
+        unit: 'unit',
+        valueCurrent: '48',
+        valuePrevious: null,
+        periodCurrent: '2024',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'persampahan',
+        sortOrder: 1,
+      },
+    ];
+
+    // Querying with long slug matches indicator with short pageSlug
+    const statsLong = store.getStatsForPage('persampahan-dan-bank-sampah-unit');
+    expect(statsLong).toHaveLength(1);
+    expect(statsLong[0]?.label).toBe('Bank Sampah Unit');
+
+    // Querying with short slug matches indicator with short pageSlug
+    const statsShort = store.getStatsForPage('persampahan');
+    expect(statsShort).toHaveLength(1);
+    expect(statsShort[0]?.label).toBe('Bank Sampah Unit');
+
+    // Updating pageSlug on item to long slug also matches both queries
+    store.indicators[0]!.pageSlug = 'persampahan-dan-bank-sampah-unit';
+    expect(store.getStatsForPage('persampahan')).toHaveLength(1);
+    expect(store.getStatsForPage('persampahan-dan-bank-sampah-unit')).toHaveLength(1);
+  });
+
+  it('handles network failure gracefully without throwing and leaves stats empty', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>().mockRejectedValue(new Error('Network offline'));
+
+    const store = useIndicatorsStore();
+    await store.fetchIndicators();
+
+    expect(store.indicators).toEqual([]);
+    expect(store.isLoading).toBe(false);
+    expect(store.getStatsForPage('kependudukan')).toEqual([]);
+  });
+});
+
 describe('indicators store (public per-section reads)', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -244,10 +628,7 @@ describe('indicators store (public per-section reads)', () => {
     globalThis.fetch = fetchMock;
 
     const store = useIndicatorsStore();
-    await Promise.all([
-      store.fetchBySectionId('sec-fail'),
-      store.fetchBySectionId('sec-ok'),
-    ]);
+    await Promise.all([store.fetchBySectionId('sec-fail'), store.fetchBySectionId('sec-ok')]);
 
     expect(store.errorsBySectionId['sec-fail']).toContain('500');
     expect(store.errorsBySectionId['sec-ok']).toBeNull();
