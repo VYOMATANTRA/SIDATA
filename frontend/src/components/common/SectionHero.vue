@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import SectionTextArea from './SectionTextArea.vue';
-import defaultHeroBg from '@/assets/img/background_laman_depan_kelurahan.png';
+import defaultHeroBg from '@/assets/img/background_laman_depan_kelurahan.webp';
 
 export interface SectionHeroProps {
   /** Eyebrow tag above hero title (default: 'Program Kelurahan Cantik mempersembahkan') */

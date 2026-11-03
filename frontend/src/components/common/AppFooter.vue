@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import BaseLink from './BaseLink.vue';
-import logoBalikpapan from '@/assets/img/logo_balikpapan.png';
-import logoDesaCantik from '@/assets/img/logo_desa_cantik.png';
-import logoSdgsDesa from '@/assets/img/sdgs_desa.png';
-import logoSdgs17 from '@/assets/img/17_kemitraan_pembangunan_desa.png';
-import logoBps from '@/assets/img/logo_bps.png';
-import logoItk from '@/assets/img/logo_itk.png';
-import logoVyomatantra from '@/assets/img/logo_vyomatantra.png';
+import logoBalikpapan from '@/assets/img/logo_balikpapan.webp';
+import logoDesaCantik from '@/assets/img/logo_desa_cantik.webp';
+import logoSdgsDesa from '@/assets/img/sdgs_desa.webp';
+import logoSdgs17 from '@/assets/img/17_kemitraan_pembangunan_desa.webp';
+import logoBps from '@/assets/img/logo_bps.webp';
+import logoItk from '@/assets/img/logo_itk.webp';
+import logoVyomatantra from '@/assets/img/logo_vyomatantra.webp';
 
 export interface FooterProps {
   year?: number | string;
@@ -35,14 +35,14 @@ const resourceLinks = [
 
 // Story & Statistics Links (Cerita)
 const storyLinks = [
-  { label: 'Demografi Kependudukan', to: '/cerita/demografi' },
+  { label: 'Demografi Kependudukan', to: '/cerita/kependudukan' },
   { label: 'Pendidikan', to: '/cerita/pendidikan' },
   { label: 'Kesehatan', to: '/cerita/kesehatan' },
-  { label: 'Pemerintahan & Kelembagaan', to: '/cerita/pemerintahan' },
-  { label: 'Ekonomi & Ketertiban', to: '/cerita/ekonomi' },
-  { label: 'Geografis & Tata Ruang', to: '/cerita/geografis' },
-  { label: 'Infrastruktur & Perumahan', to: '/cerita/infrastruktur' },
-  { label: 'Persampahan & Bank Sampah Unit', to: '/cerita/persampahan' },
+  { label: 'Pemerintahan & Kelembagaan', to: '/cerita/pemerintahan-dan-kelembagaan' },
+  { label: 'Ekonomi & Ketertiban', to: '/cerita/ekonomi-dan-ketertiban' },
+  { label: 'Geografis & Tata Ruang', to: '/cerita/geografis-dan-tata-ruang' },
+  { label: 'Infrastruktur & Perumahan', to: '/cerita/infrastruktur-dan-perumahan' },
+  { label: 'Persampahan & Bank Sampah Unit', to: '/cerita/persampahan-dan-bank-sampah-unit' },
 ];
 
 // About Links (Tentang)

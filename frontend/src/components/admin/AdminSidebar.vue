@@ -17,7 +17,7 @@ import {
   type AdminNavGroup,
 } from '../../config/adminNav';
 // TODO: replace with a dedicated SIDATA wordmark/icon once design provides one.
-import balikpapanLogo from '@/assets/img/logo_balikpapan.png';
+import balikpapanLogo from '@/assets/img/logo_balikpapan.webp';
 
 const props = withDefaults(defineProps<{ mobileOpen?: boolean }>(), { mobileOpen: false });
 const emit = defineEmits<{ (e: 'close', reason?: 'dismiss' | 'navigate'): void }>();

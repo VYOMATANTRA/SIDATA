@@ -192,6 +192,12 @@ const router = createRouter({
       ],
     },
     {
+      path: '/dashboard',
+      name: 'dashboard',
+      component: () => import('../views/DashboardView.vue'),
+      meta: { requiresAuth: true, title: 'Dasbor' },
+    },
+    {
       path: '/cerita/:slug',
       name: 'cerita-page',
       component: () => import('../views/CeritaPageView.vue'),
