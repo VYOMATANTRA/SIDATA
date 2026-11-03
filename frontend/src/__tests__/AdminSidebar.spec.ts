@@ -286,7 +286,7 @@ describe('AdminSidebar.vue — navigation out of the admin area', () => {
     expect(wrapper.find('[data-test="logout-error"]').text()).toContain('Gagal keluar');
   });
 
-  // Bug fix: a 401/403 from /api/auth/logout means the server already considers the session
+  // Bug fix: a 401 from /api/auth/logout means the server already considers the session
   // dead (e.g. the refresh token already expired), not that logout failed. Treating it as a
   // failure trapped the user: every retry hit the same already-expired session and failed the
   // same way, so there was no way to actually sign out.
@@ -308,6 +308,57 @@ describe('AdminSidebar.vue — navigation out of the admin area', () => {
     expect(authStore.isAuthenticated).toBe(false);
     expect(router.currentRoute.value.path).toBe('/login');
     expect(wrapper.find('[data-test="logout-error"]').exists()).toBe(false);
+  });
+
+  // Bug fix: a 403 from /api/auth/logout means the CSRF token was missing or stale while the
+  // session is still alive server-side. useLogout must fetch a fresh CSRF token and retry once;
+  // if the retry succeeds, logout completes normally.
+  it('fetches a fresh CSRF token and retries once when logout returns 403, succeeding if the retry succeeds', async () => {
+    const { wrapper, router } = await mountSidebar('admin');
+    const authStore = useAuthStore();
+
+    let logoutCalls = 0;
+    let csrfCalls = 0;
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('csrf-token')) {
+        csrfCalls += 1;
+        return { ok: true, json: async () => ({ csrfToken: `csrf-${csrfCalls}` }) } as Response;
+      }
+      logoutCalls += 1;
+      if (logoutCalls === 1) {
+        return { ok: false, status: 403, json: async () => ({ error: 'Forbidden' }) } as Response;
+      }
+      return { ok: true, status: 200, json: async () => ({}) } as Response;
+    });
+
+    await wrapper.find('[data-test="nav-logout"]').trigger('click');
+    await vi.waitUntil(() => !authStore.isAuthenticated);
+
+    expect(csrfCalls).toBe(2);
+    expect(logoutCalls).toBe(2);
+    expect(authStore.isAuthenticated).toBe(false);
+    expect(router.currentRoute.value.path).toBe('/login');
+    expect(wrapper.find('[data-test="logout-error"]').exists()).toBe(false);
+  });
+
+  it('keeps the session alive and shows an error when logout still returns 403 after retrying CSRF', async () => {
+    const { wrapper } = await mountSidebar('admin');
+    const authStore = useAuthStore();
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response;
+      }
+      return { ok: false, status: 403, json: async () => ({ error: 'Forbidden' }) } as Response;
+    });
+
+    await wrapper.find('[data-test="nav-logout"]').trigger('click');
+    await vi.waitUntil(() => wrapper.find('[data-test="logout-error"]').exists());
+
+    expect(authStore.isAuthenticated).toBe(true);
+    expect(wrapper.find('[data-test="logout-error"]').text()).toContain('Gagal keluar');
   });
 });
 
@@ -423,5 +474,55 @@ describe('AdminSidebar.vue — mobile drawer', () => {
     const { wrapper } = await mountSidebar('admin');
     await wrapper.find('[data-test="nav-data"]').trigger('click');
     expect(wrapper.emitted('close')).toBeTruthy();
+  });
+
+  it('reads the saved collapsed state synchronously at creation so the sidebar does not flash open on initial render', async () => {
+    window.localStorage.setItem('sidata_admin_sidebar_collapsed', '1');
+    setActivePinia(createPinia());
+    const authStore = useAuthStore();
+    authStore.user = { id: 'u1', email: 'u@example.com', role: 'admin' };
+    authStore.accessToken = 'token';
+
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    // Check immediately after mount (without awaiting an extra nextTick) that md:w-20 is applied.
+    const wrapper = mount(AdminSidebar, { global: { plugins: [router] } });
+    expect(wrapper.find('nav').classes()).toContain('md:w-20');
+  });
+
+  it('wraps Tab and Shift+Tab keyboard focus inside the open mobile drawer', async () => {
+    setActivePinia(createPinia());
+    const authStore = useAuthStore();
+    authStore.user = { id: 'u1', email: 'u@example.com', role: 'admin' };
+    authStore.accessToken = 'token';
+
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminSidebar, {
+      props: { mobileOpen: true },
+      global: { plugins: [router] },
+      attachTo: document.body,
+    });
+
+    const firstFocusable = wrapper.find('a[href="/admin"]').element as HTMLElement;
+    const lastFocusable = wrapper.find('[data-test="nav-logout"]').element as HTMLElement;
+
+    // Tab from the last focusable item wraps back to the first item.
+    lastFocusable.focus();
+    expect(document.activeElement).toBe(lastFocusable);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', cancelable: true }));
+    expect(document.activeElement).toBe(firstFocusable);
+
+    // Shift+Tab from the first focusable item wraps to the last item.
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, cancelable: true }),
+    );
+    expect(document.activeElement).toBe(lastFocusable);
+
+    wrapper.unmount();
   });
 });

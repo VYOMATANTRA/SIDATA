@@ -20,7 +20,7 @@ import {
 import balikpapanLogo from '@/assets/img/logo_balikpapan.png';
 
 const props = withDefaults(defineProps<{ mobileOpen?: boolean }>(), { mobileOpen: false });
-const emit = defineEmits<{ (e: 'close'): void }>();
+const emit = defineEmits<{ (e: 'close', reason?: 'dismiss' | 'navigate'): void }>();
 
 const route = useRoute();
 const authStore = useAuthStore();
@@ -46,15 +46,17 @@ const visibleNav = computed(() =>
 );
 
 const COLLAPSE_STORAGE_KEY = 'sidata_admin_sidebar_collapsed';
-const isCollapsed = ref(false);
 
-onMounted(() => {
+function readInitialCollapsed(): boolean {
   try {
-    isCollapsed.value = window.localStorage.getItem(COLLAPSE_STORAGE_KEY) === '1';
+    return window.localStorage.getItem(COLLAPSE_STORAGE_KEY) === '1';
   } catch {
     // localStorage unavailable (private mode, SSR) — default to expanded.
+    return false;
   }
-});
+}
+
+const isCollapsed = ref(readInitialCollapsed());
 
 function toggleCollapse() {
   isCollapsed.value = !isCollapsed.value;
@@ -103,13 +105,48 @@ function toggleSistem() {
   isSistemOpen.value = !isSistemOpen.value;
 }
 
-function closeMobile() {
-  emit('close');
+function closeMobile(reason: 'dismiss' | 'navigate' = 'dismiss') {
+  emit('close', reason);
+}
+
+const sidebarRef = ref<HTMLElement | null>(null);
+
+function getFocusableElements(): HTMLElement[] {
+  if (!sidebarRef.value) return [];
+  const candidates = sidebarRef.value.querySelectorAll<HTMLElement>(
+    'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  );
+  return Array.from(candidates).filter(
+    (el) => !el.classList.contains('hidden') && !el.closest('[style*="display: none"]'),
+  );
 }
 
 function handleKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape' && props.mobileOpen) {
-    closeMobile();
+  if (!props.mobileOpen) return;
+
+  if (event.key === 'Escape') {
+    closeMobile('dismiss');
+    return;
+  }
+
+  // Keep Tab / Shift+Tab cycling within the open mobile drawer so keyboard focus cannot escape
+  // into the dimmed header/main content behind the overlay.
+  if (event.key === 'Tab') {
+    const focusables = getFocusableElements();
+    if (focusables.length === 0) return;
+    const first = focusables[0]!;
+    const last = focusables[focusables.length - 1]!;
+    const active = document.activeElement as HTMLElement | null;
+
+    if (event.shiftKey) {
+      if (active === first || !sidebarRef.value?.contains(active)) {
+        event.preventDefault();
+        last.focus();
+      }
+    } else if (active === last || !sidebarRef.value?.contains(active)) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 }
 
@@ -151,6 +188,7 @@ async function handleLogout() {
 
 <template>
   <nav
+    ref="sidebarRef"
     aria-label="Navigasi Admin"
     class="bg-brand-navy fixed inset-y-0 left-0 z-40 flex h-full w-72 flex-col border-r border-white/10 text-white transition-all duration-200 md:visible md:static md:translate-x-0"
     :class="[
@@ -163,6 +201,7 @@ async function handleLogout() {
       <RouterLink
         to="/admin"
         class="focus-visible:ring-brand-cyan rounded-btn flex min-w-0 items-center gap-3 focus-visible:ring-2 focus-visible:outline-none"
+        @click="closeMobile('navigate')"
       >
         <img
           :src="balikpapanLogo"
@@ -184,7 +223,7 @@ async function handleLogout() {
         class="focus-visible:ring-brand-cyan rounded-btn shrink-0 border border-white/20 p-1.5 text-white/70 transition-transform hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:outline-none md:hidden"
         aria-label="Tutup menu navigasi"
         data-test="sidebar-mobile-close"
-        @click="closeMobile"
+        @click="closeMobile('dismiss')"
       >
         <XMarkIcon class="h-5 w-5" aria-hidden="true" />
       </button>
@@ -219,7 +258,7 @@ async function handleLogout() {
           "
           :aria-current="isNavActive(entry.to) ? 'page' : undefined"
           :data-test="entry.dataTest"
-          @click="closeMobile"
+          @click="closeMobile('navigate')"
         >
           <component :is="entry.icon" class="h-5 w-5 shrink-0" aria-hidden="true" />
           <span
@@ -275,7 +314,7 @@ async function handleLogout() {
                 "
                 :aria-current="isNavActive(item.to) ? 'page' : undefined"
                 :data-test="item.dataTest"
-                @click="closeMobile"
+                @click="closeMobile('navigate')"
               >
                 <component :is="item.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
                 <span
@@ -306,6 +345,7 @@ async function handleLogout() {
         to="/"
         class="focus-visible:ring-brand-cyan rounded-btn flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white focus-visible:ring-2 focus-visible:outline-none"
         data-test="nav-public-site"
+        @click="closeMobile('navigate')"
       >
         <GlobeAltIcon class="h-5 w-5 shrink-0" aria-hidden="true" />
         <span :class="labelClass(isCollapsed, 'truncate')">Kembali ke Situs Publik</span>

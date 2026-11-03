@@ -203,8 +203,9 @@ describe('AdminLayout.vue — mobile sidebar drawer', () => {
 
   // Accessibility fix: the hamburger button had no aria-expanded, so screen-reader users had no
   // way to know whether the drawer it controls was open or closed (WCAG 2.1 §4.1.2 Name, Role,
-  // Value).
-  it('reflects drawer state on the hamburger button via aria-expanded', async () => {
+  // Value). Its aria-label stays constant ("Menu navigasi") so aria-expanded alone carries the
+  // open/closed state without contradicting or duplicating the drawer's close button label.
+  it('reflects drawer state on the hamburger button via aria-expanded while keeping a constant aria-label', async () => {
     const router = createTestRouter();
     await router.push('/admin');
     await router.isReady();
@@ -212,11 +213,12 @@ describe('AdminLayout.vue — mobile sidebar drawer', () => {
     const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
     const toggle = wrapper.find('[data-test="admin-mobile-menu-toggle"]');
     expect(toggle.attributes('aria-expanded')).toBe('false');
+    expect(toggle.attributes('aria-label')).toBe('Menu navigasi');
 
     await toggle.trigger('click');
-    expect(wrapper.find('[data-test="admin-mobile-menu-toggle"]').attributes('aria-expanded')).toBe(
-      'true',
-    );
+    const openToggle = wrapper.find('[data-test="admin-mobile-menu-toggle"]');
+    expect(openToggle.attributes('aria-expanded')).toBe('true');
+    expect(openToggle.attributes('aria-label')).toBe('Menu navigasi');
   });
 
   // Accessibility fix: closing the drawer (from any trigger — its own close button, Escape, or
@@ -242,5 +244,55 @@ describe('AdminLayout.vue — mobile sidebar drawer', () => {
       wrapper.find('[data-test="admin-mobile-menu-toggle"]').element,
     );
     wrapper.unmount();
+  });
+
+  it('does not move focus back to the hamburger toggle when the drawer closes because a sidebar link was clicked', async () => {
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, {
+      global: { plugins: [router] },
+      attachTo: document.body,
+    });
+
+    await wrapper.find('[data-test="admin-mobile-menu-toggle"]').trigger('click');
+    await wrapper.vm.$nextTick();
+
+    const ceritaLink = wrapper.find('[data-test="nav-cerita"]');
+    (ceritaLink.element as HTMLElement).focus();
+    await ceritaLink.trigger('click');
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    expect(document.activeElement).not.toBe(
+      wrapper.find('[data-test="admin-mobile-menu-toggle"]').element,
+    );
+    wrapper.unmount();
+  });
+
+  it('marks the header and main content area inert while the mobile drawer is open', async () => {
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
+    const contentShell = wrapper.find('[data-test="admin-content-shell"]');
+    expect(contentShell.attributes('inert')).toBeUndefined();
+
+    await wrapper.find('[data-test="admin-mobile-menu-toggle"]').trigger('click');
+    expect(contentShell.attributes('inert')).toBeDefined();
+
+    await wrapper.find('[data-test="admin-sidebar-backdrop"]').trigger('click');
+    expect(contentShell.attributes('inert')).toBeUndefined();
+  });
+
+  it('uses dynamic viewport height (h-dvh) on the root layout container so mobile browser chrome cannot clip the bottom', async () => {
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
+    expect(wrapper.classes()).toContain('h-dvh');
   });
 });
