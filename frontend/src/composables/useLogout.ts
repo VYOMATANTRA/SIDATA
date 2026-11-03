@@ -11,24 +11,34 @@ export function useLogout() {
   const router = useRouter();
   const authStore = useAuthStore();
 
+  async function postLogout(csrfToken: string): Promise<Response> {
+    return fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'x-csrf-token': csrfToken,
+      },
+    });
+  }
+
   async function logout(): Promise<{ ok: true } | { ok: false; error: string }> {
     try {
-      const csrfToken = await getCsrfToken();
+      let csrfToken = await getCsrfToken();
+      let response = await postLogout(csrfToken);
 
-      const response = await fetch('/api/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'x-csrf-token': csrfToken,
-        },
-      });
+      // The server answers 403 when the CSRF token is missing or stale — the session is still
+      // alive server-side. Fetch a fresh CSRF token and retry once before giving up.
+      if (response.status === 403) {
+        csrfToken = await getCsrfToken();
+        response = await postLogout(csrfToken);
+      }
 
-      // A 401/403 means the server already considers the session dead (e.g. the refresh token
+      // A 401 means the server already considers the session dead (e.g. the refresh token
       // expired or was already revoked) — that is the outcome logout was trying to reach, not a
-      // failure of it. Treating it as an error here would trap the user in a session they can
-      // never leave, since every retry hits the same already-expired session and fails the same
-      // way. Only a genuine server error (5xx) or network failure keeps the local session intact.
-      if (!response.ok && response.status !== 401 && response.status !== 403) {
+      // failure of it. Any other non-OK status (including a 403 that still failed after retry, or
+      // 5xx) means the server never revoked the session, so keep local state intact and surface
+      // the error instead of falsely appearing logged out.
+      if (!response.ok && response.status !== 401) {
         return { ok: false, error: 'Gagal keluar dari sesi. Silakan coba lagi.' };
       }
 
