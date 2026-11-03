@@ -73,7 +73,11 @@ const router = createRouter({
           path: '',
           name: 'admin-dashboard',
           component: () => import('../views/AdminDashboardView.vue'),
-          meta: { title: 'Beranda', breadcrumb: [] },
+          meta: {
+            ...metaForRoles(rolesFor('/admin')),
+            title: 'Beranda',
+            breadcrumb: [],
+          },
         },
         {
           path: '/users',
@@ -89,25 +93,41 @@ const router = createRouter({
           path: 'cerita',
           name: 'admin-cerita',
           component: () => import('../views/AdminCeritaView.vue'),
-          meta: { title: 'Cerita', breadcrumb: ['Cerita'] },
+          meta: {
+            ...metaForRoles(rolesFor('/admin/cerita')),
+            title: 'Cerita',
+            breadcrumb: ['Cerita'],
+          },
         },
         {
           path: 'peta',
           name: 'admin-peta',
           component: () => import('../views/AdminPetaView.vue'),
-          meta: { title: 'Peta', breadcrumb: ['Peta'] },
+          meta: {
+            ...metaForRoles(rolesFor('/admin/peta')),
+            title: 'Peta',
+            breadcrumb: ['Peta'],
+          },
         },
         {
           path: 'publikasi',
           name: 'admin-publikasi',
           component: () => import('../views/AdminPublikasiView.vue'),
-          meta: { title: 'Publikasi', breadcrumb: ['Publikasi'] },
+          meta: {
+            ...metaForRoles(rolesFor('/admin/publikasi')),
+            title: 'Publikasi',
+            breadcrumb: ['Publikasi'],
+          },
         },
         {
           path: 'rukun-tetangga',
           name: 'admin-rukun-tetangga',
           component: () => import('../views/AdminRukunTetanggaView.vue'),
-          meta: { title: 'Rukun Tetangga', breadcrumb: ['Rukun Tetangga'] },
+          meta: {
+            ...metaForRoles(rolesFor('/admin/rukun-tetangga')),
+            title: 'Rukun Tetangga',
+            breadcrumb: ['Rukun Tetangga'],
+          },
         },
         {
           path: 'sistem/templat-kalimat',
@@ -152,13 +172,13 @@ const router = createRouter({
         {
           // Reached today via the "Retensi Audit" link inside UserManagement.vue, not a direct
           // sidebar item (SPEC §3 Sistem group has no separate retention entry). Still mounted
-          // in the shell so the sidebar persists when an admin follows that link.
+          // in the shell so the sidebar persists when an admin follows that link, and derives its
+          // role guard from its parent nav entry ('/users') so access rules cannot drift.
           path: '/settings/audit-retention',
           name: 'audit-retention-settings',
           component: () => import('../views/AuditRetentionSettingsView.vue'),
           meta: {
-            requiresAuth: true,
-            requiresAdmin: true,
+            ...metaForRoles(rolesFor('/users')),
             title: 'Pengaturan Retensi Audit',
             // Declares which sidebar item this child page belongs to, since its own path
             // doesn't match any ADMIN_NAV `to` (naive path-prefix matching would be unsafe here —
