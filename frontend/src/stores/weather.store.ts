@@ -12,12 +12,12 @@ export interface WeatherForecastEntry {
 
 export interface WeatherLocation {
   desa: string;
-  lat: number;
-  lon: number;
+  lat: number | null;
+  lon: number | null;
 }
 
 export interface WeatherData {
-  location: WeatherLocation;
+  location: WeatherLocation | null;
   forecast: WeatherForecastEntry[];
   fetchedAt: string;
   stale: boolean;
@@ -127,12 +127,49 @@ export const useWeatherStore = defineStore('weather', () => {
   const error = ref<string | null>(null);
   const lastFetchedAt = ref<Date | null>(null);
   const referenceTime = ref<Date | null>(null);
+  const currentTime = ref<number>(Date.now());
 
   let inFlight: Promise<WeatherData | null> | null = null;
+  let clockIntervalId: ReturnType<typeof setInterval> | null = null;
+
+  function startLiveClock(intervalMs = 60 * 1000) {
+    if (clockIntervalId !== null) return;
+    clockIntervalId = setInterval(() => {
+      currentTime.value = Date.now();
+    }, intervalMs);
+    if (
+      typeof clockIntervalId === 'object' &&
+      clockIntervalId !== null &&
+      'unref' in clockIntervalId &&
+      typeof (clockIntervalId as { unref: () => void }).unref === 'function'
+    ) {
+      (clockIntervalId as { unref: () => void }).unref();
+    }
+  }
+
+  function stopLiveClock() {
+    if (clockIntervalId !== null) {
+      clearInterval(clockIntervalId);
+      clockIntervalId = null;
+    }
+  }
+
+  function updateCurrentTime(time?: Date | number) {
+    if (time instanceof Date) {
+      currentTime.value = time.getTime();
+    } else if (typeof time === 'number' && Number.isFinite(time)) {
+      currentTime.value = time;
+    } else {
+      currentTime.value = Date.now();
+    }
+  }
+
+  // Start live clock updating every 60s
+  startLiveClock();
 
   const isStale = computed(() => Boolean(data.value?.stale));
   const location = computed(() => data.value?.location ?? null);
-  const locationName = computed(() => data.value?.location.desa || 'Manggar');
+  const locationName = computed(() => data.value?.location?.desa || 'Manggar');
   const fetchedAt = computed(() => data.value?.fetchedAt ?? null);
 
   const sortedForecast = computed<WeatherForecastEntry[]>(() => {
@@ -152,7 +189,8 @@ export const useWeatherStore = defineStore('weather', () => {
   });
 
   const currentEntryIndex = computed(() => {
-    return findCurrentForecastIndex(sortedForecast.value, referenceTime.value ?? new Date());
+    const now = referenceTime.value ?? new Date(currentTime.value);
+    return findCurrentForecastIndex(sortedForecast.value, now);
   });
 
   const currentEntry = computed<WeatherForecastEntry | null>(() => {
@@ -214,17 +252,27 @@ export const useWeatherStore = defineStore('weather', () => {
           throw new Error('Format respons data cuaca tidak valid');
         }
 
+        const rawLocation = json.location;
+        const parsedLocation: WeatherLocation | null =
+          rawLocation && typeof rawLocation === 'object'
+            ? {
+                desa:
+                  typeof rawLocation.desa === 'string' && rawLocation.desa.trim()
+                    ? rawLocation.desa.trim()
+                    : 'Manggar',
+                lat:
+                  typeof rawLocation.lat === 'number' && Number.isFinite(rawLocation.lat)
+                    ? rawLocation.lat
+                    : null,
+                lon:
+                  typeof rawLocation.lon === 'number' && Number.isFinite(rawLocation.lon)
+                    ? rawLocation.lon
+                    : null,
+              }
+            : null;
+
         data.value = {
-          location: {
-            desa:
-              json.location && typeof json.location.desa === 'string'
-                ? json.location.desa
-                : 'Manggar',
-            lat:
-              json.location && typeof json.location.lat === 'number' ? json.location.lat : -1.2251,
-            lon:
-              json.location && typeof json.location.lon === 'number' ? json.location.lon : 116.9438,
-          },
+          location: parsedLocation,
           forecast: json.forecast.map((entry: Partial<WeatherForecastEntry>) => ({
             datetime: typeof entry?.datetime === 'string' ? entry.datetime : '',
             temperatureCelsius:
@@ -273,6 +321,7 @@ export const useWeatherStore = defineStore('weather', () => {
     error.value = null;
     lastFetchedAt.value = null;
     referenceTime.value = null;
+    currentTime.value = Date.now();
     inFlight = null;
   }
 
@@ -282,6 +331,10 @@ export const useWeatherStore = defineStore('weather', () => {
     isLoaded,
     error,
     lastFetchedAt,
+    currentTime,
+    updateCurrentTime,
+    startLiveClock,
+    stopLiveClock,
     isStale,
     location,
     locationName,

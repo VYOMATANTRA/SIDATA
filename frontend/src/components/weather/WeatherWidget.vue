@@ -45,6 +45,11 @@ async function handleRetry() {
 
 <template>
   <div class="w-full text-white" data-test="weather-widget-root">
+    <!-- Accessible Section Heading for Weather Widget (SPEC §8 & WCAG 2.1 A) -->
+    <h2 id="weather-widget-title" class="sr-only">
+      Perkiraan Cuaca {{ weatherStore.locationName || 'Manggar' }}
+    </h2>
+
     <!-- 1. Loading State (Accessible Skeleton) -->
     <div
       v-if="isLoadingState"
@@ -54,16 +59,15 @@ async function handleRetry() {
       class="w-full"
       data-test="weather-loading-skeleton"
     >
-      <h2 id="weather-widget-title" class="sr-only">Perkiraan Cuaca Manggar</h2>
       <span class="sr-only">Memuat data perkiraan cuaca...</span>
       <div class="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-12 lg:gap-5">
         <!-- Main Card Skeleton -->
         <div
-          class="flex min-h-[13.5rem] flex-col justify-between animate-pulse motion-reduce:animate-none rounded-2xl border border-white/20 bg-white/10 p-5 backdrop-blur-md sm:min-h-[14rem] sm:p-6 lg:col-span-6"
+          class="flex min-h-[13.5rem] animate-pulse flex-col justify-between rounded-2xl border border-white/20 bg-white/10 p-5 backdrop-blur-md motion-reduce:animate-none sm:min-h-[14rem] sm:p-6 lg:col-span-6"
         >
           <div>
             <div class="h-5 w-40 rounded-md bg-white/20"></div>
-            <div class="mt-2 h-3 w-16 rounded-md bg-brand-cyan/40"></div>
+            <div class="bg-brand-cyan/40 mt-2 h-3 w-16 rounded-md"></div>
             <div class="mt-5 flex items-center gap-4">
               <div class="h-14 w-14 rounded-full bg-white/20 sm:h-16 sm:w-16"></div>
               <div class="space-y-2">
@@ -82,7 +86,7 @@ async function handleRetry() {
         <!-- Upcoming Cards Skeleton -->
         <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:col-span-6">
           <div
-            class="flex min-h-[13.5rem] flex-col items-center justify-between animate-pulse motion-reduce:animate-none rounded-2xl border border-white/20 bg-white/10 p-4 backdrop-blur-md sm:min-h-[14rem] sm:p-5"
+            class="flex min-h-[13.5rem] animate-pulse flex-col items-center justify-between rounded-2xl border border-white/20 bg-white/10 p-4 backdrop-blur-md motion-reduce:animate-none sm:min-h-[14rem] sm:p-5"
           >
             <div class="h-4 w-20 rounded-md bg-white/20"></div>
             <div class="h-10 w-10 rounded-full bg-white/20 sm:h-12 sm:w-12"></div>
@@ -92,7 +96,7 @@ async function handleRetry() {
             </div>
           </div>
           <div
-            class="flex min-h-[13.5rem] flex-col items-center justify-between animate-pulse motion-reduce:animate-none rounded-2xl border border-white/20 bg-white/10 p-4 backdrop-blur-md sm:min-h-[14rem] sm:p-5"
+            class="flex min-h-[13.5rem] animate-pulse flex-col items-center justify-between rounded-2xl border border-white/20 bg-white/10 p-4 backdrop-blur-md motion-reduce:animate-none sm:min-h-[14rem] sm:p-5"
           >
             <div class="h-4 w-20 rounded-md bg-white/20"></div>
             <div class="h-10 w-10 rounded-full bg-white/20 sm:h-12 sm:w-12"></div>
@@ -113,11 +117,13 @@ async function handleRetry() {
       data-test="weather-error-alert"
     >
       <div class="space-y-1">
-        <h2 id="weather-widget-title" class="text-sm font-bold text-rose-200 sm:text-base">
-          Gagal Memuat Perkiraan Cuaca
-        </h2>
+        <p class="text-sm font-bold text-rose-200 sm:text-base">Gagal Memuat Perkiraan Cuaca</p>
         <p class="text-xs text-slate-200 sm:text-sm">
-          {{ weatherStore.error || lastError || 'Sedang mencoba menghubungkan kembali ke server BMKG...' }}
+          {{
+            weatherStore.error ||
+            lastError ||
+            'Sedang mencoba menghubungkan kembali ke server BMKG...'
+          }}
         </p>
       </div>
 
@@ -142,7 +148,7 @@ async function handleRetry() {
       data-test="weather-stale-banner"
     >
       <div class="flex flex-wrap items-center gap-1.5">
-        <span>Data perkiraan cuaca BMKG belum diperbarui (mode luring).</span>
+        <span>Data perkiraan cuaca BMKG belum diperbarui (data cache).</span>
         <span
           v-if="weatherStore.error"
           class="font-semibold text-rose-200"
@@ -205,9 +211,9 @@ async function handleRetry() {
       class="flex flex-col items-center justify-center gap-3 rounded-2xl border border-white/20 bg-white/10 p-5 text-center text-white shadow-xl backdrop-blur-md sm:p-6"
       data-test="weather-empty-notice"
     >
-      <h2 id="weather-widget-title" class="text-sm font-semibold text-slate-200 sm:text-base">
+      <p class="text-sm font-semibold text-slate-200 sm:text-base">
         Data perkiraan cuaca belum tersedia
-      </h2>
+      </p>
       <button
         type="button"
         @click="handleRetry"

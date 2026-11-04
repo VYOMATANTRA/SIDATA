@@ -516,5 +516,81 @@ describe('Weather Pinia Store & Utilities (weather.store.ts)', () => {
       expect(store.currentEntry?.datetime).toBe('2026-10-30 15:00:00');
       expect(store.currentEntry?.temperatureCelsius).toBe(29);
     });
+
+    it('recalculates currentEntryIndex dynamically as currentTime updates', async () => {
+      globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockApiResponse,
+      } as Response);
+
+      const store = useWeatherStore();
+      await store.fetchWeather();
+
+      // Initially at 12:00 WITA
+      store.updateCurrentTime(new Date('2026-10-30T12:00:00+08:00'));
+      expect(store.currentEntry?.datetime).toBe('2026-10-30 12:00:00');
+
+      // Fast forward live clock to 18:00 WITA
+      store.updateCurrentTime(new Date('2026-10-30T18:00:00+08:00'));
+      expect(store.currentEntry?.datetime).toBe('2026-10-30 18:00:00');
+      expect(store.upcomingEntries[0]?.datetime).toBe('2026-10-30 21:00:00');
+    });
+
+    it('leaves coordinates as null and does not invent made-up fallback coordinates when backend omits them', async () => {
+      globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ...mockApiResponse,
+          location: { desa: 'Manggar' }, // lat and lon omitted
+        }),
+      } as Response);
+
+      const store = useWeatherStore();
+      await store.fetchWeather();
+
+      expect(store.location).not.toBeNull();
+      expect(store.location?.desa).toBe('Manggar');
+      expect(store.location?.lat).toBeNull();
+      expect(store.location?.lon).toBeNull();
+    });
+
+    it('handles missing or non-object location gracefully with location: null', async () => {
+      globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ...mockApiResponse,
+          location: null,
+        }),
+      } as Response);
+
+      const store = useWeatherStore();
+      await store.fetchWeather();
+
+      expect(store.location).toBeNull();
+      expect(store.locationName).toBe('Manggar'); // default fallback for title
+    });
+
+    it('resets currentTime and all state on resetState', async () => {
+      globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockApiResponse,
+      } as Response);
+
+      const store = useWeatherStore();
+      await store.fetchWeather();
+
+      const oldTime = 100000;
+      store.updateCurrentTime(oldTime);
+      expect(store.currentTime).toBe(oldTime);
+
+      store.resetState();
+      expect(store.data).toBeNull();
+      expect(store.isLoaded).toBe(false);
+      expect(store.currentTime).toBeGreaterThan(oldTime);
+    });
   });
 });

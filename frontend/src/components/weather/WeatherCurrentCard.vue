@@ -77,23 +77,22 @@ const srWindDirectionText = computed(() =>
     <!-- Card Header -->
     <div class="flex items-start justify-between gap-2 border-b border-white/10 pb-3">
       <div>
-        <h2
-          id="weather-widget-title"
+        <h3
           class="text-base font-bold tracking-tight text-white sm:text-lg"
+          data-test="weather-current-title"
         >
           Perkiraan Cuaca {{ locationName || 'Manggar' }}
-        </h2>
-        <span class="text-brand-cyan text-xs font-bold tracking-wider uppercase">
-          SAAT INI
-        </span>
+        </h3>
+        <span class="text-brand-cyan text-xs font-bold tracking-wider uppercase"> SAAT INI </span>
       </div>
 
       <div
         v-if="stale"
+        aria-hidden="true"
         class="inline-flex items-center gap-1 rounded-md border border-amber-400/30 bg-amber-500/20 px-2 py-0.5 text-[11px] font-medium text-amber-200"
         data-test="stale-badge"
       >
-        <span>Luring</span>
+        <span>Data lama</span>
       </div>
     </div>
 
@@ -131,7 +130,9 @@ const srWindDirectionText = computed(() =>
         data-test="metric-wind-speed"
       >
         <span class="sr-only">{{ srWindSpeedText }}</span>
-        <span aria-hidden="true">Kecepatan Angin : {{ windSpeed !== '-' ? `${windSpeed} km/jam` : '-' }}</span>
+        <span aria-hidden="true"
+          >Kecepatan Angin : {{ windSpeed !== '-' ? `${windSpeed} km/jam` : '-' }}</span
+        >
       </div>
 
       <div

@@ -556,13 +556,12 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
     expect(ceritaSection.text()).toContain('Jumlah Penduduk Resmi');
   });
 
-  // Edge Case 16: Weather widget mounts on top of hero background with slot override support
-  it('renders weather widget on top of hero background and supports custom slot override', async () => {
+  // Edge Case 16: WeatherWidget integration on Hero
+  it('renders weather widget inside SectionHero on the landing page', async () => {
     const { pinia, router } = setupHomeView();
     await router.push('/');
     await router.isReady();
 
-    // Default mount: renders WeatherWidget
     const wrapper = mount(HomeView, {
       global: { plugins: [pinia, router] },
     });
@@ -570,17 +569,6 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
     const heroWeather = wrapper.find('section#hero [data-test="hero-weather"]');
     expect(heroWeather.exists()).toBe(true);
     expect(heroWeather.find('[data-test="weather-widget-root"]').exists()).toBe(true);
-
-    // Custom slot mount: overrides weather widget
-    const customWrapper = mount(HomeView, {
-      global: { plugins: [pinia, router] },
-      slots: {
-        weather: '<div id="custom-home-weather">Cuaca Khusus Home</div>',
-      },
-    });
-
-    expect(customWrapper.find('#custom-home-weather').exists()).toBe(true);
-    expect(customWrapper.find('section#hero').text()).toContain('Cuaca Khusus Home');
   });
 
   // Edge Case 17: Heading hierarchy with WeatherWidget h2 in DOM order

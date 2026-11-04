@@ -104,7 +104,7 @@ describe('WeatherWidget.vue & Sub-Components (TDD & Accessibility)', () => {
       });
 
       // Header and badge
-      const title = wrapper.find('h2#weather-widget-title');
+      const title = wrapper.find('[data-test="weather-current-title"]');
       expect(title.exists()).toBe(true);
       expect(title.text()).toBe('Perkiraan Cuaca Manggar');
       expect(wrapper.text()).toContain('SAAT INI');
@@ -127,7 +127,7 @@ describe('WeatherWidget.vue & Sub-Components (TDD & Accessibility)', () => {
       expect(windDirPill.text()).toContain('Arah angin: Barat Laut');
     });
 
-    it('renders stale badge when stale prop is true', () => {
+    it('renders stale badge with "Data lama" and aria-hidden="true" when stale prop is true', () => {
       const wrapper = mount(WeatherCurrentCard, {
         props: {
           entry: mockWeatherData.forecast[0]!,
@@ -135,7 +135,10 @@ describe('WeatherWidget.vue & Sub-Components (TDD & Accessibility)', () => {
         },
       });
 
-      expect(wrapper.find('[data-test="stale-badge"]').exists()).toBe(true);
+      const badge = wrapper.find('[data-test="stale-badge"]');
+      expect(badge.exists()).toBe(true);
+      expect(badge.text()).toContain('Data lama');
+      expect(badge.attributes('aria-hidden')).toBe('true');
     });
   });
 
@@ -238,9 +241,7 @@ describe('WeatherWidget.vue & Sub-Components (TDD & Accessibility)', () => {
       });
 
       await vi.waitUntil(() => wrapper.find('[data-test="weather-stale-banner"]').exists());
-      expect(wrapper.find('[data-test="weather-stale-banner"]').text()).toContain(
-        'mode luring',
-      );
+      expect(wrapper.find('[data-test="weather-stale-banner"]').text()).toContain('data cache');
     });
 
     it('assembles responsive layout strictly matching Pic 1 (mobile) and Pic 2 (desktop)', async () => {
@@ -271,9 +272,12 @@ describe('WeatherWidget.vue & Sub-Components (TDD & Accessibility)', () => {
       // Main card exists and has heading
       const currentCard = wrapper.find('[data-test="weather-current-card"]');
       expect(currentCard.exists()).toBe(true);
-      expect(currentCard.find('h2#weather-widget-title').text()).toContain(
+      expect(currentCard.find('[data-test="weather-current-title"]').text()).toContain(
         'Perkiraan Cuaca Manggar',
       );
+      // Persistent widget h2 exists exactly once across the entire widget
+      expect(wrapper.findAll('#weather-widget-title').length).toBe(1);
+      expect(wrapper.find('#weather-widget-title').text()).toBe('Perkiraan Cuaca Manggar');
 
       // Upcoming cards container: 2 cols side-by-side on mobile, 6 cols on desktop
       const upcomingGrid = wrapper.find('[data-test="weather-upcoming-grid"]');
@@ -388,7 +392,9 @@ describe('WeatherWidget.vue & Sub-Components (TDD & Accessibility)', () => {
         },
       });
 
-      expect(wrapper.find('h2#weather-widget-title').text()).toBe('Perkiraan Cuaca Manggar');
+      expect(wrapper.find('[data-test="weather-current-title"]').text()).toBe(
+        'Perkiraan Cuaca Manggar',
+      );
       expect(wrapper.text()).toContain('Data suhu tidak tersedia');
       expect(wrapper.text()).toContain('Kelembapan udara tidak tersedia');
       expect(wrapper.text()).toContain('Kecepatan angin tidak tersedia');
@@ -400,7 +406,7 @@ describe('WeatherWidget.vue & Sub-Components (TDD & Accessibility)', () => {
     });
 
     it('safely handles NaN and non-finite metrics in WeatherCurrentCard and WeatherUpcomingCard without rendering -°C', () => {
-      const entryWithNaN: typeof mockWeatherData.forecast[0] = {
+      const entryWithNaN: (typeof mockWeatherData.forecast)[0] = {
         datetime: '2026-10-30 12:00:00',
         temperatureCelsius: NaN,
         humidityPercent: NaN,
