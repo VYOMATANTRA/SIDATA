@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { RT_LEADERS_DATA } from '../../prisma/rtLeadersData.js';
+import { RT_LEADERS_DATA } from '../data/rtLeadersData.js';
 import {
   seedRtLeaders,
   seededKetuaRtPointId,

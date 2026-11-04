@@ -10,13 +10,13 @@ import {
 } from './audit.service.js';
 import { executeLockedTransaction, withChangeResult } from '../utils/lockTransactionCache.js';
 import { hasFieldChanged } from '../utils/comparator.js';
-import { RT_LEADERS_DATA } from '../../prisma/rtLeadersData.js';
+import { RT_LEADERS_DATA } from '../data/rtLeadersData.js';
 import {
   isSeededKetuaRtPointId,
   parseSeedPointTombstones,
   RT_SEED_POINT_TOMBSTONES_KEY,
   serializeSeedPointTombstones,
-} from '../../prisma/seedRtLeaders.js';
+} from '../utils/rtSeedPoints.js';
 
 /** system_settings key: seed sets true; cleared only when no placeholder leaders remain. */
 export const RT_LEADERS_SAMPLE_ROSTER_KEY = 'maps.rt_leaders_sample_roster';
