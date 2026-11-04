@@ -19,8 +19,9 @@ const lastError = ref<string | null>(null);
 
 const isLoadingState = computed(
   () =>
+    !weatherStore.isLoaded &&
     !isRetrying.value &&
-    (weatherStore.isLoading || (props.autoFetch && !weatherStore.isLoaded)) &&
+    (weatherStore.isLoading || props.autoFetch) &&
     !weatherStore.error,
 );
 

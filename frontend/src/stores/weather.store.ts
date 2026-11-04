@@ -89,12 +89,15 @@ export function parseForecastDatetime(datetime: string): number {
   return isNaN(fallback) ? 0 : fallback;
 }
 
+export const MAX_FORECAST_SLOT_AGE_MS = 3 * 60 * 60 * 1000; // 3 hours (one forecast slot duration)
+
 /**
  * Determines the active or nearest forecast slot index from a chronological list.
  */
 export function findCurrentForecastIndex(
   forecast: WeatherForecastEntry[],
   now: Date = new Date(),
+  maxSlotAgeMs: number = MAX_FORECAST_SLOT_AGE_MS,
 ): number {
   if (!forecast || forecast.length === 0) return -1;
   const nowMs = now.getTime();
@@ -109,8 +112,12 @@ export function findCurrentForecastIndex(
     }
   }
 
-  // If at least one entry has started, return the latest active entry
+  // If at least one entry has started, verify it has not exceeded maximum slot age
   if (activeIndex !== -1) {
+    const activeEntryMs = parseForecastDatetime(forecast[activeIndex]!.datetime);
+    if (nowMs - activeEntryMs > maxSlotAgeMs) {
+      return -1;
+    }
     return activeIndex;
   }
 
@@ -231,7 +238,9 @@ export const useWeatherStore = defineStore('weather', () => {
     }
 
     isLoading.value = true;
-    error.value = null;
+    if (!isLoaded.value) {
+      error.value = null;
+    }
 
     const currentGeneration = ++fetchGeneration;
 
@@ -308,6 +317,7 @@ export const useWeatherStore = defineStore('weather', () => {
         };
 
         lastFetchedAt.value = new Date();
+        error.value = null;
         isLoaded.value = true;
         return data.value;
       } catch (err) {

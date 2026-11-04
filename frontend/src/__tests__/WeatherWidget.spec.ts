@@ -47,6 +47,7 @@ describe('WeatherWidget.vue & Sub-Components (TDD & Accessibility)', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.restoreAllMocks();
+    vi.setSystemTime(new Date('2026-10-30T12:00:00+08:00'));
   });
 
   afterEach(() => {
@@ -276,6 +277,33 @@ describe('WeatherWidget.vue & Sub-Components (TDD & Accessibility)', () => {
 
       // Card remains visible
       expect(wrapper.find('[data-test="weather-current-card"]').exists()).toBe(true);
+    });
+
+    it('does not render loading skeleton during background refresh on a loaded widget', async () => {
+      globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockWeatherData,
+      } as Response);
+
+      const pinia = createPinia();
+      setActivePinia(pinia);
+      const store = useWeatherStore(pinia);
+
+      const wrapper = mount(WeatherWidget, {
+        global: { plugins: [pinia] },
+      });
+
+      await vi.waitUntil(() => wrapper.find('[data-test="weather-populated-grid"]').exists());
+
+      // Simulate background refresh in-flight
+      store.isLoading = true;
+      await wrapper.vm.$nextTick();
+
+      // Loading skeleton must NOT appear because data is already loaded
+      expect(wrapper.find('[data-test="weather-loading-skeleton"]').exists()).toBe(false);
+      // Real cards must remain rendered without layout jump
+      expect(wrapper.find('[data-test="weather-populated-grid"]').exists()).toBe(true);
     });
 
     it('starts live clock on mount and stops it on unmount', () => {

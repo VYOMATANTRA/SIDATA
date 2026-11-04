@@ -12,6 +12,7 @@ describe('Weather Pinia Store & Utilities (weather.store.ts)', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.restoreAllMocks();
+    vi.setSystemTime(new Date('2026-10-30T12:00:00+08:00'));
   });
 
   afterEach(() => {
@@ -120,10 +121,16 @@ describe('Weather Pinia Store & Utilities (weather.store.ts)', () => {
       expect(findCurrentForecastIndex(sampleForecast, secondSlotTime)).toBe(1);
     });
 
-    it('returns last slot index when current time is past all slots', () => {
-      const lateTime = new Date('2026-10-30T22:00:00+08:00');
+    it('returns last slot index when current time is past all slots but within 3 hours', () => {
+      const lateTime = new Date('2026-10-30T20:00:00+08:00'); // 2 hours after 18:00
       const idx = findCurrentForecastIndex(sampleForecast, lateTime);
       expect(idx).toBe(sampleForecast.length - 1);
+    });
+
+    it('returns -1 when current time is more than 3 hours past the last slot (expired)', () => {
+      const expiredTime = new Date('2026-10-30T22:00:00+08:00'); // 4 hours after 18:00
+      const idx = findCurrentForecastIndex(sampleForecast, expiredTime);
+      expect(idx).toBe(-1);
     });
 
     it('skips malformed datetime rows at beginning and selects the first valid future slot', () => {
