@@ -725,7 +725,11 @@ export const getIndicatorById = async (
     if (useSharedCache) {
       const idCache = indicatorByIdCache.get(indicatorCacheKey('id', lookup));
       const slugCache = indicatorByIdCache.get(indicatorCacheKey('slug', lookup));
-      const lkg = idCache?.getLastKnownGood(null) ?? slugCache?.getLastKnownGood(null) ?? null;
+      const lkgMaxAgeMs = 5 * 60 * 1000;
+      const lkg =
+        idCache?.getLastKnownGood(null, lkgMaxAgeMs) ??
+        slugCache?.getLastKnownGood(null, lkgMaxAgeMs) ??
+        null;
       if (lkg) return lkg;
     }
     throw err;

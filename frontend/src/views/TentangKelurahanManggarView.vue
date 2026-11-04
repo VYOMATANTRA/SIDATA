@@ -299,7 +299,7 @@ const wilayahStats = computed<StatItem[]>(() => [
             <div class="bg-brand-cyan h-40 w-40 overflow-hidden rounded-full sm:h-48 sm:w-48">
               <img
                 :src="lurahPhoto"
-                alt=""
+                alt="Foto Lurah Kelurahan Manggar"
                 class="h-40 w-40 object-cover object-top sm:h-48 sm:w-48"
               />
             </div>

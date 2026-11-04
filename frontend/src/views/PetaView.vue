@@ -112,16 +112,29 @@ watch(visiblePoints, (points) => {
   }
 });
 
+const prevPageBtn = ref<HTMLButtonElement | null>(null);
+const nextPageBtn = ref<HTMLButtonElement | null>(null);
+const pagerHadFocus = ref(false);
+
+function onPagerFocusIn() {
+  pagerHadFocus.value = true;
+}
+
+function onPagerFocusOut(event: FocusEvent) {
+  const next = event.relatedTarget;
+  if (next === prevPageBtn.value || next === nextPageBtn.value) return;
+  pagerHadFocus.value = false;
+}
+
 watch(totalPages, async (pages) => {
   if (currentPage.value > pages) currentPage.value = pages;
   await nextTick();
-  const activeEl = document.activeElement as HTMLButtonElement | null;
-  if (!activeEl?.disabled) return;
-  if (!activeEl.matches('[data-test="peta-next-page"], [data-test="peta-previous-page"]')) return;
-  focusEnabledPager(
-    document.querySelector<HTMLButtonElement>('[data-test="peta-next-page"]'),
-    document.querySelector<HTMLButtonElement>('[data-test="peta-previous-page"]'),
-  );
+  if (!pagerHadFocus.value) return;
+  const activeEl = document.activeElement;
+  const onPager = activeEl === prevPageBtn.value || activeEl === nextPageBtn.value;
+  if (onPager && !(activeEl as HTMLButtonElement).disabled) return;
+  if (!onPager && activeEl !== document.body) return;
+  focusEnabledPager(nextPageBtn.value, prevPageBtn.value);
 });
 
 function formatDistance(km: number): string {
@@ -140,32 +153,26 @@ function focusEnabledPager(preferred: HTMLButtonElement | null, other: HTMLButto
   else document.getElementById('peta-search')?.focus();
 }
 
-async function goToPreviousPage() {
+function shouldHandoffPager(event: Event): boolean {
+  const activeEl = document.activeElement as HTMLButtonElement | null;
+  if (activeEl?.disabled) return true;
+  const keyboard = event instanceof MouseEvent && event.detail === 0;
+  return keyboard && paginationFocusLost(activeEl);
+}
+
+async function goToPreviousPage(event: Event) {
   if (currentPage.value > 1) {
     currentPage.value -= 1;
-    // WCAG 2.4.3: If moving to page 1 disables "Sebelumnya", hand focus to "Selanjutnya"
-    // so focus is never lost to document body. Some browsers move focus to <body> first.
     await nextTick();
-    if (paginationFocusLost(document.activeElement)) {
-      focusEnabledPager(
-        document.querySelector<HTMLButtonElement>('[data-test="peta-next-page"]'),
-        document.querySelector<HTMLButtonElement>('[data-test="peta-previous-page"]'),
-      );
-    }
+    if (shouldHandoffPager(event)) focusEnabledPager(nextPageBtn.value, prevPageBtn.value);
   }
 }
 
-async function goToNextPage() {
+async function goToNextPage(event: Event) {
   if (currentPage.value < totalPages.value) {
     currentPage.value += 1;
-    // WCAG 2.4.3: If moving to the last page disables "Selanjutnya", hand focus to "Sebelumnya".
     await nextTick();
-    if (paginationFocusLost(document.activeElement)) {
-      focusEnabledPager(
-        document.querySelector<HTMLButtonElement>('[data-test="peta-previous-page"]'),
-        document.querySelector<HTMLButtonElement>('[data-test="peta-next-page"]'),
-      );
-    }
+    if (shouldHandoffPager(event)) focusEnabledPager(prevPageBtn.value, nextPageBtn.value);
   }
 }
 
@@ -399,11 +406,14 @@ function requestUserLocation() {
               </p>
               <nav aria-label="Halaman hasil peta" class="flex items-center gap-2">
                 <button
+                  ref="prevPageBtn"
                   type="button"
                   class="rounded-btn text-brand-navy focus-visible:outline-brand-navy min-h-11 min-w-11 border border-gray-300 px-3 text-sm font-medium hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:hover:bg-gray-50"
                   aria-label="Halaman sebelumnya"
                   data-test="peta-previous-page"
                   :disabled="currentPage === 1"
+                  @focusin="onPagerFocusIn"
+                  @focusout="onPagerFocusOut"
                   @click="goToPreviousPage"
                 >
                   Sebelumnya
@@ -412,11 +422,14 @@ function requestUserLocation() {
                   >{{ currentPage }} / {{ totalPages }}</span
                 >
                 <button
+                  ref="nextPageBtn"
                   type="button"
                   class="rounded-btn text-brand-navy focus-visible:outline-brand-navy min-h-11 min-w-11 border border-gray-300 px-3 text-sm font-medium hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:hover:bg-gray-50"
                   aria-label="Halaman selanjutnya"
                   data-test="peta-next-page"
                   :disabled="currentPage === totalPages"
+                  @focusin="onPagerFocusIn"
+                  @focusout="onPagerFocusOut"
                   @click="goToNextPage"
                 >
                   Selanjutnya

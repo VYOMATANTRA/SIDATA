@@ -30,6 +30,7 @@ export class VersionedTtlCache<T> implements CacheInvalidator {
   private entry: CacheEntry<T> | null = null;
   private lastKnownGood: T | null = null;
   private hasLastKnownGood = false;
+  private lastKnownGoodAt = 0;
   private version = 0;
   private inFlightPromise: Promise<T> | null = null;
 
@@ -79,11 +80,15 @@ export class VersionedTtlCache<T> implements CacheInvalidator {
    * Retrieves the last-known-good cached data (or a provided fallback) without querying DB.
    * Uses explicit existence flag to safely return null, false, 0, or empty string if cached.
    */
-  getLastKnownGood(fallback: T): T {
-    if (this.hasLastKnownGood) {
-      return structuredClone(this.lastKnownGood as T);
+  getLastKnownGood(fallback: T, maxAgeMs?: number): T {
+    if (!this.hasLastKnownGood) return structuredClone(fallback);
+    if (
+      maxAgeMs !== undefined &&
+      (this.lastKnownGoodAt === 0 || Date.now() - this.lastKnownGoodAt > maxAgeMs)
+    ) {
+      return structuredClone(fallback);
     }
-    return structuredClone(fallback);
+    return structuredClone(this.lastKnownGood as T);
   }
 
   /**
@@ -111,6 +116,7 @@ export class VersionedTtlCache<T> implements CacheInvalidator {
     };
     this.lastKnownGood = cloned;
     this.hasLastKnownGood = true;
+    this.lastKnownGoodAt = Date.now();
     return true;
   }
 
@@ -132,6 +138,7 @@ export class VersionedTtlCache<T> implements CacheInvalidator {
     };
     this.lastKnownGood = cloned;
     this.hasLastKnownGood = true;
+    this.lastKnownGoodAt = Date.now();
   }
 
   /**
@@ -145,6 +152,7 @@ export class VersionedTtlCache<T> implements CacheInvalidator {
     if (!options?.preserveLastKnownGood) {
       this.lastKnownGood = null;
       this.hasLastKnownGood = false;
+      this.lastKnownGoodAt = 0;
     }
   }
 
