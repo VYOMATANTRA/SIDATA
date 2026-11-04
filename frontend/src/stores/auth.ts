@@ -258,6 +258,12 @@ export const useAuthStore = defineStore('auth', () => {
         })
       }
 
+      // A 401 from /api/auth/logout means the session is already considered unauthenticated/expired
+      // (e.g. an auth gateway or expired cookie rejecting the request after the session ended),
+      // so clearing local state completes the sign-out rather than trapping the user in a dead
+      // local session. Any other non-OK status (such as a 403 CSRF failure that still failed after
+      // the retry above, or a 5xx server error) means the server did not revoke the active session,
+      // so keep local state intact and surface the error.
       if (!res.ok && res.status !== 401) {
         return {
           success: false,
