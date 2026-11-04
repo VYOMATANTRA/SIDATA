@@ -705,7 +705,8 @@ export const getIndicatorById = async (
   if (result === null && useSharedCache) {
     // Drop the probe slot instead of retaining the miss in the shared LRU.
     dropIndicatorCacheEntry('id', lookup);
-    rememberMissing(lookup);
+    // A create or slug rename that committed during this read must not be hidden for the miss TTL.
+    if (indicatorMutationEpoch === epochAtStart) rememberMissing(lookup);
     return null;
   }
   if (result && useSharedCache) {
@@ -859,6 +860,8 @@ export const updateIndicator = async (
         slugCache.invalidate();
         slugCache.setCommitted(committed);
         forgetMissing(committed.slug);
+        // dropIndicatorCacheEntry forgets the old pair; restore id → new slug or later invalidation misses it.
+        rememberIndicatorIdentity(committed.id, committed.slug);
       },
       execute: async (tx) => {
         const existing = await tx.indicator.findUnique({
