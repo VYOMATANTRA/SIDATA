@@ -31,6 +31,12 @@ export interface HugeQuoteProps {
   align?: 'left' | 'center';
   /** Optional max width class for the quote description (default: 'max-w-2xl') */
   maxWidthClass?: string;
+  /** Optional container element ID */
+  id?: string;
+  /** Optional title heading ID (e.g. for aria-labelledby binding) */
+  titleId?: string;
+  /** Optional aria-labelledby attribute for the section landmark */
+  ariaLabelledby?: string;
 }
 
 const props = withDefaults(defineProps<HugeQuoteProps>(), {
@@ -100,15 +106,21 @@ const containerVariantClasses = computed(() => {
 
 <template>
   <section
-    class="relative w-full max-w-4xl overflow-hidden rounded-2xl p-6 transition-all sm:p-10 md:p-12"
-    :class="containerVariantClasses"
+    :id="id"
+    class="relative w-full max-w-5xl overflow-hidden rounded-2xl transition-all"
+    :class="[
+      containerVariantClasses,
+      variant === 'transparent' ? 'p-0' : 'p-6 pb-0 sm:p-10 sm:pb-0 md:p-12 md:pb-0',
+    ]"
     data-test="huge-quote"
-    :aria-label="title"
+    :aria-label="ariaLabelledby ? undefined : title"
+    :aria-labelledby="ariaLabelledby"
   >
     <!-- Top Area: Quote Heading & Paragraph using SectionTextArea -->
     <div class="relative z-10 w-full" data-test="quote-header">
       <SectionTextArea
         :title="title"
+        :title-id="titleId"
         :description="effectiveQuote"
         :eyebrow="eyebrow"
         :heading-tag="headingTag"
@@ -122,6 +134,11 @@ const containerVariantClasses = computed(() => {
         <template v-if="$slots.title" #title>
           <slot name="title" />
         </template>
+        <template v-else #title>
+          <span class="text-2xl font-bold tracking-tight sm:text-3xl md:text-4xl">
+            {{ title }}
+          </span>
+        </template>
         <slot name="quote">
           <slot name="description">
             <slot>{{ effectiveQuote }}</slot>
@@ -132,10 +149,13 @@ const containerVariantClasses = computed(() => {
 
     <!-- Bottom Area: Split layout with Author info (left) and Portrait/Placeholder (right) -->
     <div
-      class="relative mt-8 flex min-h-[220px] flex-col-reverse items-end justify-between gap-6 sm:mt-12 sm:flex-row sm:gap-8"
+      class="relative mt-6 flex min-h-[280px] items-end justify-between sm:mt-10 sm:min-h-[340px] md:mt-12 md:min-h-[400px] lg:min-h-[460px]"
     >
       <!-- Bottom Left: Author Name & Position/Role using SectionTextArea -->
-      <div class="relative z-10 w-full pb-1 sm:w-auto sm:pb-3" data-test="author-details">
+      <div
+        class="relative z-10 w-auto pb-6 sm:pb-8 md:pb-10"
+        data-test="author-details"
+      >
         <SectionTextArea
           :title="authorName"
           :description="effectiveAuthorPosition"
@@ -147,15 +167,29 @@ const containerVariantClasses = computed(() => {
           <template v-if="$slots.authorName" #title>
             <slot name="authorName">{{ authorName }}</slot>
           </template>
-          <slot name="authorPosition">
-            <slot name="authorRole">{{ effectiveAuthorPosition }}</slot>
-          </slot>
+          <template v-else #title>
+            <span
+              class="whitespace-nowrap text-lg font-bold tracking-tight sm:text-2xl md:text-3xl"
+            >
+              {{ authorName }}
+            </span>
+          </template>
+          <template v-if="$slots.authorPosition || $slots.authorRole" #default>
+            <slot name="authorPosition">
+              <slot name="authorRole">{{ effectiveAuthorPosition }}</slot>
+            </slot>
+          </template>
+          <template v-else #default>
+            <span class="text-base leading-relaxed text-slate-200/95">
+              {{ effectiveAuthorPosition }}
+            </span>
+          </template>
         </SectionTextArea>
       </div>
 
       <!-- Bottom Right: Dynamic Portrait Photo or Elegant Silhouette Placeholder -->
       <div
-        class="relative z-0 flex w-full shrink-0 items-end justify-center sm:w-64 sm:justify-end md:w-72"
+        class="absolute -right-2 bottom-0 z-0 flex items-end justify-end pointer-events-none sm:pointer-events-auto sm:static sm:right-auto sm:bottom-auto sm:shrink-0"
         data-test="portrait-container"
       >
         <slot name="image">
@@ -164,7 +198,7 @@ const containerVariantClasses = computed(() => {
             v-if="imageSrc && !imageError"
             :src="imageSrc"
             :alt="computedImageAlt"
-            class="h-auto max-h-[340px] w-auto max-w-full object-contain object-bottom drop-shadow-xl transition-opacity duration-300 sm:max-h-[380px]"
+            class="h-auto max-h-[330px] w-auto max-w-[78vw] object-contain object-bottom drop-shadow-2xl transition-all duration-300 sm:max-h-[400px] sm:max-w-[340px] md:max-h-[480px] md:max-w-[420px] lg:max-h-[540px] lg:max-w-[460px] xl:max-h-[580px] xl:max-w-[500px]"
             data-test="quote-image"
             @error="handleImageError"
           />
@@ -172,7 +206,7 @@ const containerVariantClasses = computed(() => {
           <!-- Placeholder (when imageSrc is omitted or fails to load) -->
           <div
             v-else
-            class="flex h-64 w-52 flex-col items-center justify-center rounded-2xl border-2 border-dashed p-4 text-center transition-colors sm:h-72 sm:w-60"
+            class="mb-6 mr-4 flex h-56 w-44 flex-col items-center justify-center rounded-2xl border-2 border-dashed p-4 text-center transition-colors sm:mb-8 sm:mr-0 sm:h-72 sm:w-60 md:mb-10"
             :class="[
               variant === 'light'
                 ? 'border-slate-300 bg-slate-100/80 text-slate-600'

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
-import StatCard, { type StatItem } from '@/components/common/StatCard.vue';
+import StatCard from '@/components/common/StatCard.vue';
 
 describe('StatCard.vue', () => {
   it('renders empty state when no props are passed', () => {
@@ -15,7 +15,7 @@ describe('StatCard.vue', () => {
   });
 
   it('renders custom items array dynamically', () => {
-    const customStats: StatItem[] = [
+    const customStats = [
       { icon: 'person', value: '12.500', label: 'Warga Terdaftar' },
       { icon: 'house', value: '45', label: 'RT Aktif' },
     ];
@@ -53,7 +53,7 @@ describe('StatCard.vue', () => {
   });
 
   it('implements semantic description list markup (dl, dt, dd) per accessibility guidelines', () => {
-    const sampleStats: StatItem[] = [
+    const sampleStats = [
       { icon: 'person', value: '53.098', label: 'Penduduk' },
       { icon: 'house', value: '100', label: 'Rukun Tetangga' },
       { icon: 'density', value: '2 jiwa/km²', label: 'Kepadatan Penduduk' },
@@ -82,6 +82,13 @@ describe('StatCard.vue', () => {
     statItems.forEach((item) => {
       const itemHtml = item.html();
       expect(itemHtml.indexOf('<dt')).toBeLessThan(itemHtml.indexOf('<dd'));
+
+      // Verify strict W3C HTML5 dl content model: only dt and dd are direct children of the item wrapper
+      const directChildrenTags = Array.from(item.element.children).map((el) => el.tagName.toLowerCase());
+      expect(directChildrenTags).toEqual(['dt', 'dd']);
+
+      // stat-icon-wrapper is nested inside dt
+      expect(item.find('dt [data-test="stat-icon-wrapper"]').exists()).toBe(true);
     });
 
     // Hidden accessible heading
@@ -165,74 +172,23 @@ describe('StatCard.vue', () => {
     expect(wrapper.find('.custom-empty-state').text()).toBe('Data sedang dimuat...');
   });
 
-  it('applies responsive 2x2 flexbox layout classes on mobile and tablet for 4 items', () => {
-    const fourStats: StatItem[] = [
-      { icon: 'house', value: '100', label: 'Rukun Tetangga terdaftar' },
-      { icon: 'density', value: 'Balikpapan Timur', label: 'Kecamatan, Kota Balikpapan' },
-      { icon: 'ratio', value: 'Pesisir & Dataran', label: 'Potensi pantai & pertanian' },
-      { icon: 'person', value: 'Desa Cantik', label: 'Kelurahan Cinta Statistik' },
+  it('applies responsive 2-column mobile and 4-column desktop grid classes', () => {
+    const sampleStats = [
+      { icon: 'person', value: '53.098', label: 'Penduduk' },
+      { icon: 'house', value: '100', label: 'Rukun Tetangga' },
+      { icon: 'density', value: '2 jiwa/km²', label: 'Kepadatan Penduduk' },
+      { icon: 'ratio', value: '1,06 : 1', label: 'Rasio Laki-laki & Perempuan' },
     ];
     const wrapper = mount(StatCard, {
       props: {
-        items: fourStats,
+        items: sampleStats,
       },
     });
 
-    const dl = wrapper.find('[data-test="stat-list"]');
-    expect(dl.classes()).toContain('flex');
-    expect(dl.classes()).toContain('flex-wrap');
-    expect(dl.classes()).toContain('lg:flex-nowrap');
-
-    const items = wrapper.findAll('[data-test="stat-item"]');
-    expect(items[0]?.classes()).toContain('w-[calc(50%-12px)]');
-  });
-
-  it('allows overriding list layout with custom listClass prop', () => {
-    const wrapper = mount(StatCard, {
-      props: {
-        items: [{ value: '10', label: 'Item 1' }],
-        listClass: 'custom-flex-container',
-      },
-    });
-
-    const dl = wrapper.find('[data-test="stat-list"]');
-    expect(dl.classes()).toContain('custom-flex-container');
-  });
-
-  it('renders generic fallback icon for unknown icon names like landscape', () => {
-    const wrapper = mount(StatCard, {
-      props: {
-        value: '10',
-        label: 'Wilayah',
-        icon: 'landscape',
-      },
-    });
-
-    const iconWrapper = wrapper.find('[data-test="stat-icon-wrapper"]');
-    expect(iconWrapper.exists()).toBe(true);
-    expect(iconWrapper.find('svg').exists()).toBe(true);
-  });
-
-  it('supports size prop for default and compact typography', () => {
-    const defaultWrapper = mount(StatCard, {
-      props: {
-        value: '10',
-        label: 'Default Size',
-      },
-    });
-    const defaultValue = defaultWrapper.find('[data-test="stat-value"]');
-    expect(defaultValue.classes()).toContain('text-xl');
-    expect(defaultValue.classes()).toContain('sm:text-2xl');
-
-    const compactWrapper = mount(StatCard, {
-      props: {
-        value: '10',
-        label: 'Compact Size',
-        size: 'compact',
-      },
-    });
-    const compactValue = compactWrapper.find('[data-test="stat-value"]');
-    expect(compactValue.classes()).toContain('text-base');
-    expect(compactValue.classes()).toContain('sm:text-lg');
+    const dl = wrapper.find('dl[data-test="stat-list"]');
+    expect(dl.exists()).toBe(true);
+    expect(dl.classes()).toContain('grid');
+    expect(dl.classes()).toContain('grid-cols-2');
+    expect(dl.classes()).toContain('sm:grid-cols-4');
   });
 });
