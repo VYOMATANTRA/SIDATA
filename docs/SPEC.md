@@ -78,7 +78,7 @@ Notes:
   states: Sosial Kemasyarakatan is the last, unnumbered chapter of Pemerintahan & Kelembagaan, and Persampahan &
   Bank Sampah Unit starts with Bank Sampah Unit, Program Eco Boba and Booklet Eco Boba chapters.
   Seeding never overwrites titles or ordering an editor has since changed.
-- The Ketua RT roster the repository ships is **synthetic only** (`backend/prisma/rtLeadersData.ts`):
+- The Ketua RT roster the repository ships is **synthetic only** (`backend/src/data/rtLeadersData.ts`):
   placeholder names, placeholder phone numbers, and generated coordinates. Real Ketua RT names, phone
   numbers, and home locations are personal data and must never be committed. The operational roster is
   loaded from a non-committed source or an admin import at deploy time — see §10 for the open

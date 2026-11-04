@@ -89,7 +89,7 @@ export const AUDIT_ACTIONS = {
   AUDIT_PRUNED: defineAction('audit.pruned', 'info'),
   // One-off ops script: cleanup-legacy-sample-rt-leaders.ts --force.
   // Metadata holds counts only — never names or phone numbers.
-  MAINTENANCE_LEGACY_RT_CLEANUP: defineAction('maintenance.legacy_rt_cleanup', 'info'),
+  MAINTENANCE_LEGACY_RT_CLEANUP: defineAction('maintenance.legacy_rt_cleanup', 'warning'),
 } as const satisfies Record<string, AuditActionDef>;
 
 export interface AuditActor {

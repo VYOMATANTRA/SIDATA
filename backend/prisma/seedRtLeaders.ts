@@ -1,34 +1,13 @@
-import { RT_LEADERS_DATA, type RtSeedRecord } from './rtLeadersData.js';
+import { RT_LEADERS_DATA, type RtSeedRecord } from '../src/data/rtLeadersData.js';
+import { seededKetuaRtPointId } from '../src/utils/rtSeedPoints.js';
 
-/** system_settings key: JSON array of seeded Ketua RT point ids an editor deleted. */
-export const RT_SEED_POINT_TOMBSTONES_KEY = 'maps.rt_seed_point_tombstones';
-
-export function parseSeedPointTombstones(raw: string | null | undefined): Set<string> {
-  if (typeof raw !== 'string' || raw.trim() === '') return new Set();
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return new Set();
-    return new Set(parsed.filter((id): id is string => typeof id === 'string' && id.trim() !== ''));
-  } catch {
-    return new Set();
-  }
-}
-
-export function serializeSeedPointTombstones(ids: Iterable<string>): string {
-  return JSON.stringify([...new Set(ids)].sort());
-}
-
-/** Deterministic UUID used by the seed for each Ketua RT spatial point. */
-export function seededKetuaRtPointId(rtNumber: number): string {
-  return `00000000-0000-0000-0001-${String(rtNumber).padStart(12, '0')}`;
-}
-
-export function isSeededKetuaRtPointId(
-  id: string,
-  data: RtSeedRecord[] = RT_LEADERS_DATA,
-): boolean {
-  return data.some((rt) => seededKetuaRtPointId(rt.rtNumber) === id);
-}
+export {
+  RT_SEED_POINT_TOMBSTONES_KEY,
+  isSeededKetuaRtPointId,
+  parseSeedPointTombstones,
+  seededKetuaRtPointId,
+  serializeSeedPointTombstones,
+} from '../src/utils/rtSeedPoints.js';
 
 /**
  * The subset of the Prisma client the RT-leader seeding needs. Narrowing it keeps
