@@ -10,6 +10,7 @@ import {
   indicatorByIdCache,
   indicatorCacheKey,
   normalizeIndicatorLookup,
+  INDICATOR_LKG_MAX_AGE_MS,
   IndicatorServiceError,
 } from '../services/indicators.service.js';
 import prisma from '../utils/prisma.js';
@@ -975,6 +976,23 @@ describe('indicators.service getIndicatorById', () => {
     };
     const result = await getIndicatorById('ind-1');
     assert.equal(result?.label, 'Cached');
+  });
+
+  it('rethrows DB error when last-known-good is older than INDICATOR_LKG_MAX_AGE_MS', async () => {
+    indicatorImpl['findMany'] = async () => [indicatorRow({ label: 'Ancient' })];
+    assert.equal((await getIndicatorById('ind-1'))?.label, 'Ancient');
+
+    const idCache = indicatorByIdCache.get(indicatorCacheKey('id', 'ind-1'));
+    assert.ok(idCache);
+    idCache.invalidate({ preserveLastKnownGood: true });
+    // Simulate entry age older than cap by rewiring lastKnownGoodAt on the private state
+    (idCache as unknown as { lastKnownGoodAt: number }).lastKnownGoodAt =
+      Date.now() - (INDICATOR_LKG_MAX_AGE_MS + 1000);
+
+    indicatorImpl['findMany'] = async () => {
+      throw new Error('db unavailable');
+    };
+    await assert.rejects(() => getIndicatorById('ind-1'), /db unavailable/);
   });
 
   it('slug path also reloads after expiry and falls back to LKG on DB error', async () => {

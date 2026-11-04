@@ -713,6 +713,23 @@ describe('utils/lockTransactionCache boundary conditions & sanity checks', () =>
     assert.deepEqual(cache.getLastKnownGood({ appName: 'Default' }), { appName: 'Default' });
   });
 
+  it('getLastKnownGood respects maxAgeMs and returns fallback when entry exceeds age cap', async () => {
+    const dummyClient = { name: 'db' };
+    const cache = new VersionedTtlCache<{ appName: string }>({
+      ttlMs: 5000,
+      baseClient: dummyClient,
+    });
+    const fallback = { appName: 'Fallback' };
+
+    cache.setCommitted({ appName: 'Fresh' });
+    // Within max age: returns cached LKG
+    assert.deepEqual(cache.getLastKnownGood(fallback, 10_000), { appName: 'Fresh' });
+
+    // Exceeding max age: returns fallback
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.deepEqual(cache.getLastKnownGood(fallback, 1), fallback);
+  });
+
   it('boundary testing: getLastKnownGood correctly preserves null and falsy values without falling back', async () => {
     const dummyClient = { name: 'db' };
     const cache = new VersionedTtlCache<unknown>({
