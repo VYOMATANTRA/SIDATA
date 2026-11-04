@@ -61,7 +61,6 @@ export function normalizeIndicatorSlug(slug: string): string {
   return slug.trim().toLowerCase();
 }
 
-
 /** Only the fields the CMS form can change; the API rejects unknown keys (`.strict()`). */
 export interface IndicatorPatch {
   label?: string;

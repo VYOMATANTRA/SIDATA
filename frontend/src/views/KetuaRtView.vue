@@ -6,13 +6,7 @@ import TentangHeroPanel from '../components/tentang/TentangHeroPanel.vue';
 import TentangNotice from '../components/tentang/TentangNotice.vue';
 import BaseButton from '../components/common/BaseButton.vue';
 import { useRtLeadersStore } from '../stores/rtLeaders.store';
-import {
-  primaryPhone,
-  digitsOnly,
-  isDialable,
-  telHref,
-  whatsappNumber,
-} from '../utils/phone';
+import { primaryPhone, digitsOnly, dialablePhones, telHref, whatsappNumber } from '../utils/phone';
 
 const rtLeadersStore = useRtLeadersStore();
 
@@ -265,7 +259,11 @@ function formatPhone(value: string): string {
             data-test="rt-search"
           />
           <p class="mt-3 text-base text-gray-700" aria-live="polite" data-test="rt-count">
-            {{ rtLeadersStore.hasSettled && !rtLeadersStore.isLoading && !rtLeadersStore.error ? countSummary : '' }}
+            {{
+              rtLeadersStore.hasSettled && !rtLeadersStore.isLoading && !rtLeadersStore.error
+                ? countSummary
+                : ''
+            }}
           </p>
         </div>
 
@@ -369,24 +367,34 @@ function formatPhone(value: string): string {
                     {{ leader.name }}
                   </td>
                   <td class="px-4 py-4 align-top whitespace-nowrap text-gray-800 sm:px-6">
-                    <a
-                      v-if="leader.phoneIsWhatsapp && isDialable(leader.phone)"
-                      :href="`https://wa.me/${whatsappNumber(leader.phone)}`"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="text-brand-navy focus-visible:outline-brand-navy font-medium underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2"
-                    >
-                      {{ formatPhone(leader.phone) }}
-                      <span class="sr-only">(WhatsApp, tautan eksternal, terbuka di tab baru)</span>
-                    </a>
-                    <a
-                      v-else-if="isDialable(leader.phone)"
-                      :href="telHref(leader.phone)"
-                      class="text-brand-navy focus-visible:outline-brand-navy font-medium underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2"
-                    >
-                      {{ formatPhone(leader.phone) }}
-                      <span class="sr-only">(panggilan telepon)</span>
-                    </a>
+                    <template v-if="dialablePhones(leader.phone).length">
+                      <template
+                        v-for="(phone, index) in dialablePhones(leader.phone)"
+                        :key="`${leader.rtNumber}-${index}`"
+                      >
+                        <a
+                          v-if="leader.phoneIsWhatsapp"
+                          :href="`https://wa.me/${whatsappNumber(phone)}`"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="text-brand-navy focus-visible:outline-brand-navy font-medium underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                        >
+                          {{ formatPhone(phone) }}
+                          <span class="sr-only"
+                            >(WhatsApp, tautan eksternal, terbuka di tab baru)</span
+                          >
+                        </a>
+                        <a
+                          v-else
+                          :href="telHref(phone)"
+                          class="text-brand-navy focus-visible:outline-brand-navy font-medium underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                        >
+                          {{ formatPhone(phone) }}
+                          <span class="sr-only">(panggilan telepon)</span>
+                        </a>
+                        <span v-if="index < dialablePhones(leader.phone).length - 1"> / </span>
+                      </template>
+                    </template>
                     <span v-else class="text-gray-700" data-test="rt-phone-placeholder">
                       {{ leader.phone.trim() || '—' }}
                     </span>
@@ -466,7 +474,7 @@ function formatPhone(value: string): string {
                 type="button"
                 :disabled="currentPage === 1"
                 aria-label="Halaman sebelumnya"
-                class="rounded-btn text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 border border-gray-300 px-3 py-2 text-sm font-medium transition-colors duration-150 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] motion-reduce:transform-none disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:hover:bg-gray-50 disabled:active:scale-100"
+                class="rounded-btn text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 border border-gray-300 px-3 py-2 text-sm font-medium transition-colors duration-150 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:hover:bg-gray-50 disabled:active:scale-100 motion-reduce:transform-none"
                 data-test="pagination-prev"
                 @click="goToPage(currentPage - 1)"
               >
@@ -523,7 +531,7 @@ function formatPhone(value: string): string {
                 type="button"
                 :disabled="currentPage === totalPages"
                 aria-label="Halaman selanjutnya"
-                class="rounded-btn text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 border border-gray-300 px-3 py-2 text-sm font-medium transition-colors duration-150 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] motion-reduce:transform-none disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:hover:bg-gray-50 disabled:active:scale-100"
+                class="rounded-btn text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 border border-gray-300 px-3 py-2 text-sm font-medium transition-colors duration-150 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:hover:bg-gray-50 disabled:active:scale-100 motion-reduce:transform-none"
                 data-test="pagination-next"
                 @click="goToPage(currentPage + 1)"
               >
