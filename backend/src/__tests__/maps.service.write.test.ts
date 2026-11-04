@@ -282,7 +282,7 @@ beforeEach(() => {
       return rows.map((row) => {
         const out: AnyRecord = {};
         for (const key of Object.keys(select)) {
-          if (select[key]) out[key] = (row as AnyRecord)[key];
+          if (select[key]) out[key] = (row as unknown as AnyRecord)[key];
         }
         return out;
       });

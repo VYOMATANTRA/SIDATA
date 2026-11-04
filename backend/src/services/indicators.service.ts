@@ -290,6 +290,13 @@ const indicatorListCache = new KeyedLruCache<string, VersionedTtlCache<Indicator
 const indicatorIdToSlug = new Map<string, string>();
 const indicatorSlugToId = new Map<string, string>();
 
+/** Bumped on every committed indicator write so an in-flight read cannot warm stale DTOs. */
+let indicatorMutationEpoch = 0;
+
+function noteIndicatorMutation(): void {
+  indicatorMutationEpoch++;
+}
+
 function rememberIndicatorIdentity(id: string, slug: string): void {
   const nid = normalizeIndicatorLookup(id);
   const nslug = normalizeIndicatorLookup(slug);
@@ -483,6 +490,7 @@ function collectKeysToInvalidate(identifier: string, keys: Set<string>): void {
 }
 
 export const invalidateIndicatorsCache = (id?: string, slug?: string): void => {
+  noteIndicatorMutation();
   const keysToInvalidate = new Set<string>();
 
   if (id) collectKeysToInvalidate(id, keysToInvalidate);
@@ -666,6 +674,9 @@ export const getIndicatorById = async (
 
   // Probe under id:lookup; dual-write under the real id + slug keys after a hit.
   // Single findMany (OR id|slug) so a miss costs one DB round-trip; prefer an id match.
+  // Capture the epoch before the read: warmIndicatorCaches uses setCommitted, which ignores
+  // the probe slot's version, so a PATCH that lands mid-read would otherwise restore stale data.
+  const epochAtStart = indicatorMutationEpoch;
   let result: IndicatorDto | null;
   try {
     result = await getIndicatorEntryCache('id', lookup).getOrFetch(async (db) => {
@@ -698,7 +709,9 @@ export const getIndicatorById = async (
     return null;
   }
   if (result && useSharedCache) {
-    warmIndicatorCaches(result);
+    if (indicatorMutationEpoch === epochAtStart) {
+      warmIndicatorCaches(result);
+    }
     // If lookup was a slug, the probe wrote under id:<slug> — drop that mistaken slot.
     if (normalizeIndicatorLookup(result.id) !== lookup) {
       dropIndicatorCacheEntry('id', lookup);
@@ -739,6 +752,7 @@ export const createIndicator = async (
       lockQuery,
       cache: [listCachesInvalidator],
       onCommit: (committed) => {
+        noteIndicatorMutation();
         warmIndicatorCaches(committed);
       },
       execute: async (tx) => {
@@ -829,6 +843,7 @@ export const updateIndicator = async (
       cache: [listCachesInvalidator],
       onCommit: (committed, didChange) => {
         if (!didChange) return;
+        noteIndicatorMutation();
         // setCommitted() alone doesn't bump the cache version, so a GET whose DB read began
         // before this commit could still pass set()'s version guard and overwrite the fresh
         // row with stale data. Invalidate first to discard any in-flight read.
@@ -1046,6 +1061,7 @@ export const deleteIndicator = async (
       lockQuery,
       cache: [listCachesInvalidator],
       onCommit: (committed) => {
+        noteIndicatorMutation();
         dropIndicatorCacheEntry('id', committed.id);
         dropIndicatorCacheEntry('slug', committed.slug);
         forgetMissing(committed.id);
