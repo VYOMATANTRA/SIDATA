@@ -4,8 +4,8 @@ import { computed } from 'vue';
 export type StatCardIconName = 'person' | 'house' | 'density' | 'ratio' | 'landscape';
 
 export interface StatItem {
-  /** Built-in icon name ('person' | 'house' | 'density' | 'ratio' | 'landscape') or custom string identifier */
-  icon?: StatCardIconName | (string & {});
+  /** Built-in icon name ('person' | 'house' | 'density' | 'ratio' | 'landscape') */
+  icon?: StatCardIconName;
   /** Primary numeric or text figure (e.g. '53.098', 100, '2 jiwa/km²', '1,06 : 1') */
   value: string | number;
   /** Label description below the figure (e.g. 'Penduduk', 'Rukun Tetangga') */
@@ -24,7 +24,7 @@ export interface StatCardProps {
   /** Single item shorthand: description label */
   label?: string;
   /** Single item shorthand: icon name */
-  icon?: StatCardIconName | (string & {});
+  icon?: StatCardIconName;
   /** Visual variant: 'dark' (Figma default charcoal) | 'glass' | 'navy' | 'light' */
   variant?: 'dark' | 'glass' | 'navy' | 'light';
   /** Optional title or section heading for the card landmark */
