@@ -36,7 +36,7 @@ describe('contentBlocks store', () => {
         slug: 'landing-hero',
         title: 'Judul Hero Baru Dinamis',
         body: 'Narasi hero baru dari server.',
-        metadata: { badge: 'Resmi Baru', ctaText: 'Lihat Data', ctaLink: '#potensi' },
+        metadata: { backgroundImage: 'https://example.com/hero.jpg' },
         sortOrder: null,
         updatedAt: '2026-09-17T00:00:00.000Z',
       },

@@ -43,7 +43,7 @@ export const DEFAULT_CONTENT_BLOCKS = [
   {
     slug: 'landing-hero',
     type: 'hero' as const,
-    title: 'Portal Data Terpadu Kelurahan Manggar',
+    title: 'Sistem Informasi Data Terpadu Kelurahan',
     body: 'Pusat integrasi data kependudukan, potensi wilayah, layanan publik, dan pemetaan geospasial Kelurahan Manggar, Balikpapan Timur.',
     metadata: null,
   },
@@ -231,7 +231,7 @@ export const heroMetadataSchema = z
       .nullable()
       .optional(),
   })
-  .strip();
+  .strict();
 
 export const sambutanLurahMetadataSchema = z
   .object({
@@ -636,12 +636,10 @@ export const updateContentBlock = async (
 
   const input = parsed.data;
 
-  let sanitizedMetadata: Record<string, unknown> | null | undefined = undefined;
-  if (input.metadata === null) {
-    sanitizedMetadata = null;
-  } else if (input.metadata !== undefined) {
-    sanitizedMetadata = validateBlockMetadata(normalizedSlug, input.metadata);
-  }
+  const sanitizedMetadata =
+    input.metadata !== undefined && input.metadata !== null
+      ? validateBlockMetadata(normalizedSlug, input.metadata)
+      : input.metadata;
 
   // Sanitize title: whitespace only or empty string becomes null
   const sanitizedTitle =

@@ -25,8 +25,8 @@ import {
   type BatasWilayahItem,
   type SotkMember,
 } from '../content/tentang';
-import heroImage from '@/assets/img/background_laman_depan_kelurahan.png';
-import lurahPhoto from '@/assets/img/lurah_placeholder_sample.png';
+import heroImage from '@/assets/img/background_laman_depan_kelurahan.webp';
+import lurahPhoto from '@/assets/img/lurah_placeholder_sample.webp';
 
 interface PotentialItem {
   title: string;
@@ -355,7 +355,6 @@ const wilayahStats = computed<StatItem[]>(() => [
           <StatCard
             :items="wilayahStats"
             variant="light"
-            size="compact"
             title="Statistik Umum Wilayah"
           />
         </div>

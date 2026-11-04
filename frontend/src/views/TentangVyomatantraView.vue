@@ -8,13 +8,13 @@ import TentangFeatureBand from '../components/tentang/TentangFeatureBand.vue';
 import TentangResourceCard from '../components/tentang/TentangResourceCard.vue';
 import TentangTeamCard from '../components/tentang/TentangTeamCard.vue';
 import TentangLogoRow from '../components/tentang/TentangLogoRow.vue';
-import heroImage from '@/assets/img/background_laman_depan_kelurahan.png';
+import heroImage from '@/assets/img/background_laman_depan_kelurahan.webp';
 import prokerPlaceholder from '@/assets/img/proker-placeholder.svg';
-import logoVyomatantra from '@/assets/img/logo_vyomatantra.png';
-import logoItk from '@/assets/img/logo_itk.png';
-import logoDesaCantik from '@/assets/img/logo_desa_cantik.png';
-import logoSdgsDesa from '@/assets/img/sdgs_desa.png';
-import logoSdgs17 from '@/assets/img/17_kemitraan_pembangunan_desa.png';
+import logoVyomatantra from '@/assets/img/logo_vyomatantra.webp';
+import logoItk from '@/assets/img/logo_itk.webp';
+import logoDesaCantik from '@/assets/img/logo_desa_cantik.webp';
+import logoSdgsDesa from '@/assets/img/sdgs_desa.webp';
+import logoSdgs17 from '@/assets/img/17_kemitraan_pembangunan_desa.webp';
 
 interface InitiativeItem {
   title: string;

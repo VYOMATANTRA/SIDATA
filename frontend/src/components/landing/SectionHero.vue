@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { DEFAULT_HERO_BLOCK, useContentBlocksStore } from '../../stores/contentBlocks.store';
 import { useSettingsStore } from '../../stores/settings.store';
+import defaultHeroBg from '@/assets/img/background_laman_depan_kelurahan.webp';
 
 const contentBlocksStore = useContentBlocksStore();
 const settingsStore = useSettingsStore();
@@ -23,49 +24,109 @@ const bodyText = computed(() => {
   }
   return DEFAULT_HERO_BLOCK.body;
 });
+
+function hasControlCharacters(str: string): boolean {
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    if ((code >= 0 && code <= 31) || code === 127) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Sanitizes and safely encodes an image URL for CSS backgroundImage.
+ * Only permits leading `/` paths and `https://` URLs to prevent CSS breakout and tracking injection.
+ */
+function sanitizeBackgroundImageUrl(url: unknown): string {
+  if (typeof url !== 'string') return defaultHeroBg;
+  const trimmed = url.trim();
+  if (!trimmed) return defaultHeroBg;
+
+  // Disallow line breaks and control characters to prevent header/CSS injection
+  if (hasControlCharacters(trimmed)) return defaultHeroBg;
+
+  // Disallow protocol-relative URLs and backslashes
+  if (trimmed.startsWith('//') || trimmed.includes('\\') || /%5c/i.test(trimmed)) {
+    return defaultHeroBg;
+  }
+
+  // Only allow absolute paths starting with / or secure https: addresses
+  const isPath = trimmed.startsWith('/');
+  const isHttps = trimmed.startsWith('https://');
+  if (!isPath && !isHttps) {
+    return defaultHeroBg;
+  }
+
+  try {
+    if (isHttps) {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol !== 'https:') return defaultHeroBg;
+    } else {
+      const parsed = new URL(trimmed, 'https://placeholder.invalid');
+      if (parsed.origin !== 'https://placeholder.invalid' || parsed.protocol !== 'https:') {
+        return defaultHeroBg;
+      }
+    }
+  } catch {
+    return defaultHeroBg;
+  }
+
+  // Decode first to avoid double-encoding sequences that are already percent-encoded (e.g. %20 -> %2520)
+  let normalized = trimmed;
+  try {
+    normalized = decodeURI(trimmed);
+  } catch {
+    // Keep trimmed if decoding fails due to malformed sequences
+  }
+
+  // Encode URI and escape quotes, parentheses, and backslashes to prevent CSS breakout
+  const escaped = encodeURI(normalized).replace(/['"()\\]/g, (char) => `\\${char}`);
+  return escaped;
+}
+
+const backgroundStyle = computed(() => {
+  const metaBg = hero.value.metadata?.backgroundImage;
+  const image = sanitizeBackgroundImageUrl(metaBg);
+
+  return {
+    backgroundImage: `linear-gradient(rgba(10, 35, 83, 0.84), rgba(0, 27, 72, 0.90)), url('${image}')`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+  };
+});
 </script>
 
 <template>
-  <header
-    class="relative overflow-hidden border-b border-slate-700/60 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 px-4 py-16 text-white sm:px-6 md:py-24 lg:px-8"
+  <section
+    id="hero"
+    class="relative flex min-h-[520px] w-full flex-col justify-center overflow-hidden px-5 py-16 text-white transition-all sm:min-h-[580px] sm:px-12 sm:py-20 md:py-24"
+    :style="backgroundStyle"
     aria-labelledby="hero-title"
-    data-test="landing-section-hero"
+    data-test="section-hero"
   >
-    <!-- Background subtle mesh accents -->
-    <div
-      class="pointer-events-none absolute inset-0 bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:16px_16px] opacity-10"
-      aria-hidden="true"
-    ></div>
-
-    <div class="relative mx-auto max-w-5xl space-y-6 text-center">
-      <!-- Fixed institutional eyebrow (not CMS badge/CTA — those belong to PR #86 backgroundImage hero) -->
-      <p class="text-sm font-medium tracking-wide text-emerald-300/90 sm:text-base">
-        {{ settingsStore.administrativeArea || 'Kelurahan Manggar' }}
-      </p>
-
-      <!-- Main Headline (Single h1 for the routed view per WCAG & docs/ACCESSIBILITY.md) -->
-      <h1
-        id="hero-title"
-        class="text-3xl leading-tight font-extrabold tracking-tight text-white sm:text-4xl md:text-5xl lg:text-6xl"
-      >
-        {{ titleText }}
-      </h1>
-
-      <!-- Institutional Narrative Body -->
-      <p
-        class="mx-auto max-w-3xl text-base leading-relaxed font-normal text-slate-300 sm:text-lg md:text-xl"
-      >
-        {{ bodyText }}
-      </p>
-
-      <div class="flex flex-wrap items-center justify-center gap-4 pt-4">
-        <router-link
-          to="/login"
-          class="inline-flex items-center justify-center rounded-xl border border-slate-700 bg-slate-800/80 px-6 py-3 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-700/80 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 sm:text-base"
+    <div class="relative z-10 mx-auto flex w-full max-w-5xl flex-col space-y-6 sm:space-y-8">
+      <div class="space-y-4">
+        <h1
+          id="hero-title"
+          class="min-w-0 text-3xl leading-tight font-extrabold tracking-tight text-white sm:text-4xl md:text-5xl"
         >
-          Akses Petugas & Editor
-        </router-link>
+          {{ titleText }}
+        </h1>
+        <p class="max-w-3xl text-sm leading-relaxed text-slate-200/95 sm:text-base md:text-lg">
+          {{ bodyText }}
+        </p>
+      </div>
+
+      <!-- Hero Actions slot (renders only when slot content is provided) -->
+      <div
+        v-if="$slots.actions"
+        class="flex flex-wrap items-center gap-3 pt-2 sm:gap-4"
+        data-test="hero-actions"
+      >
+        <slot name="actions" />
       </div>
     </div>
-  </header>
+  </section>
 </template>

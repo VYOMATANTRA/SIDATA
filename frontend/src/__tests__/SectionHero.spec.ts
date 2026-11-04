@@ -5,28 +5,170 @@ import LandingSectionHero from '../components/landing/SectionHero.vue';
 import CommonSectionHero from '@/components/common/SectionHero.vue';
 import { useContentBlocksStore, DEFAULT_HERO_BLOCK } from '../stores/contentBlocks.store';
 
-describe('Landing SectionHero.vue (no badge/CTA metadata)', () => {
-  it('renders title and body without badge or CTA controls from metadata', () => {
+describe('Landing SectionHero.vue', () => {
+  it('falls back to settingsStore tagline and DEFAULT_HERO_BLOCK body when title and body are empty or whitespace-only', () => {
     const pinia = createPinia();
     setActivePinia(pinia);
     const store = useContentBlocksStore(pinia);
+
     store.blocks['landing-hero'] = {
       ...DEFAULT_HERO_BLOCK,
-      title: 'Judul Uji Hero',
-      body: 'Isi uji hero',
-      metadata: { badge: 'Harus Diabaikan', ctaText: 'Jangan Tampil', ctaLink: '#x' },
+      title: '   ',
+      body: '   ',
     };
+
     const wrapper = mount(LandingSectionHero, {
       global: {
         plugins: [pinia],
         stubs: { 'router-link': true },
       },
     });
-    expect(wrapper.text()).toContain('Judul Uji Hero');
-    expect(wrapper.text()).toContain('Isi uji hero');
-    expect(wrapper.text()).not.toContain('Harus Diabaikan');
-    expect(wrapper.text()).not.toContain('Jangan Tampil');
-    expect(wrapper.find('a[href="#x"]').exists()).toBe(false);
+
+    const h1 = wrapper.find('h1');
+    expect(h1.text().trim().length).toBeGreaterThan(0);
+    expect(h1.text()).toBe('Sistem Informasi Data Terpadu Kelurahan Manggar');
+
+    const p = wrapper.find('p');
+    expect(p.text().trim().length).toBeGreaterThan(0);
+    expect(p.text()).toBe(DEFAULT_HERO_BLOCK.body);
+  });
+
+  it('applies the official background_laman_depan_kelurahan image and dark navy gradient overlay', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+
+    const wrapper = mount(LandingSectionHero, {
+      global: {
+        plugins: [pinia],
+        stubs: { 'router-link': true },
+      },
+    });
+
+    const section = wrapper.find('section#hero');
+    const style = section.attributes('style');
+    expect(style).toContain('linear-gradient');
+    expect(style).toContain('background_laman_depan_kelurahan.webp');
+  });
+
+  it('sanitizes and safely handles editor background image without CSS breakout or XSS', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const store = useContentBlocksStore(pinia);
+
+    // Malicious injection attempt
+    store.blocks['landing-hero'] = {
+      ...DEFAULT_HERO_BLOCK,
+      metadata: {
+        backgroundImage: "x'), url('https://tracker/p.png",
+      },
+    };
+
+    const wrapper = mount(LandingSectionHero, {
+      global: { plugins: [pinia] },
+    });
+
+    const style = wrapper.find('section#hero').attributes('style') || '';
+    // Must NOT contain the unescaped tracker injection
+    expect(style).not.toContain("url('x')");
+    expect(style).not.toContain("url('https://tracker/p.png");
+    // Should fallback to default image safely
+    expect(style).toContain('background_laman_depan_kelurahan.webp');
+  });
+
+  it('rejects protocol-relative, backslash, and dangerous schemes in background image', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const store = useContentBlocksStore(pinia);
+
+    const dangerousUrls = [
+      '//evil.com/tracker.png',
+      '/uploads\\image.png',
+      'javascript:alert(1)',
+      'data:image/png;base64,AAAA',
+      'http://insecure.com/hero.webp',
+    ];
+
+    for (const dangerous of dangerousUrls) {
+      store.blocks['landing-hero'] = {
+        ...DEFAULT_HERO_BLOCK,
+        metadata: { backgroundImage: dangerous },
+      };
+
+      const wrapper = mount(LandingSectionHero, {
+        global: { plugins: [pinia] },
+      });
+
+      const style = wrapper.find('section#hero').attributes('style') || '';
+      expect(style).toContain('background_laman_depan_kelurahan.webp');
+      expect(style).not.toContain(dangerous);
+    }
+  });
+
+  it('safely applies valid https:// and relative / background image URLs', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const store = useContentBlocksStore(pinia);
+
+    store.blocks['landing-hero'] = {
+      ...DEFAULT_HERO_BLOCK,
+      metadata: {
+        backgroundImage: 'https://cdn.example.com/custom-hero.webp',
+      },
+    };
+
+    const wrapper = mount(LandingSectionHero, {
+      global: { plugins: [pinia] },
+    });
+
+    const style = wrapper.find('section#hero').attributes('style') || '';
+    expect(style).toContain('https://cdn.example.com/custom-hero.webp');
+  });
+
+  it('does not double-encode already percent-encoded background image URLs', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const store = useContentBlocksStore(pinia);
+
+    store.blocks['landing-hero'] = {
+      ...DEFAULT_HERO_BLOCK,
+      metadata: {
+        backgroundImage: 'https://cdn.example.com/custom%20hero.webp',
+      },
+    };
+
+    const wrapper = mount(LandingSectionHero, {
+      global: { plugins: [pinia] },
+    });
+
+    const style = wrapper.find('section#hero').attributes('style') || '';
+    expect(style).toContain('https://cdn.example.com/custom%20hero.webp');
+    expect(style).not.toContain('%2520');
+  });
+
+  it('does not render empty hero-actions container when no actions slot is provided', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+
+    const wrapper = mount(LandingSectionHero, {
+      global: { plugins: [pinia] },
+    });
+
+    expect(wrapper.find('[data-test="hero-actions"]').exists()).toBe(false);
+  });
+
+  it('renders hero-actions container when actions slot is passed', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+
+    const wrapper = mount(LandingSectionHero, {
+      global: { plugins: [pinia] },
+      slots: {
+        actions: '<button id="test-cta">Aksi</button>',
+      },
+    });
+
+    expect(wrapper.find('[data-test="hero-actions"]').exists()).toBe(true);
+    expect(wrapper.find('#test-cta').exists()).toBe(true);
   });
 });
 
@@ -118,7 +260,7 @@ describe('Common SectionHero.vue', () => {
     const section = wrapper.find('[data-test="section-hero"]');
     const style = section.attributes('style');
     expect(style).toContain('linear-gradient');
-    expect(style).toContain('background_laman_depan_kelurahan.png');
+    expect(style).toContain('background_laman_depan_kelurahan.webp');
   });
 
   it('applies dark gradient background overlay when custom backgroundImage is passed', () => {

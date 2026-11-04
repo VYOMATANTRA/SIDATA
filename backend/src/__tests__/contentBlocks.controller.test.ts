@@ -977,7 +977,7 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
       slug: 'landing-hero',
       title: 'Judul Lama',
       body: 'Konten Lama',
-      metadata: { badge: 'Lama' },
+      metadata: { backgroundImage: 'https://example.com/old-hero.jpg' },
       sortOrder: null,
       updatedById: null,
       createdAt: new Date('2026-09-01'),
@@ -1015,7 +1015,7 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
         body: {
           title: '   ', // whitespace only title should be sanitized to null
           body: 'Konten Baru Lebih Informatif',
-          metadata: { badge: 'Baru' },
+          metadata: { backgroundImage: 'https://example.com/new-hero.jpg' },
         },
         user: { id: 'editor-1', email: 'editor@example.com', role: 'editor' },
       });
@@ -1155,7 +1155,7 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
     let auditCalled = false;
 
     const existingBlock = {
-      id: 'uuid-hero-1',
+      id: 'uuid-custom-noop',
       sectionId: null,
       type: 'prose',
       slug: 'custom-note',
@@ -1580,14 +1580,23 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
     }
   });
 
-  it('rejects dangerous backgroundImage values for landing-hero and accepts safe ones', async () => {
+  it('rejects stored XSS payloads and dangerous schemes in backgroundImage for landing-hero', async () => {
     invalidateContentBlocksCache();
     const dangerousImages = [
-      'javascript:alert(1)',
-      'data:image/svg+xml;utf8,<svg onload=alert(1)>',
-      'http://insecure.com/hero.jpg',
-      '//evil.com/hero.jpg',
-      '/\\evil.com',
+      'javascript:alert(document.cookie)',
+      'JAVASCRIPT:alert(1)',
+      'javascript:void(0)',
+      'data:text/html,<script>alert(1)</script>',
+      'vbscript:msgbox(1)',
+      '//attacker.com/evil.jpg',
+      '/\\evil.com/bg.jpg',
+      '/\\x',
+      '/%5cx',
+      '/%5Ce',
+      '/\\t/x',
+      'http://insecure.com/bg.jpg',
+      'https://valid.com\r\njavascript:alert(1)',
+      'https://valid.com\t/path',
     ];
 
     for (const dangerous of dangerousImages) {
@@ -1603,6 +1612,7 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
       assert.match(String((res.body as { error: string }).error), /Validasi metadata gagal/i);
     }
 
+    // Safe background images must pass validation
     const originalTransaction = prisma.$transaction;
     prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
       const mockTx = {
@@ -1643,9 +1653,10 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
 
     try {
       for (const safe of [
-        '/assets/hero.webp',
-        'https://kelurahan-manggar.balikpapan.go.id/hero.jpg',
+        '/images/hero-bg.jpg',
+        'https://cdn.balikpapan.go.id/hero-bg.jpg',
         '',
+        null,
       ]) {
         const res = fakeRes();
         await updateContentBlockHandler(
@@ -1663,67 +1674,85 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
     }
   });
 
-  it('strips unknown hero fields, including an unsafe ctaLink, instead of storing them', async () => {
+  it('heroMetadataSchema.strict rejects deprecated fields (badge, ctaText, ctaLink) with 400', async () => {
+    invalidateContentBlocksCache();
+    const deprecatedPayloads = [
+      { badge: 'Hero Badge' },
+      { ctaText: 'Jelajahi Profil' },
+      { ctaLink: '/profil' },
+      { badge: 'Badge', ctaText: 'Text', ctaLink: '#link' },
+      { unknownProperty: 'malicious or unrecognized' },
+    ];
+
+    for (const deprecatedField of deprecatedPayloads) {
+      const res = fakeRes();
+      const req = makeReq({
+        params: { slug: 'landing-hero' },
+        body: { metadata: deprecatedField },
+      });
+      await updateContentBlockHandler(req, res as unknown as Response);
+
+      assert.equal(res.status, 400, `Expected 400 for payload: ${JSON.stringify(deprecatedField)}`);
+      assert.match(
+        (res.body as { error: string }).error,
+        /Validasi metadata gagal: Unrecognized key/,
+      );
+    }
+  });
+
+  it('heroMetadataSchema.strict persists sanitized metadata (trimmed URL)', async () => {
     invalidateContentBlocksCache();
     const originalTransaction = prisma.$transaction;
+
     let savedMetadata: unknown = null;
+    const existingBlock = {
+      id: 'uuid-hero-sanitize',
+      sectionId: null,
+      type: 'hero',
+      slug: 'landing-hero',
+      title: 'Hero Title',
+      body: 'Hero Body',
+      metadata: null,
+      sortOrder: null,
+      updatedById: null,
+      createdAt: new Date('2026-09-01'),
+      updatedAt: new Date('2026-09-01'),
+    };
 
     prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
       const mockTx = {
         $queryRaw: async () => [],
         contentBlock: {
-          findUnique: async () => ({
-            id: 'block-hero',
-            sectionId: null,
-            type: 'hero',
-            slug: 'landing-hero',
-            title: 'Hero Title',
-            body: 'Hero Body',
-            metadata: null,
-            sortOrder: null,
-            updatedById: null,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          }),
+          findUnique: async () => existingBlock,
           update: async (args: { data: Record<string, unknown> }) => {
             savedMetadata = args.data.metadata;
-            return {
-              id: 'block-hero',
-              sectionId: null,
-              type: 'hero',
-              slug: 'landing-hero',
-              title: 'Hero Title',
-              body: 'Hero Body',
-              metadata: args.data.metadata,
-              sortOrder: null,
-              updatedById: null,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            };
+            return { ...existingBlock, ...args.data };
           },
         },
-        auditLog: { create: async () => ({ id: 'audit-1' }) },
+        auditLog: {
+          create: async () => {},
+        },
       };
       return fn(mockTx as unknown as typeof prisma);
     }) as unknown as typeof prisma.$transaction;
 
     try {
       const res = fakeRes();
-      await updateContentBlockHandler(
-        makeReq({
-          params: { slug: 'landing-hero' },
-          body: {
-            metadata: {
-              backgroundImage: '/hero.webp',
-              ctaLink: 'javascript:alert(1)',
-              evil: 'x',
-            },
+      const req = makeReq({
+        params: { slug: 'landing-hero' },
+        body: {
+          metadata: {
+            backgroundImage: '   /images/hero-bg.jpg   ',
           },
-        }),
-        res as unknown as Response,
-      );
+        },
+      });
+
+      await updateContentBlockHandler(req, res as unknown as Response);
+
       assert.equal(res.status, 200);
-      assert.deepEqual(savedMetadata, { backgroundImage: '/hero.webp' });
+      assert.deepEqual(savedMetadata, {
+        backgroundImage: '/images/hero-bg.jpg',
+      });
     } finally {
       prisma.$transaction = originalTransaction;
       invalidateContentBlocksCache();

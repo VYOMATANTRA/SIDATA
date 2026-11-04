@@ -8,6 +8,7 @@
     "test:coverage": "node scripts/coverage.mjs",
     "dev:seed": "tsx scripts/dev-seed.ts",
     "dev:cleanup-sample-rt": "tsx scripts/cleanup-legacy-sample-rt-leaders.ts",
+    "seed:indicator": "tsx prisma/seeder_indicator.ts",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
