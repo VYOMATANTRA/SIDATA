@@ -18,7 +18,9 @@ const settingsStore = useSettingsStore();
 onMounted(() => {
   void mapsStore.loadPoints();
   void mapsStore.loadSummary();
-  void settingsStore.fetchPublicSettings();
+  if (!settingsStore.isLoaded && !settingsStore.isLoading) {
+    void settingsStore.fetchPublicSettings();
+  }
 });
 
 const search = ref('');

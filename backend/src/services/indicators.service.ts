@@ -392,6 +392,8 @@ export const indicatorByIdCache = new KeyedLruCache<string, VersionedTtlCache<In
  * enough to absorb a scan burst without hammering the database on every repeat.
  */
 const NEGATIVE_TTL_MS = 10 * 1000; // 10 seconds
+/** Maximum age of a last-known-good indicator figure served during a database failure (5 minutes). */
+export const INDICATOR_LKG_MAX_AGE_MS = 5 * 60 * 1000;
 const MAX_NEGATIVE_ENTRIES = 200;
 const missingIndicatorIds = new Map<string, number>();
 
@@ -725,10 +727,9 @@ export const getIndicatorById = async (
     if (useSharedCache) {
       const idCache = indicatorByIdCache.get(indicatorCacheKey('id', lookup));
       const slugCache = indicatorByIdCache.get(indicatorCacheKey('slug', lookup));
-      const lkgMaxAgeMs = 5 * 60 * 1000;
       const lkg =
-        idCache?.getLastKnownGood(null, lkgMaxAgeMs) ??
-        slugCache?.getLastKnownGood(null, lkgMaxAgeMs) ??
+        idCache?.getLastKnownGood(null, INDICATOR_LKG_MAX_AGE_MS) ??
+        slugCache?.getLastKnownGood(null, INDICATOR_LKG_MAX_AGE_MS) ??
         null;
       if (lkg) return lkg;
     }
