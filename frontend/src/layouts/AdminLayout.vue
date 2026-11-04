@@ -1,76 +1,51 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import AdminSidebar from '../components/admin/AdminSidebar.vue';
 import AdminHeader from '../components/admin/AdminHeader.vue';
 import AdminBreadcrumb from '../components/admin/AdminBreadcrumb.vue';
 import { setAdminHeader } from '../composables/useAdminHeader';
+import { useIsDesktop } from '../composables/useIsDesktop';
 
 const route = useRoute();
 
 const isMobileSidebarOpen = ref(false);
-const restoreFocusOnClose = ref(true);
 const mainRef = ref<HTMLElement | null>(null);
 
 function openMobileSidebar() {
-  restoreFocusOnClose.value = true;
   isMobileSidebarOpen.value = true;
 }
 
-function closeMobileSidebar(reason: 'dismiss' | 'navigate' = 'dismiss') {
-  restoreFocusOnClose.value = reason === 'dismiss';
+function closeMobileSidebar() {
   isMobileSidebarOpen.value = false;
 }
 
 // Close the mobile drawer automatically if the viewport widens to the desktop breakpoint (768px)
 // while the drawer is open, so the content shell is never left with `inert` and an active focus
 // trap after the sidebar switches to the permanent desktop rail.
-const DESKTOP_MEDIA_QUERY = '(min-width: 768px)';
-let desktopMediaQueryList: MediaQueryList | null = null;
-
-function handleDesktopMediaChange(event: MediaQueryListEvent) {
-  if (event.matches && isMobileSidebarOpen.value) {
-    closeMobileSidebar('navigate');
+useIsDesktop((matchesDesktop) => {
+  if (matchesDesktop && isMobileSidebarOpen.value) {
+    closeMobileSidebar();
   }
-}
-
-onMounted(() => {
-  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
-    desktopMediaQueryList = window.matchMedia(DESKTOP_MEDIA_QUERY);
-    if (desktopMediaQueryList.matches && isMobileSidebarOpen.value) {
-      closeMobileSidebar('navigate');
-    }
-    desktopMediaQueryList.addEventListener?.('change', handleDesktopMediaChange);
-  }
-});
-
-onUnmounted(() => {
-  desktopMediaQueryList?.removeEventListener?.('change', handleDesktopMediaChange);
 });
 
 // Seeds the header from route meta on every navigation so there is never a stale title/subtitle;
 // a routed view can still override with a dynamic subtitle in its own onMounted (runs after this).
 // Also closes the mobile sidebar drawer so a tapped link doesn't leave it open over the new page,
-// and moves focus to <main> on subsequent nav-initiated navigations (skipping initial mount and
-// any programmatic redirect where focus is already inside <main>) so keyboard and screen-reader
-// users are placed into the newly rendered page content without hijacking in-page focus.
-// Watches route.path (not fullPath) so a view that syncs filters/search to the query string or
-// hash doesn't retrigger this and wipe out the subtitle the view already set.
+// and moves focus to <main> on subsequent path changes unless the new view has already placed
+// focus inside <main>. Watches route.path (not fullPath) so a view that syncs filters/search to
+// the query string or hash doesn't retrigger this and wipe out a dynamic subtitle.
 watch(
   () => route.path,
   (newPath, oldPath) => {
     const title = typeof route.meta.title === 'string' ? route.meta.title : '';
     const subtitle = typeof route.meta.subtitle === 'string' ? route.meta.subtitle : '';
     setAdminHeader(title, subtitle);
-    closeMobileSidebar('navigate');
+    closeMobileSidebar();
     if (oldPath !== undefined && newPath !== oldPath) {
       void nextTick(() => {
         const active = document.activeElement as HTMLElement | null;
-        const shouldMoveToMain =
-          !active ||
-          active === document.body ||
-          Boolean(active.closest('#admin-sidebar, [data-test="admin-breadcrumb"]'));
-        if (shouldMoveToMain) {
+        if (!active || !mainRef.value?.contains(active)) {
           mainRef.value?.focus();
         }
       });
@@ -94,7 +69,7 @@ watch(
       v-if="isMobileSidebarOpen"
       class="fixed inset-0 z-30 bg-slate-900/50 md:hidden"
       data-test="admin-sidebar-backdrop"
-      @click="closeMobileSidebar('dismiss')"
+      @click="closeMobileSidebar"
     ></div>
 
     <AdminSidebar :mobile-open="isMobileSidebarOpen" @close="closeMobileSidebar" />
@@ -104,11 +79,7 @@ watch(
       :inert="isMobileSidebarOpen ? true : undefined"
       data-test="admin-content-shell"
     >
-      <AdminHeader
-        :mobile-open="isMobileSidebarOpen"
-        :restore-focus-on-close="restoreFocusOnClose"
-        @open-menu="openMobileSidebar"
-      />
+      <AdminHeader :mobile-open="isMobileSidebarOpen" @open-menu="openMobileSidebar" />
 
       <main
         id="admin-main-content"

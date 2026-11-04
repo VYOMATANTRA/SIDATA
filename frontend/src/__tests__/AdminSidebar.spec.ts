@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mount, flushPromises } from '@vue/test-utils';
 import { setActivePinia, createPinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import AdminSidebar from '../components/admin/AdminSidebar.vue';
@@ -524,6 +524,7 @@ describe('AdminSidebar.vue — mobile drawer', () => {
   it('closes the mobile drawer when a nav link is clicked', async () => {
     const { wrapper } = await mountSidebar('admin');
     await wrapper.find('[data-test="nav-data"]').trigger('click');
+    await flushPromises();
     expect(wrapper.emitted('close')).toBeTruthy();
   });
 
@@ -577,7 +578,7 @@ describe('AdminSidebar.vue — mobile drawer', () => {
     wrapper.unmount();
   });
 
-  it('skips invisible or zero-rect elements in the mobile drawer focus trap', async () => {
+  it('skips hidden or checkVisibility-false elements in the mobile drawer focus trap', async () => {
     setActivePinia(createPinia());
     const authStore = useAuthStore();
     authStore.user = { id: 'u1', email: 'u@example.com', role: 'admin' };
@@ -597,13 +598,9 @@ describe('AdminSidebar.vue — mobile drawer', () => {
     const publicSiteLink = wrapper.find('[data-test="nav-public-site"]').element as HTMLElement;
     const logoutBtn = wrapper.find('[data-test="nav-logout"]').element as HTMLElement;
 
-    // Mark the logout button invisible (and stub 0 client rects on it) so publicSiteLink becomes
-    // the last actually visible focusable item in the drawer.
-    logoutBtn.classList.add('invisible');
-    Object.defineProperty(logoutBtn, 'getClientRects', {
-      value: () => ({ length: 0 }) as unknown as DOMRectList,
-      configurable: true,
-    });
+    // Mark the logout button visibility:hidden so publicSiteLink becomes the last visible
+    // focusable item in the drawer.
+    logoutBtn.style.visibility = 'hidden';
 
     publicSiteLink.focus();
     expect(document.activeElement).toBe(publicSiteLink);

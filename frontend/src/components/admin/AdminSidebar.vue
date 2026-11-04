@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, toRef, watchEffect } from 'vue';
+import { ref, computed, toRef, watch, watchEffect } from 'vue';
 import { useRoute, RouterLink } from 'vue-router';
 import {
   ChevronDownIcon,
@@ -21,7 +21,7 @@ import {
 import balikpapanLogo from '@/assets/img/logo_balikpapan.webp';
 
 const props = withDefaults(defineProps<{ mobileOpen?: boolean }>(), { mobileOpen: false });
-const emit = defineEmits<{ (e: 'close', reason?: 'dismiss' | 'navigate'): void }>();
+const emit = defineEmits<{ (e: 'close'): void }>();
 
 const route = useRoute();
 const authStore = useAuthStore();
@@ -114,9 +114,22 @@ function toggleSistem() {
   isSistemOpen.value = !isSistemOpen.value;
 }
 
-function closeMobile(reason: 'dismiss' | 'navigate' = 'dismiss') {
-  emit('close', reason);
+function closeMobile() {
+  emit('close');
 }
+
+// When the user taps a link for the page they are already viewing, `route.path` does not change,
+// so close immediately (which leaves `route.fullPath === openedFullPath` in AdminHeader.vue and
+// restores focus to the hamburger toggle). When tapping a link to a different page, wait for
+// `route.path` to commit before closing so `route.fullPath !== openedFullPath` is already true
+// when AdminHeader.vue's watcher runs, letting AdminLayout move focus directly to <main>.
+function closeMobileOnSamePage(to: string) {
+  if (route.path === to) {
+    closeMobile();
+  }
+}
+
+watch(() => route.path, closeMobile);
 
 const sidebarRef = ref<HTMLElement | null>(null);
 const mobileCloseButtonRef = ref<HTMLButtonElement | null>(null);
@@ -128,7 +141,7 @@ useDrawerFocusTrap({
   isOpen: toRef(props, 'mobileOpen'),
   containerRef: sidebarRef,
   initialFocusRef: mobileCloseButtonRef,
-  onEscape: () => closeMobile('dismiss'),
+  onEscape: closeMobile,
 });
 
 const isLoggingOut = ref(false);
@@ -161,7 +174,7 @@ async function handleLogout() {
       <RouterLink
         to="/admin"
         class="focus-visible:ring-brand-cyan rounded-btn flex min-w-0 items-center gap-3 focus-visible:ring-2 focus-visible:outline-none"
-        @click="closeMobile('navigate')"
+        @click="closeMobileOnSamePage('/admin')"
       >
         <img
           :src="balikpapanLogo"
@@ -183,7 +196,7 @@ async function handleLogout() {
         class="focus-visible:ring-brand-cyan rounded-btn shrink-0 border border-white/20 p-1.5 text-white/70 transition-transform hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:outline-none md:hidden"
         aria-label="Tutup menu navigasi"
         data-test="sidebar-mobile-close"
-        @click="closeMobile('dismiss')"
+        @click="closeMobile"
       >
         <XMarkIcon class="h-5 w-5" aria-hidden="true" />
       </button>
@@ -191,6 +204,7 @@ async function handleLogout() {
       <button
         type="button"
         class="focus-visible:ring-brand-cyan rounded-btn hidden shrink-0 border border-white/20 p-1.5 text-white/70 transition-transform hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:outline-none md:inline-flex"
+        :inert="mobileOpen ? true : undefined"
         :aria-expanded="!isCollapsed"
         aria-controls="admin-sidebar-nav-list"
         :aria-label="isCollapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'"
@@ -219,7 +233,7 @@ async function handleLogout() {
           :aria-current="isNavActive(entry.to) ? 'page' : undefined"
           :title="isCollapsed ? entry.label : undefined"
           :data-test="entry.dataTest"
-          @click="closeMobile('navigate')"
+          @click="closeMobileOnSamePage(entry.to)"
         >
           <component :is="entry.icon" class="h-5 w-5 shrink-0" aria-hidden="true" />
           <span
@@ -276,7 +290,7 @@ async function handleLogout() {
                 :aria-current="isNavActive(item.to) ? 'page' : undefined"
                 :title="isCollapsed ? item.label : undefined"
                 :data-test="item.dataTest"
-                @click="closeMobile('navigate')"
+                @click="closeMobileOnSamePage(item.to)"
               >
                 <component :is="item.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
                 <span
@@ -308,7 +322,7 @@ async function handleLogout() {
         class="focus-visible:ring-brand-cyan rounded-btn flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white focus-visible:ring-2 focus-visible:outline-none"
         :title="isCollapsed ? 'Kembali ke Situs Publik' : undefined"
         data-test="nav-public-site"
-        @click="closeMobile('navigate')"
+        @click="closeMobile"
       >
         <GlobeAltIcon class="h-5 w-5 shrink-0" aria-hidden="true" />
         <span :class="labelClass(isCollapsed, 'truncate')">Kembali ke Situs Publik</span>

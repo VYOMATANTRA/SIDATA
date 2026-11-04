@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mount, flushPromises } from '@vue/test-utils';
 import { setActivePinia, createPinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import AdminLayout from '../layouts/AdminLayout.vue';
@@ -379,7 +379,7 @@ describe('AdminLayout.vue — mobile sidebar drawer', () => {
     wrapper.unmount();
   });
 
-  it('does not move focus back to the hamburger toggle when the drawer closes because a sidebar link was clicked', async () => {
+  it('does not move focus back to the hamburger toggle when the drawer closes because a sidebar link to a different page was clicked, moving focus to <main> instead', async () => {
     const router = createTestRouter();
     await router.push('/admin');
     await router.isReady();
@@ -395,12 +395,42 @@ describe('AdminLayout.vue — mobile sidebar drawer', () => {
     const ceritaLink = wrapper.find('[data-test="nav-cerita"]');
     (ceritaLink.element as HTMLElement).focus();
     await ceritaLink.trigger('click');
-    await wrapper.vm.$nextTick();
+    await flushPromises();
     await wrapper.vm.$nextTick();
 
     expect(document.activeElement).not.toBe(
       wrapper.find('[data-test="admin-mobile-menu-toggle"]').element,
     );
+    expect(document.activeElement).toBe(wrapper.find('main#admin-main-content').element);
+    wrapper.unmount();
+  });
+
+  // Blocking accessibility fix (WCAG 2.1 §2.4.3 Focus Order): when a mobile user opens the drawer
+  // and taps the link for the page they are ALREADY viewing, route.path does not change so the
+  // navigation watcher never runs. AdminHeader must restore focus to the hamburger toggle button
+  // rather than leaving focus stranded on <body>.
+  it('returns focus to the hamburger toggle when the user taps the sidebar link for the page they are already on', async () => {
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, {
+      global: { plugins: [router] },
+      attachTo: document.body,
+    });
+
+    const toggle = wrapper.find('[data-test="admin-mobile-menu-toggle"]');
+    await toggle.trigger('click');
+    await wrapper.vm.$nextTick();
+
+    const currentPageLink = wrapper.find('[data-test="nav-beranda"]');
+    (currentPageLink.element as HTMLElement).focus();
+    await currentPageLink.trigger('click');
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('[data-test="admin-sidebar-backdrop"]').exists()).toBe(false);
+    expect(document.activeElement).toBe(toggle.element);
     wrapper.unmount();
   });
 

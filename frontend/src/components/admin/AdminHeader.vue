@@ -1,54 +1,24 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { Bars3Icon } from '@heroicons/vue/24/outline';
 import { useAdminHeader } from '../../composables/useAdminHeader';
+import { useIsDesktop } from '../../composables/useIsDesktop';
 
-const props = withDefaults(defineProps<{ mobileOpen?: boolean; restoreFocusOnClose?: boolean }>(), {
+const props = withDefaults(defineProps<{ mobileOpen?: boolean }>(), {
   mobileOpen: false,
-  restoreFocusOnClose: true,
 });
 defineEmits<{ (e: 'openMenu'): void }>();
 
 const route = useRoute();
 const { title, subtitle } = useAdminHeader();
+const { isDesktop } = useIsDesktop();
 
-// Only render the mobile drawer toggle below the md breakpoint (768px) so assistive tech on
-// desktop never encounters a button announcing aria-expanded="false" for a sidebar that is
-// permanently visible on desktop.
-const DESKTOP_MEDIA_QUERY = '(min-width: 768px)';
-
-function readIsDesktop(): boolean {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-    return false;
-  }
-  return window.matchMedia(DESKTOP_MEDIA_QUERY).matches;
-}
-
-const isDesktop = ref(readIsDesktop());
-let desktopMediaQueryList: MediaQueryList | null = null;
-
-function handleDesktopMediaChange(event: MediaQueryListEvent) {
-  isDesktop.value = event.matches;
-}
-
-onMounted(() => {
-  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
-    desktopMediaQueryList = window.matchMedia(DESKTOP_MEDIA_QUERY);
-    isDesktop.value = desktopMediaQueryList.matches;
-    desktopMediaQueryList.addEventListener?.('change', handleDesktopMediaChange);
-  }
-});
-
-onUnmounted(() => {
-  desktopMediaQueryList?.removeEventListener?.('change', handleDesktopMediaChange);
-});
-
-// Owns the toggle button (not AdminSidebar.vue) so focus can return here when the drawer is
-// dismissed via its close button, Escape, or the backdrop click (WCAG 2.1 §2.4.3 Focus Order).
-// Skips restoring focus when the drawer closed because the user navigated to another route —
-// pulling focus back to the header menu button after tapping a link forces keyboard and
-// screen-reader users to tab past the header again to reach the new page's content.
+// Owns the toggle button (not AdminSidebar.vue) so focus can return here when the drawer closes
+// on the same page — via its close button, Escape, backdrop click, or tapping the link for the
+// page the user is already viewing (WCAG 2.1 §2.4.3 Focus Order). Skips restoring focus only when
+// the drawer closed because the user navigated to a different route (`route.fullPath !==
+// openedFullPath`), where AdminLayout moves focus to <main> instead.
 const menuToggleRef = ref<HTMLButtonElement | null>(null);
 let openedFullPath = route.fullPath;
 
@@ -59,7 +29,7 @@ watch(
       openedFullPath = route.fullPath;
       return;
     }
-    if (wasOpen && props.restoreFocusOnClose && route.fullPath === openedFullPath) {
+    if (wasOpen && route.fullPath === openedFullPath) {
       void nextTick(() => menuToggleRef.value?.focus());
     }
   },

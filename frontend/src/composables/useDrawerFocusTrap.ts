@@ -7,12 +7,8 @@ export interface UseDrawerFocusTrapOptions {
   onEscape: () => void;
 }
 
-function isElementVisible(el: HTMLElement, container: HTMLElement | null): boolean {
-  if (
-    el.closest(
-      '[hidden], [inert], .hidden, .invisible, [style*="display: none"], [style*="visibility: hidden"]',
-    )
-  ) {
+function isElementVisible(el: HTMLElement): boolean {
+  if (el.closest('[hidden], [inert]')) {
     return false;
   }
 
@@ -23,26 +19,8 @@ function isElementVisible(el: HTMLElement, container: HTMLElement | null): boole
     }
   }
 
-  const isDesktopViewport =
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(min-width: 768px)').matches;
-  if (isDesktopViewport && el.closest('.md\\:hidden')) {
-    return false;
-  }
-
-  // In a real browser (or a test that stubs layout metrics), getClientRects() / offsetParent
-  // catches any CSS-driven display:none (including responsive classes). JSDOM returns 0 rects
-  // and null offsetParent for every element, so only enforce the geometry check when the
-  // container itself reports layout metrics or the element overrides getClientRects/offsetParent.
-  const containerHasLayout =
-    (container?.getClientRects().length ?? 0) > 0 || (container?.offsetParent ?? null) !== null;
-  const elementHasOwnLayoutStub =
-    Object.prototype.hasOwnProperty.call(el, 'getClientRects') ||
-    Object.prototype.hasOwnProperty.call(el, 'offsetParent');
-
-  if (containerHasLayout || elementHasOwnLayoutStub) {
-    return el.getClientRects().length > 0 || el.offsetParent !== null;
+  if (typeof el.checkVisibility === 'function') {
+    return el.checkVisibility({ checkVisibilityCSS: true });
   }
 
   return true;
@@ -75,7 +53,7 @@ export function useDrawerFocusTrap({
     const candidates = container.querySelectorAll<HTMLElement>(
       'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
     );
-    return Array.from(candidates).filter((el) => isElementVisible(el, container));
+    return Array.from(candidates).filter(isElementVisible);
   }
 
   function handleKeydown(event: KeyboardEvent) {
