@@ -218,7 +218,6 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
     expect(wrapper.text()).not.toContain('Contoh data daftar Ketua RT');
   });
 
-
   it('shows sample notice from the API flag even when phones look dialable', async () => {
     vi.stubGlobal(
       'fetch',
@@ -351,7 +350,7 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
     expect(wrapper.find('a[href="tel:+6281100000002"]').exists()).toBe(true);
   });
 
-  it('handles multi-number phone values by linking only the first number', async () => {
+  it('links every complete number and refuses a cut multi-number string', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn<typeof fetch>().mockResolvedValue({
@@ -372,6 +371,13 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
               phoneIsWhatsapp: false,
               alamat: null,
             },
+            {
+              rtNumber: 3,
+              name: 'Ketua RT 03',
+              phone: '0812-111/222',
+              phoneIsWhatsapp: true,
+              alamat: null,
+            },
           ],
         }),
       } as Response),
@@ -383,7 +389,11 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
 
     const wrapper = await mountReady();
     expect(wrapper.find('a[href="https://wa.me/628123456789"]').exists()).toBe(true);
+    expect(wrapper.find('a[href="https://wa.me/628129999888"]').exists()).toBe(true);
     expect(wrapper.find('a[href="tel:+62811222333"]').exists()).toBe(true);
+    expect(wrapper.find('a[href="tel:0815444555"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain('0812-111/222');
+    expect(wrapper.find('a[href="tel:0812111"]').exists()).toBe(false);
   });
 
   it('renders a placeholder phone as plain text instead of a dead link', async () => {

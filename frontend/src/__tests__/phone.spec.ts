@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   primaryPhone,
   digitsOnly,
+  dialablePhones,
   isPlausiblePhoneDigitRun,
   isDialable,
   telHref,
@@ -35,6 +36,19 @@ describe('phone utilities', () => {
     expect(isDialable('08123456789')).toBe(true);
     expect(isDialable('-')).toBe(false);
     expect(isDialable('Belum ada')).toBe(false);
+  });
+
+  it('does not treat a cut multi-number string as dialable', () => {
+    expect(isDialable('0812-111/222')).toBe(false);
+    expect(telHref('0812-111/222')).toBe('');
+    expect(whatsappNumber('0812-111/222')).toBe('');
+    expect(digitsOnly('0812-111/222')).toBe('');
+    expect(dialablePhones('0812-111/222')).toEqual([]);
+    expect(primaryPhone('0812-111/222')).toBe('0812-111/222');
+  });
+
+  it('returns every complete number when a split is safe', () => {
+    expect(dialablePhones('08123456789 / 08129999888')).toEqual(['08123456789', '08129999888']);
   });
 
   it('formats tel: href preserving leading plus', () => {
