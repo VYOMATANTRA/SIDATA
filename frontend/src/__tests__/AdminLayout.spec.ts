@@ -77,6 +77,51 @@ describe('AdminLayout.vue', () => {
     expect(breadcrumb.find('a').exists()).toBe(true);
   });
 
+  it('renders parent breadcrumb segments with `to` as clickable links while keeping the final segment as plain text with aria-current="page"', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: '/admin',
+          component: { template: '<div>Dashboard</div>' },
+          meta: { title: 'Beranda', breadcrumb: [] },
+        },
+        {
+          path: '/users',
+          component: { template: '<div>Users</div>' },
+          meta: { title: 'Manajemen Pengguna', breadcrumb: ['Sistem', 'Akun pengguna'] },
+        },
+        {
+          path: '/settings/audit-retention',
+          component: { template: '<div>Retention</div>' },
+          meta: {
+            title: 'Pengaturan Retensi Audit',
+            subtitle: 'Atur masa penyimpanan log audit sistem.',
+            breadcrumb: ['Sistem', { label: 'Akun pengguna', to: '/users' }, 'Retensi Audit'],
+          },
+        },
+      ],
+    });
+    await router.push('/settings/audit-retention');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
+
+    const breadcrumb = wrapper.find('[data-test="admin-breadcrumb"]');
+    const parentLink = breadcrumb.find('a[href="/users"]');
+    expect(parentLink.exists()).toBe(true);
+    expect(parentLink.text()).toBe('Akun pengguna');
+
+    const currentCrumb = breadcrumb.find('span[aria-current="page"]');
+    expect(currentCrumb.exists()).toBe(true);
+    expect(currentCrumb.text()).toBe('Retensi Audit');
+
+    // Subtitle is seeded directly from route.meta.subtitle
+    expect(wrapper.find('[data-test="admin-header"] p').text()).toBe(
+      'Atur masa penyimpanan log audit sistem.',
+    );
+  });
+
   // Accessibility fix: on the dashboard itself (empty trail), "Beranda" was rendered as a link
   // to the page the user is already on, with no aria-current, giving a screen reader no hint
   // about the current location. It must render as plain text with aria-current="page" instead.
@@ -373,6 +418,50 @@ describe('AdminLayout.vue — mobile sidebar drawer', () => {
 
     await wrapper.find('[data-test="admin-sidebar-backdrop"]').trigger('click');
     expect(contentShell.attributes('inert')).toBeUndefined();
+  });
+
+  it('automatically closes the mobile drawer and removes inert when the viewport widens to desktop (>= 768px)', async () => {
+    const originalMatchMedia = window.matchMedia;
+    const changeListeners: Array<(e: MediaQueryListEvent) => void> = [];
+    window.matchMedia = ((query: string) =>
+      ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: (_type: string, listener: EventListenerOrEventListenerObject) => {
+          if (typeof listener === 'function') {
+            changeListeners.push(listener as (e: MediaQueryListEvent) => void);
+          }
+        },
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }) as MediaQueryList) as typeof window.matchMedia;
+
+    try {
+      const router = createTestRouter();
+      await router.push('/admin');
+      await router.isReady();
+
+      const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
+      await wrapper.find('[data-test="admin-mobile-menu-toggle"]').trigger('click');
+
+      const contentShell = wrapper.find('[data-test="admin-content-shell"]');
+      expect(contentShell.attributes('inert')).toBeDefined();
+      expect(wrapper.find('[data-test="admin-sidebar-backdrop"]').exists()).toBe(true);
+
+      // Simulate widening the window past 768px
+      for (const listener of changeListeners) {
+        listener({ matches: true, media: '(min-width: 768px)' } as MediaQueryListEvent);
+      }
+      await wrapper.vm.$nextTick();
+
+      expect(contentShell.attributes('inert')).toBeUndefined();
+      expect(wrapper.find('[data-test="admin-sidebar-backdrop"]').exists()).toBe(false);
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
   });
 
   it('uses dynamic viewport height (h-dvh) on the root layout container so mobile browser chrome cannot clip the bottom', async () => {

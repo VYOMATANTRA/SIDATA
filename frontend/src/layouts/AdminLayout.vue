@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue';
+import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
 import AdminSidebar from '../components/admin/AdminSidebar.vue';
 import AdminHeader from '../components/admin/AdminHeader.vue';
@@ -22,8 +22,34 @@ function closeMobileSidebar(reason: 'dismiss' | 'navigate' = 'dismiss') {
   isMobileSidebarOpen.value = false;
 }
 
-// Seeds the header from route meta on every navigation so there is never a stale title; the
-// routed view can still override with a dynamic subtitle in its own onMounted (runs after this).
+// Close the mobile drawer automatically if the viewport widens to the desktop breakpoint (768px)
+// while the drawer is open, so the content shell is never left with `inert` and an active focus
+// trap after the sidebar switches to the permanent desktop rail.
+const DESKTOP_MEDIA_QUERY = '(min-width: 768px)';
+let desktopMediaQueryList: MediaQueryList | null = null;
+
+function handleDesktopMediaChange(event: MediaQueryListEvent) {
+  if (event.matches && isMobileSidebarOpen.value) {
+    closeMobileSidebar('navigate');
+  }
+}
+
+onMounted(() => {
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    desktopMediaQueryList = window.matchMedia(DESKTOP_MEDIA_QUERY);
+    if (desktopMediaQueryList.matches && isMobileSidebarOpen.value) {
+      closeMobileSidebar('navigate');
+    }
+    desktopMediaQueryList.addEventListener?.('change', handleDesktopMediaChange);
+  }
+});
+
+onUnmounted(() => {
+  desktopMediaQueryList?.removeEventListener?.('change', handleDesktopMediaChange);
+});
+
+// Seeds the header from route meta on every navigation so there is never a stale title/subtitle;
+// a routed view can still override with a dynamic subtitle in its own onMounted (runs after this).
 // Also closes the mobile sidebar drawer so a tapped link doesn't leave it open over the new page,
 // and moves focus to <main> on subsequent nav-initiated navigations (skipping initial mount and
 // any programmatic redirect where focus is already inside <main>) so keyboard and screen-reader
@@ -34,7 +60,8 @@ watch(
   () => route.path,
   (newPath, oldPath) => {
     const title = typeof route.meta.title === 'string' ? route.meta.title : '';
-    setAdminHeader(title, '');
+    const subtitle = typeof route.meta.subtitle === 'string' ? route.meta.subtitle : '';
+    setAdminHeader(title, subtitle);
     closeMobileSidebar('navigate');
     if (oldPath !== undefined && newPath !== oldPath) {
       void nextTick(() => {

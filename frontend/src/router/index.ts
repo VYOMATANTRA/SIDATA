@@ -79,6 +79,7 @@ const router = createRouter({
           meta: {
             ...metaForRoles(rolesFor('/admin')),
             title: 'Beranda',
+            subtitle: 'Ringkasan aktivitas dan pintasan menuju modul admin.',
             breadcrumb: [],
           },
         },
@@ -89,6 +90,7 @@ const router = createRouter({
           meta: {
             ...metaForRoles(rolesFor('/users')),
             title: 'Manajemen Pengguna',
+            subtitle: 'Kelola akun pengguna sistem, hak akses, dan status aktivasi.',
             breadcrumb: ['Sistem', 'Akun pengguna'],
           },
         },
@@ -99,6 +101,7 @@ const router = createRouter({
           meta: {
             ...metaForRoles(rolesFor('/admin/cerita')),
             title: 'Cerita',
+            subtitle: 'Kelola halaman, bab, dan narasi Cerita Kelurahan Manggar.',
             breadcrumb: ['Cerita'],
           },
         },
@@ -109,6 +112,7 @@ const router = createRouter({
           meta: {
             ...metaForRoles(rolesFor('/admin/peta')),
             title: 'Peta',
+            subtitle: 'Kelola titik spasial dan cakupan RT pada peta interaktif.',
             breadcrumb: ['Peta'],
           },
         },
@@ -119,6 +123,7 @@ const router = createRouter({
           meta: {
             ...metaForRoles(rolesFor('/admin/publikasi')),
             title: 'Publikasi',
+            subtitle: 'Kelola dokumen publikasi, infografik, dan buklet.',
             breadcrumb: ['Publikasi'],
           },
         },
@@ -129,6 +134,7 @@ const router = createRouter({
           meta: {
             ...metaForRoles(rolesFor('/admin/rukun-tetangga')),
             title: 'Rukun Tetangga',
+            subtitle: 'Kelola direktori Ketua RT 1–100 Kelurahan Manggar.',
             breadcrumb: ['Rukun Tetangga'],
           },
         },
@@ -139,6 +145,7 @@ const router = createRouter({
           meta: {
             ...metaForRoles(rolesFor('/admin/sistem/templat-kalimat')),
             title: 'Templat kalimat',
+            subtitle: 'Kelola templat kalimat perbandingan terhitung (tier-1).',
             breadcrumb: ['Sistem', 'Templat kalimat'],
           },
         },
@@ -149,6 +156,7 @@ const router = createRouter({
           meta: {
             ...metaForRoles(rolesFor('/admin/sistem/konfigurasi')),
             title: 'Konfigurasi sistem',
+            subtitle: 'Kelola profil publik portal, konfigurasi cuaca BMKG, dan retensi log audit.',
             breadcrumb: ['Sistem', 'Konfigurasi sistem'],
           },
         },
@@ -159,6 +167,8 @@ const router = createRouter({
           meta: {
             ...metaForRoles(rolesFor('/data')),
             title: 'Data',
+            subtitle:
+              'Perbarui angka indikator skalar dan tabel matriks Kelurahan Manggar secara manual.',
             breadcrumb: ['Data'],
           },
         },
@@ -169,6 +179,8 @@ const router = createRouter({
           meta: {
             ...metaForRoles(rolesFor('/audit-logs')),
             title: 'Log Sistem dan Audit Trail',
+            subtitle:
+              'Rekam jejak aktivitas manajemen pengguna, perubahan konten, dan kejadian keamanan autentikasi.',
             breadcrumb: ['Sistem', 'Log sistem'],
           },
         },
@@ -183,13 +195,15 @@ const router = createRouter({
           meta: {
             ...metaForRoles(['admin']),
             title: 'Pengaturan Retensi Audit',
+            subtitle:
+              'Atur masa penyimpanan log audit sistem berdasarkan tingkat keparahan (severity).',
             // Declares which sidebar item this child page belongs to, since its own path
             // doesn't match any ADMIN_NAV `to` (naive path-prefix matching would be unsafe here —
             // most ADMIN_NAV entries are /admin/* siblings, so prefix matching against '/admin'
             // would wrongly also light up Beranda). AdminSidebar.vue reads this to highlight
             // "Akun pengguna" and keep the Sistem group expanded while on this page.
             navActiveFor: '/users',
-            breadcrumb: ['Sistem', 'Akun pengguna', 'Retensi Audit'],
+            breadcrumb: ['Sistem', { label: 'Akun pengguna', to: '/users' }, 'Retensi Audit'],
           },
         },
       ],
