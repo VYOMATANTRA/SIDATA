@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
@@ -11,9 +11,12 @@ import { DEFAULT_CONTENT_BLOCKS } from '../services/contentBlocks.service.js';
  * isAvailableOnline to the FE PUBLICATIONS list in content/publikasi.ts.
  */
 describe('publikasi catalog FE↔BE sync', () => {
-  it('DEFAULT_CONTENT_BLOCKS publikasi-katalog matches frontend PUBLICATIONS', () => {
-    const here = dirname(fileURLToPath(import.meta.url));
-    const fePath = join(here, '../../../frontend/src/content/publikasi.ts');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const fePath = join(here, '../../../frontend/src/content/publikasi.ts');
+
+  it('DEFAULT_CONTENT_BLOCKS publikasi-katalog matches frontend PUBLICATIONS', {
+    skip: existsSync(fePath) ? false : 'frontend source is not in this checkout',
+  }, () => {
     const feSource = readFileSync(fePath, 'utf8');
 
     const beBlock = DEFAULT_CONTENT_BLOCKS.find((b) => b.slug === 'publikasi-katalog');

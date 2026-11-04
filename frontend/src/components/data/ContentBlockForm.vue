@@ -37,6 +37,9 @@ const submitted = ref(false);
 
 // Specialized draft metadata state
 const isHero = computed(() => props.block.slug === 'landing-hero');
+const heroBackgroundImage = ref(
+  String((props.block.metadata as Record<string, unknown> | null)?.backgroundImage ?? ''),
+);
 const isSambutan = computed(() => props.block.slug === 'landing-sambutan-lurah');
 const isProfil = computed(() => props.block.slug === 'tentang-kelurahan-profil');
 
@@ -272,9 +275,7 @@ function handleSubmit(): void {
 
   if (isHero.value) {
     // Align with landing PR #86: hero metadata is backgroundImage only (no badge/CTA).
-    const prev = props.block.metadata as Record<string, unknown> | null;
-    const bg =
-      typeof prev?.backgroundImage === 'string' ? prev.backgroundImage.trim() : '';
+    const bg = heroBackgroundImage.value.trim();
     metadata = bg ? { backgroundImage: bg } : null;
   } else if (isSambutan.value) {
     metadata = {
@@ -388,6 +389,23 @@ function handleSubmit(): void {
       ></textarea>
     </FormField>
 
+
+    <FormField
+      v-if="isHero"
+      :id="fieldId('backgroundImage')"
+      label="Gambar latar"
+      hint="Path relatif (/...) atau URL https. Kosongkan untuk menghapus."
+      v-slot="{ describedBy }"
+    >
+      <input
+        :id="fieldId('backgroundImage')"
+        v-model="heroBackgroundImage"
+        type="text"
+        maxlength="500"
+        :class="INPUT_CLASSES"
+        :aria-describedby="describedBy"
+      />
+    </FormField>
 
     <!-- Sambutan Lurah Metadata -->
     <fieldset
@@ -708,7 +726,7 @@ function handleSubmit(): void {
 
     <!-- Generic Metadata JSON Editor -->
     <FormField
-      v-if="!isHero && !isSambutan && !isProfil && rawMetadataJson"
+      v-if="!isHero && !isSambutan && !isProfil"
       :id="fieldId('metadata')"
       label="Metadata Tambahan (JSON)"
       hint="Format objek JSON valid untuk atribut khusus blok ini."

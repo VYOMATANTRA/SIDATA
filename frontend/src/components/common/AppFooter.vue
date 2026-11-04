@@ -11,7 +11,7 @@ import logoItk from '@/assets/img/logo_itk.webp';
 import logoVyomatantra from '@/assets/img/logo_vyomatantra.webp';
 import { useSettingsStore } from '../../stores/settings.store';
 
-const DEFAULT_PHONE = '(0542) 772158';
+const DEFAULT_PHONE = '(0542) 746123';
 const DEFAULT_ADDRESS_LINES = [
   'Kantor Kelurahan Manggar',
   'Jl. Mulawarman No. 1, RT 39',
