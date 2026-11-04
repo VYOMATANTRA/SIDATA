@@ -323,13 +323,13 @@ describe('DataManagementView.vue', () => {
     await wrapper.find('[data-test="tab-konten"]').trigger('click');
     await flushPromises();
 
-    expect(wrapper.text()).toContain('Portal Data Terpadu Kelurahan Manggar');
+    expect(wrapper.text()).toContain('Sistem Informasi Data Terpadu Kelurahan');
     expect(wrapper.text()).toContain('Sambutan Lurah Manggar');
     expect(wrapper.text()).toContain('Profil Kelurahan Manggar');
 
     const editHeroBtn = wrapper
       .findAll('button')
-      .find((b) => b.text().includes('Portal Data Terpadu'));
+      .find((b) => b.text().includes('Sistem Informasi Data Terpadu'));
     expect(editHeroBtn).toBeDefined();
 
     wrapper.unmount();
