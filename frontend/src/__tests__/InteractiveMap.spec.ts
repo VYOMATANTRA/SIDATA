@@ -38,11 +38,6 @@ const leafletMocks = vi.hoisted(() => {
     lat: -1.2251,
     lng: 116.9438,
   }));
-  const markerGetElement = vi.fn<() => HTMLElement>(() => {
-    const el = document.createElement('div');
-    el.className = 'leaflet-marker-icon';
-    return el;
-  });
 
   const state = {
     lastClusterGroupOptions: null as Record<string, unknown> | null,
