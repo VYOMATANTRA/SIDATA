@@ -180,6 +180,21 @@ const variantClasses = computed(() => {
                 <path d="M22 12A10 10 0 0 0 12 2v10z" />
               </svg>
 
+              <svg
+                v-else-if="item.icon === 'landscape'"
+                class="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8"
+                :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M3 18l6-8 4 5 3-4 5 7" />
+                <path d="M3 18h18" />
+              </svg>
+
               <!-- Fallback Default Icon -->
               <svg
                 v-else
