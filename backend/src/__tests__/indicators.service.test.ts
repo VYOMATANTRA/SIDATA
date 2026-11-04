@@ -1278,6 +1278,44 @@ describe('indicators.service getIndicatorById', () => {
     assert.equal((await getIndicatorById('ind-1'))?.label, 'Penduduk Baru');
   });
 
+  it('does not let a slow miss hide an indicator created while the read was in flight', async () => {
+    let releaseRead: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    let slowReadStarted = false;
+    let created = false;
+
+    indicatorImpl['findUnique'] = async (args: AnyRecord) => {
+      const where = args['where'] as AnyRecord;
+      if (where['slug'] !== 'new-stat' && where['id'] !== 'new-stat' && where['id'] !== 'ind-new') {
+        return null;
+      }
+      if (!slowReadStarted && where['slug'] === 'new-stat') {
+        slowReadStarted = true;
+        await gate;
+        return null;
+      }
+      return created ? indicatorRow({ id: 'ind-new', slug: 'new-stat' }) : null;
+    };
+    indicatorImpl['create'] = async (...args: never[]) => {
+      const { data } = args[0] as unknown as { data: AnyRecord };
+      created = true;
+      return indicatorRow({ ...data, id: 'ind-new' });
+    };
+    sectionImpl['findUnique'] = async () => ({ id: 'sec-1' });
+
+    const slow = getIndicatorById('new-stat');
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(slowReadStarted, true);
+
+    await createIndicator(validPayload({ slug: 'new-stat' }), ACTOR, CONTEXT);
+    releaseRead();
+    await slow;
+
+    assert.equal((await getIndicatorById('new-stat'))?.id, 'ind-new');
+  });
+
   it('indicatorCacheKey and normalizeIndicatorLookup are stable', () => {
     assert.equal(normalizeIndicatorLookup('  AbC  '), 'abc');
     assert.equal(indicatorCacheKey('id', 'AbC'), 'id:abc');
