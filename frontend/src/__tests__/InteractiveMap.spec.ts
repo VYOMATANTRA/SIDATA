@@ -101,15 +101,19 @@ const leafletMocks = vi.hoisted(() => {
         addTo: addToMap,
       })),
     },
-    marker: vi.fn<() => Record<string, unknown>>(() => ({
-      on: markerOn,
-      setIcon: markerSetIcon,
-      setLatLng: markerSetLatLng,
-      setZIndexOffset: markerSetZIndexOffset,
-      getLatLng: markerGetLatLng,
-      getElement: markerGetElement,
-      options: {},
-    })),
+    marker: vi.fn<() => Record<string, unknown>>(() => {
+      const el = document.createElement('div');
+      el.className = 'leaflet-marker-icon';
+      return {
+        on: markerOn,
+        setIcon: markerSetIcon,
+        setLatLng: markerSetLatLng,
+        setZIndexOffset: markerSetZIndexOffset,
+        getLatLng: markerGetLatLng,
+        getElement: () => el,
+        options: {},
+      };
+    }),
     divIcon: vi.fn<(opts: unknown) => unknown>((opts) => opts),
     latLngBounds: vi.fn<(latlngs: unknown) => unknown>((latlngs) => latlngs),
     markerClusterGroup,
@@ -229,9 +233,9 @@ describe('InteractiveMap.vue', () => {
     expect(typeof leafletMocks.state.lastClusterGroupOptions?.iconCreateFunction).toBe('function');
     expect(leafletMocks.state.layeraddHandler).toBeTypeOf('function');
 
-    const iconCreate = leafletMocks.state.lastClusterGroupOptions?.iconCreateFunction as (
-      cluster: { getChildCount: () => number },
-    ) => { html: string; className: string };
+    const iconCreate = leafletMocks.state.lastClusterGroupOptions?.iconCreateFunction as (cluster: {
+      getChildCount: () => number;
+    }) => { html: string; className: string };
     const created = iconCreate({ getChildCount: () => 2 });
     expect(created.className).toBe('map-cluster');
     expect(created.html).toContain('sr-only');
@@ -247,7 +251,9 @@ describe('InteractiveMap.vue', () => {
 
     leafletMocks.state.layeraddHandler?.({ layer: cluster });
     await flushPromises();
-    await new Promise<void>((resolve) => { queueMicrotask(() => resolve()); });
+    await new Promise<void>((resolve) => {
+      queueMicrotask(() => resolve());
+    });
 
     expect(iconEl.getAttribute('role')).toBe('button');
     expect(iconEl.getAttribute('tabindex')).toBe('0');
@@ -259,5 +265,23 @@ describe('InteractiveMap.vue', () => {
     leafletMocks.zoomToBounds.mockClear();
     iconEl.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
     expect(leafletMocks.zoomToBounds).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes a marker aria-label when only the name changes', async () => {
+    const wrapper = await mountMap({ points: [point({ id: 'point-1', name: 'Pos Lama', rts: [1] })] });
+    const marker = leafletMocks.L.marker.mock.results[0]?.value as {
+      getElement: () => HTMLElement;
+    };
+    const el = marker.getElement();
+
+    await wrapper.setProps({ points: [point({ id: 'point-1', name: 'Pos Lama', rts: [1] })] });
+    await flushPromises();
+    expect(el.getAttribute('aria-label')).toContain('Pos Lama');
+
+    await wrapper.setProps({ points: [point({ id: 'point-1', name: 'Pos Baru', rts: [1] })] });
+    await flushPromises();
+
+    expect(el.getAttribute('aria-label')).toContain('Pos Baru');
+    expect(leafletMocks.L.marker).toHaveBeenCalledTimes(1);
   });
 });

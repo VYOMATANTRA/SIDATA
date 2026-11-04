@@ -136,6 +136,9 @@ function renderMarkers() {
       if (markerSignatures.get(point.id) !== sig) {
         updateMarkerIcon(current, point, isSelected);
         markerSignatures.set(point.id, sig);
+      } else {
+        // Name or coverage can change without a new icon. setIcon is skipped, so refresh the label.
+        applyMarkerA11y(current, point);
       }
       current.setZIndexOffset(isSelected ? 1000 : 0);
       continue;
