@@ -63,7 +63,7 @@ const indicatorsStore = useIndicatorsStore();
 const contentBlocksStore = useContentBlocksStore();
 
 onMounted(() => {
-  void indicatorsStore.fetchBySlug(POPULATION_INDICATOR_SLUG, true);
+  void indicatorsStore.fetchBySlug(POPULATION_INDICATOR_SLUG);
   void contentBlocksStore.fetchBlocks();
 });
 
@@ -97,7 +97,7 @@ const lurahDisplayName = computed(() => {
   if (typeof fromRow === 'string' && fromRow.trim()) return fromRow.trim();
   const saved = profileMetadata.value?.lurahName;
   if (typeof saved === 'string' && saved.trim()) return saved.trim();
-  return LURAH_OFFICIAL.officialName ?? 'Nama pejabat belum tersedia';
+  return LURAH_OFFICIAL?.officialName ?? 'Nama pejabat belum tersedia';
 });
 
 const lurahDisplayTitle = computed(() => {

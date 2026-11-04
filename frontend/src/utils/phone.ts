@@ -25,14 +25,14 @@ function isCompletePhone(value: string): boolean {
 }
 
 /**
- * null when a separator is present but a piece is not a full number
- * (for example `0812-111/222`), so the cut half is never treated as dialable.
+ * Separated strings keep only complete numbers. A cut half such as `0812-111/222`
+ * yields nothing, so it is never linked. A short extra piece does not hide a full number.
  */
 function safeParts(value: string): string[] | null {
   const parts = splitPhoneParts(value);
   if (!SEPARATOR.test(value)) return parts;
-  if (parts.length < 2 || !parts.every(isCompletePhone)) return null;
-  return parts;
+  const complete = parts.filter(isCompletePhone);
+  return complete.length > 0 ? complete : null;
 }
 
 /**
