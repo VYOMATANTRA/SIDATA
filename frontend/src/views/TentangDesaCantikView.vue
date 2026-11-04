@@ -7,9 +7,9 @@ import TentangInfoCard from '../components/tentang/TentangInfoCard.vue';
 import TentangFeatureBand from '../components/tentang/TentangFeatureBand.vue';
 import TentangResourceCard from '../components/tentang/TentangResourceCard.vue';
 import TentangLogoRow from '../components/tentang/TentangLogoRow.vue';
-import heroImage from '@/assets/img/background_laman_depan_kelurahan.png';
-import logoDesaCantik from '@/assets/img/logo_desa_cantik.png';
-import logoBps from '@/assets/img/logo_bps.png';
+import heroImage from '@/assets/img/background_laman_depan_kelurahan.webp';
+import logoDesaCantik from '@/assets/img/logo_desa_cantik.webp';
+import logoBps from '@/assets/img/logo_bps.webp';
 
 interface PillarItem {
   title: string;

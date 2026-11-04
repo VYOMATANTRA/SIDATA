@@ -278,7 +278,7 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     });
 
     // The Lurah portrait uses decorative/empty alt per 89-B1 review resolution
-    const lurahImg = wrapper.find('img[src="/src/assets/img/lurah_placeholder_sample.png"]');
+    const lurahImg = wrapper.find('img[src="/src/assets/img/lurah_placeholder_sample.webp"]');
     expect(lurahImg.exists()).toBe(true);
     expect(lurahImg.attributes('alt')).toBe('');
     expect(wrapper.text()).toContain('Pimpinan Kelurahan');

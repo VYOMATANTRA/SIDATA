@@ -1,4 +1,5 @@
 import prisma from '../src/utils/prisma.js';
+import { Prisma } from '../generated/prisma/client.js';
 import {
   AUDIT_RETENTION_KEYS,
   PUBLIC_SETTING_KEYS,
@@ -214,7 +215,7 @@ async function main() {
         type: block.type,
         title: block.title,
         body: block.body,
-        metadata: block.metadata,
+        metadata: block.metadata === null ? Prisma.DbNull : block.metadata,
       },
     });
   }

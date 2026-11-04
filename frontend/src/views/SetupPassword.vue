@@ -4,8 +4,8 @@ import { useRouter } from 'vue-router'
 import TurnstileWidget from '../components/auth/TurnstileWidget.vue'
 import { getCsrfToken } from '../utils/csrf'
 import { useAuthStore } from '../stores/auth'
-import bgImage from '../assets/img/background_laman_depan_kelurahan.png'
-import logoBalikpapan from '../assets/img/logo_balikpapan.png'
+import bgImage from '../assets/img/background_laman_depan_kelurahan.webp'
+import logoBalikpapan from '../assets/img/logo_balikpapan.webp'
 
 const router = useRouter()
 const authStore = useAuthStore()
