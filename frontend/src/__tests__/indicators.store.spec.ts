@@ -673,7 +673,7 @@ describe('indicators store (single indicator reads by slug)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('returns null and records the error against that slug without caching empty result', async () => {
+  it('treats a 404 as unpublished data, not a load error', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
       ok: false,
       status: 404,
@@ -684,7 +684,7 @@ describe('indicators store (single indicator reads by slug)', () => {
     const result = await store.fetchBySlug('non-existent');
 
     expect(result).toBeNull();
-    expect(store.errorsBySlug['non-existent']).toContain('404');
+    expect(store.errorsBySlug['non-existent']).toBeNull();
     expect(store.bySlug['non-existent']).toBeUndefined();
     expect(store.loadingBySlug['non-existent']).toBe(false);
   });

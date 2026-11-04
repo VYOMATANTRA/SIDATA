@@ -427,7 +427,7 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(wrapper.text()).not.toContain('strive menyediakan');
   });
 
-  it('calls fetchBySlug with force=true on mount to guarantee fresh hero data', async () => {
+  it('calls fetchBySlug without force on mount so the short cache can be used', async () => {
     const { pinia, router } = mountView();
     const indicatorsStore = useIndicatorsStore();
     const fetchSpy = vi.spyOn(indicatorsStore, 'fetchBySlug').mockResolvedValue(null);
@@ -439,6 +439,6 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
       global: { plugins: [pinia, router] },
     });
 
-    expect(fetchSpy).toHaveBeenCalledWith('jumlah-penduduk', true);
+    expect(fetchSpy).toHaveBeenCalledWith('jumlah-penduduk');
   });
 });

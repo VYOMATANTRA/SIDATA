@@ -59,7 +59,7 @@ const POPULATION_INDICATOR_SLUG = 'jumlah-penduduk';
 const indicatorsStore = useIndicatorsStore();
 
 onMounted(() => {
-  void indicatorsStore.fetchBySlug(POPULATION_INDICATOR_SLUG, true);
+  void indicatorsStore.fetchBySlug(POPULATION_INDICATOR_SLUG);
 });
 
 const populationIndicator = computed(() => {
