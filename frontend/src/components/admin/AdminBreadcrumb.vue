@@ -4,6 +4,18 @@ import { useRoute, RouterLink } from 'vue-router';
 
 export type BreadcrumbSegment = string | { label: string; to?: string };
 
+declare module 'vue-router' {
+  interface RouteMeta {
+    breadcrumb?: BreadcrumbSegment[];
+    title?: string;
+    subtitle?: string;
+    navActiveFor?: string;
+    requiresAuth?: boolean;
+    requiresAdmin?: boolean;
+    requiresEditor?: boolean;
+  }
+}
+
 interface NormalizedSegment {
   label: string;
   to?: string;
@@ -21,9 +33,7 @@ const route = useRoute();
 const trail = computed<NormalizedSegment[]>(() => {
   const configured = route.meta.breadcrumb;
   if (Array.isArray(configured)) {
-    return (configured as BreadcrumbSegment[]).map((segment) =>
-      typeof segment === 'string' ? { label: segment } : segment,
-    );
+    return configured.map((segment) => (typeof segment === 'string' ? { label: segment } : segment));
   }
   return typeof route.meta.title === 'string' ? [{ label: route.meta.title }] : [];
 });

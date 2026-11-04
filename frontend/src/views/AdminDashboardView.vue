@@ -1,11 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
-import { setAdminHeader } from '../composables/useAdminHeader';
-
-onMounted(() => {
-  setAdminHeader('Beranda', 'Ringkasan aktivitas dan pintasan menuju modul admin.');
-});
-
+// Static header title and subtitle live in route `meta` (router/index.ts), seeded by AdminLayout.
 // TODO: build the real admin dashboard (recent activity, quick links, key stats).
 </script>
 

@@ -1,9 +1,10 @@
 import { ref } from 'vue';
 
 /**
- * Module-level (not per-component) state: the header lives in AdminLayout.vue, one level above
- * the routed view that owns the title/subtitle text, so the two need a shared channel rather than
- * props/emit. A view calls `setAdminHeader` in `onMounted`; AdminHeader.vue reads these refs.
+ * Module-level (not per-component) state: `AdminHeader.vue` lives in `AdminLayout.vue`, one level
+ * above the routed view. Static titles and subtitles live in route `meta` (`router/index.ts`) as
+ * the single source of truth and are seeded by `AdminLayout.vue` on navigation; a view only calls
+ * `setAdminHeader` directly when its subtitle needs to be overridden dynamically at runtime.
  */
 const title = ref('');
 const subtitle = ref('');

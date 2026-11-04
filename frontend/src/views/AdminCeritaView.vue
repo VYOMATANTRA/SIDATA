@@ -1,11 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
-import { setAdminHeader } from '../composables/useAdminHeader';
-
-onMounted(() => {
-  setAdminHeader('Cerita', 'Kelola daftar halaman Cerita, bab, dan urutannya.');
-});
-
+// Static header title and subtitle live in route `meta` (router/index.ts), seeded by AdminLayout.
 // TODO: build page/chapter management UI on top of GET/POST/DELETE /api/pages (SPEC §2, §3).
 </script>
 

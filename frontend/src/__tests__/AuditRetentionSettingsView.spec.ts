@@ -4,7 +4,6 @@ import { setActivePinia, createPinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import AuditRetentionSettingsView from '../views/AuditRetentionSettingsView.vue';
 import { useAuthStore } from '../stores/auth';
-import { useAdminHeader } from '../composables/useAdminHeader';
 
 function createTestRouter() {
   return createRouter({
@@ -49,10 +48,6 @@ describe('AuditRetentionSettingsView Accessibility & Markup', () => {
     const h2s = wrapper.findAll('h2');
     expect(h2s.length).toBe(1);
     expect(h2s[0]?.text()).toContain('Kebijakan Masa Simpan per Tingkat Keparahan');
-
-    const { title, subtitle } = useAdminHeader();
-    expect(title.value).toBe('Pengaturan Retensi Audit');
-    expect(subtitle.value).toContain('Atur masa penyimpanan log audit sistem');
 
     // Form controls must have matching <label for="..."> and id
     const inputIds = ['retention-info', 'retention-warning', 'retention-critical'];

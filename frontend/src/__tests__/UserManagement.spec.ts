@@ -85,7 +85,11 @@ describe('UserManagement inside AdminLayout (shell regression)', () => {
         {
           path: '/users',
           component: UserManagement,
-          meta: { title: 'Manajemen Pengguna', breadcrumb: ['Sistem', 'Akun pengguna'] },
+          meta: {
+            title: 'Manajemen Pengguna',
+            subtitle: 'Kelola akun pengguna sistem.',
+            breadcrumb: ['Sistem', 'Akun pengguna'],
+          },
         },
         { path: '/data', component: { template: '<div>Data</div>' } },
         { path: '/audit-logs', component: { template: '<div>Audit</div>' } },
@@ -107,8 +111,7 @@ describe('UserManagement inside AdminLayout (shell regression)', () => {
     expect(wrapper.find('h1').text()).toBe('Manajemen Pengguna');
     expect(wrapper.findComponent(UserManagement).exists()).toBe(true);
     // The view no longer renders its own duplicate <h2> title — only the shell's <h1> and the
-    // subtitle it set via setAdminHeader onMounted (a screen reader would otherwise read the
-    // page title twice).
+    // subtitle seeded from route meta (a screen reader would otherwise read the page title twice).
     expect(wrapper.find('h2').exists()).toBe(false);
     expect(wrapper.find('[data-test="admin-header"] p').text()).toContain(
       'Kelola akun pengguna sistem',

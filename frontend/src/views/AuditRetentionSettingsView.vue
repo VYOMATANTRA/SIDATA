@@ -9,7 +9,6 @@ import {
   type AuditRetentionPolicy,
 } from '../stores/auditRetention.store';
 import BaseButton from '../components/common/BaseButton.vue';
-import { setAdminHeader } from '../composables/useAdminHeader';
 import { INPUT_CLASSES } from '../utils/formStyles';
 
 const store = useAuditRetentionStore();
@@ -68,10 +67,6 @@ async function loadSettings() {
 }
 
 onMounted(async () => {
-  setAdminHeader(
-    'Pengaturan Retensi Audit',
-    'Atur masa penyimpanan log audit sistem berdasarkan tingkat keparahan (severity).',
-  );
   await loadSettings();
 });
 

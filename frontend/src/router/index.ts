@@ -14,11 +14,10 @@ export function metaForRoles(roles: AdminNavRole[]): {
   // Admin. Both flags are always emitted explicitly, and requiresEditor stays true on Admin-only
   // routes as well (since authStore.canEditData is isAdmin || isEditor) so a child route never
   // weakens the parent /admin shell's baseline editor/admin gate.
-  const allowsAdmin = roles.includes('admin') || allowsEditor;
   return {
     requiresAuth: true,
-    requiresAdmin: allowsAdmin && !allowsEditor,
-    requiresEditor: allowsEditor || allowsAdmin,
+    requiresAdmin: !allowsEditor,
+    requiresEditor: true,
   };
 }
 
@@ -26,16 +25,14 @@ const adminNavLinks = ADMIN_NAV.flatMap((entry) =>
   isAdminNavGroup(entry) ? entry.items : [entry],
 );
 export const rolesByPath = new Map(adminNavLinks.map((item) => [item.to, item.roles]));
-export const requestedNavPaths: string[] = [];
 
 /**
  * Looks up the roles ADMIN_NAV declares for a path. Defaults fail-closed to `['admin']` at runtime
  * so a renamed nav path never crashes router module initialization (which would break public
  * pages too) or silently widens access to editors; `adminNavRouteSync.spec.ts` asserts in CI that
- * every path passed to `rolesFor` exists in `ADMIN_NAV`.
+ * every admin route and `ADMIN_NAV` stay in sync.
  */
 export function rolesFor(path: string): AdminNavRole[] {
-  requestedNavPaths.push(path);
   return rolesByPath.get(path) ?? ['admin'];
 }
 
@@ -101,7 +98,7 @@ const router = createRouter({
           meta: {
             ...metaForRoles(rolesFor('/admin/cerita')),
             title: 'Cerita',
-            subtitle: 'Kelola halaman, bab, dan narasi Cerita Kelurahan Manggar.',
+            subtitle: 'Kelola daftar halaman Cerita, bab, dan urutannya.',
             breadcrumb: ['Cerita'],
           },
         },
@@ -112,7 +109,7 @@ const router = createRouter({
           meta: {
             ...metaForRoles(rolesFor('/admin/peta')),
             title: 'Peta',
-            subtitle: 'Kelola titik spasial dan cakupan RT pada peta interaktif.',
+            subtitle: 'Kelola titik spasial, cakupan RT, dan data Ketua RT.',
             breadcrumb: ['Peta'],
           },
         },
@@ -123,7 +120,7 @@ const router = createRouter({
           meta: {
             ...metaForRoles(rolesFor('/admin/publikasi')),
             title: 'Publikasi',
-            subtitle: 'Kelola dokumen publikasi, infografik, dan buklet.',
+            subtitle: 'Kelola materi publikasi, infografis, dan dokumen terkait.',
             breadcrumb: ['Publikasi'],
           },
         },
@@ -134,7 +131,7 @@ const router = createRouter({
           meta: {
             ...metaForRoles(rolesFor('/admin/rukun-tetangga')),
             title: 'Rukun Tetangga',
-            subtitle: 'Kelola direktori Ketua RT 1–100 Kelurahan Manggar.',
+            subtitle: 'Kelola data 100 Ketua RT: nama, kontak, dan alamat.',
             breadcrumb: ['Rukun Tetangga'],
           },
         },
@@ -145,7 +142,7 @@ const router = createRouter({
           meta: {
             ...metaForRoles(rolesFor('/admin/sistem/templat-kalimat')),
             title: 'Templat kalimat',
-            subtitle: 'Kelola templat kalimat perbandingan terhitung (tier-1).',
+            subtitle: 'Kelola templat kalimat perbandingan tier-1 (SPEC §5).',
             breadcrumb: ['Sistem', 'Templat kalimat'],
           },
         },
@@ -156,7 +153,7 @@ const router = createRouter({
           meta: {
             ...metaForRoles(rolesFor('/admin/sistem/konfigurasi')),
             title: 'Konfigurasi sistem',
-            subtitle: 'Kelola profil publik portal, konfigurasi cuaca BMKG, dan retensi log audit.',
+            subtitle: 'Pengaturan portal publik dan konfigurasi cuaca operasional.',
             breadcrumb: ['Sistem', 'Konfigurasi sistem'],
           },
         },
@@ -168,7 +165,7 @@ const router = createRouter({
             ...metaForRoles(rolesFor('/data')),
             title: 'Data',
             subtitle:
-              'Perbarui angka indikator skalar dan tabel matriks Kelurahan Manggar secara manual.',
+              'Kelola angka indikator skalar dan empat tabel matriks. Angka dimasukkan manual; impor massal belum tersedia.',
             breadcrumb: ['Data'],
           },
         },
@@ -180,7 +177,7 @@ const router = createRouter({
             ...metaForRoles(rolesFor('/audit-logs')),
             title: 'Log Sistem dan Audit Trail',
             subtitle:
-              'Rekam jejak aktivitas manajemen pengguna, perubahan konten, dan kejadian keamanan autentikasi.',
+              'Pantau seluruh aktivitas yang terjadi di sistem, mulai dari autentikasi hingga riwayat konfigurasi admin.',
             breadcrumb: ['Sistem', 'Log sistem'],
           },
         },

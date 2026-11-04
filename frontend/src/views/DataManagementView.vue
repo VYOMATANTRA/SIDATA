@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { setAdminHeader } from '../composables/useAdminHeader';
 import BaseButton from '../components/common/BaseButton.vue';
 import BaseModal from '../components/common/BaseModal.vue';
 import IndicatorCard, { type IndicatorCardModel } from '../components/data/IndicatorCard.vue';
@@ -151,10 +150,6 @@ async function loadAll(): Promise<void> {
 }
 
 onMounted(() => {
-  setAdminHeader(
-    'Data',
-    'Kelola angka indikator skalar dan empat tabel matriks. Angka dimasukkan manual; impor massal belum tersedia.',
-  );
   void loadAll();
 });
 

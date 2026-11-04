@@ -1,11 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
-import { setAdminHeader } from '../composables/useAdminHeader';
-
-onMounted(() => {
-  setAdminHeader('Peta', 'Kelola titik spasial, cakupan RT, dan data Ketua RT.');
-});
-
+// Static header title and subtitle live in route `meta` (router/index.ts), seeded by AdminLayout.
 // TODO: build the map editor UI on top of /api/maps/points and /api/maps/rt-leaders (SPEC §7).
 </script>
 

@@ -3,7 +3,6 @@ import { ref, computed, onMounted } from 'vue'
 import { ClockIcon, MagnifyingGlassIcon, PlusIcon } from '@heroicons/vue/24/outline'
 import { useUsersStore, type UserItem } from '../stores/users.store'
 import { useAuthStore } from '../stores/auth'
-import { setAdminHeader } from '../composables/useAdminHeader'
 import BaseButton from '../components/common/BaseButton.vue'
 import BaseModal from '../components/common/BaseModal.vue'
 import { INPUT_CLASSES } from '../utils/formStyles'
@@ -91,10 +90,6 @@ const filteredUsers = computed(() => {
 })
 
 onMounted(async () => {
-  setAdminHeader(
-    'Manajemen Pengguna',
-    'Kelola akun pengguna sistem, hak akses, dan status aktivasi.',
-  )
   await Promise.all([usersStore.fetchUsers(), usersStore.fetchRoles()])
 })
 
