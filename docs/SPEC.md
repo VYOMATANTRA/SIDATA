@@ -315,7 +315,7 @@ caching live in `system_settings` as a separate operational concern.
 
 **Landing page**, top to bottom:
 
-1. Hero — institutional voice: what the site is and what it covers. Framed toward Manggar's general "potensi wilayah," not an explicit Bank Sampah callout even though the main potential is Bank Sampah. Mounted directly on top of the hero background image beneath the title and body text is the **Widget Cuaca** (frosted glassmorphic card presenting current conditions and next 2 hourly forecast slots in Manggar from BMKG: condition description, temperature Celsius, humidity percent, wind speed, localized wind direction, accessible skeleton loading, error alert with retry button, and stale notice).
+1. Hero — institutional voice: what the site is and what it covers. Framed toward Manggar's general "potensi wilayah," not an explicit Bank Sampah callout even though the main potential is Bank Sampah. Mounted directly on top of the hero background image beneath the title and body text is the **Widget Cuaca** (frosted glassmorphic card presenting current conditions and next 2 forecast slots (about 3 hours apart) in Manggar from BMKG: condition description, temperature Celsius, humidity percent, wind speed, localized wind direction, accessible skeleton loading, error alert with retry button, and stale notice).
 2. Sambutan Lurah — kept as a separate section, personal/welcoming voice, distinct from the
    hero's institutional voice.
 3. Cerita preview — cards for the stat pages, each showing a few representative figures + link.

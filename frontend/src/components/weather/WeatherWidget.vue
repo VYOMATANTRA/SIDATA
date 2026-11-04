@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import { useWeatherStore } from '../../stores/weather.store';
 import WeatherCurrentCard from './WeatherCurrentCard.vue';
 import WeatherUpcomingCard from './WeatherUpcomingCard.vue';
@@ -25,9 +25,14 @@ const isLoadingState = computed(
 );
 
 onMounted(async () => {
+  weatherStore.startLiveClock();
   if (props.autoFetch && !weatherStore.isLoaded && !weatherStore.isLoading) {
     await weatherStore.fetchWeather();
   }
+});
+
+onBeforeUnmount(() => {
+  weatherStore.stopLiveClock();
 });
 
 async function handleRetry() {
@@ -139,16 +144,19 @@ async function handleRetry() {
       </button>
     </div>
 
-    <!-- 3. Stale Data Notice Banner (when stale is true and loaded) -->
+    <!-- 3. Stale Data Notice Banner (when stale is true or background refresh failed while loaded) -->
     <div
-      v-if="weatherStore.isLoaded && weatherStore.isStale"
+      v-if="weatherStore.isLoaded && (weatherStore.isStale || weatherStore.error)"
       role="status"
       aria-live="polite"
       class="mb-3 flex flex-col gap-1.5 rounded-lg border border-amber-400/30 bg-amber-500/20 px-3.5 py-2 text-xs font-medium text-amber-200 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between"
       data-test="weather-stale-banner"
     >
       <div class="flex flex-wrap items-center gap-1.5">
-        <span>Data perkiraan cuaca BMKG belum diperbarui (data cache).</span>
+        <span v-if="weatherStore.error">
+          Pembaruan cuaca terkendala. Menampilkan data terakhir.
+        </span>
+        <span v-else> Data perkiraan cuaca BMKG belum diperbarui (data cache). </span>
         <span
           v-if="weatherStore.error"
           class="font-semibold text-rose-200"
@@ -179,7 +187,7 @@ async function handleRetry() {
         <WeatherCurrentCard
           :entry="weatherStore.currentEntry"
           :location-name="weatherStore.locationName"
-          :stale="weatherStore.isStale"
+          :stale="weatherStore.isStale || Boolean(weatherStore.error)"
         />
       </div>
 

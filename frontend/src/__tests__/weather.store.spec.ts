@@ -592,5 +592,111 @@ describe('Weather Pinia Store & Utilities (weather.store.ts)', () => {
       expect(store.isLoaded).toBe(false);
       expect(store.currentTime).toBeGreaterThan(oldTime);
     });
+
+    it('deduplicates entries with different datetime string formats representing the same timestamp', async () => {
+      globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ...mockApiResponse,
+          forecast: [
+            {
+              datetime: '2026-10-30 12:00:00',
+              temperatureCelsius: 28,
+              humidityPercent: 80,
+              description: 'Berawan',
+              windSpeedKmh: 10,
+              windDirection: 'S',
+            },
+            {
+              datetime: '2026-10-30T12:00:00+08:00', // same moment, ISO format
+              temperatureCelsius: 28,
+              humidityPercent: 80,
+              description: 'Berawan',
+              windSpeedKmh: 10,
+              windDirection: 'S',
+            },
+            {
+              datetime: '2026-10-30 15:00:00',
+              temperatureCelsius: 29,
+              humidityPercent: 75,
+              description: 'Cerah Berawan',
+              windSpeedKmh: 12,
+              windDirection: 'SE',
+            },
+          ],
+        }),
+      } as Response);
+
+      const store = useWeatherStore();
+      await store.fetchWeather();
+
+      expect(store.sortedForecast.length).toBe(2);
+      expect(store.sortedForecast[0]?.datetime).toBe('2026-10-30 12:00:00');
+      expect(store.sortedForecast[1]?.datetime).toBe('2026-10-30 15:00:00');
+    });
+
+    it('discards in-flight fetch results when resetState is called before response arrives', async () => {
+      let resolveFetch!: (res: Response) => void;
+      const fetchPromise = new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      });
+
+      globalThis.fetch = vi.fn<typeof fetch>().mockReturnValue(fetchPromise);
+
+      const store = useWeatherStore();
+      const inFlightPromise = store.fetchWeather();
+
+      expect(store.isLoading).toBe(true);
+
+      // Reset store before fetch finishes
+      store.resetState();
+      expect(store.isLoaded).toBe(false);
+      expect(store.data).toBeNull();
+
+      // Now resolve the previous in-flight request
+      resolveFetch({
+        ok: true,
+        status: 200,
+        json: async () => mockApiResponse,
+      } as Response);
+
+      await inFlightPromise;
+
+      // Old in-flight fetch must NOT resurrect data or mark isLoaded as true
+      expect(store.isLoaded).toBe(false);
+      expect(store.data).toBeNull();
+    });
+
+    it('automatically refetches weather when live clock ticks and client cache is expired', async () => {
+      let fetchCount = 0;
+      globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async () => {
+        fetchCount++;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => mockApiResponse,
+        } as Response;
+      });
+
+      const store = useWeatherStore();
+      await store.fetchWeather();
+      expect(fetchCount).toBe(1);
+
+      // Age lastFetchedAt beyond client cache TTL
+      store.lastFetchedAt = new Date(Date.now() - 16 * 60 * 1000);
+
+      // Use fake timers to advance clock interval
+      vi.useFakeTimers();
+      store.startLiveClock(1000);
+      vi.advanceTimersByTime(1000);
+
+      // Let tick promise resolve
+      await Promise.resolve();
+      expect(fetchCount).toBe(2);
+
+      store.stopLiveClock();
+      vi.useRealTimers();
+    });
   });
 });

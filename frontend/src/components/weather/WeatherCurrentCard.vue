@@ -77,13 +77,15 @@ const srWindDirectionText = computed(() =>
     <!-- Card Header -->
     <div class="flex items-start justify-between gap-2 border-b border-white/10 pb-3">
       <div>
-        <h3
+        <p
           class="text-base font-bold tracking-tight text-white sm:text-lg"
           data-test="weather-current-title"
         >
           Perkiraan Cuaca {{ locationName || 'Manggar' }}
-        </h3>
-        <span class="text-brand-cyan text-xs font-bold tracking-wider uppercase"> SAAT INI </span>
+        </p>
+        <span class="text-brand-cyan text-xs font-bold tracking-wider uppercase">
+          {{ stale ? 'DATA TERAKHIR' : 'SAAT INI' }}
+        </span>
       </div>
 
       <div

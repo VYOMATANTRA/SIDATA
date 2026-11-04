@@ -131,11 +131,14 @@ export const useWeatherStore = defineStore('weather', () => {
 
   let inFlight: Promise<WeatherData | null> | null = null;
   let clockIntervalId: ReturnType<typeof setInterval> | null = null;
+  let fetchGeneration = 0;
 
   function startLiveClock(intervalMs = 60 * 1000) {
     if (clockIntervalId !== null) return;
     clockIntervalId = setInterval(() => {
       currentTime.value = Date.now();
+      // Periodically refresh weather if client cache TTL has expired
+      fetchWeather().catch(() => {});
     }, intervalMs);
     if (
       typeof clockIntervalId === 'object' &&
@@ -164,9 +167,6 @@ export const useWeatherStore = defineStore('weather', () => {
     }
   }
 
-  // Start live clock updating every 60s
-  startLiveClock();
-
   const isStale = computed(() => Boolean(data.value?.stale));
   const location = computed(() => data.value?.location ?? null);
   const locationName = computed(() => data.value?.location?.desa || 'Manggar');
@@ -181,10 +181,12 @@ export const useWeatherStore = defineStore('weather', () => {
     const sorted = [...validEntries].sort(
       (a, b) => parseForecastDatetime(a.datetime) - parseForecastDatetime(b.datetime),
     );
-    // Deduplicate any consecutive entries with identical datetime timestamps
+    // Deduplicate any consecutive entries with identical parsed timestamps
     return sorted.filter((entry, idx, arr) => {
       if (idx === 0) return true;
-      return entry.datetime !== arr[idx - 1]?.datetime;
+      const prev = arr[idx - 1];
+      if (!prev) return true;
+      return parseForecastDatetime(entry.datetime) !== parseForecastDatetime(prev.datetime);
     });
   });
 
@@ -231,12 +233,18 @@ export const useWeatherStore = defineStore('weather', () => {
     isLoading.value = true;
     error.value = null;
 
+    const currentGeneration = ++fetchGeneration;
+
     inFlight = (async () => {
       try {
         const res = await fetch('/api/weather', {
           method: 'GET',
           headers: { Accept: 'application/json' },
         });
+
+        if (currentGeneration !== fetchGeneration) {
+          return null;
+        }
 
         if (!res.ok) {
           const errJson = await res.json().catch(() => null);
@@ -248,6 +256,10 @@ export const useWeatherStore = defineStore('weather', () => {
         }
 
         const json = await res.json();
+        if (currentGeneration !== fetchGeneration) {
+          return null;
+        }
+
         if (!json || typeof json !== 'object' || !Array.isArray(json.forecast)) {
           throw new Error('Format respons data cuaca tidak valid');
         }
@@ -299,11 +311,16 @@ export const useWeatherStore = defineStore('weather', () => {
         isLoaded.value = true;
         return data.value;
       } catch (err) {
+        if (currentGeneration !== fetchGeneration) {
+          return null;
+        }
         error.value = err instanceof Error ? err.message : 'Gagal memuat data cuaca';
         return data.value;
       } finally {
-        isLoading.value = false;
-        inFlight = null;
+        if (currentGeneration === fetchGeneration) {
+          isLoading.value = false;
+          inFlight = null;
+        }
       }
     })();
 
@@ -315,6 +332,8 @@ export const useWeatherStore = defineStore('weather', () => {
   }
 
   function resetState() {
+    fetchGeneration++;
+    stopLiveClock();
     data.value = null;
     isLoading.value = false;
     isLoaded.value = false;

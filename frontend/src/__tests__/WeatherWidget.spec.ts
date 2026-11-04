@@ -139,6 +139,8 @@ describe('WeatherWidget.vue & Sub-Components (TDD & Accessibility)', () => {
       expect(badge.exists()).toBe(true);
       expect(badge.text()).toContain('Data lama');
       expect(badge.attributes('aria-hidden')).toBe('true');
+      expect(wrapper.text()).toContain('DATA TERAKHIR');
+      expect(wrapper.text()).not.toContain('SAAT INI');
     });
   });
 
@@ -242,6 +244,56 @@ describe('WeatherWidget.vue & Sub-Components (TDD & Accessibility)', () => {
 
       await vi.waitUntil(() => wrapper.find('[data-test="weather-stale-banner"]').exists());
       expect(wrapper.find('[data-test="weather-stale-banner"]').text()).toContain('data cache');
+    });
+
+    it('displays warning banner when later background refresh fails while data is already loaded', async () => {
+      globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockWeatherData,
+      } as Response);
+
+      const pinia = createPinia();
+      setActivePinia(pinia);
+      const store = useWeatherStore(pinia);
+
+      const wrapper = mount(WeatherWidget, {
+        global: { plugins: [pinia] },
+      });
+
+      await vi.waitUntil(() => wrapper.find('[data-test="weather-populated-grid"]').exists());
+
+      // Simulate background refresh failure while data is loaded
+      store.error = 'Gagal memuat data cuaca (HTTP 500)';
+
+      await wrapper.vm.$nextTick();
+
+      // Warning banner must be visible despite data still being displayed
+      const banner = wrapper.find('[data-test="weather-stale-banner"]');
+      expect(banner.exists()).toBe(true);
+      expect(banner.text()).toContain('Pembaruan cuaca terkendala');
+      expect(banner.text()).toContain('HTTP 500');
+
+      // Card remains visible
+      expect(wrapper.find('[data-test="weather-current-card"]').exists()).toBe(true);
+    });
+
+    it('starts live clock on mount and stops it on unmount', () => {
+      const pinia = createPinia();
+      setActivePinia(pinia);
+      const store = useWeatherStore(pinia);
+
+      const startSpy = vi.spyOn(store, 'startLiveClock');
+      const stopSpy = vi.spyOn(store, 'stopLiveClock');
+
+      const wrapper = mount(WeatherWidget, {
+        global: { plugins: [pinia] },
+      });
+
+      expect(startSpy).toHaveBeenCalled();
+
+      wrapper.unmount();
+      expect(stopSpy).toHaveBeenCalled();
     });
 
     it('assembles responsive layout strictly matching Pic 1 (mobile) and Pic 2 (desktop)', async () => {
