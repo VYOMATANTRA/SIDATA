@@ -89,7 +89,21 @@ const sotkMembers = computed<SotkMember[]>(() => {
 });
 
 const lurahOfficial = computed<SotkMember | undefined>(() => {
-  return sotkMembers.value.find((m) => m.role === 'Lurah') ?? LURAH_OFFICIAL;
+  return sotkMembers.value.find((m) => m.role.trim() === 'Lurah');
+});
+
+const lurahDisplayName = computed(() => {
+  const fromRow = lurahOfficial.value?.officialName;
+  if (typeof fromRow === 'string' && fromRow.trim()) return fromRow.trim();
+  const saved = profileMetadata.value?.lurahName;
+  if (typeof saved === 'string' && saved.trim()) return saved.trim();
+  return LURAH_OFFICIAL.officialName ?? 'Nama pejabat belum tersedia';
+});
+
+const lurahDisplayTitle = computed(() => {
+  const saved = profileMetadata.value?.lurahTitle;
+  if (typeof saved === 'string' && saved.trim()) return saved.trim();
+  return 'Lurah Kelurahan Manggar';
 });
 
 const populationIndicator = computed(() => {
@@ -292,9 +306,9 @@ const wilayahStats = computed<StatItem[]>(() => [
             <!-- Name & Title below the photo -->
             <div class="mt-4 flex flex-col items-center text-center">
               <h3 class="text-brand-navy text-lg font-bold">
-                {{ lurahOfficial?.officialName ?? 'Nama pejabat belum tersedia' }}
+                {{ lurahDisplayName }}
               </h3>
-              <p class="mt-0.5 text-sm font-medium text-gray-700">Lurah Kelurahan Manggar</p>
+              <p class="mt-0.5 text-sm font-medium text-gray-700">{{ lurahDisplayTitle }}</p>
               <p class="text-xs text-gray-500">Pemerintah Kelurahan Manggar</p>
               <span
                 class="bg-brand-cyan text-brand-navy mt-2.5 inline-block rounded-[5px] px-3 py-1 text-xs font-semibold"
@@ -350,8 +364,8 @@ const wilayahStats = computed<StatItem[]>(() => [
           <h3 class="text-brand-navy text-base font-bold">Batas-Batas Wilayah Administratif:</h3>
           <ul class="mt-3 flex flex-wrap gap-x-6 gap-y-3 text-base text-gray-800">
             <li
-              v-for="item in batasWilayah"
-              :key="item.arah"
+              v-for="(item, index) in batasWilayah"
+              :key="`${item.arah}-${index}`"
               class="flex w-full items-center gap-2 sm:w-[calc(50%-12px)]"
             >
               <span class="text-brand-navy font-medium">{{ item.arah }}:</span>
@@ -389,7 +403,11 @@ const wilayahStats = computed<StatItem[]>(() => [
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-200 bg-white">
-              <tr v-for="member in sotkMembers" :key="member.role" class="transition-colors">
+              <tr
+                v-for="(member, index) in sotkMembers"
+                :key="`${member.role}-${index}`"
+                class="transition-colors"
+              >
                 <th scope="row" class="text-brand-navy px-4 py-4 align-top font-semibold sm:px-6">
                   {{ member.role }}
                 </th>

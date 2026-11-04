@@ -309,6 +309,9 @@ onMounted(() => {
     map.on('dragstart', () => {
       userHasPanned = true;
     });
+    map.on('zoomstart', () => {
+      userHasPanned = true;
+    });
 
     window.addEventListener('resize', handleResize);
   });
