@@ -10,7 +10,7 @@ import {
 import { DEFAULT_CONTENT_BLOCKS } from '../src/services/contentBlocks.service.js';
 import { DEFAULT_COMPARISON_TEMPLATES } from '../src/services/comparisonTemplates.service.js';
 import { CERITA_PAGES } from './ceritaPages.js';
-import { RT_LEADERS_DATA } from './rtLeadersData.js';
+import { RT_LEADERS_DATA } from '../src/data/rtLeadersData.js';
 import {
   parseSeedPointTombstones,
   RT_SEED_POINT_TOMBSTONES_KEY,

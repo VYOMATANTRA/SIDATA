@@ -78,7 +78,7 @@ Notes:
   states: Sosial Kemasyarakatan is the last, unnumbered chapter of Pemerintahan & Kelembagaan, and Persampahan &
   Bank Sampah Unit starts with Bank Sampah Unit, Program Eco Boba and Booklet Eco Boba chapters.
   Seeding never overwrites titles or ordering an editor has since changed.
-- The Ketua RT roster the repository ships is **synthetic only** (`backend/prisma/rtLeadersData.ts`):
+- The Ketua RT roster the repository ships is **synthetic only** (`backend/src/data/rtLeadersData.ts`):
   placeholder names, placeholder phone numbers, and generated coordinates. Real Ketua RT names, phone
   numbers, and home locations are personal data and must never be committed. The operational roster is
   loaded from a non-committed source or an admin import at deploy time — see §10 for the open
@@ -409,9 +409,9 @@ keeps proper `<caption>` / `<th scope>` semantics under filtering.
 clusters expand as visitors zoom, and overlapping points remain individually selectable at close
 zoom. A coordinated results panel contains one search for point names, RT numbers, and available RT
 leader names, category filters, nearest-first results, and five-result pagination. Distance sorting
-optionally uses browser geolocation upon explicit visitor click ("Dekat saya"), with
+optionally uses browser geolocation upon explicit visitor click ("Gunakan lokasi saya"), with
 distances measured from the visitor's detected coordinates; otherwise distances fall back to the
-kelurahan geographic centre as origin. The "Dekat saya" trigger is hidden while a point is selected
+kelurahan geographic centre as origin. The "Gunakan lokasi saya" trigger is hidden while a point is selected
 and the results panel switches to the detail view. Pagination only changes the list; all filtered points remain
 on the map. Selecting a result focuses its marker and shows its details in the same panel. Search
 and filters reset the result list to page one. The list remains a keyboard-accessible alternative

@@ -28,9 +28,8 @@ const userLocation = ref<{ latitude: number; longitude: number } | null>(null);
 const locationError = ref<string | null>(null);
 
 /**
- * The dataset carries no coordinate for the kelurahan office itself, so
- * distances are measured from the map's Manggar centre and labelled as such
- * rather than pretending to be measured from the office.
+ * Distances use the CMS default coordinates when they have loaded.
+ * `KELURAHAN_ORIGIN` is only the fallback when settings are unavailable.
  */
 const KELURAHAN_ORIGIN = MANGGAR_MAP_ORIGIN;
 
