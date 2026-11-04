@@ -24,6 +24,20 @@ function isCompletePhone(value: string): boolean {
   return digits.length >= 10 && digits.length <= 15 && /^(?:0|62|8)/.test(digits);
 }
 
+/** WhatsApp links are for mobiles only. A landline stays a tel: link. */
+export function isWhatsappMobile(value: string): boolean {
+  const digits = digitRun(value);
+  return /^(?:08|628|8)/.test(digits);
+}
+
+/** Pieces dropped from a separated value, so the cell can still show an extension. */
+export function undialablePhoneRemainder(value: string): string {
+  if (!SEPARATOR.test(value)) return '';
+  return splitPhoneParts(value)
+    .filter((part) => !isCompletePhone(part))
+    .join(' / ');
+}
+
 /**
  * Separated strings keep only complete numbers. A cut half such as `0812-111/222`
  * yields nothing, so it is never linked. A short extra piece does not hide a full number.
