@@ -454,6 +454,8 @@ export const useIndicatorsStore = defineStore('indicators', () => {
             delete nextAt[normalized];
             bySlug.value = next;
             bySlugFetchedAt.value = nextAt;
+            errorsBySlug.value = { ...errorsBySlug.value, [normalized]: null };
+            return null;
           }
           throw new Error(`Gagal memuat indikator (status ${response.status})`);
         }

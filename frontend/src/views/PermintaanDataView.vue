@@ -36,7 +36,7 @@ const steps: StepItem[] = [
     description: 'Ajukan secara daring melalui portal PPID atau serahkan berkas langsung.',
     details: [
       'Daring: isi formulir permohonan pada portal resmi PPID Pemerintah Kota Balikpapan.',
-      'Luring: serahkan berkas di Meja Informasi Kantor Kelurahan Manggar atau Diskominfo Kota Balikpapan.',
+      'Luring: serahkan berkas di Meja Informasi PPID atau Diskominfo Kota Balikpapan.',
       'Simpan bukti pendaftaran resmi berupa Nomor Register Permohonan Informasi (SOP Tahap 3).',
     ],
   },
@@ -129,7 +129,7 @@ const informationClasses = [
 const escalationPath = [
   {
     title: 'Permohonan',
-    target: 'PPID Kota Balikpapan & Meja Layanan Kelurahan',
+    target: 'PPID Kota Balikpapan / Diskominfo',
     note: 'Diajukan tertulis atau daring. PPID wajib memberikan pemberitahuan tertulis paling lambat 10 hari kerja sejak permohonan diterima, dan dapat memperpanjang waktu paling lambat 7 hari kerja berikutnya dengan alasan tertulis. Dasar hukum: Pasal 22 ayat (7)–(8) UU No. 14 Tahun 2008.',
   },
   {

@@ -38,6 +38,12 @@ describe('phone utilities', () => {
     expect(isDialable('Belum ada')).toBe(false);
   });
 
+  it('keeps a complete number when another piece is too short to dial', () => {
+    expect(dialablePhones('08123456789 / 12345')).toEqual(['08123456789']);
+    expect(isDialable('08123456789 / 12345')).toBe(true);
+    expect(telHref('08123456789 / 12345')).toBe('tel:08123456789');
+  });
+
   it('does not treat a cut multi-number string as dialable', () => {
     expect(isDialable('0812-111/222')).toBe(false);
     expect(telHref('0812-111/222')).toBe('');
