@@ -290,7 +290,10 @@ const indicatorListCache = new KeyedLruCache<string, VersionedTtlCache<Indicator
 const indicatorIdToSlug = new Map<string, string>();
 const indicatorSlugToId = new Map<string, string>();
 
-/** Bumped on every committed indicator write so an in-flight read cannot warm stale DTOs. */
+/**
+ * Bumped on every committed indicator write so an in-flight read cannot warm stale DTOs.
+ * Global on purpose: a write to one indicator skips warming any concurrent read. Cost is one extra DB read, not a stale cache.
+ */
 let indicatorMutationEpoch = 0;
 
 function noteIndicatorMutation(): void {
