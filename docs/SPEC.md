@@ -144,7 +144,7 @@ Hybrid model:
 - **Matrix/table-shaped data** (age pyramid, 17-group ethnicity, religion×sex, occupation table —
   4 fixed-shape tables) — manual, form-based entry only. Bulk import is explicitly out of scope
   for these.
-- **Prose** — field-by-field forms (tier-1 builder or tier-2 free text; see §5).
+- **Prose & Standalone Content Blocks** — field-by-field forms (tier-1 builder or tier-2 free text; see §5). Standalone landing content blocks (`landing-hero`, `landing-sambutan-lurah`, `landing-highlights`) are managed via `/api/content-blocks`. Specifically, the hero block manages `title`, `body`, and optional `backgroundImage`; `badge` and call-to-action buttons were removed to maintain a clean institutional profile voice without redundant action buttons.
 
 The frontend surface for the first two is a single `/data` view (editor/admin only, no CMS
 sidebar shell): a searchable, type-filterable card list of every scalar indicator and matrix

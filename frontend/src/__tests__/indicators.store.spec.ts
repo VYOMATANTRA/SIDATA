@@ -179,6 +179,7 @@ describe('indicators store (global / landing page indicators)', () => {
     const sampleIndicators: IndicatorItem[] = [
       {
         id: '1',
+        sectionId: 'sec-1',
         slug: 'jumlah-penduduk',
         label: 'Penduduk',
         unit: 'jiwa',
@@ -195,6 +196,7 @@ describe('indicators store (global / landing page indicators)', () => {
       },
       {
         id: '2',
+        sectionId: 'sec-1',
         slug: 'rukun-tetangga',
         label: 'Rukun Tetangga',
         unit: 'RT',
@@ -260,6 +262,7 @@ describe('indicators store (global / landing page indicators)', () => {
     const initialIndicators: IndicatorItem[] = [
       {
         id: '1',
+        sectionId: 'sec-1',
         slug: 'penduduk',
         label: 'Penduduk',
         unit: 'jiwa',
@@ -305,6 +308,7 @@ describe('indicators store (global / landing page indicators)', () => {
     const initialIndicators: IndicatorItem[] = [
       {
         id: '1',
+        sectionId: 'sec-1',
         slug: 'penduduk',
         label: 'Penduduk',
         unit: 'jiwa',
@@ -351,6 +355,7 @@ describe('indicators store (global / landing page indicators)', () => {
     store.indicators = [
       {
         id: '1',
+        sectionId: 'sec-1',
         slug: 'custom-ratio',
         label: 'Rasio Khusus',
         unit: ': 1',
@@ -367,6 +372,7 @@ describe('indicators store (global / landing page indicators)', () => {
       },
       {
         id: '2',
+        sectionId: 'sec-1',
         slug: 'kepadatan-wilayah',
         label: 'Kepadatan Wilayah',
         unit: 'jiwa/km²',
@@ -383,6 +389,7 @@ describe('indicators store (global / landing page indicators)', () => {
       },
       {
         id: '3',
+        sectionId: 'sec-1',
         slug: 'pendidikan-fake-prefix',
         label: 'Item Di Halaman Lain',
         unit: 'unit',
@@ -414,6 +421,104 @@ describe('indicators store (global / landing page indicators)', () => {
       label: 'Kepadatan Wilayah',
       unit: 'jiwa/km²',
     });
+  });
+
+  it('deterministically sorts indicators by sortOrder in getStatsForPage', () => {
+    const store = useIndicatorsStore();
+    store.indicators = [
+      {
+        id: 'ind-3',
+        sectionId: 'sec-1',
+        slug: 'pendidikan-ketiga',
+        label: 'Stat Ketiga',
+        unit: null,
+        valueCurrent: '30',
+        valuePrevious: null,
+        periodCurrent: '2024',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'pendidikan',
+        sortOrder: 3,
+      },
+      {
+        id: 'ind-1',
+        sectionId: 'sec-1',
+        slug: 'pendidikan-pertama',
+        label: 'Stat Pertama',
+        unit: null,
+        valueCurrent: '10',
+        valuePrevious: null,
+        periodCurrent: '2024',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'pendidikan',
+        sortOrder: 1,
+      },
+      {
+        id: 'ind-2',
+        sectionId: 'sec-1',
+        slug: 'pendidikan-kedua',
+        label: 'Stat Kedua',
+        unit: null,
+        valueCurrent: '20',
+        valuePrevious: null,
+        periodCurrent: '2024',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'pendidikan',
+        sortOrder: 2,
+      },
+    ];
+
+    const stats = store.getStatsForPage('pendidikan');
+    expect(stats.map((s) => s.label)).toEqual(['Stat Pertama', 'Stat Kedua', 'Stat Ketiga']);
+  });
+
+  it('supports slug aliasing between persampahan-dan-bank-sampah-unit and persampahan in getStatsForPage', () => {
+    const store = useIndicatorsStore();
+    store.indicators = [
+      {
+        id: 'waste-1',
+        sectionId: 'sec-waste',
+        slug: 'persampahan-bank-sampah',
+        label: 'Bank Sampah Unit',
+        unit: 'unit',
+        valueCurrent: '48',
+        valuePrevious: null,
+        periodCurrent: '2024',
+        periodPrevious: null,
+        isComputedComparison: false,
+        isStale: false,
+        source: null,
+        hedgeNote: null,
+        pageSlug: 'persampahan',
+        sortOrder: 1,
+      },
+    ];
+
+    // Querying with long slug matches indicator with short pageSlug
+    const statsLong = store.getStatsForPage('persampahan-dan-bank-sampah-unit');
+    expect(statsLong).toHaveLength(1);
+    expect(statsLong[0]?.label).toBe('Bank Sampah Unit');
+
+    // Querying with short slug matches indicator with short pageSlug
+    const statsShort = store.getStatsForPage('persampahan');
+    expect(statsShort).toHaveLength(1);
+    expect(statsShort[0]?.label).toBe('Bank Sampah Unit');
+
+    // Updating pageSlug on item to long slug also matches both queries
+    store.indicators[0]!.pageSlug = 'persampahan-dan-bank-sampah-unit';
+    expect(store.getStatsForPage('persampahan')).toHaveLength(1);
+    expect(store.getStatsForPage('persampahan-dan-bank-sampah-unit')).toHaveLength(1);
   });
 
   it('handles network failure gracefully without throwing and leaves stats empty', async () => {

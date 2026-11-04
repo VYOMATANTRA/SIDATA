@@ -26,7 +26,7 @@ export interface RenderedComparison {
 
 export interface Indicator {
   id: string;
-  sectionId?: string | null;
+  sectionId: string;
   slug: string;
   label: string;
   unit: string | null;
@@ -227,14 +227,26 @@ export const useIndicatorsStore = defineStore('indicators', () => {
 
   function getStatsForPage(pageSlug: string): StatItem[] {
     const target = pageSlug.toLowerCase();
-    const matched = indicators.value.filter((item) => item.pageSlug?.toLowerCase() === target);
+    const isWasteCategory =
+      target === 'persampahan' || target === 'persampahan-dan-bank-sampah-unit';
 
-    return matched.map((item) => ({
-      icon: resolveIconForIndicator(item.slug, item.label),
-      value: formatIndicatorValue(item.valueCurrent, item.unit),
-      label: item.label,
-      unit: item.unit || undefined,
-    }));
+    const matched = indicators.value.filter((item) => {
+      const itemSlug = item.pageSlug?.toLowerCase();
+      if (!itemSlug) return false;
+      if (isWasteCategory) {
+        return itemSlug === 'persampahan' || itemSlug === 'persampahan-dan-bank-sampah-unit';
+      }
+      return itemSlug === target;
+    });
+
+    return matched
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((item) => ({
+        icon: resolveIconForIndicator(item.slug, item.label),
+        value: formatIndicatorValue(item.valueCurrent, item.unit),
+        label: item.label,
+        unit: item.unit || undefined,
+      }));
   }
 
   async function updateIndicator(id: string, patch: IndicatorPatch): Promise<Indicator> {
