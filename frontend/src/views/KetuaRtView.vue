@@ -63,6 +63,14 @@ const paginatedLeaders = computed(() => {
   return filteredLeaders.value.slice(start, start + pageSize.value);
 });
 
+const phonesForLeader = computed(() => {
+  const map = new Map<number, string[]>();
+  for (const leader of paginatedLeaders.value) {
+    map.set(leader.rtNumber, dialablePhones(leader.phone));
+  }
+  return map;
+});
+
 const startRowIndex = computed(() =>
   filteredLeaders.value.length === 0 ? 0 : (currentPage.value - 1) * pageSize.value + 1,
 );
@@ -103,10 +111,14 @@ async function goToPage(page: number) {
   // hand focus to the newly active page button so keyboard focus is not lost to <body>.
   await nextTick();
   const activeEl = document.activeElement as HTMLElement | null;
-  if (
-    activeEl &&
-    (activeEl.hasAttribute('disabled') || activeEl.getAttribute('aria-disabled') === 'true')
-  ) {
+  // Some browsers move focus to <body> before the disabled attribute is observable.
+  const focusLost =
+    !activeEl ||
+    activeEl === document.body ||
+    activeEl.hasAttribute('disabled') ||
+    activeEl.getAttribute('aria-disabled') === 'true' ||
+    (activeEl as HTMLButtonElement).disabled === true;
+  if (focusLost) {
     const activePageBtn = document.querySelector<HTMLButtonElement>(
       `[data-test="pagination-page-${page}"]`,
     );
@@ -366,11 +378,11 @@ function formatPhone(value: string): string {
                   <td class="px-4 py-4 align-top break-words text-gray-800 sm:px-6">
                     {{ leader.name }}
                   </td>
-                  <td class="px-4 py-4 align-top whitespace-nowrap text-gray-800 sm:px-6">
-                    <template v-if="dialablePhones(leader.phone).length">
+                  <td class="px-4 py-4 align-top break-words text-gray-800 sm:px-6">
+                    <template v-if="phonesForLeader.get(leader.rtNumber)?.length">
                       <template
-                        v-for="(phone, index) in dialablePhones(leader.phone)"
-                        :key="`${leader.rtNumber}-${index}`"
+                        v-for="(phone, index) in phonesForLeader.get(leader.rtNumber)"
+                        :key="`${index}-${phone}`"
                       >
                         <a
                           v-if="leader.phoneIsWhatsapp"
@@ -392,7 +404,11 @@ function formatPhone(value: string): string {
                           {{ formatPhone(phone) }}
                           <span class="sr-only">(panggilan telepon)</span>
                         </a>
-                        <span v-if="index < dialablePhones(leader.phone).length - 1"> / </span>
+                        <span
+                          v-if="index < (phonesForLeader.get(leader.rtNumber)?.length ?? 0) - 1"
+                        >
+                          /
+                        </span>
                       </template>
                     </template>
                     <span v-else class="text-gray-700" data-test="rt-phone-placeholder">
