@@ -159,6 +159,44 @@ describe('AdminLayout.vue', () => {
     expect(document.activeElement).toBe(mainEl);
     wrapper.unmount();
   });
+
+  it('does not steal focus onto <main> when a view has already focused an interactive element inside <main>', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: '/admin',
+          component: { template: '<div><button data-test="inner-btn">Action</button></div>' },
+          meta: { title: 'Beranda', breadcrumb: [] },
+        },
+        {
+          path: '/admin/cerita',
+          component: {
+            mounted() {
+              (this.$el as HTMLElement).querySelector<HTMLInputElement>('input')?.focus();
+            },
+            template: '<div><input data-test="cerita-input" /></div>',
+          },
+          meta: { title: 'Cerita', breadcrumb: ['Cerita'] },
+        },
+      ],
+    });
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, {
+      global: { plugins: [router] },
+      attachTo: document.body,
+    });
+
+    await router.push('/admin/cerita');
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    const inputEl = wrapper.find('[data-test="cerita-input"]').element;
+    expect(document.activeElement).toBe(inputEl);
+    wrapper.unmount();
+  });
 });
 
 describe('AdminLayout.vue — mobile sidebar drawer', () => {

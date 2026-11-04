@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, watchEffect, nextTick } from 'vue';
+import { ref, computed, toRef, watchEffect } from 'vue';
 import { useRoute, RouterLink } from 'vue-router';
 import {
   ChevronDownIcon,
@@ -10,6 +10,7 @@ import {
 } from '@heroicons/vue/24/outline';
 import { useAuthStore } from '../../stores/auth';
 import { useLogout } from '../../composables/useLogout';
+import { useDrawerFocusTrap } from '../../composables/useDrawerFocusTrap';
 import {
   ADMIN_NAV,
   isAdminNavGroup,
@@ -110,118 +111,17 @@ function closeMobile(reason: 'dismiss' | 'navigate' = 'dismiss') {
 }
 
 const sidebarRef = ref<HTMLElement | null>(null);
-
-function isElementVisible(el: HTMLElement): boolean {
-  if (
-    el.closest(
-      '[hidden], [inert], .hidden, .invisible, [style*="display: none"], [style*="visibility: hidden"]',
-    )
-  ) {
-    return false;
-  }
-
-  if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
-    const style = window.getComputedStyle(el);
-    if (style.display === 'none' || style.visibility === 'hidden') {
-      return false;
-    }
-  }
-
-  const isDesktopViewport =
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(min-width: 768px)').matches;
-  if (isDesktopViewport && el.closest('.md\\:hidden')) {
-    return false;
-  }
-
-  // In a real browser (or a test that stubs layout metrics), getClientRects() / offsetParent
-  // catches any CSS-driven display:none (including responsive classes). JSDOM returns 0 rects
-  // and null offsetParent for every element, so only enforce the geometry check when the
-  // container itself reports layout metrics or the element overrides getClientRects/offsetParent.
-  const containerHasLayout =
-    (sidebarRef.value?.getClientRects().length ?? 0) > 0 || sidebarRef.value?.offsetParent !== null;
-  const elementHasOwnLayoutStub =
-    Object.prototype.hasOwnProperty.call(el, 'getClientRects') ||
-    Object.prototype.hasOwnProperty.call(el, 'offsetParent');
-
-  if (containerHasLayout || elementHasOwnLayoutStub) {
-    return el.getClientRects().length > 0 || el.offsetParent !== null;
-  }
-
-  return true;
-}
-
-function getFocusableElements(): HTMLElement[] {
-  if (!sidebarRef.value) return [];
-  const candidates = sidebarRef.value.querySelectorAll<HTMLElement>(
-    'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
-  );
-  return Array.from(candidates).filter(isElementVisible);
-}
-
-function isEventFromOpenDialog(event: KeyboardEvent): boolean {
-  if (event.defaultPrevented) return true;
-  const target =
-    (event.target instanceof HTMLElement ? event.target : null) ??
-    (document.activeElement instanceof HTMLElement ? document.activeElement : null);
-  if (target?.closest('[role="dialog"], [role="alertdialog"], dialog')) {
-    return true;
-  }
-  return Boolean(document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]'));
-}
-
-function handleKeydown(event: KeyboardEvent) {
-  if (!props.mobileOpen) return;
-
-  if (event.key === 'Escape') {
-    if (isEventFromOpenDialog(event)) return;
-    closeMobile('dismiss');
-    return;
-  }
-
-  // Keep Tab / Shift+Tab cycling within the open mobile drawer so keyboard focus cannot escape
-  // into the dimmed header/main content behind the overlay.
-  if (event.key === 'Tab') {
-    const focusables = getFocusableElements();
-    if (focusables.length === 0) return;
-    const first = focusables[0]!;
-    const last = focusables[focusables.length - 1]!;
-    const active = document.activeElement as HTMLElement | null;
-
-    if (event.shiftKey) {
-      if (active === first || !sidebarRef.value?.contains(active)) {
-        event.preventDefault();
-        last.focus();
-      }
-    } else if (active === last || !sidebarRef.value?.contains(active)) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
-}
-
-onMounted(() => {
-  window.addEventListener('keydown', handleKeydown);
-});
-
-onUnmounted(() => {
-  window.removeEventListener('keydown', handleKeydown);
-});
-
-// Moves focus into the drawer when it opens on mobile, so keyboard users land on its content
-// instead of staying wherever focus was on the page behind it (WCAG 2.1 §2.4.3 Focus Order).
-// Returning focus to the toggle button on close is AdminHeader.vue's job — it owns that button.
 const mobileCloseButtonRef = ref<HTMLButtonElement | null>(null);
 
-watch(
-  () => props.mobileOpen,
-  (open) => {
-    if (open) {
-      void nextTick(() => mobileCloseButtonRef.value?.focus());
-    }
-  },
-);
+// Moves focus into the drawer when it opens on mobile, traps Tab/Shift+Tab inside it, and closes
+// on Escape (ignoring Escape events from open modal dialogs). Returning focus to the header toggle
+// button on close is AdminHeader.vue's job — it owns that button.
+useDrawerFocusTrap({
+  isOpen: toRef(props, 'mobileOpen'),
+  containerRef: sidebarRef,
+  initialFocusRef: mobileCloseButtonRef,
+  onEscape: () => closeMobile('dismiss'),
+});
 
 const isLoggingOut = ref(false);
 const logoutError = ref('');

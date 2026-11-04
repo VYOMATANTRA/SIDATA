@@ -25,8 +25,9 @@ function closeMobileSidebar(reason: 'dismiss' | 'navigate' = 'dismiss') {
 // Seeds the header from route meta on every navigation so there is never a stale title; the
 // routed view can still override with a dynamic subtitle in its own onMounted (runs after this).
 // Also closes the mobile sidebar drawer so a tapped link doesn't leave it open over the new page,
-// and moves focus to <main> on subsequent navigations (skipping the initial mount) so keyboard
-// and screen-reader users are placed into the newly rendered page content.
+// and moves focus to <main> on subsequent nav-initiated navigations (skipping initial mount and
+// any programmatic redirect where focus is already inside <main>) so keyboard and screen-reader
+// users are placed into the newly rendered page content without hijacking in-page focus.
 // Watches route.path (not fullPath) so a view that syncs filters/search to the query string or
 // hash doesn't retrigger this and wipe out the subtitle the view already set.
 watch(
@@ -36,7 +37,16 @@ watch(
     setAdminHeader(title, '');
     closeMobileSidebar('navigate');
     if (oldPath !== undefined && newPath !== oldPath) {
-      void nextTick(() => mainRef.value?.focus());
+      void nextTick(() => {
+        const active = document.activeElement as HTMLElement | null;
+        const shouldMoveToMain =
+          !active ||
+          active === document.body ||
+          Boolean(active.closest('#admin-sidebar, [data-test="admin-breadcrumb"]'));
+        if (shouldMoveToMain) {
+          mainRef.value?.focus();
+        }
+      });
     }
   },
   { immediate: true },

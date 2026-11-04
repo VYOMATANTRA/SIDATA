@@ -57,4 +57,37 @@ describe('Admin shell persistence across navigation (real router)', () => {
     expect(wrapper.findAll('[data-test="admin-sidebar"]').length).toBe(1);
     expect(wrapper.find('[data-test="nav-sistem-log"]').attributes('aria-current')).toBe('page');
   });
+
+  it('renders exactly one <h1>, one <header>, and one <main> across every migrated admin view', async () => {
+    const migratedPaths = [
+      '/admin',
+      '/data',
+      '/users',
+      '/audit-logs',
+      '/settings/audit-retention',
+    ];
+
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(App, { global: { plugins: [router] } });
+
+    for (const path of migratedPaths) {
+      await router.push(path);
+      await flushPromises();
+
+      expect(
+        wrapper.findAll('h1').length,
+        `expected exactly one <h1> on "${path}"`,
+      ).toBe(1);
+      expect(
+        wrapper.findAll('header').length,
+        `expected exactly one <header> on "${path}"`,
+      ).toBe(1);
+      expect(
+        wrapper.findAll('main').length,
+        `expected exactly one <main> on "${path}"`,
+      ).toBe(1);
+    }
+  });
 });
