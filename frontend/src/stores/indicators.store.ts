@@ -130,22 +130,21 @@ export const useIndicatorsStore = defineStore('indicators', () => {
     const next = { ...bySlug.value };
     const nextAt = { ...bySlugFetchedAt.value };
     const evicted: string[] = [];
-    if (slugKey !== null) {
-      evicted.push(slugKey);
-    }
+    let deleted = false;
     for (const [k, v] of Object.entries(next)) {
       if (v.id === id || (slugKey !== null && k === slugKey)) {
         delete next[k];
         delete nextAt[k];
-        if (!evicted.includes(k)) {
-          evicted.push(k);
-        }
+        deleted = true;
+        if (!evicted.includes(k)) evicted.push(k);
       }
     }
-    if (evicted.length > 0) {
+    if (deleted) {
       bySlug.value = next;
       bySlugFetchedAt.value = nextAt;
     }
+    // Still report the slug so a delete bumps generation even when that key was not cached.
+    if (slugKey !== null && !evicted.includes(slugKey)) evicted.push(slugKey);
     return evicted;
   }
 

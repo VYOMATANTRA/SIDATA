@@ -15,7 +15,10 @@ function splitPhoneParts(value: string): string[] {
     .filter(Boolean);
 }
 
-/** A piece that can stand alone as a local or Indonesian mobile/landline number. */
+/**
+ * A piece that can stand alone in a separated string.
+ * Stricter than isPlausiblePhoneDigitRun (7–15, any prefix): a cut half like `0812-111` must not become a link.
+ */
 function isCompletePhone(value: string): boolean {
   const digits = digitRun(value);
   return digits.length >= 10 && digits.length <= 15 && /^(?:0|62|8)/.test(digits);

@@ -102,12 +102,9 @@ const paginationEnd = computed(() =>
   Math.min(currentPage.value * PAGE_SIZE, nearbyPoints.value.length),
 );
 
-watch(
-  [search, () => mapsStore.activeTypeFilter, userLocation],
-  () => {
-    currentPage.value = 1;
-  },
-);
+watch([search, () => mapsStore.activeTypeFilter, userLocation], () => {
+  currentPage.value = 1;
+});
 
 watch(visiblePoints, (points) => {
   if (mapsStore.selectedPoint && !points.some((p) => p.id === mapsStore.selectedPoint?.id)) {
@@ -115,24 +112,45 @@ watch(visiblePoints, (points) => {
   }
 });
 
-watch(totalPages, (pages) => {
+watch(totalPages, async (pages) => {
   if (currentPage.value > pages) currentPage.value = pages;
+  await nextTick();
+  const activeEl = document.activeElement as HTMLButtonElement | null;
+  if (!activeEl?.disabled) return;
+  if (!activeEl.matches('[data-test="peta-next-page"], [data-test="peta-previous-page"]')) return;
+  focusEnabledPager(
+    document.querySelector<HTMLButtonElement>('[data-test="peta-next-page"]'),
+    document.querySelector<HTMLButtonElement>('[data-test="peta-previous-page"]'),
+  );
 });
 
 function formatDistance(km: number): string {
   return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
 }
 
+function paginationFocusLost(activeEl: Element | null): boolean {
+  if (!activeEl || activeEl === document.body) return true;
+  const button = activeEl as HTMLButtonElement;
+  return button.disabled === true || activeEl.hasAttribute('disabled');
+}
+
+function focusEnabledPager(preferred: HTMLButtonElement | null, other: HTMLButtonElement | null) {
+  if (preferred && !preferred.disabled) preferred.focus();
+  else if (other && !other.disabled) other.focus();
+  else document.getElementById('peta-search')?.focus();
+}
+
 async function goToPreviousPage() {
   if (currentPage.value > 1) {
     currentPage.value -= 1;
     // WCAG 2.4.3: If moving to page 1 disables "Sebelumnya", hand focus to "Selanjutnya"
-    // so focus is never lost to document body.
+    // so focus is never lost to document body. Some browsers move focus to <body> first.
     await nextTick();
-    const activeEl = document.activeElement as HTMLElement | null;
-    if (activeEl && activeEl.hasAttribute('disabled')) {
-      const nextBtn = document.querySelector<HTMLButtonElement>('[data-test="peta-next-page"]');
-      nextBtn?.focus();
+    if (paginationFocusLost(document.activeElement)) {
+      focusEnabledPager(
+        document.querySelector<HTMLButtonElement>('[data-test="peta-next-page"]'),
+        document.querySelector<HTMLButtonElement>('[data-test="peta-previous-page"]'),
+      );
     }
   }
 }
@@ -140,13 +158,13 @@ async function goToPreviousPage() {
 async function goToNextPage() {
   if (currentPage.value < totalPages.value) {
     currentPage.value += 1;
-    // WCAG 2.4.3: If moving to the last page disables "Selanjutnya", hand focus to "Sebelumnya"
-    // so focus is never lost to document body.
+    // WCAG 2.4.3: If moving to the last page disables "Selanjutnya", hand focus to "Sebelumnya".
     await nextTick();
-    const activeEl = document.activeElement as HTMLElement | null;
-    if (activeEl && activeEl.hasAttribute('disabled')) {
-      const prevBtn = document.querySelector<HTMLButtonElement>('[data-test="peta-previous-page"]');
-      prevBtn?.focus();
+    if (paginationFocusLost(document.activeElement)) {
+      focusEnabledPager(
+        document.querySelector<HTMLButtonElement>('[data-test="peta-previous-page"]'),
+        document.querySelector<HTMLButtonElement>('[data-test="peta-next-page"]'),
+      );
     }
   }
 }
@@ -248,7 +266,9 @@ function requestUserLocation() {
                   <h3 id="terdekat-title" class="text-brand-navy text-base font-bold">
                     Titik terdekat
                   </h3>
-                  <p class="mt-1 text-sm text-gray-600" aria-live="polite">Jarak dihitung dari {{ originLabel }}.</p>
+                  <p class="mt-1 text-sm text-gray-600" aria-live="polite">
+                    Jarak dihitung dari {{ originLabel }}.
+                  </p>
                 </div>
                 <button
                   v-if="mapsStore.selectedPoint"
