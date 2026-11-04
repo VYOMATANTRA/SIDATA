@@ -1234,6 +1234,50 @@ describe('indicators.service getIndicatorById', () => {
     assert.equal((await getIndicatorById('bar'))?.id, 'bar');
   });
 
+  it('does not let a slow read warm over a committed update', async () => {
+    const oldRow = indicatorRow({ label: 'Jumlah Penduduk' });
+    let current = indicatorRow({ label: 'Jumlah Penduduk' });
+    let releaseRead: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    let slowReadStarted = false;
+
+    indicatorImpl['findUnique'] = async (args: AnyRecord) => {
+      const where = args['where'] as AnyRecord;
+      if (where['id'] === 'ind-1') return current;
+      if (where['slug'] === 'jumlah-penduduk') {
+        if (!slowReadStarted) {
+          slowReadStarted = true;
+          await gate;
+          return oldRow;
+        }
+        return current;
+      }
+      return null;
+    };
+    indicatorImpl['update'] = async (...args: never[]) => {
+      const { data } = args[0] as unknown as { data: AnyRecord };
+      current = { ...current, ...data };
+      return current;
+    };
+    sectionImpl['findUnique'] = async () => ({ id: 'sec-1' });
+
+    const slow = getIndicatorById('jumlah-penduduk');
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(slowReadStarted, true);
+
+    await updateIndicator('ind-1', { label: 'Penduduk Baru' }, ACTOR, CONTEXT);
+    releaseRead();
+    await slow;
+
+    indicatorImpl['findUnique'] = async () => {
+      throw new Error('must be served from cache');
+    };
+    assert.equal((await getIndicatorById('jumlah-penduduk'))?.label, 'Penduduk Baru');
+    assert.equal((await getIndicatorById('ind-1'))?.label, 'Penduduk Baru');
+  });
+
   it('indicatorCacheKey and normalizeIndicatorLookup are stable', () => {
     assert.equal(normalizeIndicatorLookup('  AbC  '), 'abc');
     assert.equal(indicatorCacheKey('id', 'AbC'), 'id:abc');
