@@ -6,7 +6,15 @@ import TentangHeroPanel from '../components/tentang/TentangHeroPanel.vue';
 import TentangNotice from '../components/tentang/TentangNotice.vue';
 import BaseButton from '../components/common/BaseButton.vue';
 import { useRtLeadersStore } from '../stores/rtLeaders.store';
-import { primaryPhone, digitsOnly, dialablePhones, telHref, whatsappNumber } from '../utils/phone';
+import {
+  primaryPhone,
+  digitsOnly,
+  dialablePhones,
+  isWhatsappMobile,
+  telHref,
+  undialablePhoneRemainder,
+  whatsappNumber,
+} from '../utils/phone';
 
 const rtLeadersStore = useRtLeadersStore();
 
@@ -102,7 +110,7 @@ const paginationPages = computed<(number | 'ellipsis')[]>(() => {
   return [1, 'ellipsis', current - 1, current, current + 1, 'ellipsis', total];
 });
 
-async function goToPage(page: number) {
+async function goToPage(page: number, event?: Event) {
   if (page < 1 || page > totalPages.value) return;
   currentPage.value = page;
 
@@ -111,13 +119,14 @@ async function goToPage(page: number) {
   // hand focus to the newly active page button so keyboard focus is not lost to <body>.
   await nextTick();
   const activeEl = document.activeElement as HTMLElement | null;
-  // Some browsers move focus to <body> before the disabled attribute is observable.
-  const focusLost =
-    !activeEl ||
-    activeEl === document.body ||
-    activeEl.hasAttribute('disabled') ||
-    activeEl.getAttribute('aria-disabled') === 'true' ||
-    (activeEl as HTMLButtonElement).disabled === true;
+  const keyboard = event instanceof MouseEvent && event.detail === 0;
+  const disabled =
+    !!activeEl &&
+    (activeEl.hasAttribute('disabled') ||
+      activeEl.getAttribute('aria-disabled') === 'true' ||
+      (activeEl as HTMLButtonElement).disabled === true);
+  // A mouse click in Safari may leave focus on <body>. Do not pull focus for that.
+  const focusLost = disabled || (keyboard && (!activeEl || activeEl === document.body));
   if (focusLost) {
     const activePageBtn = document.querySelector<HTMLButtonElement>(
       `[data-test="pagination-page-${page}"]`,
@@ -385,7 +394,7 @@ function formatPhone(value: string): string {
                         :key="`${index}-${phone}`"
                       >
                         <a
-                          v-if="leader.phoneIsWhatsapp"
+                          v-if="leader.phoneIsWhatsapp && isWhatsappMobile(phone)"
                           :href="`https://wa.me/${whatsappNumber(phone)}`"
                           target="_blank"
                           rel="noopener noreferrer"
@@ -410,6 +419,9 @@ function formatPhone(value: string): string {
                           /
                         </span>
                       </template>
+                      <span v-if="undialablePhoneRemainder(leader.phone)" class="text-gray-700">
+                        / {{ undialablePhoneRemainder(leader.phone) }}
+                      </span>
                     </template>
                     <span v-else class="text-gray-700" data-test="rt-phone-placeholder">
                       {{ leader.phone.trim() || '—' }}
@@ -492,7 +504,7 @@ function formatPhone(value: string): string {
                 aria-label="Halaman sebelumnya"
                 class="rounded-btn text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 border border-gray-300 px-3 py-2 text-sm font-medium transition-colors duration-150 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:hover:bg-gray-50 disabled:active:scale-100 motion-reduce:transform-none"
                 data-test="pagination-prev"
-                @click="goToPage(currentPage - 1)"
+                @click="goToPage(currentPage - 1, $event)"
               >
                 <svg
                   class="h-4 w-4"
@@ -536,7 +548,7 @@ function formatPhone(value: string): string {
                         : 'text-brand-navy border border-gray-300 hover:bg-gray-100'
                     "
                     :data-test="`pagination-page-${item}`"
-                    @click="goToPage(item)"
+                    @click="goToPage(item, $event)"
                   >
                     {{ item }}
                   </button>
@@ -549,7 +561,7 @@ function formatPhone(value: string): string {
                 aria-label="Halaman selanjutnya"
                 class="rounded-btn text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 border border-gray-300 px-3 py-2 text-sm font-medium transition-colors duration-150 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:hover:bg-gray-50 disabled:active:scale-100 motion-reduce:transform-none"
                 data-test="pagination-next"
-                @click="goToPage(currentPage + 1)"
+                @click="goToPage(currentPage + 1, $event)"
               >
                 <span class="hidden sm:inline">Selanjutnya</span>
                 <svg

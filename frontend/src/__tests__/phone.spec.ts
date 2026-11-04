@@ -5,7 +5,9 @@ import {
   dialablePhones,
   isPlausiblePhoneDigitRun,
   isDialable,
+  isWhatsappMobile,
   telHref,
+  undialablePhoneRemainder,
   whatsappNumber,
 } from '../utils/phone';
 
@@ -32,10 +34,21 @@ describe('phone utilities', () => {
     expect(isPlausiblePhoneDigitRun('0812345678901234')).toBe(false); // 16 digits
   });
 
+  it('keeps a short single landline dialable', () => {
+    expect(isDialable('7721589')).toBe(true);
+    expect(telHref('7721589')).toBe('tel:7721589');
+  });
+
   it('checks if contact is dialable', () => {
     expect(isDialable('08123456789')).toBe(true);
     expect(isDialable('-')).toBe(false);
     expect(isDialable('Belum ada')).toBe(false);
+  });
+
+  it('keeps the short piece as text and does not send a landline to WhatsApp', () => {
+    expect(undialablePhoneRemainder('0542-123456 / 654321')).toBe('654321');
+    expect(isWhatsappMobile('0542-123456')).toBe(false);
+    expect(isWhatsappMobile('08123456789')).toBe(true);
   });
 
   it('keeps a complete number when another piece is too short to dial', () => {
