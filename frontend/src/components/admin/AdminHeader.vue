@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue';
+import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { Bars3Icon } from '@heroicons/vue/24/outline';
 import { useAdminHeader } from '../../composables/useAdminHeader';
@@ -12,6 +12,37 @@ defineEmits<{ (e: 'openMenu'): void }>();
 
 const route = useRoute();
 const { title, subtitle } = useAdminHeader();
+
+// Only render the mobile drawer toggle below the md breakpoint (768px) so assistive tech on
+// desktop never encounters a button announcing aria-expanded="false" for a sidebar that is
+// permanently visible on desktop.
+const DESKTOP_MEDIA_QUERY = '(min-width: 768px)';
+
+function readIsDesktop(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false;
+  }
+  return window.matchMedia(DESKTOP_MEDIA_QUERY).matches;
+}
+
+const isDesktop = ref(readIsDesktop());
+let desktopMediaQueryList: MediaQueryList | null = null;
+
+function handleDesktopMediaChange(event: MediaQueryListEvent) {
+  isDesktop.value = event.matches;
+}
+
+onMounted(() => {
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    desktopMediaQueryList = window.matchMedia(DESKTOP_MEDIA_QUERY);
+    isDesktop.value = desktopMediaQueryList.matches;
+    desktopMediaQueryList.addEventListener?.('change', handleDesktopMediaChange);
+  }
+});
+
+onUnmounted(() => {
+  desktopMediaQueryList?.removeEventListener?.('change', handleDesktopMediaChange);
+});
 
 // Owns the toggle button (not AdminSidebar.vue) so focus can return here when the drawer is
 // dismissed via its close button, Escape, or the backdrop click (WCAG 2.1 §2.4.3 Focus Order).
@@ -41,11 +72,12 @@ watch(
     data-test="admin-header"
   >
     <button
+      v-if="!isDesktop"
       ref="menuToggleRef"
       type="button"
       class="focus-visible:ring-brand-indigo rounded-btn mt-0.5 inline-flex shrink-0 items-center justify-center border border-slate-300 p-2 text-slate-600 transition-colors hover:bg-slate-100 focus-visible:ring-2 focus-visible:outline-none md:hidden"
       :aria-expanded="mobileOpen"
-      aria-controls="admin-sidebar-nav-list"
+      aria-controls="admin-sidebar"
       aria-label="Menu navigasi"
       data-test="admin-mobile-menu-toggle"
       @click="$emit('openMenu')"

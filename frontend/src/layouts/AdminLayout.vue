@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import AdminSidebar from '../components/admin/AdminSidebar.vue';
 import AdminHeader from '../components/admin/AdminHeader.vue';
@@ -10,6 +10,7 @@ const route = useRoute();
 
 const isMobileSidebarOpen = ref(false);
 const restoreFocusOnClose = ref(true);
+const mainRef = ref<HTMLElement | null>(null);
 
 function openMobileSidebar() {
   restoreFocusOnClose.value = true;
@@ -23,15 +24,20 @@ function closeMobileSidebar(reason: 'dismiss' | 'navigate' = 'dismiss') {
 
 // Seeds the header from route meta on every navigation so there is never a stale title; the
 // routed view can still override with a dynamic subtitle in its own onMounted (runs after this).
-// Also closes the mobile sidebar drawer so a tapped link doesn't leave it open over the new page.
+// Also closes the mobile sidebar drawer so a tapped link doesn't leave it open over the new page,
+// and moves focus to <main> on subsequent navigations (skipping the initial mount) so keyboard
+// and screen-reader users are placed into the newly rendered page content.
 // Watches route.path (not fullPath) so a view that syncs filters/search to the query string or
 // hash doesn't retrigger this and wipe out the subtitle the view already set.
 watch(
   () => route.path,
-  () => {
+  (newPath, oldPath) => {
     const title = typeof route.meta.title === 'string' ? route.meta.title : '';
     setAdminHeader(title, '');
     closeMobileSidebar('navigate');
+    if (oldPath !== undefined && newPath !== oldPath) {
+      void nextTick(() => mainRef.value?.focus());
+    }
   },
   { immediate: true },
 );
@@ -67,7 +73,12 @@ watch(
         @open-menu="openMobileSidebar"
       />
 
-      <main id="admin-main-content" class="flex-1 px-6 py-6 md:px-10 md:py-8" tabindex="-1">
+      <main
+        id="admin-main-content"
+        ref="mainRef"
+        class="flex-1 px-6 py-6 focus:outline-none md:px-10 md:py-8"
+        tabindex="-1"
+      >
         <div class="rounded-card border border-slate-200 bg-white p-6 shadow-sm md:p-8">
           <AdminBreadcrumb class="mb-6" />
           <RouterView />

@@ -137,6 +137,28 @@ describe('AdminLayout.vue', () => {
       'Ringkasan aktivitas dan pintasan menuju modul admin.',
     );
   });
+
+  it('moves focus to <main> after navigating between admin pages, without hijacking focus on initial mount', async () => {
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, {
+      global: { plugins: [router] },
+      attachTo: document.body,
+    });
+    const mainEl = wrapper.find('main#admin-main-content').element;
+
+    // Initial mount must not hijack focus onto <main>.
+    expect(document.activeElement).not.toBe(mainEl);
+
+    await router.push('/admin/cerita');
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    expect(document.activeElement).toBe(mainEl);
+    wrapper.unmount();
+  });
 });
 
 describe('AdminLayout.vue — mobile sidebar drawer', () => {
@@ -219,6 +241,34 @@ describe('AdminLayout.vue — mobile sidebar drawer', () => {
     const openToggle = wrapper.find('[data-test="admin-mobile-menu-toggle"]');
     expect(openToggle.attributes('aria-expanded')).toBe('true');
     expect(openToggle.attributes('aria-label')).toBe('Menu navigasi');
+    expect(openToggle.attributes('aria-controls')).toBe('admin-sidebar');
+    expect(wrapper.find('nav#admin-sidebar').exists()).toBe(true);
+  });
+
+  it('omits the mobile drawer toggle button on desktop viewports so assistive tech does not announce aria-expanded=false when the sidebar is permanently open', async () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) =>
+      ({
+        matches: query === '(min-width: 768px)',
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }) as MediaQueryList) as typeof window.matchMedia;
+
+    try {
+      const router = createTestRouter();
+      await router.push('/admin');
+      await router.isReady();
+
+      const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
+      expect(wrapper.find('[data-test="admin-mobile-menu-toggle"]').exists()).toBe(false);
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
   });
 
   // Accessibility fix: closing the drawer (from any trigger — its own close button, Escape, or

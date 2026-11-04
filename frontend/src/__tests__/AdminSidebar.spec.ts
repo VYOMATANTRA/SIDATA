@@ -232,6 +232,30 @@ describe('AdminSidebar.vue', () => {
       expect(classes).not.toContain('sr-only');
     }
   });
+
+  it('provides a title tooltip on nav items and controls when collapsed on desktop, and omits it when expanded', async () => {
+    const { wrapper } = await mountSidebar('admin');
+
+    expect(wrapper.find('[data-test="nav-data"]').attributes('title')).toBeUndefined();
+    expect(wrapper.find('[data-test="nav-sistem"]').attributes('title')).toBeUndefined();
+    expect(
+      wrapper.find('[data-test="nav-sistem-akun-pengguna"]').attributes('title'),
+    ).toBeUndefined();
+    expect(wrapper.find('[data-test="nav-public-site"]').attributes('title')).toBeUndefined();
+    expect(wrapper.find('[data-test="nav-logout"]').attributes('title')).toBeUndefined();
+
+    await wrapper.find('[data-test="sidebar-collapse-toggle"]').trigger('click');
+
+    expect(wrapper.find('[data-test="nav-data"]').attributes('title')).toBe('Data');
+    expect(wrapper.find('[data-test="nav-sistem"]').attributes('title')).toBe('Sistem');
+    expect(wrapper.find('[data-test="nav-sistem-akun-pengguna"]').attributes('title')).toBe(
+      'Akun pengguna',
+    );
+    expect(wrapper.find('[data-test="nav-public-site"]').attributes('title')).toBe(
+      'Kembali ke Situs Publik',
+    );
+    expect(wrapper.find('[data-test="nav-logout"]').attributes('title')).toBe('Keluar');
+  });
 });
 
 describe('AdminSidebar.vue — navigation out of the admin area', () => {
@@ -524,5 +548,75 @@ describe('AdminSidebar.vue — mobile drawer', () => {
     expect(document.activeElement).toBe(lastFocusable);
 
     wrapper.unmount();
+  });
+
+  it('skips invisible or zero-rect elements in the mobile drawer focus trap', async () => {
+    setActivePinia(createPinia());
+    const authStore = useAuthStore();
+    authStore.user = { id: 'u1', email: 'u@example.com', role: 'admin' };
+    authStore.accessToken = 'token';
+
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminSidebar, {
+      props: { mobileOpen: true },
+      global: { plugins: [router] },
+      attachTo: document.body,
+    });
+
+    const firstFocusable = wrapper.find('a[href="/admin"]').element as HTMLElement;
+    const publicSiteLink = wrapper.find('[data-test="nav-public-site"]').element as HTMLElement;
+    const logoutBtn = wrapper.find('[data-test="nav-logout"]').element as HTMLElement;
+
+    // Mark the logout button invisible (and stub 0 client rects on it) so publicSiteLink becomes
+    // the last actually visible focusable item in the drawer.
+    logoutBtn.classList.add('invisible');
+    Object.defineProperty(logoutBtn, 'getClientRects', {
+      value: () => ({ length: 0 }) as unknown as DOMRectList,
+      configurable: true,
+    });
+
+    publicSiteLink.focus();
+    expect(document.activeElement).toBe(publicSiteLink);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', cancelable: true }));
+    expect(document.activeElement).toBe(firstFocusable);
+
+    wrapper.unmount();
+  });
+
+  it('ignores Escape key events when a modal dialog is open or focused', async () => {
+    setActivePinia(createPinia());
+    const authStore = useAuthStore();
+    authStore.user = { id: 'u1', email: 'u@example.com', role: 'admin' };
+    authStore.accessToken = 'token';
+
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminSidebar, {
+      props: { mobileOpen: true },
+      global: { plugins: [router] },
+      attachTo: document.body,
+    });
+
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    const dialogBtn = document.createElement('button');
+    dialog.appendChild(dialogBtn);
+    document.body.appendChild(dialog);
+    dialogBtn.focus();
+
+    try {
+      dialogBtn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await wrapper.vm.$nextTick();
+      expect(wrapper.emitted('close')).toBeFalsy();
+    } finally {
+      document.body.removeChild(dialog);
+      wrapper.unmount();
+    }
   });
 });

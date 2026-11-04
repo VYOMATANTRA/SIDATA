@@ -111,20 +111,71 @@ function closeMobile(reason: 'dismiss' | 'navigate' = 'dismiss') {
 
 const sidebarRef = ref<HTMLElement | null>(null);
 
+function isElementVisible(el: HTMLElement): boolean {
+  if (
+    el.closest(
+      '[hidden], [inert], .hidden, .invisible, [style*="display: none"], [style*="visibility: hidden"]',
+    )
+  ) {
+    return false;
+  }
+
+  if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+    const style = window.getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden') {
+      return false;
+    }
+  }
+
+  const isDesktopViewport =
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(min-width: 768px)').matches;
+  if (isDesktopViewport && el.closest('.md\\:hidden')) {
+    return false;
+  }
+
+  // In a real browser (or a test that stubs layout metrics), getClientRects() / offsetParent
+  // catches any CSS-driven display:none (including responsive classes). JSDOM returns 0 rects
+  // and null offsetParent for every element, so only enforce the geometry check when the
+  // container itself reports layout metrics or the element overrides getClientRects/offsetParent.
+  const containerHasLayout =
+    (sidebarRef.value?.getClientRects().length ?? 0) > 0 || sidebarRef.value?.offsetParent !== null;
+  const elementHasOwnLayoutStub =
+    Object.prototype.hasOwnProperty.call(el, 'getClientRects') ||
+    Object.prototype.hasOwnProperty.call(el, 'offsetParent');
+
+  if (containerHasLayout || elementHasOwnLayoutStub) {
+    return el.getClientRects().length > 0 || el.offsetParent !== null;
+  }
+
+  return true;
+}
+
 function getFocusableElements(): HTMLElement[] {
   if (!sidebarRef.value) return [];
   const candidates = sidebarRef.value.querySelectorAll<HTMLElement>(
     'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
   );
-  return Array.from(candidates).filter(
-    (el) => !el.classList.contains('hidden') && !el.closest('[style*="display: none"]'),
-  );
+  return Array.from(candidates).filter(isElementVisible);
+}
+
+function isEventFromOpenDialog(event: KeyboardEvent): boolean {
+  if (event.defaultPrevented) return true;
+  const target =
+    (event.target instanceof HTMLElement ? event.target : null) ??
+    (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  if (target?.closest('[role="dialog"], [role="alertdialog"], dialog')) {
+    return true;
+  }
+  return Boolean(document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]'));
 }
 
 function handleKeydown(event: KeyboardEvent) {
   if (!props.mobileOpen) return;
 
   if (event.key === 'Escape') {
+    if (isEventFromOpenDialog(event)) return;
     closeMobile('dismiss');
     return;
   }
@@ -188,6 +239,7 @@ async function handleLogout() {
 
 <template>
   <nav
+    id="admin-sidebar"
     ref="sidebarRef"
     aria-label="Navigasi Admin"
     class="bg-brand-navy fixed inset-y-0 left-0 z-40 flex h-full w-72 flex-col border-r border-white/10 text-white transition-all duration-200 md:visible md:static md:translate-x-0"
@@ -257,6 +309,7 @@ async function handleLogout() {
               : 'text-white/70 hover:bg-white/5 hover:text-white'
           "
           :aria-current="isNavActive(entry.to) ? 'page' : undefined"
+          :title="isCollapsed ? entry.label : undefined"
           :data-test="entry.dataTest"
           @click="closeMobile('navigate')"
         >
@@ -282,6 +335,7 @@ async function handleLogout() {
             class="focus-visible:ring-brand-cyan rounded-btn flex w-full items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white focus-visible:ring-2 focus-visible:outline-none"
             :aria-expanded="isSistemOpen"
             aria-controls="admin-sistem-group"
+            :title="isCollapsed ? entry.label : undefined"
             :data-test="entry.dataTest"
             @click="toggleSistem"
           >
@@ -313,6 +367,7 @@ async function handleLogout() {
                     : 'text-white/60 hover:bg-white/5 hover:text-white'
                 "
                 :aria-current="isNavActive(item.to) ? 'page' : undefined"
+                :title="isCollapsed ? item.label : undefined"
                 :data-test="item.dataTest"
                 @click="closeMobile('navigate')"
               >
@@ -344,6 +399,7 @@ async function handleLogout() {
       <RouterLink
         to="/"
         class="focus-visible:ring-brand-cyan rounded-btn flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white focus-visible:ring-2 focus-visible:outline-none"
+        :title="isCollapsed ? 'Kembali ke Situs Publik' : undefined"
         data-test="nav-public-site"
         @click="closeMobile('navigate')"
       >
@@ -363,6 +419,7 @@ async function handleLogout() {
       <button
         type="button"
         class="focus-visible:ring-brand-cyan rounded-btn flex w-full items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+        :title="isCollapsed ? 'Keluar' : undefined"
         data-test="nav-logout"
         :disabled="isLoggingOut"
         @click="handleLogout"
