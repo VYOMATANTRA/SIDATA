@@ -4,36 +4,39 @@ import { useAuthStore } from '../stores/auth';
 import { useSettingsStore } from '../stores/settings.store';
 import { ADMIN_NAV, isAdminNavGroup, type AdminNavRole } from '../config/adminNav';
 
-function metaForRoles(roles: AdminNavRole[]) {
+export function metaForRoles(roles: AdminNavRole[]): {
+  requiresAuth: true;
+  requiresAdmin: boolean;
+  requiresEditor: boolean;
+} {
+  const allowsEditor = roles.includes('editor');
+  // SPEC §3: Admin can do everything Editor can, so any route open to Editor is also open to
+  // Admin. Both flags are always emitted explicitly, and requiresEditor stays true on Admin-only
+  // routes as well (since authStore.canEditData is isAdmin || isEditor) so a child route never
+  // weakens the parent /admin shell's baseline editor/admin gate.
+  const allowsAdmin = roles.includes('admin') || allowsEditor;
   return {
     requiresAuth: true,
-    requiresAdmin: roles.includes('admin') && !roles.includes('editor'),
-    requiresEditor: roles.includes('editor'),
+    requiresAdmin: allowsAdmin && !allowsEditor,
+    requiresEditor: allowsEditor || allowsAdmin,
   };
 }
 
 const adminNavLinks = ADMIN_NAV.flatMap((entry) =>
   isAdminNavGroup(entry) ? entry.items : [entry],
 );
-const rolesByPath = new Map(adminNavLinks.map((item) => [item.to, item.roles]));
+export const rolesByPath = new Map(adminNavLinks.map((item) => [item.to, item.roles]));
+export const requestedNavPaths: string[] = [];
 
 /**
- * Looks up the roles ADMIN_NAV declares for a path, throwing instead of silently falling back if
- * the path isn't found. A `path` here is a literal copied from `adminNav.ts`'s `to` field — if it
- * drifts out of sync (a nav path renamed without updating this string, or vice versa), a silent
- * fallback would let the route quietly guard with the wrong roles, defeating SPEC §3's "nav and
- * routes can't disagree" invariant. Throwing at module load time (this runs as soon as
- * router/index.ts is imported, which every test file and the app itself does) turns that drift
- * into an immediate, loud failure instead of a hidden permissions bug.
+ * Looks up the roles ADMIN_NAV declares for a path. Defaults fail-closed to `['admin']` at runtime
+ * so a renamed nav path never crashes router module initialization (which would break public
+ * pages too) or silently widens access to editors; `adminNavRouteSync.spec.ts` asserts in CI that
+ * every path passed to `rolesFor` exists in `ADMIN_NAV`.
  */
-function rolesFor(path: string): AdminNavRole[] {
-  const roles = rolesByPath.get(path);
-  if (!roles) {
-    throw new Error(
-      `router/index.ts: no ADMIN_NAV entry with to: "${path}" — add one in adminNav.ts or fix this path so routes and the sidebar stay in sync.`,
-    );
-  }
-  return roles;
+export function rolesFor(path: string): AdminNavRole[] {
+  requestedNavPaths.push(path);
+  return rolesByPath.get(path) ?? ['admin'];
 }
 
 const router = createRouter({
@@ -172,13 +175,13 @@ const router = createRouter({
         {
           // Reached today via the "Retensi Audit" link inside UserManagement.vue, not a direct
           // sidebar item (SPEC §3 Sistem group has no separate retention entry). Still mounted
-          // in the shell so the sidebar persists when an admin follows that link, and derives its
-          // role guard from its parent nav entry ('/users') so access rules cannot drift.
+          // in the shell so the sidebar persists when an admin follows that link, with its own
+          // explicit Admin-only role requirement (SPEC §3) rather than borrowing /users's roles.
           path: '/settings/audit-retention',
           name: 'audit-retention-settings',
           component: () => import('../views/AuditRetentionSettingsView.vue'),
           meta: {
-            ...metaForRoles(rolesFor('/users')),
+            ...metaForRoles(['admin']),
             title: 'Pengaturan Retensi Audit',
             // Declares which sidebar item this child page belongs to, since its own path
             // doesn't match any ADMIN_NAV `to` (naive path-prefix matching would be unsafe here —
