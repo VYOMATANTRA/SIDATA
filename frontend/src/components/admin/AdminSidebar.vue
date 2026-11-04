@@ -79,14 +79,22 @@ function labelClass(collapsed: boolean, expandedClass: string): string {
   return collapsed ? `${expandedClass} md:sr-only` : expandedClass;
 }
 
-// A route "belongs" to a nav entry either by exact path match, or by declaring
+function normalizePath(path: string): string {
+  return path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
+}
+
+// A route "belongs" to a nav entry either by normalized path match, or by declaring
 // `meta.navActiveFor` (see router/index.ts) when it's a child page reached by some other means
 // than clicking this entry (e.g. /settings/audit-retention, linked from inside UserManagement.vue
 // rather than the sidebar). Plain path-prefix matching isn't safe here: most ADMIN_NAV entries are
 // /admin/* siblings, so prefix-matching against '/admin' would also light up Beranda everywhere.
 function isNavActive(to: string): boolean {
-  if (route.path === to) return true;
-  return typeof route.meta.navActiveFor === 'string' && route.meta.navActiveFor === to;
+  const normalizedTo = normalizePath(to);
+  if (normalizePath(route.path) === normalizedTo) return true;
+  return (
+    typeof route.meta.navActiveFor === 'string' &&
+    normalizePath(route.meta.navActiveFor) === normalizedTo
+  );
 }
 
 function isGroupActive(group: AdminNavGroup) {
@@ -244,9 +252,8 @@ async function handleLogout() {
               {{ entry.label }}
             </span>
             <ChevronDownIcon
-              v-if="!isCollapsed"
               class="h-4 w-4 shrink-0 transition-transform duration-200"
-              :class="isSistemOpen ? 'rotate-180' : ''"
+              :class="[isSistemOpen ? 'rotate-180' : '', isCollapsed ? 'md:hidden' : '']"
               aria-hidden="true"
             />
           </button>
@@ -254,8 +261,8 @@ async function handleLogout() {
           <ul
             v-show="isSistemOpen"
             id="admin-sistem-group"
-            class="mt-1 space-y-1"
-            :class="isCollapsed ? '' : 'pl-8'"
+            class="mt-1 space-y-1 pl-8"
+            :class="isCollapsed ? 'md:pl-0' : ''"
           >
             <li v-for="item in entry.items" :key="item.label">
               <RouterLink

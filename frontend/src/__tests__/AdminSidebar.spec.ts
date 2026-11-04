@@ -143,6 +143,33 @@ describe('AdminSidebar.vue', () => {
     expect(wrapper.find('[data-test="nav-beranda"]').attributes('aria-current')).toBeUndefined();
   });
 
+  it('keeps the active highlight and auto-opens the Sistem group even when the URL has a trailing slash', async () => {
+    const { wrapper: berandaWrapper } = await mountSidebar('admin', '/admin/');
+    expect(berandaWrapper.find('[data-test="nav-beranda"]').attributes('aria-current')).toBe(
+      'page',
+    );
+
+    const { wrapper: auditWrapper } = await mountSidebar('admin', '/audit-logs/');
+    expect(auditWrapper.find('[data-test="nav-sistem-log"]').attributes('aria-current')).toBe(
+      'page',
+    );
+    expect(auditWrapper.find('[data-test="nav-sistem"]').attributes('aria-expanded')).toBe('true');
+  });
+
+  it('scopes the Sistem group chevron hiding and indentation reset to md: when collapsed so the mobile drawer keeps both', async () => {
+    const { wrapper } = await mountSidebar('admin');
+    await wrapper.find('[data-test="sidebar-collapse-toggle"]').trigger('click');
+
+    const sistemGroupList = wrapper.find('#admin-sistem-group');
+    expect(sistemGroupList.classes()).toContain('pl-8');
+    expect(sistemGroupList.classes()).toContain('md:pl-0');
+
+    const sistemButtonIcons = wrapper.find('[data-test="nav-sistem"]').findAll('svg');
+    // Both the group icon and the chevron remain in the DOM; the chevron is hidden only at md+
+    expect(sistemButtonIcons.length).toBe(2);
+    expect(sistemButtonIcons[1]?.classes()).toContain('md:hidden');
+  });
+
   it('toggles collapse state via the collapse button with aria-expanded', async () => {
     const { wrapper } = await mountSidebar('admin');
 
