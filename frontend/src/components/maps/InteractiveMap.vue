@@ -80,6 +80,7 @@ function applyMarkerA11y(marker: L.Marker, point: SpatialPointDTO) {
   const markerElement = marker.getElement();
   if (markerElement) {
     markerElement.setAttribute('aria-label', markerLabel(point));
+    markerElement.setAttribute('title', markerLabel(point));
     markerElement.setAttribute('role', 'button');
   }
 }
