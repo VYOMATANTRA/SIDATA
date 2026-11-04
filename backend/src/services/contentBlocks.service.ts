@@ -231,7 +231,7 @@ export const heroMetadataSchema = z
       .nullable()
       .optional(),
   })
-  .passthrough();
+  .strip();
 
 export const sambutanLurahMetadataSchema = z
   .object({
