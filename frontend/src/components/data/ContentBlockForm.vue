@@ -100,7 +100,7 @@ function readBatasWilayah(meta: Record<string, unknown> | null): BatasDraft[] {
 
 function readSotkMembers(meta: Record<string, unknown> | null): SotkDraft[] {
   const raw = meta?.sotkMembers;
-  if (!Array.isArray(raw) || raw.length === 0) {
+  if (!Array.isArray(raw)) {
     return [
       { role: 'Lurah', officialName: '', duties: '' },
       { role: 'Sekretaris Lurah', officialName: '', duties: '' },
@@ -125,7 +125,7 @@ const profilSotk = ref<SotkDraft[]>(readSotkMembers(metaRecord));
 const profilLurahName = ref(
   String(
     metaRecord?.lurahName ??
-      profilSotk.value.find((m) => m.role === 'Lurah')?.officialName ??
+      profilSotk.value.find((m) => m.role.trim().toLowerCase() === 'lurah')?.officialName ??
       '',
   ),
 );
@@ -137,7 +137,7 @@ function markLurahFieldEdited(): void {
 }
 
 function markSotkLurahEdited(role: string): void {
-  if (role.trim() === 'Lurah') lurahEditSource.value = 'sotk';
+  if (role.trim().toLowerCase() === 'lurah') lurahEditSource.value = 'sotk';
 }
 
 const profilLurahTitle = ref(String(metaRecord?.lurahTitle ?? 'Lurah Kelurahan Manggar'));
@@ -157,7 +157,12 @@ function addSotkRow(): void {
 }
 
 function removeSotkRow(index: number): void {
+  const removed = profilSotk.value[index];
   profilSotk.value = profilSotk.value.filter((_, i) => i !== index);
+  if (removed?.role.trim().toLowerCase() === 'lurah') {
+    lurahEditSource.value = 'sotk';
+    profilLurahName.value = '';
+  }
 }
 
 // Raw JSON fallback for generic/custom blocks (not used for profile — dedicated fields instead)
@@ -297,7 +302,7 @@ function handleSubmit(): void {
       duties: row.duties.trim() || null,
     }));
     // Copy only the Lurah name control the editor actually changed (Andi #112).
-    const lurahIdx = sotkMembers.findIndex((m) => m.role === 'Lurah');
+    const lurahIdx = sotkMembers.findIndex((m) => m.role.trim().toLowerCase() === 'lurah');
     let resolvedLurahName = lurahName;
     if (lurahEditSource.value === 'field') {
       if (lurahIdx >= 0) {
@@ -308,14 +313,10 @@ function handleSubmit(): void {
         // When no SOTK row for 'Lurah' exists, entering a Lurah name in the dedicated
         // top input intentionally prepends a new 'Lurah' SOTK row so the SOTK roster
         // reflects the leadership structure without requiring manual row recreation.
-        sotkMembers = [
-          { role: 'Lurah', officialName: lurahName, duties: null },
-          ...sotkMembers,
-        ];
+        sotkMembers = [{ role: 'Lurah', officialName: lurahName, duties: null }, ...sotkMembers];
       }
     } else if (lurahEditSource.value === 'sotk') {
-      const fromSotk =
-        lurahIdx >= 0 ? (sotkMembers[lurahIdx]?.officialName ?? '').trim() : '';
+      const fromSotk = lurahIdx >= 0 ? (sotkMembers[lurahIdx]?.officialName ?? '').trim() : '';
       resolvedLurahName = fromSotk;
     }
     metadata = {
@@ -388,7 +389,6 @@ function handleSubmit(): void {
         required
       ></textarea>
     </FormField>
-
 
     <FormField
       v-if="isHero"

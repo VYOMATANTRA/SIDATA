@@ -249,7 +249,7 @@ export const sambutanLurahMetadataSchema = z
       .nullable()
       .optional(),
   })
-  .passthrough();
+  .strip();
 
 export const highlightMetadataSchema = z
   .object({
@@ -260,12 +260,12 @@ export const highlightMetadataSchema = z
             title: z.string().trim().max(100, 'Judul highlight maksimal 100 karakter'),
             desc: z.string().trim().max(500, 'Deskripsi highlight maksimal 500 karakter'),
           })
-          .passthrough(),
+          .strip(),
       )
       .max(10, 'Maksimal 10 item highlight')
       .optional(),
   })
-  .passthrough();
+  .strip();
 
 const publikasiItemSchema = z
   .object({
@@ -333,7 +333,7 @@ const batasWilayahItemSchema = z
       .min(1, 'Nama wilayah batas wajib diisi')
       .max(255, 'Nama wilayah batas maksimal 255 karakter'),
   })
-  .passthrough();
+  .strip();
 
 const sotkMemberSchema = z
   .object({
@@ -355,7 +355,7 @@ const sotkMemberSchema = z
       .nullable()
       .optional(),
   })
-  .passthrough();
+  .strip();
 
 export const tentangProfilMetadataSchema = z
   .object({
@@ -373,7 +373,7 @@ export const tentangProfilMetadataSchema = z
     batasWilayah: z.array(batasWilayahItemSchema).max(10, 'Maksimal 10 batas wilayah').optional(),
     sotkMembers: z.array(sotkMemberSchema).max(30, 'Maksimal 30 anggota SOTK').optional(),
   })
-  .passthrough();
+  .strip();
 
 /**
  * Validates slug-specific metadata and returns the Zod-cleaned value so trimmed

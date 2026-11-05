@@ -82,14 +82,16 @@ const batasWilayah = computed<BatasWilayahItem[]>(() => {
   return BATAS_WILAYAH;
 });
 
+const hasCustomSotkRoster = computed(() => Array.isArray(profileMetadata.value?.sotkMembers));
+
 const sotkMembers = computed<SotkMember[]>(() => {
   const custom = profileMetadata.value?.sotkMembers;
-  if (Array.isArray(custom) && custom.length > 0) return custom as SotkMember[];
+  if (Array.isArray(custom)) return custom as SotkMember[];
   return SOTK_MEMBERS;
 });
 
 const lurahOfficial = computed<SotkMember | undefined>(() => {
-  return sotkMembers.value.find((m) => m.role.trim() === 'Lurah');
+  return sotkMembers.value.find((m) => m.role.trim().toLowerCase() === 'lurah');
 });
 
 const lurahDisplayName = computed(() => {
@@ -97,6 +99,8 @@ const lurahDisplayName = computed(() => {
   if (typeof fromRow === 'string' && fromRow.trim()) return fromRow.trim();
   const saved = profileMetadata.value?.lurahName;
   if (typeof saved === 'string' && saved.trim()) return saved.trim();
+  // An explicit roster without a Lurah row must not resurrect the static default.
+  if (hasCustomSotkRoster.value) return 'Nama pejabat belum tersedia';
   return LURAH_OFFICIAL?.officialName ?? 'Nama pejabat belum tersedia';
 });
 

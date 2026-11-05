@@ -1,14 +1,44 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, it } from 'node:test';
 import { DEFAULT_CONTENT_BLOCKS } from '../services/contentBlocks.service.js';
 
+interface PublicationLike {
+  category: string;
+  title: string;
+  description: string;
+  source?: string | null;
+  href?: string | null;
+  isAvailableOnline: boolean;
+}
+
+interface NormalizedPublication {
+  category: string;
+  title: string;
+  description: string;
+  source: string | null;
+  href: string | null;
+  isAvailableOnline: boolean;
+}
+
+function normalize(item: PublicationLike): NormalizedPublication {
+  return {
+    category: item.category,
+    title: item.title,
+    description: item.description,
+    source: item.source ?? null,
+    href: item.href ?? null,
+    isAvailableOnline: item.isAvailableOnline,
+  };
+}
+
 /**
- * Backend cannot import the Vue frontend module graph, so the publikasi-katalog
- * default stays as a mirrored copy. This test locks titles/categories/sources/
- * isAvailableOnline to the FE PUBLICATIONS list in content/publikasi.ts.
+ * Backend cannot import the Vue frontend module graph at build time, so the
+ * publikasi-katalog default stays as a mirrored copy. This test loads the
+ * frontend module at runtime (it is plain TypeScript) and compares the actual
+ * exported data, not source text.
  */
 describe('publikasi catalog FE↔BE sync', () => {
   const here = dirname(fileURLToPath(import.meta.url));
@@ -19,43 +49,20 @@ describe('publikasi catalog FE↔BE sync', () => {
     {
       skip: existsSync(fePath) ? false : 'frontend source is not in this checkout',
     },
-    () => {
-      const feSource = readFileSync(fePath, 'utf8');
+    async () => {
+      const feModule = (await import(pathToFileURL(fePath).href)) as {
+        PUBLICATIONS?: unknown;
+      };
+      assert.ok(Array.isArray(feModule.PUBLICATIONS), 'PUBLICATIONS must be an array');
+      const fePublications = feModule.PUBLICATIONS as PublicationLike[];
+      assert.ok(fePublications.length > 0);
 
       const beBlock = DEFAULT_CONTENT_BLOCKS.find((b) => b.slug === 'publikasi-katalog');
       assert.ok(beBlock);
-      const publications = (beBlock!.metadata as { publications: Array<Record<string, unknown>> })
-        .publications;
+      const publications = (beBlock!.metadata as { publications: PublicationLike[] }).publications;
       assert.ok(Array.isArray(publications));
-      assert.equal(publications.length, 4);
 
-      for (const item of publications) {
-        assert.equal(typeof item['category'], 'string');
-        assert.equal(typeof item['title'], 'string');
-        assert.equal(typeof item['description'], 'string');
-        assert.equal(typeof item['isAvailableOnline'], 'boolean');
-        assert.equal(item['isAvailableOnline'], false);
-        assert.equal(typeof item['source'], 'string');
-        // Title + category + source must appear verbatim in the FE module.
-        assert.match(feSource, new RegExp(escapeRegExp(String(item['title']))));
-        assert.match(feSource, new RegExp(escapeRegExp(String(item['category']))));
-        assert.match(feSource, new RegExp(escapeRegExp(String(item['source']))));
-      }
-
-      // Order: Prodeskel, Infografis, Eco Boba, Manggar dalam Angka
-      assert.deepEqual(
-        publications.map((p) => p['title']),
-        [
-          'Publikasi Prodeskel',
-          'Infografis Kelurahan Manggar',
-          'Booklet Eco Boba',
-          'Manggar dalam Angka 2026',
-        ],
-      );
+      assert.deepEqual(publications.map(normalize), fePublications.map(normalize));
     },
   );
 });
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}

@@ -289,7 +289,7 @@ describe('ContentBlockForm.vue', () => {
     expect(payload.metadata.sotkMembers[0]?.officialName).toBeNull();
   });
 
-  it('starts with empty official names and shows placeholder when profil SOTK metadata is empty', () => {
+  it('does not restore default SOTK rows when an explicit roster is empty', () => {
     const emptyProfilBlock: ContentBlock = {
       ...mockProfilBlock,
       metadata: {
@@ -306,14 +306,60 @@ describe('ContentBlockForm.vue', () => {
     const lurahInput = wrapper.find('input#block-lurahName');
     expect(lurahInput.attributes('placeholder')).toBe('Nama pejabat belum tersedia');
     expect((lurahInput.element as HTMLInputElement).value).toBe('');
+    expect(wrapper.find('input#block-sotk-name-0').exists()).toBe(false);
+  });
 
-    const sotkName0 = wrapper.find('input#block-sotk-name-0');
-    expect(sotkName0.exists()).toBe(true);
-    expect(sotkName0.attributes('placeholder')).toBe('Nama pejabat belum tersedia');
-    expect((sotkName0.element as HTMLInputElement).value).toBe('');
+  it('matches the Lurah role case-insensitively in the form', async () => {
+    const mixedCaseBlock: ContentBlock = {
+      ...mockProfilBlock,
+      metadata: {
+        ...mockProfilBlock.metadata,
+        lurahName: 'Nama Lama',
+        sotkMembers: [
+          { role: '  lurah ', officialName: 'Nama Lama', duties: null },
+          { role: 'Sekretaris Lurah', officialName: 'Sekretaris Uji', duties: null },
+        ],
+      },
+    };
 
-    const sotkRole0 = wrapper.find('input#block-sotk-role-0');
-    expect((sotkRole0.element as HTMLInputElement).value).toBe('Lurah');
+    const wrapper = mount(ContentBlockForm, {
+      props: { block: mixedCaseBlock },
+    });
+
+    expect((wrapper.find('input#block-lurahName').element as HTMLInputElement).value).toBe(
+      'Nama Lama',
+    );
+    await wrapper.find('input#block-sotk-name-0').setValue('Nama Baru');
+    await wrapper.find('form').trigger('submit.prevent');
+
+    const payload = wrapper.emitted('submit')?.[0]?.[0] as {
+      metadata: { lurahName: string; sotkMembers: Array<{ officialName: string | null }> };
+    };
+    expect(payload.metadata.lurahName).toBe('Nama Baru');
+    expect(payload.metadata.sotkMembers[0]?.officialName).toBe('Nama Baru');
+  });
+
+  it('keeps the Lurah row deleted after a top-field edit', async () => {
+    const wrapper = mount(ContentBlockForm, {
+      props: { block: mockProfilBlock },
+    });
+
+    await wrapper.find('input#block-lurahName').setValue('Nama Baru');
+    const removeButtons = wrapper.findAll('button').filter((b) => b.text() === 'Hapus jabatan');
+    await removeButtons[0]?.trigger('click');
+    await wrapper.find('form').trigger('submit.prevent');
+
+    const payload = wrapper.emitted('submit')?.[0]?.[0] as {
+      metadata: {
+        lurahName?: string;
+        sotkMembers: Array<{ role: string; officialName: string | null }>;
+      };
+    };
+    expect(payload.metadata.lurahName).toBeUndefined();
+    expect(payload.metadata.sotkMembers.some((m) => m.role.trim().toLowerCase() === 'lurah')).toBe(
+      false,
+    );
+    expect((wrapper.find('input#block-lurahName').element as HTMLInputElement).value).toBe('');
   });
 
   it('prepends a Lurah SOTK row when editing top Lurah field if no Lurah row previously existed', async () => {

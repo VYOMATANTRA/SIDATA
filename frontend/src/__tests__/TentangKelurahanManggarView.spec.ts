@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import TentangKelurahanManggarView from '../views/TentangKelurahanManggarView.vue';
 import { useIndicatorsStore, type IndicatorDto } from '../stores/indicators.store';
+import { useContentBlocksStore } from '../stores/contentBlocks.store';
 
 function mountView() {
   const pinia = createPinia();
@@ -425,6 +426,49 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     // Typo fix assertion: "berupaya menyediakan" instead of "strive menyediakan"
     expect(wrapper.text()).toContain('Kelurahan Manggar berupaya menyediakan');
     expect(wrapper.text()).not.toContain('strive menyediakan');
+  });
+
+  it('matches the Lurah role case-insensitively in profile metadata', async () => {
+    const { pinia, router } = mountView();
+    const contentBlocks = useContentBlocksStore();
+    contentBlocks.blocks['tentang-kelurahan-profil'] = {
+      ...contentBlocks.blocks['tentang-kelurahan-profil']!,
+      metadata: {
+        lurahName: '',
+        sotkMembers: [{ role: '  lurah ', officialName: 'Nama Dari Metadata', duties: null }],
+      },
+    };
+    vi.spyOn(contentBlocks, 'fetchBlocks').mockResolvedValue(undefined);
+    vi.spyOn(useIndicatorsStore(), 'fetchBySlug').mockResolvedValue(null);
+    await router.push('/tentang/kelurahan-manggar');
+    await router.isReady();
+
+    const wrapper = mount(TentangKelurahanManggarView, {
+      global: { plugins: [pinia, router] },
+    });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.text()).toContain('Nama Dari Metadata');
+    wrapper.unmount();
+  });
+
+  it('does not resurrect the static Lurah when a custom SOTK roster is empty', async () => {
+    const { pinia, router } = mountView();
+    const contentBlocks = useContentBlocksStore();
+    contentBlocks.blocks['tentang-kelurahan-profil'] = {
+      ...contentBlocks.blocks['tentang-kelurahan-profil']!,
+      metadata: { lurahName: '', sotkMembers: [] },
+    };
+    vi.spyOn(contentBlocks, 'fetchBlocks').mockResolvedValue(undefined);
+    vi.spyOn(useIndicatorsStore(), 'fetchBySlug').mockResolvedValue(null);
+    await router.push('/tentang/kelurahan-manggar');
+    await router.isReady();
+
+    const wrapper = mount(TentangKelurahanManggarView, {
+      global: { plugins: [pinia, router] },
+    });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.text()).toContain('Nama pejabat belum tersedia');
+    wrapper.unmount();
   });
 
   it('calls fetchBySlug without force on mount so the short cache can be used', async () => {
