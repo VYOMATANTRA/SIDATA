@@ -19,7 +19,12 @@ function splitPhoneParts(value: string): string[] {
  * A piece that can stand alone in a separated string.
  * Stricter than isPlausiblePhoneDigitRun (7–15, any prefix): a cut half like `0812-111` must not become a link.
  */
-function isCompletePhone(value: string): boolean {
+function isExplicitlyIncomplete(value: string): boolean {
+  return /\b(?:partial|cut|truncated|ext\.?|extension|samb\.?|lanjutan)\b|\.\.\.|…/i.test(value);
+}
+
+function isPlausibleCompletePhonePart(value: string): boolean {
+  if (isExplicitlyIncomplete(value)) return false;
   const digits = digitRun(value);
   return digits.length >= 10 && digits.length <= 15 && /^(?:0|62|8)/.test(digits);
 }
@@ -34,7 +39,7 @@ export function isWhatsappMobile(value: string): boolean {
 export function undialablePhoneRemainder(value: string): string {
   if (!SEPARATOR.test(value)) return '';
   return splitPhoneParts(value)
-    .filter((part) => !isCompletePhone(part))
+    .filter((part) => !isPlausibleCompletePhonePart(part))
     .join(' / ');
 }
 
@@ -44,8 +49,8 @@ export function undialablePhoneRemainder(value: string): string {
  */
 function safeParts(value: string): string[] | null {
   const parts = splitPhoneParts(value);
-  if (!SEPARATOR.test(value)) return parts;
-  const complete = parts.filter(isCompletePhone);
+  if (!SEPARATOR.test(value)) return parts.some(isExplicitlyIncomplete) ? null : parts;
+  const complete = parts.filter(isPlausibleCompletePhonePart);
   return complete.length > 0 ? complete : null;
 }
 

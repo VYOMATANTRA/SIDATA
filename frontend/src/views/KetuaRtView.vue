@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import TentangPageLayout from '../components/tentang/TentangPageLayout.vue';
 import TentangBreadcrumb from '../components/tentang/TentangBreadcrumb.vue';
 import TentangHeroPanel from '../components/tentang/TentangHeroPanel.vue';
 import TentangNotice from '../components/tentang/TentangNotice.vue';
 import BaseButton from '../components/common/BaseButton.vue';
-import { useRtLeadersStore } from '../stores/rtLeaders.store';
+import { RT_LEADERS_CACHE_TTL_MS, useRtLeadersStore } from '../stores/rtLeaders.store';
 import {
   primaryPhone,
   digitsOnly,
@@ -20,6 +20,20 @@ const rtLeadersStore = useRtLeadersStore();
 
 onMounted(() => {
   void rtLeadersStore.fetchRtLeaders();
+  refreshTimer = window.setInterval(() => {
+    if (document.visibilityState === 'visible') void rtLeadersStore.fetchRtLeaders();
+  }, RT_LEADERS_CACHE_TTL_MS);
+  document.addEventListener('visibilitychange', refreshIfVisible);
+});
+
+let refreshTimer: number | undefined;
+function refreshIfVisible() {
+  if (document.visibilityState === 'visible') void rtLeadersStore.fetchRtLeaders();
+}
+
+onUnmounted(() => {
+  if (refreshTimer !== undefined) window.clearInterval(refreshTimer);
+  document.removeEventListener('visibilitychange', refreshIfVisible);
 });
 
 const query = ref('');
@@ -352,7 +366,10 @@ function formatPhone(value: string): string {
               </thead>
 
               <!-- Loading skeleton keeps the table's shape -->
-              <tbody v-if="rtLeadersStore.isLoading" class="divide-y divide-gray-200 bg-white">
+              <tbody
+                v-if="rtLeadersStore.isLoading && !hasRows"
+                class="divide-y divide-gray-200 bg-white"
+              >
                 <tr v-for="row in 5" :key="`skeleton-${row}`" aria-hidden="true">
                   <td class="px-4 py-4 sm:px-6">
                     <span class="block h-4 w-10 animate-pulse rounded bg-gray-200"></span>

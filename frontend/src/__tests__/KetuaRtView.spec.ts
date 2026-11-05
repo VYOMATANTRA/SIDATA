@@ -3,7 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import KetuaRtView from '../views/KetuaRtView.vue';
-import type { RtLeader } from '../stores/rtLeaders.store';
+import { RT_LEADERS_CACHE_TTL_MS, type RtLeader } from '../stores/rtLeaders.store';
 
 const ROSTER_SIZE = 100;
 /** The page's default page size, matching the view's initial `pageSize`. */
@@ -69,6 +69,43 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+describe('KetuaRtView roster revalidation', () => {
+  it('refreshes the rows and sample notice together while visible, and refreshes stale data on return', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.mocked(fetch);
+    const wrapper = await mountReady();
+    expect(wrapper.text()).toContain('Data contoh, bukan daftar resmi');
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ leaders: buildRoster(false), isSampleRoster: false }),
+    } as Response);
+    await vi.advanceTimersByTimeAsync(RT_LEADERS_CACHE_TTL_MS);
+    await flushPromises();
+    expect(wrapper.text()).not.toContain('Data contoh, bukan daftar resmi');
+    expect(wrapper.text()).toContain('Ketua RT 1');
+
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+    await vi.advanceTimersByTimeAsync(RT_LEADERS_CACHE_TTL_MS);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ leaders: buildRoster(true), isSampleRoster: true }),
+    } as Response);
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+    document.dispatchEvent(new Event('visibilitychange'));
+    await flushPromises();
+    expect(wrapper.text()).toContain('Data contoh, bukan daftar resmi');
+    const clearIntervalSpy = vi.spyOn(window, 'clearInterval');
+    const removeListenerSpy = vi.spyOn(document, 'removeEventListener');
+    wrapper.unmount();
+    expect(clearIntervalSpy).toHaveBeenCalled();
+    expect(removeListenerSpy).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
+  });
 });
 
 describe('KetuaRtView accessibility, search, and contact rendering', () => {

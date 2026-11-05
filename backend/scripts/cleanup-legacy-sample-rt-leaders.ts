@@ -1,185 +1,12 @@
-/**
- * One-off maintenance script to clean up legacy development sample data for RT leaders
- * and their spatial points.
- *
- * Replaces leftover development sample leaders (RT 01-03) with placeholder sample
- * data when they still match the recognition fingerprints, and removes the legacy
- * sample spatial point (`00000000-0000-0000-0000-000000000001`) to eliminate
- * integrity conflicts.
- *
- * Usage:
- *   npx tsx scripts/cleanup-legacy-sample-rt-leaders.ts
- *   npx tsx scripts/cleanup-legacy-sample-rt-leaders.ts --force   # required in production
- */
+/** One-off maintenance entry point for legacy sample RT records. */
 import { pathToFileURL } from 'node:url';
 import prisma from '../src/utils/prisma.js';
-import { buildAuditLog, recordAuditLog, AUDIT_ACTIONS } from '../src/services/audit.service.js';
 import {
-  LEGACY_SAMPLE_LEADERS,
-  LEGACY_SAMPLE_POINT_ID,
-  matchesLegacySampleLeader,
-} from '../src/utils/legacySampleRtFingerprints.js';
+  cleanLegacySampleRtData,
+  runLegacySampleRtCleanup,
+} from '../src/services/legacySampleRtCleanup.service.js';
 
-export type LegacySampleCleanupResult = {
-  deletedJunctions: number;
-  deletedPoints: number;
-  updatedLeaders: number;
-};
-
-type CleanupTx = {
-  spatialPoint: {
-    findUnique: (args: { where: { id: string } }) => Promise<{
-      id: string;
-      type: string;
-      name: string;
-      latitude: number;
-      longitude: number;
-    } | null>;
-    deleteMany: (args: { where: { id: string } }) => Promise<{ count: number }>;
-  };
-  spatialPointRt: {
-    deleteMany: (args: { where: { pointId: string } }) => Promise<{ count: number }>;
-  };
-  rtLeader: {
-    findUnique: (args: {
-      where: { rtNumber: number };
-    }) => Promise<{ name: string; phone: string } | null>;
-    update: (args: {
-      where: { rtNumber: number };
-      data: {
-        name: string;
-        phone: string;
-        phoneIsWhatsapp: boolean;
-        alamat: null;
-      };
-    }) => Promise<unknown>;
-  };
-};
-
-/**
- * Core cleanup body — extracted so unit tests can drive it with a fake transaction
- * client without opening a real database connection.
- */
-export async function runLegacySampleRtCleanup(tx: CleanupTx): Promise<LegacySampleCleanupResult> {
-  const legacyPoint = await tx.spatialPoint.findUnique({
-    where: { id: LEGACY_SAMPLE_POINT_ID },
-  });
-
-  let deletedJunctionsCount = 0;
-  let deletedPointsCount = 0;
-
-  if (
-    legacyPoint &&
-    legacyPoint.type === 'ketua_rt' &&
-    legacyPoint.name.includes('Pos RT 01') &&
-    legacyPoint.latitude === -1.2235 &&
-    legacyPoint.longitude === 116.9521
-  ) {
-    const deletedJunctions = await tx.spatialPointRt.deleteMany({
-      where: { pointId: LEGACY_SAMPLE_POINT_ID },
-    });
-    deletedJunctionsCount = deletedJunctions.count;
-
-    const deletedPoints = await tx.spatialPoint.deleteMany({
-      where: { id: LEGACY_SAMPLE_POINT_ID },
-    });
-    deletedPointsCount = deletedPoints.count;
-  }
-
-  let updatedLeaders = 0;
-  for (const [rtNumStr, expected] of Object.entries(LEGACY_SAMPLE_LEADERS)) {
-    const rtNumber = Number(rtNumStr);
-    const existing = await tx.rtLeader.findUnique({
-      where: { rtNumber },
-    });
-
-    if (existing && matchesLegacySampleLeader(existing, expected)) {
-      await tx.rtLeader.update({
-        where: { rtNumber },
-        data: {
-          name: `Ketua RT ${String(rtNumber).padStart(2, '0')}`,
-          phone: '—',
-          phoneIsWhatsapp: false,
-          alamat: null,
-        },
-      });
-      updatedLeaders++;
-    }
-  }
-
-  return {
-    deletedJunctions: deletedJunctionsCount,
-    deletedPoints: deletedPointsCount,
-    updatedLeaders,
-  };
-}
-
-export type CleanupAuditDeps = {
-  recordAudit?: typeof recordAuditLog;
-  log?: (line: string) => void;
-  now?: () => Date;
-  /** When set, the audit row is written with this client (same transaction as the cleanup). */
-  tx?: { auditLog: { create: typeof prisma.auditLog.create } };
-};
-
-function cleanupChangedData(result: LegacySampleCleanupResult): boolean {
-  return result.deletedJunctions > 0 || result.deletedPoints > 0 || result.updatedLeaders > 0;
-}
-
-/**
- * Structured audit trail for a cleanup run that changed data. Counts and timestamp only —
- * never names or phone numbers. Console log always; DB audit when data changed.
- */
-export async function recordLegacySampleCleanupAudit(
-  result: LegacySampleCleanupResult,
-  opts: { force: boolean; nodeEnv: string | undefined },
-  deps: CleanupAuditDeps = {},
-): Promise<void> {
-  const at = (deps.now ?? (() => new Date()))().toISOString();
-  const payload = {
-    event: 'maintenance.legacy_rt_cleanup',
-    at,
-    force: opts.force,
-    nodeEnv: opts.nodeEnv ?? null,
-    deletedJunctions: result.deletedJunctions,
-    deletedPoints: result.deletedPoints,
-    updatedLeaders: result.updatedLeaders,
-  };
-  (deps.log ?? console.log)(JSON.stringify(payload));
-
-  if (!cleanupChangedData(result)) return;
-
-  const entry = {
-    action: AUDIT_ACTIONS.MAINTENANCE_LEGACY_RT_CLEANUP,
-    outcome: 'success' as const,
-    actor: {
-      id: null,
-      email: 'script:cleanup-legacy-sample-rt-leaders',
-      role: 'system',
-    },
-    target: {
-      type: 'rt_leader',
-      id: null,
-      label: 'legacy-sample-cleanup',
-    },
-    metadata: {
-      deletedJunctions: result.deletedJunctions,
-      deletedPoints: result.deletedPoints,
-      updatedLeaders: result.updatedLeaders,
-      force: opts.force,
-      at,
-      nodeEnv: opts.nodeEnv ?? null,
-    },
-  };
-
-  if (deps.tx) {
-    await buildAuditLog(entry, deps.tx);
-    return;
-  }
-
-  const record = deps.recordAudit ?? recordAuditLog;
-  await record(entry);
-}
+export { runLegacySampleRtCleanup };
 
 async function main() {
   const force = process.argv.includes('--force');
@@ -188,25 +15,17 @@ async function main() {
   }
 
   console.log('Memulai pembersihan data sample RT lawas...');
-
-  const results = await prisma.$transaction(async (tx) => {
-    const cleanupResult = await runLegacySampleRtCleanup(tx);
-    await recordLegacySampleCleanupAudit(
-      cleanupResult,
-      { force, nodeEnv: process.env.NODE_ENV },
-      { tx },
-    );
-    return cleanupResult;
+  const results = await cleanLegacySampleRtData('script', {
+    force,
+    ...(process.env.NODE_ENV ? { nodeEnv: process.env.NODE_ENV } : {}),
   });
-
-  console.log('Pembersihan selesai:');
-  console.log(results);
+  console.log('Pembersihan selesai:', results);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]!).href) {
   main()
-    .catch((e) => {
-      console.error('Error saat pembersihan data sample RT:', e);
+    .catch((error) => {
+      console.error('Error saat pembersihan data sample RT:', error);
       process.exit(1);
     })
     .finally(async () => {
