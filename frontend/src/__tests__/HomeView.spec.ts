@@ -531,7 +531,7 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
                 slug: 'kependudukan-total',
                 label: 'Jumlah Penduduk Resmi',
                 unit: 'jiwa',
-                valueCurrent: '53.120',
+                valueCurrent: '53120',
                 pageSlug: 'kependudukan',
                 sortOrder: 1,
               },
@@ -554,5 +554,75 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
     const ceritaSection = wrapper.find('section#cerita-preview');
     expect(ceritaSection.text()).toContain('53.120');
     expect(ceritaSection.text()).toContain('Jumlah Penduduk Resmi');
+  });
+
+  // Edge Case 16: WeatherWidget integration on Hero
+  it('renders weather widget inside SectionHero on the landing page', async () => {
+    const { pinia, router } = setupHomeView();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(HomeView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    const heroWeather = wrapper.find('section#hero [data-test="hero-weather"]');
+    expect(heroWeather.exists()).toBe(true);
+    expect(heroWeather.find('[data-test="weather-widget-root"]').exists()).toBe(true);
+  });
+
+  // Edge Case 17: Heading hierarchy with WeatherWidget h2 in DOM order
+  it('preserves strict heading hierarchy across Hero h1, Weather h2, Sambutan h2, and Cerita h2', async () => {
+    const { pinia, router } = setupHomeView();
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/weather')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            location: { desa: 'Manggar', lat: -1.2251, lon: 116.9438 },
+            forecast: [
+              {
+                datetime: '2026-10-30 12:00:00',
+                temperatureCelsius: 24,
+                humidityPercent: 78,
+                description: 'Berawan',
+                windSpeedKmh: 15,
+                windDirection: 'NW',
+              },
+            ],
+            fetchedAt: '2026-10-30T12:00:00.000Z',
+            stale: false,
+          }),
+        } as Response;
+      }
+      return { ok: true, json: async () => ({}) } as Response;
+    });
+
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(HomeView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    await vi.waitUntil(() => wrapper.find('h2#weather-widget-title').exists());
+
+    const heroTitle = wrapper.find('h1#hero-title').element;
+    const weatherTitle = wrapper.find('h2#weather-widget-title').element;
+    const sambutanTitle = wrapper.find('h2#sambutan-title').element;
+    const ceritaTitle = wrapper.find('h2#cerita-preview-title').element;
+
+    expect(
+      heroTitle.compareDocumentPosition(weatherTitle) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      weatherTitle.compareDocumentPosition(sambutanTitle) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      sambutanTitle.compareDocumentPosition(ceritaTitle) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });

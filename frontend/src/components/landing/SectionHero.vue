@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { DEFAULT_HERO_BLOCK, useContentBlocksStore } from '../../stores/contentBlocks.store';
 import { useSettingsStore } from '../../stores/settings.store';
+import WeatherWidget from '../weather/WeatherWidget.vue';
 import defaultHeroBg from '@/assets/img/background_laman_depan_kelurahan.webp';
 
 const contentBlocksStore = useContentBlocksStore();
@@ -126,6 +127,13 @@ const backgroundStyle = computed(() => {
         data-test="hero-actions"
       >
         <slot name="actions" />
+      </div>
+
+      <!-- Weather Widget slot (Spec §8) -->
+      <div class="w-full pt-2 sm:pt-4" data-test="hero-weather">
+        <slot name="weather">
+          <WeatherWidget />
+        </slot>
       </div>
     </div>
   </section>
