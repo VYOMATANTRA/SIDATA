@@ -90,9 +90,13 @@ Notes:
   id array) in the **same transaction** as the point delete and its audit row (SPEC §3). Re-seed
   skips tombstoned ids — it must not recreate the point or its default `spatial_point_rt` coverage.
   An empty database with no tombstones still seeds the full synthetic roster.
-- The public "data contoh" sample-roster flag (`maps.rt_leaders_sample_roster`) is cleared only when
-  **no** `rt_leaders` row still matches the synthetic placeholder fingerprint for its RT; editing a
-  single placeholder among many must leave the notice visible.
+- Every environment seeds the 100 official Ketua RT names extracted from the Monografi roster;
+  synthetic names, phone numbers, and coordinates never enter an official row. Development may
+  additionally create synthetic map points, but the leaders keep the official names.
+- The public "data contoh" sample-roster flag (`maps.rt_leaders_sample_roster`) is explicit: ordinary
+  leader edits and CSV imports never change it. Only an Admin may flip it through
+  `PATCH /api/maps/rt-leaders/sample-status`, which is audited. Production seeds it `false`;
+  development seeds it `true` because its map coordinates are synthetic.
 - `GET /api/maps/rt-leaders` returns `{ leaders, total, isSampleRoster }`; the public sample notice
   follows this explicit flag and is never inferred from whether phone numbers look synthetic. The
   Ketua RT page revalidates the roster every 60 seconds while visible and when a hidden tab becomes
@@ -190,11 +194,11 @@ Hybrid model:
   for these.
 - **Prose & Standalone Content Blocks** — field-by-field forms (tier-1 builder or tier-2 free text; see §5). Standalone landing content blocks (`landing-hero`, `landing-sambutan-lurah`, `landing-highlights`) are managed via `/api/content-blocks`. Specifically, the hero block manages `title`, `body`, and optional `backgroundImage`; `badge` and call-to-action buttons were removed to maintain a clean institutional profile voice without redundant action buttons.
 
-The frontend surface for the first two is a single `/data` view (editor/admin only, no CMS
-sidebar shell): a searchable, type-filterable card list of every scalar indicator and matrix
-table, each opening an accessible edit dialog. It is edit-only — an indicator or table must
-attach to a `section`, and no section-management surface exists, so create/delete are not in the
-UI rather than shipped as forms that cannot submit. "Import From" from the wireframe is not
+The frontend surface for the first two is a single `/data` view (editor/admin only, mounted
+inside the admin base layout shell — see §8), a searchable, type-filterable card list of every
+scalar indicator and matrix table, each opening an accessible edit dialog. It is edit-only — an
+indicator or table must attach to a `section`, and no section-management surface exists, so
+create/delete are not in the UI rather than shipped as forms that cannot submit. "Import From" from the wireframe is not
 built, consistent with the scope above. The previous-year pair is edited independently of
 `is_computed_comparison`: a pair alone does not promote an indicator into the tier-1 computed set
 (§5), so the flag is preserved as stored and is only cleared when the pair is cleared, since the
@@ -382,43 +386,27 @@ buried inside a stat page. Entry points:
 
 The page provides **in-table search**: a single labelled text input filtering on both
 `rt_number` and leader `name`, applied client-side over the full 100-row set (no server
-round-trip). When the query contains only digits, search matches `rt_number` exactly and does
-not search names (e.g. searching "1" matches RT 1 only, not "RT 10" or a leader named "One").
-The matching rows are then **paginated client-side**, with a page-size control
-(10/25/50/100 rows) and a bounded page-number list, so paging never costs a second request —
-the page already asks for all 100 leaders in one call. The visible row count is announced as
-results change ("Menampilkan N dari 100 RT"; a paginated slice is announced as
-"Menampilkan 1–10 dari 100 RT"). Rows remain sorted by `rt_number` and the unfiltered table is
-the default state, so the page is fully usable with JavaScript-driven filtering ignored. The
-`Alamat` column is automatically hidden when no leader in the displayed dataset has an address
-value. When the displayed dataset is detected as synthetic/sample data (i.e. every leader is
-non-dialable or carries a placeholder name), a prominent sample-data notice is displayed explaining
-that the roster contains placeholder names and contacts pending official publication; when real
-operational contacts are loaded, this notice is suppressed. No RT-range grouping or collapsible
-bands — flat table only.
+round-trip). A digits-only query matches the RT number as a prefix and also matches names that
+contain those digits, so `1` finds RT 1 and RT 10–19, while `007` still finds RT 7. The matching
+rows are then **paginated client-side**, defaulting to **10 rows per page**, with a page-size
+control (10/25/50/100 rows) and a bounded page-number list. Paging never costs a second request —
+the page already asks for all 100 leaders in one call. The live region announces only the number
+of matches ("Menampilkan N dari 100 RT"); the visible page range stays outside the live region so
+paging does not re-announce the same count. Rows remain sorted by `rt_number` and the unfiltered
+table is the default state. The `Alamat` column is automatically hidden when no leader in the
+displayed dataset has an address value. A prominent sample-data notice follows the explicit
+`maps.rt_leaders_sample_roster` flag, never a phone/name heuristic. No RT-range grouping or
+collapsible bands — flat table only.
+
+Operational roster entry is available in the CMS: manual editing of name, phone, WhatsApp flag,
+address, and optional coordinates, plus CSV preview/apply. CSV columns are
+`rtNumber,name,phone,phoneIsWhatsapp,alamat,latitude,longitude`; blank cells preserve existing
+values, omitted RTs are never deleted, and the whole import rolls back if any row is invalid.
+Coordinates create or update the RT's 1:1 `ketua_rt` spatial point.
 
 Accessibility implications, per `docs/ACCESSIBILITY.md`: the input needs a real `<label>` (not
 placeholder-only), the result count belongs in an `aria-live="polite"` region, and the table
 keeps proper `<caption>` / `<th scope>` semantics under filtering.
-
-**Peta explorer.** The public map shows matching spatial points with zoom-based marker clustering;
-clusters expand as visitors zoom, and overlapping points remain individually selectable at close
-zoom. A coordinated results panel contains one search for point names, RT numbers, and available RT
-leader names, category filters, nearest-first results, and five-result pagination. Distance sorting
-optionally uses browser geolocation upon explicit visitor click ("Gunakan lokasi saya"), with
-distances measured from the visitor's detected coordinates; otherwise distances fall back to the
-CMS default coordinates (`public.default_coordinates`), with the shared Manggar constant only as a
-fallback when settings are unavailable. The map's initial centre and zoom use the same CMS values;
-after the first point load frames the surveyed extent, or the visitor pans/zooms, late settings
-updates must not move the viewport. The "Gunakan lokasi saya" trigger is hidden while a point is selected
-and the results panel switches to the detail view. Pagination only changes the list; all filtered points remain
-on the map. Selecting a result focuses its marker and shows its details in the same panel; clicking
-a marker selects it without moving the viewport. Escape closes the detail when focus is inside the
-detail panel or the map, but not when focus is in the header, search, or another page control.
-Cluster icons expose `role="button"`, `tabindex="0"`, and a count-bearing `aria-label`; Enter and
-Space zoom to the cluster, or spiderfy it at maximum zoom. Search
-and filters reset the result list to page one. The list remains a keyboard-accessible alternative
-to interacting with the map.
 
 **Footer:**
 
@@ -481,6 +469,20 @@ lanjut, with the proposal's scheduled activities listed under each stage. The se
 program work as designed in the proposal and attributes it to that document, pointing to the
 Monografi, the map, and the booklet for the field record.
 
+**Admin base layout shell.** Every admin/CMS route (`/admin`, `/data`, `/users`, `/audit-logs`,
+`/settings/audit-retention`, and the `/admin/*` placeholder destinations named below) is mounted
+inside one shared layout (`AdminLayout.vue`): a collapsible sidebar, a header showing the page
+title and a one-line subtitle the view supplies, and a breadcrumb. Shell access requires Editor or
+Admin; individual routes still layer their own `requiresAdmin` guard where SPEC §3 restricts them
+to Admin. The sidebar lists Beranda, Data, Cerita, Peta, Publikasi, Rukun Tetangga, and an
+Admin-only **Sistem** group (Akun pengguna, Templat kalimat, Konfigurasi sistem, Log sistem).
+Visibility is driven by a single role-to-items map (`frontend/src/config/adminNav.ts`) that the
+route guards also read from, so the sidebar and the guards cannot disagree about who can reach a
+given page — a resource a role isn't authorized for is absent from the sidebar entirely, not
+merely disabled. Cerita, Peta, Publikasi, Rukun Tetangga, Templat kalimat, and Konfigurasi sistem
+are not built yet; their sidebar entries carry a "Segera hadir" badge and open a minimal
+placeholder view rather than being hidden, so they stay discoverable while unbuilt.
+
 ## 9. Explicitly Out of Scope
 
 - **Budget/finance (APBDes) surfacing** — dropped entirely; the kelurahan has no APBDes. Note that
@@ -524,15 +526,9 @@ Single register — unresolved questions live here and nowhere else.
   not infer an appointment process.
 - **Vision and mission statement:** No approved wording was found in the inspected source set. Keep
   this section omitted until the Kelurahan provides an approved vision/mission document.
-- **Operational Ketua RT roster import:** The repository ships a synthetic roster only (§2). In
-  production environments (`NODE_ENV=production`), `prisma db seed` deliberately skips seeding
-  placeholder Ketua RT rows to avoid exposing fabricated contact data. Production environments
-  ship with an empty Ketua RT roster by default and present the standard "Data belum tersedia"
-  notice until an approved operational import mechanism (such as an administrative CSV import or
-  verified deploy script) is completed. Until then, synthetic data is strictly confined to
-  development and testing environments.
-- **Public visibility of Ketua RT contacts:** The Ketua RT page and the Peta explorer's point
-  detail both publish names, phone numbers, and addresses for private individuals; the API serves
-  the same fields to both entry points. Confirm with the kelurahan whether the directory is
-  published as-is, or needs a reduced field set (for example address withheld, or contact only on
-  request). Any reduced public field set must be enforced at the API, not only hidden in one view.
+- **Operational Ketua RT roster import (settled):** The official names come from the Monografi
+  roster (§2). Deployment seeds those names; phones and addresses are entered through the CMS
+  manual editor or CSV import. Synthetic contacts and coordinates stay development-only.
+- **Public visibility of Ketua RT contacts (settled):** The Ketua RT page and Peta detail publish
+  names, phone numbers, and addresses. The API serves the same fields to both entry points; contact
+  values remain empty until an approved source provides them.

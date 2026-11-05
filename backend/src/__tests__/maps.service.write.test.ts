@@ -1024,12 +1024,9 @@ describe('maps.service updateRtLeader', () => {
     const metadata = auditRows[0]?.metadata as AnyRecord;
     assert.deepEqual(metadata['changedFields'], ['name', 'phone', 'phoneIsWhatsapp']);
     assert.equal(metadata['changes'], undefined);
-    // sampleLeader is already non-placeholder; no placeholders remain → clear flag.
-    assert.ok(
-      settingCalls['upsert'],
-      'sample-roster flag must be cleared when no placeholders remain',
-    );
-    assert.equal(settings.get(RT_LEADERS_SAMPLE_ROSTER_KEY), 'false');
+    // An ordinary edit must not certify the whole roster as official.
+    assert.equal(settingCalls['upsert'], undefined);
+    assert.equal(settings.get(RT_LEADERS_SAMPLE_ROSTER_KEY), 'true');
   });
 
   it('keeps the sample-roster flag when other placeholder rows remain', async () => {
@@ -1059,7 +1056,7 @@ describe('maps.service updateRtLeader', () => {
     assert.equal(settings.get(RT_LEADERS_SAMPLE_ROSTER_KEY), 'true');
   });
 
-  it('clears the sample-roster flag when the last placeholder is replaced', async () => {
+  it('never clears the sample-roster flag on an ordinary edit', async () => {
     const placeholder1 = sampleLeader({
       rtNumber: 1,
       name: 'Ketua RT 01',
@@ -1076,7 +1073,7 @@ describe('maps.service updateRtLeader', () => {
       CONTEXT,
     );
 
-    assert.equal(settings.get(RT_LEADERS_SAMPLE_ROSTER_KEY), 'false');
+    assert.equal(settings.get(RT_LEADERS_SAMPLE_ROSTER_KEY), 'true');
   });
 
   it('does not clear the sample-roster flag on a no-op PATCH', async () => {

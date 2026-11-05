@@ -22,7 +22,7 @@ onMounted(() => {
   void rtLeadersStore.fetchRtLeaders();
   refreshTimer = window.setInterval(() => {
     if (document.visibilityState === 'visible') void rtLeadersStore.fetchRtLeaders();
-  }, RT_LEADERS_CACHE_TTL_MS);
+  }, RT_LEADERS_CACHE_TTL_MS / 2);
   document.addEventListener('visibilitychange', refreshIfVisible);
 });
 
@@ -65,7 +65,11 @@ const filteredLeaders = computed(() => {
 
   const rtNumber = queryAsRtNumber.value;
   if (rtNumber !== null) {
-    return rtLeadersStore.rtLeaders.filter((leader) => leader.rtNumber === rtNumber);
+    const rtPrefix = String(rtNumber);
+    return rtLeadersStore.rtLeaders.filter(
+      (leader) =>
+        String(leader.rtNumber).startsWith(rtPrefix) || leader.name.toLowerCase().includes(term),
+    );
   }
 
   return rtLeadersStore.rtLeaders.filter((leader) => leader.name.toLowerCase().includes(term));
@@ -190,25 +194,7 @@ const showNoData = computed(
 const countSummary = computed(() => {
   const rosterTotal = rtLeadersStore.rtLeaders.length;
   const filtered = filteredLeaders.value.length;
-
-  if (filtered === 0) {
-    return `Menampilkan 0 dari ${rosterTotal} RT`;
-  }
-
-  if (filtered === 1) {
-    return `Menampilkan 1 dari ${rosterTotal} RT`;
-  }
-
-  // Every match fits on the first page: report the match count.
-  if (pageSize.value >= filtered && currentPage.value === 1) {
-    return `Menampilkan ${filtered} dari ${rosterTotal} RT`;
-  }
-
-  if (isFiltered.value) {
-    return `Menampilkan ${startRowIndex.value}–${endRowIndex.value} dari ${filtered} RT (total ${rosterTotal} RT)`;
-  }
-
-  return `Menampilkan ${startRowIndex.value}–${endRowIndex.value} dari ${rosterTotal} RT`;
+  return `Menampilkan ${filtered} dari ${rosterTotal} RT`;
 });
 
 /**
@@ -295,9 +281,7 @@ function formatPhone(value: string): string {
           />
           <p class="mt-3 text-base text-gray-700" aria-live="polite" data-test="rt-count">
             {{
-              rtLeadersStore.hasSettled && !rtLeadersStore.isLoading && !rtLeadersStore.error
-                ? countSummary
-                : ''
+              rtLeadersStore.hasSettled && (hasRows || !rtLeadersStore.error) ? countSummary : ''
             }}
           </p>
         </div>
@@ -402,7 +386,7 @@ function formatPhone(value: string): string {
                     {{ leader.rtNumber }}
                   </th>
                   <td class="px-4 py-4 align-top break-words text-gray-800 sm:px-6">
-                    {{ leader.name }}
+                    {{ leader.name.trim() || 'Nama ketua belum tersedia' }}
                   </td>
                   <td class="px-4 py-4 align-top break-words text-gray-800 sm:px-6">
                     <template v-if="phonesForLeader.get(leader.rtNumber)?.length">
