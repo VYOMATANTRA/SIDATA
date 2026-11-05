@@ -46,10 +46,17 @@ async function main() {
     },
   });
 
-  const isProduction = process.env.NODE_ENV === 'production';
+  const shouldSeedSample =
+    process.env.SEED_SAMPLE_DATA === 'true' ||
+    (process.env.NODE_ENV === 'development' && process.env.SEED_SAMPLE_DATA !== 'false');
 
-  if (isProduction) {
-    // Production starts with 100 empty slots. Real names, contacts, and coordinates
+  // Always run legacy cleanup in both production and development to reset any leftover synthetic records
+  await cleanLegacySampleRtData('seed', {
+    ...(process.env.NODE_ENV ? { nodeEnv: process.env.NODE_ENV } : {}),
+  });
+
+  if (!shouldSeedSample) {
+    // Production/safe mode starts with 100 empty slots. Real names, contacts, and coordinates
     // enter through the CMS/CSV import and are never committed to the repository.
     await seedEmptyRtLeaderSlots(
       prisma,
@@ -61,10 +68,6 @@ async function main() {
       update: {},
     });
   } else {
-    await cleanLegacySampleRtData('seed', {
-      ...(process.env.NODE_ENV ? { nodeEnv: process.env.NODE_ENV } : {}),
-    });
-
     const tombstoneSetting = await prisma.systemSetting.findUnique({
       where: { key: RT_SEED_POINT_TOMBSTONES_KEY },
     });

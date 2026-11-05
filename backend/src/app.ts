@@ -29,7 +29,8 @@ if (TRUST_PROXY) {
   app.set('trust proxy', /^\d+$/.test(TRUST_PROXY) ? Number(TRUST_PROXY) : parsed);
 }
 
-app.use(express.json());
+app.use('/api/maps/rt-leaders/import', express.json({ limit: '512kb' }));
+app.use(express.json({ limit: '100kb' }));
 app.use(cookieParser());
 app.use(
   cors({
@@ -55,6 +56,12 @@ app.use('/api/comparison-templates', comparisonTemplatesRoutes);
 app.use('/api/indicator-tables', indicatorTablesRoutes);
 
 app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (typeof err === 'object' && err !== null && 'type' in err && err.type === 'entity.too.large') {
+    return res.status(413).json({
+      error: 'Ukuran payload melebihi batas yang diizinkan (maksimal 512 KB untuk impor CSV).',
+    });
+  }
+
   if (err === invalidCsrfTokenError) {
     return res.status(403).json({ error: 'CSRF token tidak valid' });
   }

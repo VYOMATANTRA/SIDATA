@@ -32,37 +32,79 @@ export interface ParsedRtLeadersCsv {
   errors: RtLeaderImportError[];
 }
 
-function splitCsvLine(line: string): string[] {
-  const values: string[] = [];
-  let value = '';
-  let quoted = false;
+/**
+ * Parses raw CSV text into rows and columns while respecting quoted fields
+ * that span multiple lines and escaped quotes ("").
+ */
+function parseCsvRecords(input: string): {
+  records: string[][];
+  errors: RtLeaderImportError[];
+} {
+  const cleanInput = input.replace(/^\uFEFF/, '');
+  const records: string[][] = [];
+  const errors: RtLeaderImportError[] = [];
 
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i];
-    if (quoted) {
+  let currentRow: string[] = [];
+  let currentField = '';
+  let inQuotes = false;
+  let logicalRowNumber = 1;
+
+  for (let i = 0; i < cleanInput.length; i += 1) {
+    const char = cleanInput[i];
+
+    if (inQuotes) {
       if (char === '"') {
-        if (line[i + 1] === '"') {
-          value += '"';
-          i += 1;
+        if (cleanInput[i + 1] === '"') {
+          currentField += '"';
+          i += 1; // skip escaped quote
         } else {
-          quoted = false;
+          inQuotes = false;
         }
       } else {
-        value += char;
+        currentField += char;
       }
       continue;
     }
+
     if (char === '"') {
-      quoted = true;
+      inQuotes = true;
     } else if (char === ',') {
-      values.push(value);
-      value = '';
+      currentRow.push(currentField);
+      currentField = '';
+    } else if (char === '\r' || char === '\n') {
+      if (char === '\r' && cleanInput[i + 1] === '\n') {
+        i += 1; // consume CRLF
+      }
+      currentRow.push(currentField);
+      currentField = '';
+
+      // Skip empty line at very end or start
+      if (currentRow.length > 1 || (currentRow.length === 1 && currentRow[0]!.trim() !== '')) {
+        records.push(currentRow);
+        logicalRowNumber += 1;
+      }
+      currentRow = [];
     } else {
-      value += char;
+      currentField += char;
     }
   }
-  values.push(value);
-  return values;
+
+  if (inQuotes) {
+    errors.push({
+      rowNumber: logicalRowNumber,
+      field: 'row',
+      message: 'Format CSV tidak valid: tanda kutip penutup tidak ditemukan.',
+    });
+  }
+
+  if (currentRow.length > 0 || currentField !== '') {
+    currentRow.push(currentField);
+    if (currentRow.length > 1 || (currentRow.length === 1 && currentRow[0]!.trim() !== '')) {
+      records.push(currentRow);
+    }
+  }
+
+  return { records, errors };
 }
 
 function parseBoolean(value: string): boolean | undefined {
@@ -73,12 +115,23 @@ function parseBoolean(value: string): boolean | undefined {
   return undefined;
 }
 
+const CLEAR_TOKEN = '\\N';
+
 export function parseRtLeadersCsv(input: string): ParsedRtLeadersCsv {
-  const errors: RtLeaderImportError[] = [];
-  const rows: RtLeaderImportRow[] = [];
-  const seen = new Set<number>();
-  const lines = input.replace(/^\uFEFF/, '').split(/\r?\n/);
-  const header = (lines.shift() ?? '').split(',').map((item) => item.trim());
+  const { records, errors } = parseCsvRecords(input);
+  if (errors.length > 0) {
+    return { rows: [], errors };
+  }
+
+  if (records.length === 0) {
+    return {
+      rows: [],
+      errors: [{ rowNumber: 1, field: 'header', message: 'CSV kosong.' }],
+    };
+  }
+
+  const headerRow = records.shift() ?? [];
+  const header = headerRow.map((item) => item.trim());
 
   if (header.join(',') !== RT_LEADERS_CSV_HEADER.join(',')) {
     return {
@@ -93,10 +146,11 @@ export function parseRtLeadersCsv(input: string): ParsedRtLeadersCsv {
     };
   }
 
-  lines.forEach((line, index) => {
-    if (line.trim() === '') return;
+  const rows: RtLeaderImportRow[] = [];
+  const seen = new Set<number>();
+
+  records.forEach((values, index) => {
     const rowNumber = index + 2;
-    const values = splitCsvLine(line);
     if (values.length !== RT_LEADERS_CSV_HEADER.length) {
       errors.push({
         rowNumber,
@@ -115,6 +169,7 @@ export function parseRtLeadersCsv(input: string): ParsedRtLeadersCsv {
       rawLat = '',
       rawLon = '',
     ] = values.map((v) => v.trim());
+
     const rtNumber = Number(rawRt);
     if (!/^\d+$/.test(rawRt) || !Number.isInteger(rtNumber) || rtNumber < 1 || rtNumber > 100) {
       errors.push({ rowNumber, field: 'rtNumber', message: 'Nomor RT harus 1–100.' });
@@ -136,9 +191,19 @@ export function parseRtLeadersCsv(input: string): ParsedRtLeadersCsv {
       errors.push({ rowNumber, field: 'alamat', message: 'Alamat maksimal 2000 karakter.' });
     }
 
-    const whatsapp = parseBoolean(rawWhatsapp);
-    if (rawWhatsapp && whatsapp === undefined) {
+    // Support explicit clear token \N
+    const isPhoneCleared = rawPhone.toUpperCase() === CLEAR_TOKEN;
+    const isAlamatCleared = rawAlamat.toUpperCase() === CLEAR_TOKEN;
+
+    const parsedPhone = isPhoneCleared ? '' : rawPhone ? rawPhone : undefined;
+    const parsedAlamat = isAlamatCleared ? null : rawAlamat ? rawAlamat : undefined;
+
+    let whatsapp = parseBoolean(rawWhatsapp);
+    if (rawWhatsapp && whatsapp === undefined && rawWhatsapp.toUpperCase() !== CLEAR_TOKEN) {
       errors.push({ rowNumber, field: 'phoneIsWhatsapp', message: 'Nilai harus true/false.' });
+    }
+    if (isPhoneCleared || parsedPhone === '') {
+      whatsapp = false;
     }
 
     const hasLat = rawLat !== '';
@@ -166,9 +231,9 @@ export function parseRtLeadersCsv(input: string): ParsedRtLeadersCsv {
       rowNumber,
       rtNumber,
       ...(rawName ? { name: rawName } : {}),
-      ...(rawPhone ? { phone: rawPhone } : {}),
+      ...(parsedPhone !== undefined ? { phone: parsedPhone } : {}),
       ...(whatsapp !== undefined ? { phoneIsWhatsapp: whatsapp } : {}),
-      ...(rawAlamat ? { alamat: rawAlamat } : {}),
+      ...(parsedAlamat !== undefined ? { alamat: parsedAlamat } : {}),
       ...(latitude !== undefined && longitude !== undefined ? { latitude, longitude } : {}),
     });
   });
