@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import {
   useIndicatorsStore,
+  formatIndicatorValue,
   type Indicator,
   type IndicatorDto,
   type IndicatorItem,
@@ -183,7 +184,7 @@ describe('indicators store (global / landing page indicators)', () => {
         slug: 'jumlah-penduduk',
         label: 'Penduduk',
         unit: 'jiwa',
-        valueCurrent: '53.098',
+        valueCurrent: '53098',
         valuePrevious: null,
         periodCurrent: '2026',
         periodPrevious: null,
@@ -637,3 +638,34 @@ describe('indicators store (public per-section reads)', () => {
     expect(store.loadingBySectionId['sec-ok']).toBe(false);
   });
 });
+
+describe('formatIndicatorValue (Indonesian decimal & thousands formatting)', () => {
+  it('formats decimals with three trailing fractional digits as decimal comma, not thousands', () => {
+    // Specifically targets the blocking bug where "2.500" was mistaken for 2500
+    expect(formatIndicatorValue('2.500')).toBe('2,5');
+    expect(formatIndicatorValue('1.250')).toBe('1,25');
+  });
+
+  it('formats plain integer strings with thousands separator dot', () => {
+    expect(formatIndicatorValue('53098')).toBe('53.098');
+    expect(formatIndicatorValue('100')).toBe('100');
+  });
+
+  it('formats decimal strings with .0000 by dropping fractional zeroes and adding thousand dots', () => {
+    expect(formatIndicatorValue('12480.0000')).toBe('12.480');
+    expect(formatIndicatorValue('100.0000')).toBe('100');
+  });
+
+  it('formats ratios and decimal fractions correctly', () => {
+    expect(formatIndicatorValue('1.06', ': 1')).toBe('1,06');
+    expect(formatIndicatorValue('98.5', '%')).toBe('98,5');
+    expect(formatIndicatorValue('0.9700')).toBe('0,97');
+    expect(formatIndicatorValue('0.0040')).toBe('0,004');
+  });
+
+  it('handles zero and empty strings properly', () => {
+    expect(formatIndicatorValue('')).toBe('');
+    expect(formatIndicatorValue('-0.0000')).toBe('0');
+  });
+});
+
