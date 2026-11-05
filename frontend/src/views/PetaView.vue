@@ -391,11 +391,8 @@ function requestUserLocation() {
               v-if="mapsStore.selectedPoint"
               class="min-h-0 flex-1 overflow-y-auto"
               :point="mapsStore.selectedPoint"
-              :leader="mapsStore.selectedLeader"
-              :leader-error="mapsStore.selectedLeaderError"
               close-label="Tutup detail"
               @close="mapsStore.clearSelection"
-              @retry-leader="mapsStore.retrySelectedLeader"
             />
 
             <ol

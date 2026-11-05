@@ -1,18 +1,15 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import type { SpatialPointDTO, SpatialPointType, MapSummaryDTO, RtLeaderDTO } from '../types/maps';
-import { fetchSpatialPoints, fetchMapSummary, fetchRtLeaderByRt } from '../services/maps.service';
+import { fetchSpatialPoints, fetchMapSummary } from '../services/maps.service';
 
 export const useMapsStore = defineStore('maps', () => {
   const points = ref<SpatialPointDTO[]>([]);
   const summary = ref<MapSummaryDTO | null>(null);
   const selectedPoint = ref<SpatialPointDTO | null>(null);
-  const selectedLeader = ref<RtLeaderDTO | null>(null);
-  const selectedLeaderError = ref<string | null>(null);
   const activeTypeFilter = ref<SpatialPointType | 'all'>('all');
   const isLoading = ref(false);
   const error = ref<string | null>(null);
-  let selectionRequest = 0;
   let loadPointsRequest = 0;
 
   const filteredPoints = computed(() => {
@@ -24,6 +21,35 @@ export const useMapsStore = defineStore('maps', () => {
     });
   });
 
+  /**
+   * Resolves contact strictly from embedded point data under the validity predicate.
+   * Never falls back to standalone leader fetches when conflicted or missing.
+   */
+  const selectedLeader = computed<RtLeaderDTO | null>(() => {
+    const point = selectedPoint.value;
+    if (!point || point.type !== 'ketua_rt') return null;
+    if (
+      point.rts.length !== 1 ||
+      (point.integrityWarning && point.integrityWarning.trim() !== '')
+    ) {
+      return null;
+    }
+    const leader = point.rtLeader;
+    if (!leader || leader.rtNumber !== point.rts[0]) {
+      return null;
+    }
+    return {
+      ...leader,
+      coordinates: {
+        latitude: point.latitude,
+        longitude: point.longitude,
+        pointId: point.id,
+      },
+      createdAt: point.createdAt,
+      updatedAt: point.updatedAt,
+    };
+  });
+
   async function loadPoints() {
     const requestId = ++loadPointsRequest;
     isLoading.value = true;
@@ -33,28 +59,12 @@ export const useMapsStore = defineStore('maps', () => {
       if (requestId !== loadPointsRequest) return;
       points.value = fetched;
       if (selectedPoint.value) {
-        const previous = selectedPoint.value;
-        const fresh = points.value.find((p) => p.id === previous.id) ?? null;
+        const previousId = selectedPoint.value.id;
+        const fresh = points.value.find((p) => p.id === previousId) ?? null;
         if (!fresh) {
           clearSelection();
         } else {
           selectedPoint.value = fresh;
-          const sameRt = fresh.rts[0] === previous.rts[0] && fresh.type === previous.type;
-          if (!sameRt) {
-            void selectPoint(fresh);
-          } else if (fresh.rtLeader) {
-            selectedLeader.value = {
-              ...fresh.rtLeader,
-              coordinates: {
-                latitude: fresh.latitude,
-                longitude: fresh.longitude,
-                pointId: fresh.id,
-              },
-              createdAt: fresh.createdAt,
-              updatedAt: fresh.updatedAt,
-            };
-            selectedLeaderError.value = null;
-          }
         }
       }
     } catch (err) {
@@ -75,45 +85,8 @@ export const useMapsStore = defineStore('maps', () => {
     }
   }
 
-  async function selectPoint(point: SpatialPointDTO | null) {
-    const requestId = ++selectionRequest;
+  function selectPoint(point: SpatialPointDTO | null) {
     selectedPoint.value = point;
-    selectedLeader.value = null;
-    selectedLeaderError.value = null;
-
-    if (point && point.type === 'ketua_rt' && point.rts.length > 0) {
-      if (point.rtLeader) {
-        selectedLeader.value = {
-          ...point.rtLeader,
-          coordinates: {
-            latitude: point.latitude,
-            longitude: point.longitude,
-            pointId: point.id,
-          },
-          createdAt: point.createdAt,
-          updatedAt: point.updatedAt,
-        };
-        return;
-      }
-      const primaryRt = point.rts[0];
-      if (typeof primaryRt === 'number') {
-        try {
-          const leader = await fetchRtLeaderByRt(primaryRt);
-          if (requestId === selectionRequest) selectedLeader.value = leader;
-        } catch (err) {
-          if (requestId === selectionRequest) {
-            selectedLeaderError.value =
-              err instanceof Error ? err.message : 'Gagal memuat kontak Ketua RT';
-          }
-        }
-      }
-    }
-  }
-
-  async function retrySelectedLeader() {
-    if (selectedPoint.value) {
-      await selectPoint(selectedPoint.value);
-    }
   }
 
   function setTypeFilter(type: SpatialPointType | 'all') {
@@ -121,10 +94,7 @@ export const useMapsStore = defineStore('maps', () => {
   }
 
   function clearSelection() {
-    selectionRequest += 1;
     selectedPoint.value = null;
-    selectedLeader.value = null;
-    selectedLeaderError.value = null;
   }
 
   return {
@@ -132,7 +102,6 @@ export const useMapsStore = defineStore('maps', () => {
     summary,
     selectedPoint,
     selectedLeader,
-    selectedLeaderError,
     activeTypeFilter,
     isLoading,
     error,
@@ -140,7 +109,6 @@ export const useMapsStore = defineStore('maps', () => {
     loadPoints,
     loadSummary,
     selectPoint,
-    retrySelectedLeader,
     setTypeFilter,
     clearSelection,
   };

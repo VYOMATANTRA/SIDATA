@@ -6,14 +6,7 @@ import type { SpatialPointDTO, RtLeaderDTO } from '../types/maps';
 import { MANGGAR_MAP_ORIGIN } from '../constants/mapOrigin';
 
 // The drawer links to the Ketua RT page (SPEC §8), so it always needs a router.
-function mountDrawer(
-  props: {
-    point: SpatialPointDTO | null;
-    leader?: RtLeaderDTO | null;
-    leaderError?: string | null;
-  },
-  attachTo?: HTMLElement,
-) {
+function mountDrawer(props: { point: SpatialPointDTO | null }, attachTo?: HTMLElement) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -30,6 +23,32 @@ function mountDrawer(
 }
 
 describe('SpatialPointDrawer.vue', () => {
+  const sampleLeaderWa: RtLeaderDTO = {
+    rtNumber: 1,
+    name: 'Bambang Supriyanto',
+    phone: '081234567801',
+    phoneIsWhatsapp: true,
+    alamat: 'Jl. Mulawarman No. 12',
+    coordinates: {
+      latitude: MANGGAR_MAP_ORIGIN.latitude,
+      longitude: MANGGAR_MAP_ORIGIN.longitude,
+      pointId: 'point-1',
+    },
+    createdAt: '2026-08-01T00:00:00Z',
+    updatedAt: '2026-08-01T00:00:00Z',
+  };
+
+  const sampleLeaderCallOnly: RtLeaderDTO = {
+    rtNumber: 1,
+    name: 'Ahmad Dahlan',
+    phone: '081234567802',
+    phoneIsWhatsapp: false,
+    alamat: 'Jl. Pemuda RT 01',
+    coordinates: null,
+    createdAt: '2026-08-01T00:00:00Z',
+    updatedAt: '2026-08-01T00:00:00Z',
+  };
+
   const samplePoint: SpatialPointDTO = {
     id: 'point-1',
     name: 'Pos RT 01',
@@ -38,37 +57,13 @@ describe('SpatialPointDrawer.vue', () => {
     longitude: MANGGAR_MAP_ORIGIN.longitude,
     metadata: { note: 'Posyandu' },
     rts: [1],
-    createdAt: '2026-08-01T00:00:00Z',
-    updatedAt: '2026-08-01T00:00:00Z',
-  };
-
-  const sampleLeaderWa: RtLeaderDTO = {
-    rtNumber: 1,
-    name: 'Bambang Supriyanto',
-    phone: '081234567801',
-    phoneIsWhatsapp: true,
-    alamat: 'Jl. Mulawarman No. 12',
-    coordinates: { latitude: MANGGAR_MAP_ORIGIN.latitude, longitude: MANGGAR_MAP_ORIGIN.longitude, pointId: 'point-1' },
-    createdAt: '2026-08-01T00:00:00Z',
-    updatedAt: '2026-08-01T00:00:00Z',
-  };
-
-  const sampleLeaderCallOnly: RtLeaderDTO = {
-    rtNumber: 2,
-    name: 'Ahmad Dahlan',
-    phone: '081234567802',
-    phoneIsWhatsapp: false,
-    alamat: 'Jl. Pemuda RT 02',
-    coordinates: null,
+    rtLeader: sampleLeaderWa,
     createdAt: '2026-08-01T00:00:00Z',
     updatedAt: '2026-08-01T00:00:00Z',
   };
 
   it('renders WhatsApp action button when phoneIsWhatsapp is true (SPEC §7)', () => {
-    const wrapper = mountDrawer({
-      point: samplePoint,
-      leader: sampleLeaderWa,
-    });
+    const wrapper = mountDrawer({ point: samplePoint });
 
     expect(wrapper.text()).toContain('Pos RT 01');
     expect(wrapper.text()).toContain('Bambang Supriyanto');
@@ -80,8 +75,7 @@ describe('SpatialPointDrawer.vue', () => {
 
   it('renders Call Only action button when phoneIsWhatsapp is false (SPEC §7)', () => {
     const wrapper = mountDrawer({
-      point: samplePoint,
-      leader: sampleLeaderCallOnly,
+      point: { ...samplePoint, rtLeader: sampleLeaderCallOnly },
     });
 
     expect(wrapper.text()).toContain('Ahmad Dahlan');
@@ -93,8 +87,10 @@ describe('SpatialPointDrawer.vue', () => {
 
   it('does not render contact buttons when phone is a placeholder like "-"', () => {
     const wrapper = mountDrawer({
-      point: samplePoint,
-      leader: { ...sampleLeaderWa, phone: '-' },
+      point: {
+        ...samplePoint,
+        rtLeader: { ...sampleLeaderWa, phone: '-' },
+      },
     });
 
     expect(wrapper.find('a[href^="https://wa.me/"]').exists()).toBe(false);
@@ -103,8 +99,10 @@ describe('SpatialPointDrawer.vue', () => {
 
   it('extracts primary number for WhatsApp when phone contains multiple numbers', () => {
     const wrapper = mountDrawer({
-      point: samplePoint,
-      leader: { ...sampleLeaderWa, phone: '081234567801 / 081987654321' },
+      point: {
+        ...samplePoint,
+        rtLeader: { ...sampleLeaderWa, phone: '081234567801 / 081987654321' },
+      },
     });
 
     const button = wrapper.find('a[href^="https://wa.me/"]');
@@ -120,12 +118,8 @@ describe('SpatialPointDrawer.vue', () => {
   });
 
   it('keeps the WhatsApp icon once BaseButton moved to the leftIcon slot', () => {
-    const wrapper = mountDrawer({
-      point: samplePoint,
-      leader: sampleLeaderWa,
-    });
+    const wrapper = mountDrawer({ point: samplePoint });
 
-    // The icon lives in the button's leading icon slot, not a dead #icon slot
     const button = wrapper.find('a[href^="https://wa.me/"]');
     expect(button.find('[data-test="left-icon"]').exists()).toBe(true);
     expect(button.find('svg').exists()).toBe(true);
@@ -133,10 +127,7 @@ describe('SpatialPointDrawer.vue', () => {
   });
 
   it('links to the Ketua RT page as the map entry point (SPEC §8)', () => {
-    const wrapper = mountDrawer({
-      point: samplePoint,
-      leader: sampleLeaderWa,
-    });
+    const wrapper = mountDrawer({ point: samplePoint });
 
     const link = wrapper.find('a[href="/ketua-rt"]');
     expect(link.exists()).toBe(true);
@@ -144,7 +135,6 @@ describe('SpatialPointDrawer.vue', () => {
   });
 
   it('moves focus to the close button so keyboard users land inside the detail', async () => {
-    // Focus can only move within the document, so this mount is attached.
     const wrapper = mountDrawer({ point: samplePoint }, document.body);
     await wrapper.vm.$nextTick();
     await wrapper.vm.$nextTick();
@@ -157,22 +147,79 @@ describe('SpatialPointDrawer.vue', () => {
 
   it('shows unpadded RT numbers in coverage chips', () => {
     const wrapper = mountDrawer({
-      point: { ...samplePoint, rts: [5, 12] },
+      point: { ...samplePoint, rts: [5, 12], rtLeader: null },
     });
     expect(wrapper.text()).toContain('RT 5');
     expect(wrapper.text()).toContain('RT 12');
     expect(wrapper.text()).not.toContain('RT 05');
   });
 
-  it('shows a retryable message when the leader lookup failed', async () => {
+  // --- Invariant regression tests (§4) ---
+
+  it('omits contact card when rtLeader is null on a valid point', () => {
     const wrapper = mountDrawer({
-      point: samplePoint,
-      leader: null,
-      leaderError: 'Gagal memuat kontak Ketua RT',
+      point: { ...samplePoint, rtLeader: null },
     });
-    expect(wrapper.find('[data-test="drawer-leader-error"]').exists()).toBe(true);
-    await wrapper.find('[data-test="drawer-leader-retry"]').trigger('click');
-    expect(wrapper.emitted('retry-leader')).toBeDefined();
+    expect(wrapper.text()).not.toContain('Kontak Ketua RT');
+    expect(wrapper.find('a[href^="https://wa.me/"]').exists()).toBe(false);
+    expect(wrapper.find('a[href^="tel:"]').exists()).toBe(false);
+    // General link to directory still renders
+    expect(wrapper.find('a[href="/ketua-rt"]').exists()).toBe(true);
   });
 
+  it('omits contact card and actions when point has an integrityWarning', () => {
+    const wrapper = mountDrawer({
+      point: {
+        ...samplePoint,
+        integrityWarning: 'Multiple ketua_rt points assigned to RT 1',
+        rtLeader: sampleLeaderWa,
+      },
+    });
+
+    expect(wrapper.text()).toContain('Peringatan Integritas Data');
+    expect(wrapper.text()).toContain('Multiple ketua_rt points assigned to RT 1');
+    expect(wrapper.text()).not.toContain('Kontak Ketua RT');
+    expect(wrapper.text()).not.toContain('Bambang Supriyanto');
+    expect(wrapper.find('a[href^="https://wa.me/"]').exists()).toBe(false);
+    expect(wrapper.find('a[href^="tel:"]').exists()).toBe(false);
+  });
+
+  it('omits contact card and actions when point spans multiple RTs', () => {
+    const wrapper = mountDrawer({
+      point: {
+        ...samplePoint,
+        rts: [1, 2],
+        rtLeader: sampleLeaderWa,
+      },
+    });
+
+    expect(wrapper.text()).not.toContain('Kontak Ketua RT');
+    expect(wrapper.find('a[href^="https://wa.me/"]').exists()).toBe(false);
+  });
+
+  it('omits contact card when embedded leader rtNumber does not match point RT', () => {
+    const wrapper = mountDrawer({
+      point: {
+        ...samplePoint,
+        rts: [1],
+        rtLeader: { ...sampleLeaderWa, rtNumber: 99 },
+      },
+    });
+
+    expect(wrapper.text()).not.toContain('Kontak Ketua RT');
+    expect(wrapper.find('a[href^="https://wa.me/"]').exists()).toBe(false);
+  });
+
+  it('omits contact card on non-ketua_rt point even if rtLeader is accidentally present', () => {
+    const wrapper = mountDrawer({
+      point: {
+        ...samplePoint,
+        type: 'bank_sampah',
+        rtLeader: sampleLeaderWa,
+      },
+    });
+
+    expect(wrapper.text()).not.toContain('Kontak Ketua RT');
+    expect(wrapper.find('a[href^="https://wa.me/"]').exists()).toBe(false);
+  });
 });

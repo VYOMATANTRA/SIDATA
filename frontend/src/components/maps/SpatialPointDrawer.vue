@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
-import type { SpatialPointDTO, RtLeaderDTO } from '../../types/maps';
+import type { SpatialPointDTO } from '../../types/maps';
 import BaseButton from '../common/BaseButton.vue';
 import { isDialable, telHref, whatsappNumber } from '../../utils/phone';
 
 interface Props {
   point: SpatialPointDTO | null;
-  leader?: RtLeaderDTO | null;
-  leaderError?: string | null;
   closeLabel?: string;
 }
 
@@ -16,7 +14,6 @@ const props = defineProps<Props>();
 
 const emit = defineEmits<{
   (e: 'close'): void;
-  (e: 'retry-leader'): void;
 }>();
 
 const closeButtonEl = ref<HTMLButtonElement | null>(null);
@@ -116,7 +113,20 @@ const typeBadge = computed(() => {
   }
 });
 
-const contactPhone = computed(() => props.leader?.phone || props.point?.rtLeader?.phone || '');
+const validatedLeader = computed(() => {
+  const p = props.point;
+  if (!p || p.type !== 'ketua_rt') return null;
+  if (p.rts.length !== 1 || (p.integrityWarning && p.integrityWarning.trim() !== '')) {
+    return null;
+  }
+  const leader = p.rtLeader;
+  if (!leader || leader.rtNumber !== p.rts[0]) {
+    return null;
+  }
+  return leader;
+});
+
+const contactPhone = computed(() => validatedLeader.value?.phone || '');
 
 const hasDialableContact = computed(() => {
   return isDialable(contactPhone.value);
@@ -127,7 +137,7 @@ const whatsappUrl = computed(() => {
   if (!phone) return '';
   const formatted = whatsappNumber(phone);
   if (!formatted) return '';
-  const rtNum = props.leader?.rtNumber || props.point?.rts[0] || '';
+  const rtNum = validatedLeader.value?.rtNumber || '';
   const text = encodeURIComponent(
     `Halo Bapak/Ibu Ketua RT ${rtNum} Kelurahan Manggar, saya ingin bertanya terkait data/layanan wilayah.`,
   );
@@ -139,9 +149,7 @@ const phoneTelUrl = computed(() => {
 });
 
 const isWhatsapp = computed(() => {
-  if (props.leader) return props.leader.phoneIsWhatsapp;
-  if (props.point?.rtLeader) return props.point.rtLeader.phoneIsWhatsapp;
-  return true;
+  return validatedLeader.value?.phoneIsWhatsapp ?? true;
 });
 
 const metadataEntries = computed(() => {
@@ -250,47 +258,28 @@ const metadataEntries = computed(() => {
       </div>
     </div>
 
-    <div
-      v-if="point.type === 'ketua_rt' && leaderError && !(leader || point.rtLeader)"
-      class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3.5"
-      role="alert"
-      data-test="drawer-leader-error"
-    >
-      <p class="text-sm text-slate-800">{{ leaderError }}</p>
-      <button
-        type="button"
-        class="rounded-btn text-brand-navy mt-2 min-h-10 border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-white"
-        data-test="drawer-leader-retry"
-        @click="emit('retry-leader')"
-      >
-        Coba lagi
-      </button>
-    </div>
-
     <!-- Special Ketua RT Card Details -->
     <div
-      v-if="point.type === 'ketua_rt' && (leader || point.rtLeader)"
+      v-if="validatedLeader"
       class="mt-4 space-y-2 rounded-xl border border-slate-200/80 bg-slate-50 p-3.5"
     >
       <div class="flex items-center justify-between">
         <span class="text-brand-navy text-xs font-semibold tracking-wider uppercase">
           Kontak Ketua RT
         </span>
-        <span class="text-xs font-medium text-slate-500">
-          RT {{ leader?.rtNumber || point.rtLeader?.rtNumber }}
-        </span>
+        <span class="text-xs font-medium text-slate-500"> RT {{ validatedLeader.rtNumber }} </span>
       </div>
 
       <div class="text-sm font-semibold text-slate-900">
-        {{ leader?.name || point.rtLeader?.name }}
+        {{ validatedLeader.name || 'Nama ketua belum tersedia' }}
       </div>
 
-      <div v-if="leader?.alamat || point.rtLeader?.alamat" class="text-xs text-slate-600">
-        {{ leader?.alamat || point.rtLeader?.alamat }}
+      <div v-if="validatedLeader.alamat" class="text-xs text-slate-600">
+        {{ validatedLeader.alamat }}
       </div>
 
       <div class="font-mono text-xs text-slate-700">
-        {{ leader?.phone || point.rtLeader?.phone }}
+        {{ validatedLeader.phone || '—' }}
       </div>
 
       <!-- Action Button: WhatsApp vs Phone Call -->
@@ -328,10 +317,16 @@ const metadataEntries = computed(() => {
         </BaseButton>
       </div>
 
-      <!-- The map is an entry point to the dedicated Ketua RT page (SPEC §8) -->
+      <div v-else class="pt-1 text-xs text-slate-500">
+        Nomor telepon tidak tersedia untuk panggilan langsung.
+      </div>
+    </div>
+
+    <!-- The map is an entry point to the dedicated Ketua RT page (SPEC §8) -->
+    <div v-if="point.type === 'ketua_rt'" class="mt-3">
       <RouterLink
         to="/ketua-rt"
-        class="text-brand-navy focus-visible:outline-brand-navy inline-flex items-center gap-1 pt-1 text-xs font-medium underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2"
+        class="text-brand-navy focus-visible:outline-brand-navy inline-flex items-center gap-1 text-xs font-medium underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2"
       >
         Lihat seluruh daftar Ketua RT
         <span aria-hidden="true">&rarr;</span>
