@@ -126,11 +126,11 @@ describe('contentBlocks store', () => {
 
     expect(result.title).toBe('Judul Diperbarui Editor');
     expect(store.hero.title).toBe('Judul Diperbarui Editor');
-    expect(capturedInit?.headers).toEqual({
-      'Content-Type': 'application/json',
-      'x-csrf-token': 'test-csrf-token',
-      Authorization: 'Bearer mock-access-token',
-    });
+    const headers = new Headers(capturedInit?.headers);
+    expect(headers.get('Content-Type')).toBe('application/json');
+    expect(headers.get('x-csrf-token')).toBe('test-csrf-token');
+    expect(headers.get('Authorization')).toBe('Bearer mock-access-token');
+    expect(capturedInit?.credentials).toBe('include');
   });
 
   it('updateBlock omits Authorization header when user is unauthenticated', async () => {
@@ -172,9 +172,9 @@ describe('contentBlocks store', () => {
       body: 'Isi publik',
     });
 
-    expect(capturedInit?.headers).toEqual({
-      'Content-Type': 'application/json',
-      'x-csrf-token': 'test-csrf-token',
-    });
+    const headers = new Headers(capturedInit?.headers);
+    expect(headers.get('Content-Type')).toBe('application/json');
+    expect(headers.get('x-csrf-token')).toBe('test-csrf-token');
+    expect(headers.get('Authorization')).toBeNull();
   });
 });

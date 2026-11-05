@@ -198,7 +198,6 @@ describe('AdminSidebar.vue', () => {
       'nav-cerita',
       'nav-peta',
       'nav-publikasi',
-      'nav-rukun-tetangga',
       'nav-sistem-templat-kalimat',
       'nav-sistem-konfigurasi',
     ];
@@ -207,7 +206,13 @@ describe('AdminSidebar.vue', () => {
       expect(link.text()).toContain('Segera hadir');
     }
 
-    const built = ['nav-beranda', 'nav-data', 'nav-sistem-akun-pengguna', 'nav-sistem-log'];
+    const built = [
+      'nav-beranda',
+      'nav-data',
+      'nav-rukun-tetangga',
+      'nav-sistem-akun-pengguna',
+      'nav-sistem-log',
+    ];
     for (const dataTest of built) {
       const link = wrapper.find(`[data-test="${dataTest}"]`);
       expect(link.text()).not.toContain('Segera hadir');

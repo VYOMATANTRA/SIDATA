@@ -433,13 +433,14 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
   <div>
     <div class="mt-6 flex border-b border-slate-200" role="tablist" aria-label="Kategori CMS">
       <button
-        v-for="tab in availableTabs"
+        v-for="(tab, tabIndex) in availableTabs"
         :key="tab.id"
         :id="`tab-${tab.id}`"
         type="button"
         role="tab"
         :aria-selected="activeTab === tab.id"
         :aria-controls="`panel-${tab.id}`"
+        :tabindex="activeTab === tab.id ? 0 : -1"
         class="border-b-2 px-4 py-2.5 text-sm font-medium transition-colors"
         :class="
           activeTab === tab.id
@@ -447,11 +448,8 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
             : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
         "
         :data-test="`tab-${tab.id}`"
-        @click="
-          activeTab = tab.id;
-          typeFilter = 'all';
-          searchQuery = '';
-        "
+        @click="selectTab(tab)"
+        @keydown="handleTabKeydown($event, tabIndex)"
       >
         {{ tab.label }}
       </button>

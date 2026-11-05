@@ -509,9 +509,9 @@ Admin-only **Sistem** group (Akun pengguna, Templat kalimat, Konfigurasi sistem,
 Visibility is driven by a single role-to-items map (`frontend/src/config/adminNav.ts`) that the
 route guards also read from, so the sidebar and the guards cannot disagree about who can reach a
 given page — a resource a role isn't authorized for is absent from the sidebar entirely, not
-merely disabled. Cerita, Peta, Publikasi, Rukun Tetangga, Templat kalimat, and Konfigurasi sistem
-are not built yet; their sidebar entries carry a "Segera hadir" badge and open a minimal
-placeholder view rather than being hidden, so they stay discoverable while unbuilt.
+merely disabled. Cerita, Templat kalimat, and Konfigurasi sistem are not built yet; their sidebar
+entries carry a "Segera hadir" badge and open a minimal placeholder view rather than being hidden.
+Rukun Tetangga opens its real management view; Peta and Publikasi still open placeholders.
 
 ## 9. Explicitly Out of Scope
 

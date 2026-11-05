@@ -97,7 +97,6 @@ export const ADMIN_NAV: (AdminNavLink | AdminNavGroup)[] = [
     icon: BuildingLibraryIcon,
     roles: ['editor', 'admin'],
     dataTest: 'nav-rukun-tetangga',
-    badge: 'Segera hadir',
   },
   {
     label: 'Sistem',
