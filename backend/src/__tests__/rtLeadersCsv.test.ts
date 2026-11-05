@@ -22,6 +22,26 @@ describe('parseRtLeadersCsv', () => {
     });
   });
 
+  it('supports multi-line quoted addresses without breaking into multiple rows', () => {
+    const result = parseRtLeadersCsv(
+      `${header}\n1,Nama Ketua,0812,false,"Jl. Mulawarman No. 1\nRT 01 Kel. Manggar\nKec. Balikpapan Timur",-1.2,116.9`,
+    );
+    assert.equal(result.errors.length, 0);
+    assert.equal(result.rows.length, 1);
+    assert.equal(
+      result.rows[0]?.alamat,
+      'Jl. Mulawarman No. 1\nRT 01 Kel. Manggar\nKec. Balikpapan Timur',
+    );
+  });
+
+  it('supports explicit clear token \\N for phone and address', () => {
+    const result = parseRtLeadersCsv(`${header}\n1,Nama,\\N,true,\\N,,`);
+    assert.equal(result.errors.length, 0);
+    assert.equal(result.rows[0]?.phone, '');
+    assert.equal(result.rows[0]?.alamat, null);
+    assert.equal(result.rows[0]?.phoneIsWhatsapp, false);
+  });
+
   it('supports quoted commas and escaped quotes', () => {
     const result = parseRtLeadersCsv(`${header}\n1,"Nama, ""Lengkap""",0812,false,"Jl. A, RT 1",,`);
     assert.equal(result.rows[0]?.name, 'Nama, "Lengkap"');
@@ -183,6 +203,33 @@ describe('previewRtLeadersImport and importRtLeadersCsv coordinate handling', ()
     assert.deepEqual(preview.rows[0]?.changedFields, ['phone', 'alamat', 'coordinates']);
   });
 
+  it('rejects coordinates update for RT whose ketua_rt point covers multiple RTs', async () => {
+    const { client, coverages } = createMockClient();
+    const { previewRtLeadersImport } = await import('../services/maps.service.js');
+
+    // Make p-1 cover both RT 1 and RT 2
+    coverages.push({ pointId: 'p-1', rtNumber: 2 });
+
+    const csv = `${header}\n1,Ketua 1,081234,true,Jl 1,-1.22,116.99`;
+    const preview = await previewRtLeadersImport(csv, client);
+
+    assert.equal(preview.errors.length, 1);
+    assert.equal(preview.errors[0]?.field, 'coordinates');
+    assert.match(preview.errors[0]?.message ?? '', /mencakup 2 RT/);
+  });
+
+  it('writes spatial_point audit log when coordinates are updated during import', async () => {
+    const { client, auditLogs } = createMockClient();
+    const { importRtLeadersCsv } = await import('../services/maps.service.js');
+
+    const csv = `${header}\n1,Ketua 1,081234,true,Jl 1,-1.299,116.999`;
+    await importRtLeadersCsv(csv, actor, reqContext, client);
+
+    const pointAudit = auditLogs.find((log) => log.targetType === 'spatial_point');
+    assert.ok(pointAudit, 'Spatial point audit log must be emitted when coordinates change');
+    assert.equal(pointAudit.metadata?.via, 'csv-import');
+  });
+
   it('importing identical data twice performs no-op and creates no audit log on the second run', async () => {
     const { client, auditLogs } = createMockClient();
     const { importRtLeadersCsv } = await import('../services/maps.service.js');
@@ -191,11 +238,16 @@ describe('previewRtLeadersImport and importRtLeadersCsv coordinate handling', ()
 
     const firstRun = await importRtLeadersCsv(csv, actor, reqContext, client);
     assert.equal(firstRun.summary.changed, 1);
-    assert.equal(auditLogs.length, 1);
+    const logsAfterFirst = auditLogs.length;
+    assert.ok(logsAfterFirst >= 1);
 
     const secondRun = await importRtLeadersCsv(csv, actor, reqContext, client);
     assert.equal(secondRun.summary.changed, 0);
     assert.equal(secondRun.summary.unchanged, 1);
-    assert.equal(auditLogs.length, 1, 'No second audit log should be emitted on no-op import');
+    assert.equal(
+      auditLogs.length,
+      logsAfterFirst,
+      'No second audit log should be emitted on no-op import',
+    );
   });
 });

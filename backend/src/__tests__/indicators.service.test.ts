@@ -1024,6 +1024,33 @@ describe('indicators.service getIndicatorById', () => {
     assert.equal((await getIndicatorById('jumlah-penduduk'))?.label, 'Slug Reloaded');
   });
 
+  it('rethrows programming errors (TypeError) rather than falling back to LKG', async () => {
+    indicatorImpl['findMany'] = async () => [indicatorRow({ label: 'Cached Before TypeError' })];
+    assert.equal((await getIndicatorById('ind-1'))?.label, 'Cached Before TypeError');
+
+    const idCache = indicatorByIdCache.get(indicatorCacheKey('id', 'ind-1'));
+    assert.ok(idCache);
+    idCache.invalidate({ preserveLastKnownGood: true });
+
+    indicatorImpl['findMany'] = async () => {
+      throw new TypeError('programming bug: cannot read properties of undefined');
+    };
+    await assert.rejects(
+      () => getIndicatorById('ind-1'),
+      /programming bug: cannot read properties of undefined/,
+    );
+  });
+
+  it('drops probe slot from cache on DB error so probe slots never accumulate', async () => {
+    indicatorImpl['findMany'] = async () => {
+      throw new Error('db unavailable');
+    };
+    await assert.rejects(() => getIndicatorById('non-existent-probe-slot'), /db unavailable/);
+
+    const probeSlot = indicatorByIdCache.get(indicatorCacheKey('id', 'non-existent-probe-slot'));
+    assert.equal(probeSlot, undefined, 'Probe slot must be dropped on error in finally');
+  });
+
   it('maps a row to the exact DTO shape', async () => {
     indicatorImpl['findMany'] = async () => [indicatorRow()];
 

@@ -97,6 +97,26 @@ export async function runLegacySampleRtCleanup(
     if (deletedPoints === 0 && deletedJunctions > 0) {
       throw new Error('Legacy sample point changed during cleanup; transaction rolled back.');
     }
+    if (deletedPoints > 0) {
+      await tx.auditLog.create({
+        data: {
+          action: AUDIT_ACTIONS.SPATIAL_POINT_DELETED.action,
+          severity: AUDIT_ACTIONS.SPATIAL_POINT_DELETED.severity,
+          outcome: 'success',
+          actorId: null,
+          actorEmail: `${source}:cleanup-legacy-sample-rt-leaders`,
+          actorRole: 'system',
+          targetType: 'spatial_point',
+          targetId: LEGACY_SAMPLE_POINT_ID,
+          targetLabel: point.name,
+          metadata: {
+            reason: 'cleanup-legacy-sample-point',
+            source,
+            at: (options.now ?? (() => new Date()))().toISOString(),
+          } as Prisma.InputJsonValue,
+        },
+      });
+    }
   }
 
   let updatedLeaders = 0;

@@ -60,25 +60,25 @@ npm ci
 
 Fill in `.env` with at least:
 
-| Variable                         | Description                                                                                          |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                   | MySQL connection string, e.g. `mysql://root:password@localhost:3306/sidata` (swap host `mysql` to `localhost` for local runs) |
-| `JWT_SECRET`                     | Secret used to sign access tokens                                                                    |
-| `JWT_REFRESH_SECRET`             | Secret used to sign refresh tokens                                                                   |
-| `CSRF_SECRET`                    | Secret used to sign CSRF tokens and cookies                                                          |
-| `COOKIE_ENCRYPTION_KEY`         | Secret used to encrypt temporary OAuth state and verifier cookies                                    |
-| `CORS_ORIGIN`                    | Frontend origin allowed to make credentialed requests, e.g. `http://localhost:5173`                  |
-| `GOOGLE_CLIENT_ID`               | Google OAuth2 Client ID                                                                              |
-| `GOOGLE_CLIENT_SECRET`           | Google OAuth2 Client Secret                                                                          |
-| `GOOGLE_CALLBACK_URL`           | Google OAuth2 Callback URL, e.g. `http://localhost:3000/api/auth/google/callback`                    |
-| `GOOGLE_OAUTH_SUCCESS_REDIRECT` | Frontend URL for successful OAuth redirect, e.g. `http://localhost:5173/auth/callback`              |
-| `GOOGLE_OAUTH_FAILURE_REDIRECT` | Frontend URL for failed OAuth redirect, e.g. `http://localhost:5173/login?error=oauth_failed`       |
-| `OAUTH_STATE_TTL_SECONDS`       | _(optional)_ TTL for the temporary `oauth_state` cookie, defaults to `300`                             |
-| `OAUTH_PKCE_TTL_SECONDS`         | _(optional)_ TTL for the temporary `oauth_verifier` cookie, defaults to `300`                          |
-| `TURNSTILE_SECRET`               | Cloudflare Turnstile anti-bot secret key (`1x0000000000000000000000000000000AA` for local testing)   |
-| `RESEND_API_KEY`                 | Resend API key for transactional emails                                                              |
-| `EMAIL_FROM`                     | Sender identity for transactional emails, e.g. `"SIDATA Kelurahan Manggar <onboarding@resend.dev>"`  |
-| `PORT`                           | _(optional)_ Backend port, defaults to `3000`                                                        |
+| Variable                        | Description                                                                                                                   |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                  | MySQL connection string, e.g. `mysql://root:password@localhost:3306/sidata` (swap host `mysql` to `localhost` for local runs) |
+| `JWT_SECRET`                    | Secret used to sign access tokens                                                                                             |
+| `JWT_REFRESH_SECRET`            | Secret used to sign refresh tokens                                                                                            |
+| `CSRF_SECRET`                   | Secret used to sign CSRF tokens and cookies                                                                                   |
+| `COOKIE_ENCRYPTION_KEY`         | Secret used to encrypt temporary OAuth state and verifier cookies                                                             |
+| `CORS_ORIGIN`                   | Frontend origin allowed to make credentialed requests, e.g. `http://localhost:5173`                                           |
+| `GOOGLE_CLIENT_ID`              | Google OAuth2 Client ID                                                                                                       |
+| `GOOGLE_CLIENT_SECRET`          | Google OAuth2 Client Secret                                                                                                   |
+| `GOOGLE_CALLBACK_URL`           | Google OAuth2 Callback URL, e.g. `http://localhost:3000/api/auth/google/callback`                                             |
+| `GOOGLE_OAUTH_SUCCESS_REDIRECT` | Frontend URL for successful OAuth redirect, e.g. `http://localhost:5173/auth/callback`                                        |
+| `GOOGLE_OAUTH_FAILURE_REDIRECT` | Frontend URL for failed OAuth redirect, e.g. `http://localhost:5173/login?error=oauth_failed`                                 |
+| `OAUTH_STATE_TTL_SECONDS`       | _(optional)_ TTL for the temporary `oauth_state` cookie, defaults to `300`                                                    |
+| `OAUTH_PKCE_TTL_SECONDS`        | _(optional)_ TTL for the temporary `oauth_verifier` cookie, defaults to `300`                                                 |
+| `TURNSTILE_SECRET`              | Cloudflare Turnstile anti-bot secret key (`1x0000000000000000000000000000000AA` for local testing)                            |
+| `RESEND_API_KEY`                | Resend API key for transactional emails                                                                                       |
+| `EMAIL_FROM`                    | Sender identity for transactional emails, e.g. `"SIDATA Kelurahan Manggar <onboarding@resend.dev>"`                           |
+| `PORT`                          | _(optional)_ Backend port, defaults to `3000`                                                                                 |
 
 The server validates required variables at boot and fails fast if any are missing. Optional variables fall back to documented defaults.
 
@@ -157,7 +157,7 @@ Checklist for a new environment (Docker on a VPS). Background: [`AGENTS.md`](AGE
      ```bash
      npm run dev:cleanup-sample-rt -- --force
      ```
-     This cleanup is fingerprint-limited: it resets recognized synthetic placeholder rows, removes synthetic RT points, preserves editor-modified rows, and writes a count-only audit log in the same transaction. Synthetic data that does not match narrow legacy fingerprints will not be automatically cleared; operators must verify and maintain the appropriate `maps.rt_leaders_sample_roster` flag in the Admin CMS until data is verified.
+     This cleanup is fingerprint-limited: it resets recognized synthetic placeholder rows, removes synthetic RT points, preserves editor-modified rows, and writes a count-only audit log in the same transaction. Synthetic data that does not match narrow legacy fingerprints will not be automatically cleared; operators must verify and toggle the appropriate `maps.rt_leaders_sample_roster` flag via the Admin CMS (/admin/rukun-tetangga) or `PATCH /api/maps/rt-leaders/sample-status` once verified.
 
 ## Public Content Sources
 
@@ -180,13 +180,13 @@ verification rules.
 
 ### Backend (`backend/`)
 
-| Task                 | Command                                 |
-| -------------------- | --------------------------------------- |
-| Run unit tests       | `npm test`                              |
-| Lint                 | `npm run lint`                          |
-| Format code          | `npm run format`                        |
-| Run server           | `npx tsx src/index.ts`                  |
-| Run via Docker       | `docker compose up --build` (repo root) |
+| Task           | Command                                 |
+| -------------- | --------------------------------------- |
+| Run unit tests | `npm test`                              |
+| Lint           | `npm run lint`                          |
+| Format code    | `npm run format`                        |
+| Run server     | `npx tsx src/index.ts`                  |
+| Run via Docker | `docker compose up --build` (repo root) |
 
 ## Project Structure
 

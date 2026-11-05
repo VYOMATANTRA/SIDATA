@@ -69,6 +69,17 @@ onUnmounted(() => {
   if (restoreFocusOnUnmount) {
     const pointId = props.point?.id;
     void nextTick(() => {
+      // Do not steal focus if the user is already interacting with an input (e.g. search box)
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          activeEl.id === 'peta-search' ||
+          activeEl.closest('#peta-search, [data-test="peta-search"]'))
+      ) {
+        return;
+      }
       if (pointId) {
         const itemBtn = document.querySelector<HTMLElement>(
           `[data-test="peta-result-${pointId}"] button`,

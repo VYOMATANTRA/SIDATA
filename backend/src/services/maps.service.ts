@@ -22,7 +22,7 @@ import {
   serializeSeedPointTombstones,
 } from '../utils/rtSeedPoints.js';
 
-/** system_settings key: seed sets true; cleared only when no placeholder leaders remain. */
+/** system_settings key: explicit sample roster flag. Toggled exclusively via audited PATCH /api/maps/rt-leaders/sample-status by an Admin. */
 export const RT_LEADERS_SAMPLE_ROSTER_KEY = 'maps.rt_leaders_sample_roster';
 
 export { RT_SEED_POINT_TOMBSTONES_KEY };
@@ -1683,10 +1683,16 @@ export const updateRtLeader = async (
         if (input.phone !== undefined && hasFieldChanged(existing.phone, sanitizedPhone)) {
           changedFields.push('phone');
         }
-        if (input.phoneIsWhatsapp !== undefined) {
-          if (existing.phoneIsWhatsapp !== input.phoneIsWhatsapp) {
-            changedFields.push('phoneIsWhatsapp');
-          }
+
+        const resultingPhone = sanitizedPhone !== undefined ? sanitizedPhone : existing.phone;
+        let resultingWhatsapp =
+          input.phoneIsWhatsapp !== undefined ? input.phoneIsWhatsapp : existing.phoneIsWhatsapp;
+        if (resultingPhone === '') {
+          resultingWhatsapp = false;
+        }
+
+        if (existing.phoneIsWhatsapp !== resultingWhatsapp) {
+          changedFields.push('phoneIsWhatsapp');
         }
         if (input.alamat !== undefined && hasFieldChanged(existing.alamat, sanitizedAlamat)) {
           changedFields.push('alamat');
@@ -1701,8 +1707,8 @@ export const updateRtLeader = async (
           data: {
             ...(input.name !== undefined ? { name: input.name.trim() } : {}),
             ...(input.phone !== undefined ? { phone: input.phone.trim() } : {}),
-            ...(input.phoneIsWhatsapp !== undefined
-              ? { phoneIsWhatsapp: input.phoneIsWhatsapp }
+            ...(input.phoneIsWhatsapp !== undefined || resultingPhone === ''
+              ? { phoneIsWhatsapp: resultingWhatsapp }
               : {}),
             ...(input.alamat !== undefined ? { alamat: sanitizeNullableText(input.alamat) } : {}),
           },
@@ -1756,6 +1762,7 @@ interface ExistingRtPoint {
   id: string;
   latitude: number;
   longitude: number;
+  coverageCount: number;
 }
 
 function hasCoordinateChanged(before: number | undefined, after: number | undefined): boolean {
@@ -1807,6 +1814,18 @@ async function loadRtPointsIndex(client: {
     pointId: string;
     rtNumber: number;
   }>;
+
+  const coverageCountByPointId = new Map<string, number>();
+  for (const coverage of coverageRows) {
+    const point = pointById.get(coverage.pointId);
+    if (point?.type === 'ketua_rt') {
+      coverageCountByPointId.set(
+        coverage.pointId,
+        (coverageCountByPointId.get(coverage.pointId) ?? 0) + 1,
+      );
+    }
+  }
+
   const ketuaRtPointByRt = new Map<number, ExistingRtPoint>();
   const duplicateRts = new Set<number>();
   for (const coverage of coverageRows) {
@@ -1818,6 +1837,7 @@ async function loadRtPointsIndex(client: {
         id: point.id,
         latitude: point.latitude,
         longitude: point.longitude,
+        coverageCount: coverageCountByPointId.get(point.id) ?? 1,
       });
     }
   }
@@ -1863,6 +1883,21 @@ export async function previewRtLeadersImport(
     const existingPoint = duplicateRts.has(row.rtNumber)
       ? undefined
       : ketuaRtPointByRt.get(row.rtNumber);
+
+    if (
+      row.latitude !== undefined &&
+      row.longitude !== undefined &&
+      existingPoint &&
+      existingPoint.coverageCount > 1
+    ) {
+      errors.push({
+        rowNumber: row.rowNumber,
+        field: 'coordinates',
+        message: `RT ${row.rtNumber} terhubung ke titik ketua_rt yang mencakup ${existingPoint.coverageCount} RT; perbaiki data spasial terlebih dahulu.`,
+      });
+      continue;
+    }
+
     const changedFields = importChangedFields(existing, existingPoint, row);
     rows.push({
       rowNumber: row.rowNumber,
@@ -1901,10 +1936,33 @@ export async function importRtLeadersCsv(
   }
 
   let committedResult: RtLeaderImportPreview | null = null;
+  const sortedRtNumbers = Array.from(new Set(parsed.rows.map((r) => r.rtNumber))).sort(
+    (a, b) => a - b,
+  );
 
   await executeLockedTransaction({
     client,
-    lockQuery: Prisma.sql`SELECT rt_number FROM rt_leaders ORDER BY rt_number FOR UPDATE`,
+    lockQuery: async (txRaw) => {
+      const tx = txRaw as SpatialWriteTxClient;
+      // 1. Lock affected existing ketua_rt spatial points in ascending ID order first (consistent with point CRUD)
+      const coverageRows = (await tx.spatialPointRt.findMany({
+        where: {
+          rtNumber: { in: sortedRtNumbers },
+          point: { type: 'ketua_rt' },
+        },
+        select: { pointId: true },
+      })) as Array<{ pointId: string }>;
+      const pointIds = Array.from(new Set(coverageRows.map((c) => c.pointId))).sort();
+      if (pointIds.length > 0) {
+        await tx.$queryRaw(
+          Prisma.sql`SELECT id FROM spatial_points WHERE id IN (${Prisma.join(pointIds)}) ORDER BY id FOR UPDATE`,
+        );
+      }
+      // 2. Lock affected rt_leaders in ascending rt_number order
+      await tx.$queryRaw(
+        Prisma.sql`SELECT rt_number FROM rt_leaders WHERE rt_number IN (${Prisma.join(sortedRtNumbers)}) ORDER BY rt_number FOR UPDATE`,
+      );
+    },
     execute: async (txRaw) => {
       const tx = txRaw as SpatialWriteTxClient;
       const changedRtNumbers: number[] = [];
@@ -1935,6 +1993,19 @@ export async function importRtLeadersCsv(
         const existingPoint = duplicateRts.has(row.rtNumber)
           ? undefined
           : ketuaRtPointByRt.get(row.rtNumber);
+
+        if (
+          row.latitude !== undefined &&
+          row.longitude !== undefined &&
+          existingPoint &&
+          existingPoint.coverageCount > 1
+        ) {
+          throw new MapsServiceError(
+            `RT ${row.rtNumber} terhubung ke titik ketua_rt yang mencakup ${existingPoint.coverageCount} RT; perbaiki data spasial terlebih dahulu.`,
+            409,
+          );
+        }
+
         const changedFields = importChangedFields(existing, existingPoint, row);
 
         resultRows.push({
@@ -1961,9 +2032,16 @@ export async function importRtLeadersCsv(
         }
         if (row.phone !== undefined && hasFieldChanged(existing.phone, row.phone)) {
           leaderDataToUpdate.phone = row.phone;
+          if (row.phone.trim() === '') {
+            leaderDataToUpdate.phoneIsWhatsapp = false;
+            if (existing.phoneIsWhatsapp) {
+              changedFieldSet.add('phoneIsWhatsapp');
+            }
+          }
         }
         if (row.phoneIsWhatsapp !== undefined && existing.phoneIsWhatsapp !== row.phoneIsWhatsapp) {
-          leaderDataToUpdate.phoneIsWhatsapp = row.phoneIsWhatsapp;
+          leaderDataToUpdate.phoneIsWhatsapp =
+            leaderDataToUpdate.phone === '' ? false : row.phoneIsWhatsapp;
         }
         if (row.alamat !== undefined && hasFieldChanged(existing.alamat, row.alamat)) {
           leaderDataToUpdate.alamat = row.alamat;
@@ -1986,8 +2064,26 @@ export async function importRtLeadersCsv(
               where: { id: existingPoint.id },
               data: { latitude: row.latitude, longitude: row.longitude },
             });
+            await buildAuditLog(
+              {
+                action: AUDIT_ACTIONS.SPATIAL_POINT_UPDATED,
+                actor,
+                target: {
+                  type: 'spatial_point',
+                  id: existingPoint.id,
+                  label: `Pos RT ${String(existing.rtNumber).padStart(2, '0')}`,
+                },
+                metadata: {
+                  from: { latitude: existingPoint.latitude, longitude: existingPoint.longitude },
+                  to: { latitude: row.latitude, longitude: row.longitude },
+                  via: 'csv-import',
+                },
+                context: reqContext,
+              },
+              tx,
+            );
           } else {
-            await tx.spatialPoint.create({
+            const created = await tx.spatialPoint.create({
               data: {
                 name: `Pos RT ${String(existing.rtNumber).padStart(2, '0')} Kelurahan Manggar`,
                 type: 'ketua_rt',
@@ -1997,6 +2093,22 @@ export async function importRtLeadersCsv(
                 rtCoverages: { create: [{ rtNumber: existing.rtNumber }] },
               },
             });
+            await buildAuditLog(
+              {
+                action: AUDIT_ACTIONS.SPATIAL_POINT_CREATED,
+                actor,
+                target: { type: 'spatial_point', id: created.id, label: created.name },
+                metadata: {
+                  type: 'ketua_rt',
+                  latitude: row.latitude,
+                  longitude: row.longitude,
+                  rts: [existing.rtNumber],
+                  via: 'csv-import',
+                },
+                context: reqContext,
+              },
+              tx,
+            );
           }
         }
       }

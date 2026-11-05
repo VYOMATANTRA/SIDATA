@@ -60,12 +60,17 @@ export const useRtLeadersStore = defineStore('rtLeaders', () => {
 
   async function fetchRtLeaders(force = false): Promise<void> {
     if (!force && inFlight) return inFlight;
-    if (!force && hasSettled.value && Date.now() - lastFetchedAt < RT_LEADERS_CACHE_TTL_MS) return;
+    if (!force && hasSettled.value && Date.now() - lastFetchedAt < RT_LEADERS_CACHE_TTL_MS - 1_000) {
+      return;
+    }
 
     // Keep the previously loaded roster visible until a forced refetch succeeds,
     // so a failed retry does not blank the page.
     const currentRequestId = ++activeRequestId;
-    isLoading.value = true;
+    const isBackground = !force && hasSettled.value;
+    if (!isBackground) {
+      isLoading.value = true;
+    }
     error.value = null;
 
     inFlight = (async () => {

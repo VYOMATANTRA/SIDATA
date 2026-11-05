@@ -29,11 +29,11 @@ describe('rtLeaders store freshness', () => {
     await store.fetchRtLeaders();
     expect(store.isSampleRoster).toBe(true);
 
-    vi.advanceTimersByTime(RT_LEADERS_CACHE_TTL_MS - 1);
+    vi.advanceTimersByTime(RT_LEADERS_CACHE_TTL_MS - 1_500);
     await store.fetchRtLeaders();
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    vi.advanceTimersByTime(1);
+    vi.advanceTimersByTime(1_500);
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => roster(false) } as Response);
     await store.fetchRtLeaders();
     expect(fetchMock).toHaveBeenCalledTimes(2);

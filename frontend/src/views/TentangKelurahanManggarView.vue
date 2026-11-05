@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import TentangPageLayout from '../components/tentang/TentangPageLayout.vue';
 import TentangBreadcrumb from '../components/tentang/TentangBreadcrumb.vue';
@@ -63,7 +63,10 @@ const contentBlocksStore = useContentBlocksStore();
 const router = useRouter();
 const hasMapRoute = computed(() => router.getRoutes().some((route) => route.path === '/peta'));
 
+const hasMounted = ref(false);
+
 onMounted(() => {
+  hasMounted.value = true;
   void indicatorsStore.fetchBySlug(POPULATION_INDICATOR_SLUG);
   void contentBlocksStore.fetchBlocks();
 });
@@ -116,8 +119,8 @@ const populationIndicator = computed(() => {
 
 const isPopulationLoading = computed(() => {
   const loading = indicatorsStore.loadingBySlug[POPULATION_INDICATOR_SLUG];
-  // If undefined (not loaded yet) or true (in flight), treat as loading to avoid first-paint empty flash
-  return loading !== false && !populationIndicator.value;
+  if (!hasMounted.value) return true;
+  return loading === true && !populationIndicator.value;
 });
 
 const populationError = computed(() => {
