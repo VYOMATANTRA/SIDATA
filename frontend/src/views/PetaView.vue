@@ -27,7 +27,11 @@ onMounted(() => {
 const search = ref('');
 const currentPage = ref(1);
 const PAGE_SIZE = 5;
-const userLocation = ref<{ latitude: number; longitude: number } | null>(null);
+const userLocation = ref<{
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+} | null>(null);
 const locationError = ref<string | null>(null);
 
 /**
@@ -51,15 +55,14 @@ const visiblePoints = computed<SpatialPointDTO[]>(() => {
   }
 
   const asRtNumber = /^\d+$/.test(term) ? Number.parseInt(term, 10) : null;
+  const rtPrefix = asRtNumber === null ? '' : String(asRtNumber);
 
   return mapsStore.filteredPoints.filter((point) => {
-    if (asRtNumber !== null) {
-      return point.rts.includes(asRtNumber);
-    }
-    return (
+    const nameMatches =
       point.name.toLowerCase().includes(term) ||
-      (point.rtLeader?.name.toLowerCase().includes(term) ?? false)
-    );
+      (point.rtLeader?.name.toLowerCase().includes(term) ?? false);
+    if (nameMatches) return true;
+    return rtPrefix !== '' && point.rts.some((rt) => String(rt).startsWith(rtPrefix));
   });
 });
 
@@ -228,7 +231,9 @@ function requestUserLocation() {
       userLocation.value = {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
       };
+      void nextTick(() => mapRef.value?.focusUserLocation?.());
     },
     (err) => {
       if (err.code === err.PERMISSION_DENIED) {
@@ -293,6 +298,8 @@ function requestUserLocation() {
           <InteractiveMap
             ref="mapRef"
             :points="visiblePoints"
+            :frame-points="mapsStore.points"
+            :user-location="userLocation"
             :selected-point-id="mapsStore.selectedPoint?.id ?? null"
             :default-center="defaultCenter"
             :default-zoom="defaultZoom"
@@ -323,6 +330,15 @@ function requestUserLocation() {
                   Kembali ke hasil
                 </button>
                 <div v-else class="flex items-center gap-2">
+                  <button
+                    v-if="userLocation"
+                    type="button"
+                    class="rounded-btn text-brand-navy focus-visible:outline-brand-navy min-h-11 border border-gray-300 px-3 py-2 text-sm font-medium hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2"
+                    data-test="peta-focus-location"
+                    @click="mapRef?.focusUserLocation()"
+                  >
+                    Pusatkan lokasi saya
+                  </button>
                   <button
                     v-if="userLocation"
                     type="button"
