@@ -25,6 +25,7 @@ export interface RtLeader {
  * silently return only the first 10 RTs.
  */
 const RT_LEADERS_ENDPOINT = '/api/maps/rt-leaders?limit=100';
+export const RT_LEADERS_CACHE_TTL_MS = 60_000;
 
 /**
  * A row without a usable number, name, or phone cannot be rendered or searched,
@@ -56,10 +57,11 @@ export const useRtLeadersStore = defineStore('rtLeaders', () => {
 
   let inFlight: Promise<void> | null = null;
   let activeRequestId = 0;
+  let lastFetchedAt = 0;
 
   async function fetchRtLeaders(force = false): Promise<void> {
     if (!force && inFlight) return inFlight;
-    if (!force && rtLeaders.value.length > 0) return;
+    if (!force && hasSettled.value && Date.now() - lastFetchedAt < RT_LEADERS_CACHE_TTL_MS) return;
 
     // Keep the previously loaded roster visible until a forced refetch succeeds,
     // so a failed retry does not blank the page.
@@ -85,6 +87,7 @@ export const useRtLeadersStore = defineStore('rtLeaders', () => {
         rejectedCount.value = rows.length - valid.length;
         rtLeaders.value = [...valid].sort((a, b) => a.rtNumber - b.rtNumber);
         isSampleRoster.value = data.isSampleRoster === true;
+        lastFetchedAt = Date.now();
       } catch (err) {
         if (currentRequestId !== activeRequestId) return;
         error.value = err instanceof Error ? err.message : 'Terjadi kesalahan jaringan';

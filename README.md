@@ -82,6 +82,14 @@ Fill in `.env` with at least:
 
 The server validates required variables at boot and fails fast if any are missing. Optional variables fall back to documented defaults.
 
+In non-production environments, `npx prisma db seed` loads synthetic RT leaders and delegates
+recognized legacy-sample cleanup to the same transactional service used by the maintenance CLI.
+The cleanup is fingerprint-limited, preserves edited rows, and writes a count-only warning audit
+record in the same transaction when it changes data. For a manual cleanup, run
+`npm run dev:cleanup-sample-rt` from `backend/`; production requires the explicit `--force` flag.
+The public Ketua RT page refreshes its roster and `isSampleRoster` notice every 60 seconds while
+visible, keeping the last successful roster displayed if a refresh fails.
+
 The auth API issues CSRF tokens from `GET /api/auth/csrf-token`. Include the returned token in the `x-csrf-token` header on mutating auth requests.
 
 Apply the Prisma schema and seed default roles:
