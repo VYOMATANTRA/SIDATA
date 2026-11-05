@@ -225,7 +225,7 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function logout(): Promise<{ success: boolean; error?: string }> {
     try {
-      const csrfToken = await getCsrfToken()
+      let csrfToken = await getCsrfToken()
       if (!csrfToken) {
         return {
           success: false,
@@ -233,7 +233,7 @@ export const useAuthStore = defineStore('auth', () => {
         }
       }
 
-      const res = await fetch('/api/auth/logout', {
+      let res = await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -241,7 +241,30 @@ export const useAuthStore = defineStore('auth', () => {
         },
       })
 
-      if (!res.ok) {
+      if (res.status === 403) {
+        csrfToken = await getCsrfToken()
+        if (!csrfToken) {
+          return {
+            success: false,
+            error: 'Gagal memvalidasi token keamanan (CSRF). Silakan coba lagi.',
+          }
+        }
+        res = await fetch('/api/auth/logout', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'x-csrf-token': csrfToken,
+          },
+        })
+      }
+
+      // A 401 from /api/auth/logout means the session is already considered unauthenticated/expired
+      // (e.g. an auth gateway or expired cookie rejecting the request after the session ended),
+      // so clearing local state completes the sign-out rather than trapping the user in a dead
+      // local session. Any other non-OK status (such as a 403 CSRF failure that still failed after
+      // the retry above, or a 5xx server error) means the server did not revoke the active session,
+      // so keep local state intact and surface the error.
+      if (!res.ok && res.status !== 401) {
         return {
           success: false,
           error: 'Gagal keluar dari sesi. Silakan coba lagi.',
