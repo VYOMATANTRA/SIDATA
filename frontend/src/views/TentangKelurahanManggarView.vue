@@ -143,7 +143,7 @@ const wilayahStats = computed<StatItem[]>(() => [
   { icon: 'house', value: String(rtCount.value), label: 'Rukun Tetangga terdaftar' },
   { icon: 'density', value: kecamatan.value, label: `Kecamatan, ${kota.value}` },
   { icon: 'landscape', value: landscape.value, label: 'Potensi pantai & pertanian' },
-  { icon: 'ratio', value: 'Desa Cantik', label: 'Kelurahan Cinta Statistik' },
+  { icon: 'statistics', value: 'Desa Cantik', label: 'Kelurahan Cinta Statistik' },
 ]);
 </script>
 
@@ -352,11 +352,7 @@ const wilayahStats = computed<StatItem[]>(() => [
         </p>
 
         <div class="mt-5">
-          <StatCard
-            :items="wilayahStats"
-            variant="light"
-            title="Statistik Umum Wilayah"
-          />
+          <StatCard :items="wilayahStats" variant="light" title="Statistik Umum Wilayah" />
         </div>
 
         <div class="rounded-btn border-brand-navy/20 mt-6 border bg-white p-5">

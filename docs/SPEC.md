@@ -93,6 +93,11 @@ Notes:
 - The public "data contoh" sample-roster flag (`maps.rt_leaders_sample_roster`) is cleared only when
   **no** `rt_leaders` row still matches the synthetic placeholder fingerprint for its RT; editing a
   single placeholder among many must leave the notice visible.
+- `GET /api/maps/rt-leaders` returns `{ leaders, total, isSampleRoster }`; the public sample notice
+  follows this explicit flag and is never inferred from whether phone numbers look synthetic. The
+  Ketua RT page revalidates the roster every 60 seconds while visible and when a hidden tab becomes
+  visible after the cache expires. It keeps the last successful rows and sample flag together if a
+  revalidation fails.
 - `GET /api/pages` and `GET /api/pages/:slug` expose the hierarchy publicly (page → chapters →
   sections, each ordered by `sort_order`). `GET /api/pages?include=sections` returns every page
   with its chapters and sections in one request (one nested query), so a caller that needs all
@@ -135,6 +140,13 @@ verification/lockout) is recorded in `audit_logs` (§7). Read access is admin-on
 also where the tier-1 prose-builder override log (§5) lives (`comparison_template.keyword_warning_overridden`), rather
 than a second table — `target_type`/`target_id` are unconstrained (no FK) specifically so future
 content tables (indicators, prose, RT leaders, etc.) can be audited without a schema change.
+
+Legacy development RT sample cleanup (`maintenance.legacy_rt_cleanup`) is recorded once, in the
+same transaction as any changed point/coverage/leader rows. It uses warning severity and a system
+actor; metadata contains source, row counts, force/environment context, and timestamp only—never
+leader names or phone numbers. A no-op cleanup writes no database audit row. Both the non-production
+seed and the maintenance CLI call the shared cleanup service. The CLI refuses production unless
+`--force` is supplied.
 
 - **Severity is fixed per action, not chosen per call site** — `info` / `warning` / `critical`,
   defined once in `backend/src/services/audit.service.ts`'s `AUDIT_ACTIONS` table. `critical`

@@ -66,6 +66,16 @@ describe('phone utilities', () => {
     expect(primaryPhone('0812-111/222')).toBe('0812-111/222');
   });
 
+  it('keeps explicitly marked truncated phone pieces out of links', () => {
+    expect(dialablePhones('08123456789 / partial 081234567890')).toEqual(['08123456789']);
+    expect(undialablePhoneRemainder('08123456789 / partial 081234567890')).toBe(
+      'partial 081234567890',
+    );
+    expect(dialablePhones('truncated: 081234567890')).toEqual([]);
+    expect(telHref('truncated: 081234567890')).toBe('');
+    expect(whatsappNumber('truncated: 081234567890')).toBe('');
+  });
+
   it('returns every complete number when a split is safe', () => {
     expect(dialablePhones('08123456789 / 08129999888')).toEqual(['08123456789', '08129999888']);
   });

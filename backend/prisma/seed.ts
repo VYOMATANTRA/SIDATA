@@ -16,10 +16,7 @@ import {
   RT_SEED_POINT_TOMBSTONES_KEY,
   seedRtLeaders,
 } from './seedRtLeaders.js';
-import {
-  LEGACY_SAMPLE_LEADERS,
-  matchesLegacySampleLeader,
-} from '../src/utils/legacySampleRtFingerprints.js';
+import { cleanLegacySampleRtData } from '../src/services/legacySampleRtCleanup.service.js';
 
 async function main() {
   console.log('Memulai proses seeding...');
@@ -54,57 +51,9 @@ async function main() {
   // In production, the operational roster must be loaded from an official import (SPEC §10),
   // never populated with placeholder synthetic data.
   if (process.env.NODE_ENV !== 'production') {
-    const legacySamplePoint = await prisma.spatialPoint.findUnique({
-      where: { id: '00000000-0000-0000-0000-000000000001' },
+    await cleanLegacySampleRtData('seed', {
+      ...(process.env.NODE_ENV ? { nodeEnv: process.env.NODE_ENV } : {}),
     });
-    if (legacySamplePoint) {
-      if (
-        legacySamplePoint.type === 'ketua_rt' &&
-        legacySamplePoint.name.includes('Pos RT 01') &&
-        legacySamplePoint.latitude === -1.2235 &&
-        legacySamplePoint.longitude === 116.9521
-      ) {
-        // Automatically remove untouched legacy sample point so RT 1 does not have conflicting points
-        await prisma.spatialPointRt.deleteMany({
-          where: { pointId: '00000000-0000-0000-0000-000000000001' },
-        });
-        await prisma.spatialPoint.deleteMany({
-          where: { id: '00000000-0000-0000-0000-000000000001' },
-        });
-      } else {
-        console.warn(
-          '⚠️  Titik sample lama ketua_rt terdeteksi. Jalankan `npm run dev:cleanup-sample-rt` untuk membersihkan data lama.',
-        );
-      }
-    }
-
-    // Legacy seed used real-looking names and dialable phones for RT 1–3. Those
-    // rows survive `update: {}` on the new placeholders, so reset them when they
-    // still match the recognition fingerprint (same rule as
-    // scripts/cleanup-legacy-sample-rt-leaders.ts). Phones are matched by sha256
-    // digest — raw dialable values are not stored in source.
-    let resetLegacyLeaders = 0;
-    for (const [rtNumStr, expected] of Object.entries(LEGACY_SAMPLE_LEADERS)) {
-      const rtNumber = Number(rtNumStr);
-      const existing = await prisma.rtLeader.findUnique({ where: { rtNumber } });
-      if (existing && matchesLegacySampleLeader(existing, expected)) {
-        await prisma.rtLeader.update({
-          where: { rtNumber },
-          data: {
-            name: `Ketua RT ${String(rtNumber).padStart(2, '0')}`,
-            phone: '—',
-            phoneIsWhatsapp: false,
-            alamat: null,
-          },
-        });
-        resetLegacyLeaders += 1;
-      }
-    }
-    if (resetLegacyLeaders > 0) {
-      console.log(
-        `Mengganti ${resetLegacyLeaders} Ketua RT sample lawas (RT 1–3) dengan placeholder.`,
-      );
-    }
 
     const tombstoneSetting = await prisma.systemSetting.findUnique({
       where: { key: RT_SEED_POINT_TOMBSTONES_KEY },

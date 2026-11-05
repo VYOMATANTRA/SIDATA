@@ -6,10 +6,10 @@ import {
   phoneSha256,
 } from '../utils/legacySampleRtFingerprints.js';
 import {
-  recordLegacySampleCleanupAudit,
+  cleanLegacySampleRtData,
   runLegacySampleRtCleanup,
-  type LegacySampleCleanupResult,
-} from '../../scripts/cleanup-legacy-sample-rt-leaders.js';
+  type CleanupTx,
+} from '../services/legacySampleRtCleanup.service.js';
 import { AUDIT_ACTIONS } from '../services/audit.service.js';
 
 describe('legacySampleRtFingerprints', () => {
@@ -71,14 +71,14 @@ describe('runLegacySampleRtCleanup', () => {
       rtLeader: {
         findUnique: async ({ where }: { where: { rtNumber: number } }) => {
           if (where.rtNumber === 1) {
-            return { name: LEGACY_SAMPLE_LEADERS[1]!.name, phone };
+            return { name: LEGACY_SAMPLE_LEADERS[1]!.name, phone, phoneIsWhatsapp: true };
           }
           if (where.rtNumber === 2) {
-            return { name: 'Ketua RT 02', phone: '—' };
+            return { name: 'Ketua RT 02', phone: '—', phoneIsWhatsapp: false };
           }
-          return { name: 'Ketua RT 03', phone: '—' };
+          return { name: 'Ketua RT 03', phone: '—', phoneIsWhatsapp: false };
         },
-        update: async ({
+        updateMany: async ({
           where,
           data,
         }: {
@@ -86,9 +86,10 @@ describe('runLegacySampleRtCleanup', () => {
           data: Record<string, unknown>;
         }) => {
           updates.push({ rtNumber: where.rtNumber, data });
-          return data;
+          return { count: 1 };
         },
       },
+      auditLog: { create: async () => ({}) },
     };
 
     const result = await runLegacySampleRtCleanup(tx);
@@ -100,6 +101,52 @@ describe('runLegacySampleRtCleanup', () => {
     assert.equal(updates.length, 1);
     assert.equal(updates[0]!.rtNumber, 1);
     assert.equal(updates[0]!.data['phone'], '—');
+  });
+
+  it('writes one warning audit with counts for a change and none for a no-op', async () => {
+    let auditWrites = 0;
+    let metadata: Record<string, unknown> | undefined;
+    const tx = {
+      spatialPoint: { findUnique: async () => null, deleteMany: async () => ({ count: 0 }) },
+      spatialPointRt: { deleteMany: async () => ({ count: 0 }) },
+      rtLeader: {
+        findUnique: async ({ where }: { where: { rtNumber: number } }) =>
+          where.rtNumber === 1
+            ? {
+                name: LEGACY_SAMPLE_LEADERS[1]!.name,
+                phone: ['0812', '3456', '7801'].join(''),
+                phoneIsWhatsapp: true,
+              }
+            : null,
+        updateMany: async () => ({ count: 1 }),
+      },
+      auditLog: {
+        create: async ({
+          data,
+        }: {
+          data: { action: string; severity: string; metadata: unknown };
+        }) => {
+          auditWrites += 1;
+          assert.equal(data.action, AUDIT_ACTIONS.MAINTENANCE_LEGACY_RT_CLEANUP.action);
+          assert.equal(data.severity, 'warning');
+          metadata = data.metadata as Record<string, unknown>;
+          return {};
+        },
+      },
+    };
+    await runLegacySampleRtCleanup(tx, {
+      source: 'seed',
+      now: () => new Date('2026-10-30T12:00:00Z'),
+    });
+    assert.equal(auditWrites, 1);
+    assert.equal(metadata?.['source'], 'seed');
+    assert.equal(metadata?.['updatedLeaders'], 1);
+    assert.equal('phone' in (metadata ?? {}), false);
+    assert.equal('name' in (metadata ?? {}), false);
+
+    tx.rtLeader.findUnique = async () => null;
+    await runLegacySampleRtCleanup(tx);
+    assert.equal(auditWrites, 1);
   });
 
   it('deletes the legacy sample point when the spatial fingerprint still matches', async () => {
@@ -126,11 +173,12 @@ describe('runLegacySampleRtCleanup', () => {
         },
       },
       rtLeader: {
-        findUnique: async () => ({ name: 'Ketua RT 01', phone: '—' }),
-        update: async () => {
+        findUnique: async () => ({ name: 'Ketua RT 01', phone: '—', phoneIsWhatsapp: false }),
+        updateMany: async () => {
           throw new Error('should not update');
         },
       },
+      auditLog: { create: async () => ({}) },
     };
 
     const result = await runLegacySampleRtCleanup(tx);
@@ -144,76 +192,52 @@ describe('runLegacySampleRtCleanup', () => {
   });
 });
 
-describe('recordLegacySampleCleanupAudit', () => {
-  it('writes a structured log always and an audit row when data changed (any force flag)', async () => {
-    const lines: string[] = [];
-    const audits: unknown[] = [];
-    const result: LegacySampleCleanupResult = {
-      deletedJunctions: 1,
-      deletedPoints: 1,
-      updatedLeaders: 2,
+describe('cleanLegacySampleRtData transaction boundary', () => {
+  it('does not swallow an audit failure, so Prisma rolls cleanup back', async () => {
+    const phone = ['0812', '3456', '7801'].join('');
+    let leaderName = LEGACY_SAMPLE_LEADERS[1]!.name;
+    let committed = false;
+    const fakeTx = {
+      spatialPoint: {
+        findUnique: async () => null,
+        deleteMany: async () => ({ count: 0 }),
+      },
+      spatialPointRt: { deleteMany: async () => ({ count: 0 }) },
+      rtLeader: {
+        findUnique: async ({ where }: { where: { rtNumber: number } }) =>
+          where.rtNumber === 1 ? { name: leaderName, phone, phoneIsWhatsapp: true } : null,
+        updateMany: async ({ data }: { data: { name: string } }) => {
+          leaderName = data.name;
+          return { count: 1 };
+        },
+      },
+      auditLog: {
+        create: async () => {
+          throw new Error('audit unavailable');
+        },
+      },
+    } satisfies CleanupTx;
+
+    const transaction = async (
+      callback: (tx: CleanupTx) => Promise<{
+        deletedJunctions: number;
+        deletedPoints: number;
+        updatedLeaders: number;
+      }>,
+    ) => {
+      const pendingName = leaderName;
+      try {
+        const result = await callback(fakeTx);
+        committed = true;
+        return result;
+      } catch (error) {
+        leaderName = pendingName;
+        throw error;
+      }
     };
 
-    await recordLegacySampleCleanupAudit(
-      result,
-      { force: false, nodeEnv: 'development' },
-      {
-        log: (line) => lines.push(line),
-        recordAudit: async (entry) => {
-          audits.push(entry);
-        },
-        now: () => new Date('2026-10-30T12:00:00.000Z'),
-      },
-    );
-    assert.equal(audits.length, 1);
-    assert.equal(lines.length, 1);
-    const parsed = JSON.parse(lines[0]!) as Record<string, unknown>;
-    assert.equal(parsed['event'], 'maintenance.legacy_rt_cleanup');
-    assert.equal(parsed['updatedLeaders'], 2);
-    assert.equal(parsed['force'], false);
-    const entryNoForce = audits[0] as {
-      action: { action: string };
-      metadata: Record<string, unknown>;
-    };
-    assert.equal(entryNoForce.action.action, AUDIT_ACTIONS.MAINTENANCE_LEGACY_RT_CLEANUP.action);
-    assert.equal(entryNoForce.metadata['force'], false);
-
-    await recordLegacySampleCleanupAudit(
-      { deletedJunctions: 0, deletedPoints: 0, updatedLeaders: 0 },
-      { force: true, nodeEnv: 'production' },
-      {
-        log: (line) => lines.push(line),
-        recordAudit: async (entry) => {
-          audits.push(entry);
-        },
-        now: () => new Date('2026-10-30T12:00:00.000Z'),
-      },
-    );
-    // No data changed → still log, but no second audit row.
-    assert.equal(audits.length, 1);
-    assert.equal(lines.length, 2);
-
-    await recordLegacySampleCleanupAudit(
-      result,
-      { force: true, nodeEnv: 'production' },
-      {
-        log: (line) => lines.push(line),
-        recordAudit: async (entry) => {
-          audits.push(entry);
-        },
-        now: () => new Date('2026-10-30T12:00:00.000Z'),
-      },
-    );
-    assert.equal(audits.length, 2);
-    const entry = audits[1] as {
-      action: { action: string };
-      metadata: Record<string, unknown>;
-    };
-    assert.equal(entry.action.action, AUDIT_ACTIONS.MAINTENANCE_LEGACY_RT_CLEANUP.action);
-    assert.equal(entry.metadata['force'], true);
-    assert.equal(entry.metadata['updatedLeaders'], 2);
-    // No personal data in metadata.
-    assert.equal('name' in entry.metadata, false);
-    assert.equal('phone' in entry.metadata, false);
+    await assert.rejects(cleanLegacySampleRtData('script', { transaction }), /audit unavailable/);
+    assert.equal(committed, false);
+    assert.equal(leaderName, LEGACY_SAMPLE_LEADERS[1]!.name);
   });
 });
