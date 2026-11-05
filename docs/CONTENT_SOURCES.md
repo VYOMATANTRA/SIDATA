@@ -106,6 +106,9 @@ All titles below refer to files in the Google Drive folder above, in the named s
   PDF viewer p. 19). Use this table for public boundary copy. The user confirmed **Kelurahan
   Karang Joang** only as the northern boundary on 21 October 2026; the settled rule is recorded
   in `docs/SPEC.md` §8.
+- `Profil Kelurahan Manggar 2026.pdf` (Data Umum) and `Manggar Dalam Angka 2026` (Bab 1 Geografi dan Iklim,
+  printed p. 16, PDF viewer p. 17) describe the physical landscape as coastal lowlands ("Pesisir & Dataran
+  Rendah") bordering the Makassar Strait to the south.
 
 ## Handling sensitive source fields
 
@@ -122,6 +125,8 @@ subfolder, reporting period, and page/table references. Move a resolved discrepa
 that register alone.
 
 ## PPID procedure citation
+
+*(Verified against official statute texts of UU No. 14 Tahun 2008 and PerKI No. 1 Tahun 2013 on 2026-11-06)*
 
 - [Peraturan Komisi Informasi No. 1 Tahun 2013, official record](https://peraturan.go.id/id/peraturan-ki-no-1-tahun-2013)
   and [official PDF](https://peraturan.go.id/files/bn649-2013.pdf), marked in force by the

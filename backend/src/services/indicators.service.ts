@@ -373,12 +373,15 @@ export const indicatorByIdCache = new KeyedLruCache<string, VersionedTtlCache<In
     capacity: MAX_CACHE_ENTRIES,
     onEvict: (key) => {
       // Drop the dual-written partner so a half-evicted pair cannot leave a stale index entry.
+      // Schedulable outside synchronous set() to avoid mutating map during LRU eviction.
       const partner = partnerCacheKey(key);
       forgetIndicatorIdentityByKey(key);
       if (partner && partner !== key) {
-        indicatorByIdCache.get(partner)?.invalidate();
-        indicatorByIdCache.delete(partner);
-        forgetIndicatorIdentityByKey(partner);
+        queueMicrotask(() => {
+          indicatorByIdCache.get(partner)?.invalidate();
+          indicatorByIdCache.delete(partner);
+          forgetIndicatorIdentityByKey(partner);
+        });
       }
     },
   },
@@ -518,7 +521,10 @@ export const invalidateIndicatorsCache = (id?: string, slug?: string): void => {
   if (slug) collectKeysToInvalidate(slug, keysToInvalidate);
 
   for (const key of keysToInvalidate) {
-    indicatorByIdCache.get(key)?.invalidate();
+    const entry = indicatorByIdCache.get(key);
+    if (entry) {
+      entry.invalidate();
+    }
     indicatorByIdCache.delete(key);
     forgetIndicatorIdentityByKey(key);
   }
@@ -526,6 +532,9 @@ export const invalidateIndicatorsCache = (id?: string, slug?: string): void => {
   if (slug) forgetMissing(slug);
 
   if (!id && !slug) {
+    for (const entry of indicatorByIdCache.values()) {
+      entry.invalidate();
+    }
     indicatorByIdCache.clear();
     missingIndicatorIds.clear();
     clearIndicatorIdentityIndex();
@@ -647,6 +656,57 @@ function isPrismaKnownError(error: unknown, code: string): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === code;
 }
 
+/**
+ * Returns true if the error represents a database connection, pool timeout, or availability
+ * failure. Programming bugs (e.g. TypeErrors in formatting) return false and must never trigger LKG fallback.
+ */
+function isDatabaseAvailabilityError(error: unknown): boolean {
+  if (
+    error instanceof TypeError ||
+    error instanceof RangeError ||
+    error instanceof ReferenceError ||
+    error instanceof SyntaxError
+  ) {
+    return false;
+  }
+  if (error instanceof Prisma.PrismaClientInitializationError) return true;
+  if (error instanceof Prisma.PrismaClientRustPanicError) return true;
+  if (error instanceof Prisma.PrismaClientUnknownRequestError) return true;
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code.startsWith('P10') || error.code === 'P2024') return true;
+  }
+  if (typeof error === 'object' && error !== null) {
+    const err = error as Record<string, unknown>;
+    const code = String(err['code'] ?? '');
+    if (
+      [
+        'ECONNREFUSED',
+        'ETIMEDOUT',
+        'ECONNRESET',
+        'EPIPE',
+        'ENOTFOUND',
+        'EAI_AGAIN',
+        '45028',
+      ].includes(code)
+    ) {
+      return true;
+    }
+    const msg = String(err['message'] ?? '').toLowerCase();
+    if (
+      msg.includes('pool timeout') ||
+      msg.includes('failed to retrieve a connection') ||
+      msg.includes('econnrefused') ||
+      msg.includes("can't reach database server") ||
+      msg.includes('connection lost') ||
+      msg.includes('unavailable') ||
+      msg.includes('connection')
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export const listIndicators = async (
   filters: IndicatorListFilters = {},
   client: { indicator: Pick<typeof prisma.indicator, 'findMany' | 'count'> } = prisma,
@@ -708,7 +768,7 @@ export const getIndicatorById = async (
   // Capture the epoch before the read: warmIndicatorCaches uses setCommitted, which ignores
   // the probe slot's version, so a PATCH that lands mid-read would otherwise restore stale data.
   const epochAtStart = indicatorMutationEpoch;
-  let result: IndicatorDto | null;
+  let result: IndicatorDto | null = null;
   try {
     result = await getIndicatorEntryCache('id', lookup).getOrFetch(async (db) => {
       const candidates = await db.indicator.findMany({
@@ -724,7 +784,7 @@ export const getIndicatorById = async (
       return formatIndicator(row as Parameters<typeof formatIndicator>[0]);
     }, client);
   } catch (err) {
-    if (useSharedCache) {
+    if (useSharedCache && isDatabaseAvailabilityError(err)) {
       const idCache = indicatorByIdCache.get(indicatorCacheKey('id', lookup));
       const slugCache = indicatorByIdCache.get(indicatorCacheKey('slug', lookup));
       const lkg =
@@ -734,22 +794,22 @@ export const getIndicatorById = async (
       if (lkg) return lkg;
     }
     throw err;
+  } finally {
+    if (useSharedCache) {
+      // Drop probe slot on error, miss, or when lookup was a slug rather than the primary id
+      if (!result || normalizeIndicatorLookup(result.id) !== lookup) {
+        dropIndicatorCacheEntry('id', lookup);
+      }
+    }
   }
 
   if (result === null && useSharedCache) {
-    // Drop the probe slot instead of retaining the miss in the shared LRU.
-    dropIndicatorCacheEntry('id', lookup);
-    // A create or slug rename that committed during this read must not be hidden for the miss TTL.
     if (indicatorMutationEpoch === epochAtStart) rememberMissing(lookup);
     return null;
   }
   if (result && useSharedCache) {
     if (indicatorMutationEpoch === epochAtStart) {
       warmIndicatorCaches(result);
-    }
-    // If lookup was a slug, the probe wrote under id:<slug> — drop that mistaken slot.
-    if (normalizeIndicatorLookup(result.id) !== lookup) {
-      dropIndicatorCacheEntry('id', lookup);
     }
   }
   return result;

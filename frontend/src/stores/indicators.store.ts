@@ -459,6 +459,8 @@ export const useIndicatorsStore = defineStore('indicators', () => {
           return bySlug.value[normalized] ?? null;
         }
         if (
+          data &&
+          typeof data === 'object' &&
           data.indicator &&
           typeof data.indicator === 'object' &&
           typeof data.indicator.slug === 'string'
@@ -466,14 +468,8 @@ export const useIndicatorsStore = defineStore('indicators', () => {
           stampSlugCache(normalized, data.indicator);
           return data.indicator;
         }
-        // Valid empty / unpublished / invalid format: clear any stale hit.
-        const next = { ...bySlug.value };
-        const nextAt = { ...bySlugFetchedAt.value };
-        delete next[normalized];
-        delete nextAt[normalized];
-        bySlug.value = next;
-        bySlugFetchedAt.value = nextAt;
-        throw new Error('Format data indikator tidak valid');
+        // Malformed body on 200 OK: keep the previous cached value (same as 5xx), do not delete.
+        throw new Error('Format data indikator dari server tidak valid');
       } catch (err) {
         if (!isCurrent()) {
           return bySlug.value[normalized] ?? null;
