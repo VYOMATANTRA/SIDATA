@@ -423,9 +423,16 @@ zoom. A coordinated results panel contains one search for point names, RT number
 leader names, category filters, nearest-first results, and five-result pagination. Distance sorting
 optionally uses browser geolocation upon explicit visitor click ("Gunakan lokasi saya"), with
 distances measured from the visitor's detected coordinates; otherwise distances fall back to the
-kelurahan geographic centre as origin. The "Gunakan lokasi saya" trigger is hidden while a point is selected
+CMS default coordinates (`public.default_coordinates`), with the shared Manggar constant only as a
+fallback when settings are unavailable. The map's initial centre and zoom use the same CMS values;
+after the first point load frames the surveyed extent, or the visitor pans/zooms, late settings
+updates must not move the viewport. The "Gunakan lokasi saya" trigger is hidden while a point is selected
 and the results panel switches to the detail view. Pagination only changes the list; all filtered points remain
-on the map. Selecting a result focuses its marker and shows its details in the same panel. Search
+on the map. Selecting a result focuses its marker and shows its details in the same panel; clicking
+a marker selects it without moving the viewport. Escape closes the detail when focus is inside the
+detail panel or the map, but not when focus is in the header, search, or another page control.
+Cluster icons expose `role="button"`, `tabindex="0"`, and a count-bearing `aria-label`; Enter and
+Space zoom to the cluster, or spiderfy it at maximum zoom. Search
 and filters reset the result list to page one. The list remains a keyboard-accessible alternative
 to interacting with the map.
 
@@ -469,7 +476,7 @@ Provides three tabbed operational interfaces:
 
 **Dynamic View & Component Integration:**
 - **`AppFooter`**: Dynamically reflects verified public contact numbers (`contactPhone`) and office address lines (`contactAddress`) from `settingsStore` when loaded, falling back gracefully to static defaults. The `/publikasi` link in the "Sumber Daya" navigation is always included to provide public access to municipal reports and booklets.
-- **`InteractiveMap` & `PetaView`**: Initialize initial center and zoom level dynamically from `settingsStore.defaultCoordinates`. Distance calculations in `PetaView` measure from this dynamic kelurahan coordinate origin when browser geolocation is unavailable or ungranted.
+- **`InteractiveMap` & `PetaView`**: `PetaView` resolves `settingsStore.defaultCoordinates` once and passes the initial centre/zoom to `InteractiveMap`; the map applies a late settings change only before point framing or user interaction. Distance calculations in `PetaView` measure from this dynamic kelurahan coordinate origin when browser geolocation is unavailable or ungranted, with the shared Manggar constant only as an offline fallback.
 - **`TentangKelurahanManggarView`**: Dynamically renders profile metrics (RT count, kecamatan, kota, landscape), administrative boundaries, and SOTK officials from the `tentang-kelurahan-profil` content block, falling back to verified constants in `content/tentang.ts`.
 - **`PublikasiView`**: Dynamically renders publication entries from the `publikasi-katalog` content block, falling back to `content/publikasi.ts`. Documents with verified `href` URLs expose direct download actions, while others display the honest "Segera hadir" status.
 
@@ -548,9 +555,11 @@ Single register — unresolved questions live here and nowhere else.
   notice until an approved operational import mechanism (such as an administrative CSV import or
   verified deploy script) is completed. Until then, synthetic data is strictly confined to
   development and testing environments.
-- **Public visibility of Ketua RT contacts:** The page publishes names, phone numbers, and addresses
-  for private individuals. Confirm with the kelurahan whether the directory is published as-is, or
-  needs a reduced field set (for example address withheld, or contact only on request).
+- **Public visibility of Ketua RT contacts:** The Ketua RT page and the Peta explorer's point
+  detail both publish names, phone numbers, and addresses for private individuals; the API serves
+  the same fields to both entry points. Confirm with the kelurahan whether the directory is
+  published as-is, or needs a reduced field set (for example address withheld, or contact only on
+  request). Any reduced public field set must be enforced at the API, not only hidden in one view.
 - **Permintaan Data / UU 14/2008 citations (settled 2026-10-30):** Public copy on `/permintaan-data`
   uses Pasal 22 ayat (7)–(8) for the 10+7 working-day PPID reply window; Pasal 35 ayat (1) for
   keberatan grounds; Pasal 36 ayat (1) for the 30 working-day window to *file* keberatan; Pasal 36

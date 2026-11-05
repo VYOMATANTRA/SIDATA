@@ -10,10 +10,11 @@ import SpatialPointDrawer from '../components/maps/SpatialPointDrawer.vue';
 import { useMapsStore } from '../stores/maps';
 import { useSettingsStore } from '../stores/settings.store';
 import type { SpatialPointDTO, SpatialPointType } from '../types/maps';
-import { MANGGAR_MAP_ORIGIN } from '../constants/mapOrigin';
+import { MANGGAR_MAP_DEFAULT_ZOOM, MANGGAR_MAP_ORIGIN } from '../constants/mapOrigin';
 
 const mapsStore = useMapsStore();
 const settingsStore = useSettingsStore();
+const mapRef = ref<InstanceType<typeof InteractiveMap> | null>(null);
 
 onMounted(() => {
   void mapsStore.loadPoints();
@@ -64,11 +65,31 @@ const visiblePoints = computed<SpatialPointDTO[]>(() => {
 
 const defaultOrigin = computed(() => {
   const coords = settingsStore.defaultCoordinates;
-  if (coords && typeof coords.lat === 'number' && typeof coords.lon === 'number') {
+  if (
+    coords &&
+    typeof coords.lat === 'number' &&
+    Number.isFinite(coords.lat) &&
+    Math.abs(coords.lat) <= 90 &&
+    typeof coords.lon === 'number' &&
+    Number.isFinite(coords.lon) &&
+    Math.abs(coords.lon) <= 180
+  ) {
     return { latitude: coords.lat, longitude: coords.lon };
   }
   return KELURAHAN_ORIGIN;
 });
+
+const defaultZoom = computed(() => {
+  const zoom = settingsStore.defaultCoordinates?.zoom;
+  return typeof zoom === 'number' && Number.isInteger(zoom) && zoom >= 1 && zoom <= 19
+    ? zoom
+    : MANGGAR_MAP_DEFAULT_ZOOM;
+});
+
+const defaultCenter = computed<[number, number]>(() => [
+  defaultOrigin.value.latitude,
+  defaultOrigin.value.longitude,
+]);
 
 const origin = computed(() => userLocation.value ?? defaultOrigin.value);
 const originLabel = computed(() => (userLocation.value ? 'lokasi Anda' : 'pusat kelurahan'));
@@ -103,9 +124,20 @@ const paginationEnd = computed(() =>
   Math.min(currentPage.value * PAGE_SIZE, nearbyPoints.value.length),
 );
 
-watch([search, () => mapsStore.activeTypeFilter, userLocation], () => {
+watch([search, () => mapsStore.activeTypeFilter, userLocation, defaultOrigin], () => {
   currentPage.value = 1;
 });
+
+/** Result-list selections reveal the marker; marker clicks do not move the map. */
+async function selectFromList(point: SpatialPointDTO) {
+  void mapsStore.selectPoint(point);
+  await nextTick();
+  mapRef.value?.revealPoint(point.id);
+}
+
+function onMapEscape() {
+  if (mapsStore.selectedPoint) mapsStore.clearSelection();
+}
 
 watch(visiblePoints, (points) => {
   if (mapsStore.selectedPoint && !points.some((p) => p.id === mapsStore.selectedPoint?.id)) {
@@ -259,9 +291,13 @@ function requestUserLocation() {
         <!-- Keep map + search + panel mounted so retrying or loading doesn't tear down the Leaflet instance or typed search query -->
         <div class="mt-4 grid items-stretch gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
           <InteractiveMap
+            ref="mapRef"
             :points="visiblePoints"
             :selected-point-id="mapsStore.selectedPoint?.id ?? null"
+            :default-center="defaultCenter"
+            :default-zoom="defaultZoom"
             @select-point="mapsStore.selectPoint"
+            @escape="onMapEscape"
           />
 
           <section
@@ -359,7 +395,7 @@ function requestUserLocation() {
                   type="button"
                   class="focus-visible:outline-brand-navy flex min-h-[68px] w-full cursor-pointer items-start justify-between gap-3 py-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2"
                   data-test="peta-result"
-                  @click="mapsStore.selectPoint(item.point)"
+                  @click="selectFromList(item.point)"
                 >
                   <span>
                     <span class="text-brand-navy block text-base font-semibold">

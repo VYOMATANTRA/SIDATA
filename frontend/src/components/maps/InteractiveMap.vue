@@ -7,20 +7,24 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster';
 import type { SpatialPointDTO, SpatialPointType } from '../../types/maps';
-import { useSettingsStore } from '../../stores/settings.store';
 import { MANGGAR_MAP_CENTER, MANGGAR_MAP_DEFAULT_ZOOM } from '../../constants/mapOrigin';
 
 interface Props {
   points: SpatialPointDTO[];
   selectedPointId?: string | null;
+  defaultCenter?: [number, number];
+  defaultZoom?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   selectedPointId: null,
+  defaultCenter: () => [...MANGGAR_MAP_CENTER],
+  defaultZoom: MANGGAR_MAP_DEFAULT_ZOOM,
 });
 
 const emit = defineEmits<{
   (e: 'select-point', point: SpatialPointDTO): void;
+  (e: 'escape'): void;
 }>();
 
 const mapContainer = ref<HTMLElement | null>(null);
@@ -35,11 +39,7 @@ const markerSignatures = new Map<string, string>();
  * filter, a selection) must not move the viewport out from under the user.
  */
 let hasFramedPoints = false;
-/** True after the user drags the map — settings-driven recentre must not yank them. */
-let userHasPanned = false;
-
-const DEFAULT_CENTER: [number, number] = MANGGAR_MAP_CENTER;
-const DEFAULT_ZOOM = MANGGAR_MAP_DEFAULT_ZOOM;
+let userMovedViewport = false;
 
 /**
  * Leaflet makes markers focusable, so each one needs a name a screen reader can
@@ -156,46 +156,64 @@ function renderMarkers() {
 }
 
 /**
- * Make a cluster icon keyboard-operable (Enter/Space zooms like a click).
- * Leaflet markers are focusable by default; clusters need explicit role + keydown.
+ * Make a cluster icon keyboard-operable (Enter/Space zooms, or spiderfies at max
+ * zoom). The activator lives inside the generated icon, so it is present before
+ * Leaflet attaches the icon to the map and survives icon regeneration.
  */
-function decorateClusterIcon(cluster: L.MarkerCluster) {
-  const el = cluster.getElement();
-  if (!el) return;
-  const count = cluster.getChildCount();
-  el.setAttribute('role', 'button');
-  el.setAttribute('tabindex', '0');
-  el.setAttribute('aria-label', `Kelompok ${count} titik, tekan Enter untuk memperbesar`);
-  if (el.dataset.sidataKeybound === '1') return;
-  el.dataset.sidataKeybound = '1';
-  el.addEventListener('keydown', (ev: KeyboardEvent) => {
-    if (ev.key === 'Enter' || ev.key === ' ') {
-      ev.preventDefault();
-      ev.stopPropagation();
-      cluster.zoomToBounds({ padding: [28, 28] });
-    }
-  });
+function activateCluster(cluster: L.MarkerCluster) {
+  if (!map) return;
+  if (map.getZoom() >= map.getMaxZoom()) {
+    cluster.spiderfy();
+  } else {
+    cluster.zoomToBounds({ padding: [28, 28] });
+  }
 }
 
 /**
- * Single viewport move when a point is selected. Previously setView ran first and
- * zoomToShowLayer ran on zoomend — two animations. zoomToShowLayer alone covers
- * both clustered and already-visible markers.
+ * Keyboard activation is delegated from the map container, so it keeps working
+ * after Leaflet regenerates cluster icons on zoom, filter, and spiderfy changes.
  */
-function revealSelectedPoint() {
-  if (!map || !markerLayerGroup || !props.selectedPointId) return;
-  const targetId = props.selectedPointId;
-  const marker = markers.get(targetId);
+function clusterForActivator(activator: HTMLElement): L.MarkerCluster | null {
+  let found: L.MarkerCluster | null = null;
+  map?.eachLayer((layer) => {
+    const cluster = layer as L.MarkerCluster;
+    if (typeof cluster.getChildCount === 'function' && cluster.getElement()?.contains(activator)) {
+      found = cluster;
+    }
+  });
+  return found;
+}
+
+function handleClusterKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  const activator = (event.target as HTMLElement | null)?.closest<HTMLElement>(
+    '[data-cluster-activator]',
+  );
+  if (!activator) return;
+  const cluster = clusterForActivator(activator);
+  if (!cluster) return;
+  event.preventDefault();
+  event.stopPropagation();
+  activateCluster(cluster);
+}
+
+/**
+ * Reveal a point only when the selection came from the result list. Marker
+ * clicks select without moving the viewport the user just tapped on.
+ */
+function revealPoint(pointId: string) {
+  if (!map || !markerLayerGroup || !pointId) return;
+  const marker = markers.get(pointId);
   if (!marker) return;
 
   markerLayerGroup.zoomToShowLayer(marker, () => {
-    if (props.selectedPointId !== targetId) return;
-    const point = props.points.find((item) => item.id === targetId);
+    if (props.selectedPointId !== pointId) return;
+    const point = props.points.find((item) => item.id === pointId);
     if (point) {
       const sig = markerSignature(point, true);
-      if (markerSignatures.get(targetId) !== sig) {
+      if (markerSignatures.get(pointId) !== sig) {
         updateMarkerIcon(marker, point, true);
-        markerSignatures.set(targetId, sig);
+        markerSignatures.set(pointId, sig);
       }
     }
     marker.setZIndexOffset(1000);
@@ -223,24 +241,6 @@ function framePoints() {
   hasFramedPoints = true;
 }
 
-const settingsStore = useSettingsStore();
-
-function getInitialCenter(): [number, number] {
-  const coords = settingsStore.defaultCoordinates;
-  if (coords && typeof coords.lat === 'number' && typeof coords.lon === 'number') {
-    return [coords.lat, coords.lon];
-  }
-  return DEFAULT_CENTER;
-}
-
-function getInitialZoom(): number {
-  const coords = settingsStore.defaultCoordinates;
-  if (coords && typeof coords.zoom === 'number') {
-    return coords.zoom;
-  }
-  return DEFAULT_ZOOM;
-}
-
 onMounted(() => {
   isUnmounted = false;
   nextTick(() => {
@@ -249,7 +249,15 @@ onMounted(() => {
     map = L.map(mapContainer.value, {
       zoomControl: false,
       attributionControl: false,
-    }).setView(getInitialCenter(), getInitialZoom());
+    }).setView(props.defaultCenter, props.defaultZoom);
+
+    // A user pan or zoom must win over a late-arriving CMS default.
+    map.on('dragstart', () => {
+      userMovedViewport = true;
+    });
+    map.on('zoomstart', () => {
+      if (!hasFramedPoints) userMovedViewport = true;
+    });
 
     // Standard OpenStreetMap Tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -284,20 +292,14 @@ onMounted(() => {
       iconCreateFunction: (cluster) => {
         const count = cluster.getChildCount();
         return L.divIcon({
-          html: `<span class="map-cluster__count" aria-hidden="true">${count}</span><span class="sr-only">Kelompok ${count} titik, tekan Enter untuk memperbesar</span>`,
+          html: `<span class="map-cluster__activator" data-cluster-activator role="button" tabindex="0" aria-label="Kelompok ${count} titik, tekan Enter atau Spasi untuk memperbesar"><span class="map-cluster__count" aria-hidden="true">${count}</span></span>`,
           className: 'map-cluster',
           iconSize: [42, 42],
         });
       },
     }).addTo(map);
 
-    // Decorate cluster icons once Leaflet has attached their DOM nodes.
-    markerLayerGroup.on('layeradd', (event) => {
-      const layer = event.layer as L.Layer & { getChildCount?: () => number };
-      if (typeof layer.getChildCount === 'function') {
-        queueMicrotask(() => decorateClusterIcon(layer as L.MarkerCluster));
-      }
-    });
+    mapContainer.value.addEventListener('keydown', handleClusterKeydown);
 
     renderMarkers();
     framePoints();
@@ -307,32 +309,9 @@ onMounted(() => {
       map?.invalidateSize();
     }, 150);
 
-    map.on('dragstart', () => {
-      userHasPanned = true;
-    });
-    map.on('zoomstart', () => {
-      userHasPanned = true;
-    });
-
     window.addEventListener('resize', handleResize);
   });
 });
-
-/**
- * When public settings arrive after mount (or an admin changes the default
- * centre), recentre only if the user has not panned and points have not been
- * framed onto survey data.
- */
-watch(
-  () => settingsStore.defaultCoordinates,
-  (coords) => {
-    if (!map || hasFramedPoints || userHasPanned) return;
-    if (!coords || typeof coords.lat !== 'number' || typeof coords.lon !== 'number') return;
-    const zoom = typeof coords.zoom === 'number' ? coords.zoom : DEFAULT_ZOOM;
-    map.setView([coords.lat, coords.lon], zoom, { animate: false });
-  },
-  { deep: true },
-);
 
 watch(
   () => props.points,
@@ -345,15 +324,32 @@ watch(
 
 watch(
   () => props.selectedPointId,
-  (id) => {
+  () => {
+    // Highlight only. Viewport reveal is requested explicitly by the result list.
     renderMarkers();
-    if (id) revealSelectedPoint();
   },
 );
+
+watch(
+  () => [props.defaultCenter, props.defaultZoom] as const,
+  ([center, zoom]) => {
+    if (!map || hasFramedPoints || userMovedViewport) return;
+    map.setView(center, zoom);
+  },
+  { deep: true },
+);
+
+function handleEscape(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || event.defaultPrevented) return;
+  emit('escape');
+}
+
+defineExpose({ revealPoint });
 
 onUnmounted(() => {
   isUnmounted = true;
   window.removeEventListener('resize', handleResize);
+  mapContainer.value?.removeEventListener('keydown', handleClusterKeydown);
   if (sizeInvalidationTimer !== null) {
     window.clearTimeout(sizeInvalidationTimer);
     sizeInvalidationTimer = null;
@@ -370,8 +366,9 @@ onUnmounted(() => {
 <template>
   <div
     class="rounded-btn relative h-[420px] w-full overflow-hidden border border-gray-300 bg-gray-100 sm:h-[520px] lg:h-[640px]"
+    @keydown="handleEscape"
   >
-    <div ref="mapContainer" class="h-full w-full" />
+    <div ref="mapContainer" data-test="map-canvas" class="h-full w-full" />
   </div>
 </template>
 
@@ -418,6 +415,19 @@ onUnmounted(() => {
   font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+.map-cluster__activator {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.map-cluster__activator:focus-visible {
+  outline: 3px solid #0a2353;
+  outline-offset: 3px;
 }
 
 @media (hover: hover) and (pointer: fine) {
