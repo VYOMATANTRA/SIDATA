@@ -3,6 +3,22 @@ import { mount } from '@vue/test-utils';
 import StatCard, { type StatItem } from '@/components/common/StatCard.vue';
 
 describe('StatCard.vue', () => {
+  it('renders the landscape artwork instead of the fallback icon', () => {
+    const wrapper = mount(StatCard, {
+      props: { icon: 'landscape', value: 'Pesisir', label: 'Bentang alam' },
+    });
+    expect(wrapper.find('path[d="M3 18l6-8 4 5 3-4 5 7"]').exists()).toBe(true);
+    expect(wrapper.find('circle').exists()).toBe(false);
+  });
+
+  it('renders a bar chart for the statistics icon', () => {
+    const wrapper = mount(StatCard, {
+      props: { icon: 'statistics', value: 'Desa Cantik', label: 'Kelurahan Cinta Statistik' },
+    });
+    expect(wrapper.find('path[d="M8 16v-4M13 16V8M18 16V4"]').exists()).toBe(true);
+    expect(wrapper.find('circle').exists()).toBe(false);
+  });
+
   it('renders empty state when no props are passed', () => {
     const wrapper = mount(StatCard);
 
@@ -84,7 +100,9 @@ describe('StatCard.vue', () => {
       expect(itemHtml.indexOf('<dt')).toBeLessThan(itemHtml.indexOf('<dd'));
 
       // Verify strict W3C HTML5 dl content model: only dt and dd are direct children of the item wrapper
-      const directChildrenTags = Array.from(item.element.children).map((el) => el.tagName.toLowerCase());
+      const directChildrenTags = Array.from(item.element.children).map((el) =>
+        el.tagName.toLowerCase(),
+      );
       expect(directChildrenTags).toEqual(['dt', 'dd']);
 
       // stat-icon-wrapper is nested inside dt
