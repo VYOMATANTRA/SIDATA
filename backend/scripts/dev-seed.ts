@@ -44,9 +44,6 @@ async function main() {
     } catch (error) {
       const failure = describeDbConnectionFailure(error);
       if (!failure || !failure.retryable || attempt === CONNECT_ATTEMPTS) {
-        if (failure) {
-          console.error(formatDbConnectionFailure(failure));
-        }
         throw error;
       }
       console.log(`Menunggu database siap (${attempt}/${CONNECT_ATTEMPTS}) — ${failure.reason}`);
@@ -87,10 +84,12 @@ async function main() {
 main()
   .catch((e) => {
     const failure = describeDbConnectionFailure(e);
-    if (!failure) {
+    if (failure) {
+      console.error(formatDbConnectionFailure(failure));
+    } else {
       console.error('Error saat dev-seed:', e);
     }
-    process.exit(1);
+    process.exitCode = 1;
   })
   .finally(async () => {
     await prisma.$disconnect();

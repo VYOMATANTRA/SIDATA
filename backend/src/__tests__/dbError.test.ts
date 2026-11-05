@@ -34,6 +34,35 @@ describe('describeDbConnectionFailure', () => {
     assert.equal(failure.retryable, true);
   });
 
+  it('classifies a realistic nested Prisma/MariaDB adapter error with top-level P2039 as retryable', () => {
+    const error = {
+      name: 'PrismaClientKnownRequestError',
+      code: 'P2039',
+      message: 'Failed to retrieve a connection from the pool (timeout after 10000ms)',
+      meta: {
+        driverAdapterError: {
+          originalCode: '45028',
+          originalMessage: 'pool timeout',
+          kind: 'mysql',
+          code: '45028',
+          state: 'HY000',
+          cause: {
+            message: 'pool timeout',
+            code: '45028',
+            cause: 'connect ECONNREFUSED 127.0.0.1:3306',
+          },
+        },
+      },
+    };
+
+    const failure = describeDbConnectionFailure(error);
+
+    assert.ok(failure);
+    assert.equal(failure.reason, 'connect ECONNREFUSED 127.0.0.1:3306');
+    assert.equal(failure.code, '45028');
+    assert.equal(failure.retryable, true);
+  });
+
   it('marks a refused connection as retryable and a rejected credential as not', () => {
     const refused = describeDbConnectionFailure(
       adapterError('connect ECONNREFUSED 127.0.0.1:3306'),
