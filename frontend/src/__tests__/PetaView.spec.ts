@@ -2,9 +2,32 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
+import { defineComponent, h } from 'vue';
 import PetaView from '../views/PetaView.vue';
 import type { MapSummaryDTO, RtLeaderDTO, SpatialPointDTO } from '../types/maps';
 import { MANGGAR_MAP_ORIGIN } from '../constants/mapOrigin';
+
+const revealPointMock = vi.fn<(id: string) => void>();
+const MapStub = defineComponent({
+  name: 'InteractiveMap',
+  props: {
+    points: { type: Array, default: () => [] },
+    selectedPointId: { type: String, default: null },
+    defaultCenter: { type: Array, default: () => [] },
+    defaultZoom: { type: Number, default: 0 },
+  },
+  emits: ['select-point', 'escape'],
+  setup(_props, { expose, emit }) {
+    expose({ revealPoint: revealPointMock });
+    return () =>
+      h('div', { 'data-test': 'map-stub' }, [
+        h('button', {
+          'data-test': 'map-escape',
+          onClick: () => emit('escape'),
+        }),
+      ]);
+  },
+});
 
 const POINTS: SpatialPointDTO[] = [
   {
@@ -64,7 +87,11 @@ const LEADER: RtLeaderDTO = {
   phone: '08125356695',
   phoneIsWhatsapp: true,
   alamat: null,
-  coordinates: { latitude: MANGGAR_MAP_ORIGIN.latitude, longitude: MANGGAR_MAP_ORIGIN.longitude, pointId: 'point-1' },
+  coordinates: {
+    latitude: MANGGAR_MAP_ORIGIN.latitude,
+    longitude: MANGGAR_MAP_ORIGIN.longitude,
+    pointId: 'point-1',
+  },
   createdAt: '2026-08-01T00:00:00Z',
   updatedAt: '2026-08-01T00:00:00Z',
 };
@@ -95,7 +122,7 @@ async function mountReady() {
     global: {
       plugins: [pinia, router],
       // Leaflet needs a real layout engine; the map itself is covered separately.
-      stubs: { InteractiveMap: { template: '<div data-test="map-stub" />' } },
+      stubs: { InteractiveMap: MapStub },
     },
   });
   await flushPromises();
@@ -104,6 +131,7 @@ async function mountReady() {
 }
 
 beforeEach(() => {
+  revealPointMock.mockClear();
   vi.stubGlobal(
     'fetch',
     vi.fn<typeof fetch>().mockImplementation(async (input) => {
@@ -115,7 +143,10 @@ beforeEach(() => {
         return { ok: true, json: async () => ({ leader: LEADER }) } as Response;
       }
       if (url.includes('/api/maps/points')) {
-        return { ok: true, json: async () => ({ points: POINTS, total: POINTS.length }) } as Response;
+        return {
+          ok: true,
+          json: async () => ({ points: POINTS, total: POINTS.length }),
+        } as Response;
       }
       return { ok: false, status: 404, json: async () => ({}) } as Response;
     }),
@@ -173,6 +204,79 @@ describe('PetaView accessibility, filtering, and point selection', () => {
     expect(rows[1]?.text()).toContain('RT 30, 60, 72');
   });
 
+  it('uses CMS default coordinates for distances and the map centre', async () => {
+    const custom = { lat: -1.24, lon: 116.97, zoom: 15 };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input);
+        if (url.includes('/api/settings/public')) {
+          return {
+            ok: true,
+            json: async () => ({ settings: { defaultCoordinates: custom } }),
+          } as Response;
+        }
+        if (url.includes('/api/maps/summary')) {
+          return { ok: true, json: async () => SUMMARY } as Response;
+        }
+        if (url.includes('/api/maps/points')) {
+          return {
+            ok: true,
+            json: async () => ({ points: POINTS, total: POINTS.length }),
+          } as Response;
+        }
+        return { ok: false, status: 404, json: async () => ({}) } as Response;
+      }),
+    );
+    const wrapper = await mountReady();
+
+    const map = wrapper.findComponent(MapStub);
+    expect(map.props('defaultCenter')).toEqual([custom.lat, custom.lon]);
+    expect(map.props('defaultZoom')).toBe(15);
+
+    // Point 3 sits exactly on the CMS origin, so it becomes nearest.
+    const rows = wrapper.findAll('[data-test="peta-result"]');
+    expect(rows[0]?.text()).toContain('Posyandu Manggar');
+    expect(rows[0]?.text()).toContain('0 m');
+    wrapper.unmount();
+  });
+
+  it('falls back to the shared origin when settings are unavailable', async () => {
+    const wrapper = await mountReady();
+
+    const map = wrapper.findComponent(MapStub);
+    expect(map.props('defaultCenter')).toEqual([
+      MANGGAR_MAP_ORIGIN.latitude,
+      MANGGAR_MAP_ORIGIN.longitude,
+    ]);
+    expect(map.props('defaultZoom')).toBe(13);
+    expect(wrapper.find('[data-test="peta-result"]').text()).toContain('0 m');
+    wrapper.unmount();
+  });
+
+  it('reveals a marker only after a result-list selection', async () => {
+    const wrapper = await mountReady();
+    expect(revealPointMock).not.toHaveBeenCalled();
+
+    await wrapper.findAll('[data-test="peta-result"]')[0]?.trigger('click');
+    await flushPromises();
+
+    expect(revealPointMock).toHaveBeenCalledWith('point-1');
+    wrapper.unmount();
+  });
+
+  it('closes the open detail when Escape comes from the map', async () => {
+    const wrapper = await mountReady();
+    await wrapper.findAll('[data-test="peta-result"]')[0]?.trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[data-test="peta-result"]').exists()).toBe(false);
+
+    await wrapper.find('[data-test="map-escape"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[data-test="peta-result"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
   it('filters the list by name and by RT number', async () => {
     const wrapper = await mountReady();
     const search = wrapper.find('[data-test="peta-search"]');
@@ -189,9 +293,7 @@ describe('PetaView accessibility, filtering, and point selection', () => {
 
     await search.setValue('tidak ada');
     expect(wrapper.find('[data-test="peta-empty"]').exists()).toBe(true);
-    expect(wrapper.find('[data-test="peta-empty"]').text()).toContain(
-      'Tidak ada titik yang cocok',
-    );
+    expect(wrapper.find('[data-test="peta-empty"]').text()).toContain('Tidak ada titik yang cocok');
   });
 
   it('searches the RT leader name and paginates list results without removing map points', async () => {
@@ -219,8 +321,13 @@ describe('PetaView accessibility, filtering, and point selection', () => {
       'fetch',
       vi.fn<typeof fetch>().mockImplementation(async (input) => {
         const url = String(input);
-        if (url.includes('/api/maps/summary')) return { ok: true, json: async () => SUMMARY } as Response;
-        if (url.includes('/api/maps/points')) return { ok: true, json: async () => ({ points: manyPoints, total: manyPoints.length }) } as Response;
+        if (url.includes('/api/maps/summary'))
+          return { ok: true, json: async () => SUMMARY } as Response;
+        if (url.includes('/api/maps/points'))
+          return {
+            ok: true,
+            json: async () => ({ points: manyPoints, total: manyPoints.length }),
+          } as Response;
         return { ok: false, status: 404, json: async () => ({}) } as Response;
       }),
     );
@@ -228,17 +335,27 @@ describe('PetaView accessibility, filtering, and point selection', () => {
     const wrapper = await mountReady();
     expect(wrapper.findAll('[data-test="peta-result"]')).toHaveLength(5);
     expect(wrapper.find('[data-test="peta-pagination-summary"]').text()).toContain('1–5 dari 12');
-    expect(wrapper.find<HTMLButtonElement>('[data-test="peta-previous-page"]').element.disabled).toBe(true);
-    expect(wrapper.find<HTMLButtonElement>('[data-test="peta-next-page"]').element.disabled).toBe(false);
+    expect(
+      wrapper.find<HTMLButtonElement>('[data-test="peta-previous-page"]').element.disabled,
+    ).toBe(true);
+    expect(wrapper.find<HTMLButtonElement>('[data-test="peta-next-page"]').element.disabled).toBe(
+      false,
+    );
 
     await wrapper.find('[data-test="peta-next-page"]').trigger('click');
     expect(wrapper.findAll('[data-test="peta-result"]')).toHaveLength(5);
     expect(wrapper.find('[data-test="peta-pagination-summary"]').text()).toContain('6–10 dari 12');
-    expect(wrapper.find<HTMLButtonElement>('[data-test="peta-previous-page"]').element.disabled).toBe(false);
-    expect(wrapper.find<HTMLButtonElement>('[data-test="peta-next-page"]').element.disabled).toBe(false);
+    expect(
+      wrapper.find<HTMLButtonElement>('[data-test="peta-previous-page"]').element.disabled,
+    ).toBe(false);
+    expect(wrapper.find<HTMLButtonElement>('[data-test="peta-next-page"]').element.disabled).toBe(
+      false,
+    );
 
     await wrapper.find('[data-test="peta-next-page"]').trigger('click');
-    expect(wrapper.find<HTMLButtonElement>('[data-test="peta-next-page"]').element.disabled).toBe(true);
+    expect(wrapper.find<HTMLButtonElement>('[data-test="peta-next-page"]').element.disabled).toBe(
+      true,
+    );
 
     await wrapper.find('[data-test="peta-search"]').setValue('RT');
     expect(wrapper.findAll('[data-test="peta-result"]')).toHaveLength(5);
@@ -261,7 +378,10 @@ describe('PetaView accessibility, filtering, and point selection', () => {
     expect(ketuaRtLink.text()).toContain('Lihat seluruh daftar Ketua RT');
 
     // Closing returns to the list
-    await wrapper.findAll('button').find((button) => button.text().trim() === 'Kembali ke hasil')?.trigger('click');
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().trim() === 'Kembali ke hasil')
+      ?.trigger('click');
     await flushPromises();
     expect(wrapper.text()).toContain('Titik terdekat');
   });
@@ -329,7 +449,9 @@ describe('PetaView accessibility, filtering, and point selection', () => {
     });
 
     const wrapper = await mountReady();
-    const dekatSayaBtn = wrapper.findAll('button').find((b) => b.text().trim() === 'Gunakan lokasi saya');
+    const dekatSayaBtn = wrapper
+      .findAll('button')
+      .find((b) => b.text().trim() === 'Gunakan lokasi saya');
     expect(dekatSayaBtn).toBeDefined();
 
     await dekatSayaBtn?.trigger('click');

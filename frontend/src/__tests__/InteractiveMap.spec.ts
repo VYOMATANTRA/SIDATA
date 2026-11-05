@@ -24,7 +24,7 @@ const leafletMocks = vi.hoisted(() => {
     cb?.();
   });
   const zoomToBounds = vi.fn<() => void>();
-  const eachLayer = vi.fn<() => void>();
+  const spiderfy = vi.fn<() => void>();
   const clusterOn = vi.fn<(event: string, handler: (...args: never[]) => void) => void>();
   const clusterAddTo = vi.fn<() => unknown>().mockReturnThis();
   const clusterRemoveLayer = vi.fn<() => void>();
@@ -43,7 +43,12 @@ const leafletMocks = vi.hoisted(() => {
     lastClusterGroupOptions: null as Record<string, unknown> | null,
     layeraddHandler: null as ((event: { layer: unknown }) => void) | null,
     animationendHandler: null as (() => void) | null,
+    clusterLayers: [] as unknown[],
   };
+
+  const eachLayer = vi.fn<(fn: (layer: unknown) => void) => void>((fn) => {
+    for (const layer of state.clusterLayers) fn(layer);
+  });
 
   const mapInstance: Record<string, unknown> = {
     setView,
@@ -53,6 +58,10 @@ const leafletMocks = vi.hoisted(() => {
     getBounds,
     off,
     once,
+    on: vi.fn<(event: string, handler: () => void) => void>(),
+    eachLayer: (fn: (layer: unknown) => void) => {
+      for (const layer of state.clusterLayers) fn(layer);
+    },
     remove,
     invalidateSize,
     addLayer: vi.fn<() => void>(),
@@ -67,6 +76,7 @@ const leafletMocks = vi.hoisted(() => {
       addTo: clusterAddTo,
       zoomToShowLayer,
       zoomToBounds,
+      spiderfy,
       eachLayer,
       removeLayer: clusterRemoveLayer,
       addLayer: clusterAddLayer,
@@ -121,6 +131,7 @@ const leafletMocks = vi.hoisted(() => {
     getMaxZoom,
     zoomToShowLayer,
     zoomToBounds,
+    spiderfy,
     state,
     L,
     mapInstance,
@@ -152,12 +163,19 @@ const point = (overrides: Partial<SpatialPointDTO> = {}): SpatialPointDTO => ({
 });
 
 async function mountMap(
-  props: { points?: SpatialPointDTO[]; selectedPointId?: string | null } = {},
+  props: {
+    points?: SpatialPointDTO[];
+    selectedPointId?: string | null;
+    defaultCenter?: [number, number];
+    defaultZoom?: number;
+  } = {},
 ) {
   const wrapper = mount(InteractiveMap, {
     props: {
       points: props.points ?? [point()],
       selectedPointId: props.selectedPointId ?? null,
+      ...(props.defaultCenter ? { defaultCenter: props.defaultCenter } : {}),
+      ...(props.defaultZoom ? { defaultZoom: props.defaultZoom } : {}),
     },
     attachTo: document.body,
   });
@@ -173,6 +191,7 @@ describe('InteractiveMap.vue', () => {
     leafletMocks.state.lastClusterGroupOptions = null;
     leafletMocks.state.layeraddHandler = null;
     leafletMocks.state.animationendHandler = null;
+    leafletMocks.state.clusterLayers = [];
     leafletMocks.getZoom.mockReturnValue(13);
     leafletMocks.setView.mockImplementation(function () {
       return leafletMocks.mapInstance;
@@ -201,7 +220,12 @@ describe('InteractiveMap.vue', () => {
     expect(leafletMocks.setView).toHaveBeenCalledWith(MANGGAR_MAP_CENTER, MANGGAR_MAP_DEFAULT_ZOOM);
   });
 
-  it('reveals a selected point with a single zoomToShowLayer and no competing setView', async () => {
+  it('uses CMS default centre and zoom when supplied', async () => {
+    await mountMap({ defaultCenter: [-1.2, 116.9], defaultZoom: 12 });
+    expect(leafletMocks.setView).toHaveBeenCalledWith([-1.2, 116.9], 12);
+  });
+
+  it('highlights a selected point without moving the viewport', async () => {
     const wrapper = await mountMap({ points: [point()], selectedPointId: null });
     leafletMocks.setView.mockClear();
     leafletMocks.zoomToShowLayer.mockClear();
@@ -209,12 +233,46 @@ describe('InteractiveMap.vue', () => {
     await wrapper.setProps({ selectedPointId: 'point-1' });
     await flushPromises();
 
+    expect(leafletMocks.zoomToShowLayer).not.toHaveBeenCalled();
+    expect(leafletMocks.setView).not.toHaveBeenCalled();
+    const marker = leafletMocks.L.marker.mock.results[0]?.value as {
+      setZIndexOffset: ReturnType<typeof vi.fn>;
+    };
+    expect(marker.setZIndexOffset).toHaveBeenCalledWith(1000);
+  });
+
+  it('reveals a point only when the result list explicitly asks for it', async () => {
+    const wrapper = await mountMap({ points: [point()], selectedPointId: 'point-1' });
+    leafletMocks.setView.mockClear();
+    leafletMocks.zoomToShowLayer.mockClear();
+
+    (wrapper.vm as unknown as { revealPoint: (id: string) => void }).revealPoint('point-1');
+    await flushPromises();
+
     expect(leafletMocks.zoomToShowLayer).toHaveBeenCalledTimes(1);
     expect(leafletMocks.setView).not.toHaveBeenCalled();
   });
 
-  it('decorates cluster icons as buttons and zooms on Enter/Space', async () => {
-    await mountMap({
+  it('applies a late default centre only before points frame the map or the user moves it', async () => {
+    const wrapper = await mountMap({ points: [] });
+    leafletMocks.setView.mockClear();
+    await wrapper.setProps({ defaultCenter: [-1.2, 116.9], defaultZoom: 12 });
+    expect(leafletMocks.setView).toHaveBeenCalledWith([-1.2, 116.9], 12);
+
+    const framed = await mountMap();
+    leafletMocks.setView.mockClear();
+    await framed.setProps({ defaultCenter: [-1.1, 116.8], defaultZoom: 11 });
+    expect(leafletMocks.setView).not.toHaveBeenCalled();
+  });
+
+  it('emits escape from within the map', async () => {
+    const wrapper = await mountMap();
+    await wrapper.find('.leaflet-container, div').trigger('keydown', { key: 'Escape' });
+    expect(wrapper.emitted('escape')).toBeDefined();
+  });
+
+  it('creates accessible cluster activators and zooms or spiderfies on Enter/Space', async () => {
+    const wrapper = await mountMap({
       points: [
         point({ id: 'a' }),
         point({
@@ -226,44 +284,53 @@ describe('InteractiveMap.vue', () => {
     });
 
     expect(typeof leafletMocks.state.lastClusterGroupOptions?.iconCreateFunction).toBe('function');
-    expect(leafletMocks.state.layeraddHandler).toBeTypeOf('function');
 
     const iconCreate = leafletMocks.state.lastClusterGroupOptions?.iconCreateFunction as (cluster: {
       getChildCount: () => number;
     }) => { html: string; className: string };
     const created = iconCreate({ getChildCount: () => 2 });
     expect(created.className).toBe('map-cluster');
-    expect(created.html).toContain('sr-only');
+    expect(created.html).toContain('role="button"');
+    expect(created.html).toContain('tabindex="0"');
     expect(created.html).toContain('Kelompok 2 titik');
+    expect(created.html).toContain('data-cluster-activator');
 
     const iconEl = document.createElement('div');
     iconEl.className = 'map-cluster leaflet-marker-icon';
+    iconEl.innerHTML = created.html;
     const cluster = {
       getChildCount: () => 2,
       getElement: () => iconEl,
       zoomToBounds: leafletMocks.zoomToBounds,
+      spiderfy: leafletMocks.spiderfy,
     };
+    leafletMocks.state.clusterLayers = [cluster];
 
-    leafletMocks.state.layeraddHandler?.({ layer: cluster });
-    await flushPromises();
-    await new Promise<void>((resolve) => {
-      queueMicrotask(() => resolve());
-    });
+    (wrapper.element.querySelector('[data-test="map-canvas"]') as HTMLElement).appendChild(iconEl);
+    const activator = iconEl.querySelector('[data-cluster-activator]') as HTMLElement;
+    expect(activator).toBeTruthy();
+    expect(activator.getAttribute('role')).toBe('button');
+    expect(activator.getAttribute('tabindex')).toBe('0');
+    expect(activator.getAttribute('aria-label')).toContain('Kelompok 2');
 
-    expect(iconEl.getAttribute('role')).toBe('button');
-    expect(iconEl.getAttribute('tabindex')).toBe('0');
-    expect(iconEl.getAttribute('aria-label')).toContain('Kelompok 2');
-
-    iconEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    activator.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(leafletMocks.zoomToBounds).toHaveBeenCalledTimes(1);
 
     leafletMocks.zoomToBounds.mockClear();
-    iconEl.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    activator.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
     expect(leafletMocks.zoomToBounds).toHaveBeenCalledTimes(1);
+
+    leafletMocks.zoomToBounds.mockClear();
+    leafletMocks.getZoom.mockReturnValue(19);
+    activator.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(leafletMocks.zoomToBounds).not.toHaveBeenCalled();
+    expect(leafletMocks.spiderfy).toHaveBeenCalledTimes(1);
   });
 
   it('refreshes a marker aria-label when only the name changes', async () => {
-    const wrapper = await mountMap({ points: [point({ id: 'point-1', name: 'Pos Lama', rts: [1] })] });
+    const wrapper = await mountMap({
+      points: [point({ id: 'point-1', name: 'Pos Lama', rts: [1] })],
+    });
     const marker = leafletMocks.L.marker.mock.results[0]?.value as {
       getElement: () => HTMLElement;
     };
