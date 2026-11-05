@@ -80,9 +80,9 @@ Notes:
   Seeding never overwrites titles or ordering an editor has since changed.
 - The Ketua RT roster the repository ships is **synthetic only** (`backend/src/data/rtLeadersData.ts`):
   placeholder names, placeholder phone numbers, and generated coordinates. Real Ketua RT names, phone
-  numbers, and home locations are personal data and must never be committed. The operational roster is
-  loaded from a non-committed source or an admin import at deploy time — see §10 for the open
-  import-path question.
+  numbers, and home locations are personal data and must never be committed. Deployment seeds 100 empty slots;
+  real names, phones, addresses, and coordinates enter through the CMS manual editor or CSV import. Synthetic
+  contacts and coordinates stay development-only.
 - Every RT-leader seed upsert carries `update: {}`. Re-running the seed fills in rows that are
   missing and nothing else; it must never revert a correction an editor has already made.
 - Deleting a **seeded** Ketua RT spatial point (deterministic seed id) is also a correction: the
@@ -419,6 +419,10 @@ address, and optional coordinates, plus CSV preview/apply. CSV columns are
 values, omitted RTs are never deleted, and the whole import rolls back if any row is invalid.
 Coordinates create or update the RT's 1:1 `ketua_rt` spatial point.
 
+Public contact visibility: The Ketua RT page and Peta detail publish names, phone numbers, and
+addresses. The API serves the same fields to both entry points; contact values remain empty until
+an approved source provides them.
+
 Accessibility implications, per `docs/ACCESSIBILITY.md`: the input needs a real `<label>` (not
 placeholder-only), the result count belongs in an `aria-live="polite"` region, and the table
 keeps proper `<caption>` / `<th scope>` semantics under filtering.
@@ -556,9 +560,3 @@ Konsistensi Data Pada Semua Media Publikasi` was empty; check Google Drive for a
   not infer an appointment process.
 - **Vision and mission statement:** No approved wording was found in the inspected source set. Keep
   this section omitted until the Kelurahan provides an approved vision/mission document.
-- **Operational Ketua RT roster import (settled):** Deployment seeds 100 empty slots; real names,
-  phones, addresses, and coordinates enter through the CMS manual editor or CSV import and are
-  never committed to the repository. Synthetic contacts and coordinates stay development-only.
-- **Public visibility of Ketua RT contacts (settled):** The Ketua RT page and Peta detail publish
-  names, phone numbers, and addresses. The API serves the same fields to both entry points; contact
-  values remain empty until an approved source provides them.

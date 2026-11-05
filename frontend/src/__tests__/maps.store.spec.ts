@@ -1,13 +1,25 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useMapsStore } from '../stores/maps';
-import type { SpatialPointDTO, MapSummaryDTO } from '../types/maps';
+import type { SpatialPointDTO, MapSummaryDTO, RtLeaderDTO } from '../types/maps';
 import { MANGGAR_MAP_ORIGIN } from '../constants/mapOrigin';
 
 describe('maps.ts Pinia Store', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    vi.restoreAllMocks();
   });
+
+  const mockLeader: RtLeaderDTO = {
+    rtNumber: 1,
+    name: 'Leader Satu',
+    phone: '08120000001',
+    phoneIsWhatsapp: true,
+    alamat: 'Jl. RT 1',
+    coordinates: null,
+    createdAt: '2026-08-01T00:00:00Z',
+    updatedAt: '2026-08-01T00:00:00Z',
+  };
 
   const mockPoints: SpatialPointDTO[] = [
     {
@@ -18,6 +30,7 @@ describe('maps.ts Pinia Store', () => {
       longitude: MANGGAR_MAP_ORIGIN.longitude,
       metadata: null,
       rts: [1],
+      rtLeader: mockLeader,
       createdAt: '2026-08-01T00:00:00Z',
       updatedAt: '2026-08-01T00:00:00Z',
     },
@@ -63,68 +76,103 @@ describe('maps.ts Pinia Store', () => {
     expect(store.filteredPoints.length).toBe(2);
   });
 
-  it('does not let an older leader lookup overwrite the current selection', async () => {
-    let resolveFirst!: (value: import('../types/maps').RtLeaderDTO | null) => void;
-    const firstLookup = new Promise<import('../types/maps').RtLeaderDTO | null>((resolve) => {
-      resolveFirst = resolve;
-    });
-    const currentLeader = {
-      rtNumber: 2,
-      name: 'Current leader',
-      phone: '08120000002',
-      phoneIsWhatsapp: true,
-      alamat: null,
-      coordinates: null,
-      createdAt: '2026-08-01T00:00:00Z',
-      updatedAt: '2026-08-01T00:00:00Z',
-    };
-    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation((input) => {
-      if (String(input).endsWith('/rt-leaders/1'))
-        return firstLookup.then(
-          (leader) => ({ ok: true, json: async () => ({ leader }) }) as Response,
-        );
-      if (String(input).endsWith('/rt-leaders/2'))
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ leader: currentLeader }),
-        } as Response);
-      return Promise.resolve({ ok: false, status: 404, json: async () => ({}) } as Response);
-    });
+  it('derives selectedLeader strictly from the selected point without issuing secondary fetch', async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    globalThis.fetch = fetchMock;
 
     const store = useMapsStore();
-    const firstSelection = store.selectPoint(mockPoints[0]!);
-    await store.selectPoint({ ...mockPoints[0]!, id: 'point-2', rts: [2] });
-    resolveFirst({ ...currentLeader, rtNumber: 1, name: 'Stale leader' });
-    await firstSelection;
+    store.selectPoint(mockPoints[0]!);
 
-    expect(store.selectedPoint?.rts).toEqual([2]);
-    expect(store.selectedLeader?.name).toBe('Current leader');
+    expect(store.selectedPoint?.id).toBe('point-1');
+    expect(store.selectedLeader?.name).toBe('Leader Satu');
+    expect(store.selectedLeader?.rtNumber).toBe(1);
+    expect(store.selectedLeader?.coordinates?.pointId).toBe('point-1');
+    // Selecting a point must never fetch from the standalone leader endpoint
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('keeps an open contact card when a points reload returns the same RT', async () => {
-    const leader = {
-      rtNumber: 1,
-      name: 'Leader Satu',
-      phone: '08120000001',
-      phoneIsWhatsapp: true,
-      alamat: null,
-      coordinates: null,
-      createdAt: '2026-08-01T00:00:00Z',
-      updatedAt: '2026-08-01T00:00:00Z',
-    };
-    const pointWithLeader = { ...mockPoints[0]!, rtLeader: leader };
+  it('evaluates selectedLeader as null when point has an integrityWarning', () => {
+    const store = useMapsStore();
+    store.selectPoint({
+      ...mockPoints[0]!,
+      integrityWarning: 'Integrity conflict on RT 1',
+    });
+
+    expect(store.selectedLeader).toBeNull();
+  });
+
+  it('evaluates selectedLeader as null when point has multiple RTs or mismatched rtNumber', () => {
+    const store = useMapsStore();
+
+    // Multiple RT coverages
+    store.selectPoint({
+      ...mockPoints[0]!,
+      rts: [1, 2],
+    });
+    expect(store.selectedLeader).toBeNull();
+
+    // Mismatched rtNumber
+    store.selectPoint({
+      ...mockPoints[0]!,
+      rts: [1],
+      rtLeader: { ...mockLeader, rtNumber: 2 },
+    });
+    expect(store.selectedLeader).toBeNull();
+  });
+
+  it('keeps an open contact card when points reload with same valid point and leader', async () => {
+    const store = useMapsStore();
+    store.selectPoint(mockPoints[0]!);
+    expect(store.selectedLeader?.name).toBe('Leader Satu');
+
+    const updatedLeader = { ...mockLeader, name: 'Leader Satu Update' };
+    const refreshedPoint = { ...mockPoints[0]!, rtLeader: updatedLeader };
+
     globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
       ok: true,
-      json: async () => ({ points: [pointWithLeader], total: 1 }),
+      json: async () => ({ points: [refreshedPoint], total: 1 }),
     } as Response);
-
-    const store = useMapsStore();
-    await store.selectPoint(pointWithLeader);
-    expect(store.selectedLeader?.name).toBe('Leader Satu');
 
     await store.loadPoints();
     expect(store.selectedPoint?.id).toBe('point-1');
-    expect(store.selectedLeader?.name).toBe('Leader Satu');
+    expect(store.selectedLeader?.name).toBe('Leader Satu Update');
+  });
+
+  it('removes contact immediately when point reloads into an integrity conflict', async () => {
+    const store = useMapsStore();
+    store.selectPoint(mockPoints[0]!);
+    expect(store.selectedLeader).not.toBeNull();
+
+    const conflictedPoint = {
+      ...mockPoints[0]!,
+      integrityWarning: 'Disputed point',
+      rtLeader: null,
+    };
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({ points: [conflictedPoint], total: 1 }),
+    } as Response);
+
+    await store.loadPoints();
+    expect(store.selectedPoint?.id).toBe('point-1');
+    expect(store.selectedPoint?.integrityWarning).toBe('Disputed point');
+    expect(store.selectedLeader).toBeNull();
+  });
+
+  it('clears selection when selected point is removed during points reload', async () => {
+    const store = useMapsStore();
+    store.selectPoint(mockPoints[0]!);
+    expect(store.selectedPoint).not.toBeNull();
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({ points: [mockPoints[1]!], total: 1 }),
+    } as Response);
+
+    await store.loadPoints();
+    expect(store.selectedPoint).toBeNull();
+    expect(store.selectedLeader).toBeNull();
   });
 
   it('loads map summary metrics', async () => {

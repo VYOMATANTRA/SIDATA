@@ -78,7 +78,7 @@ onUnmounted(() => {
     >
       <div
         v-if="isOpen"
-        class="absolute left-0 z-50 mt-2 w-64 divide-y divide-slate-100 rounded-2xl border border-slate-200/90 bg-white/95 p-3.5 text-sm shadow-xl backdrop-blur-md"
+        class="absolute right-0 z-50 mt-2 w-64 max-w-[calc(100vw-2rem)] divide-y divide-slate-100 rounded-2xl border border-slate-200/90 bg-white/95 p-3.5 text-sm shadow-xl backdrop-blur-md"
       >
         <div class="pb-2.5">
           <span class="block text-xs font-semibold tracking-wider text-slate-400 uppercase">
