@@ -1,4 +1,5 @@
 import { RT_LEADERS_DATA, type RtSeedRecord } from '../src/data/rtLeadersData.js';
+import type { OfficialRtLeaderRecord } from '../src/data/officialRtLeaders.js';
 import { seededKetuaRtPointId } from '../src/utils/rtSeedPoints.js';
 
 export {
@@ -91,7 +92,7 @@ export async function seedRtLeaders(
     }
 
     const pointName = `Pos RT ${String(rt.rtNumber).padStart(2, '0')} Kelurahan Manggar`;
-    const metadata = { keterangan: `Ketua RT ${rt.rtNumber}: ${rt.name}` };
+    const metadata = { keterangan: `Titik contoh RT ${rt.rtNumber}` };
 
     const existingPoint = await client.spatialPoint.findUnique({ where: { id: pointId } });
 
@@ -129,5 +130,29 @@ export async function seedRtLeaders(
     });
   }
 
+  return data.length;
+}
+
+/**
+ * Creates the 100 editable RT slots without inventing contact details.
+ * Existing rows are never updated, so an editor correction survives re-seeding.
+ */
+export async function seedOfficialRtLeaderSlots(
+  client: Pick<RtLeaderSeedClient, 'rtLeader'>,
+  data: readonly OfficialRtLeaderRecord[],
+): Promise<number> {
+  for (const rt of data) {
+    await client.rtLeader.upsert({
+      where: { rtNumber: rt.rtNumber },
+      update: {},
+      create: {
+        rtNumber: rt.rtNumber,
+        name: rt.name,
+        phone: '',
+        phoneIsWhatsapp: false,
+        alamat: null,
+      },
+    });
+  }
   return data.length;
 }

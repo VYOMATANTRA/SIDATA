@@ -11,9 +11,11 @@ import { DEFAULT_CONTENT_BLOCKS } from '../src/services/contentBlocks.service.js
 import { DEFAULT_COMPARISON_TEMPLATES } from '../src/services/comparisonTemplates.service.js';
 import { CERITA_PAGES } from './ceritaPages.js';
 import { RT_LEADERS_DATA } from '../src/data/rtLeadersData.js';
+import { OFFICIAL_RT_LEADERS } from '../src/data/officialRtLeaders.js';
 import {
   parseSeedPointTombstones,
   RT_SEED_POINT_TOMBSTONES_KEY,
+  seedOfficialRtLeaderSlots,
   seedRtLeaders,
 } from './seedRtLeaders.js';
 import { cleanLegacySampleRtData } from '../src/services/legacySampleRtCleanup.service.js';
@@ -45,24 +47,43 @@ async function main() {
     },
   });
 
-  // Seed all 100 RT Leaders and their 1:1 Spatial Points (in non-production environments only).
-  // `update: {}` throughout: seeding must never overwrite a correction an editor
-  // has already made (SPEC §2). Re-running the seed only fills in missing rows.
-  // In production, the operational roster must be loaded from an official import (SPEC §10),
-  // never populated with placeholder synthetic data.
-  if (process.env.NODE_ENV !== 'production') {
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  // Every environment starts with the 100 official RT names from the Monografi.
+  // The source publishes no phone, address, or machine-readable coordinates, so
+  // those fields start empty and are filled through the CMS. `update: {}` keeps
+  // editor corrections intact on re-seed.
+  if (!isProduction) {
     await cleanLegacySampleRtData('seed', {
       ...(process.env.NODE_ENV ? { nodeEnv: process.env.NODE_ENV } : {}),
     });
 
+    // The legacy cleanup leaves placeholder names behind; replace only those,
+    // never a name an editor has already corrected.
+    for (const leader of OFFICIAL_RT_LEADERS) {
+      await prisma.rtLeader.updateMany({
+        where: {
+          rtNumber: leader.rtNumber,
+          name: { startsWith: 'Ketua RT ' },
+          phone: { in: ['—', ''] },
+        },
+        data: { name: leader.name, phone: '', phoneIsWhatsapp: false, alamat: null },
+      });
+    }
+  }
+
+  await seedOfficialRtLeaderSlots(prisma, OFFICIAL_RT_LEADERS);
+
+  // Development keeps the synthetic map points so the Peta page has something to
+  // render; the leaders themselves stay the official names above.
+  if (!isProduction) {
     const tombstoneSetting = await prisma.systemSetting.findUnique({
       where: { key: RT_SEED_POINT_TOMBSTONES_KEY },
     });
     const skippedPointIds = parseSeedPointTombstones(tombstoneSetting?.value);
     await seedRtLeaders(prisma, RT_LEADERS_DATA, { skippedPointIds });
 
-    // Mark the roster as sample until an editor saves real leaders (maps.service clears it).
-    // create-only: a re-seed must not flip the flag back after an editor has cleared it.
+    // Development map coordinates are synthetic, so the sample notice stays on.
     await prisma.systemSetting.upsert({
       where: { key: 'maps.rt_leaders_sample_roster' },
       create: { key: 'maps.rt_leaders_sample_roster', value: 'true' },
@@ -101,6 +122,13 @@ async function main() {
         },
       });
     }
+  } else {
+    // Production names are official; no synthetic points or contacts are created.
+    await prisma.systemSetting.upsert({
+      where: { key: 'maps.rt_leaders_sample_roster' },
+      create: { key: 'maps.rt_leaders_sample_roster', value: 'false' },
+      update: {},
+    });
   }
 
   // Audit log retention defaults to "0" (keep forever) for every severity — a fresh install
@@ -217,7 +245,7 @@ async function main() {
     roleUser,
     roleEditor,
     roleAdmin,
-    totalRtLeaders: RT_LEADERS_DATA.length,
+    totalRtLeaders: await prisma.rtLeader.count(),
     seededBlocks: DEFAULT_CONTENT_BLOCKS.map((b) => b.slug),
     seededComparisonTemplates: DEFAULT_COMPARISON_TEMPLATES.map((t) => t.slug),
   });
