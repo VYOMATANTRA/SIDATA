@@ -55,6 +55,8 @@ export type IndicatorItem = IndicatorDto;
 /**
  * Format an indicator value using Indonesian conventions:
  * comma for decimal point ('2,5', '1,06'), dot for thousands ('53.098').
+ * Drops a trailing fractional part that is exactly zero (e.g. "12480.0000" -> "12.480").
+ * Preserves exact decimal digits without IEEE-754 precision loss.
  */
 export function formatIndicatorValue(
   value: string | number,
@@ -63,32 +65,25 @@ export function formatIndicatorValue(
   const strVal = String(value).trim();
   if (!strVal) return '';
 
-  if (unit && unit.includes(':')) {
-    return strVal.replace('.', ',');
-  }
-
-  // If strVal is already pre-formatted with Indonesian thousand dots, e.g. '53.098' or '53.120'
-  if (/^\d{1,3}(\.\d{3})+$/.test(strVal)) {
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(strVal);
+  if (!match) {
+    if (unit && unit.includes(':')) {
+      return strVal.replace('.', ',');
+    }
     return strVal;
   }
 
-  // Plain digits like '53098' or '100' -> format to Indonesian locale ('53.098')
-  if (/^\d+$/.test(strVal)) {
-    return Number(strVal).toLocaleString('id-ID');
-  }
+  const sign = match[1] ?? '';
+  const integerPart = match[2] ?? '0';
+  const fractionPart = match[3] ?? '';
 
-  // Stored as Decimal with .0000 -> extract integer part and format
-  if (/^\d+\.0+$/.test(strVal)) {
-    const intPart = strVal.split('.')[0]!;
-    return Number(intPart).toLocaleString('id-ID');
-  }
+  const groupedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const trimmedFraction = fractionPart.replace(/0+$/, '');
 
-  // Consistent decimal comma fallback for decimal strings (e.g. '2.5' or '1.06')
-  if (/^-?\d+\.\d+$/.test(strVal)) {
-    return strVal.replace('.', ',');
-  }
+  // Avoid a "-0" display for values like "-0.0000" — there's no real negative figure here.
+  const isZero = !/[1-9]/.test(integerPart + trimmedFraction);
 
-  return strVal;
+  return `${isZero ? '' : sign}${groupedInteger}${trimmedFraction ? `,${trimmedFraction}` : ''}`;
 }
 
 export function resolveIconForIndicator(
