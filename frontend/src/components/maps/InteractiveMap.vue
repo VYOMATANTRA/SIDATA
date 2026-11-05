@@ -11,15 +11,19 @@ import { MANGGAR_MAP_CENTER, MANGGAR_MAP_DEFAULT_ZOOM } from '../../constants/ma
 
 interface Props {
   points: SpatialPointDTO[];
+  /** Full unfiltered set used once for initial bounds; falls back to `points`. */
+  framePoints?: SpatialPointDTO[];
   selectedPointId?: string | null;
   defaultCenter?: [number, number];
   defaultZoom?: number;
+  userLocation?: { latitude: number; longitude: number; accuracy: number } | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   selectedPointId: null,
   defaultCenter: () => [...MANGGAR_MAP_CENTER],
   defaultZoom: MANGGAR_MAP_DEFAULT_ZOOM,
+  userLocation: null,
 });
 
 const emit = defineEmits<{
@@ -30,6 +34,7 @@ const emit = defineEmits<{
 const mapContainer = ref<HTMLElement | null>(null);
 let map: L.Map | null = null;
 let markerLayerGroup: L.MarkerClusterGroup | null = null;
+let userLocationLayer: L.LayerGroup | null = null;
 let sizeInvalidationTimer: number | null = null;
 let isUnmounted = false;
 const markers = new Map<string, L.Marker>();
@@ -230,11 +235,12 @@ function handleResize() {
  * Frames the map on the points themselves instead of the fixed default centre,
  * so the surveyed extent fits the viewport on first load.
  */
-function framePoints() {
-  if (!map || hasFramedPoints || props.points.length === 0) return;
+function frameInitialPoints() {
+  const points = props.framePoints ?? props.points;
+  if (!map || hasFramedPoints || userMovedViewport || points.length === 0) return;
 
   const bounds = L.latLngBounds(
-    props.points.map((point) => [point.latitude, point.longitude] as [number, number]),
+    points.map((point) => [point.latitude, point.longitude] as [number, number]),
   );
 
   map.fitBounds(bounds, { padding: [28, 28], maxZoom: 15 });
@@ -262,6 +268,43 @@ function handleUserInteraction(event: Event) {
   if (event.type === 'keydown' && ZOOM_KEYS.has((event as KeyboardEvent).key)) {
     userMovedViewport = true;
   }
+}
+
+function renderUserLocation() {
+  if (!map) return;
+  if (!props.userLocation) {
+    userLocationLayer?.clearLayers();
+    return;
+  }
+  if (!userLocationLayer) userLocationLayer = L.layerGroup().addTo(map);
+  userLocationLayer.clearLayers();
+
+  const { latitude, longitude, accuracy } = props.userLocation;
+  L.circle([latitude, longitude], {
+    radius: Math.max(accuracy, 1),
+    color: '#0a2353',
+    weight: 1,
+    fillColor: '#0a2353',
+    fillOpacity: 0.12,
+  }).addTo(userLocationLayer);
+  L.marker([latitude, longitude], {
+    icon: L.divIcon({
+      className: 'custom-user-marker',
+      html: '<span class="custom-user-marker__dot" aria-hidden="true"></span><span class="sr-only">Lokasi Anda</span>',
+      iconSize: [22, 22],
+      iconAnchor: [11, 11],
+    }),
+    title: 'Lokasi Anda',
+    alt: 'Lokasi Anda',
+  }).addTo(userLocationLayer);
+}
+
+function focusUserLocation() {
+  if (!map || !props.userLocation) return;
+  map.setView(
+    [props.userLocation.latitude, props.userLocation.longitude],
+    Math.max(map.getZoom(), 16),
+  );
 }
 
 onMounted(() => {
@@ -328,7 +371,8 @@ onMounted(() => {
     mapContainer.value.addEventListener('keydown', handleClusterKeydown);
 
     renderMarkers();
-    framePoints();
+    frameInitialPoints();
+    renderUserLocation();
 
     // Trigger size invalidation to calculate proper tile grid after render
     sizeInvalidationTimer = window.setTimeout(() => {
@@ -343,7 +387,8 @@ watch(
   () => props.points,
   () => {
     renderMarkers();
-    framePoints();
+    frameInitialPoints();
+    renderUserLocation();
   },
   { deep: true },
 );
@@ -370,7 +415,7 @@ function handleEscape(event: KeyboardEvent) {
   emit('escape');
 }
 
-defineExpose({ revealPoint });
+defineExpose({ revealPoint, focusUserLocation });
 
 onUnmounted(() => {
   isUnmounted = true;
@@ -392,6 +437,7 @@ onUnmounted(() => {
   }
   markers.clear();
   markerSignatures.clear();
+  userLocationLayer = null;
 });
 </script>
 
@@ -447,6 +493,21 @@ onUnmounted(() => {
   font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+.custom-user-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.custom-user-marker__dot {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border: 3px solid white;
+  border-radius: 50%;
+  background: #0a2353;
+  box-shadow: 0 0 0 2px rgb(10 35 83 / 35%);
 }
 
 .map-cluster:focus-visible {

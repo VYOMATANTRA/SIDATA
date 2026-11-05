@@ -79,8 +79,15 @@ describe('maps.ts Pinia Store', () => {
       updatedAt: '2026-08-01T00:00:00Z',
     };
     globalThis.fetch = vi.fn<typeof fetch>().mockImplementation((input) => {
-      if (String(input).endsWith('/rt-leaders/1')) return firstLookup.then((leader) => ({ ok: true, json: async () => ({ leader }) }) as Response);
-      if (String(input).endsWith('/rt-leaders/2')) return Promise.resolve({ ok: true, json: async () => ({ leader: currentLeader }) } as Response);
+      if (String(input).endsWith('/rt-leaders/1'))
+        return firstLookup.then(
+          (leader) => ({ ok: true, json: async () => ({ leader }) }) as Response,
+        );
+      if (String(input).endsWith('/rt-leaders/2'))
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ leader: currentLeader }),
+        } as Response);
       return Promise.resolve({ ok: false, status: 404, json: async () => ({}) } as Response);
     });
 
@@ -92,6 +99,32 @@ describe('maps.ts Pinia Store', () => {
 
     expect(store.selectedPoint?.rts).toEqual([2]);
     expect(store.selectedLeader?.name).toBe('Current leader');
+  });
+
+  it('keeps an open contact card when a points reload returns the same RT', async () => {
+    const leader = {
+      rtNumber: 1,
+      name: 'Leader Satu',
+      phone: '08120000001',
+      phoneIsWhatsapp: true,
+      alamat: null,
+      coordinates: null,
+      createdAt: '2026-08-01T00:00:00Z',
+      updatedAt: '2026-08-01T00:00:00Z',
+    };
+    const pointWithLeader = { ...mockPoints[0]!, rtLeader: leader };
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({ points: [pointWithLeader], total: 1 }),
+    } as Response);
+
+    const store = useMapsStore();
+    await store.selectPoint(pointWithLeader);
+    expect(store.selectedLeader?.name).toBe('Leader Satu');
+
+    await store.loadPoints();
+    expect(store.selectedPoint?.id).toBe('point-1');
+    expect(store.selectedLeader?.name).toBe('Leader Satu');
   });
 
   it('loads map summary metrics', async () => {

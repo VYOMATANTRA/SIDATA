@@ -215,7 +215,8 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
     const next = wrapper.find('[data-test="pagination-next"]');
     await next.trigger('click');
     expect(wrapper.findAll('tbody th[scope="row"]')[0]?.text()).toBe('11');
-    expect(wrapper.find('[data-test="rt-count"]').text()).toBe('Menampilkan 11–20 dari 100 RT');
+    expect(wrapper.find('[data-test="rt-count"]').text()).toBe('Menampilkan 100 dari 100 RT');
+    expect(wrapper.find('[data-test="pagination-summary"]').text()).toContain('11–20');
 
     await wrapper.find('[data-test="pagination-prev"]').trigger('click');
     expect(wrapper.findAll('tbody th[scope="row"]')[0]?.text()).toBe('1');
@@ -232,7 +233,7 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
     const count = wrapper.find('[data-test="rt-count"]');
     expect(count.exists()).toBe(true);
     expect(count.attributes('aria-live')).toBe('polite');
-    expect(count.text()).toBe('Menampilkan 1–10 dari 100 RT');
+    expect(count.text()).toBe('Menampilkan 100 dari 100 RT');
 
     // Exactly one live region, so nothing competes with the count.
     expect(wrapper.findAll('[aria-live="polite"]')).toHaveLength(1);
@@ -374,20 +375,21 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
     expect(search.attributes('id')).toBe('rt-search');
 
     await search.setValue('007');
-    expect(wrapper.findAll('tbody th[scope="row"]')).toHaveLength(1);
+    expect(wrapper.findAll('tbody th[scope="row"]')).toHaveLength(DEFAULT_PAGE_SIZE);
     expect(wrapper.find('tbody th[scope="row"]').text()).toBe('7');
-    expect(wrapper.find('[data-test="rt-count"]').text()).toBe('Menampilkan 1 dari 100 RT');
+    expect(wrapper.find('[data-test="rt-count"]').text()).toBe('Menampilkan 11 dari 100 RT');
   });
 
-  it('treats a digits-only query as one exact RT number', async () => {
+  it('treats a digits-only query as an RT prefix', async () => {
     const wrapper = await mountReady();
     const search = wrapper.find('[data-test="rt-search"]');
 
-    // "7" must not substring-match RT 17, 27, 37, 70, 71, …
+    // "7" covers RT 7 and RT 70–79, but not RT 17 or 27.
     await search.setValue('7');
-    const rows = wrapper.findAll('tbody th[scope="row"]');
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.text()).toBe('7');
+    const firstPage = wrapper.findAll('tbody th[scope="row"]');
+    expect(firstPage).toHaveLength(DEFAULT_PAGE_SIZE);
+    expect(firstPage[0]?.text()).toBe('7');
+    expect(wrapper.find('[data-test="rt-count"]').text()).toBe('Menampilkan 19 dari 100 RT');
 
     await search.setValue('70');
     expect(wrapper.findAll('tbody th[scope="row"]')).toHaveLength(1);
@@ -621,7 +623,8 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
           leaders: [
             ...buildRoster().slice(0, 2),
             { rtNumber: 3, name: '', phone: '08120000003', phoneIsWhatsapp: true },
-            { rtNumber: 4, phone: '08120000004', phoneIsWhatsapp: true },
+            { rtNumber: 4, name: 42, phone: '08120000004', phoneIsWhatsapp: true },
+            { rtNumber: 5, name: 'Tanpa telepon', phone: null, phoneIsWhatsapp: true },
           ],
           total: 4,
         }),
@@ -630,8 +633,8 @@ describe('KetuaRtView accessibility, search, and contact rendering', () => {
 
     const wrapper = await mountReady();
 
-    // The malformed rows are dropped instead of throwing on a missing name.
-    expect(wrapper.findAll('tbody th[scope="row"]')).toHaveLength(2);
+    // Rows with an empty name stay visible; unusable fields are dropped.
+    expect(wrapper.findAll('tbody th[scope="row"]')).toHaveLength(3);
     expect(wrapper.find('[data-test="rt-rejected"]').text()).toContain(
       '2 baris data tidak lengkap',
     );

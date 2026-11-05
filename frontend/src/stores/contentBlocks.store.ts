@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { useAuthStore } from './auth';
-import { getCsrfToken } from '../utils/csrf';
+import { apiRequestJson } from '../utils/apiClient';
 import { PUBLICATIONS } from '../content/publikasi';
 import { SOTK_MEMBERS } from '../content/tentang';
 
@@ -123,25 +122,12 @@ export const DEFAULT_CONTENT_BLOCKS: Record<string, ContentBlock> = {
 };
 
 export const useContentBlocksStore = defineStore('contentBlocks', () => {
-  const authStore = useAuthStore();
   const blocks = ref<Record<string, ContentBlock>>({ ...DEFAULT_CONTENT_BLOCKS });
   const isLoading = ref(false);
   const isLoaded = ref(false);
   const error = ref<string | null>(null);
 
   let inFlight: Promise<void> | null = null;
-
-  async function getAuthHeaders(): Promise<Record<string, string>> {
-    const csrfToken = await getCsrfToken();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'x-csrf-token': csrfToken,
-    };
-    if (authStore.accessToken) {
-      headers['Authorization'] = `Bearer ${authStore.accessToken}`;
-    }
-    return headers;
-  }
 
   const hero = computed<ContentBlock>(() => blocks.value['landing-hero'] ?? DEFAULT_HERO_BLOCK);
   const sambutanLurah = computed<ContentBlock>(
@@ -197,20 +183,13 @@ export const useContentBlocksStore = defineStore('contentBlocks', () => {
     slug: string,
     payload: { title?: string | null; body?: string; metadata?: Record<string, unknown> | null },
   ): Promise<ContentBlock> {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`/api/content-blocks/${encodeURIComponent(slug)}`, {
-      method: 'PATCH',
-      headers,
-      credentials: 'include',
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errJson = (await response.json().catch(() => ({}))) as { error?: string };
-      throw new Error(errJson.error || 'Gagal memperbarui blok konten');
-    }
-
-    const data = (await response.json()) as { block: ContentBlock };
+    const data = await apiRequestJson<{ block: ContentBlock }>(
+      `/api/content-blocks/${encodeURIComponent(slug)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      },
+    );
     blocks.value = {
       ...blocks.value,
       [data.block.slug]: data.block,

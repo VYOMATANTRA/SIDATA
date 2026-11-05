@@ -33,8 +33,29 @@ export const useMapsStore = defineStore('maps', () => {
       if (requestId !== loadPointsRequest) return;
       points.value = fetched;
       if (selectedPoint.value) {
-        const fresh = points.value.find((p) => p.id === selectedPoint.value?.id) ?? null;
-        void selectPoint(fresh);
+        const previous = selectedPoint.value;
+        const fresh = points.value.find((p) => p.id === previous.id) ?? null;
+        if (!fresh) {
+          clearSelection();
+        } else {
+          selectedPoint.value = fresh;
+          const sameRt = fresh.rts[0] === previous.rts[0] && fresh.type === previous.type;
+          if (!sameRt) {
+            void selectPoint(fresh);
+          } else if (fresh.rtLeader) {
+            selectedLeader.value = {
+              ...fresh.rtLeader,
+              coordinates: {
+                latitude: fresh.latitude,
+                longitude: fresh.longitude,
+                pointId: fresh.id,
+              },
+              createdAt: fresh.createdAt,
+              updatedAt: fresh.updatedAt,
+            };
+            selectedLeaderError.value = null;
+          }
+        }
       }
     } catch (err) {
       if (requestId !== loadPointsRequest) return;

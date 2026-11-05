@@ -38,7 +38,6 @@ function isRtLeader(value: unknown): value is RtLeader {
     typeof candidate.rtNumber === 'number' &&
     Number.isFinite(candidate.rtNumber) &&
     typeof candidate.name === 'string' &&
-    candidate.name.trim() !== '' &&
     typeof candidate.phone === 'string' &&
     typeof candidate.phoneIsWhatsapp === 'boolean'
   );

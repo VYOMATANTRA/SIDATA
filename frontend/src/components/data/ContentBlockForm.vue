@@ -197,9 +197,10 @@ const fieldErrors = computed<Record<string, string | undefined>>(() => {
       profilRtCount.value === undefined ||
       Number.isNaN(Number(profilRtCount.value)) ||
       Number(profilRtCount.value) < 1 ||
+      Number(profilRtCount.value) > 1000 ||
       !Number.isInteger(Number(profilRtCount.value))
     ) {
-      errors.rtCount = 'Jumlah RT harus berupa bilangan bulat positif (minimal 1).';
+      errors.rtCount = 'Jumlah RT harus berupa bilangan bulat antara 1 dan 1000.';
     }
     if (!profilKecamatan.value.trim()) {
       errors.kecamatan = 'Kecamatan tidak boleh kosong.';

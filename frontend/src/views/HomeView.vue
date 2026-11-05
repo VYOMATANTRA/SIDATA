@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/auth';
 import { useSettingsStore } from '../stores/settings.store';
 import { useContentBlocksStore } from '../stores/contentBlocks.store';
 import { useIndicatorsStore } from '../stores/indicators.store';
+import { useLogout } from '../composables/useLogout';
 import AppNavbar from '../components/common/AppNavbar.vue';
 import AppFooter from '../components/common/AppFooter.vue';
 import SectionHero from '../components/landing/SectionHero.vue';
@@ -120,6 +121,7 @@ const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
 const contentBlocksStore = useContentBlocksStore();
 const indicatorsStore = useIndicatorsStore();
+const { logout } = useLogout();
 
 const isLoggingOut = ref(false);
 const logoutError = ref('');
@@ -142,16 +144,10 @@ async function handleLogout() {
   logoutError.value = '';
 
   try {
-    const result = await authStore.logout();
-
-    if (!result.success) {
-      logoutError.value = result.error || 'Gagal keluar dari sesi. Silakan coba lagi.';
-      return;
+    const result = await logout();
+    if (!result.ok) {
+      logoutError.value = result.error;
     }
-
-    await router.push('/login');
-  } catch {
-    logoutError.value = 'Terjadi kesalahan tidak terduga saat keluar. Silakan coba lagi.';
   } finally {
     isLoggingOut.value = false;
   }

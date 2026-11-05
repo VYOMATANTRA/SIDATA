@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import { RouterLink } from 'vue-router';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import BaseButton from '../components/common/BaseButton.vue';
 import BaseModal from '../components/common/BaseModal.vue';
 import IndicatorCard, { type IndicatorCardModel } from '../components/data/IndicatorCard.vue';
@@ -63,6 +62,28 @@ const availableTabs = computed(() => {
   return tabs;
 });
 
+function selectTab(tab: (typeof availableTabs.value)[number]) {
+  activeTab.value = tab.id;
+  typeFilter.value = 'all';
+  searchQuery.value = '';
+}
+
+async function handleTabKeydown(event: KeyboardEvent, index: number) {
+  const tabs = availableTabs.value;
+  let nextIndex: number | null = null;
+  if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
+  if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length;
+  if (event.key === 'Home') nextIndex = 0;
+  if (event.key === 'End') nextIndex = tabs.length - 1;
+  if (nextIndex === null) return;
+  event.preventDefault();
+  const next = tabs[nextIndex];
+  if (!next) return;
+  selectTab(next);
+  await nextTick();
+  document.getElementById(`tab-${next.id}`)?.focus();
+}
+
 const activeScalar = ref<Indicator | null>(null);
 const activeTableId = ref<string | null>(null);
 const activeTable = ref<IndicatorTableDetail | null>(null);
@@ -101,38 +122,37 @@ function compareCards(a: IndicatorCardModel, b: IndicatorCardModel): number {
   const pageB = b.kicker ?? '\uffff';
   const byPage = pageA.localeCompare(pageB, 'id');
   if (byPage !== 0) return byPage;
-  if (a.type !== b.type) return a.type === 'skalar' ? -1 : b.type === 'skalar' ? 1 : a.type.localeCompare(b.type, 'id');
+  if (a.type !== b.type)
+    return a.type === 'skalar' ? -1 : b.type === 'skalar' ? 1 : a.type.localeCompare(b.type, 'id');
   return a.title.localeCompare(b.title, 'id');
 }
 
 const cards = computed<IndicatorCardModel[]>(() => {
-  const scalarCards: IndicatorCardModel[] = indicatorsStore.indicators.map(
-    (indicator: Indicator) => {
-      const stats = [
-        {
-          label: `Nilai Sekarang (${indicator.periodCurrent})`,
-          value: formatDecimalId(indicator.valueCurrent),
-        },
-      ];
-      if (indicator.valuePrevious !== null) {
-        stats.push({
-          label: `Nilai Lalu (${indicator.periodPrevious ?? '—'})`,
-          value: formatDecimalId(indicator.valuePrevious),
-        });
-      }
-      return {
-        id: indicator.id,
-        type: 'skalar',
-        title: indicator.label,
-        kicker: pagesStore.pageTitleFor(indicator.sectionId),
-        sectionLabel: pagesStore.labelFor(indicator.sectionId),
-        stats,
-        source: indicator.source,
-        hedgeNote: indicator.hedgeNote,
-        isStale: indicator.isStale,
-      };
-    },
-  );
+  const scalarCards: IndicatorCardModel[] = indicatorsStore.indicators.map((indicator) => {
+    const stats = [
+      {
+        label: `Nilai Sekarang (${indicator.periodCurrent})`,
+        value: formatDecimalId(indicator.valueCurrent),
+      },
+    ];
+    if (indicator.valuePrevious !== null) {
+      stats.push({
+        label: `Nilai Lalu (${indicator.periodPrevious ?? '—'})`,
+        value: formatDecimalId(indicator.valuePrevious),
+      });
+    }
+    return {
+      id: indicator.id,
+      type: 'skalar',
+      title: indicator.label,
+      kicker: pagesStore.pageTitleFor(indicator.sectionId),
+      sectionLabel: pagesStore.labelFor(indicator.sectionId),
+      stats,
+      source: indicator.source,
+      hedgeNote: indicator.hedgeNote,
+      isStale: indicator.isStale,
+    };
+  });
 
   const tableCards: IndicatorCardModel[] = tablesStore.tables.map((table: IndicatorTable) => ({
     id: table.id,
@@ -249,7 +269,9 @@ async function loadAll(): Promise<void> {
   ]);
 }
 
-onMounted(loadAll);
+onMounted(() => {
+  void loadAll();
+});
 
 function openScalar(indicator: Indicator): void {
   serverError.value = '';
@@ -274,7 +296,7 @@ function handleEdit(card: IndicatorCardModel): void {
   isEditingSettings.value = false;
 
   if (card.type === 'skalar') {
-    const indicator = indicatorsStore.indicators.find((item: Indicator) => item.id === card.id);
+    const indicator = indicatorsStore.indicators.find((item) => item.id === card.id);
     if (indicator) openScalar(indicator);
     return;
   }
@@ -296,8 +318,8 @@ function handleEdit(card: IndicatorCardModel): void {
   if (card.type === 'pengaturan') {
     if (!authStore.isAdmin) return;
     if (settingsStore.error || !settingsStore.isLoaded) {
-      serverError.value = settingsStore.error
-        || 'Pengaturan publik belum siap. Muat ulang halaman lalu coba lagi.';
+      serverError.value =
+        settingsStore.error || 'Pengaturan publik belum siap. Muat ulang halaman lalu coba lagi.';
       return;
     }
     isEditingSettings.value = true;
@@ -408,194 +430,141 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col bg-slate-50">
-    <!-- Skip link, docs/ACCESSIBILITY.md §3 (2.4.1) -->
-    <a
-      href="#main-content"
-      class="focus:bg-brand-navy focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-xl focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg"
+  <div>
+    <div class="mt-6 flex border-b border-slate-200" role="tablist" aria-label="Kategori CMS">
+      <button
+        v-for="tab in availableTabs"
+        :key="tab.id"
+        :id="`tab-${tab.id}`"
+        type="button"
+        role="tab"
+        :aria-selected="activeTab === tab.id"
+        :aria-controls="`panel-${tab.id}`"
+        class="border-b-2 px-4 py-2.5 text-sm font-medium transition-colors"
+        :class="
+          activeTab === tab.id
+            ? 'border-brand-navy text-brand-navy font-semibold'
+            : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
+        "
+        :data-test="`tab-${tab.id}`"
+        @click="
+          activeTab = tab.id;
+          typeFilter = 'all';
+          searchQuery = '';
+        "
+      >
+        {{ tab.label }}
+      </button>
+    </div>
+
+    <div class="mt-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <form
+        role="search"
+        aria-label="Saring daftar data"
+        class="flex w-full flex-col gap-3 sm:flex-row sm:items-end md:w-auto"
+        @submit.prevent
+      >
+        <div class="w-full sm:w-72">
+          <label for="data-search" class="block text-xs font-medium text-slate-600">
+            Cari data
+          </label>
+          <input
+            id="data-search"
+            v-model="searchQuery"
+            type="search"
+            placeholder="Nama indikator, halaman, atau sumber"
+            :class="INPUT_CLASSES"
+            class="mt-1"
+          />
+        </div>
+
+        <div v-if="activeTab === 'indikator'" class="w-full sm:w-52">
+          <label for="data-type" class="block text-xs font-medium text-slate-600">
+            Tipe data
+          </label>
+          <select id="data-type" v-model="typeFilter" :class="INPUT_CLASSES" class="mt-1">
+            <option value="all">Semua Tipe Data</option>
+            <option value="skalar">Skalar</option>
+            <option value="matriks">Matriks</option>
+          </select>
+        </div>
+      </form>
+
+      <p class="text-xs text-slate-600 md:text-right" aria-live="polite" data-test="result-count">
+        Menampilkan {{ filteredCards.length }} dari {{ cards.length }} data
+      </p>
+    </div>
+
+    <div
+      v-if="loadError"
+      role="alert"
+      class="rounded-card mt-6 border border-rose-300 bg-rose-50 px-4 py-3"
     >
-      Lewati ke konten utama
-    </a>
+      <p class="text-sm font-medium text-rose-900">{{ loadError }}</p>
+      <BaseButton variant="secondary" size="sm" class="mt-3" @click="loadAll">
+        Coba muat ulang
+      </BaseButton>
+    </div>
 
-    <header class="border-b border-slate-200 bg-white">
-      <div
-        class="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8"
+    <p
+      v-if="pagesStore.hierarchyError"
+      class="rounded-card mt-4 border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900"
+    >
+      Struktur halaman tidak dapat dimuat, jadi asal halaman tiap data tidak ditampilkan. Daftar
+      data tetap dapat diedit.
+    </p>
+
+    <div role="tabpanel" :id="`panel-${activeTab}`" :aria-labelledby="`tab-${activeTab}`">
+      <p
+        v-if="isLoading && cards.length === 0"
+        class="mt-10 text-sm text-slate-600"
+        aria-live="polite"
       >
-        <RouterLink
-          to="/"
-          class="focus-visible:outline-brand-navy rounded-btn text-brand-navy inline-flex items-center gap-2 px-2 py-1 text-sm font-medium transition-colors hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          <svg
-            class="h-4 w-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M19 12H5M12 19l-7-7 7-7" />
-          </svg>
-          Beranda
-        </RouterLink>
+        Memuat data…
+      </p>
 
-        <span
-          class="bg-brand-navy/5 text-brand-navy rounded-full px-3 py-1 text-xs font-semibold tracking-wide uppercase"
-        >
-          Editor / Admin
-        </span>
-      </div>
-    </header>
-
-    <main id="main-content" class="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
-      <div>
-        <p class="text-xs font-semibold tracking-widest text-slate-500 uppercase">
-          CMS Data &amp; Konten
+      <div
+        v-else-if="filteredCards.length === 0"
+        class="rounded-card mt-10 border border-dashed border-slate-300 bg-white px-6 py-12 text-center"
+      >
+        <p class="text-base font-semibold text-slate-800">
+          {{ cards.length === 0 ? 'Belum ada data indikator' : 'Tidak ada data yang cocok' }}
         </p>
-        <h1 class="text-brand-navy mt-1 text-xl font-bold">Data &amp; Konten Portal</h1>
-        <p class="mt-1 max-w-2xl text-sm text-slate-600">
-          Kelola angka indikator skalar, tabel matriks, narasi blok konten, dan pengaturan publik
-          portal.
+        <p class="mx-auto mt-2 max-w-md text-sm text-slate-600">
+          <template v-if="cards.length === 0">
+            Data indikator dan tabel matriks belum tersedia untuk lingkungan ini. Setelah datanya
+            diisi, kartunya akan muncul di sini dan bisa diedit.
+          </template>
+          <template v-else>
+            Ubah kata kunci pencarian atau pilih tipe data lain untuk melihat data yang lain.
+          </template>
         </p>
-      </div>
-
-      <div class="mt-6 flex border-b border-slate-200" role="tablist" aria-label="Kategori CMS">
-        <button
-          v-for="tab in availableTabs"
-          :key="tab.id"
-          :id="`tab-${tab.id}`"
-          type="button"
-          role="tab"
-          :aria-selected="activeTab === tab.id"
-          :aria-controls="`panel-${tab.id}`"
-          class="border-b-2 px-4 py-2.5 text-sm font-medium transition-colors"
-          :class="
-            activeTab === tab.id
-              ? 'border-brand-navy text-brand-navy font-semibold'
-              : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
-          "
-          :data-test="`tab-${tab.id}`"
+        <BaseButton
+          v-if="cards.length > 0"
+          variant="secondary"
+          size="sm"
+          class="mt-4"
           @click="
-            activeTab = tab.id;
-            typeFilter = 'all';
             searchQuery = '';
+            typeFilter = 'all';
           "
         >
-          {{ tab.label }}
-        </button>
-      </div>
-
-      <div class="mt-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <form
-          role="search"
-          aria-label="Saring daftar data"
-          class="flex w-full flex-col gap-3 sm:flex-row sm:items-end md:w-auto"
-          @submit.prevent
-        >
-          <div class="w-full sm:w-72">
-            <label for="data-search" class="block text-xs font-medium text-slate-600">
-              Cari data
-            </label>
-            <input
-              id="data-search"
-              v-model="searchQuery"
-              type="search"
-              placeholder="Nama indikator, halaman, atau sumber"
-              :class="INPUT_CLASSES"
-              class="mt-1"
-            />
-          </div>
-
-          <div v-if="activeTab === 'indikator'" class="w-full sm:w-52">
-            <label for="data-type" class="block text-xs font-medium text-slate-600">
-              Tipe data
-            </label>
-            <select id="data-type" v-model="typeFilter" :class="INPUT_CLASSES" class="mt-1">
-              <option value="all">Semua Tipe Data</option>
-              <option value="skalar">Skalar</option>
-              <option value="matriks">Matriks</option>
-            </select>
-          </div>
-        </form>
-
-        <p class="text-xs text-slate-600 md:text-right" aria-live="polite" data-test="result-count">
-          Menampilkan {{ filteredCards.length }} dari {{ cards.length }} data
-        </p>
-      </div>
-
-      <div
-        v-if="loadError"
-        role="alert"
-        class="rounded-card mt-6 border border-rose-300 bg-rose-50 px-4 py-3"
-      >
-        <p class="text-sm font-medium text-rose-900">{{ loadError }}</p>
-        <BaseButton variant="secondary" size="sm" class="mt-3" @click="loadAll">
-          Coba muat ulang
+          Kosongkan filter
         </BaseButton>
       </div>
 
-      <p
-        v-if="pagesStore.hierarchyError"
-        class="rounded-card mt-4 border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900"
-      >
-        Struktur halaman tidak dapat dimuat, jadi asal halaman tiap data tidak ditampilkan. Daftar
-        data tetap dapat diedit.
-      </p>
+      <template v-else>
+        <h2 class="sr-only">Daftar data</h2>
 
-      <div role="tabpanel" :id="`panel-${activeTab}`" :aria-labelledby="`tab-${activeTab}`">
-        <p
-          v-if="isLoading && cards.length === 0"
-          class="mt-10 text-sm text-slate-600"
-          aria-live="polite"
-        >
-          Memuat data…
-        </p>
+        <ul class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <li v-for="card in filteredCards" :key="`${card.type}-${card.id}`" class="h-full">
+            <IndicatorCard :card="card" @edit="handleEdit(card)" />
+          </li>
+        </ul>
+      </template>
+    </div>
 
-        <div
-          v-else-if="filteredCards.length === 0"
-          class="rounded-card mt-10 border border-dashed border-slate-300 bg-white px-6 py-12 text-center"
-        >
-          <p class="text-base font-semibold text-slate-800">
-            {{ cards.length === 0 ? 'Belum ada data indikator' : 'Tidak ada data yang cocok' }}
-          </p>
-          <p class="mx-auto mt-2 max-w-md text-sm text-slate-600">
-            <template v-if="cards.length === 0">
-              Data indikator dan tabel matriks belum tersedia untuk lingkungan ini. Setelah datanya
-              diisi, kartunya akan muncul di sini dan bisa diedit.
-            </template>
-            <template v-else>
-              Ubah kata kunci pencarian atau pilih tipe data lain untuk melihat data yang lain.
-            </template>
-          </p>
-          <BaseButton
-            v-if="cards.length > 0"
-            variant="secondary"
-            size="sm"
-            class="mt-4"
-            @click="
-              searchQuery = '';
-              typeFilter = 'all';
-            "
-          >
-            Kosongkan filter
-          </BaseButton>
-        </div>
-
-        <template v-else>
-          <h2 class="sr-only">Daftar data</h2>
-
-          <ul class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <li v-for="card in filteredCards" :key="`${card.type}-${card.id}`" class="h-full">
-              <IndicatorCard :card="card" @edit="handleEdit(card)" />
-            </li>
-          </ul>
-        </template>
-      </div>
-
-      <p class="sr-only" aria-live="polite">{{ statusMessage }}</p>
-    </main>
-
+    <p class="sr-only" aria-live="polite">{{ statusMessage }}</p>
     <BaseModal
       :open="isEditorOpen"
       :title="modalTitle"

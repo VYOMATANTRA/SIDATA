@@ -4,10 +4,7 @@ import FormField from '../common/FormField.vue';
 import FormErrorSummary from '../common/FormErrorSummary.vue';
 import BaseButton from '../common/BaseButton.vue';
 import type { PublicSettings } from '../../stores/settings.store';
-import {
-  MANGGAR_MAP_ORIGIN,
-  MANGGAR_MAP_DEFAULT_ZOOM,
-} from '../../constants/mapOrigin';
+import { MANGGAR_MAP_ORIGIN, MANGGAR_MAP_DEFAULT_ZOOM } from '../../constants/mapOrigin';
 import { INPUT_CLASSES } from '../../utils/formStyles';
 
 export interface PublicSettingsFormProps {
@@ -91,7 +88,8 @@ const fieldErrors = computed<Record<string, string | undefined>>(() => {
     zoom.value === null ||
     Number.isNaN(Number(zoom.value)) ||
     Number(zoom.value) < 1 ||
-    Number(zoom.value) > 20
+    Number(zoom.value) > 20 ||
+    !Number.isInteger(Number(zoom.value))
   ) {
     errors.zoom = 'Zoom harus berupa bilangan bulat antara 1 dan 20.';
   }
@@ -137,7 +135,7 @@ function handleSubmit(): void {
     defaultCoordinates: {
       lat: Number(lat.value),
       lon: Number(lon.value),
-      zoom: Math.round(Number(zoom.value)),
+      zoom: Number(zoom.value),
     },
   });
 }
