@@ -10,6 +10,7 @@ defineProps<Props>();
 
 const isOpen = ref(false);
 const dropdownRef = ref<HTMLElement | null>(null);
+const triggerBtnRef = ref<HTMLButtonElement | null>(null);
 
 function toggleDropdown() {
   isOpen.value = !isOpen.value;
@@ -25,6 +26,7 @@ function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && isOpen.value) {
     event.preventDefault();
     isOpen.value = false;
+    triggerBtnRef.value?.focus();
   }
 }
 
@@ -48,11 +50,12 @@ onUnmounted(() => {
   >
     <!-- Dropdown Trigger Button -->
     <button
+      ref="triggerBtnRef"
       type="button"
       class="text-brand-navy inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200/90 bg-white/95 px-3.5 py-2 text-sm font-medium shadow-md backdrop-blur-md transition-all hover:bg-white"
       :class="{ 'ring-brand-indigo/30 border-brand-indigo ring-2': isOpen }"
-      aria-haspopup="true"
       :aria-expanded="isOpen"
+      aria-controls="map-summary-panel"
       @click="toggleDropdown"
     >
       <span>Ringkasan Data</span>
@@ -78,6 +81,7 @@ onUnmounted(() => {
     >
       <div
         v-if="isOpen"
+        id="map-summary-panel"
         class="absolute right-0 z-50 mt-2 w-64 max-w-[calc(100vw-2rem)] divide-y divide-slate-100 rounded-2xl border border-slate-200/90 bg-white/95 p-3.5 text-sm shadow-xl backdrop-blur-md"
       >
         <div class="pb-2.5">
