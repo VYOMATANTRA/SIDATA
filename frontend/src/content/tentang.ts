@@ -9,9 +9,6 @@ export const KECAMATAN = 'Balikpapan Timur';
 // TODO: move to CMS
 export const KOTA = 'Kota Balikpapan';
 
-// TODO: move to CMS
-export const LANDSCAPE = 'Pesisir & Dataran';
-
 export interface BatasWilayahItem {
   arah: string;
   wilayah: string;

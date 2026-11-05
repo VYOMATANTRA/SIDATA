@@ -476,8 +476,13 @@ Provides three tabbed operational interfaces:
 **Dynamic View & Component Integration:**
 - **`AppFooter`**: Dynamically reflects verified public contact numbers (`contactPhone`) and office address lines (`contactAddress`) from `settingsStore` when loaded, falling back gracefully to static defaults. The `/publikasi` link in the "Sumber Daya" navigation is always included to provide public access to municipal reports and booklets.
 - **`InteractiveMap` & `PetaView`**: `PetaView` resolves `settingsStore.defaultCoordinates` once and passes the initial centre/zoom to `InteractiveMap`; the map applies a late settings change only before point framing or user interaction. Distance calculations in `PetaView` measure from this dynamic kelurahan coordinate origin when browser geolocation is unavailable or ungranted, with the shared Manggar constant only as an offline fallback.
-- **`TentangKelurahanManggarView`**: Dynamically renders profile metrics (RT count, kecamatan, kota, landscape), administrative boundaries, and SOTK officials from the `tentang-kelurahan-profil` content block, falling back to verified constants in `content/tentang.ts`.
+- **`TentangKelurahanManggarView`**: Dynamically renders profile metrics (RT count, kecamatan, kota), administrative boundaries, and SOTK officials from the `tentang-kelurahan-profil` content block, falling back to verified constants in `content/tentang.ts`.
 - **`PublikasiView`**: Dynamically renders publication entries from the `publikasi-katalog` content block, falling back to `content/publikasi.ts`. Documents with verified `href` URLs expose direct download actions, while others display the honest "Segera hadir" status.
+
+The `/permintaan-data` guide cites UU 14/2008 Pasal 22 ayat (7)–(8) for the 10+7 working-day
+PPID reply window, Pasal 35 ayat (1) and Pasal 36 for the objection windows, and Pasal 37–38
+with PerKI No. 1/2013 Pasal 13 for disputes. The local PPID SOP is a procedure reference, not a
+substitute for the statute.
 
 The Kelurahan Manggar profile publishes **Kelurahan Karang Joang** only as its northern
 administrative boundary, following the 2025 boundary table in `Manggar Dalam Angka 2026`
@@ -559,10 +564,3 @@ Single register — unresolved questions live here and nowhere else.
   the same fields to both entry points. Confirm with the kelurahan whether the directory is
   published as-is, or needs a reduced field set (for example address withheld, or contact only on
   request). Any reduced public field set must be enforced at the API, not only hidden in one view.
-- **Permintaan Data / UU 14/2008 citations (settled 2026-10-30):** Public copy on `/permintaan-data`
-  uses Pasal 22 ayat (7)–(8) for the 10+7 working-day PPID reply window; Pasal 35 ayat (1) for
-  keberatan grounds; Pasal 36 ayat (1) for the 30 working-day window to *file* keberatan; Pasal 36
-  ayat (2) for the 30 working-day *atasan PPID* reply; Pasal 37–38 (+ PerKI No. 1/2013 Pasal 13)
-  for sengketa to Komisi Informasi. Verified against pasal.id Pasal 35–36 pages and the UU 14/2008
-  text mirrors at Bank Indonesia and e-PPID Komisi Informasi (links in the PR / this bullet).
-  SOP PPID Balikpapan remains a local procedure reference alongside the statute — not a substitute.
