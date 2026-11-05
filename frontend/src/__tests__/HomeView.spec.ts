@@ -531,7 +531,7 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
                 slug: 'kependudukan-total',
                 label: 'Jumlah Penduduk Resmi',
                 unit: 'jiwa',
-                valueCurrent: '53.120',
+                valueCurrent: '53120',
                 pageSlug: 'kependudukan',
                 sortOrder: 1,
               },
