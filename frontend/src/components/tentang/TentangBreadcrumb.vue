@@ -4,11 +4,12 @@ import { RouterLink } from 'vue-router';
 withDefaults(
   defineProps<{
     label: string;
-    /** Parent crumb label. Defaults to the Tentang hub. */
+    /** Parent crumb label. Defaults to 'Tentang'. */
     parentLabel?: string;
+    /** Parent crumb destination. When omitted, parent is rendered as plain text. */
     parentTo?: string;
   }>(),
-  { parentLabel: 'Tentang', parentTo: '/tentang' },
+  { parentLabel: 'Tentang', parentTo: undefined },
 );
 </script>
 
@@ -17,11 +18,15 @@ withDefaults(
     <ol class="mx-auto flex max-w-5xl items-center gap-2 text-base">
       <li>
         <RouterLink
+          v-if="parentTo"
           :to="parentTo"
           class="text-brand-navy focus-visible:outline-brand-navy font-medium hover:underline focus-visible:underline focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           {{ parentLabel }}
         </RouterLink>
+        <span v-else class="text-gray-500 font-medium">
+          {{ parentLabel }}
+        </span>
       </li>
       <li aria-hidden="true" class="text-gray-400">&gt;</li>
       <li>
