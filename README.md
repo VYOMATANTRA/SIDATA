@@ -151,6 +151,13 @@ Checklist for a new environment (Docker on a VPS). Background: [`AGENTS.md`](AGE
      `0 3 * * * cd /path/to/SIDATA/backend && npx tsx scripts/prune-audit-logs.ts >> /var/log/sidata-prune.log 2>&1`
      (needs `AUDIT_ADMIN_DATABASE_URL` and the other required backend variables in the root `.env`, and `npx` on cron's `PATH`).
 5. If behind a reverse proxy, set `TRUST_PROXY`.
+6. **Database initialization vs. upgrade runbook:**
+   - **Fresh installation:** Run `npx prisma db seed` with `NODE_ENV=production`. In production, seeding initializes 100 empty RT slots (`rtNumber` 1–100 with blank names/contacts and no spatial points) and initializes `maps.rt_leaders_sample_roster` to `false`. Real leader names, contacts, and coordinates must be entered through the CMS manual editor or imported via CSV.
+   - **Upgrading an existing database previously seeded with sample/dev data:** Because seeding uses `update: {}` to prevent overwriting existing rows, previously seeded synthetic records or points will survive a re-seed. Before public release, operators must verify whether recognized legacy synthetic records remain. If present, run the maintenance cleanup command from `backend/` during an authorized maintenance window with production configuration:
+     ```bash
+     npm run dev:cleanup-sample-rt -- --force
+     ```
+     This cleanup is fingerprint-limited: it resets recognized synthetic placeholder rows, removes synthetic RT points, preserves editor-modified rows, and writes a count-only audit log in the same transaction. Synthetic data that does not match narrow legacy fingerprints will not be automatically cleared; operators must verify and maintain the appropriate `maps.rt_leaders_sample_roster` flag in the Admin CMS until data is verified.
 
 ## Public Content Sources
 
