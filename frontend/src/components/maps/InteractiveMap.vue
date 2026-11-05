@@ -172,12 +172,14 @@ function activateCluster(cluster: L.MarkerCluster) {
 /**
  * Keyboard activation is delegated from the map container, so it keeps working
  * after Leaflet regenerates cluster icons on zoom, filter, and spiderfy changes.
+ * Leaflet already gives the cluster wrapper itself role="button" and tabindex="0";
+ * the inner markup stays presentation-only so each cluster has one tab stop.
  */
-function clusterForActivator(activator: HTMLElement): L.MarkerCluster | null {
+function clusterForElement(element: HTMLElement): L.MarkerCluster | null {
   let found: L.MarkerCluster | null = null;
   map?.eachLayer((layer) => {
     const cluster = layer as L.MarkerCluster;
-    if (typeof cluster.getChildCount === 'function' && cluster.getElement()?.contains(activator)) {
+    if (typeof cluster.getChildCount === 'function' && cluster.getElement() === element) {
       found = cluster;
     }
   });
@@ -186,11 +188,9 @@ function clusterForActivator(activator: HTMLElement): L.MarkerCluster | null {
 
 function handleClusterKeydown(event: KeyboardEvent) {
   if (event.key !== 'Enter' && event.key !== ' ') return;
-  const activator = (event.target as HTMLElement | null)?.closest<HTMLElement>(
-    '[data-cluster-activator]',
-  );
-  if (!activator) return;
-  const cluster = clusterForActivator(activator);
+  const clusterElement = (event.target as HTMLElement | null)?.closest<HTMLElement>('.map-cluster');
+  if (!clusterElement) return;
+  const cluster = clusterForElement(clusterElement);
   if (!cluster) return;
   event.preventDefault();
   event.stopPropagation();
@@ -292,7 +292,7 @@ onMounted(() => {
       iconCreateFunction: (cluster) => {
         const count = cluster.getChildCount();
         return L.divIcon({
-          html: `<span class="map-cluster__activator" data-cluster-activator role="button" tabindex="0" aria-label="Kelompok ${count} titik, tekan Enter atau Spasi untuk memperbesar"><span class="map-cluster__count" aria-hidden="true">${count}</span></span>`,
+          html: `<span class="map-cluster__count" aria-hidden="true">${count}</span><span class="sr-only">Kelompok ${count} titik, tekan Enter atau Spasi untuk memperbesar</span>`,
           className: 'map-cluster',
           iconSize: [42, 42],
         });
@@ -417,15 +417,7 @@ onUnmounted(() => {
   font-variant-numeric: tabular-nums;
 }
 
-.map-cluster__activator {
-  display: grid;
-  width: 100%;
-  height: 100%;
-  place-items: center;
-  border-radius: 50%;
-}
-
-.map-cluster__activator:focus-visible {
+.map-cluster:focus-visible {
   outline: 3px solid #0a2353;
   outline-offset: 3px;
 }
