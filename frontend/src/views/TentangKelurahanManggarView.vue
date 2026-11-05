@@ -11,6 +11,7 @@ import TentangFeatureBand from '../components/tentang/TentangFeatureBand.vue';
 import TentangResourceCard from '../components/tentang/TentangResourceCard.vue';
 import StatCard, { type StatItem } from '../components/common/StatCard.vue';
 import { useIndicatorsStore } from '../stores/indicators.store';
+import { useContentBlocksStore } from '../stores/contentBlocks.store';
 import type { TentangIconName } from '../components/tentang/TentangIcon.vue';
 import {
   RT_COUNT,
@@ -21,6 +22,8 @@ import {
   LURAH_OFFICIAL,
   SOTK_SOURCE_CITATION,
   BOUNDARY_SOURCE_CITATION,
+  type BatasWilayahItem,
+  type SotkMember,
 } from '../content/tentang';
 import heroImage from '@/assets/img/background_laman_depan_kelurahan.webp';
 
@@ -56,11 +59,55 @@ const potentials: PotentialItem[] = [
 const POPULATION_INDICATOR_SLUG = 'jumlah-penduduk';
 
 const indicatorsStore = useIndicatorsStore();
+const contentBlocksStore = useContentBlocksStore();
 const router = useRouter();
 const hasMapRoute = computed(() => router.getRoutes().some((route) => route.path === '/peta'));
 
 onMounted(() => {
   void indicatorsStore.fetchBySlug(POPULATION_INDICATOR_SLUG);
+  void contentBlocksStore.fetchBlocks();
+});
+
+const profileMetadata = computed(() => {
+  return contentBlocksStore.tentangProfil.metadata as Record<string, unknown> | null;
+});
+
+const rtCount = computed(() => Number(profileMetadata.value?.rtCount ?? RT_COUNT));
+const kecamatan = computed(() => String(profileMetadata.value?.kecamatan ?? KECAMATAN));
+const kota = computed(() => String(profileMetadata.value?.kota ?? KOTA));
+
+const batasWilayah = computed<BatasWilayahItem[]>(() => {
+  const custom = profileMetadata.value?.batasWilayah;
+  if (Array.isArray(custom) && custom.length > 0) return custom as BatasWilayahItem[];
+  return BATAS_WILAYAH;
+});
+
+const hasCustomSotkRoster = computed(() => Array.isArray(profileMetadata.value?.sotkMembers));
+
+const sotkMembers = computed<SotkMember[]>(() => {
+  const custom = profileMetadata.value?.sotkMembers;
+  if (Array.isArray(custom)) return custom as SotkMember[];
+  return SOTK_MEMBERS;
+});
+
+const lurahOfficial = computed<SotkMember | undefined>(() => {
+  return sotkMembers.value.find((m) => m.role.trim().toLowerCase() === 'lurah');
+});
+
+const lurahDisplayName = computed(() => {
+  const fromRow = lurahOfficial.value?.officialName;
+  if (typeof fromRow === 'string' && fromRow.trim()) return fromRow.trim();
+  const saved = profileMetadata.value?.lurahName;
+  if (typeof saved === 'string' && saved.trim()) return saved.trim();
+  // An explicit roster without a Lurah row must not resurrect the static default.
+  if (hasCustomSotkRoster.value) return 'Nama pejabat belum tersedia';
+  return LURAH_OFFICIAL?.officialName ?? 'Nama pejabat belum tersedia';
+});
+
+const lurahDisplayTitle = computed(() => {
+  const saved = profileMetadata.value?.lurahTitle;
+  if (typeof saved === 'string' && saved.trim()) return saved.trim();
+  return 'Lurah Kelurahan Manggar';
 });
 
 const populationIndicator = computed(() => {
@@ -97,8 +144,8 @@ const formattedPopulation = computed(() => {
 });
 
 const wilayahStats = computed<StatItem[]>(() => [
-  { icon: 'house', value: String(RT_COUNT), label: 'Rukun Tetangga terdaftar' },
-  { icon: 'density', value: KECAMATAN, label: `Kecamatan, ${KOTA}` },
+  { icon: 'house', value: String(rtCount.value), label: 'Rukun Tetangga terdaftar' },
+  { icon: 'density', value: kecamatan.value, label: `Kecamatan, ${kota.value}` },
   { icon: 'statistics', value: 'Desa Cantik', label: 'Kelurahan Cinta Statistik' },
 ]);
 </script>
@@ -247,7 +294,7 @@ const wilayahStats = computed<StatItem[]>(() => [
           class="flex-1"
         >
           Peta lokasi rumah ketua RT dan bank sampah aktif di Kelurahan Manggar, Kecamatan
-          {{ KECAMATAN }}.
+          {{ kecamatan }}.
           <template v-if="!hasMapRoute" #footer>
             <p data-test="map-card-coming-soon" class="text-sm font-medium text-white">
               Segera hadir
@@ -284,9 +331,9 @@ const wilayahStats = computed<StatItem[]>(() => [
           <div class="flex shrink-0 flex-col items-center text-center sm:w-56">
             <div class="flex flex-col items-center text-center">
               <h3 class="text-brand-navy text-lg font-bold">
-                {{ LURAH_OFFICIAL?.officialName ?? 'Nama pejabat belum tersedia' }}
+                {{ lurahDisplayName }}
               </h3>
-              <p class="mt-0.5 text-sm font-medium text-gray-700">Lurah Kelurahan Manggar</p>
+              <p class="mt-0.5 text-sm font-medium text-gray-700">{{ lurahDisplayTitle }}</p>
               <p class="text-xs text-gray-500">Pemerintah Kelurahan Manggar</p>
               <span
                 class="bg-brand-cyan text-brand-navy mt-2.5 inline-block rounded-[5px] px-3 py-1 text-xs font-semibold"
@@ -300,7 +347,7 @@ const wilayahStats = computed<StatItem[]>(() => [
             <div class="space-y-3 text-base leading-relaxed text-gray-800">
               <p>
                 Sebagai garda terdepan pelayanan pemerintah daerah bagi masyarakat di wilayah
-                {{ KECAMATAN }}, Kelurahan Manggar berupaya menyediakan pelayanan yang ramah,
+                {{ kecamatan }}, Kelurahan Manggar berupaya menyediakan pelayanan yang ramah,
                 akuntabel, dan transparan.
               </p>
               <p>
@@ -310,7 +357,7 @@ const wilayahStats = computed<StatItem[]>(() => [
                 >
                 dan pengembangan portal
                 <strong class="text-brand-navy font-semibold">SIDATA</strong> bersama
-                {{ RT_COUNT }} Rukun Tetangga (RT) diharapkan dapat membantu penyajian informasi
+                {{ rtCount }} Rukun Tetangga (RT) diharapkan dapat membantu penyajian informasi
                 Kelurahan Manggar secara terstruktur dan mendukung pemanfaatan data dalam
                 perencanaan pelayanan masyarakat, seperti dalam program sosial dan penanganan
                 lingkungan.
@@ -337,8 +384,8 @@ const wilayahStats = computed<StatItem[]>(() => [
           <h3 class="text-brand-navy text-base font-bold">Batas-Batas Wilayah Administratif:</h3>
           <ul class="mt-3 flex flex-wrap gap-x-6 gap-y-3 text-base text-gray-800">
             <li
-              v-for="item in BATAS_WILAYAH"
-              :key="item.arah"
+              v-for="(item, index) in batasWilayah"
+              :key="`${item.arah}-${index}`"
               class="flex w-full items-center gap-2 sm:w-[calc(50%-12px)]"
             >
               <span class="text-brand-navy font-medium">{{ item.arah }}:</span>
@@ -376,7 +423,11 @@ const wilayahStats = computed<StatItem[]>(() => [
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-200 bg-white">
-              <tr v-for="member in SOTK_MEMBERS" :key="member.role" class="transition-colors">
+              <tr
+                v-for="(member, index) in sotkMembers"
+                :key="`${member.role}-${index}`"
+                class="transition-colors"
+              >
                 <th scope="row" class="text-brand-navy px-4 py-4 align-top font-semibold sm:px-6">
                   {{ member.role }}
                 </th>

@@ -823,12 +823,7 @@ export const createCoverageSchema = z.object({ rtNumber: rtNumberField }).strict
 export const updateLeaderSchema = z
   .object({
     name: nameField.optional(),
-    phone: z
-      .string()
-      .trim()
-      .min(1, 'Nomor telepon wajib diisi')
-      .max(191, 'Nomor telepon maksimal 191 karakter')
-      .optional(),
+    phone: z.string().trim().max(191, 'Nomor telepon maksimal 191 karakter').optional(),
     phoneIsWhatsapp: z.boolean().optional(),
     alamat: z.string().trim().max(2000, 'Alamat maksimal 2000 karakter').nullable().optional(),
   })

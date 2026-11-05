@@ -40,10 +40,16 @@ All titles below refer to files in the Google Drive folder above, in the named s
   Because the approved edition is unresolved in `docs/SPEC.md` §10, do not publish the count until
   that source conflict is resolved.
 - The Monografi's employee list records the Lurah, Secretary, Kasi Trantib L-H, Kasi Pemerintahan
-  dan Pelayanan Publik, and Kasi Pemberdayaan Masyarakat with names. See PDF viewer pp. 8–9; the
-  extracted pages do not expose consistent printed page numbers. The source lists names/titles but
-  not the detailed SOTK duties shown in the previous site copy. Do not publish the NIP or phone
-  fields present in the same record.
+  dan Pelayanan Publik, and Kasi Pemberdayaan Masyarakat with names (verified character-for-character
+  against `docs/Descan manggar 2026/Monografi /MONOGRAFI KELURAHAN MANGGAR.pdf` page 8, "DATA PERSONIL"):
+  - Lurah: `Munir Achmad, S.E.`
+  - Sekretaris Lurah: `Munjiah Puspitawaty. M, S.E` (the `. M,` punctuation matches the source verbatim)
+  - Kasi Trantib L-H: `Nanang Sri Ruriyanto, S.Sos.`
+  - Kasi Pemerintahan dan Pelayanan Publik: `Hasiba, S.A.P`
+  - Kasi Pemberdayaan Masyarakat: `Marthen Solly, S.ST`
+  See PDF viewer pp. 8–9; the extracted pages do not expose consistent printed page numbers. The source
+  lists names/titles but not the detailed SOTK duties shown in the previous site copy. Do not publish
+  the NIP or phone fields present in the same record.
 - The standalone RT/BSU map credits direct field survey by Tim Insos VYOMATANTRA, July 2026. The
   `Manggar Dalam Angka 2026` map caption independently credits a field survey by Tim Inovasi Sosial
   VYOMATANTRA ITK (Gambar 1, printed p. 17, PDF viewer p. 18). Cite the standalone map or its

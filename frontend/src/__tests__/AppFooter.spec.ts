@@ -192,4 +192,16 @@ describe('AppFooter.vue', () => {
     expect(copyrightContainer?.classList.contains('text-xs')).toBe(true);
     expect(copyrightContainer?.classList.contains('sm:text-sm')).toBe(true);
   });
+
+  it('always includes Publikasi link in the footer per SPEC §8', async () => {
+    const router = createMockRouter();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(AppFooter, {
+      global: { plugins: [router] },
+    });
+    expect(wrapper.find('a[href="/publikasi"]').exists()).toBe(true);
+    expect(wrapper.find('a[href="/publikasi"]').text()).toBe('Publikasi');
+  });
 });

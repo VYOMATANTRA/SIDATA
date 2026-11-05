@@ -46,6 +46,9 @@ const leafletMocks = vi.hoisted(() => {
     clusterLayers: [] as unknown[],
   };
 
+  const on = vi.fn<(...args: unknown[]) => unknown>(function (this: unknown) {
+    return this;
+  });
   const eachLayer = vi.fn<(fn: (layer: unknown) => void) => void>((fn) => {
     for (const layer of state.clusterLayers) fn(layer);
   });
@@ -56,12 +59,10 @@ const leafletMocks = vi.hoisted(() => {
     getZoom,
     getMaxZoom,
     getBounds,
+    on,
     off,
     once,
-    on: vi.fn<(event: string, handler: () => void) => void>(),
-    eachLayer: (fn: (layer: unknown) => void) => {
-      for (const layer of state.clusterLayers) fn(layer);
-    },
+    eachLayer,
     remove,
     invalidateSize,
     addLayer: vi.fn<() => void>(),
@@ -322,6 +323,43 @@ describe('InteractiveMap.vue', () => {
     iconEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(leafletMocks.zoomToBounds).not.toHaveBeenCalled();
     expect(leafletMocks.spiderfy).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows a later settings update after an earlier programmatic recentre', async () => {
+    const wrapper = await mountMap({ points: [] });
+    leafletMocks.setView.mockClear();
+
+    await wrapper.setProps({ defaultCenter: [-1.2, 116.9], defaultZoom: 12 });
+    expect(leafletMocks.setView).toHaveBeenCalledWith([-1.2, 116.9], 12);
+
+    leafletMocks.setView.mockClear();
+    await wrapper.setProps({ defaultCenter: [-1.1, 116.8], defaultZoom: 11 });
+    expect(leafletMocks.setView).toHaveBeenCalledWith([-1.1, 116.8], 11);
+  });
+
+  it('protects the viewport after visitor zoom interactions', async () => {
+    for (const dispatch of [
+      (canvas: HTMLElement) => canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true })),
+      (canvas: HTMLElement) => canvas.dispatchEvent(new Event('touchstart', { bubbles: true })),
+      (canvas: HTMLElement) => canvas.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })),
+      (canvas: HTMLElement) => {
+        const control = document.createElement('button');
+        control.className = 'leaflet-control-zoom-in';
+        canvas.appendChild(control);
+        control.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      },
+      (canvas: HTMLElement) =>
+        canvas.dispatchEvent(new KeyboardEvent('keydown', { key: '+', bubbles: true })),
+    ]) {
+      const wrapper = await mountMap({ points: [] });
+      const canvas = wrapper.element.querySelector('[data-test="map-canvas"]') as HTMLElement;
+      leafletMocks.setView.mockClear();
+      dispatch(canvas);
+
+      await wrapper.setProps({ defaultCenter: [-1.2, 116.9], defaultZoom: 12 });
+      expect(leafletMocks.setView).not.toHaveBeenCalled();
+      wrapper.unmount();
+    }
   });
 
   it('refreshes a marker aria-label when only the name changes', async () => {

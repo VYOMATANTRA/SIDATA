@@ -12,7 +12,6 @@ import {
   getSlugCache,
   invalidateContentBlocksCache,
   contentBlocksCache,
-  isSafeCtaLink,
   isSafePhotoUrl,
 } from '../services/contentBlocks.service.js';
 import prisma from '../utils/prisma.js';
@@ -1158,8 +1157,8 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
     const existingBlock = {
       id: 'uuid-custom-noop',
       sectionId: null,
-      type: 'custom',
-      slug: 'custom-block',
+      type: 'prose',
+      slug: 'custom-note',
       title: 'Judul Sama',
       body: 'Konten Sama',
       metadata: { a: 1, b: 2, c: [{ x: 10, y: 20 }] },
@@ -1191,7 +1190,7 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
     try {
       const res = fakeRes();
       const req = makeReq({
-        params: { slug: 'custom-block' },
+        params: { slug: 'custom-note' },
         body: {
           title: 'Judul Sama',
           body: 'Konten Sama',
@@ -1333,8 +1332,8 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
     const existingBlock = {
       id: 'uuid-custom-1',
       sectionId: null,
-      type: 'custom',
-      slug: 'custom-block',
+      type: 'prose',
+      slug: 'custom-note',
       title: 'Judul Lama',
       body: 'Konten Lama',
       metadata: null,
@@ -1364,7 +1363,7 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
     try {
       const res = fakeRes();
       const req = makeReq({
-        params: { slug: 'custom-block' },
+        params: { slug: 'custom-note' },
         body: {
           metadata: {
             zeroVal: 0,
@@ -1452,7 +1451,7 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
       slug: 'landing-hero',
       title: 'Judul Sama',
       body: 'Konten Sama',
-      metadata: { backgroundImage: 'https://example.com/hero.jpg' },
+      metadata: { backgroundImage: '/hero.webp' },
       sortOrder: null,
       updatedById: null,
       createdAt: new Date('2026-09-01'),
@@ -1497,7 +1496,7 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
         body: {
           title: 'Judul Sama',
           body: 'Konten Sama',
-          metadata: { backgroundImage: 'https://example.com/hero.jpg' },
+          metadata: { backgroundImage: '/hero.webp' },
         },
       });
 
@@ -1848,19 +1847,213 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
     }
   });
 
-  it('isSafeCtaLink and isSafePhotoUrl reject protocol-relative backslash bypasses (/\\x, /%5cx, /\\t/x)', () => {
+  it('isSafePhotoUrl rejects protocol-relative backslash bypasses (/\\x, /%5cx, /\\t/x)', () => {
     const malicious = ['/\\evil.com', '/\\x', '/%5cx', '/%5Cx', '/%5cevil.com', '/\\t/x'];
 
     for (const link of malicious) {
-      assert.equal(isSafeCtaLink(link), false, `isSafeCtaLink must reject: ${link}`);
       assert.equal(isSafePhotoUrl(link), false, `isSafePhotoUrl must reject: ${link}`);
     }
 
-    assert.equal(isSafeCtaLink('#potensi'), true);
-    assert.equal(isSafeCtaLink('/layanan'), true);
-    assert.equal(isSafeCtaLink('https://kelurahan-manggar.balikpapan.go.id'), true);
+    assert(isSafePhotoUrl('/images/lurah.jpg'), 'expected true');
+    assert(isSafePhotoUrl('https://cdn.balikpapan.go.id/lurah.jpg'), 'expected true');
+  });
+  it('rejects dangerous javascript: URLs in publikasi-katalog metadata and accepts https://', async () => {
+    // 1. Rejection of javascript:
+    const resBad = fakeRes();
+    await updateContentBlockHandler(
+      makeReq({
+        params: { slug: 'publikasi-katalog' },
+        body: {
+          metadata: {
+            publications: [
+              {
+                category: 'Infografis',
+                title: 'Uji Bahaya',
+                description: 'Deskripsi',
+                href: 'javascript:alert(1)',
+              },
+            ],
+          },
+        },
+      }),
+      resBad as unknown as Response,
+    );
+    assert.equal(resBad.status, 400);
+    assert.match((resBad.body as { error: string }).error, /https:\/\//);
 
-    assert.equal(isSafePhotoUrl('/images/lurah.jpg'), true);
-    assert.equal(isSafePhotoUrl('https://cdn.balikpapan.go.id/lurah.jpg'), true);
+    // 2. Rejection of isAvailableOnline: true without href
+    const resNoHref = fakeRes();
+    await updateContentBlockHandler(
+      makeReq({
+        params: { slug: 'publikasi-katalog' },
+        body: {
+          metadata: {
+            publications: [
+              {
+                category: 'Infografis',
+                title: 'Online Tapi Tanpa Tautan',
+                description: 'Deskripsi',
+                isAvailableOnline: true,
+              },
+            ],
+          },
+        },
+      }),
+      resNoHref as unknown as Response,
+    );
+    assert.equal(resNoHref.status, 400);
+    assert.match(
+      (resNoHref.body as { error: string }).error,
+      /Status ketersediaan online harus selaras dengan keberadaan tautan href/,
+    );
+
+    // 3. Acceptance of valid https:// and empty string href (transformed to undefined)
+    invalidateContentBlocksCache();
+    const originalTransaction = prisma.$transaction;
+    const existingBlock = {
+      id: 'uuid-pub-1',
+      sectionId: null,
+      type: 'prose',
+      slug: 'publikasi-katalog',
+      title: 'Katalog Publikasi',
+      body: 'Koleksi dokumen',
+      metadata: null,
+      sortOrder: null,
+      updatedById: null,
+      createdAt: new Date('2026-09-01'),
+      updatedAt: new Date('2026-09-01'),
+    };
+
+    prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+      const mockTx = {
+        $queryRaw: async () => [],
+        contentBlock: {
+          findUnique: async () => existingBlock,
+          update: async (args: { data: Record<string, unknown> }) => ({
+            ...existingBlock,
+            ...args.data,
+          }),
+        },
+        auditLog: {
+          create: async () => ({ id: 'audit-1' }),
+        },
+      };
+      return fn(mockTx as unknown as typeof prisma);
+    }) as unknown as typeof prisma.$transaction;
+
+    try {
+      const resGood = fakeRes();
+      await updateContentBlockHandler(
+        makeReq({
+          params: { slug: 'publikasi-katalog' },
+          body: {
+            metadata: {
+              publications: [
+                {
+                  category: 'Infografis',
+                  title: 'Dokumen Resmi',
+                  description: 'Deskripsi',
+                  href: 'https://example.com/dokumen.pdf',
+                  isAvailableOnline: true,
+                },
+                {
+                  category: 'Prodeskel',
+                  title: 'Dokumen Cetak',
+                  description: 'Deskripsi cetak',
+                  href: '',
+                  isAvailableOnline: false,
+                },
+              ],
+            },
+          },
+        }),
+        resGood as unknown as Response,
+      );
+      assert.equal(resGood.status, 200);
+    } finally {
+      prisma.$transaction = originalTransaction;
+      invalidateContentBlocksCache();
+    }
+  });
+
+  it('stores Zod-cleaned publikasi metadata (trimmed https href), not the raw input', async () => {
+    invalidateContentBlocksCache();
+    const originalTransaction = prisma.$transaction;
+    const existingBlock = {
+      id: 'uuid-pub-2',
+      sectionId: null,
+      type: 'prose',
+      slug: 'publikasi-katalog',
+      title: 'Katalog Publikasi',
+      body: 'Koleksi dokumen',
+      metadata: null,
+      sortOrder: null,
+      updatedById: null,
+      createdAt: new Date('2026-09-01'),
+      updatedAt: new Date('2026-09-01'),
+    };
+
+    let savedMetadata: unknown;
+    prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
+      const mockTx = {
+        $queryRaw: async () => [],
+        contentBlock: {
+          findUnique: async () => existingBlock,
+          update: async (args: { data: Record<string, unknown> }) => {
+            savedMetadata = args.data.metadata;
+            return { ...existingBlock, ...args.data };
+          },
+        },
+        auditLog: {
+          create: async () => ({ id: 'audit-2' }),
+        },
+      };
+      return fn(mockTx as unknown as typeof prisma);
+    }) as unknown as typeof prisma.$transaction;
+
+    try {
+      const res = fakeRes();
+      await updateContentBlockHandler(
+        makeReq({
+          params: { slug: 'publikasi-katalog' },
+          body: {
+            metadata: {
+              publications: [
+                {
+                  category: ' Infografis ',
+                  title: ' Dokumen ',
+                  description: ' Deskripsi ',
+                  href: '  https://example.com/dokumen.pdf  ',
+                  isAvailableOnline: true,
+                },
+              ],
+            },
+          },
+        }),
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 200);
+      const pubs = (savedMetadata as { publications: Array<Record<string, unknown>> }).publications;
+      assert.equal(pubs[0]?.href, 'https://example.com/dokumen.pdf');
+      assert.equal(pubs[0]?.category, 'Infografis');
+      assert.equal(pubs[0]?.title, 'Dokumen');
+    } finally {
+      prisma.$transaction = originalTransaction;
+      invalidateContentBlocksCache();
+    }
+  });
+
+  it('validates rtCount in tentang-kelurahan-profil metadata', async () => {
+    for (const badRt of [0, -5, 1.5, 9999]) {
+      const res = fakeRes();
+      await updateContentBlockHandler(
+        makeReq({
+          params: { slug: 'tentang-kelurahan-profil' },
+          body: { metadata: { rtCount: badRt } },
+        }),
+        res as unknown as Response,
+      );
+      assert.equal(res.status, 400);
+    }
   });
 });

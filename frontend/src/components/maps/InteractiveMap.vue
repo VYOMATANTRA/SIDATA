@@ -247,6 +247,29 @@ function frameInitialPoints() {
   hasFramedPoints = true;
 }
 
+const ZOOM_KEYS = new Set(['+', '=', '-', '_', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+
+/**
+ * Programmatic setView/fitBounds also fire zoomstart, so user intent is tracked
+ * from the interactions that actually originate with the visitor.
+ */
+function handleUserInteraction(event: Event) {
+  if (event.type === 'wheel' || event.type === 'touchstart' || event.type === 'dblclick') {
+    userMovedViewport = true;
+    return;
+  }
+  if (event.type === 'click') {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('.leaflet-control-zoom-in, .leaflet-control-zoom-out')) {
+      userMovedViewport = true;
+    }
+    return;
+  }
+  if (event.type === 'keydown' && ZOOM_KEYS.has((event as KeyboardEvent).key)) {
+    userMovedViewport = true;
+  }
+}
+
 function renderUserLocation() {
   if (!map) return;
   if (!props.userLocation) {
@@ -294,13 +317,16 @@ onMounted(() => {
       attributionControl: false,
     }).setView(props.defaultCenter, props.defaultZoom);
 
-    // A user pan or zoom must win over a late-arriving CMS default.
+    // A user pan must also win over a late-arriving CMS default.
     map.on('dragstart', () => {
       userMovedViewport = true;
     });
-    map.on('zoomstart', () => {
-      if (!hasFramedPoints) userMovedViewport = true;
-    });
+
+    mapContainer.value.addEventListener('wheel', handleUserInteraction, { passive: true });
+    mapContainer.value.addEventListener('touchstart', handleUserInteraction, { passive: true });
+    mapContainer.value.addEventListener('dblclick', handleUserInteraction);
+    mapContainer.value.addEventListener('click', handleUserInteraction);
+    mapContainer.value.addEventListener('keydown', handleUserInteraction);
 
     // Standard OpenStreetMap Tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -384,6 +410,8 @@ watch(
   { deep: true },
 );
 
+watch(() => props.userLocation, renderUserLocation, { deep: true });
+
 function handleEscape(event: KeyboardEvent) {
   if (event.key !== 'Escape' || event.defaultPrevented) return;
   emit('escape');
@@ -394,7 +422,13 @@ defineExpose({ revealPoint, focusUserLocation });
 onUnmounted(() => {
   isUnmounted = true;
   window.removeEventListener('resize', handleResize);
-  mapContainer.value?.removeEventListener('keydown', handleClusterKeydown);
+  const container = mapContainer.value;
+  container?.removeEventListener('keydown', handleClusterKeydown);
+  container?.removeEventListener('wheel', handleUserInteraction);
+  container?.removeEventListener('touchstart', handleUserInteraction);
+  container?.removeEventListener('dblclick', handleUserInteraction);
+  container?.removeEventListener('click', handleUserInteraction);
+  container?.removeEventListener('keydown', handleUserInteraction);
   if (sizeInvalidationTimer !== null) {
     window.clearTimeout(sizeInvalidationTimer);
     sizeInvalidationTimer = null;

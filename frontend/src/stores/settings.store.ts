@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import { apiRequestJson } from '../utils/apiClient';
 
 export interface CoordinatesSetting {
   lat: number;
@@ -190,6 +191,28 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
+  async function updatePublicSettings(updates: Partial<PublicSettings>): Promise<PublicSettings> {
+    const data = await apiRequestJson<{ message: string; settings: PublicSettings }>(
+      '/api/settings/public',
+      {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
+      },
+    );
+    if (data?.settings) {
+      settings.value = {
+        ...settings.value,
+        ...data.settings,
+        defaultCoordinates: {
+          ...settings.value.defaultCoordinates,
+          ...data.settings.defaultCoordinates,
+        },
+      };
+      updateDocumentTitle(lastPageTitle.value);
+    }
+    return settings.value;
+  }
+
   return {
     settings,
     isLoading,
@@ -206,6 +229,7 @@ export const useSettingsStore = defineStore('settings', () => {
     contactWhatsapp,
     contactEmail,
     fetchPublicSettings,
+    updatePublicSettings,
     updateDocumentTitle,
   };
 });
