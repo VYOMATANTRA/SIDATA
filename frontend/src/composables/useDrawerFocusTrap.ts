@@ -12,18 +12,14 @@ function isElementVisible(el: HTMLElement): boolean {
     return false;
   }
 
-  if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
-    const style = window.getComputedStyle(el);
-    if (style.display === 'none' || style.visibility === 'hidden') {
-      return false;
-    }
-  }
-
+  // Real browsers support `checkVisibility`; JSDOM does not implement it (nor layout geometry such
+  // as `getClientRects()`), so fall back to computed `display` / `visibility` in test environments.
   if (typeof el.checkVisibility === 'function') {
     return el.checkVisibility({ checkVisibilityCSS: true });
   }
 
-  return true;
+  const style = window.getComputedStyle(el);
+  return style.display !== 'none' && style.visibility !== 'hidden';
 }
 
 function isEventFromOpenDialog(event: KeyboardEvent): boolean {

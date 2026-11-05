@@ -16,20 +16,21 @@ const { isDesktop } = useIsDesktop();
 
 // Owns the toggle button (not AdminSidebar.vue) so focus can return here when the drawer closes
 // on the same page — via its close button, Escape, backdrop click, or tapping the link for the
-// page the user is already viewing (WCAG 2.1 §2.4.3 Focus Order). Skips restoring focus only when
-// the drawer closed because the user navigated to a different route (`route.fullPath !==
-// openedFullPath`), where AdminLayout moves focus to <main> instead.
+// page the user is already viewing (WCAG 2.1 §2.4.3 Focus Order). Compares `route.path` (matching
+// AdminLayout.vue's `watch(() => route.path)`) so the two components are complementary: whenever
+// `route.path` changes, AdminLayout moves focus to <main>; whenever `route.path` is unchanged
+// (even if a query string or hash was cleared), focus returns here so it is never stranded.
 const menuToggleRef = ref<HTMLButtonElement | null>(null);
-let openedFullPath = route.fullPath;
+let openedPath = route.path;
 
 watch(
   () => props.mobileOpen,
   (open, wasOpen) => {
     if (open) {
-      openedFullPath = route.fullPath;
+      openedPath = route.path;
       return;
     }
-    if (wasOpen && route.fullPath === openedFullPath) {
+    if (wasOpen && route.path === openedPath) {
       void nextTick(() => menuToggleRef.value?.focus());
     }
   },

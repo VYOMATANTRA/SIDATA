@@ -113,4 +113,20 @@ describe('router/index.ts — ADMIN_NAV route synchronization and role guards', 
       expect(router.currentRoute.value.path).toBe(path);
     }
   });
+
+  it('explicitly locks /settings/audit-retention to ["admin"] and rejects an editor', async () => {
+    const retentionRoute = router.resolve('/settings/audit-retention');
+    expect(retentionRoute.meta.requiresAuth).toBe(true);
+    expect(retentionRoute.meta.requiresAdmin).toBe(true);
+    expect(retentionRoute.meta.requiresEditor).toBe(true);
+
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore(pinia);
+
+    authStore.setAuth({ id: 'ed-1', email: 'editor@manggar.go.id', role: 'editor' }, 'token');
+    await router.push('/admin');
+    await router.push('/settings/audit-retention');
+    expect(router.currentRoute.value.name).toBe('home');
+  });
 });

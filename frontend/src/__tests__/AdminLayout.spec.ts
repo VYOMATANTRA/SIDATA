@@ -434,6 +434,31 @@ describe('AdminLayout.vue — mobile sidebar drawer', () => {
     wrapper.unmount();
   });
 
+  it('returns focus to the hamburger toggle when the user taps the current page link even if a query string was present', async () => {
+    const router = createTestRouter();
+    await router.push('/admin?tab=ringkasan');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, {
+      global: { plugins: [router] },
+      attachTo: document.body,
+    });
+
+    const toggle = wrapper.find('[data-test="admin-mobile-menu-toggle"]');
+    await toggle.trigger('click');
+    await wrapper.vm.$nextTick();
+
+    const currentPageLink = wrapper.find('[data-test="nav-beranda"]');
+    (currentPageLink.element as HTMLElement).focus();
+    await currentPageLink.trigger('click');
+    await flushPromises();
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('[data-test="admin-sidebar-backdrop"]').exists()).toBe(false);
+    expect(document.activeElement).toBe(toggle.element);
+    wrapper.unmount();
+  });
+
   it('marks the header and main content area inert while the mobile drawer is open', async () => {
     const router = createTestRouter();
     await router.push('/admin');

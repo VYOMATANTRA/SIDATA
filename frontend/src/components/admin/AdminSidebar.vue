@@ -119,10 +119,10 @@ function closeMobile() {
 }
 
 // When the user taps a link for the page they are already viewing, `route.path` does not change,
-// so close immediately (which leaves `route.fullPath === openedFullPath` in AdminHeader.vue and
-// restores focus to the hamburger toggle). When tapping a link to a different page, wait for
-// `route.path` to commit before closing so `route.fullPath !== openedFullPath` is already true
-// when AdminHeader.vue's watcher runs, letting AdminLayout move focus directly to <main>.
+// so close immediately (which leaves `route.path === openedPath` in AdminHeader.vue and restores
+// focus to the hamburger toggle). When tapping a link to a different page, wait for `route.path`
+// to commit before closing so `route.path !== openedPath` is already true when AdminHeader.vue's
+// watcher runs, letting AdminLayout move focus directly to <main>.
 function closeMobileOnSamePage(to: string) {
   if (route.path === to) {
     closeMobile();
