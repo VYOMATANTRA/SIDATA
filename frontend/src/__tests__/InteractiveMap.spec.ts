@@ -272,7 +272,7 @@ describe('InteractiveMap.vue', () => {
     expect(wrapper.emitted('escape')).toBeDefined();
   });
 
-  it('creates accessible cluster activators and zooms or spiderfies on Enter/Space', async () => {
+  it('keeps one cluster tab stop and zooms or spiderfies on Enter/Space', async () => {
     const wrapper = await mountMap({
       points: [
         point({ id: 'a' }),
@@ -291,10 +291,10 @@ describe('InteractiveMap.vue', () => {
     }) => { html: string; className: string };
     const created = iconCreate({ getChildCount: () => 2 });
     expect(created.className).toBe('map-cluster');
-    expect(created.html).toContain('role="button"');
-    expect(created.html).toContain('tabindex="0"');
+    expect(created.html).toContain('sr-only');
     expect(created.html).toContain('Kelompok 2 titik');
-    expect(created.html).toContain('data-cluster-activator');
+    expect(created.html).not.toContain('tabindex');
+    expect(created.html).not.toContain('role="button"');
 
     const iconEl = document.createElement('div');
     iconEl.className = 'map-cluster leaflet-marker-icon';
@@ -308,22 +308,19 @@ describe('InteractiveMap.vue', () => {
     leafletMocks.state.clusterLayers = [cluster];
 
     (wrapper.element.querySelector('[data-test="map-canvas"]') as HTMLElement).appendChild(iconEl);
-    const activator = iconEl.querySelector('[data-cluster-activator]') as HTMLElement;
-    expect(activator).toBeTruthy();
-    expect(activator.getAttribute('role')).toBe('button');
-    expect(activator.getAttribute('tabindex')).toBe('0');
-    expect(activator.getAttribute('aria-label')).toContain('Kelompok 2');
+    // Leaflet adds role/tabindex to the wrapper; inner markup must not add a second stop.
+    expect(iconEl.querySelector('[tabindex]')).toBeNull();
 
-    activator.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    iconEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(leafletMocks.zoomToBounds).toHaveBeenCalledTimes(1);
 
     leafletMocks.zoomToBounds.mockClear();
-    activator.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    iconEl.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
     expect(leafletMocks.zoomToBounds).toHaveBeenCalledTimes(1);
 
     leafletMocks.zoomToBounds.mockClear();
     leafletMocks.getZoom.mockReturnValue(19);
-    activator.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    iconEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(leafletMocks.zoomToBounds).not.toHaveBeenCalled();
     expect(leafletMocks.spiderfy).toHaveBeenCalledTimes(1);
   });

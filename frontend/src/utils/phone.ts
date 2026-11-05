@@ -16,8 +16,8 @@ function splitPhoneParts(value: string): string[] {
 }
 
 /**
- * A piece that can stand alone in a separated string.
- * Stricter than isPlausiblePhoneDigitRun (7–15, any prefix): a cut half like `0812-111` must not become a link.
+ * Detects values explicitly labelled as incomplete (for example an extension or
+ * a truncated fragment), so they are never turned into dialable links.
  */
 function isExplicitlyIncomplete(value: string): boolean {
   return /\b(?:partial|cut|truncated|ext\.?|extension|samb\.?|lanjutan)\b|\.\.\.|…/i.test(value);

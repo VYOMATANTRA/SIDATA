@@ -35,10 +35,10 @@ export const DEFAULT_SAMBUTAN_BLOCK: ContentBlock = {
   type: 'sambutan_lurah',
   slug: 'landing-sambutan-lurah',
   title: 'Sambutan Lurah Manggar',
-  body: 'Selamat datang di Sistem Informasi Data Terpadu (SIDATA) Kelurahan Manggar. Portal ini kami hadirkan sebagai sarana transparansi informasi dan keterpaduan data statistik serta spasial guna mendukung perencanaan wilayah dan pelayanan masyarakat yang lebih efektif.',
+  body: 'Selamat datang di Sistem Informasi Data Terpadu (SIDATA) Kelurahan Manggar. Portal ini dihadirkan sebagai sarana transparansi informasi dan keterpaduan data statistik serta spasial guna mendukung perencanaan wilayah dan pelayanan masyarakat yang lebih efektif.',
   metadata: {
-    authorName: 'Munir Achmad, S.E.',
-    authorTitle: 'Lurah Manggar',
+    authorName: 'Lurah Manggar',
+    authorTitle: 'Kepala Kelurahan Manggar',
     photoUrl: '',
   },
   sortOrder: null,
