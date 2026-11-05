@@ -28,6 +28,23 @@ interface ImportPreview {
   summary: { total: number; changed: number; unchanged: number; errors: number };
 }
 
+interface AcceptedCsvPreview {
+  csv: string;
+  inputRevision: number;
+  preview: ImportPreview;
+}
+
+interface BaselineRow {
+  rtNumber: number;
+  name: string;
+  phone: string;
+  phoneIsWhatsapp: boolean;
+  alamat: string | null;
+  pointId: string | null;
+  latitude: number | null;
+  longitude: number | null;
+}
+
 const CSV_HEADER = 'rtNumber,name,phone,phoneIsWhatsapp,alamat,latitude,longitude';
 const authStore = useAuthStore();
 
@@ -53,6 +70,7 @@ const pageRows = computed(() =>
 );
 
 const editing = ref<LeaderRow | null>(null);
+const baseline = ref<BaselineRow | null>(null);
 const draft = ref({
   name: '',
   phone: '',
@@ -64,7 +82,11 @@ const isSaving = ref(false);
 const saveError = ref('');
 
 const csvText = ref('');
-const importPreview = ref<ImportPreview | null>(null);
+const inputRevision = ref(0);
+let previewSequence = 0;
+let fileReadToken = 0;
+
+const acceptedPreview = ref<AcceptedCsvPreview | null>(null);
 const importError = ref('');
 const importBusy = ref(false);
 const importResult = ref('');
@@ -90,6 +112,16 @@ onMounted(loadLeaders);
 function openEditor(row: LeaderRow) {
   editing.value = row;
   saveError.value = '';
+  baseline.value = {
+    rtNumber: row.rtNumber,
+    name: row.name,
+    phone: row.phone,
+    phoneIsWhatsapp: row.phoneIsWhatsapp,
+    alamat: row.alamat,
+    pointId: row.coordinates?.pointId ?? null,
+    latitude: row.coordinates?.latitude ?? null,
+    longitude: row.coordinates?.longitude ?? null,
+  };
   draft.value = {
     name: row.name,
     phone: row.phone,
@@ -103,106 +135,221 @@ function openEditor(row: LeaderRow) {
 
 function closeEditor() {
   editing.value = null;
+  baseline.value = null;
   saveError.value = '';
 }
 
 async function saveLeader() {
-  const target = editing.value;
-  if (!target) return;
+  const base = baseline.value;
+  if (!base || isSaving.value) return;
+
+  // 1. Capture immutable submission snapshot
+  const snapshot = {
+    rtNumber: base.rtNumber,
+    name: draft.value.name.trim(),
+    phone: draft.value.phone.trim(),
+    phoneIsWhatsapp: draft.value.phoneIsWhatsapp,
+    alamat: draft.value.alamat.trim(),
+    desiredLocation: draft.value.location ? { ...draft.value.location } : null,
+    pointId: base.pointId,
+    baseLatitude: base.latitude,
+    baseLongitude: base.longitude,
+  };
+
   isSaving.value = true;
   saveError.value = '';
-  try {
-    await apiRequestJson(`/api/maps/rt-leaders/${target.rtNumber}`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        name: draft.value.name.trim(),
-        phone: draft.value.phone.trim(),
-        phoneIsWhatsapp: draft.value.phoneIsWhatsapp,
-        alamat: draft.value.alamat.trim(),
-      }),
-    });
 
-    if (draft.value.location) {
-      const { latitude, longitude } = draft.value.location;
-      if (target.coordinates) {
-        await apiRequestJson(`/api/maps/points/${target.coordinates.pointId}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ latitude, longitude }),
-        });
-      } else {
-        await apiRequestJson('/api/maps/points', {
-          method: 'POST',
-          body: JSON.stringify({
-            name: `Pos RT ${String(target.rtNumber).padStart(2, '0')} Kelurahan Manggar`,
-            type: 'ketua_rt',
-            latitude,
-            longitude,
-            rts: [target.rtNumber],
-          }),
-        });
-      }
+  // 2. Compute contact patch (only send changed fields; omit unchanged empty name on fresh slot)
+  const contactPatch: Record<string, unknown> = {};
+  if (snapshot.name !== base.name) contactPatch.name = snapshot.name;
+  if (snapshot.phone !== base.phone) contactPatch.phone = snapshot.phone;
+  if (snapshot.phoneIsWhatsapp !== base.phoneIsWhatsapp)
+    contactPatch.phoneIsWhatsapp = snapshot.phoneIsWhatsapp;
+  if (snapshot.alamat !== (base.alamat ?? '')) contactPatch.alamat = snapshot.alamat;
+
+  // 3. Compute location operation according to transition table
+  const coordsChanged =
+    snapshot.desiredLocation !== null &&
+    (base.latitude === null ||
+      base.longitude === null ||
+      Math.abs(snapshot.desiredLocation.latitude - base.latitude) > 1e-7 ||
+      Math.abs(snapshot.desiredLocation.longitude - base.longitude) > 1e-7);
+
+  let locationOp: 'none' | 'create' | 'update' | 'delete' = 'none';
+  if (!base.pointId && snapshot.desiredLocation) {
+    locationOp = 'create';
+  } else if (base.pointId && !snapshot.desiredLocation) {
+    locationOp = 'delete';
+  } else if (base.pointId && coordsChanged) {
+    locationOp = 'update';
+  }
+
+  if (Object.keys(contactPatch).length === 0 && locationOp === 'none') {
+    closeEditor();
+    return;
+  }
+
+  let contactSuccess = false;
+  try {
+    // Save contact first if changed
+    if (Object.keys(contactPatch).length > 0) {
+      await apiRequestJson(`/api/maps/rt-leaders/${snapshot.rtNumber}`, {
+        method: 'PATCH',
+        body: JSON.stringify(contactPatch),
+      });
+      contactSuccess = true;
+      base.name = snapshot.name;
+      base.phone = snapshot.phone;
+      base.phoneIsWhatsapp = snapshot.phoneIsWhatsapp;
+      base.alamat = snapshot.alamat;
+    } else {
+      contactSuccess = true;
     }
 
-    statusMessage.value = `Data RT ${target.rtNumber} disimpan.`;
+    // Now execute location operation
+    if (locationOp === 'delete' && snapshot.pointId) {
+      await apiRequestJson(`/api/maps/points/${snapshot.pointId}`, {
+        method: 'DELETE',
+      });
+      base.pointId = null;
+      base.latitude = null;
+      base.longitude = null;
+    } else if (locationOp === 'update' && snapshot.pointId && snapshot.desiredLocation) {
+      await apiRequestJson(`/api/maps/points/${snapshot.pointId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          latitude: snapshot.desiredLocation.latitude,
+          longitude: snapshot.desiredLocation.longitude,
+        }),
+      });
+      base.latitude = snapshot.desiredLocation.latitude;
+      base.longitude = snapshot.desiredLocation.longitude;
+    } else if (locationOp === 'create' && snapshot.desiredLocation) {
+      const created = await apiRequestJson<{ point: { id: string } }>('/api/maps/points', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `Pos RT ${String(snapshot.rtNumber).padStart(2, '0')} Kelurahan Manggar`,
+          type: 'ketua_rt',
+          latitude: snapshot.desiredLocation.latitude,
+          longitude: snapshot.desiredLocation.longitude,
+          rts: [snapshot.rtNumber],
+        }),
+      });
+      base.pointId = created.point?.id ?? null;
+      base.latitude = snapshot.desiredLocation.latitude;
+      base.longitude = snapshot.desiredLocation.longitude;
+    }
+
+    statusMessage.value = `Data RT ${snapshot.rtNumber} berhasil disimpan.`;
     closeEditor();
     await loadLeaders();
   } catch (error) {
-    saveError.value = error instanceof Error ? error.message : 'Gagal menyimpan data.';
+    const errMessage =
+      error instanceof Error ? error.message : 'Terjadi kesalahan saat menyimpan data.';
+    if (contactSuccess && Object.keys(contactPatch).length > 0 && locationOp !== 'none') {
+      saveError.value = `Data kontak berhasil disimpan, namun lokasi gagal diperbarui: ${errMessage}`;
+      void loadLeaders();
+    } else {
+      saveError.value = errMessage;
+    }
   } finally {
     isSaving.value = false;
   }
 }
 
-async function previewImport() {
-  const csv = csvText.value.trim();
-  if (!csv) {
-    importError.value = 'Pilih berkas CSV atau tempel isinya terlebih dahulu.';
-    return;
-  }
-  importBusy.value = true;
-  importError.value = '';
+function onCsvTextChange() {
+  inputRevision.value += 1;
+  acceptedPreview.value = null;
   importResult.value = '';
-  try {
-    importPreview.value = await apiRequestJson<ImportPreview>(
-      '/api/maps/rt-leaders/import/preview',
-      {
-        method: 'POST',
-        body: JSON.stringify({ csv }),
-      },
-    );
-  } catch (error) {
-    importPreview.value = null;
-    importError.value = error instanceof Error ? error.message : 'Gagal memeriksa CSV.';
-  } finally {
-    importBusy.value = false;
-  }
-}
-
-async function applyImport() {
-  importBusy.value = true;
   importError.value = '';
-  try {
-    const result = await apiRequestJson<{ summary: ImportPreview['summary'] }>(
-      '/api/maps/rt-leaders/import',
-      { method: 'POST', body: JSON.stringify({ csv: csvText.value }) },
-    );
-    importResult.value = `${result.summary.changed} baris diperbarui, ${result.summary.unchanged} tidak berubah.`;
-    importPreview.value = null;
-    statusMessage.value = 'Impor CSV selesai.';
-    await loadLeaders();
-  } catch (error) {
-    importError.value = error instanceof Error ? error.message : 'Gagal menerapkan CSV.';
-  } finally {
-    importBusy.value = false;
-  }
 }
 
 async function onCsvFile(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0];
   if (!file) return;
-  csvText.value = await file.text();
-  importPreview.value = null;
+  const token = ++fileReadToken;
+  try {
+    const text = await file.text();
+    if (token !== fileReadToken) return;
+    csvText.value = text;
+    inputRevision.value += 1;
+    acceptedPreview.value = null;
+    importResult.value = '';
+    importError.value = '';
+  } catch {
+    if (token === fileReadToken) {
+      importError.value = 'Gagal membaca berkas CSV.';
+    }
+  }
+}
+
+async function previewImport() {
+  const currentText = csvText.value;
+  if (!currentText.trim()) {
+    importError.value = 'Pilih berkas CSV atau tempel isinya terlebih dahulu.';
+    return;
+  }
+  const currentRevision = inputRevision.value;
+  const seq = ++previewSequence;
+
+  importBusy.value = true;
   importError.value = '';
+  importResult.value = '';
+  acceptedPreview.value = null;
+
+  try {
+    const result = await apiRequestJson<ImportPreview>('/api/maps/rt-leaders/import/preview', {
+      method: 'POST',
+      body: JSON.stringify({ csv: currentText }),
+    });
+    if (seq === previewSequence && currentRevision === inputRevision.value) {
+      acceptedPreview.value = {
+        csv: currentText,
+        inputRevision: currentRevision,
+        preview: result,
+      };
+    }
+  } catch (error) {
+    if (seq === previewSequence && currentRevision === inputRevision.value) {
+      acceptedPreview.value = null;
+      importError.value = error instanceof Error ? error.message : 'Gagal memeriksa CSV.';
+    }
+  } finally {
+    if (seq === previewSequence) {
+      importBusy.value = false;
+    }
+  }
+}
+
+const canApplyImport = computed(() => {
+  if (importBusy.value) return false;
+  if (!acceptedPreview.value) return false;
+  if (acceptedPreview.value.inputRevision !== inputRevision.value) return false;
+  if (acceptedPreview.value.csv !== csvText.value) return false;
+  return acceptedPreview.value.preview.errors.length === 0;
+});
+
+async function applyImport() {
+  if (!canApplyImport.value || !acceptedPreview.value) return;
+  const snapshotToApply = acceptedPreview.value;
+
+  importBusy.value = true;
+  importError.value = '';
+  try {
+    const result = await apiRequestJson<{ summary: ImportPreview['summary'] }>(
+      '/api/maps/rt-leaders/import',
+      { method: 'POST', body: JSON.stringify({ csv: snapshotToApply.csv }) },
+    );
+    importResult.value = `${result.summary.changed} baris diperbarui, ${result.summary.unchanged} tidak berubah.`;
+    acceptedPreview.value = null;
+    statusMessage.value = 'Impor CSV selesai.';
+    await loadLeaders();
+  } catch (error) {
+    acceptedPreview.value = null;
+    importError.value = error instanceof Error ? error.message : 'Gagal menerapkan CSV.';
+  } finally {
+    importBusy.value = false;
+  }
 }
 
 function downloadTemplate() {
@@ -244,8 +391,7 @@ async function setSampleStatus(isSample: boolean) {
         <div>
           <h2 id="rt-editor-title" class="text-brand-navy text-lg font-bold">Daftar Ketua RT</h2>
           <p class="mt-1 text-sm text-slate-600">
-            Nama berasal dari Monografi Kelurahan Manggar. Lengkapi kontak dan koordinat melalui
-            formulir atau impor CSV.
+            Kelola kontak dan koordinat Ketua RT melalui formulir atau impor CSV.
           </p>
         </div>
         <span
@@ -338,6 +484,7 @@ async function setSampleStatus(isSample: boolean) {
             type="file"
             accept=".csv,text/csv"
             class="mt-1 block text-sm"
+            :disabled="importBusy"
             data-test="rt-csv-file"
             @change="onCsvFile"
           />
@@ -355,7 +502,9 @@ async function setSampleStatus(isSample: boolean) {
         rows="5"
         :class="INPUT_CLASSES"
         class="mt-1 w-full font-mono text-xs"
+        :disabled="importBusy"
         data-test="rt-csv-text"
+        @input="onCsvTextChange"
       />
       <div class="mt-3 flex gap-3">
         <BaseButton variant="secondary" size="sm" :disabled="importBusy" @click="previewImport">
@@ -364,7 +513,8 @@ async function setSampleStatus(isSample: boolean) {
         <BaseButton
           variant="primary"
           size="sm"
-          :disabled="importBusy || !importPreview || importPreview.errors.length > 0"
+          :disabled="!canApplyImport"
+          data-test="rt-apply-import"
           @click="applyImport"
         >
           Terapkan impor
@@ -375,21 +525,25 @@ async function setSampleStatus(isSample: boolean) {
         {{ importResult }}
       </p>
 
-      <div v-if="importPreview" class="mt-4 space-y-2" data-test="rt-import-preview">
+      <div v-if="acceptedPreview" class="mt-4 space-y-2" data-test="rt-import-preview">
         <p class="text-sm text-slate-700">
-          {{ importPreview.summary.changed }} diubah, {{ importPreview.summary.unchanged }} tetap,
-          {{ importPreview.summary.errors }} kesalahan.
+          {{ acceptedPreview.preview.summary.changed }} diubah,
+          {{ acceptedPreview.preview.summary.unchanged }} tetap,
+          {{ acceptedPreview.preview.summary.errors }} kesalahan.
         </p>
         <ul
-          v-if="importPreview.errors.length"
+          v-if="acceptedPreview.preview.errors.length"
           class="list-disc space-y-1 pl-5 text-sm text-rose-700"
         >
-          <li v-for="error in importPreview.errors" :key="`${error.rowNumber}-${error.field}`">
+          <li
+            v-for="error in acceptedPreview.preview.errors"
+            :key="`${error.rowNumber}-${error.field}`"
+          >
             Baris {{ error.rowNumber }} ({{ error.field }}): {{ error.message }}
           </li>
         </ul>
         <ul v-else class="max-h-48 space-y-1 overflow-y-auto text-sm text-slate-700">
-          <li v-for="row in importPreview.rows" :key="row.rtNumber">
+          <li v-for="row in acceptedPreview.preview.rows" :key="row.rtNumber">
             RT {{ row.rtNumber }} — {{ row.action === 'update' ? 'diubah' : 'tetap' }}
             <span v-if="row.changedFields.length">({{ row.changedFields.join(', ') }})</span>
           </li>
@@ -423,14 +577,26 @@ async function setSampleStatus(isSample: boolean) {
       <form class="space-y-4" @submit.prevent="saveLeader">
         <div>
           <label for="rt-name" class="block text-sm font-medium text-slate-700">Nama</label>
-          <input id="rt-name" v-model="draft.name" :class="INPUT_CLASSES" class="mt-1 w-full" />
+          <input
+            id="rt-name"
+            v-model="draft.name"
+            :disabled="isSaving"
+            :class="INPUT_CLASSES"
+            class="mt-1 w-full"
+          />
         </div>
         <div>
           <label for="rt-phone" class="block text-sm font-medium text-slate-700">Telepon</label>
-          <input id="rt-phone" v-model="draft.phone" :class="INPUT_CLASSES" class="mt-1 w-full" />
+          <input
+            id="rt-phone"
+            v-model="draft.phone"
+            :disabled="isSaving"
+            :class="INPUT_CLASSES"
+            class="mt-1 w-full"
+          />
         </div>
         <label class="flex items-center gap-2 text-sm text-slate-700">
-          <input v-model="draft.phoneIsWhatsapp" type="checkbox" />
+          <input v-model="draft.phoneIsWhatsapp" :disabled="isSaving" type="checkbox" />
           Nomor ini memiliki WhatsApp
         </label>
         <div>
@@ -438,6 +604,7 @@ async function setSampleStatus(isSample: boolean) {
           <textarea
             id="rt-alamat"
             v-model="draft.alamat"
+            :disabled="isSaving"
             rows="2"
             :class="INPUT_CLASSES"
             class="mt-1 w-full"
