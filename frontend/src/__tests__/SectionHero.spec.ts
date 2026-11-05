@@ -170,6 +170,36 @@ describe('Landing SectionHero.vue', () => {
     expect(wrapper.find('[data-test="hero-actions"]').exists()).toBe(true);
     expect(wrapper.find('#test-cta').exists()).toBe(true);
   });
+
+  it('renders default WeatherWidget inside hero-weather container on top of hero background', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+
+    const wrapper = mount(LandingSectionHero, {
+      global: { plugins: [pinia] },
+    });
+
+    const weatherContainer = wrapper.find('[data-test="hero-weather"]');
+    expect(weatherContainer.exists()).toBe(true);
+    expect(wrapper.find('[data-test="weather-widget-root"]').exists()).toBe(true);
+  });
+
+  it('allows custom slot injection into weather slot in Landing SectionHero', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+
+    const wrapper = mount(LandingSectionHero, {
+      global: { plugins: [pinia] },
+      slots: {
+        weather: '<div id="custom-weather-card">Cuaca Kustom</div>',
+      },
+    });
+
+    const weatherContainer = wrapper.find('[data-test="hero-weather"]');
+    expect(weatherContainer.exists()).toBe(true);
+    expect(weatherContainer.find('#custom-weather-card').exists()).toBe(true);
+    expect(weatherContainer.text()).toContain('Cuaca Kustom');
+  });
 });
 
 describe('Common SectionHero.vue', () => {
