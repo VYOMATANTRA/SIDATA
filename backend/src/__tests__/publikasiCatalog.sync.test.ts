@@ -79,14 +79,27 @@ describe('publikasi catalog FE↔BE sync', () => {
       assert.ok(beBlock, `DEFAULT_CONTENT_BLOCKS must define ${slug}`);
 
       assert.ok(sql.includes(`'${slug}'`), `Migration SQL must insert ${slug}`);
-      assert.ok(sql.includes(`'${beBlock.title}'`), `Migration SQL must insert matching title for ${slug}`);
-      assert.ok(sql.includes(`'${beBlock.body}'`), `Migration SQL must insert matching body for ${slug}`);
+      assert.ok(
+        sql.includes(`'${beBlock.title}'`),
+        `Migration SQL must insert matching title for ${slug}`,
+      );
+      assert.ok(
+        sql.includes(`'${beBlock.body}'`),
+        `Migration SQL must insert matching body for ${slug}`,
+      );
 
       // Verify metadata JSON embedded in the SQL matches
       const match = sql.match(new RegExp(`'${slug}',\\s*'[^']+',\\s*'[^']+',\\s*'({.+?})'`, 's'));
-      assert.ok(match && match[1], `Metadata JSON for ${slug} must be extracted from migration SQL`);
+      assert.ok(
+        match && match[1],
+        `Metadata JSON for ${slug} must be extracted from migration SQL`,
+      );
       const parsedSqlMeta = JSON.parse(match[1]);
-      assert.deepEqual(parsedSqlMeta, beBlock.metadata, `Metadata for ${slug} in migration SQL must match DEFAULT_CONTENT_BLOCKS`);
+      assert.deepEqual(
+        parsedSqlMeta,
+        beBlock.metadata,
+        `Metadata for ${slug} in migration SQL must match DEFAULT_CONTENT_BLOCKS`,
+      );
     }
   });
 });
