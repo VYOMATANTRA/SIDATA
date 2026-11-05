@@ -10,6 +10,22 @@ import {
 } from './audit.service.js';
 import { executeLockedTransaction, withChangeResult } from '../utils/lockTransactionCache.js';
 import { hasFieldChanged } from '../utils/comparator.js';
+import {
+  parseRtLeadersCsv,
+  type RtLeaderImportError,
+  type RtLeaderImportRow,
+} from '../utils/rtLeadersCsv.js';
+import {
+  isSeededKetuaRtPointId,
+  parseSeedPointTombstones,
+  RT_SEED_POINT_TOMBSTONES_KEY,
+  serializeSeedPointTombstones,
+} from '../utils/rtSeedPoints.js';
+
+/** system_settings key: seed sets true; cleared only when no placeholder leaders remain. */
+export const RT_LEADERS_SAMPLE_ROSTER_KEY = 'maps.rt_leaders_sample_roster';
+
+export { RT_SEED_POINT_TOMBSTONES_KEY };
 
 export const ALL_SPATIAL_POINT_TYPES: readonly SpatialPointType[] = [
   'ketua_rt',
@@ -451,6 +467,8 @@ export async function getSpatialPointById(id: string): Promise<SpatialPointDTO |
 export async function getRtLeaders(query?: RtLeaderQuery): Promise<{
   leaders: RtLeaderDTO[];
   total: number;
+  /** True while the roster is still the seeded placeholder set (not live kelurahan data). */
+  isSampleRoster: boolean;
 }> {
   const where: {
     rtNumber?: number;
@@ -486,7 +504,7 @@ export async function getRtLeaders(query?: RtLeaderQuery): Promise<{
     }
   }
 
-  const [total, leaders] = await Promise.all([
+  const [total, leaders, sampleSetting] = await Promise.all([
     prisma.rtLeader.count({ where }),
     prisma.rtLeader.findMany({
       where,
@@ -494,7 +512,9 @@ export async function getRtLeaders(query?: RtLeaderQuery): Promise<{
       ...(typeof query?.limit === 'number' ? { take: query.limit } : {}),
       ...(typeof query?.offset === 'number' ? { skip: query.offset } : {}),
     }),
+    prisma.systemSetting.findUnique({ where: { key: RT_LEADERS_SAMPLE_ROSTER_KEY } }),
   ]);
+  const isSampleRoster = sampleSetting?.value === 'true';
 
   const rtNumbers = leaders.map((l) => l.rtNumber);
   // Note: `_count.rtCoverages` is the point's TOTAL coverage count, not just
@@ -560,6 +580,7 @@ export async function getRtLeaders(query?: RtLeaderQuery): Promise<{
   return {
     leaders: mappedLeaders,
     total,
+    isSampleRoster,
   };
 }
 
@@ -846,14 +867,47 @@ interface RtLeaderWriteRow {
 }
 
 interface SpatialWriteTxClient {
-  spatialPoint: Pick<typeof prisma.spatialPoint, 'findUnique' | 'create' | 'update' | 'delete'>;
+  spatialPoint: Pick<
+    typeof prisma.spatialPoint,
+    'findUnique' | 'findMany' | 'create' | 'update' | 'delete'
+  >;
   spatialPointRt: Pick<
     typeof prisma.spatialPointRt,
     'findMany' | 'findUnique' | 'create' | 'createMany' | 'delete' | 'deleteMany'
   >;
-  rtLeader: Pick<typeof prisma.rtLeader, 'findUnique' | 'update'>;
+  rtLeader: Pick<typeof prisma.rtLeader, 'findUnique' | 'findMany' | 'update'>;
+  systemSetting: Pick<typeof prisma.systemSetting, 'upsert' | 'findUnique'>;
   auditLog: Pick<typeof prisma.auditLog, 'create'>;
   $queryRaw: (query: Prisma.Sql) => Promise<unknown>;
+}
+
+/** Record a deleted seeded point id so re-seed will not recreate it (same tx as delete+audit). */
+async function recordSeededPointTombstone(
+  tx: Pick<SpatialWriteTxClient, 'systemSetting' | '$queryRaw'>,
+  pointId: string,
+): Promise<void> {
+  if (!isSeededKetuaRtPointId(pointId)) return;
+  // Ensure row exists before taking row-level lock (avoiding gap locks on missing rows)
+  await tx.systemSetting.upsert({
+    where: { key: RT_SEED_POINT_TOMBSTONES_KEY },
+    create: { key: RT_SEED_POINT_TOMBSTONES_KEY, value: '[]' },
+    update: {},
+  });
+  await tx.$queryRaw(
+    Prisma.sql`SELECT setting_key FROM system_settings WHERE setting_key = ${RT_SEED_POINT_TOMBSTONES_KEY} FOR UPDATE`,
+  );
+  const existing = await tx.systemSetting.findUnique({
+    where: { key: RT_SEED_POINT_TOMBSTONES_KEY },
+  });
+  const ids = parseSeedPointTombstones(existing?.value);
+  if (ids.has(pointId)) return;
+  ids.add(pointId);
+  const value = serializeSeedPointTombstones(ids);
+  await tx.systemSetting.upsert({
+    where: { key: RT_SEED_POINT_TOMBSTONES_KEY },
+    create: { key: RT_SEED_POINT_TOMBSTONES_KEY, value },
+    update: { value },
+  });
 }
 
 function isPrismaKnownError(error: unknown, code: string): boolean {
@@ -1397,6 +1451,9 @@ export const deleteSpatialPoint = async (
           tx,
         );
 
+        // Editor delete of a seeded Ketua RT point must stick across re-seeds (SPEC §2).
+        await recordSeededPointTombstone(tx, existing.id);
+
         return before;
       },
     });
@@ -1678,3 +1735,215 @@ export const updateRtLeader = async (
     throw error;
   }
 };
+
+// --- RT leader CSV import ----------------------------------------------------------
+
+export interface RtLeaderImportRowPreview {
+  rowNumber: number;
+  rtNumber: number;
+  name: string;
+  action: 'update' | 'unchanged';
+  changedFields: string[];
+}
+
+export interface RtLeaderImportPreview {
+  rows: RtLeaderImportRowPreview[];
+  errors: RtLeaderImportError[];
+  summary: { total: number; changed: number; unchanged: number; errors: number };
+}
+
+type ImportLeaderRow = Pick<
+  RtLeaderWriteRow,
+  'rtNumber' | 'name' | 'phone' | 'phoneIsWhatsapp' | 'alamat'
+>;
+
+function importChangedFields(existing: ImportLeaderRow, row: RtLeaderImportRow): string[] {
+  const changed: string[] = [];
+  if (row.name !== undefined && hasFieldChanged(existing.name, row.name)) changed.push('name');
+  if (row.phone !== undefined && hasFieldChanged(existing.phone, row.phone)) changed.push('phone');
+  if (row.phoneIsWhatsapp !== undefined && existing.phoneIsWhatsapp !== row.phoneIsWhatsapp) {
+    changed.push('phoneIsWhatsapp');
+  }
+  if (row.alamat !== undefined && hasFieldChanged(existing.alamat, row.alamat))
+    changed.push('alamat');
+  if (row.latitude !== undefined) changed.push('coordinates');
+  return changed;
+}
+
+/** Validates a CSV without writing; unknown RT numbers are reported as row errors. */
+export async function previewRtLeadersImport(
+  csv: string,
+  client = prisma,
+): Promise<RtLeaderImportPreview> {
+  const parsed = parseRtLeadersCsv(csv);
+  const errors = [...parsed.errors];
+  const leaders = await client.rtLeader.findMany();
+  const byRt = new Map(leaders.map((leader) => [leader.rtNumber, leader]));
+  const rows: RtLeaderImportRowPreview[] = [];
+
+  for (const row of parsed.rows) {
+    const existing = byRt.get(row.rtNumber);
+    if (!existing) {
+      errors.push({ rowNumber: row.rowNumber, field: 'rtNumber', message: 'RT tidak ditemukan.' });
+      continue;
+    }
+    const changedFields = importChangedFields(existing, row);
+    rows.push({
+      rowNumber: row.rowNumber,
+      rtNumber: row.rtNumber,
+      name: row.name ?? existing.name,
+      action: changedFields.length > 0 ? 'update' : 'unchanged',
+      changedFields,
+    });
+  }
+
+  const changed = rows.filter((row) => row.action === 'update').length;
+  return {
+    rows,
+    errors,
+    summary: {
+      total: rows.length,
+      changed,
+      unchanged: rows.length - changed,
+      errors: errors.length,
+    },
+  };
+}
+
+export async function importRtLeadersCsv(
+  csv: string,
+  actor: AuditActor,
+  reqContext: AuditRequestContext,
+  client = prisma,
+): Promise<RtLeaderImportPreview> {
+  const preview = await previewRtLeadersImport(csv, client);
+  if (preview.errors.length > 0) {
+    throw new MapsServiceError(
+      `Impor dibatalkan: ${preview.errors.length} baris tidak valid. ${preview.errors[0]?.message ?? ''}`,
+      400,
+    );
+  }
+  if (preview.summary.changed === 0) return preview;
+
+  const parsed = parseRtLeadersCsv(csv);
+  const byRt = new Map(parsed.rows.map((row) => [row.rtNumber, row]));
+  const changedRtNumbers: number[] = [];
+  const changedFieldSet = new Set<string>();
+
+  await executeLockedTransaction({
+    client,
+    lockQuery: Prisma.sql`SELECT rt_number FROM rt_leaders ORDER BY rt_number FOR UPDATE`,
+    execute: async (txRaw) => {
+      const tx = txRaw as SpatialWriteTxClient;
+      const existingRows = (await tx.rtLeader.findMany()) as unknown as ImportLeaderRow[];
+      const pointRows = (await tx.spatialPoint.findMany()) as Array<{
+        id: string;
+        type: string;
+      }>;
+      const pointTypeById = new Map(pointRows.map((point) => [point.id, point.type]));
+      const coverageRows = (await tx.spatialPointRt.findMany()) as Array<{
+        pointId: string;
+        rtNumber: number;
+      }>;
+      const ketuaRtPointByRt = new Map<number, string>();
+      const duplicateRts = new Set<number>();
+      for (const coverage of coverageRows) {
+        if (pointTypeById.get(coverage.pointId) !== 'ketua_rt') continue;
+        if (ketuaRtPointByRt.has(coverage.rtNumber)) duplicateRts.add(coverage.rtNumber);
+        else ketuaRtPointByRt.set(coverage.rtNumber, coverage.pointId);
+      }
+
+      for (const existing of existingRows) {
+        const row = byRt.get(existing.rtNumber);
+        if (!row) continue;
+        const changedFields = importChangedFields(existing, row);
+        if (changedFields.length === 0) continue;
+        for (const field of changedFields) changedFieldSet.add(field);
+
+        await tx.rtLeader.update({
+          where: { rtNumber: existing.rtNumber },
+          data: {
+            ...(row.name !== undefined ? { name: row.name } : {}),
+            ...(row.phone !== undefined ? { phone: row.phone } : {}),
+            ...(row.phoneIsWhatsapp !== undefined ? { phoneIsWhatsapp: row.phoneIsWhatsapp } : {}),
+            ...(row.alamat !== undefined ? { alamat: row.alamat } : {}),
+          },
+        });
+        if (row.latitude !== undefined && row.longitude !== undefined) {
+          if (duplicateRts.has(existing.rtNumber)) {
+            throw new MapsServiceError(
+              `RT ${existing.rtNumber} memiliki lebih dari satu titik ketua_rt; perbaiki data spasial terlebih dahulu.`,
+              409,
+            );
+          }
+          const pointId = ketuaRtPointByRt.get(existing.rtNumber);
+          if (pointId) {
+            await tx.spatialPoint.update({
+              where: { id: pointId },
+              data: { latitude: row.latitude, longitude: row.longitude },
+            });
+          } else {
+            await tx.spatialPoint.create({
+              data: {
+                name: `Pos RT ${String(existing.rtNumber).padStart(2, '0')} Kelurahan Manggar`,
+                type: 'ketua_rt',
+                latitude: row.latitude,
+                longitude: row.longitude,
+                metadata: { keterangan: `Titik RT ${existing.rtNumber}` },
+                rtCoverages: { create: [{ rtNumber: existing.rtNumber }] },
+              },
+            });
+          }
+        }
+        changedRtNumbers.push(existing.rtNumber);
+      }
+
+      await buildAuditLog(
+        {
+          action: AUDIT_ACTIONS.RT_LEADERS_IMPORTED,
+          actor,
+          target: { type: 'rt_leader', id: null, label: 'csv-import' },
+          metadata: { changedRtNumbers, changedFields: [...changedFieldSet] },
+          context: reqContext,
+        },
+        tx,
+      );
+    },
+  });
+
+  return preview;
+}
+
+export async function setRtLeaderSampleStatus(
+  isSample: boolean,
+  actor: AuditActor,
+  reqContext: AuditRequestContext,
+  client = prisma,
+): Promise<{ isSampleRoster: boolean }> {
+  await executeLockedTransaction({
+    client,
+    lockQuery: Prisma.sql`SELECT setting_key FROM system_settings WHERE setting_key = ${RT_LEADERS_SAMPLE_ROSTER_KEY} FOR UPDATE`,
+    execute: async (txRaw) => {
+      const tx = txRaw as SpatialWriteTxClient;
+      const previous = await tx.systemSetting.findUnique({
+        where: { key: RT_LEADERS_SAMPLE_ROSTER_KEY },
+      });
+      await tx.systemSetting.upsert({
+        where: { key: RT_LEADERS_SAMPLE_ROSTER_KEY },
+        create: { key: RT_LEADERS_SAMPLE_ROSTER_KEY, value: isSample ? 'true' : 'false' },
+        update: { value: isSample ? 'true' : 'false' },
+      });
+      await buildAuditLog(
+        {
+          action: AUDIT_ACTIONS.RT_ROSTER_STATUS_CHANGED,
+          actor,
+          target: { type: 'rt_leader', id: null, label: 'sample-status' },
+          metadata: { from: previous?.value ?? null, to: isSample ? 'true' : 'false' },
+          context: reqContext,
+        },
+        tx,
+      );
+    },
+  });
+  return { isSampleRoster: isSample };
+}

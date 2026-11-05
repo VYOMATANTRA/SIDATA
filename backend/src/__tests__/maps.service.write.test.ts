@@ -8,7 +8,10 @@ import {
   deleteSpatialPointCoverage,
   updateRtLeader,
   MapsServiceError,
+  RT_LEADERS_SAMPLE_ROSTER_KEY,
+  RT_SEED_POINT_TOMBSTONES_KEY,
 } from '../services/maps.service.js';
+import { seededKetuaRtPointId } from '../../prisma/seedRtLeaders.js';
 import prisma from '../utils/prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
 
@@ -102,6 +105,8 @@ let queryRawCalls: unknown[][];
 let pointCalls: Record<string, unknown[][]>;
 let rtsCalls: Record<string, unknown[][]>;
 let leaderCalls: Record<string, unknown[][]>;
+let settingCalls: Record<string, unknown[][]>;
+let settings: Map<string, string>;
 let originals: Array<{ target: AnyRecord; key: string; fn: unknown }>;
 
 function stubMethod(target: AnyRecord, key: string, fn: unknown) {
@@ -158,6 +163,8 @@ beforeEach(() => {
   pointCalls = {};
   rtsCalls = {};
   leaderCalls = {};
+  settingCalls = {};
+  settings = new Map([[RT_LEADERS_SAMPLE_ROSTER_KEY, 'true']]);
   originals = [];
   seedState([], []);
 
@@ -268,6 +275,18 @@ beforeEach(() => {
       const where = (args as { where: { rtNumber: number } }).where;
       return leaders.get(where.rtNumber) ?? null;
     },
+    findMany: async (args: AnyRecord) => {
+      const select = (args as { select?: Record<string, boolean> }).select;
+      const rows = [...leaders.values()];
+      if (!select) return rows;
+      return rows.map((row) => {
+        const out: AnyRecord = {};
+        for (const key of Object.keys(select)) {
+          if (select[key]) out[key] = (row as unknown as AnyRecord)[key];
+        }
+        return out;
+      });
+    },
     update: async (args: AnyRecord) => {
       const { where, data } = args as { where: { rtNumber: number }; data: AnyRecord };
       const found = leaders.get(where.rtNumber);
@@ -314,6 +333,30 @@ beforeEach(() => {
     spatialPoint: proxied(pointImpl, pointCalls),
     spatialPointRt: proxied(rtsImpl, rtsCalls),
     rtLeader: proxied(leaderImpl, leaderCalls),
+    systemSetting: proxied(
+      {
+        findUnique: async (args: AnyRecord) => {
+          const where = (args as { where: { key: string } }).where;
+          const value = settings.get(where.key);
+          return value === undefined ? null : { key: where.key, value };
+        },
+        upsert: async (args: AnyRecord) => {
+          const { where, create, update } = args as {
+            where: { key: string };
+            create: { key: string; value: string };
+            update: { value?: string };
+          };
+          const existing = settings.get(where.key);
+          if (existing === undefined) {
+            settings.set(create.key, create.value);
+            return { key: create.key, value: create.value };
+          }
+          if (update.value !== undefined) settings.set(where.key, update.value);
+          return { key: where.key, value: settings.get(where.key) };
+        },
+      },
+      settingCalls,
+    ),
     auditLog: {
       create: (async (...args: never[]) => {
         const { data } = args[0] as unknown as { data: AnyRecord };
@@ -894,6 +937,57 @@ describe('maps.service deleteSpatialPointCoverage', () => {
 // updateRtLeader
 // ---------------------------------------------------------------------------
 
+describe('maps.service deleteSpatialPoint seed tombstones', () => {
+  it('records a seeded Ketua RT point id in system_settings inside the delete transaction', async () => {
+    const seededId = seededKetuaRtPointId(5);
+    seedState([ketuaPoint({ id: seededId, name: 'Pos RT 05 Kelurahan Manggar' })], [], {
+      [seededId]: [5],
+    });
+
+    await deleteSpatialPoint(seededId, ACTOR, CONTEXT);
+
+    assert.equal(points.has(seededId), false);
+    assert.equal(auditRows[0]?.action, 'spatial_point.deleted');
+    const raw = settings.get(RT_SEED_POINT_TOMBSTONES_KEY);
+    assert.ok(raw, 'tombstone setting must be written');
+    assert.deepEqual(JSON.parse(raw!), [seededId]);
+  });
+
+  it('does not tombstone a non-seeded point id', async () => {
+    seedState([ketuaPoint({ id: 'point-custom' })], [], { 'point-custom': [5] });
+    await deleteSpatialPoint('point-custom', ACTOR, CONTEXT);
+    assert.equal(settings.get(RT_SEED_POINT_TOMBSTONES_KEY), undefined);
+  });
+
+  it('locks the tombstone settings row and accumulates multiple deleted seeded point ids', async () => {
+    const id1 = seededKetuaRtPointId(1);
+    const id2 = seededKetuaRtPointId(2);
+    seedState(
+      [
+        ketuaPoint({ id: id1, name: 'Pos RT 01 Kelurahan Manggar' }),
+        ketuaPoint({ id: id2, name: 'Pos RT 02 Kelurahan Manggar' }),
+      ],
+      [],
+      { [id1]: [1], [id2]: [2] },
+    );
+
+    await deleteSpatialPoint(id1, ACTOR, CONTEXT);
+    await deleteSpatialPoint(id2, ACTOR, CONTEXT);
+
+    const sqlOf = (args: unknown) =>
+      ((args as unknown[] | undefined)?.[0] as Prisma.Sql | undefined)?.sql ?? String(args);
+    const tombstoneLocks = queryRawCalls.filter((args) =>
+      sqlOf(args).includes('system_settings WHERE setting_key ='),
+    );
+    assert.equal(tombstoneLocks.length, 2, 'each delete must lock the tombstone settings row');
+
+    const raw = settings.get(RT_SEED_POINT_TOMBSTONES_KEY);
+    assert.ok(raw);
+    const parsed = JSON.parse(raw!) as string[];
+    assert.deepEqual(parsed.sort(), [id1, id2].sort());
+  });
+});
+
 describe('maps.service updateRtLeader', () => {
   it('rejects out-of-range rtNumber before opening a transaction', async () => {
     await assertServiceError(updateRtLeader(0, { name: 'X' }, ACTOR, CONTEXT), 400);
@@ -930,6 +1024,73 @@ describe('maps.service updateRtLeader', () => {
     const metadata = auditRows[0]?.metadata as AnyRecord;
     assert.deepEqual(metadata['changedFields'], ['name', 'phone', 'phoneIsWhatsapp']);
     assert.equal(metadata['changes'], undefined);
+    // An ordinary edit must not certify the whole roster as official.
+    assert.equal(settingCalls['upsert'], undefined);
+    assert.equal(settings.get(RT_LEADERS_SAMPLE_ROSTER_KEY), 'true');
+  });
+
+  it('keeps the sample-roster flag when other placeholder rows remain', async () => {
+    const placeholder1 = sampleLeader({
+      rtNumber: 1,
+      name: 'Ketua RT 01',
+      phone: '—',
+      phoneIsWhatsapp: false,
+      alamat: 'Jl. Contoh RT 01, Manggar',
+    });
+    const placeholder2 = sampleLeader({
+      rtNumber: 2,
+      name: 'Ketua RT 02',
+      phone: '—',
+      phoneIsWhatsapp: false,
+      alamat: 'Jl. Contoh RT 02, Manggar',
+    });
+    seedState([], [placeholder1, placeholder2], {});
+
+    await updateRtLeader(
+      1,
+      { name: 'Ketua Baru', phone: '081200000001', phoneIsWhatsapp: true },
+      ACTOR,
+      CONTEXT,
+    );
+
+    assert.equal(settings.get(RT_LEADERS_SAMPLE_ROSTER_KEY), 'true');
+  });
+
+  it('never clears the sample-roster flag on an ordinary edit', async () => {
+    const placeholder1 = sampleLeader({
+      rtNumber: 1,
+      name: 'Ketua RT 01',
+      phone: '—',
+      phoneIsWhatsapp: false,
+      alamat: 'Jl. Contoh RT 01, Manggar',
+    });
+    seedState([], [placeholder1], {});
+
+    await updateRtLeader(
+      1,
+      { name: 'Ketua Baru', phone: '081200000001', phoneIsWhatsapp: true },
+      ACTOR,
+      CONTEXT,
+    );
+
+    assert.equal(settings.get(RT_LEADERS_SAMPLE_ROSTER_KEY), 'true');
+  });
+
+  it('does not clear the sample-roster flag on a no-op PATCH', async () => {
+    seedState([], [sampleLeader()], {});
+    await updateRtLeader(5, { name: 'Andi Pratama' }, ACTOR, CONTEXT);
+    assert.equal(settingCalls['upsert'], undefined);
+    assert.equal(settings.get(RT_LEADERS_SAMPLE_ROSTER_KEY), 'true');
+  });
+
+  it('skips the full roster scan if the sample-roster flag is already false', async () => {
+    settings.set(RT_LEADERS_SAMPLE_ROSTER_KEY, 'false');
+    seedState([], [sampleLeader()], {});
+
+    await updateRtLeader(5, { name: 'Nama Terverifikasi' }, ACTOR, CONTEXT);
+
+    assert.equal(leaderCalls['findMany'], undefined);
+    assert.equal(settingCalls['upsert'], undefined);
   });
 
   it('collapses a blank alamat to null', async () => {

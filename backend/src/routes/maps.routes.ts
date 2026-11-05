@@ -11,9 +11,12 @@ import {
   createPointCoverageHandler,
   deletePointCoverageHandler,
   updateRtLeaderHandler,
+  previewRtLeaderImportHandler,
+  importRtLeaderCsvHandler,
+  setRtLeaderSampleStatusHandler,
 } from '../controllers/maps.controller.js';
 import { verifyToken } from '../middlewares/auth.middleware.js';
-import { requireEditorOrAdmin } from '../middlewares/role.middleware.js';
+import { requireAdmin, requireEditorOrAdmin } from '../middlewares/role.middleware.js';
 import {
   apiLimiter,
   mapsPointsLimiter,
@@ -73,6 +76,30 @@ router.delete(
   requireEditorOrAdmin,
   mapsWriteLimiter,
   deletePointCoverageHandler,
+);
+router.post(
+  '/rt-leaders/import/preview',
+  apiLimiter,
+  verifyToken,
+  requireEditorOrAdmin,
+  mapsWriteLimiter,
+  previewRtLeaderImportHandler,
+);
+router.post(
+  '/rt-leaders/import',
+  apiLimiter,
+  verifyToken,
+  requireEditorOrAdmin,
+  mapsWriteLimiter,
+  importRtLeaderCsvHandler,
+);
+router.patch(
+  '/rt-leaders/sample-status',
+  apiLimiter,
+  verifyToken,
+  requireAdmin,
+  mapsWriteLimiter,
+  setRtLeaderSampleStatusHandler,
 );
 router.patch(
   '/rt-leaders/:rtNumber',

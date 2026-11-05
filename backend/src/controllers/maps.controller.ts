@@ -19,6 +19,9 @@ import {
   createSpatialPointCoverage,
   deleteSpatialPointCoverage,
   updateRtLeader,
+  previewRtLeadersImport,
+  importRtLeadersCsv,
+  setRtLeaderSampleStatus,
 } from '../services/maps.service.js';
 import type { SpatialPointType } from '../../generated/prisma/client.js';
 
@@ -433,6 +436,74 @@ export const updateRtLeaderHandler = async (req: AuthRequest, res: Response): Pr
     }
     console.error(
       'Error saat memperbarui Ketua RT:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
+    return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
+  }
+};
+
+export const previewRtLeaderImportHandler = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<Response> => {
+  try {
+    if (typeof req.body?.csv !== 'string' || req.body.csv.trim() === '') {
+      return res.status(400).json({ error: 'Berkas CSV wajib diisi.' });
+    }
+    return res.status(200).json(await previewRtLeadersImport(req.body.csv));
+  } catch (error) {
+    console.error(
+      'Error saat mempratinjau impor Ketua RT:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
+    return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
+  }
+};
+
+export const importRtLeaderCsvHandler = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<Response> => {
+  try {
+    if (typeof req.body?.csv !== 'string' || req.body.csv.trim() === '') {
+      return res.status(400).json({ error: 'Berkas CSV wajib diisi.' });
+    }
+    const actor = requireActor(req);
+    const result = await importRtLeadersCsv(req.body.csv, actor, extractRequestContext(req));
+    return res.status(200).json({ message: 'Impor Ketua RT berhasil', ...result });
+  } catch (error) {
+    if (error instanceof MapsServiceError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    console.error(
+      'Error saat mengimpor Ketua RT:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
+    return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
+  }
+};
+
+export const setRtLeaderSampleStatusHandler = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<Response> => {
+  try {
+    if (typeof req.body?.isSample !== 'boolean') {
+      return res.status(400).json({ error: 'isSample harus berupa boolean.' });
+    }
+    const actor = requireActor(req);
+    const result = await setRtLeaderSampleStatus(
+      req.body.isSample,
+      actor,
+      extractRequestContext(req),
+    );
+    return res.status(200).json({ message: 'Status contoh daftar Ketua RT diperbarui', ...result });
+  } catch (error) {
+    if (error instanceof MapsServiceError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    console.error(
+      'Error saat memperbarui status daftar Ketua RT:',
       error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
     );
     return res.status(500).json({ error: 'Terjadi kesalahan internal server' });

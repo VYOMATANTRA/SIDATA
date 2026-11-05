@@ -78,6 +78,30 @@ Notes:
   states: Sosial Kemasyarakatan is the last, unnumbered chapter of Pemerintahan & Kelembagaan, and Persampahan &
   Bank Sampah Unit starts with Bank Sampah Unit, Program Eco Boba and Booklet Eco Boba chapters.
   Seeding never overwrites titles or ordering an editor has since changed.
+- The Ketua RT roster the repository ships is **synthetic only** (`backend/src/data/rtLeadersData.ts`):
+  placeholder names, placeholder phone numbers, and generated coordinates. Real Ketua RT names, phone
+  numbers, and home locations are personal data and must never be committed. The operational roster is
+  loaded from a non-committed source or an admin import at deploy time — see §10 for the open
+  import-path question.
+- Every RT-leader seed upsert carries `update: {}`. Re-running the seed fills in rows that are
+  missing and nothing else; it must never revert a correction an editor has already made.
+- Deleting a **seeded** Ketua RT spatial point (deterministic seed id) is also a correction: the
+  delete path records the point id in `system_settings` key `maps.rt_seed_point_tombstones` (JSON
+  id array) in the **same transaction** as the point delete and its audit row (SPEC §3). Re-seed
+  skips tombstoned ids — it must not recreate the point or its default `spatial_point_rt` coverage.
+  An empty database with no tombstones still seeds the full synthetic roster.
+- Production seeds 100 empty Ketua RT slots (RT number only). Names, phone numbers, addresses, and
+  coordinates enter only through the CMS/CSV import, so real roster data is never committed to the
+  repository. Development seeds a fully synthetic roster and synthetic map points.
+- The public "data contoh" sample-roster flag (`maps.rt_leaders_sample_roster`) is explicit: ordinary
+  leader edits and CSV imports never change it. Only an Admin may flip it through
+  `PATCH /api/maps/rt-leaders/sample-status`, which is audited. Production seeds it `false`;
+  development seeds it `true` because its map coordinates are synthetic.
+- `GET /api/maps/rt-leaders` returns `{ leaders, total, isSampleRoster }`; the public sample notice
+  follows this explicit flag and is never inferred from whether phone numbers look synthetic. The
+  Ketua RT page revalidates the roster every 60 seconds while visible and when a hidden tab becomes
+  visible after the cache expires. It keeps the last successful rows and sample flag together if a
+  revalidation fails.
 - `GET /api/pages` and `GET /api/pages/:slug` expose the hierarchy publicly (page → chapters →
   sections, each ordered by `sort_order`). `GET /api/pages?include=sections` returns every page
   with its chapters and sections in one request (one nested query), so a caller that needs all
@@ -120,6 +144,13 @@ verification/lockout) is recorded in `audit_logs` (§7). Read access is admin-on
 also where the tier-1 prose-builder override log (§5) lives (`comparison_template.keyword_warning_overridden`), rather
 than a second table — `target_type`/`target_id` are unconstrained (no FK) specifically so future
 content tables (indicators, prose, RT leaders, etc.) can be audited without a schema change.
+
+Legacy development RT sample cleanup (`maintenance.legacy_rt_cleanup`) is recorded once, in the
+same transaction as any changed point/coverage/leader rows. It uses warning severity and a system
+actor; metadata contains source, row counts, force/environment context, and timestamp only—never
+leader names or phone numbers. A no-op cleanup writes no database audit row. Both the non-production
+seed and the maintenance CLI call the shared cleanup service. The CLI refuses production unless
+`--force` is supplied.
 
 - **Severity is fixed per action, not chosen per call site** — `info` / `warning` / `critical`,
   defined once in `backend/src/services/audit.service.ts`'s `AUDIT_ACTIONS` table. `critical`
@@ -355,10 +386,23 @@ buried inside a stat page. Entry points:
 
 The page provides **in-table search**: a single labelled text input filtering on both
 `rt_number` and leader `name`, applied client-side over the full 100-row set (no server
-round-trip, no pagination). The visible row count is announced as results change
-("Menampilkan N dari 100 RT"). Rows remain sorted by `rt_number` and the unfiltered table is
-the default state, so the page is fully usable with JavaScript-driven filtering ignored. No
-RT-range grouping or collapsible bands — flat table only.
+round-trip). A digits-only query matches the RT number as a prefix and also matches names that
+contain those digits, so `1` finds RT 1 and RT 10–19, while `007` still finds RT 7. The matching
+rows are then **paginated client-side**, defaulting to **10 rows per page**, with a page-size
+control (10/25/50/100 rows) and a bounded page-number list. Paging never costs a second request —
+the page already asks for all 100 leaders in one call. The live region announces only the number
+of matches ("Menampilkan N dari 100 RT"); the visible page range stays outside the live region so
+paging does not re-announce the same count. Rows remain sorted by `rt_number` and the unfiltered
+table is the default state. The `Alamat` column is automatically hidden when no leader in the
+displayed dataset has an address value. A prominent sample-data notice follows the explicit
+`maps.rt_leaders_sample_roster` flag, never a phone/name heuristic. No RT-range grouping or
+collapsible bands — flat table only.
+
+Operational roster entry is available in the CMS: manual editing of name, phone, WhatsApp flag,
+address, and optional coordinates, plus CSV preview/apply. CSV columns are
+`rtNumber,name,phone,phoneIsWhatsapp,alamat,latitude,longitude`; blank cells preserve existing
+values, omitted RTs are never deleted, and the whole import rolls back if any row is invalid.
+Coordinates create or update the RT's 1:1 `ketua_rt` spatial point.
 
 Accessibility implications, per `docs/ACCESSIBILITY.md`: the input needs a real `<label>` (not
 placeholder-only), the result count belongs in an `aria-live="polite"` region, and the table
@@ -482,3 +526,9 @@ Single register — unresolved questions live here and nowhere else.
   not infer an appointment process.
 - **Vision and mission statement:** No approved wording was found in the inspected source set. Keep
   this section omitted until the Kelurahan provides an approved vision/mission document.
+- **Operational Ketua RT roster import (settled):** Deployment seeds 100 empty slots; real names,
+  phones, addresses, and coordinates enter through the CMS manual editor or CSV import and are
+  never committed to the repository. Synthetic contacts and coordinates stay development-only.
+- **Public visibility of Ketua RT contacts (settled):** The Ketua RT page and Peta detail publish
+  names, phone numbers, and addresses. The API serves the same fields to both entry points; contact
+  values remain empty until an approved source provides them.
