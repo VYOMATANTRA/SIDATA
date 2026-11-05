@@ -88,6 +88,46 @@ function installFetchMock(overrides: FetchOverrides = {}) {
       return json({ indicators: [indicator], total: 1, page: 1, pageSize: 200 });
     }
 
+    if (url === '/api/content-blocks') {
+      return json({
+        blocks: [
+          {
+            id: 'b-hero',
+            slug: 'landing-hero',
+            type: 'hero',
+            title: 'Sistem Informasi Data Terpadu Kelurahan',
+            body: 'Selamat datang di portal data kelurahan.',
+            metadata: null,
+            sortOrder: null,
+            createdAt: CREATED,
+            updatedAt: CREATED,
+          },
+          {
+            id: 'b-sambutan',
+            slug: 'landing-sambutan-lurah',
+            type: 'sambutan_lurah',
+            title: 'Sambutan Lurah Manggar',
+            body: 'Sambutan resmi.',
+            metadata: null,
+            sortOrder: null,
+            createdAt: CREATED,
+            updatedAt: CREATED,
+          },
+          {
+            id: 'b-profil',
+            slug: 'tentang-kelurahan-profil',
+            type: 'prose',
+            title: 'Profil Kelurahan Manggar',
+            body: 'Data profil.',
+            metadata: null,
+            sortOrder: null,
+            createdAt: CREATED,
+            updatedAt: CREATED,
+          },
+        ],
+      });
+    }
+
     if (url === '/api/indicator-tables?pageSize=200') {
       return json({ tables: [table], total: 1, page: 1, pageSize: 200 });
     }

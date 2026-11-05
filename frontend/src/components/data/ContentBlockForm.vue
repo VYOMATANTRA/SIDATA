@@ -100,16 +100,17 @@ function readBatasWilayah(meta: Record<string, unknown> | null): BatasDraft[] {
 
 function readSotkMembers(meta: Record<string, unknown> | null): SotkDraft[] {
   const raw = meta?.sotkMembers;
+  const initialLurah = meta?.lurahName ? String(meta.lurahName).trim() : '';
   if (!Array.isArray(raw)) {
     return [
-      { role: 'Lurah', officialName: '', duties: '' },
+      { role: 'Lurah', officialName: initialLurah, duties: '' },
       { role: 'Sekretaris Lurah', officialName: '', duties: '' },
       { role: 'Kasi Trantib L-H', officialName: '', duties: '' },
       { role: 'Kasi Pemerintahan dan Pelayanan Publik', officialName: '', duties: '' },
       { role: 'Kasi Pemberdayaan Masyarakat', officialName: '', duties: '' },
     ];
   }
-  return raw.map((item) => {
+  const members = raw.map((item) => {
     const row = item as Record<string, unknown>;
     return {
       role: String(row.role ?? ''),
@@ -117,27 +118,39 @@ function readSotkMembers(meta: Record<string, unknown> | null): SotkDraft[] {
       duties: row.duties == null ? '' : String(row.duties),
     };
   });
+  const lurahRow = members.find((m) => m.role.trim().toLowerCase() === 'lurah');
+  if (lurahRow && !lurahRow.officialName && initialLurah) {
+    lurahRow.officialName = initialLurah;
+  }
+  return members;
 }
 
 const metaRecord = props.block.metadata as Record<string, unknown> | null;
 const profilBatas = ref<BatasDraft[]>(readBatasWilayah(metaRecord));
 const profilSotk = ref<SotkDraft[]>(readSotkMembers(metaRecord));
-const profilLurahName = ref(
-  String(
-    metaRecord?.lurahName ??
-      profilSotk.value.find((m) => m.role.trim().toLowerCase() === 'lurah')?.officialName ??
-      '',
-  ),
-);
-/** Which Lurah name control the editor last changed ('field' | 'sotk' | 'none'). */
-const lurahEditSource = ref<'none' | 'field' | 'sotk'>('none');
+
+// Single source of truth: Lurah name is a two-way computed lens directly on the SOTK Lurah row
+const profilLurahName = computed({
+  get: () => {
+    const lurah = profilSotk.value.find((m) => m.role.trim().toLowerCase() === 'lurah');
+    return lurah ? lurah.officialName : '';
+  },
+  set: (value: string) => {
+    const lurah = profilSotk.value.find((m) => m.role.trim().toLowerCase() === 'lurah');
+    if (lurah) {
+      lurah.officialName = value;
+    } else if (value.trim()) {
+      profilSotk.value = [{ role: 'Lurah', officialName: value, duties: '' }, ...profilSotk.value];
+    }
+  },
+});
 
 function markLurahFieldEdited(): void {
-  lurahEditSource.value = 'field';
+  // Maintained for backward compatibility
 }
 
-function markSotkLurahEdited(role: string): void {
-  if (role.trim().toLowerCase() === 'lurah') lurahEditSource.value = 'sotk';
+function markSotkLurahEdited(): void {
+  // Maintained for backward compatibility
 }
 
 const profilLurahTitle = ref(String(metaRecord?.lurahTitle ?? 'Lurah Kelurahan Manggar'));
@@ -157,12 +170,7 @@ function addSotkRow(): void {
 }
 
 function removeSotkRow(index: number): void {
-  const removed = profilSotk.value[index];
   profilSotk.value = profilSotk.value.filter((_, i) => i !== index);
-  if (removed?.role.trim().toLowerCase() === 'lurah') {
-    lurahEditSource.value = 'sotk';
-    profilLurahName.value = '';
-  }
 }
 
 // Raw JSON fallback for generic/custom blocks (not used for profile — dedicated fields instead)
@@ -291,35 +299,19 @@ function handleSubmit(): void {
       photoUrl: authorPhotoUrl.value.trim() || undefined,
     };
   } else if (isProfil.value) {
-    const lurahName = profilLurahName.value.trim();
     const lurahTitle = profilLurahTitle.value.trim();
     const batasWilayah = profilBatas.value.map((row) => ({
       arah: row.arah.trim(),
       wilayah: row.wilayah.trim(),
     }));
-    let sotkMembers = profilSotk.value.map((row) => ({
+    const sotkMembers = profilSotk.value.map((row) => ({
       role: row.role.trim(),
       officialName: row.officialName.trim() || null,
       duties: row.duties.trim() || null,
     }));
-    // Copy only the Lurah name control the editor actually changed (Andi #112).
-    const lurahIdx = sotkMembers.findIndex((m) => m.role.trim().toLowerCase() === 'lurah');
-    let resolvedLurahName = lurahName;
-    if (lurahEditSource.value === 'field') {
-      if (lurahIdx >= 0) {
-        sotkMembers = sotkMembers.map((m, i) =>
-          i === lurahIdx ? { ...m, officialName: lurahName || null } : m,
-        );
-      } else if (lurahName) {
-        // When no SOTK row for 'Lurah' exists, entering a Lurah name in the dedicated
-        // top input intentionally prepends a new 'Lurah' SOTK row so the SOTK roster
-        // reflects the leadership structure without requiring manual row recreation.
-        sotkMembers = [{ role: 'Lurah', officialName: lurahName, duties: null }, ...sotkMembers];
-      }
-    } else if (lurahEditSource.value === 'sotk') {
-      const fromSotk = lurahIdx >= 0 ? (sotkMembers[lurahIdx]?.officialName ?? '').trim() : '';
-      resolvedLurahName = fromSotk;
-    }
+    const lurahRow = sotkMembers.find((m) => m.role.trim().toLowerCase() === 'lurah');
+    const resolvedLurahName = (lurahRow?.officialName ?? '').trim();
+
     metadata = {
       ...props.block.metadata,
       rtCount: Number(profilRtCount.value),
@@ -678,7 +670,7 @@ function handleSubmit(): void {
               v-model="row.officialName"
               type="text"
               placeholder="Nama pejabat belum tersedia"
-              @input="markSotkLurahEdited(row.role)"
+              @input="markSotkLurahEdited"
               maxlength="150"
               :class="INPUT_CLASSES"
               :aria-describedby="describedBy"

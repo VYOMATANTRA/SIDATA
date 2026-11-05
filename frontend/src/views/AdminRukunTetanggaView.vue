@@ -162,10 +162,20 @@ async function saveLeader() {
   // 2. Compute contact patch (only send changed fields; omit unchanged empty name on fresh slot)
   const contactPatch: Record<string, unknown> = {};
   if (snapshot.name !== base.name) contactPatch.name = snapshot.name;
-  if (snapshot.phone !== base.phone) contactPatch.phone = snapshot.phone;
-  if (snapshot.phoneIsWhatsapp !== base.phoneIsWhatsapp)
-    contactPatch.phoneIsWhatsapp = snapshot.phoneIsWhatsapp;
-  if (snapshot.alamat !== (base.alamat ?? '')) contactPatch.alamat = snapshot.alamat;
+  if (snapshot.phone !== base.phone) {
+    contactPatch.phone = snapshot.phone;
+    if (snapshot.phone === '') {
+      snapshot.phoneIsWhatsapp = false;
+      contactPatch.phoneIsWhatsapp = false;
+    }
+  }
+  if (snapshot.phoneIsWhatsapp !== base.phoneIsWhatsapp) {
+    contactPatch.phoneIsWhatsapp = snapshot.phone === '' ? false : snapshot.phoneIsWhatsapp;
+  }
+  const normalizedAlamat = snapshot.alamat === '' ? null : snapshot.alamat;
+  if (normalizedAlamat !== base.alamat) {
+    contactPatch.alamat = normalizedAlamat;
+  }
 
   // 3. Compute location operation according to transition table
   const coordsChanged =
@@ -595,8 +605,15 @@ async function setSampleStatus(isSample: boolean) {
             class="mt-1 w-full"
           />
         </div>
-        <label class="flex items-center gap-2 text-sm text-slate-700">
-          <input v-model="draft.phoneIsWhatsapp" :disabled="isSaving" type="checkbox" />
+        <label
+          class="flex items-center gap-2 text-sm text-slate-700"
+          :class="{ 'cursor-not-allowed opacity-50': !draft.phone.trim() }"
+        >
+          <input
+            v-model="draft.phoneIsWhatsapp"
+            :disabled="isSaving || !draft.phone.trim()"
+            type="checkbox"
+          />
           Nomor ini memiliki WhatsApp
         </label>
         <div>

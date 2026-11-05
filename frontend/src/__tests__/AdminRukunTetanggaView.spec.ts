@@ -123,6 +123,40 @@ describe('AdminRukunTetanggaView.vue', () => {
     expect(deleteReq?.url).toContain('/api/maps/points/point-1');
   });
 
+  it('sends null for cleared address and forces phoneIsWhatsapp to false when phone is blank', async () => {
+    const requests: { url: string; method: string; body?: Record<string, unknown> }[] = [];
+    setupFetchMock((url, init) => {
+      if (init?.method && ['PATCH', 'DELETE', 'POST'].includes(init.method)) {
+        requests.push({
+          url,
+          method: init.method,
+          body: init.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : undefined,
+        });
+        return { ok: true, json: async () => ({ message: 'success' }) } as Response;
+      }
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+
+    // Open RT 1 (has phone '081234' and alamat 'Jl. Mulawarman')
+    await wrapper.find('[data-test="rt-edit-1"]').trigger('click');
+
+    // Clear phone and alamat
+    await wrapper.find('input#rt-phone').setValue('');
+    await wrapper.find('textarea#rt-alamat').setValue('');
+
+    // Submit form
+    await wrapper.find('form').trigger('submit');
+    await flushPromises();
+
+    const patchReq = requests.find((r) => r.method === 'PATCH' && r.url.includes('/rt-leaders/1'));
+    expect(patchReq).toBeDefined();
+    expect(patchReq?.body?.phone).toBe('');
+    expect(patchReq?.body?.phoneIsWhatsapp).toBe(false);
+    expect(patchReq?.body?.alamat).toBe(null);
+  });
+
   it('creates new spatial point when previously empty slot sets location', async () => {
     const requests: { url: string; method: string; body?: Record<string, unknown> }[] = [];
     setupFetchMock((url, init) => {

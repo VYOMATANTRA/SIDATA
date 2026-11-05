@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, it } from 'node:test';
@@ -43,6 +43,10 @@ function normalize(item: PublicationLike): NormalizedPublication {
 describe('publikasi catalog FE↔BE sync', () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const fePath = join(here, '../../../frontend/src/content/publikasi.ts');
+  const migrationSqlPath = join(
+    here,
+    '../../prisma/migrations/20261105000000_backfill_cms_blocks/migration.sql',
+  );
 
   it(
     'DEFAULT_CONTENT_BLOCKS publikasi-katalog matches frontend PUBLICATIONS',
@@ -65,4 +69,24 @@ describe('publikasi catalog FE↔BE sync', () => {
       assert.deepEqual(publications.map(normalize), fePublications.map(normalize));
     },
   );
+
+  it('migration 20261105000000_backfill_cms_blocks SQL values stay in sync with DEFAULT_CONTENT_BLOCKS', () => {
+    assert.ok(existsSync(migrationSqlPath), 'migration SQL file must exist');
+    const sql = readFileSync(migrationSqlPath, 'utf8');
+
+    for (const slug of ['tentang-kelurahan-profil', 'publikasi-katalog']) {
+      const beBlock = DEFAULT_CONTENT_BLOCKS.find((b) => b.slug === slug);
+      assert.ok(beBlock, `DEFAULT_CONTENT_BLOCKS must define ${slug}`);
+
+      assert.ok(sql.includes(`'${slug}'`), `Migration SQL must insert ${slug}`);
+      assert.ok(sql.includes(`'${beBlock.title}'`), `Migration SQL must insert matching title for ${slug}`);
+      assert.ok(sql.includes(`'${beBlock.body}'`), `Migration SQL must insert matching body for ${slug}`);
+
+      // Verify metadata JSON embedded in the SQL matches
+      const match = sql.match(new RegExp(`'${slug}',\\s*'[^']+',\\s*'[^']+',\\s*'({.+?})'`, 's'));
+      assert.ok(match && match[1], `Metadata JSON for ${slug} must be extracted from migration SQL`);
+      const parsedSqlMeta = JSON.parse(match[1]);
+      assert.deepEqual(parsedSqlMeta, beBlock.metadata, `Metadata for ${slug} in migration SQL must match DEFAULT_CONTENT_BLOCKS`);
+    }
+  });
 });

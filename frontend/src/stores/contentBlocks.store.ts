@@ -123,12 +123,14 @@ export const DEFAULT_CONTENT_BLOCKS: Record<string, ContentBlock> = {
 
 export const useContentBlocksStore = defineStore('contentBlocks', () => {
   const blocks = ref<Record<string, ContentBlock>>({ ...DEFAULT_CONTENT_BLOCKS });
+  const serverBlocks = ref<Record<string, ContentBlock>>({});
   const isLoading = ref(false);
   const isLoaded = ref(false);
   const error = ref<string | null>(null);
 
   let inFlight: Promise<void> | null = null;
 
+  const editableBlocks = computed<ContentBlock[]>(() => Object.values(serverBlocks.value));
   const hero = computed<ContentBlock>(() => blocks.value['landing-hero'] ?? DEFAULT_HERO_BLOCK);
   const sambutanLurah = computed<ContentBlock>(
     () => blocks.value['landing-sambutan-lurah'] ?? DEFAULT_SAMBUTAN_BLOCK,
@@ -160,12 +162,15 @@ export const useContentBlocksStore = defineStore('contentBlocks', () => {
         const data = (await response.json()) as { blocks?: ContentBlock[] };
         if (Array.isArray(data.blocks)) {
           const map: Record<string, ContentBlock> = { ...DEFAULT_CONTENT_BLOCKS };
+          const serverMap: Record<string, ContentBlock> = {};
           for (const item of data.blocks) {
             if (item && item.slug) {
               map[item.slug] = item;
+              serverMap[item.slug] = item;
             }
           }
           blocks.value = map;
+          serverBlocks.value = serverMap;
           isLoaded.value = true;
         }
       } catch (err) {
@@ -194,11 +199,17 @@ export const useContentBlocksStore = defineStore('contentBlocks', () => {
       ...blocks.value,
       [data.block.slug]: data.block,
     };
+    serverBlocks.value = {
+      ...serverBlocks.value,
+      [data.block.slug]: data.block,
+    };
     return data.block;
   }
 
   return {
     blocks,
+    serverBlocks,
+    editableBlocks,
     isLoading,
     isLoaded,
     error,

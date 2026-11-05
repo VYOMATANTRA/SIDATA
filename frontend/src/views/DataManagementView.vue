@@ -170,7 +170,7 @@ const cards = computed<IndicatorCardModel[]>(() => {
   }));
 
   if (activeTab.value === 'konten') {
-    return Object.values(contentBlocksStore.blocks)
+    return contentBlocksStore.editableBlocks
       .map((block) => ({
         id: block.slug,
         type: 'konten' as const,
@@ -455,44 +455,6 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
       </button>
     </div>
 
-    <div class="mt-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-      <form
-        role="search"
-        aria-label="Saring daftar data"
-        class="flex w-full flex-col gap-3 sm:flex-row sm:items-end md:w-auto"
-        @submit.prevent
-      >
-        <div class="w-full sm:w-72">
-          <label for="data-search" class="block text-xs font-medium text-slate-600">
-            Cari data
-          </label>
-          <input
-            id="data-search"
-            v-model="searchQuery"
-            type="search"
-            placeholder="Nama indikator, halaman, atau sumber"
-            :class="INPUT_CLASSES"
-            class="mt-1"
-          />
-        </div>
-
-        <div v-if="activeTab === 'indikator'" class="w-full sm:w-52">
-          <label for="data-type" class="block text-xs font-medium text-slate-600">
-            Tipe data
-          </label>
-          <select id="data-type" v-model="typeFilter" :class="INPUT_CLASSES" class="mt-1">
-            <option value="all">Semua Tipe Data</option>
-            <option value="skalar">Skalar</option>
-            <option value="matriks">Matriks</option>
-          </select>
-        </div>
-      </form>
-
-      <p class="text-xs text-slate-600 md:text-right" aria-live="polite" data-test="result-count">
-        Menampilkan {{ filteredCards.length }} dari {{ cards.length }} data
-      </p>
-    </div>
-
     <div
       v-if="loadError"
       role="alert"
@@ -512,53 +474,121 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
       data tetap dapat diedit.
     </p>
 
-    <div role="tabpanel" :id="`panel-${activeTab}`" :aria-labelledby="`tab-${activeTab}`">
-      <p
-        v-if="isLoading && cards.length === 0"
-        class="mt-10 text-sm text-slate-600"
-        aria-live="polite"
-      >
-        Memuat data…
-      </p>
+    <div
+      v-for="tab in availableTabs"
+      :key="tab.id"
+      :id="`panel-${tab.id}`"
+      role="tabpanel"
+      :aria-labelledby="`tab-${tab.id}`"
+      :hidden="activeTab !== tab.id"
+    >
+      <template v-if="activeTab === tab.id">
+        <div class="mt-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <form
+            role="search"
+            aria-label="Saring daftar data"
+            class="flex w-full flex-col gap-3 sm:flex-row sm:items-end md:w-auto"
+            @submit.prevent
+          >
+            <div class="w-full sm:w-72">
+              <label for="data-search" class="block text-xs font-medium text-slate-600">
+                Cari data
+              </label>
+              <input
+                id="data-search"
+                v-model="searchQuery"
+                type="search"
+                placeholder="Nama indikator, halaman, atau sumber"
+                :class="INPUT_CLASSES"
+                class="mt-1"
+              />
+            </div>
 
-      <div
-        v-else-if="filteredCards.length === 0"
-        class="rounded-card mt-10 border border-dashed border-slate-300 bg-white px-6 py-12 text-center"
-      >
-        <p class="text-base font-semibold text-slate-800">
-          {{ cards.length === 0 ? 'Belum ada data indikator' : 'Tidak ada data yang cocok' }}
-        </p>
-        <p class="mx-auto mt-2 max-w-md text-sm text-slate-600">
-          <template v-if="cards.length === 0">
-            Data indikator dan tabel matriks belum tersedia untuk lingkungan ini. Setelah datanya
-            diisi, kartunya akan muncul di sini dan bisa diedit.
-          </template>
-          <template v-else>
-            Ubah kata kunci pencarian atau pilih tipe data lain untuk melihat data yang lain.
-          </template>
-        </p>
-        <BaseButton
-          v-if="cards.length > 0"
-          variant="secondary"
-          size="sm"
-          class="mt-4"
-          @click="
-            searchQuery = '';
-            typeFilter = 'all';
-          "
+            <div v-if="activeTab === 'indikator'" class="w-full sm:w-52">
+              <label for="data-type" class="block text-xs font-medium text-slate-600">
+                Tipe data
+              </label>
+              <select id="data-type" v-model="typeFilter" :class="INPUT_CLASSES" class="mt-1">
+                <option value="all">Semua Tipe Data</option>
+                <option value="skalar">Skalar</option>
+                <option value="matriks">Matriks</option>
+              </select>
+            </div>
+          </form>
+
+          <p
+            class="text-xs text-slate-600 md:text-right"
+            aria-live="polite"
+            data-test="result-count"
+          >
+            Menampilkan {{ filteredCards.length }} dari {{ cards.length }} data
+          </p>
+        </div>
+
+        <p
+          v-if="isLoading && cards.length === 0"
+          class="mt-10 text-sm text-slate-600"
+          aria-live="polite"
         >
-          Kosongkan filter
-        </BaseButton>
-      </div>
+          Memuat data…
+        </p>
 
-      <template v-else>
-        <h2 class="sr-only">Daftar data</h2>
+        <div
+          v-else-if="filteredCards.length === 0"
+          class="rounded-card mt-10 border border-dashed border-slate-300 bg-white px-6 py-12 text-center"
+        >
+          <p class="text-base font-semibold text-slate-800">
+            {{
+              cards.length === 0
+                ? activeTab === 'konten'
+                  ? 'Belum ada data blok konten'
+                  : activeTab === 'pengaturan'
+                    ? 'Belum ada pengaturan'
+                    : 'Belum ada data indikator'
+                : 'Tidak ada data yang cocok'
+            }}
+          </p>
+          <p class="mx-auto mt-2 max-w-md text-sm text-slate-600">
+            <template v-if="cards.length === 0">
+              <template v-if="activeTab === 'konten'">
+                Blok konten belum tersedia untuk lingkungan ini. Setelah dimigrasikan atau diisi,
+                kartunya akan muncul di sini dan bisa diedit.
+              </template>
+              <template v-else-if="activeTab === 'pengaturan'">
+                Pengaturan publik belum dikonfigurasi.
+              </template>
+              <template v-else>
+                Data indikator dan tabel matriks belum tersedia untuk lingkungan ini. Setelah
+                datanya diisi, kartunya akan muncul di sini dan bisa diedit.
+              </template>
+            </template>
+            <template v-else>
+              Ubah kata kunci pencarian atau pilih tipe data lain untuk melihat data yang lain.
+            </template>
+          </p>
+          <BaseButton
+            v-if="cards.length > 0"
+            variant="secondary"
+            size="sm"
+            class="mt-4"
+            @click="
+              searchQuery = '';
+              typeFilter = 'all';
+            "
+          >
+            Kosongkan filter
+          </BaseButton>
+        </div>
 
-        <ul class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <li v-for="card in filteredCards" :key="`${card.type}-${card.id}`" class="h-full">
-            <IndicatorCard :card="card" @edit="handleEdit(card)" />
-          </li>
-        </ul>
+        <template v-else>
+          <h2 class="sr-only">Daftar data</h2>
+
+          <ul class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <li v-for="card in filteredCards" :key="`${card.type}-${card.id}`" class="h-full">
+              <IndicatorCard :card="card" @edit="handleEdit(card)" />
+            </li>
+          </ul>
+        </template>
       </template>
     </div>
 
