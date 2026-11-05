@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import TentangPageLayout from '../components/tentang/TentangPageLayout.vue';
 import TentangBreadcrumb from '../components/tentang/TentangBreadcrumb.vue';
 import TentangPhotoHero from '../components/tentang/TentangPhotoHero.vue';
@@ -15,7 +16,6 @@ import {
   RT_COUNT,
   KECAMATAN,
   KOTA,
-  LANDSCAPE,
   BATAS_WILAYAH,
   SOTK_MEMBERS,
   LURAH_OFFICIAL,
@@ -23,7 +23,6 @@ import {
   BOUNDARY_SOURCE_CITATION,
 } from '../content/tentang';
 import heroImage from '@/assets/img/background_laman_depan_kelurahan.webp';
-import lurahPhoto from '@/assets/img/lurah_placeholder_sample.webp';
 
 interface PotentialItem {
   title: string;
@@ -57,6 +56,8 @@ const potentials: PotentialItem[] = [
 const POPULATION_INDICATOR_SLUG = 'jumlah-penduduk';
 
 const indicatorsStore = useIndicatorsStore();
+const router = useRouter();
+const hasMapRoute = computed(() => router.getRoutes().some((route) => route.path === '/peta'));
 
 onMounted(() => {
   void indicatorsStore.fetchBySlug(POPULATION_INDICATOR_SLUG);
@@ -81,7 +82,7 @@ function retryPopulation() {
 }
 
 const formattedPopulation = computed(() => {
-  if (populationError.value) return null;
+  // A failed refresh must not hide the last value the store intentionally kept.
   const indicator = populationIndicator.value;
   if (!indicator) return null;
   const num = Number(indicator.valueCurrent);
@@ -98,7 +99,6 @@ const formattedPopulation = computed(() => {
 const wilayahStats = computed<StatItem[]>(() => [
   { icon: 'house', value: String(RT_COUNT), label: 'Rukun Tetangga terdaftar' },
   { icon: 'density', value: KECAMATAN, label: `Kecamatan, ${KOTA}` },
-  { icon: 'landscape', value: LANDSCAPE, label: 'Potensi pantai & pertanian' },
   { icon: 'statistics', value: 'Desa Cantik', label: 'Kelurahan Cinta Statistik' },
 ]);
 </script>
@@ -128,15 +128,39 @@ const wilayahStats = computed<StatItem[]>(() => [
     </section>
 
     <!-- 2. Loaded state: Stat hero with exact period snapshot & hedge note -->
-    <TentangStatHero
-      v-else-if="formattedPopulation"
-      label="Sekilas Manggar"
-      :value="formattedPopulation.value"
-      :unit="formattedPopulation.unit"
-      :caption="formattedPopulation.caption"
-      :subcaption="formattedPopulation.subcaption"
-      :hedge-note="formattedPopulation.hedgeNote"
-    />
+    <template v-else-if="formattedPopulation">
+      <TentangStatHero
+        label="Sekilas Manggar"
+        :value="formattedPopulation.value"
+        :unit="formattedPopulation.unit"
+        :caption="formattedPopulation.caption"
+        :subcaption="formattedPopulation.subcaption"
+        :hedge-note="formattedPopulation.hedgeNote"
+      />
+      <section
+        v-if="populationError"
+        class="bg-white px-4 pb-10 sm:px-6 sm:pb-12"
+        aria-label="Pemberitahuan pembaruan data"
+      >
+        <div
+          class="mx-auto flex max-w-5xl flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between"
+          data-test="population-stale-notice"
+          role="status"
+        >
+          <p>
+            Gagal memperbarui data. Menampilkan angka terakhir yang berhasil dimuat.
+            <span class="block text-amber-800">{{ populationError }}</span>
+          </p>
+          <button
+            type="button"
+            class="border-brand-navy text-brand-navy hover:bg-brand-navy shrink-0 rounded border px-3 py-1.5 text-xs font-semibold hover:text-white"
+            @click="retryPopulation"
+          >
+            Coba Lagi
+          </button>
+        </div>
+      </section>
+    </template>
 
     <!-- 3. Error state: network or server failure with retry button -->
     <section
@@ -217,12 +241,18 @@ const wilayahStats = computed<StatItem[]>(() => [
         <TentangResourceCard
           title="Peta Spasial RT dan Bank Sampah Unit"
           icon="map"
-          to="/peta"
-          cta-label="Lihat Peta"
+          :to="hasMapRoute ? '/peta' : undefined"
+          :cta-label="hasMapRoute ? 'Buka peta' : undefined"
+          data-test="map-resource-card"
           class="flex-1"
         >
           Peta lokasi rumah ketua RT dan bank sampah aktif di Kelurahan Manggar, Kecamatan
           {{ KECAMATAN }}.
+          <template v-if="!hasMapRoute" #footer>
+            <p data-test="map-card-coming-soon" class="text-sm font-medium text-white">
+              Segera hadir
+            </p>
+          </template>
         </TentangResourceCard>
 
         <TentangResourceCard
@@ -252,15 +282,7 @@ const wilayahStats = computed<StatItem[]>(() => [
           class="rounded-btn mt-5 flex flex-col items-center gap-6 border border-gray-300 bg-white p-5 sm:flex-row sm:items-start sm:p-6"
         >
           <div class="flex shrink-0 flex-col items-center text-center sm:w-56">
-            <div class="bg-brand-cyan h-40 w-40 overflow-hidden rounded-full sm:h-48 sm:w-48">
-              <img
-                :src="lurahPhoto"
-                alt=""
-                class="h-40 w-40 object-cover object-top sm:h-48 sm:w-48"
-              />
-            </div>
-            <!-- Name & Title below the photo -->
-            <div class="mt-4 flex flex-col items-center text-center">
+            <div class="flex flex-col items-center text-center">
               <h3 class="text-brand-navy text-lg font-bold">
                 {{ LURAH_OFFICIAL?.officialName ?? 'Nama pejabat belum tersedia' }}
               </h3>

@@ -451,6 +451,11 @@ Implemented frontend routes:
 
 `/tentang` redirects to `/tentang/kelurahan-manggar`.
 
+The `/permintaan-data` guide cites UU 14/2008 Pasal 22 ayat (7)–(8) for the 10+7 working-day
+PPID reply window, Pasal 35 ayat (1) and Pasal 36 for the objection windows, and Pasal 37–38
+with PerKI No. 1/2013 Pasal 13 for disputes. The local PPID SOP is a procedure reference, not a
+substitute for the statute.
+
 The Kelurahan Manggar profile publishes **Kelurahan Karang Joang** only as its northern
 administrative boundary, following the 2025 boundary table in `Manggar Dalam Angka 2026`
 (Tabel 1.1.2; printed p. 18, PDF viewer p. 19).
@@ -531,10 +536,3 @@ Single register — unresolved questions live here and nowhere else.
   the same fields to both entry points. Confirm with the kelurahan whether the directory is
   published as-is, or needs a reduced field set (for example address withheld, or contact only on
   request). Any reduced public field set must be enforced at the API, not only hidden in one view.
-- **Permintaan Data / UU 14/2008 citations (settled 2026-10-30):** Public copy on `/permintaan-data`
-  uses Pasal 22 ayat (7)–(8) for the 10+7 working-day PPID reply window; Pasal 35 ayat (1) for
-  keberatan grounds; Pasal 36 ayat (1) for the 30 working-day window to *file* keberatan; Pasal 36
-  ayat (2) for the 30 working-day *atasan PPID* reply; Pasal 37–38 (+ PerKI No. 1/2013 Pasal 13)
-  for sengketa to Komisi Informasi. Verified against pasal.id Pasal 35–36 pages and the UU 14/2008
-  text mirrors at Bank Indonesia and e-PPID Komisi Informasi (links in the PR / this bullet).
-  SOP PPID Balikpapan remains a local procedure reference alongside the statute — not a substitute.
