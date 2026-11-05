@@ -60,6 +60,8 @@ Backend runs on port from `PORT` env var (default 3000). Prisma client is genera
 
 **Never develop directly on `main`** — always create a feature/fix/docs/chore branch and open a PR. `main` should only receive changes via merged PRs.
 
+**Never commit or push production data** — real production data (including names, phone numbers, addresses, coordinates, user records, exports, database dumps, and credentials) must never be committed or pushed to GitHub under any circumstance unless the repository owner explicitly instructs it. Use synthetic data for development and tests; production data enters at runtime through the CMS, CSV import, or deployment environment, never through the repository.
+
 **Keep documentation in sync** — whenever a change affects setup, commands, architecture, env vars, or workflows, update the relevant docs (README.md, CONTRIBUTING.md, SECURITY.md, this file) in the same PR rather than leaving them stale.
 
 **Keep the spec in sync** — whenever a change settles or revises a product/domain decision (page structure, content model, roles, data-entry rules, schema design intent, scope), update `docs/SPEC.md` in the same PR. Record the decision and the rule it implies, not the deliberation behind it — rationale for settled questions is context every future session pays for. Unresolved questions belong in SPEC.md §10 and nowhere else.
