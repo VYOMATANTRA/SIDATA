@@ -207,7 +207,7 @@ async function handleLogout() {
         :inert="mobileOpen ? true : undefined"
         :aria-expanded="!isCollapsed"
         aria-controls="admin-sidebar-nav-list"
-        :aria-label="isCollapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'"
+        aria-label="Ciutkan sidebar"
         data-test="sidebar-collapse-toggle"
         @click="toggleCollapse"
       >

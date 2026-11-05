@@ -170,15 +170,17 @@ describe('AdminSidebar.vue', () => {
     expect(sistemButtonIcons[1]?.classes()).toContain('md:hidden');
   });
 
-  it('toggles collapse state via the collapse button with aria-expanded', async () => {
+  it('toggles collapse state via the collapse button with aria-expanded and a constant aria-label', async () => {
     const { wrapper } = await mountSidebar('admin');
 
     const toggle = wrapper.find('[data-test="sidebar-collapse-toggle"]');
     expect(toggle.element.tagName).toBe('BUTTON');
     expect(toggle.attributes('aria-expanded')).toBe('true');
+    expect(toggle.attributes('aria-label')).toBe('Ciutkan sidebar');
 
     await toggle.trigger('click');
     expect(toggle.attributes('aria-expanded')).toBe('false');
+    expect(toggle.attributes('aria-label')).toBe('Ciutkan sidebar');
   });
 
   it('renders as a labelled nav landmark', async () => {
