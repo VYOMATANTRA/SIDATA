@@ -5,7 +5,7 @@ import { createRouter, createMemoryHistory } from 'vue-router';
 import TentangKelurahanManggarView from '../views/TentangKelurahanManggarView.vue';
 import { useIndicatorsStore, type IndicatorDto } from '../stores/indicators.store';
 
-function mountView() {
+function mountView(options: { includeMapRoute?: boolean } = {}) {
   const pinia = createPinia();
   setActivePinia(pinia);
 
@@ -15,6 +15,9 @@ function mountView() {
       { path: '/', component: { template: '<div>Home</div>' } },
       { path: '/tentang', component: { template: '<div>Tentang</div>' } },
       { path: '/tentang/kelurahan-manggar', component: TentangKelurahanManggarView },
+      ...(options.includeMapRoute
+        ? [{ path: '/peta', component: { template: '<div>Peta</div>' } }]
+        : []),
       { path: '/:pathMatch(.*)*', component: { template: '<div>Page</div>' } },
     ],
   });
@@ -164,7 +167,7 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(fetchSpy).toHaveBeenCalledWith('jumlah-penduduk', true);
   });
 
-  it('renders error state even if bySlug contained a previous value before the failed refetch', async () => {
+  it('keeps showing the last good population value when a refresh fails', async () => {
     const { pinia, router } = mountView();
     const indicatorsStore = useIndicatorsStore();
     indicatorsStore.bySlug = {
@@ -190,7 +193,8 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
       },
     };
     indicatorsStore.loadingBySlug['jumlah-penduduk'] = false;
-    indicatorsStore.errorsBySlug['jumlah-penduduk'] = 'Gagal memuat indikator (status 404)';
+    indicatorsStore.errorsBySlug['jumlah-penduduk'] = 'Gagal memuat indikator (status 500)';
+    const fetchSpy = vi.spyOn(indicatorsStore, 'fetchBySlug').mockResolvedValue(null);
 
     await router.push('/tentang/kelurahan-manggar');
     await router.isReady();
@@ -200,8 +204,13 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(wrapper.find('[data-test="population-error"]').exists()).toBe(true);
-    expect(wrapper.text()).not.toContain('125.000');
+    expect(wrapper.find('[data-test="population-stale-notice"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain('125.000');
+    expect(wrapper.text()).toContain('Menampilkan angka terakhir yang berhasil dimuat');
+    expect(wrapper.find('[data-test="population-error"]').exists()).toBe(false);
+
+    await wrapper.find('[data-test="population-stale-notice"] button').trigger('click');
+    expect(fetchSpy).toHaveBeenLastCalledWith('jumlah-penduduk', true);
   });
 
   it('renders the population loading state without flashing an empty state', async () => {
@@ -268,7 +277,7 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(wrapper.find('button[aria-disabled="true"]').exists()).toBe(false);
   });
 
-  it('renders Lurah profile with accessible photo alt text', async () => {
+  it('renders the Lurah profile without a sample portrait', async () => {
     const { pinia, router } = mountView();
     await router.push('/tentang/kelurahan-manggar');
     await router.isReady();
@@ -277,10 +286,8 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
       global: { plugins: [pinia, router] },
     });
 
-    // The Lurah portrait uses decorative/empty alt per 89-B1 review resolution
-    const lurahImg = wrapper.find('img[src="/src/assets/img/lurah_placeholder_sample.webp"]');
-    expect(lurahImg.exists()).toBe(true);
-    expect(lurahImg.attributes('alt')).toBe('');
+    // A named official must never be paired with placeholder art.
+    expect(wrapper.find('img[src*="lurah_placeholder_sample"]').exists()).toBe(false);
     expect(wrapper.text()).toContain('Pimpinan Kelurahan');
     expect(wrapper.text()).toContain('Lurah Kelurahan Manggar');
     expect(wrapper.text()).toContain('Munir Achmad, S.E.');
@@ -318,6 +325,25 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
       'Peta lokasi rumah ketua RT dan bank sampah aktif di Kelurahan Manggar, Kecamatan Balikpapan Timur.',
     );
     expect(wrapper.text()).not.toContain('seluruh ketua RT');
+    const mapCard = wrapper.find('[data-test="map-resource-card"]');
+    expect(mapCard.find('[data-test="map-card-coming-soon"]').exists()).toBe(true);
+    expect(mapCard.find('a[href="/peta"]').exists()).toBe(false);
+  });
+
+  it('links the map card once the Peta route exists', async () => {
+    const { pinia, router } = mountView({ includeMapRoute: true });
+    await router.push('/tentang/kelurahan-manggar');
+    await router.isReady();
+
+    const wrapper = mount(TentangKelurahanManggarView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    const mapCard = wrapper.find('[data-test="map-resource-card"]');
+    expect(mapCard.find('[data-test="map-card-coming-soon"]').exists()).toBe(false);
+    const mapLink = mapCard.find('a[href="/peta"]');
+    expect(mapLink.exists()).toBe(true);
+    expect(mapLink.text()).toContain('Buka peta');
   });
 
   it('renders SOTK table with proper accessibility attributes', async () => {
@@ -414,8 +440,8 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
     expect(statCard.text()).toContain('Rukun Tetangga terdaftar');
     expect(statCard.text()).toContain('Balikpapan Timur');
     expect(statCard.text()).toContain('Kecamatan, Kota Balikpapan');
-    expect(statCard.text()).toContain('Pesisir & Dataran');
-    expect(statCard.text()).toContain('Potensi pantai & pertanian');
+    expect(statCard.text()).not.toContain('Pesisir & Dataran');
+    expect(statCard.text()).not.toContain('Potensi pantai & pertanian');
     expect(statCard.text()).toContain('Desa Cantik');
     expect(statCard.text()).toContain('Kelurahan Cinta Statistik');
 
