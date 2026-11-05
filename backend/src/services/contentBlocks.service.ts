@@ -51,7 +51,7 @@ export const DEFAULT_CONTENT_BLOCKS = [
     slug: 'landing-sambutan-lurah',
     type: 'sambutan_lurah' as const,
     title: 'Sambutan Lurah Manggar',
-    body: 'Selamat datang di Sistem Informasi Data Terpadu (SIDATA) Kelurahan Manggar. Portal ini kami hadirkan sebagai sarana transparansi informasi dan keterpaduan data statistik serta spasial guna mendukung perencanaan wilayah dan pelayanan masyarakat yang lebih efektif.',
+    body: 'Selamat datang di Sistem Informasi Data Terpadu (SIDATA) Kelurahan Manggar. Portal ini dihadirkan sebagai sarana transparansi informasi dan keterpaduan data statistik serta spasial guna mendukung perencanaan wilayah dan pelayanan masyarakat yang lebih efektif.',
     metadata: {
       authorName: 'Lurah Manggar',
       authorTitle: 'Kepala Kelurahan Manggar',
