@@ -204,4 +204,70 @@ describe('PublikasiView', () => {
     expect(link.attributes('href')).toBe('https://example.com/terbuka.pdf');
     expect(wrapper.find('[data-test="publication-status"]').exists()).toBe(false);
   });
+
+  it('renders file format and human-readable size when supplied on downloadable items', async () => {
+    const { router, wrapper } = mountPublikasiView();
+    await router.push('/publikasi');
+    await router.isReady();
+
+    const { useContentBlocksStore } = await import('../stores/contentBlocks.store');
+    const store = useContentBlocksStore();
+    store.blocks['publikasi-katalog'] = {
+      id: 'block-pub',
+      sectionId: null,
+      type: 'prose',
+      slug: 'publikasi-katalog',
+      title: 'Katalog',
+      body: 'Deskripsi',
+      metadata: {
+        publications: [
+          {
+            category: 'Statistik',
+            title: 'Dokumen Lengkap',
+            description: 'Ada tipe dan ukuran',
+            href: 'https://example.com/dokumen.pdf',
+            isAvailableOnline: true,
+            fileType: 'PDF',
+            fileSizeBytes: 2_450_000,
+          },
+        ],
+      },
+      sortOrder: null,
+      updatedAt: '2026-09-01T00:00:00.000Z',
+    };
+    await wrapper.vm.$nextTick();
+
+    const fileInfo = wrapper.find('[data-test="publication-file-info"]');
+    expect(fileInfo.exists()).toBe(true);
+    expect(fileInfo.text()).toContain('PDF');
+    expect(fileInfo.text()).toContain('2.3 MB');
+  });
+
+  it('honors an explicit empty catalog array without restoring default publications (D2)', async () => {
+    const { router, wrapper } = mountPublikasiView();
+    await router.push('/publikasi');
+    await router.isReady();
+
+    const { useContentBlocksStore } = await import('../stores/contentBlocks.store');
+    const store = useContentBlocksStore();
+    store.blocks['publikasi-katalog'] = {
+      id: 'block-pub',
+      sectionId: null,
+      type: 'prose',
+      slug: 'publikasi-katalog',
+      title: 'Katalog',
+      body: 'Deskripsi',
+      metadata: {
+        publications: [],
+      },
+      sortOrder: null,
+      updatedAt: '2026-09-01T00:00:00.000Z',
+    };
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('[data-test="empty-publication-catalog"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain('Belum ada publikasi');
+    expect(wrapper.find('[data-test="publication-list"]').exists()).toBe(false);
+    expect(wrapper.text()).toContain('0 publikasi');
+  });
 });

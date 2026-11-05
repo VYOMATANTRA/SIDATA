@@ -299,6 +299,18 @@ const publikasiItemSchema = z
       )
       .optional(),
     source: z.string().trim().max(500, 'Sumber maksimal 500 karakter').optional(),
+    fileType: z
+      .string()
+      .trim()
+      .min(1, 'Format berkas minimal 1 karakter')
+      .max(20, 'Format berkas maksimal 20 karakter')
+      .optional(),
+    fileSizeBytes: z
+      .number()
+      .int('Ukuran berkas harus bilangan bulat')
+      .positive('Ukuran berkas harus positif')
+      .max(Number.MAX_SAFE_INTEGER, 'Ukuran berkas melebihi batas maksimum')
+      .optional(),
     isAvailableOnline: z.boolean().default(false),
   })
   .refine(

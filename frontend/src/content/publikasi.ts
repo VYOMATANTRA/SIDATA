@@ -10,6 +10,10 @@ export interface PublicationItem {
    * verified source title is available yet.
    */
   source?: string;
+  /** Optional file format label (e.g. 'PDF', 'XLSX') */
+  fileType?: string;
+  /** Optional file size in bytes */
+  fileSizeBytes?: number;
 }
 
 /**
@@ -69,4 +73,11 @@ export function isDownloadable(item: PublicationItem): boolean {
 
 export function hasPublicPublication(list: PublicationItem[] = PUBLICATIONS): boolean {
   return list.some(isDownloadable);
+}
+
+export function formatFileSize(bytes?: number): string {
+  if (bytes === undefined || bytes === null || !Number.isFinite(bytes) || bytes <= 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
