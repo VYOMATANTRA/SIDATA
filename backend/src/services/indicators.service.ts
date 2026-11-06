@@ -306,6 +306,11 @@ const indicatorListCache = new KeyedLruCache<string, VersionedTtlCache<Indicator
 const indicatorIdToSlug = new Map<string, string>();
 const indicatorSlugToId = new Map<string, string>();
 
+// Avoid making every request wait for the database connection timeout during an outage.
+// Entries are bounded and never extend the last-known-good age limit.
+const INDICATOR_OUTAGE_RETRY_MS = 2_000;
+const indicatorOutageRetryAfter = new Map<string, number>();
+
 /**
  * Bumped on every committed indicator write so an in-flight read cannot warm stale DTOs.
  * Global on purpose: a write to one indicator skips warming any concurrent read. Cost is one extra DB read, not a stale cache.
@@ -314,6 +319,7 @@ let indicatorMutationEpoch = 0;
 
 function noteIndicatorMutation(): void {
   indicatorMutationEpoch++;
+  indicatorOutageRetryAfter.clear();
 }
 
 function rememberIndicatorIdentity(id: string, slug: string): void {
@@ -758,6 +764,17 @@ export const getIndicatorById = async (
     const slugCache = indicatorByIdCache.get(indicatorCacheKey('slug', lookup));
     const fromSlug = slugCache?.get();
     if (fromSlug) return fromSlug;
+
+    const retryAfter = indicatorOutageRetryAfter.get(lookup);
+    if (retryAfter !== undefined) {
+      if (Date.now() < retryAfter) {
+        const stale =
+          idCache?.getLastKnownGood(null, INDICATOR_LKG_MAX_AGE_MS) ??
+          slugCache?.getLastKnownGood(null, INDICATOR_LKG_MAX_AGE_MS);
+        if (stale) return stale;
+      }
+      indicatorOutageRetryAfter.delete(lookup);
+    }
   }
 
   // Probe under id:lookup; dual-write under the real id + slug keys after a hit.
@@ -790,6 +807,14 @@ export const getIndicatorById = async (
         slugCache?.getLastKnownGood(null, INDICATOR_LKG_MAX_AGE_MS) ??
         null;
       if (lkg) {
+        if (indicatorMutationEpoch === epochAtStart) {
+          if (indicatorOutageRetryAfter.size >= MAX_CACHE_ENTRIES) {
+            const oldest = indicatorOutageRetryAfter.keys().next().value;
+            if (oldest !== undefined) indicatorOutageRetryAfter.delete(oldest);
+          }
+          indicatorOutageRetryAfter.delete(lookup);
+          indicatorOutageRetryAfter.set(lookup, Date.now() + INDICATOR_OUTAGE_RETRY_MS);
+        }
         servedStaleId = normalizeIndicatorLookup(lkg.id) === lookup;
         return lkg;
       }
