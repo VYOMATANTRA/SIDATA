@@ -132,6 +132,11 @@ describe('router auth guard retry behavior', () => {
     expect(router.currentRoute.value.name).toBe('ketua-rt');
     expect(router.currentRoute.value.meta.title).toBe('Ketua RT');
 
+    await router.push('/peta');
+    expect(router.currentRoute.value.path).toBe('/peta');
+    expect(router.currentRoute.value.name).toBe('peta');
+    expect(router.currentRoute.value.meta.title).toBe('Peta');
+
     // Test redirect from /tentang to /tentang/kelurahan-manggar
     await router.push('/tentang');
     expect(router.currentRoute.value.path).toBe('/tentang/kelurahan-manggar');

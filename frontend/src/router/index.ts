@@ -257,6 +257,12 @@ const router = createRouter({
       component: () => import('../views/KetuaRtView.vue'),
       meta: { title: 'Ketua RT' },
     },
+    {
+      path: '/peta',
+      name: 'peta',
+      component: () => import('../views/PetaView.vue'),
+      meta: { title: 'Peta' },
+    },
   ],
 });
 
