@@ -647,7 +647,11 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
         return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response;
       }
       if (url.includes('/api/auth/logout')) {
-        return { ok: false, status: 401, json: async () => ({ error: 'Unauthorized' }) } as Response;
+        return {
+          ok: false,
+          status: 401,
+          json: async () => ({ error: 'Unauthorized' }),
+        } as Response;
       }
       return { ok: true, json: async () => ({}) } as Response;
     });

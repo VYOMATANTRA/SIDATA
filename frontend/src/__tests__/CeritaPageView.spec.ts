@@ -99,7 +99,11 @@ describe('CeritaPageView', () => {
     globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
       const url = String(input);
       if (url.startsWith('/api/pages/')) {
-        return { ok: false, status: 404, json: async () => ({ error: 'Halaman tidak ditemukan' }) } as Response;
+        return {
+          ok: false,
+          status: 404,
+          json: async () => ({ error: 'Halaman tidak ditemukan' }),
+        } as Response;
       }
       return { ok: true, json: async () => ({ blocks: [] }) } as Response;
     });
@@ -109,7 +113,9 @@ describe('CeritaPageView', () => {
     await flushPromises();
 
     expect(wrapper.find('[data-test="cerita-not-found"]').exists()).toBe(true);
-    expect(wrapper.find('[data-test="cerita-not-found"]').text()).toContain('Halaman tidak ditemukan');
+    expect(wrapper.find('[data-test="cerita-not-found"]').text()).toContain(
+      'Halaman tidak ditemukan',
+    );
   });
 
   it('shows an error state with a retry button on a server error, instead of a blank main', async () => {
@@ -251,7 +257,8 @@ describe('CeritaPageView', () => {
     const wrapper = mount(CeritaPageView, { global: { plugins: [pinia, router] } });
     await flushPromises();
 
-    const firstPageChapterLink = () => wrapper.find('[data-test="chapter-toc-rail"] [aria-current="true"]');
+    const firstPageChapterLink = () =>
+      wrapper.find('[data-test="chapter-toc-rail"] [aria-current="true"]');
     expect(firstPageChapterLink().exists()).toBe(true);
     expect(firstPageChapterLink().attributes('href')).toBe('#kependudukan-bab-1');
 
@@ -260,7 +267,8 @@ describe('CeritaPageView', () => {
 
     // Must highlight pendidikan's own chapter, never stay stuck on kependudukan's id (which no
     // longer matches anything in the new page's chapter list, so nothing would be highlighted).
-    const secondPageChapterLink = () => wrapper.find('[data-test="chapter-toc-rail"] [aria-current="true"]');
+    const secondPageChapterLink = () =>
+      wrapper.find('[data-test="chapter-toc-rail"] [aria-current="true"]');
     expect(secondPageChapterLink().exists()).toBe(true);
     expect(secondPageChapterLink().attributes('href')).toBe('#pendidikan-bab-1');
   });

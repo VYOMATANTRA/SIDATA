@@ -154,9 +154,7 @@ describe('DashboardView (TDD: Edge Cases First, Happy Path Last)', () => {
     await logoutBtn.trigger('click');
     await vi.waitUntil(() => wrapper.text().includes('Gagal memvalidasi token keamanan'));
 
-    expect(wrapper.text()).toContain(
-      'Gagal memvalidasi token keamanan (CSRF). Silakan coba lagi.',
-    );
+    expect(wrapper.text()).toContain('Gagal memvalidasi token keamanan (CSRF). Silakan coba lagi.');
     expect(authStore.isAuthenticated).toBe(true);
   });
 
@@ -260,7 +258,9 @@ describe('DashboardView (TDD: Edge Cases First, Happy Path Last)', () => {
     await logoutBtn.trigger('click');
     await vi.waitUntil(() => wrapper.find('[role="alert"]').exists());
 
-    expect(wrapper.text()).toContain('Terjadi kesalahan tidak terduga saat keluar. Silakan coba lagi.');
+    expect(wrapper.text()).toContain(
+      'Terjadi kesalahan tidak terduga saat keluar. Silakan coba lagi.',
+    );
     expect(authStore.isAuthenticated).toBe(true);
     expect(logoutBtn.attributes('disabled')).toBeUndefined();
   });

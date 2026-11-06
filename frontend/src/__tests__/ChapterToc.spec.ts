@@ -49,7 +49,9 @@ describe('ChapterToc.vue (sheet variant)', () => {
     // resolving to a real element; it's just hidden, not removed.
     expect(wrapper.find('[data-test="chapter-toc-sheet-panel"]').exists()).toBe(true);
     expect(isHidden(wrapper, '[data-test="chapter-toc-sheet-panel"]')).toBe(true);
-    expect(wrapper.find('[data-test="chapter-toc-trigger"]').attributes('aria-expanded')).toBe('false');
+    expect(wrapper.find('[data-test="chapter-toc-trigger"]').attributes('aria-expanded')).toBe(
+      'false',
+    );
   });
 
   it("the trigger's aria-controls points at the panel's actual id", () => {
@@ -57,7 +59,9 @@ describe('ChapterToc.vue (sheet variant)', () => {
       props: { chapters, activeChapterId: 'chap-1', variant: 'sheet' },
     });
 
-    const controlsId = wrapper.find('[data-test="chapter-toc-trigger"]').attributes('aria-controls');
+    const controlsId = wrapper
+      .find('[data-test="chapter-toc-trigger"]')
+      .attributes('aria-controls');
     expect(controlsId).toBeTruthy();
     expect(wrapper.find(`#${controlsId}`).attributes('data-test')).toBe('chapter-toc-sheet-panel');
   });
@@ -69,7 +73,9 @@ describe('ChapterToc.vue (sheet variant)', () => {
 
     await wrapper.find('[data-test="chapter-toc-trigger"]').trigger('click');
     expect(isHidden(wrapper, '[data-test="chapter-toc-sheet-panel"]')).toBe(false);
-    expect(wrapper.find('[data-test="chapter-toc-trigger"]').attributes('aria-expanded')).toBe('true');
+    expect(wrapper.find('[data-test="chapter-toc-trigger"]').attributes('aria-expanded')).toBe(
+      'true',
+    );
 
     await wrapper.findAll('[data-test="chapter-toc-link"]')[1]?.trigger('click');
 

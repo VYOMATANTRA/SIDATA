@@ -49,7 +49,7 @@ function toggleSheet() {
           :class="
             chapter.id === activeChapterId
               ? 'border-brand-cyan text-brand-navy font-semibold'
-              : 'border-transparent text-slate-500 hover:text-brand-navy'
+              : 'hover:text-brand-navy border-transparent text-slate-500'
           "
           :aria-current="chapter.id === activeChapterId ? 'true' : undefined"
           data-test="chapter-toc-link"
@@ -74,7 +74,9 @@ function toggleSheet() {
           <a
             :href="`#${chapter.slug}`"
             class="flex items-center gap-3 px-4 py-3 text-sm"
-            :class="chapter.id === activeChapterId ? 'text-brand-navy font-semibold' : 'text-slate-600'"
+            :class="
+              chapter.id === activeChapterId ? 'text-brand-navy font-semibold' : 'text-slate-600'
+            "
             :aria-current="chapter.id === activeChapterId ? 'true' : undefined"
             data-test="chapter-toc-link"
             @click="handleSelect(chapter.id)"

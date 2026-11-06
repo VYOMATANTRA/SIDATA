@@ -59,13 +59,7 @@ describe('Admin shell persistence across navigation (real router)', () => {
   });
 
   it('renders exactly one <h1>, one <header>, and one <main> across every migrated admin view', async () => {
-    const migratedPaths = [
-      '/admin',
-      '/data',
-      '/users',
-      '/audit-logs',
-      '/settings/audit-retention',
-    ];
+    const migratedPaths = ['/admin', '/data', '/users', '/audit-logs', '/settings/audit-retention'];
 
     await router.push('/admin');
     await router.isReady();
@@ -76,18 +70,11 @@ describe('Admin shell persistence across navigation (real router)', () => {
       await router.push(path);
       await flushPromises();
 
-      expect(
-        wrapper.findAll('h1').length,
-        `expected exactly one <h1> on "${path}"`,
-      ).toBe(1);
-      expect(
-        wrapper.findAll('header').length,
-        `expected exactly one <header> on "${path}"`,
-      ).toBe(1);
-      expect(
-        wrapper.findAll('main').length,
-        `expected exactly one <main> on "${path}"`,
-      ).toBe(1);
+      expect(wrapper.findAll('h1').length, `expected exactly one <h1> on "${path}"`).toBe(1);
+      expect(wrapper.findAll('header').length, `expected exactly one <header> on "${path}"`).toBe(
+        1,
+      );
+      expect(wrapper.findAll('main').length, `expected exactly one <main> on "${path}"`).toBe(1);
     }
   });
 });

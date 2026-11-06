@@ -17,14 +17,14 @@ withDefaults(defineProps<{ steps: StepItem[] }>(), { steps: () => [] });
       class="procedure-step flex gap-4 py-6 first:pt-0 last:pb-0"
     >
       <span
-        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-navy text-base font-bold text-white"
+        class="bg-brand-navy flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base font-bold text-white"
         aria-hidden="true"
       >
         {{ item.step }}
       </span>
 
       <div>
-        <h3 class="text-base font-bold text-brand-navy">{{ item.title }}</h3>
+        <h3 class="text-brand-navy text-base font-bold">{{ item.title }}</h3>
         <p class="mt-1 text-base leading-relaxed text-gray-800">{{ item.description }}</p>
         <ul class="mt-2 list-disc space-y-1 pl-5 text-base text-gray-700">
           <li v-for="(detail, index) in item.details" :key="index">{{ detail }}</li>

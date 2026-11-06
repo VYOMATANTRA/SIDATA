@@ -60,7 +60,11 @@ export const useRtLeadersStore = defineStore('rtLeaders', () => {
 
   async function fetchRtLeaders(force = false): Promise<void> {
     if (!force && inFlight) return inFlight;
-    if (!force && hasSettled.value && Date.now() - lastFetchedAt < RT_LEADERS_CACHE_TTL_MS - 1_000) {
+    if (
+      !force &&
+      hasSettled.value &&
+      Date.now() - lastFetchedAt < RT_LEADERS_CACHE_TTL_MS - 1_000
+    ) {
       return;
     }
 

@@ -3,7 +3,10 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router';
 import { usePagesStore } from '../stores/pages.store';
 import { useIndicatorsStore, type IndicatorDto } from '../stores/indicators.store';
-import { useIndicatorTablesStore, type IndicatorTableDetailDto } from '../stores/indicatorTables.store';
+import {
+  useIndicatorTablesStore,
+  type IndicatorTableDetailDto,
+} from '../stores/indicatorTables.store';
 import { useContentBlocksStore, type ContentBlock } from '../stores/contentBlocks.store';
 import ChapterToc, { type TocChapter } from '../components/cerita/ChapterToc.vue';
 import ChapterSection from '../components/cerita/ChapterSection.vue';
@@ -99,7 +102,9 @@ function setupScrollSpy() {
     (entries) => {
       const visible = entries.filter((entry) => entry.isIntersecting);
       if (visible.length === 0) return;
-      const topMost = visible.reduce((a, b) => (a.boundingClientRect.top < b.boundingClientRect.top ? a : b));
+      const topMost = visible.reduce((a, b) =>
+        a.boundingClientRect.top < b.boundingClientRect.top ? a : b,
+      );
       const id = topMost.target.getAttribute('data-chapter-id');
       if (id) activeChapterId.value = id;
     },
@@ -171,7 +176,7 @@ onBeforeUnmount(() => observer?.disconnect());
   <div class="flex min-h-screen flex-col bg-white">
     <a
       href="#main-content"
-      class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-xl focus:bg-brand-navy focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white"
+      class="focus:bg-brand-navy sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-xl focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white"
     >
       Lewati ke konten utama
     </a>
@@ -204,7 +209,7 @@ onBeforeUnmount(() => observer?.disconnect());
         </p>
         <button
           type="button"
-          class="bg-brand-navy mt-5 rounded-btn px-4 py-2 text-sm font-semibold text-white"
+          class="bg-brand-navy rounded-btn mt-5 px-4 py-2 text-sm font-semibold text-white"
           data-test="cerita-retry"
           @click="retryLoad"
         >

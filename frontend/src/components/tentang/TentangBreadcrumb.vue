@@ -24,7 +24,7 @@ withDefaults(
         >
           {{ parentLabel }}
         </RouterLink>
-        <span v-else class="text-gray-500 font-medium">
+        <span v-else class="font-medium text-gray-500">
           {{ parentLabel }}
         </span>
       </li>

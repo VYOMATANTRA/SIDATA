@@ -90,7 +90,9 @@ describe('buildIndicatorNarrative', () => {
 
     const narrative = buildIndicatorNarrative(indicator);
 
-    expect(narrative.text).toContain('Data Potensi Juni 2024, tidak memiliki pembanding tahun lalu.');
+    expect(narrative.text).toContain(
+      'Data Potensi Juni 2024, tidak memiliki pembanding tahun lalu.',
+    );
   });
 
   it('stays hedged even when isComputedComparison is true but the API returned no comparison', () => {

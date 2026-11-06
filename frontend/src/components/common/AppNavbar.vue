@@ -108,9 +108,7 @@ const hamburgerBarClasses = computed(() => {
 <template>
   <header class="w-full transition-colors duration-200" :class="containerClasses">
     <nav aria-label="Navigasi Utama" class="w-full">
-      <div
-        class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 sm:px-8 sm:py-5"
-      >
+      <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 sm:px-8 sm:py-5">
         <!-- Brand & Identity Lockup -->
         <div class="flex items-center">
           <RouterLink

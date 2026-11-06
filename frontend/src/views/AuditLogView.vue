@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue';
 import {
   ListBulletIcon,
   ExclamationTriangleIcon,
@@ -8,15 +8,15 @@ import {
   PencilSquareIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-} from '@heroicons/vue/24/outline'
-import { useAuditStore, type AuditLogItem } from '../stores/audit.store'
+} from '@heroicons/vue/24/outline';
+import { useAuditStore, type AuditLogItem } from '../stores/audit.store';
 
-const auditStore = useAuditStore()
+const auditStore = useAuditStore();
 
-const searchQuery = ref('')
-const severityFilter = ref<'' | 'info' | 'warning' | 'critical'>('')
-const acknowledgingId = ref<string | null>(null)
-const acknowledgeError = ref<string | null>(null)
+const searchQuery = ref('');
+const severityFilter = ref<'' | 'info' | 'warning' | 'critical'>('');
+const acknowledgingId = ref<string | null>(null);
+const acknowledgeError = ref<string | null>(null);
 
 /**
  * Indonesian labels for every action code audit.service.ts can emit, so the "Kejadian"
@@ -59,22 +59,22 @@ const ACTION_LABELS: Record<string, string> = {
   'indicator_table_row.updated': 'Baris tabel indikator diperbarui',
   'indicator_table_row.deleted': 'Baris tabel indikator dihapus',
   'audit.pruned': 'Log audit dipangkas',
-}
+};
 
 function eventLabel(log: AuditLogItem): string {
-  const base = ACTION_LABELS[log.action] || log.action
+  const base = ACTION_LABELS[log.action] || log.action;
   // Mirror the wireframe's "Ganti role user (Admin to Editor)" detail from the
   // before/after metadata recorded by users.service.ts.
   if (log.action === 'user.role_changed' && log.metadata) {
-    const md = log.metadata as Record<string, unknown>
-    const from = typeof md.fromRoleName === 'string' ? md.fromRoleName : ''
-    const to = typeof md.toRoleName === 'string' ? md.toRoleName : ''
-    if (from && to) return `${base} (${from} to ${to})`
+    const md = log.metadata as Record<string, unknown>;
+    const from = typeof md.fromRoleName === 'string' ? md.fromRoleName : '';
+    const to = typeof md.toRoleName === 'string' ? md.toRoleName : '';
+    if (from && to) return `${base} (${from} to ${to})`;
   }
-  return base
+  return base;
 }
 
-const totalPages = computed(() => Math.max(1, Math.ceil(auditStore.total / auditStore.pageSize)))
+const totalPages = computed(() => Math.max(1, Math.ceil(auditStore.total / auditStore.pageSize)));
 
 /**
  * Client-side search over the loaded page (same pattern as UserManagement's search) —
@@ -82,24 +82,24 @@ const totalPages = computed(() => Math.max(1, Math.ceil(auditStore.total / audit
  * narrows what is already on screen rather than issuing a query the backend can't honor.
  */
 const visibleLogs = computed(() => {
-  const q = searchQuery.value.trim().toLowerCase()
-  if (!q) return auditStore.logs
+  const q = searchQuery.value.trim().toLowerCase();
+  if (!q) return auditStore.logs;
   return auditStore.logs.filter(
     (l) =>
       eventLabel(l).toLowerCase().includes(q) ||
       l.action.toLowerCase().includes(q) ||
       (l.actorEmail || '').toLowerCase().includes(q) ||
       (l.targetLabel || '').toLowerCase().includes(q),
-  )
-})
+  );
+});
 
 const totalLogCount = computed(() => {
-  const c = auditStore.summary?.counts
-  return c ? c.info + c.warning + c.critical : 0
-})
+  const c = auditStore.summary?.counts;
+  return c ? c.info + c.warning + c.critical : 0;
+});
 
 // Wireframe asks for WITA; render the instant in that zone so label and clock agree.
-const WITA = 'Asia/Makassar'
+const WITA = 'Asia/Makassar';
 
 function formatDate(iso: string): string {
   return new Intl.DateTimeFormat('en-GB', {
@@ -107,7 +107,7 @@ function formatDate(iso: string): string {
     month: 'short',
     year: 'numeric',
     timeZone: WITA,
-  }).format(new Date(iso))
+  }).format(new Date(iso));
 }
 
 function formatTime(iso: string): string {
@@ -117,75 +117,75 @@ function formatTime(iso: string): string {
     second: '2-digit',
     hour12: false,
     timeZone: WITA,
-  }).format(new Date(iso))
-  return `${time} WITA`
+  }).format(new Date(iso));
+  return `${time} WITA`;
 }
 
 function severityLabel(severity: string): string {
   switch (severity) {
     case 'critical':
-      return 'Kritis'
+      return 'Kritis';
     case 'warning':
-      return 'Peringatan'
+      return 'Peringatan';
     default:
-      return 'Info'
+      return 'Info';
   }
 }
 
 function severityClasses(severity: string): string {
   switch (severity) {
     case 'critical':
-      return 'bg-red-600 text-white border-transparent'
+      return 'bg-red-600 text-white border-transparent';
     case 'warning':
-      return 'bg-amber-600 text-white border-transparent'
+      return 'bg-amber-600 text-white border-transparent';
     default:
-      return 'bg-emerald-600 text-white border-transparent'
+      return 'bg-emerald-600 text-white border-transparent';
   }
 }
 
 function targetText(log: AuditLogItem): string {
   if (log.targetType === 'user' && log.targetId) {
-    const id = `#${log.targetId.substring(0, 8)}`
-    return log.targetLabel ? `User ID: ${id} (${log.targetLabel})` : `User ID: ${id}`
+    const id = `#${log.targetId.substring(0, 8)}`;
+    return log.targetLabel ? `User ID: ${id} (${log.targetLabel})` : `User ID: ${id}`;
   }
-  if (log.targetLabel) return log.targetLabel
-  return log.targetType || '-'
+  if (log.targetLabel) return log.targetLabel;
+  return log.targetType || '-';
 }
 
 function capitalize(value: string | null): string {
-  if (!value) return '-'
-  return value.charAt(0).toUpperCase() + value.slice(1)
+  if (!value) return '-';
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function isOpenCritical(log: AuditLogItem): boolean {
-  return log.severity === 'critical' && log.acknowledgedAt == null
+  return log.severity === 'critical' && log.acknowledgedAt == null;
 }
 
 function applySeverity() {
-  auditStore.applyFilters({ severity: severityFilter.value })
+  auditStore.applyFilters({ severity: severityFilter.value });
 }
 
 async function handleAcknowledge(log: AuditLogItem) {
-  acknowledgingId.value = log.id
-  acknowledgeError.value = null
+  acknowledgingId.value = log.id;
+  acknowledgeError.value = null;
   try {
-    await auditStore.acknowledgeLog(log.id)
+    await auditStore.acknowledgeLog(log.id);
   } catch (err: unknown) {
     acknowledgeError.value =
-      err instanceof Error ? err.message : 'Gagal meng-acknowledge audit log.'
+      err instanceof Error ? err.message : 'Gagal meng-acknowledge audit log.';
   } finally {
-    acknowledgingId.value = null
+    acknowledgingId.value = null;
   }
 }
 
 onMounted(async () => {
-  const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   await Promise.all([
     auditStore.fetchLogs(),
     auditStore.fetchSummary(oneMonthAgo),
     auditStore.fetchAdminActionCount(24),
-  ])
-})
+  ]);
+});
 </script>
 
 <template>

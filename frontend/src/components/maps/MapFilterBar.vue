@@ -26,11 +26,11 @@ function handleTypeClick(type: SpatialPointType | 'all') {
     >
       <button
         type="button"
-        class="min-h-10 rounded-btn text-sm cursor-pointer px-3 py-1.5 font-medium whitespace-nowrap transition-colors select-none"
+        class="rounded-btn min-h-10 cursor-pointer px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors select-none"
         :class="
           activeType === 'all'
             ? 'bg-brand-navy text-white shadow-sm'
-            : 'border border-gray-300 bg-white text-brand-navy hover:border-brand-navy'
+            : 'text-brand-navy hover:border-brand-navy border border-gray-300 bg-white'
         "
         :aria-pressed="activeType === 'all'"
         @click="handleTypeClick('all')"
@@ -40,17 +40,17 @@ function handleTypeClick(type: SpatialPointType | 'all') {
 
       <button
         type="button"
-        class="min-h-10 rounded-btn text-sm flex cursor-pointer items-center gap-1.5 px-3 py-1.5 font-medium whitespace-nowrap transition-colors select-none"
+        class="rounded-btn flex min-h-10 cursor-pointer items-center gap-1.5 px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors select-none"
         :class="
           activeType === 'ketua_rt'
             ? 'bg-brand-indigo text-white shadow-sm'
-            : 'border border-gray-300 bg-white text-brand-navy hover:border-brand-navy'
+            : 'text-brand-navy hover:border-brand-navy border border-gray-300 bg-white'
         "
         :aria-pressed="activeType === 'ketua_rt'"
         @click="handleTypeClick('ketua_rt')"
       >
         <span
-          class="h-2.5 w-2.5 rounded-full bg-brand-indigo"
+          class="bg-brand-indigo h-2.5 w-2.5 rounded-full"
           :class="{ 'bg-white': activeType === 'ketua_rt' }"
         />
         Ketua RT
@@ -58,17 +58,17 @@ function handleTypeClick(type: SpatialPointType | 'all') {
 
       <button
         type="button"
-        class="min-h-10 rounded-btn text-sm flex cursor-pointer items-center gap-1.5 px-3 py-1.5 font-medium whitespace-nowrap transition-colors select-none"
+        class="rounded-btn flex min-h-10 cursor-pointer items-center gap-1.5 px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors select-none"
         :class="
           activeType === 'bank_sampah'
             ? 'bg-brand-navy-deep text-white shadow-sm'
-            : 'border border-gray-300 bg-white text-brand-navy hover:border-brand-navy'
+            : 'text-brand-navy hover:border-brand-navy border border-gray-300 bg-white'
         "
         :aria-pressed="activeType === 'bank_sampah'"
         @click="handleTypeClick('bank_sampah')"
       >
         <span
-          class="h-2.5 w-2.5 rounded-full bg-brand-navy-deep"
+          class="bg-brand-navy-deep h-2.5 w-2.5 rounded-full"
           :class="{ 'bg-white': activeType === 'bank_sampah' }"
         />
         Bank Sampah
@@ -76,22 +76,21 @@ function handleTypeClick(type: SpatialPointType | 'all') {
 
       <button
         type="button"
-        class="min-h-10 rounded-btn text-sm flex cursor-pointer items-center gap-1.5 px-3 py-1.5 font-medium whitespace-nowrap transition-colors select-none"
+        class="rounded-btn flex min-h-10 cursor-pointer items-center gap-1.5 px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors select-none"
         :class="
           activeType === 'fasilitas_umum'
             ? 'bg-brand-violet text-white shadow-sm'
-            : 'border border-gray-300 bg-white text-brand-navy hover:border-brand-navy'
+            : 'text-brand-navy hover:border-brand-navy border border-gray-300 bg-white'
         "
         :aria-pressed="activeType === 'fasilitas_umum'"
         @click="handleTypeClick('fasilitas_umum')"
       >
         <span
-          class="h-2.5 w-2.5 rounded-full bg-brand-violet"
+          class="bg-brand-violet h-2.5 w-2.5 rounded-full"
           :class="{ 'bg-white': activeType === 'fasilitas_umum' }"
         />
         Fasilitas Umum
       </button>
     </div>
-
   </div>
 </template>

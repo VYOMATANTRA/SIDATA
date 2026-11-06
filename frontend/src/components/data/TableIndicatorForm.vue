@@ -178,10 +178,7 @@ const errorEntries = computed<ErrorEntry[]>(() => {
     );
     if (sexSplit.value) {
       push(rowFieldId(row.id, 'male'), validateCell(draft.male, `Laki-laki (${rowLabel})`));
-      push(
-        rowFieldId(row.id, 'female'),
-        validateCell(draft.female, `Perempuan (${rowLabel})`),
-      );
+      push(rowFieldId(row.id, 'female'), validateCell(draft.female, `Perempuan (${rowLabel})`));
     } else {
       push(rowFieldId(row.id, 'total'), validateCell(draft.total, `Total (${rowLabel})`));
     }
@@ -291,16 +288,16 @@ function handleSubmit(): void {
     />
 
     <fieldset class="space-y-4">
-      <legend class="text-sm font-semibold tracking-wide text-brand-navy uppercase">
+      <legend class="text-brand-navy text-sm font-semibold tracking-wide uppercase">
         Identitas Tabel
       </legend>
 
       <div
-        class="bg-brand-navy/5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-card px-4 py-3 text-sm text-slate-700"
+        class="bg-brand-navy/5 rounded-card flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-sm text-slate-700"
       >
-        <span class="font-medium text-brand-navy">{{ kindMeta.label }}</span>
+        <span class="text-brand-navy font-medium">{{ kindMeta.label }}</span>
         <span
-          class="rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold tracking-wide text-brand-navy uppercase"
+          class="text-brand-navy rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold tracking-wide uppercase"
         >
           {{ table.kind }}
         </span>
@@ -379,7 +376,7 @@ function handleSubmit(): void {
     </fieldset>
 
     <fieldset>
-      <legend class="text-sm font-semibold tracking-wide text-brand-navy uppercase">
+      <legend class="text-brand-navy text-sm font-semibold tracking-wide uppercase">
         Baris Data
       </legend>
       <p class="mt-1 text-xs text-slate-500">
@@ -388,11 +385,11 @@ function handleSubmit(): void {
           Total tiap baris dihitung dari laki-laki + perempuan dan tidak disimpan terpisah.
         </template>
         <template v-else>Setiap baris memakai satu nilai total.</template>
-        Sel angka boleh dikosongkan bila data belum tersedia; sel kosong disimpan sebagai tidak
-        ada data, bukan nol.
+        Sel angka boleh dikosongkan bila data belum tersedia; sel kosong disimpan sebagai tidak ada
+        data, bukan nol.
       </p>
 
-      <div class="mt-3 overflow-x-auto rounded-card border border-slate-200">
+      <div class="rounded-card mt-3 overflow-x-auto border border-slate-200">
         <table class="w-full min-w-[34rem] border-collapse text-sm">
           <caption class="sr-only">
             Baris data

@@ -19,12 +19,12 @@ const labelId = useId();
 <template>
   <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" :aria-labelledby="labelId">
     <div class="mx-auto max-w-5xl">
-      <p :id="labelId" class="text-sm font-semibold tracking-[0.25em] text-brand-navy uppercase">
+      <p :id="labelId" class="text-brand-navy text-sm font-semibold tracking-[0.25em] uppercase">
         {{ label }}
       </p>
       <p class="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span class="text-xl font-bold text-brand-navy">{{ value }}</span>
-        <span class="text-lg font-semibold text-brand-teal-deep">{{ unit }}</span>
+        <span class="text-brand-navy text-xl font-bold">{{ value }}</span>
+        <span class="text-brand-teal-deep text-lg font-semibold">{{ unit }}</span>
       </p>
       <p class="mt-2 max-w-2xl text-base text-gray-700">{{ caption }}</p>
       <p v-if="subcaption" class="mt-1 text-sm text-gray-500">{{ subcaption }}</p>

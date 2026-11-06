@@ -19,15 +19,15 @@ const headingId = useId();
   <section class="rounded-btn border border-gray-400 bg-white p-5" :aria-labelledby="headingId">
     <div class="flex flex-wrap items-center gap-3">
       <span
-        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-indigo text-white"
+        class="bg-brand-indigo flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white"
         aria-hidden="true"
       >
         <TentangIcon :name="icon" />
       </span>
-      <h2 :id="headingId" class="text-base font-bold text-brand-navy">{{ heading }}</h2>
+      <h2 :id="headingId" class="text-brand-navy text-base font-bold">{{ heading }}</h2>
       <span
         v-if="badge"
-        class="rounded-[5px] bg-brand-cyan px-2 py-0.5 text-sm font-medium text-brand-navy"
+        class="bg-brand-cyan text-brand-navy rounded-[5px] px-2 py-0.5 text-sm font-medium"
       >
         {{ badge }}
       </span>

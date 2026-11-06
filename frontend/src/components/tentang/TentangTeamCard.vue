@@ -13,18 +13,18 @@ withDefaults(
 
 <template>
   <article class="rounded-[5px] border border-gray-300 bg-white p-5 text-center">
-    <div v-if="photo" class="mx-auto h-20 w-20 overflow-hidden rounded-full bg-brand-cyan">
+    <div v-if="photo" class="bg-brand-cyan mx-auto h-20 w-20 overflow-hidden rounded-full">
       <img :src="photo" :alt="`Foto ${title}`" class="h-20 w-20 object-cover" />
     </div>
 
     <div
       v-else-if="showPlaceholder"
-      class="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-brand-navy/10 bg-brand-cyan/40 text-brand-navy/60"
+      class="border-brand-navy/10 bg-brand-cyan/40 text-brand-navy/60 mx-auto flex h-20 w-20 items-center justify-center rounded-full border"
       aria-hidden="true"
       data-test="team-photo-placeholder"
     >
       <svg
-        class="h-10 w-10 text-brand-navy/50"
+        class="text-brand-navy/50 h-10 w-10"
         viewBox="0 0 24 24"
         fill="currentColor"
         focusable="false"
@@ -35,8 +35,8 @@ withDefaults(
       </svg>
     </div>
 
-    <h3 class="mt-3 text-base font-bold text-brand-navy">{{ title }}</h3>
+    <h3 class="text-brand-navy mt-3 text-base font-bold">{{ title }}</h3>
     <p v-if="meta" class="text-xs text-gray-700">{{ meta }}</p>
-    <p class="mt-1 text-base text-brand-navy">{{ role }}</p>
+    <p class="text-brand-navy mt-1 text-base">{{ role }}</p>
   </article>
 </template>

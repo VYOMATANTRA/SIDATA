@@ -267,24 +267,15 @@ describe('indicator tables store (public per-section reads)', () => {
   it('drops the section cache after a save so the Cerita view refetches', async () => {
     let male = 120;
 
-    globalThis.fetch = vi.fn<typeof fetch>(
-      async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = String(input);
-        if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
-        if (url.startsWith('/api/indicator-tables?sectionId=sec-1')) {
-          return json({ tables: [tableSummary] });
-        }
-        if (url === '/api/indicator-tables/tbl-1') {
-          if (init?.method === 'PATCH') {
-            male = 200;
-            return json({
-              table: {
-                ...tableDetail,
-                rows: [{ ...tableDetail.rows[0], male }],
-                totals: { ...tableDetail.totals, male },
-              },
-            });
-          }
+    globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
+      if (url.startsWith('/api/indicator-tables?sectionId=sec-1')) {
+        return json({ tables: [tableSummary] });
+      }
+      if (url === '/api/indicator-tables/tbl-1') {
+        if (init?.method === 'PATCH') {
+          male = 200;
           return json({
             table: {
               ...tableDetail,
@@ -293,9 +284,16 @@ describe('indicator tables store (public per-section reads)', () => {
             },
           });
         }
-        throw new Error(`unexpected fetch: ${url}`);
-      },
-    ) as typeof fetch;
+        return json({
+          table: {
+            ...tableDetail,
+            rows: [{ ...tableDetail.rows[0], male }],
+            totals: { ...tableDetail.totals, male },
+          },
+        });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as typeof fetch;
 
     const store = useIndicatorTablesStore();
 
@@ -346,10 +344,7 @@ describe('indicator tables store (public per-section reads)', () => {
     globalThis.fetch = fetchMock;
 
     const store = useIndicatorTablesStore();
-    await Promise.all([
-      store.fetchBySectionId('sec-fail'),
-      store.fetchBySectionId('sec-ok'),
-    ]);
+    await Promise.all([store.fetchBySectionId('sec-fail'), store.fetchBySectionId('sec-ok')]);
 
     expect(store.errorsBySectionId['sec-fail']).toContain('500');
     expect(store.errorsBySectionId['sec-ok']).toBeNull();
