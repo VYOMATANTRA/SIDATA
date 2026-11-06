@@ -144,6 +144,40 @@ describe('AdminRukunTetanggaView.vue', () => {
     const deleteReq = requests.find((r) => r.method === 'DELETE');
     expect(deleteReq).toBeDefined();
     expect(deleteReq?.url).toContain('/api/maps/points/point-1');
+    expect(deleteReq?.url).toContain('expectedRtNumber=1');
+  });
+
+  it('retains the draft and blocks stale location saves until explicit reload', async () => {
+    const requests: string[] = [];
+    setupFetchMock((url, init) => {
+      if (init?.method === 'DELETE' && url.includes('/api/maps/points/')) {
+        requests.push(url);
+        return {
+          ok: false,
+          status: 409,
+          json: async () => ({ error: 'Ownership changed' }),
+        } as Response;
+      }
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    await wrapper.find('[data-test="rt-edit-1"]').trigger('click');
+    await wrapper.find('input#rt-name').setValue('Unsaved draft');
+    await wrapper.find('[data-test="picker-clear"]').trigger('click');
+    await wrapper.find('form').trigger('submit');
+    await flushPromises();
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toContain('expectedRtNumber=1');
+    expect((wrapper.find('input#rt-name').element as HTMLInputElement).value).toBe('Unsaved draft');
+    expect(wrapper.text()).toContain('Data kontak berhasil disimpan');
+    expect(wrapper.find('button[type="submit"]').attributes('disabled')).toBeDefined();
+    await wrapper.find('form').trigger('submit');
+    expect(requests).toHaveLength(1);
+    const reload = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Muat ulang data RT'));
+    await reload!.trigger('click');
+    expect(wrapper.find('button[type="submit"]').attributes('disabled')).toBeUndefined();
   });
 
   it('sends null for cleared address and forces phoneIsWhatsapp to false when phone is blank', async () => {

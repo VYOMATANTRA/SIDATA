@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import BaseButton from '../components/common/BaseButton.vue';
 import BaseModal from '../components/common/BaseModal.vue';
 import RtLocationPicker, { type PickedLocation } from '../components/maps/RtLocationPicker.vue';
-import { apiRequestJson } from '../utils/apiClient';
+import { ApiError, apiRequestJson } from '../utils/apiClient';
 import { useAuthStore } from '../stores/auth';
 import { INPUT_CLASSES } from '../utils/formStyles';
 
@@ -65,6 +65,32 @@ const filtered = computed(() => {
   );
 });
 const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / PAGE_SIZE)));
+const pagination = ref<HTMLElement | null>(null);
+watch(totalPages, async (pages) => {
+  const focused = document.activeElement;
+  if (page.value > pages) page.value = pages;
+  await nextTick();
+  if (
+    focused instanceof HTMLButtonElement &&
+    focused.disabled &&
+    pagination.value?.contains(focused)
+  ) {
+    (
+      pagination.value.querySelector<HTMLButtonElement>('button:not(:disabled)') ?? pagination.value
+    ).focus();
+  }
+});
+async function changePage(next: number) {
+  const focused = document.activeElement;
+  page.value = next;
+  await nextTick();
+  if (focused instanceof HTMLButtonElement && focused.disabled) {
+    (
+      pagination.value?.querySelector<HTMLButtonElement>('button:not(:disabled)') ??
+      pagination.value
+    )?.focus();
+  }
+}
 const pageRows = computed(() =>
   filtered.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE),
 );
@@ -80,6 +106,8 @@ const draft = ref({
 });
 const isSaving = ref(false);
 const saveError = ref('');
+const locationConflict = ref(false);
+const locationValid = ref(true);
 
 const csvText = ref('');
 const inputRevision = ref(0);
@@ -113,6 +141,8 @@ onMounted(loadLeaders);
 function openEditor(row: LeaderRow) {
   editing.value = row;
   saveError.value = '';
+  locationConflict.value = false;
+  locationValid.value = true;
   baseline.value = {
     rtNumber: row.rtNumber,
     name: row.name,
@@ -142,7 +172,7 @@ function closeEditor() {
 
 async function saveLeader() {
   const base = baseline.value;
-  if (!base || isSaving.value) return;
+  if (!base || isSaving.value || locationConflict.value || !locationValid.value) return;
 
   // 1. Capture immutable submission snapshot
   const snapshot = {
@@ -201,6 +231,7 @@ async function saveLeader() {
 
   isSaving.value = true;
   let contactSuccess = false;
+  let writingLocation = false;
   try {
     // Save contact first if changed
     if (Object.keys(contactPatch).length > 0) {
@@ -218,21 +249,28 @@ async function saveLeader() {
     }
 
     // Now execute location operation
+    writingLocation = true;
     if (locationOp === 'delete' && snapshot.pointId) {
-      await apiRequestJson(`/api/maps/points/${snapshot.pointId}`, {
-        method: 'DELETE',
-      });
+      await apiRequestJson(
+        `/api/maps/points/${encodeURIComponent(snapshot.pointId)}?expectedRtNumber=${snapshot.rtNumber}`,
+        {
+          method: 'DELETE',
+        },
+      );
       base.pointId = null;
       base.latitude = null;
       base.longitude = null;
     } else if (locationOp === 'update' && snapshot.pointId && snapshot.desiredLocation) {
-      await apiRequestJson(`/api/maps/points/${snapshot.pointId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          latitude: snapshot.desiredLocation.latitude,
-          longitude: snapshot.desiredLocation.longitude,
-        }),
-      });
+      await apiRequestJson(
+        `/api/maps/points/${encodeURIComponent(snapshot.pointId)}?expectedRtNumber=${snapshot.rtNumber}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            latitude: snapshot.desiredLocation.latitude,
+            longitude: snapshot.desiredLocation.longitude,
+          }),
+        },
+      );
       base.latitude = snapshot.desiredLocation.latitude;
       base.longitude = snapshot.desiredLocation.longitude;
     } else if (locationOp === 'create' && snapshot.desiredLocation) {
@@ -257,7 +295,20 @@ async function saveLeader() {
   } catch (error) {
     const errMessage =
       error instanceof Error ? error.message : 'Terjadi kesalahan saat menyimpan data.';
-    if (contactSuccess && Object.keys(contactPatch).length > 0 && locationOp !== 'none') {
+    if (
+      writingLocation &&
+      (locationOp === 'update' || locationOp === 'delete') &&
+      error instanceof ApiError &&
+      (error.status === 409 || error.status === 404)
+    ) {
+      locationConflict.value = true;
+      const contactNotice =
+        contactSuccess && Object.keys(contactPatch).length > 0
+          ? 'Data kontak berhasil disimpan. '
+          : '';
+      saveError.value = `${contactNotice}Lokasi telah berubah atau dihapus. Muat ulang data RT sebelum menyimpan.`;
+      await loadLeaders();
+    } else if (contactSuccess && Object.keys(contactPatch).length > 0 && locationOp !== 'none') {
       saveError.value = `Data kontak berhasil disimpan, namun lokasi gagal diperbarui: ${errMessage}`;
       void loadLeaders();
     } else {
@@ -266,6 +317,12 @@ async function saveLeader() {
   } finally {
     isSaving.value = false;
   }
+}
+
+async function reloadEditor() {
+  if (loadError.value) await loadLeaders();
+  const row = leaders.value.find((leader) => leader.rtNumber === baseline.value?.rtNumber);
+  if (row && !loadError.value) openEditor(row);
 }
 
 function onCsvTextChange() {
@@ -484,12 +541,22 @@ async function setSampleStatus(isSample: boolean) {
         </table>
       </div>
       <p v-if="isLoading" class="mt-2 text-sm text-slate-600" role="status">Memuat data…</p>
-      <div class="mt-3 flex items-center justify-between text-sm">
-        <BaseButton variant="secondary" size="sm" :disabled="page <= 1" @click="page -= 1">
+      <div ref="pagination" tabindex="-1" class="mt-3 flex items-center justify-between text-sm">
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          :disabled="page <= 1"
+          @click="changePage(page - 1)"
+        >
           Sebelumnya
         </BaseButton>
         <span>Halaman {{ page }} dari {{ totalPages }}</span>
-        <BaseButton variant="secondary" size="sm" :disabled="page >= totalPages" @click="page += 1">
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          :disabled="page >= totalPages"
+          @click="changePage(page + 1)"
+        >
           Selanjutnya
         </BaseButton>
       </div>
@@ -646,13 +713,30 @@ async function setSampleStatus(isSample: boolean) {
             class="mt-1 w-full"
           />
         </div>
-        <RtLocationPicker v-model="draft.location" :disabled="isSaving" />
+        <RtLocationPicker
+          v-model="draft.location"
+          :disabled="isSaving"
+          @validity-change="locationValid = $event"
+        />
         <p v-if="saveError" class="text-sm text-rose-700" role="alert">{{ saveError }}</p>
+        <BaseButton
+          v-if="locationConflict"
+          type="button"
+          variant="secondary"
+          :disabled="isLoading"
+          @click="reloadEditor"
+          >Muat ulang data RT</BaseButton
+        >
         <div class="flex justify-end gap-3">
           <BaseButton variant="secondary" size="md" :disabled="isSaving" @click="closeEditor">
             Batal
           </BaseButton>
-          <BaseButton type="submit" variant="primary" size="md" :disabled="isSaving">
+          <BaseButton
+            type="submit"
+            variant="primary"
+            size="md"
+            :disabled="isSaving || locationConflict || !locationValid"
+          >
             {{ isSaving ? 'Menyimpan…' : 'Simpan' }}
           </BaseButton>
         </div>

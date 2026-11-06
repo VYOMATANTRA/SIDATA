@@ -543,6 +543,37 @@ describe('maps.service createSpatialPoint', () => {
 // ---------------------------------------------------------------------------
 
 describe('maps.service updateSpatialPoint', () => {
+  it('guards stale RT ownership under the point lock before writing or auditing', async () => {
+    for (const [point, rts] of [
+      [ketuaPoint(), [9]],
+      [ketuaPoint({ type: 'bank_sampah' }), [5]],
+      [ketuaPoint(), [5, 9]],
+    ] as Array<[PointRecord, number[]]>) {
+      seedState([point], [sampleLeader()], { [point.id]: rts });
+      const auditsBefore = auditRows.length;
+      await assertServiceError(
+        updateSpatialPoint(point.id, { latitude: -1.3 }, ACTOR, CONTEXT, undefined, 5),
+        409,
+      );
+      await assertServiceError(deleteSpatialPoint(point.id, ACTOR, CONTEXT, undefined, 5), 409);
+      assert.equal(points.get(point.id)?.latitude, point.latitude);
+      assert.deepEqual(coveragesOf(point.id), rts);
+      assert.equal(auditRows.length, auditsBefore);
+    }
+    await assertServiceError(
+      updateSpatialPoint('missing', { latitude: -1.3 }, ACTOR, CONTEXT, undefined, 5),
+      404,
+    );
+    await assertServiceError(deleteSpatialPoint('missing', ACTOR, CONTEXT, undefined, 5), 404);
+  });
+
+  it('allows a matching owner and retains unguarded writes', async () => {
+    seedState([ketuaPoint()], [sampleLeader()], { 'point-ketua-1': [5] });
+    await updateSpatialPoint('point-ketua-1', { latitude: -1.3 }, ACTOR, CONTEXT, undefined, 5);
+    assert.equal(points.get('point-ketua-1')?.latitude, -1.3);
+    await deleteSpatialPoint('point-ketua-1', ACTOR, CONTEXT);
+    assert.equal(points.has('point-ketua-1'), false);
+  });
   function seed() {
     seedState(
       [ketuaPoint(), bankSampahPoint(), ketuaPoint({ id: 'point-b', name: 'Pos RT 7' })],

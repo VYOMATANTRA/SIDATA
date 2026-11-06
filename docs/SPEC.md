@@ -97,6 +97,11 @@ Notes:
   leader edits and CSV imports never change it. Only an Admin may flip it through
   `PATCH /api/maps/rt-leaders/sample-status`, which is audited. Production seeds it `false`;
   development seeds it `true` because its map coordinates are synthetic.
+- RT editor location PATCH and DELETE requests include `expectedRtNumber` (1–100). Under the
+  point lock the server requires a `ketua_rt` point with exactly that coverage, returning 409 if
+  ownership, type or coverage changed and 404 if the point was deleted. Generic point clients may
+  omit the parameter. On a stale response the editor preserves the draft, refreshes the roster,
+  reports any contact changes already saved, and requires explicit RT reload before saving again.
 - `GET /api/maps/rt-leaders` returns `{ leaders, total, isSampleRoster }`; the public sample notice
   follows this explicit flag and is never inferred from whether phone numbers look synthetic. The
   Ketua RT page revalidates the roster every 60 seconds while visible and when a hidden tab becomes

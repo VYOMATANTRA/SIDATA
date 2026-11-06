@@ -326,6 +326,14 @@ export const createPointHandler = async (req: AuthRequest, res: Response): Promi
   }
 };
 
+function parseExpectedRtNumber(value: unknown): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || !/^(?:[1-9]|[1-9]\d|100)$/.test(value)) {
+    throw new MapsServiceError('expectedRtNumber harus berupa nomor RT 1–100.', 400);
+  }
+  return Number(value);
+}
+
 export const updatePointHandler = async (req: AuthRequest, res: Response): Promise<Response> => {
   try {
     const actor = requireActor(req);
@@ -334,6 +342,8 @@ export const updatePointHandler = async (req: AuthRequest, res: Response): Promi
       req.body,
       actor,
       extractRequestContext(req),
+      undefined,
+      parseExpectedRtNumber(req.query['expectedRtNumber']),
     );
     return res.status(200).json({ message: 'Titik spasial berhasil diperbarui', point });
   } catch (error) {
@@ -351,7 +361,13 @@ export const updatePointHandler = async (req: AuthRequest, res: Response): Promi
 export const deletePointHandler = async (req: AuthRequest, res: Response): Promise<Response> => {
   try {
     const actor = requireActor(req);
-    const point = await deleteSpatialPoint(req.params['id'], actor, extractRequestContext(req));
+    const point = await deleteSpatialPoint(
+      req.params['id'],
+      actor,
+      extractRequestContext(req),
+      undefined,
+      parseExpectedRtNumber(req.query['expectedRtNumber']),
+    );
     return res.status(200).json({ message: 'Titik spasial berhasil dihapus', point });
   } catch (error) {
     if (error instanceof MapsServiceError) {

@@ -3,6 +3,8 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import {
   deletePointCoverageHandler,
   updateRtLeaderHandler,
+  updatePointHandler,
+  deletePointHandler,
 } from '../controllers/maps.controller.js';
 import prisma from '../utils/prisma.js';
 
@@ -171,5 +173,28 @@ describe('maps.controller :rtNumber handlers', () => {
     assert.equal(bad2.statusCode, 400, 'non-numeric RT must be rejected');
     assert.match(String(((bad2 as AnyRecord).body as AnyRecord)['error']), /Nomor RT/);
     assert.equal(txCalls.length, 0, 'invalid params must never open a transaction');
+  });
+
+  it('validates optional expectedRtNumber for both point writes', async () => {
+    for (const handler of [updatePointHandler, deletePointHandler]) {
+      for (const value of ['0', '101', '1.5', 'abc', ['1', '2']]) {
+        const res = makeRes();
+        const req = {
+          ...makeReq({ id: 'missing' }, { latitude: -1 }),
+          query: { expectedRtNumber: value },
+        };
+        await handler(req as never, res as never);
+        assert.equal(res.statusCode, 400);
+      }
+      for (const value of ['1', '100', undefined]) {
+        const res = makeRes();
+        const req = {
+          ...makeReq({ id: 'missing' }, { latitude: -1 }),
+          query: { expectedRtNumber: value },
+        };
+        await handler(req as never, res as never);
+        assert.equal(res.statusCode, 404);
+      }
+    }
   });
 });
