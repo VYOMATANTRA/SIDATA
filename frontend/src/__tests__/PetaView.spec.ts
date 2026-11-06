@@ -373,7 +373,7 @@ describe('PetaView accessibility, filtering, and point selection', () => {
     expect(wrapper.text()).toContain('Kontak Ketua RT');
     expect(wrapper.text()).toContain('Suwarjo Manggar');
 
-    const ketuaRtLink = wrapper.find('a[href="/ketua-rt"]');
+    const ketuaRtLink = wrapper.find('main a[href="/ketua-rt"]');
     expect(ketuaRtLink.exists()).toBe(true);
     expect(ketuaRtLink.text()).toContain('Lihat seluruh daftar Ketua RT');
 
