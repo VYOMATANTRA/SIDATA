@@ -205,7 +205,7 @@ describe('PetaView accessibility, filtering, and point selection', () => {
   });
 
   it('uses CMS default coordinates for distances and the map centre', async () => {
-    const custom = { lat: -1.24, lon: 116.97, zoom: 15 };
+    const custom = { lat: -1.24, lon: 116.97, zoom: 20 };
     vi.stubGlobal(
       'fetch',
       vi.fn<typeof fetch>().mockImplementation(async (input) => {
@@ -232,7 +232,7 @@ describe('PetaView accessibility, filtering, and point selection', () => {
 
     const map = wrapper.findComponent(MapStub);
     expect(map.props('defaultCenter')).toEqual([custom.lat, custom.lon]);
-    expect(map.props('defaultZoom')).toBe(15);
+    expect(map.props('defaultZoom')).toBe(20);
 
     // Point 3 sits exactly on the CMS origin, so it becomes nearest.
     const rows = wrapper.findAll('[data-test="peta-result"]');

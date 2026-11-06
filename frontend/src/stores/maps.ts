@@ -10,7 +10,10 @@ export const useMapsStore = defineStore('maps', () => {
   const activeTypeFilter = ref<SpatialPointType | 'all'>('all');
   const isLoading = ref(false);
   const error = ref<string | null>(null);
+  const summaryError = ref<string | null>(null);
+  const isSummaryLoading = ref(false);
   let loadPointsRequest = 0;
+  let loadSummaryRequest = 0;
 
   const filteredPoints = computed(() => {
     return points.value.filter((point) => {
@@ -78,10 +81,18 @@ export const useMapsStore = defineStore('maps', () => {
   }
 
   async function loadSummary() {
+    const requestId = ++loadSummaryRequest;
+    isSummaryLoading.value = true;
+    summaryError.value = null;
     try {
-      summary.value = await fetchMapSummary();
-    } catch {
-      // Non-blocking summary load failure
+      const fetched = await fetchMapSummary();
+      if (requestId === loadSummaryRequest) summary.value = fetched;
+    } catch (err) {
+      if (requestId === loadSummaryRequest) {
+        summaryError.value = err instanceof Error ? err.message : 'Gagal memuat ringkasan peta';
+      }
+    } finally {
+      if (requestId === loadSummaryRequest) isSummaryLoading.value = false;
     }
   }
 
@@ -105,6 +116,8 @@ export const useMapsStore = defineStore('maps', () => {
     activeTypeFilter,
     isLoading,
     error,
+    summaryError,
+    isSummaryLoading,
     filteredPoints,
     loadPoints,
     loadSummary,
