@@ -14,6 +14,7 @@ import {
   IndicatorServiceError,
 } from '../services/indicators.service.js';
 import prisma from '../utils/prisma.js';
+import { VersionedTtlCache } from '../utils/lockTransactionCache.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import {
   TEMPLATE_ROW,
@@ -963,7 +964,9 @@ describe('indicators.service getIndicatorById', () => {
     assert.ok(dbHits >= 1);
   });
 
-  it('returns last-known-good when DB refresh throws after expiry', async () => {
+  it('keeps returning last-known-good on consecutive failed ID refreshes', async (t) => {
+    let now = 1_800_000_000_000;
+    t.mock.method(Date, 'now', () => now);
     indicatorImpl['findMany'] = async () => [indicatorRow({ label: 'Cached' })];
     assert.equal((await getIndicatorById('ind-1'))?.label, 'Cached');
 
@@ -971,11 +974,77 @@ describe('indicators.service getIndicatorById', () => {
     assert.ok(idCache);
     idCache.invalidate({ preserveLastKnownGood: true });
 
+    let failedRefreshes = 0;
     indicatorImpl['findMany'] = async () => {
+      failedRefreshes++;
       throw new Error('db unavailable');
     };
     const result = await getIndicatorById('ind-1');
     assert.equal(result?.label, 'Cached');
+    now += 2_001;
+    assert.equal((await getIndicatorById('ind-1'))?.label, 'Cached');
+    assert.equal(failedRefreshes, 2);
+
+    indicatorImpl['findMany'] = async () => [indicatorRow({ label: 'Recovered' })];
+    now += 2_001;
+    assert.equal((await getIndicatorById('ind-1'))?.label, 'Recovered');
+  });
+
+  it('briefly backs off after an availability failure and retries the database', async (t) => {
+    let now = 1_800_000_000_000;
+    t.mock.method(Date, 'now', () => now);
+    let dbHits = 0;
+    indicatorImpl['findMany'] = async () => [indicatorRow({ label: 'Cached' })];
+    assert.equal((await getIndicatorById('ind-1'))?.label, 'Cached');
+    now += 61_000;
+    indicatorImpl['findMany'] = async () => {
+      dbHits++;
+      throw new Error('db unavailable');
+    };
+    assert.equal((await getIndicatorById('ind-1'))?.label, 'Cached');
+    assert.equal((await getIndicatorById('ind-1'))?.label, 'Cached');
+    assert.equal(dbHits, 1);
+    now += 2_001;
+    indicatorImpl['findMany'] = async () => {
+      dbHits++;
+      return [indicatorRow({ label: 'Recovered' })];
+    };
+    assert.equal((await getIndicatorById('ind-1'))?.label, 'Recovered');
+    assert.equal(dbHits, 2);
+  });
+
+  it('clears outage backoff on cache invalidation', async (t) => {
+    let now = 1_800_000_000_000;
+    t.mock.method(Date, 'now', () => now);
+    indicatorImpl['findMany'] = async () => [indicatorRow({ label: 'Cached' })];
+    await getIndicatorById('ind-1');
+    now += 61_000;
+    indicatorImpl['findMany'] = async () => {
+      throw new Error('db unavailable');
+    };
+    assert.equal((await getIndicatorById('ind-1'))?.label, 'Cached');
+
+    invalidateIndicatorsCache('ind-1');
+    indicatorImpl['findMany'] = async () => [indicatorRow({ label: 'Updated' })];
+    assert.equal((await getIndicatorById('ind-1'))?.label, 'Updated');
+  });
+
+  it('does not extend the stale fallback deadline on repeated failed reads', async (t) => {
+    let now = 1_800_000_000_000;
+    t.mock.method(Date, 'now', () => now);
+    indicatorImpl['findMany'] = async () => [indicatorRow({ label: 'Cached' })];
+    assert.equal((await getIndicatorById('ind-1'))?.label, 'Cached');
+
+    indicatorImpl['findMany'] = async () => {
+      throw new Error('db unavailable');
+    };
+    now += 61_000;
+    assert.equal((await getIndicatorById('ind-1'))?.label, 'Cached');
+    now += INDICATOR_LKG_MAX_AGE_MS - 61_001;
+    assert.equal((await getIndicatorById('ind-1'))?.label, 'Cached');
+    // Even within the two-second backoff, stale data expires at its original deadline.
+    now += 2;
+    await assert.rejects(() => getIndicatorById('ind-1'), /db unavailable/);
   });
 
   it('rethrows DB error when last-known-good is older than INDICATOR_LKG_MAX_AGE_MS', async () => {
@@ -1022,6 +1091,8 @@ describe('indicators.service getIndicatorById', () => {
       throw new Error('db unavailable');
     };
     assert.equal((await getIndicatorById('jumlah-penduduk'))?.label, 'Slug Reloaded');
+    assert.equal((await getIndicatorById('jumlah-penduduk'))?.label, 'Slug Reloaded');
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'jumlah-penduduk')), false);
   });
 
   it('rethrows programming errors (TypeError) rather than falling back to LKG', async () => {
@@ -1247,6 +1318,29 @@ describe('indicators.service getIndicatorById', () => {
     const reFetched = await getIndicatorById('slug-target');
     assert.equal(reFetched?.id, 'slug-target');
     assert.equal(dbQueries > reReadQueries, true);
+  });
+
+  it('does not delete a freshly replaced partner after an eviction', async () => {
+    indicatorImpl['findMany'] = async () => [indicatorRow({ id: 'target', slug: 'target-slug' })];
+    const original = await getIndicatorById('target');
+    assert.ok(original);
+
+    // Fill the remaining slots without yielding, then evict the target ID entry.
+    for (let i = 0; i < 199; i++) {
+      indicatorByIdCache.set(
+        indicatorCacheKey('id', `decoy-${i}`),
+        new VersionedTtlCache({ ttlMs: 60_000, baseClient: prisma }),
+      );
+    }
+
+    // A fresh cache entry may be written before deferred eviction cleanup runs.
+    const slugKey = indicatorCacheKey('slug', 'target-slug');
+    indicatorByIdCache
+      .getOrCompute(slugKey, () => new VersionedTtlCache({ ttlMs: 60_000, baseClient: prisma }))
+      .setCommitted({ ...original, label: 'Freshly saved' });
+    await Promise.resolve();
+
+    assert.equal(indicatorByIdCache.peek(slugKey)?.get()?.label, 'Freshly saved');
   });
 
   it('keeps id and slug namespaces from colliding', async () => {

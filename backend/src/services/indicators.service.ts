@@ -306,6 +306,11 @@ const indicatorListCache = new KeyedLruCache<string, VersionedTtlCache<Indicator
 const indicatorIdToSlug = new Map<string, string>();
 const indicatorSlugToId = new Map<string, string>();
 
+// Avoid making every request wait for the database connection timeout during an outage.
+// Entries are bounded and never extend the last-known-good age limit.
+const INDICATOR_OUTAGE_RETRY_MS = 2_000;
+const indicatorOutageRetryAfter = new Map<string, number>();
+
 /**
  * Bumped on every committed indicator write so an in-flight read cannot warm stale DTOs.
  * Global on purpose: a write to one indicator skips warming any concurrent read. Cost is one extra DB read, not a stale cache.
@@ -314,6 +319,7 @@ let indicatorMutationEpoch = 0;
 
 function noteIndicatorMutation(): void {
   indicatorMutationEpoch++;
+  indicatorOutageRetryAfter.clear();
 }
 
 function rememberIndicatorIdentity(id: string, slug: string): void {
@@ -372,16 +378,13 @@ export const indicatorByIdCache = new KeyedLruCache<string, VersionedTtlCache<In
   {
     capacity: MAX_CACHE_ENTRIES,
     onEvict: (key) => {
-      // Drop the dual-written partner so a half-evicted pair cannot leave a stale index entry.
-      // Schedulable outside synchronous set() to avoid mutating map during LRU eviction.
+      // Drop the partner before the current insertion completes, so cleanup cannot
+      // remove a replacement written after this eviction.
       const partner = partnerCacheKey(key);
       forgetIndicatorIdentityByKey(key);
       if (partner && partner !== key) {
-        queueMicrotask(() => {
-          indicatorByIdCache.get(partner)?.invalidate();
-          indicatorByIdCache.delete(partner);
-          forgetIndicatorIdentityByKey(partner);
-        });
+        indicatorByIdCache.peek(partner)?.invalidate();
+        indicatorByIdCache.delete(partner);
       }
     },
   },
@@ -761,6 +764,17 @@ export const getIndicatorById = async (
     const slugCache = indicatorByIdCache.get(indicatorCacheKey('slug', lookup));
     const fromSlug = slugCache?.get();
     if (fromSlug) return fromSlug;
+
+    const retryAfter = indicatorOutageRetryAfter.get(lookup);
+    if (retryAfter !== undefined) {
+      if (Date.now() < retryAfter) {
+        const stale =
+          idCache?.getLastKnownGood(null, INDICATOR_LKG_MAX_AGE_MS) ??
+          slugCache?.getLastKnownGood(null, INDICATOR_LKG_MAX_AGE_MS);
+        if (stale) return stale;
+      }
+      indicatorOutageRetryAfter.delete(lookup);
+    }
   }
 
   // Probe under id:lookup; dual-write under the real id + slug keys after a hit.
@@ -769,6 +783,7 @@ export const getIndicatorById = async (
   // the probe slot's version, so a PATCH that lands mid-read would otherwise restore stale data.
   const epochAtStart = indicatorMutationEpoch;
   let result: IndicatorDto | null = null;
+  let servedStaleId = false;
   try {
     result = await getIndicatorEntryCache('id', lookup).getOrFetch(async (db) => {
       const candidates = await db.indicator.findMany({
@@ -791,11 +806,22 @@ export const getIndicatorById = async (
         idCache?.getLastKnownGood(null, INDICATOR_LKG_MAX_AGE_MS) ??
         slugCache?.getLastKnownGood(null, INDICATOR_LKG_MAX_AGE_MS) ??
         null;
-      if (lkg) return lkg;
+      if (lkg) {
+        if (indicatorMutationEpoch === epochAtStart) {
+          if (indicatorOutageRetryAfter.size >= MAX_CACHE_ENTRIES) {
+            const oldest = indicatorOutageRetryAfter.keys().next().value;
+            if (oldest !== undefined) indicatorOutageRetryAfter.delete(oldest);
+          }
+          indicatorOutageRetryAfter.delete(lookup);
+          indicatorOutageRetryAfter.set(lookup, Date.now() + INDICATOR_OUTAGE_RETRY_MS);
+        }
+        servedStaleId = normalizeIndicatorLookup(lkg.id) === lookup;
+        return lkg;
+      }
     }
     throw err;
   } finally {
-    if (useSharedCache) {
+    if (useSharedCache && !servedStaleId) {
       // Drop probe slot on error, miss, or when lookup was a slug rather than the primary id
       if (!result || normalizeIndicatorLookup(result.id) !== lookup) {
         dropIndicatorCacheEntry('id', lookup);

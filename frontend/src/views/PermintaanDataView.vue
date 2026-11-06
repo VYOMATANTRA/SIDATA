@@ -71,12 +71,6 @@ interface SlaItem {
 
 const slaRules: SlaItem[] = [
   {
-    stage: 'Verifikasi & Registrasi Berkas Permohonan',
-    duration: '1 Hari Kerja',
-    regulation:
-      'SOP Layanan PPID Balikpapan No. 490/365/M/DISKOMINFO & Perki No. 1/2021 (Pasal 22 ayat (4)–(6) UU No. 14/2008)',
-  },
-  {
     stage: 'Penyampaian Tanggapan Tertulis PPID',
     duration: 'Maksimal 10 Hari Kerja',
     regulation:
