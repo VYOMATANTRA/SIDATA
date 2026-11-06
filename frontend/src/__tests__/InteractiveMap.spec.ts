@@ -111,6 +111,7 @@ const leafletMocks = vi.hoisted(() => {
       const el = document.createElement('div');
       el.className = 'leaflet-marker-icon';
       return {
+        addTo: addToMap,
         on: markerOn,
         setIcon: markerSetIcon,
         setLatLng: markerSetLatLng,
@@ -121,6 +122,11 @@ const leafletMocks = vi.hoisted(() => {
       };
     }),
     divIcon: vi.fn<(opts: unknown) => unknown>((opts) => opts),
+    circle: vi.fn<() => { addTo: typeof addToMap }>(() => ({ addTo: addToMap })),
+    layerGroup: vi.fn<() => unknown>(() => ({
+      addTo: vi.fn<() => unknown>().mockReturnThis(),
+      clearLayers: vi.fn<() => void>(),
+    })),
     latLngBounds: vi.fn<(latlngs: unknown) => unknown>((latlngs) => latlngs),
     markerClusterGroup,
   };
@@ -166,17 +172,21 @@ const point = (overrides: Partial<SpatialPointDTO> = {}): SpatialPointDTO => ({
 async function mountMap(
   props: {
     points?: SpatialPointDTO[];
+    framePoints?: SpatialPointDTO[];
     selectedPointId?: string | null;
     defaultCenter?: [number, number];
     defaultZoom?: number;
+    userLocation?: { latitude: number; longitude: number; accuracy: number } | null;
   } = {},
 ) {
   const wrapper = mount(InteractiveMap, {
     props: {
       points: props.points ?? [point()],
+      ...(props.framePoints ? { framePoints: props.framePoints } : {}),
       selectedPointId: props.selectedPointId ?? null,
       ...(props.defaultCenter ? { defaultCenter: props.defaultCenter } : {}),
       ...(props.defaultZoom ? { defaultZoom: props.defaultZoom } : {}),
+      ...(props.userLocation ? { userLocation: props.userLocation } : {}),
     },
     attachTo: document.body,
   });
@@ -264,6 +274,57 @@ describe('InteractiveMap.vue', () => {
     leafletMocks.setView.mockClear();
     await framed.setProps({ defaultCenter: [-1.1, 116.8], defaultZoom: 11 });
     expect(leafletMocks.setView).not.toHaveBeenCalled();
+  });
+
+  it('frames late unfiltered points even when visible points remain unchanged', async () => {
+    const wrapper = await mountMap({ points: [], framePoints: [] });
+    leafletMocks.fitBounds.mockClear();
+    await wrapper.setProps({ framePoints: [point()] });
+    expect(leafletMocks.fitBounds).toHaveBeenCalledTimes(1);
+  });
+
+  it('frames points after a programmatic default-centre update', async () => {
+    const wrapper = await mountMap({ points: [] });
+    leafletMocks.fitBounds.mockClear();
+    await wrapper.setProps({ defaultCenter: [-1.2, 116.9], defaultZoom: 12 });
+    expect(leafletMocks.setView).toHaveBeenCalledWith([-1.2, 116.9], 12);
+    await wrapper.setProps({ points: [point()] });
+    expect(leafletMocks.fitBounds).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not reframe after the visitor moves the map with the wheel', async () => {
+    const wrapper = await mountMap({ points: [], framePoints: [] });
+    leafletMocks.fitBounds.mockClear();
+    await wrapper.find('[data-test="map-canvas"]').trigger('wheel');
+    await wrapper.setProps({ framePoints: [point()] });
+    expect(leafletMocks.fitBounds).not.toHaveBeenCalled();
+  });
+
+  it('preserves an explicitly requested user location when points or defaults arrive later', async () => {
+    const wrapper = await mountMap({
+      points: [],
+      userLocation: { latitude: -1.1, longitude: 116.8, accuracy: 10 },
+    });
+    leafletMocks.setView.mockClear();
+    (wrapper.vm as unknown as { focusUserLocation: () => void }).focusUserLocation();
+    expect(leafletMocks.setView).toHaveBeenCalledWith([-1.1, 116.8], 16);
+    leafletMocks.setView.mockClear();
+    leafletMocks.fitBounds.mockClear();
+    await wrapper.setProps({ points: [point()], defaultCenter: [-1.2, 116.9] });
+    expect(leafletMocks.fitBounds).not.toHaveBeenCalled();
+    expect(leafletMocks.setView).not.toHaveBeenCalled();
+  });
+
+  it('preserves a result-list reveal when framing data arrives later', async () => {
+    const wrapper = await mountMap({
+      points: [point()],
+      framePoints: [],
+      selectedPointId: 'point-1',
+    });
+    leafletMocks.fitBounds.mockClear();
+    (wrapper.vm as unknown as { revealPoint: (id: string) => void }).revealPoint('point-1');
+    await wrapper.setProps({ framePoints: [point()] });
+    expect(leafletMocks.fitBounds).not.toHaveBeenCalled();
   });
 
   it('emits escape from within the map', async () => {

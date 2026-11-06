@@ -1942,6 +1942,11 @@ export async function importRtLeadersCsv(
 
   await executeLockedTransaction({
     client,
+    // The lock target list is read before the point rows are locked. REPEATABLE READ would
+    // keep using that pre-lock snapshot for the post-lock coverage/coordinate load, so a
+    // sibling writer that committed while we waited on the lock would stay invisible and a
+    // shared point could be moved. ReadCommitted makes every post-lock read a current read.
+    isolationLevel: 'ReadCommitted',
     lockQuery: async (txRaw) => {
       const tx = txRaw as SpatialWriteTxClient;
       // 1. Lock affected existing ketua_rt spatial points in ascending ID order first (consistent with point CRUD)

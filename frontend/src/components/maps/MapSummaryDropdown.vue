@@ -23,7 +23,12 @@ function handleClickOutside(event: MouseEvent) {
 }
 
 function handleKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape' && isOpen.value) {
+  if (
+    event.key === 'Escape' &&
+    isOpen.value &&
+    event.target instanceof Node &&
+    dropdownRef.value?.contains(event.target)
+  ) {
     event.preventDefault();
     isOpen.value = false;
     triggerBtnRef.value?.focus();
@@ -80,7 +85,7 @@ onUnmounted(() => {
       leave-to-class="opacity-0 translate-y-1 scale-95"
     >
       <div
-        v-if="isOpen"
+        v-show="isOpen"
         id="map-summary-panel"
         class="absolute right-0 z-50 mt-2 w-64 max-w-[calc(100vw-2rem)] divide-y divide-slate-100 rounded-2xl border border-slate-200/90 bg-white/95 p-3.5 text-sm shadow-xl backdrop-blur-md"
       >

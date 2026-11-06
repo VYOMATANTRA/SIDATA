@@ -148,3 +148,6 @@ vite.config.ts.timestamp-*
 *.iml
 /docs/Descan manggar 2026/
 /docs/Descan Manggar 2026/
+
+# Playwright MCP browser-session artifacts (console logs, snapshots)
+.playwright-mcp/
