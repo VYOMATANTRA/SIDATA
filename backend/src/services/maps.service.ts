@@ -729,7 +729,6 @@ export interface SpatialPointCoverageDTO {
   id: string;
   pointId: string;
   rtNumber: number;
-  createdAt: string;
 }
 
 /**
@@ -1001,13 +1000,11 @@ function formatCoverage(row: {
   id: number;
   pointId: string;
   rtNumber: number;
-  createdAt: Date;
 }): SpatialPointCoverageDTO {
   return {
     id: String(row.id),
     pointId: row.pointId,
     rtNumber: row.rtNumber,
-    createdAt: row.createdAt.toISOString(),
   };
 }
 
@@ -1518,7 +1515,7 @@ export const createSpatialPointCoverage = async (
 
         const created = (await tx.spatialPointRt.create({
           data: { pointId: normalizedId, rtNumber },
-        })) as unknown as { id: number; pointId: string; rtNumber: number; createdAt: Date };
+        })) as { id: number; pointId: string; rtNumber: number };
 
         const postCoverages = normalizeCoverageSet([
           ...point.rtCoverages.map((cov) => cov.rtNumber),
@@ -1598,7 +1595,7 @@ export const deleteSpatialPointCoverage = async (
 
       const existing = (await tx.spatialPointRt.findUnique({
         where: { pointId_rtNumber: { pointId: normalizedId, rtNumber } },
-      })) as unknown as { id: number; pointId: string; rtNumber: number; createdAt: Date } | null;
+      })) as { id: number; pointId: string; rtNumber: number } | null;
       if (!existing) {
         throw new MapsServiceError(
           `RT ${rtNumber.toString()} tidak terdaftar pada titik ini.`,
