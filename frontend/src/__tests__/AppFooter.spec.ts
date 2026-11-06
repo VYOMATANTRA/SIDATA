@@ -230,11 +230,15 @@ describe('AppFooter.vue', () => {
     expect(ceritaNav.find('a[href="/cerita/ekonomi-dan-ketertiban"]').exists()).toBe(true);
     expect(ceritaNav.find('a[href="/cerita/geografis-dan-tata-ruang"]').exists()).toBe(true);
     expect(ceritaNav.find('a[href="/cerita/infrastruktur-dan-perumahan"]').exists()).toBe(true);
-    expect(ceritaNav.find('a[href="/cerita/persampahan-dan-bank-sampah-unit"]').exists()).toBe(true);
+    expect(ceritaNav.find('a[href="/cerita/persampahan-dan-bank-sampah-unit"]').exists()).toBe(
+      true,
+    );
 
     // 3. Tentang (all 3 pages)
     const tentangNav = wrapper.find('nav[aria-label="Navigasi Tentang Kelurahan"]');
-    expect(tentangNav.find('a[href="/tentang/kelurahan-manggar"]').text()).toBe('Kelurahan Manggar');
+    expect(tentangNav.find('a[href="/tentang/kelurahan-manggar"]').text()).toBe(
+      'Kelurahan Manggar',
+    );
     expect(tentangNav.find('a[href="/tentang/desa-cantik"]').text()).toBe(
       'Program Desa/Kelurahan Cantik',
     );
