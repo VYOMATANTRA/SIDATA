@@ -145,14 +145,6 @@ const profilLurahName = computed({
   },
 });
 
-function markLurahFieldEdited(): void {
-  // Maintained for backward compatibility
-}
-
-function markSotkLurahEdited(): void {
-  // Maintained for backward compatibility
-}
-
 const profilLurahTitle = ref(String(metaRecord?.lurahTitle ?? 'Lurah Kelurahan Manggar'));
 
 function addBatasRow(): void {
@@ -526,7 +518,6 @@ function handleSubmit(): void {
             v-model="profilLurahName"
             type="text"
             placeholder="Nama pejabat belum tersedia"
-            @input="markLurahFieldEdited"
             maxlength="150"
             :class="INPUT_CLASSES"
             :aria-describedby="describedBy"
@@ -670,7 +661,6 @@ function handleSubmit(): void {
               v-model="row.officialName"
               type="text"
               placeholder="Nama pejabat belum tersedia"
-              @input="markSotkLurahEdited"
               maxlength="150"
               :class="INPUT_CLASSES"
               :aria-describedby="describedBy"
