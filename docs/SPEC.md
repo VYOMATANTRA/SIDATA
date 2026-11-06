@@ -440,7 +440,7 @@ keeps proper `<caption>` / `<th scope>` semantics under filtering.
 - **Cerita** — links to the Cerita-labeled pages. Confirmed: the 7 stat pages + Persampahan & Bank
   Sampah Unit.
 - **Tentang** — Kelurahan Manggar, Program Desa/Kelurahan Cantik, Inovasi Sosial VYOMATANTRA.
-- **Kolaborasi** — three logos: Desa Cantik/BPS, ITK, Tim Insos VYOMATANTRA.
+- **Kolaborasi** — three logos: Desa Cantik/BPS, ITK, Tim Insos VYOMATANTRA; each logo links to the partner's official site (BPS at https://www.bps.go.id, ITK at https://itk.ac.id; opens in a new tab with rel="noopener noreferrer") or, for VYOMATANTRA, to its Tentang page (/tentang/vyomatantra).
 
 **Page inventory.** Three classes; this is the full set of public pages. Current frontend routes are listed below.
 
