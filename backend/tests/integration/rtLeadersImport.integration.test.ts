@@ -77,6 +77,42 @@ describe('CSV import against real MySQL', () => {
     await prisma.$disconnect();
   });
 
+  it('keeps preview, writes, and audits consistent with the resulting phone', async () => {
+    await insertLeader(prisma, 99, { name: 'Synthetic Leader', phone: '', phoneIsWhatsapp: false });
+    const unchanged = csv(['99,Synthetic Leader,,true,,,']);
+    const preview = await previewRtLeadersImport(unchanged);
+    assert.deepEqual(preview.rows[0]?.changedFields, []);
+    const result = await importRtLeadersCsv(unchanged, ACTOR, REQUEST_CONTEXT);
+    assert.equal(result.summary.unchanged, 1);
+    assert.equal((await readLeader(99))?.phoneIsWhatsapp, false);
+    assert.equal(await prisma.auditLog.count(), 0);
+
+    const renamed = csv(['99,Synthetic Updated,,true,,,']);
+    const renamedPreview = await previewRtLeadersImport(renamed);
+    assert.deepEqual(renamedPreview.rows[0]?.changedFields, ['name']);
+    const renamedResult = await importRtLeadersCsv(renamed, ACTOR, REQUEST_CONTEXT);
+    assert.deepEqual(renamedResult.rows[0]?.changedFields, ['name']);
+    assert.equal((await readLeader(99))?.phoneIsWhatsapp, false);
+
+    const withPhone = csv(['99,Synthetic Updated,08123456789,true,,,']);
+    assert.deepEqual((await previewRtLeadersImport(withPhone)).rows[0]?.changedFields, [
+      'phone',
+      'phoneIsWhatsapp',
+    ]);
+    await importRtLeadersCsv(withPhone, ACTOR, REQUEST_CONTEXT);
+    assert.equal((await readLeader(99))?.phoneIsWhatsapp, true);
+
+    const clearPhone = csv(['99,Synthetic Updated,\\N,true,,,']);
+    assert.deepEqual((await previewRtLeadersImport(clearPhone)).rows[0]?.changedFields, [
+      'phone',
+      'phoneIsWhatsapp',
+    ]);
+    await importRtLeadersCsv(clearPhone, ACTOR, REQUEST_CONTEXT);
+    const cleared = await readLeader(99);
+    assert.equal(cleared?.phone, '');
+    assert.equal(cleared?.phoneIsWhatsapp, false);
+  });
+
   it('applies opposite-order concurrent imports atomically with zero InnoDB deadlocks', async () => {
     await seedTwoPoints();
     const deadlocksBefore = await innodbDeadlockCount(prisma);
