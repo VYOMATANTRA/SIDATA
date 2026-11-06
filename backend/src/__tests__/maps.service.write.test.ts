@@ -44,7 +44,6 @@ interface CoverageRecord {
   id: number;
   pointId: string;
   rtNumber: number;
-  createdAt: Date;
 }
 
 interface LeaderRecord {
@@ -131,7 +130,7 @@ function proxied(impl: AnyRecord, calls: Record<string, unknown[][]>): AnyRecord
 
 function insertCoverages(pointId: string, rts: number[]) {
   for (const rtNumber of rts) {
-    coverages.push({ id: coverageIdSeq++, pointId, rtNumber, createdAt: P });
+    coverages.push({ id: coverageIdSeq++, pointId, rtNumber });
   }
 }
 
@@ -239,14 +238,14 @@ beforeEach(() => {
     },
     create: async (args: AnyRecord) => {
       const data = args.data as { pointId: string; rtNumber: number };
-      const row: CoverageRecord = { id: coverageIdSeq++, createdAt: P, ...data };
+      const row: CoverageRecord = { id: coverageIdSeq++, ...data };
       coverages.push(row);
       return row;
     },
     createMany: async (args: AnyRecord) => {
       const data = (args.data as Array<{ pointId: string; rtNumber: number }>) ?? [];
       for (const item of data) {
-        coverages.push({ id: coverageIdSeq++, createdAt: P, ...item });
+        coverages.push({ id: coverageIdSeq++, ...item });
       }
       return { count: data.length };
     },
@@ -835,6 +834,7 @@ describe('maps.service createSpatialPointCoverage', () => {
     assert.equal(typeof coverage.id, 'string');
     assert.equal(coverage.pointId, 'point-bs-1');
     assert.equal(coverage.rtNumber, 5);
+    assert.deepEqual(Object.keys(coverage).sort(), ['id', 'pointId', 'rtNumber']);
     assert.deepEqual(coveragesOf('point-bs-1'), [1, 2, 3, 5]);
 
     assert.equal(auditRows[0]?.action, 'spatial_point_rt.created');
@@ -897,6 +897,7 @@ describe('maps.service deleteSpatialPointCoverage', () => {
     const coverage = await deleteSpatialPointCoverage('point-bs-1', 2, ACTOR, CONTEXT);
 
     assert.equal(coverage.rtNumber, 2);
+    assert.deepEqual(Object.keys(coverage).sort(), ['id', 'pointId', 'rtNumber']);
     assert.deepEqual(coveragesOf('point-bs-1'), [1, 3]);
     assert.equal(auditRows[0]?.action, 'spatial_point_rt.deleted');
     assert.equal(auditRows[0]?.targetLabel, 'RT 2');
