@@ -314,6 +314,13 @@ describe('InteractiveMap.vue', () => {
     expect(leafletMocks.setView).not.toHaveBeenCalled();
   });
 
+  it('renders a newly requested user location without waiting for points to change', async () => {
+    const wrapper = await mountMap({ points: [] });
+    leafletMocks.L.circle.mockClear();
+    await wrapper.setProps({ userLocation: { latitude: -1.1, longitude: 116.8, accuracy: 10 } });
+    expect(leafletMocks.L.circle).toHaveBeenCalledTimes(1);
+  });
+
   it('preserves a result-list reveal when framing data arrives later', async () => {
     const wrapper = await mountMap({
       points: [point()],

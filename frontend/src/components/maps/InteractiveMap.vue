@@ -414,6 +414,8 @@ watch(
   { deep: true },
 );
 
+watch(() => props.userLocation, renderUserLocation, { deep: true });
+
 function handleEscape(event: KeyboardEvent) {
   if (event.key !== 'Escape' || event.defaultPrevented) return;
   emit('escape');
