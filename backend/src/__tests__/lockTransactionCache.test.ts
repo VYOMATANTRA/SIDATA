@@ -323,6 +323,41 @@ describe('utils/lockTransactionCache executeLockedTransaction', () => {
     assert.equal(onCommitCalled, true);
   });
 
+  it('forwards the requested isolation level as the transaction option', async () => {
+    let receivedOptions: { isolationLevel?: Prisma.TransactionIsolationLevel } | undefined;
+    const mockClient = {
+      $transaction: async (
+        fn: (tx: object) => Promise<unknown>,
+        options?: { isolationLevel?: Prisma.TransactionIsolationLevel },
+      ) => {
+        receivedOptions = options;
+        return fn({});
+      },
+    };
+
+    await executeLockedTransaction({
+      client: mockClient,
+      isolationLevel: 'ReadCommitted',
+      execute: async () => 'ok',
+    });
+
+    assert.deepEqual(receivedOptions, { isolationLevel: 'ReadCommitted' });
+  });
+
+  it('omits the transaction option object when no isolation level is requested', async () => {
+    let receivedOptions: unknown = 'not-called';
+    const mockClient = {
+      $transaction: async (fn: (tx: object) => Promise<unknown>, options?: unknown) => {
+        receivedOptions = options;
+        return fn({});
+      },
+    };
+
+    await executeLockedTransaction({ client: mockClient, execute: async () => 'ok' });
+
+    assert.equal(receivedOptions, undefined);
+  });
+
   it('acquires lock via custom function and supports array of caches', async () => {
     let lockFnCalled = false;
     let cache1Invalidated = false;
