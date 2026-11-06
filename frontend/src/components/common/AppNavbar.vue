@@ -1,7 +1,22 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed } from 'vue';
 import { RouterLink } from 'vue-router';
 import balikpapanLogo from '@/assets/img/logo_balikpapan.webp';
+import { useDrawerFocusTrap } from '../../composables/useDrawerFocusTrap';
+
+export interface NavItem {
+  label: string;
+  to: string;
+}
+
+const DEFAULT_NAV_ITEMS: readonly NavItem[] = [
+  { label: 'Beranda', to: '/' },
+  { label: 'Publikasi', to: '/publikasi' },
+  { label: 'Peta', to: '/peta' },
+  { label: 'Ketua RT', to: '/ketua-rt' },
+  { label: 'Permintaan Data', to: '/permintaan-data' },
+  { label: 'Tentang', to: '/tentang/kelurahan-manggar' },
+];
 
 export interface NavbarProps {
   variant?: 'navy' | 'white' | 'transparent';
@@ -27,6 +42,8 @@ const emit = defineEmits<{
 }>();
 
 const isMenuOpen = ref(false);
+const toggleButtonRef = ref<HTMLButtonElement | null>(null);
+const drawerRef = ref<HTMLElement | null>(null);
 
 function toggleMenu() {
   isMenuOpen.value = !isMenuOpen.value;
@@ -40,18 +57,13 @@ function closeMenu() {
   }
 }
 
-function handleKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape' && isMenuOpen.value) {
+useDrawerFocusTrap({
+  isOpen: isMenuOpen,
+  containerRef: drawerRef,
+  onEscape: () => {
     closeMenu();
-  }
-}
-
-onMounted(() => {
-  window.addEventListener('keydown', handleKeydown);
-});
-
-onUnmounted(() => {
-  window.removeEventListener('keydown', handleKeydown);
+    toggleButtonRef.value?.focus();
+  },
 });
 
 const isNavy = computed(() => props.variant === 'navy');
@@ -139,6 +151,7 @@ const hamburgerBarClasses = computed(() => {
 
           <!-- Hamburger Toggle Button: Solid corners & equal row heights -->
           <button
+            ref="toggleButtonRef"
             type="button"
             class="focus-visible:ring-brand-indigo inline-flex h-10 w-10 items-center justify-center p-1 transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:outline-none"
             :aria-expanded="isMenuOpen"
@@ -177,22 +190,25 @@ const hamburgerBarClasses = computed(() => {
         <div
           v-show="isMenuOpen"
           id="primary-navigation-menu"
+          ref="drawerRef"
           class="border-t border-white/10 px-6 py-6 shadow-xl"
           :class="isNavy ? 'bg-brand-navy text-white' : 'border-slate-200 bg-white text-slate-900'"
           data-test="nav-menu-drawer"
         >
           <div class="mx-auto max-w-7xl space-y-4">
             <slot name="menu" :close="closeMenu">
-              <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 <RouterLink
-                  to="/"
+                  v-for="item in DEFAULT_NAV_ITEMS"
+                  :key="item.to"
+                  :to="item.to"
                   class="rounded-btn focus-visible:ring-brand-indigo block px-4 py-2.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
                   :class="
                     isNavy ? 'text-white hover:bg-white/10' : 'text-slate-800 hover:bg-slate-100'
                   "
                   @click="closeMenu"
                 >
-                  Beranda
+                  {{ item.label }}
                 </RouterLink>
               </div>
             </slot>

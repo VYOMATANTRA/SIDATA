@@ -145,7 +145,41 @@ describe('AppNavbar.vue', () => {
     wrapper.unmount();
   });
 
-  it('closes mobile menu when Escape key is pressed', async () => {
+  it('closes mobile menu when Escape key is pressed and restores focus to hamburger toggle button', async () => {
+    const router = createMockRouter();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(AppNavbar, {
+      global: {
+        plugins: [router],
+      },
+      attachTo: document.body,
+    });
+
+    const hamburger = wrapper.find<HTMLButtonElement>('[data-test="hamburger-btn"]');
+    // Open menu
+    await hamburger.trigger('click');
+    expect(hamburger.attributes('aria-expanded')).toBe('true');
+    expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(true);
+
+    // Focus something inside drawer
+    const firstLink = wrapper.find<HTMLAnchorElement>('[data-test="nav-menu-drawer"] a');
+    firstLink.element.focus();
+    expect(document.activeElement).toBe(firstLink.element);
+
+    // Press Escape
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(false);
+    expect(hamburger.attributes('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(hamburger.element);
+
+    wrapper.unmount();
+  });
+
+  it('renders complete default public navigation items in drawer when no custom menu slot is passed', async () => {
     const router = createMockRouter();
     await router.push('/');
     await router.isReady();
@@ -159,13 +193,59 @@ describe('AppNavbar.vue', () => {
 
     // Open menu
     await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
-    expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(true);
 
-    // Press Escape
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    const drawer = wrapper.find('[data-test="nav-menu-drawer"]');
+    expect(drawer.find('a[href="/"]').text()).toBe('Beranda');
+    expect(drawer.find('a[href="/publikasi"]').text()).toBe('Publikasi');
+    expect(drawer.find('a[href="/peta"]').text()).toBe('Peta');
+    expect(drawer.find('a[href="/ketua-rt"]').text()).toBe('Ketua RT');
+    expect(drawer.find('a[href="/permintaan-data"]').text()).toBe('Permintaan Data');
+    expect(drawer.find('a[href="/tentang/kelurahan-manggar"]').text()).toBe('Tentang');
+
+    // Clicking a nav link closes drawer
+    await drawer.find('a[href="/publikasi"]').trigger('click');
     await wrapper.vm.$nextTick();
+    expect(drawer.isVisible()).toBe(false);
 
-    expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('traps Tab navigation within the mobile drawer while open', async () => {
+    const router = createMockRouter();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(AppNavbar, {
+      global: {
+        plugins: [router],
+      },
+      attachTo: document.body,
+    });
+
+    await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
+
+    const focusables = wrapper.findAll<HTMLElement>('[data-test="nav-menu-drawer"] a');
+    expect(focusables.length).toBeGreaterThan(1);
+    const first = focusables[0]!.element;
+    const last = focusables[focusables.length - 1]!.element;
+
+    // Focus last element and press Tab -> wraps to first
+    last.focus();
+    const tabEvent = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    window.dispatchEvent(tabEvent);
+    expect(document.activeElement).toBe(first);
+
+    // Focus first element and press Shift+Tab -> wraps to last
+    first.focus();
+    const shiftTabEvent = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(shiftTabEvent);
+    expect(document.activeElement).toBe(last);
+
     wrapper.unmount();
   });
 });
