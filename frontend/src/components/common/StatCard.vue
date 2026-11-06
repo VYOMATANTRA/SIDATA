@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
+export type StatCardIconName =
+  'person' | 'house' | 'density' | 'ratio' | 'landscape' | 'statistics';
+
 export interface StatItem {
-  /** Identifier or built-in icon name ('person' | 'house' | 'density' | 'ratio') */
-  icon?: 'person' | 'house' | 'density' | 'ratio' | string;
+  /** Built-in icon name */
+  icon?: StatCardIconName;
   /** Primary numeric or text figure (e.g. '53.098', 100, '2 jiwa/km²', '1,06 : 1') */
   value: string | number;
   /** Label description below the figure (e.g. 'Penduduk', 'Rukun Tetangga') */
@@ -22,7 +25,7 @@ export interface StatCardProps {
   /** Single item shorthand: description label */
   label?: string;
   /** Single item shorthand: icon name */
-  icon?: 'person' | 'house' | 'density' | 'ratio' | string;
+  icon?: StatCardIconName;
   /** Visual variant: 'dark' (Figma default charcoal) | 'glass' | 'navy' | 'light' */
   variant?: 'dark' | 'glass' | 'navy' | 'light';
   /** Optional title or section heading for the card landmark */
@@ -87,20 +90,17 @@ const variantClasses = computed(() => {
     -->
     <dl
       v-if="displayedItems.length > 0"
-      class="grid grid-cols-2 sm:grid-cols-4 items-start gap-2 sm:gap-4 md:gap-6 text-center"
+      class="grid grid-cols-2 items-start gap-2 text-center sm:grid-cols-4 sm:gap-4 md:gap-6"
       data-test="stat-list"
     >
       <div
         v-for="(item, idx) in displayedItems"
         :key="idx"
-        class="flex flex-col items-center text-center px-0.5 sm:px-1"
+        class="flex flex-col items-center px-0.5 text-center sm:px-1"
         data-test="stat-item"
       >
         <!-- Description Term (<dt>): Stat Label Description & Icon (precedes <dd> in DOM for screen readers) -->
-        <dt
-          class="contents"
-          data-test="stat-label"
-        >
+        <dt class="contents" data-test="stat-label">
           <!-- Icon Container -->
           <div
             class="mb-1.5 flex h-7 w-7 items-center justify-center sm:mb-2.5 sm:h-9 sm:w-9"
@@ -178,6 +178,36 @@ const variantClasses = computed(() => {
                 <path d="M22 12A10 10 0 0 0 12 2v10z" />
               </svg>
 
+              <svg
+                v-else-if="item.icon === 'landscape'"
+                class="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8"
+                :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M3 18l6-8 4 5 3-4 5 7" />
+                <path d="M3 18h18" />
+              </svg>
+
+              <svg
+                v-else-if="item.icon === 'statistics'"
+                class="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8"
+                :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M3 3v18h18" />
+                <path d="M8 16v-4M13 16V8M18 16V4" />
+              </svg>
+
               <!-- Fallback Default Icon -->
               <svg
                 v-else
@@ -199,7 +229,9 @@ const variantClasses = computed(() => {
 
           <span
             class="order-2 mt-1 max-w-full text-[10px] leading-tight sm:text-xs md:text-sm"
-            :class="variant === 'light' ? 'font-medium text-slate-600' : 'font-normal text-slate-200'"
+            :class="
+              variant === 'light' ? 'font-medium text-slate-600' : 'font-normal text-slate-200'
+            "
           >
             {{ item.label }}
           </span>
@@ -212,7 +244,9 @@ const variantClasses = computed(() => {
           data-test="stat-value"
         >
           {{ item.value
-          }}<span v-if="item.unit" class="ml-0.5 text-xs font-normal sm:text-sm">{{ item.unit }}</span>
+          }}<span v-if="item.unit" class="ml-0.5 text-xs font-normal sm:text-sm">{{
+            item.unit
+          }}</span>
         </dd>
       </div>
     </dl>

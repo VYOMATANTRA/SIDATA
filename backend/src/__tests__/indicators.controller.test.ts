@@ -122,6 +122,37 @@ beforeEach(() => {
     }) as AsyncFn);
   }
 
+  // Bridge: getIndicatorById now uses a single findMany(OR id|slug). Reuse findUnique
+  // stubs so existing controller tests keep working unless they override findMany.
+  indicatorImpl['findMany'] = async (args: AnyRecord) => {
+    const where = args['where'] as { OR?: Array<{ id?: string; slug?: string }> };
+    if (!Array.isArray(where?.OR)) {
+      throw new Error('unexpected prisma.indicator.findMany where shape');
+    }
+    if (!indicatorImpl['findUnique']) return [];
+    const rows: AnyRecord[] = [];
+    const seen = new Set<string>();
+    for (const clause of where.OR) {
+      const findUnique = indicatorImpl['findUnique'] as (arg: AnyRecord) => Promise<unknown>;
+      const row = (await findUnique({
+        where: clause,
+        include: args['include'],
+      })) as AnyRecord | null;
+      if (row && typeof row.id === 'string' && !seen.has(row.id)) {
+        seen.add(row.id);
+        rows.push(row);
+      }
+    }
+    const idLookup = where.OR.find((clause) => typeof clause.id === 'string')?.id;
+    if (typeof idLookup === 'string') {
+      const preferred = rows.find(
+        (row) => String(row.id).trim().toLowerCase() === idLookup.trim().toLowerCase(),
+      );
+      if (preferred) return [preferred];
+    }
+    return rows.slice(0, 1);
+  };
+
   sectionImpl['findUnique'] = async () => ({ id: 'sec-1' });
 });
 
@@ -289,6 +320,25 @@ describe('indicators.controller getIndicatorHandler', () => {
 
     assert.equal(res.status, 200);
     assert.equal(((res.body as AnyRecord)['indicator'] as AnyRecord)['slug'], 'jumlah-penduduk');
+  });
+
+  it('returns 200 with the indicator when queried by slug', async () => {
+    indicatorImpl['findUnique'] = async (args: AnyRecord) => {
+      const where = args['where'] as { id?: string; slug?: string };
+      if (where.slug === 'jumlah-penduduk') {
+        return indicatorRow({ id: 'ind-1', slug: 'jumlah-penduduk' });
+      }
+      return null;
+    };
+
+    const res = fakeRes();
+    await getIndicatorHandler(
+      { params: { id: 'jumlah-penduduk' } } as unknown as Request,
+      res as unknown as Response,
+    );
+
+    assert.equal(res.status, 200);
+    assert.equal(((res.body as AnyRecord)['indicator'] as AnyRecord)['id'], 'ind-1');
   });
 
   it('returns 500 when the database throws', async () => {

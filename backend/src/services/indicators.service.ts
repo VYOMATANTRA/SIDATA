@@ -299,8 +299,95 @@ const indicatorListCache = new KeyedLruCache<string, VersionedTtlCache<Indicator
   MAX_CACHE_ENTRIES,
 );
 
+/**
+ * Secondary index so invalidation can resolve the paired id/slug key in O(1)
+ * without scanning the LRU. Kept in sync on warm, drop, invalidate, and LRU eviction.
+ */
+const indicatorIdToSlug = new Map<string, string>();
+const indicatorSlugToId = new Map<string, string>();
+
+// Avoid making every request wait for the database connection timeout during an outage.
+// Entries are bounded and never extend the last-known-good age limit.
+const INDICATOR_OUTAGE_RETRY_MS = 2_000;
+const indicatorOutageRetryAfter = new Map<string, number>();
+
+/**
+ * Bumped on every committed indicator write so an in-flight read cannot warm stale DTOs.
+ * Global on purpose: a write to one indicator skips warming any concurrent read. Cost is one extra DB read, not a stale cache.
+ */
+let indicatorMutationEpoch = 0;
+
+function noteIndicatorMutation(): void {
+  indicatorMutationEpoch++;
+  indicatorOutageRetryAfter.clear();
+}
+
+function rememberIndicatorIdentity(id: string, slug: string): void {
+  const nid = normalizeIndicatorLookup(id);
+  const nslug = normalizeIndicatorLookup(slug);
+  const prevSlug = indicatorIdToSlug.get(nid);
+  if (prevSlug !== undefined && prevSlug !== nslug) {
+    indicatorSlugToId.delete(prevSlug);
+  }
+  const prevId = indicatorSlugToId.get(nslug);
+  if (prevId !== undefined && prevId !== nid) {
+    indicatorIdToSlug.delete(prevId);
+  }
+  indicatorIdToSlug.set(nid, nslug);
+  indicatorSlugToId.set(nslug, nid);
+}
+
+function partnerCacheKey(cacheKey: string): string | null {
+  if (cacheKey.startsWith('id:')) {
+    const slug = indicatorIdToSlug.get(cacheKey.slice(3));
+    return slug !== undefined ? indicatorCacheKey('slug', slug) : null;
+  }
+  if (cacheKey.startsWith('slug:')) {
+    const id = indicatorSlugToId.get(cacheKey.slice(5));
+    return id !== undefined ? indicatorCacheKey('id', id) : null;
+  }
+  return null;
+}
+
+function forgetIndicatorIdentityByKey(cacheKey: string): void {
+  if (cacheKey.startsWith('id:')) {
+    const nid = cacheKey.slice(3);
+    const slug = indicatorIdToSlug.get(nid);
+    indicatorIdToSlug.delete(nid);
+    if (slug !== undefined && indicatorSlugToId.get(slug) === nid) {
+      indicatorSlugToId.delete(slug);
+    }
+    return;
+  }
+  if (cacheKey.startsWith('slug:')) {
+    const nslug = cacheKey.slice(5);
+    const id = indicatorSlugToId.get(nslug);
+    indicatorSlugToId.delete(nslug);
+    if (id !== undefined && indicatorIdToSlug.get(id) === nslug) {
+      indicatorIdToSlug.delete(id);
+    }
+  }
+}
+
+function clearIndicatorIdentityIndex(): void {
+  indicatorIdToSlug.clear();
+  indicatorSlugToId.clear();
+}
+
 export const indicatorByIdCache = new KeyedLruCache<string, VersionedTtlCache<IndicatorDto | null>>(
-  MAX_CACHE_ENTRIES,
+  {
+    capacity: MAX_CACHE_ENTRIES,
+    onEvict: (key) => {
+      // Drop the partner before the current insertion completes, so cleanup cannot
+      // remove a replacement written after this eviction.
+      const partner = partnerCacheKey(key);
+      forgetIndicatorIdentityByKey(key);
+      if (partner && partner !== key) {
+        indicatorByIdCache.peek(partner)?.invalidate();
+        indicatorByIdCache.delete(partner);
+      }
+    },
+  },
 );
 
 /**
@@ -311,29 +398,53 @@ export const indicatorByIdCache = new KeyedLruCache<string, VersionedTtlCache<In
  * enough to absorb a scan burst without hammering the database on every repeat.
  */
 const NEGATIVE_TTL_MS = 10 * 1000; // 10 seconds
+/** Maximum age of a last-known-good indicator figure served during a database failure (5 minutes). */
+export const INDICATOR_LKG_MAX_AGE_MS = 5 * 60 * 1000;
 const MAX_NEGATIVE_ENTRIES = 200;
 const missingIndicatorIds = new Map<string, number>();
 
-function isKnownMissing(id: string): boolean {
-  const expiresAt = missingIndicatorIds.get(id);
+export type IndicatorCacheKind = 'id' | 'slug';
+
+/**
+ * Canonical per-entry cache key. Every get / set / invalidate path must go through
+ * this so mixed-case reads cannot fork the cache, and id vs slug never share a key
+ * (Andi review: lowercase-only keys without a kind prefix collide across namespaces).
+ */
+export function indicatorCacheKey(kind: IndicatorCacheKind, value: string): string {
+  return `${kind}:${value.trim().toLowerCase()}`;
+}
+
+/** Normalize a raw id-or-slug lookup string before DB and negative-cache use. */
+export function normalizeIndicatorLookup(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function isKnownMissing(lookup: string): boolean {
+  const key = normalizeIndicatorLookup(lookup);
+  const expiresAt = missingIndicatorIds.get(key);
   if (expiresAt === undefined) return false;
   if (Date.now() >= expiresAt) {
-    missingIndicatorIds.delete(id);
+    missingIndicatorIds.delete(key);
     return false;
   }
   return true;
 }
 
-function rememberMissing(id: string): void {
-  if (!missingIndicatorIds.has(id)) {
+function rememberMissing(lookup: string): void {
+  const key = normalizeIndicatorLookup(lookup);
+  if (!missingIndicatorIds.has(key)) {
     if (missingIndicatorIds.size >= MAX_NEGATIVE_ENTRIES) {
       const oldest = missingIndicatorIds.keys().next().value;
       if (oldest !== undefined) missingIndicatorIds.delete(oldest);
     }
   } else {
-    missingIndicatorIds.delete(id);
+    missingIndicatorIds.delete(key);
   }
-  missingIndicatorIds.set(id, Date.now() + NEGATIVE_TTL_MS);
+  missingIndicatorIds.set(key, Date.now() + NEGATIVE_TTL_MS);
+}
+
+function forgetMissing(lookup: string): void {
+  missingIndicatorIds.delete(normalizeIndicatorLookup(lookup));
 }
 
 const getListCache = (key: string): VersionedTtlCache<IndicatorListResult> =>
@@ -342,11 +453,30 @@ const getListCache = (key: string): VersionedTtlCache<IndicatorListResult> =>
     () => new VersionedTtlCache<IndicatorListResult>({ ttlMs: CACHE_TTL_MS, baseClient: prisma }),
   );
 
-const getByIdCache = (id: string): VersionedTtlCache<IndicatorDto | null> =>
+const getIndicatorEntryCache = (
+  kind: IndicatorCacheKind,
+  value: string,
+): VersionedTtlCache<IndicatorDto | null> =>
   indicatorByIdCache.getOrCompute(
-    id,
+    indicatorCacheKey(kind, value),
     () => new VersionedTtlCache<IndicatorDto | null>({ ttlMs: CACHE_TTL_MS, baseClient: prisma }),
   );
+
+function warmIndicatorCaches(dto: IndicatorDto): void {
+  rememberIndicatorIdentity(dto.id, dto.slug);
+  getIndicatorEntryCache('id', dto.id).setCommitted(dto);
+  getIndicatorEntryCache('slug', dto.slug).setCommitted(dto);
+  forgetMissing(dto.id);
+  forgetMissing(dto.slug);
+}
+
+function dropIndicatorCacheEntry(kind: IndicatorCacheKind, value: string): void {
+  const key = indicatorCacheKey(kind, value);
+  indicatorByIdCache.get(key)?.invalidate();
+  indicatorByIdCache.delete(key);
+  // Probe slots (id:<slug>) are not indexed; real identity keys are cleaned here too.
+  forgetIndicatorIdentityByKey(key);
+}
 
 /**
  * Adapter so the keyed list caches can ride executeLockedTransaction's `cache` option,
@@ -362,13 +492,55 @@ const listCachesInvalidator: CacheInvalidator = {
   },
 };
 
-export const invalidateIndicatorsCache = (id?: string): void => {
-  if (id) {
-    indicatorByIdCache.get(id)?.invalidate();
-    missingIndicatorIds.delete(id);
-  } else {
+function collectKeysToInvalidate(identifier: string, keys: Set<string>): void {
+  const norm = normalizeIndicatorLookup(identifier);
+  keys.add(indicatorCacheKey('id', norm));
+  keys.add(indicatorCacheKey('slug', norm));
+
+  // O(1) via the secondary index (no full LRU scan).
+  const pairedSlug = indicatorIdToSlug.get(norm);
+  if (pairedSlug !== undefined) {
+    keys.add(indicatorCacheKey('slug', pairedSlug));
+  }
+  const pairedId = indicatorSlugToId.get(norm);
+  if (pairedId !== undefined) {
+    keys.add(indicatorCacheKey('id', pairedId));
+  }
+
+  // Direct peeks cover lastKnownGood when the index was never warmed for this key.
+  for (const kind of ['id', 'slug'] as const) {
+    const directCache = indicatorByIdCache.peek(indicatorCacheKey(kind, norm));
+    const directData = directCache?.get() ?? directCache?.getLastKnownGood(null);
+    if (directData?.id) keys.add(indicatorCacheKey('id', directData.id));
+    if (directData?.slug) keys.add(indicatorCacheKey('slug', directData.slug));
+  }
+}
+
+export const invalidateIndicatorsCache = (id?: string, slug?: string): void => {
+  noteIndicatorMutation();
+  const keysToInvalidate = new Set<string>();
+
+  if (id) collectKeysToInvalidate(id, keysToInvalidate);
+  if (slug) collectKeysToInvalidate(slug, keysToInvalidate);
+
+  for (const key of keysToInvalidate) {
+    const entry = indicatorByIdCache.get(key);
+    if (entry) {
+      entry.invalidate();
+    }
+    indicatorByIdCache.delete(key);
+    forgetIndicatorIdentityByKey(key);
+  }
+  if (id) forgetMissing(id);
+  if (slug) forgetMissing(slug);
+
+  if (!id && !slug) {
+    for (const entry of indicatorByIdCache.values()) {
+      entry.invalidate();
+    }
     indicatorByIdCache.clear();
     missingIndicatorIds.clear();
+    clearIndicatorIdentityIndex();
   }
   for (const cache of indicatorListCache.values()) {
     cache.invalidate();
@@ -487,6 +659,57 @@ function isPrismaKnownError(error: unknown, code: string): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === code;
 }
 
+/**
+ * Returns true if the error represents a database connection, pool timeout, or availability
+ * failure. Programming bugs (e.g. TypeErrors in formatting) return false and must never trigger LKG fallback.
+ */
+function isDatabaseAvailabilityError(error: unknown): boolean {
+  if (
+    error instanceof TypeError ||
+    error instanceof RangeError ||
+    error instanceof ReferenceError ||
+    error instanceof SyntaxError
+  ) {
+    return false;
+  }
+  if (error instanceof Prisma.PrismaClientInitializationError) return true;
+  if (error instanceof Prisma.PrismaClientRustPanicError) return true;
+  if (error instanceof Prisma.PrismaClientUnknownRequestError) return true;
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code.startsWith('P10') || error.code === 'P2024') return true;
+  }
+  if (typeof error === 'object' && error !== null) {
+    const err = error as Record<string, unknown>;
+    const code = String(err['code'] ?? '');
+    if (
+      [
+        'ECONNREFUSED',
+        'ETIMEDOUT',
+        'ECONNRESET',
+        'EPIPE',
+        'ENOTFOUND',
+        'EAI_AGAIN',
+        '45028',
+      ].includes(code)
+    ) {
+      return true;
+    }
+    const msg = String(err['message'] ?? '').toLowerCase();
+    if (
+      msg.includes('pool timeout') ||
+      msg.includes('failed to retrieve a connection') ||
+      msg.includes('econnrefused') ||
+      msg.includes("can't reach database server") ||
+      msg.includes('connection lost') ||
+      msg.includes('unavailable') ||
+      msg.includes('connection')
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export const listIndicators = async (
   filters: IndicatorListFilters = {},
   client: { indicator: Pick<typeof prisma.indicator, 'findMany' | 'count'> } = prisma,
@@ -520,28 +743,100 @@ export const listIndicators = async (
 
 export const getIndicatorById = async (
   id: unknown,
-  client: { indicator: Pick<typeof prisma.indicator, 'findUnique'> } = prisma,
+  client: { indicator: Pick<typeof prisma.indicator, 'findUnique' | 'findMany'> } = prisma,
 ): Promise<IndicatorDto | null> => {
   if (typeof id !== 'string' || id.trim() === '' || id.length > 191) {
     return null;
   }
-  const normalizedId = id.trim();
+  // Normalize before cache and DB so `ABC123` / `abc123` never fork entries or hide a hit.
+  const lookup = normalizeIndicatorLookup(id);
   const useSharedCache = client === prisma;
-  if (useSharedCache && isKnownMissing(normalizedId)) {
+  if (useSharedCache && isKnownMissing(lookup)) {
     return null;
   }
-  const result = await getByIdCache(normalizedId).getOrFetch(async (db) => {
-    const row = await db.indicator.findUnique({
-      where: { id: normalizedId },
-      include: WITH_TEMPLATE,
-    });
-    if (!row) return null;
-    return formatIndicator(row as Parameters<typeof formatIndicator>[0]);
-  }, client);
+
+  if (useSharedCache) {
+    // Fresh (unexpired) hits only. Do not serve getLastKnownGood here — that would
+    // skip DB refresh forever after TTL expiry. LKG is reserved for the catch path.
+    const idCache = indicatorByIdCache.get(indicatorCacheKey('id', lookup));
+    const fromId = idCache?.get();
+    if (fromId) return fromId;
+    const slugCache = indicatorByIdCache.get(indicatorCacheKey('slug', lookup));
+    const fromSlug = slugCache?.get();
+    if (fromSlug) return fromSlug;
+
+    const retryAfter = indicatorOutageRetryAfter.get(lookup);
+    if (retryAfter !== undefined) {
+      if (Date.now() < retryAfter) {
+        const stale =
+          idCache?.getLastKnownGood(null, INDICATOR_LKG_MAX_AGE_MS) ??
+          slugCache?.getLastKnownGood(null, INDICATOR_LKG_MAX_AGE_MS);
+        if (stale) return stale;
+      }
+      indicatorOutageRetryAfter.delete(lookup);
+    }
+  }
+
+  // Probe under id:lookup; dual-write under the real id + slug keys after a hit.
+  // Single findMany (OR id|slug) so a miss costs one DB round-trip; prefer an id match.
+  // Capture the epoch before the read: warmIndicatorCaches uses setCommitted, which ignores
+  // the probe slot's version, so a PATCH that lands mid-read would otherwise restore stale data.
+  const epochAtStart = indicatorMutationEpoch;
+  let result: IndicatorDto | null = null;
+  let servedStaleId = false;
+  try {
+    result = await getIndicatorEntryCache('id', lookup).getOrFetch(async (db) => {
+      const candidates = await db.indicator.findMany({
+        where: { OR: [{ id: lookup }, { slug: lookup }] },
+        include: WITH_TEMPLATE,
+        take: 2,
+      });
+      const row =
+        candidates.find((candidate) => normalizeIndicatorLookup(candidate.id) === lookup) ??
+        candidates[0] ??
+        null;
+      if (!row) return null;
+      return formatIndicator(row as Parameters<typeof formatIndicator>[0]);
+    }, client);
+  } catch (err) {
+    if (useSharedCache && isDatabaseAvailabilityError(err)) {
+      const idCache = indicatorByIdCache.get(indicatorCacheKey('id', lookup));
+      const slugCache = indicatorByIdCache.get(indicatorCacheKey('slug', lookup));
+      const lkg =
+        idCache?.getLastKnownGood(null, INDICATOR_LKG_MAX_AGE_MS) ??
+        slugCache?.getLastKnownGood(null, INDICATOR_LKG_MAX_AGE_MS) ??
+        null;
+      if (lkg) {
+        if (indicatorMutationEpoch === epochAtStart) {
+          if (indicatorOutageRetryAfter.size >= MAX_CACHE_ENTRIES) {
+            const oldest = indicatorOutageRetryAfter.keys().next().value;
+            if (oldest !== undefined) indicatorOutageRetryAfter.delete(oldest);
+          }
+          indicatorOutageRetryAfter.delete(lookup);
+          indicatorOutageRetryAfter.set(lookup, Date.now() + INDICATOR_OUTAGE_RETRY_MS);
+        }
+        servedStaleId = normalizeIndicatorLookup(lkg.id) === lookup;
+        return lkg;
+      }
+    }
+    throw err;
+  } finally {
+    if (useSharedCache && !servedStaleId) {
+      // Drop probe slot on error, miss, or when lookup was a slug rather than the primary id
+      if (!result || normalizeIndicatorLookup(result.id) !== lookup) {
+        dropIndicatorCacheEntry('id', lookup);
+      }
+    }
+  }
+
   if (result === null && useSharedCache) {
-    // Drop the just-allocated slot instead of retaining the miss in the shared LRU.
-    indicatorByIdCache.delete(normalizedId);
-    rememberMissing(normalizedId);
+    if (indicatorMutationEpoch === epochAtStart) rememberMissing(lookup);
+    return null;
+  }
+  if (result && useSharedCache) {
+    if (indicatorMutationEpoch === epochAtStart) {
+      warmIndicatorCaches(result);
+    }
   }
   return result;
 };
@@ -578,7 +873,8 @@ export const createIndicator = async (
       lockQuery,
       cache: [listCachesInvalidator],
       onCommit: (committed) => {
-        getByIdCache(committed.id).setCommitted(committed);
+        noteIndicatorMutation();
+        warmIndicatorCaches(committed);
       },
       execute: async (tx) => {
         const section = await tx.section.findUnique({ where: { id: sectionId } });
@@ -645,7 +941,7 @@ export const updateIndicator = async (
   if (typeof id !== 'string' || id.trim() === '' || id.length > 191) {
     throw new IndicatorServiceError('ID indikator tidak valid.', 400);
   }
-  const normalizedId = id.trim();
+  const normalizedId = normalizeIndicatorLookup(id);
 
   if (typeof rawInput !== 'object' || rawInput === null || Array.isArray(rawInput)) {
     throw new IndicatorServiceError('Payload harus berupa objek JSON.', 400);
@@ -658,7 +954,8 @@ export const updateIndicator = async (
   const input = parsed.data as UpdateIndicatorInput & Record<string, unknown>;
 
   const lockQuery = Prisma.sql`SELECT id FROM indicators WHERE id = ${normalizedId} FOR UPDATE`;
-  const targetCache = getByIdCache(normalizedId);
+  const targetCache = getIndicatorEntryCache('id', normalizedId);
+  let oldSlug: string | undefined;
 
   try {
     return await executeLockedTransaction({
@@ -667,12 +964,24 @@ export const updateIndicator = async (
       cache: [listCachesInvalidator],
       onCommit: (committed, didChange) => {
         if (!didChange) return;
+        noteIndicatorMutation();
         // setCommitted() alone doesn't bump the cache version, so a GET whose DB read began
         // before this commit could still pass set()'s version guard and overwrite the fresh
         // row with stale data. Invalidate first to discard any in-flight read.
         targetCache.invalidate();
         targetCache.setCommitted(committed);
-        missingIndicatorIds.delete(committed.id);
+        forgetMissing(committed.id);
+
+        if (oldSlug && oldSlug !== committed.slug) {
+          dropIndicatorCacheEntry('slug', oldSlug);
+          forgetMissing(oldSlug);
+        }
+        const slugCache = getIndicatorEntryCache('slug', committed.slug);
+        slugCache.invalidate();
+        slugCache.setCommitted(committed);
+        forgetMissing(committed.slug);
+        // dropIndicatorCacheEntry forgets the old pair; restore id → new slug or later invalidation misses it.
+        rememberIndicatorIdentity(committed.id, committed.slug);
       },
       execute: async (tx) => {
         const existing = await tx.indicator.findUnique({
@@ -682,6 +991,7 @@ export const updateIndicator = async (
         if (!existing) {
           throw new IndicatorServiceError('Indikator tidak ditemukan.', 404);
         }
+        oldSlug = existing.slug;
 
         if (input.sectionId !== undefined) {
           const nextSectionId = input.sectionId.trim();
@@ -864,7 +1174,7 @@ export const deleteIndicator = async (
   if (typeof id !== 'string' || id.trim() === '' || id.length > 191) {
     throw new IndicatorServiceError('ID indikator tidak valid.', 400);
   }
-  const normalizedId = id.trim();
+  const normalizedId = normalizeIndicatorLookup(id);
 
   const lockQuery = Prisma.sql`SELECT id FROM indicators WHERE id = ${normalizedId} FOR UPDATE`;
 
@@ -874,8 +1184,11 @@ export const deleteIndicator = async (
       lockQuery,
       cache: [listCachesInvalidator],
       onCommit: (committed) => {
-        indicatorByIdCache.delete(committed.id);
-        missingIndicatorIds.delete(committed.id);
+        noteIndicatorMutation();
+        dropIndicatorCacheEntry('id', committed.id);
+        dropIndicatorCacheEntry('slug', committed.slug);
+        forgetMissing(committed.id);
+        forgetMissing(committed.slug);
       },
       execute: async (tx) => {
         const existing = await tx.indicator.findUnique({

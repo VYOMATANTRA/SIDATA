@@ -96,6 +96,43 @@ describe('router auth guard retry behavior', () => {
     expect(router.currentRoute.value.name).toBe('auth-callback');
   });
 
+  it('navigates to public Tentang pages and Permintaan Data page without authentication', async () => {
+    sessionStorage.clear();
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore(pinia);
+    authStore.clearAuth();
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async () => {
+      return { ok: false, status: 401, json: async () => ({}) } as Response;
+    });
+
+    await router.push('/tentang/kelurahan-manggar');
+    expect(router.currentRoute.value.path).toBe('/tentang/kelurahan-manggar');
+    expect(router.currentRoute.value.name).toBe('tentang-kelurahan-manggar');
+    expect(router.currentRoute.value.meta.title).toBe('Tentang Kelurahan Manggar');
+
+    await router.push('/tentang/desa-cantik');
+    expect(router.currentRoute.value.path).toBe('/tentang/desa-cantik');
+    expect(router.currentRoute.value.name).toBe('tentang-desa-cantik');
+    expect(router.currentRoute.value.meta.title).toBe('Program Desa Cantik');
+
+    await router.push('/tentang/vyomatantra');
+    expect(router.currentRoute.value.path).toBe('/tentang/vyomatantra');
+    expect(router.currentRoute.value.name).toBe('tentang-vyomatantra');
+    expect(router.currentRoute.value.meta.title).toBe('Inovasi Sosial VYOMATANTRA');
+
+    await router.push('/permintaan-data');
+    expect(router.currentRoute.value.path).toBe('/permintaan-data');
+    expect(router.currentRoute.value.name).toBe('permintaan-data');
+    expect(router.currentRoute.value.meta.title).toBe('Permintaan Data');
+
+    // Test redirect from /tentang to /tentang/kelurahan-manggar
+    await router.push('/tentang');
+    expect(router.currentRoute.value.path).toBe('/tentang/kelurahan-manggar');
+    expect(router.currentRoute.value.name).toBe('tentang-kelurahan-manggar');
+  });
+
   it('protects /users route with authentication and admin role guards', async () => {
     sessionStorage.clear();
     const pinia = createPinia();
