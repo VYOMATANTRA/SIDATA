@@ -372,16 +372,13 @@ export const indicatorByIdCache = new KeyedLruCache<string, VersionedTtlCache<In
   {
     capacity: MAX_CACHE_ENTRIES,
     onEvict: (key) => {
-      // Drop the dual-written partner so a half-evicted pair cannot leave a stale index entry.
-      // Schedulable outside synchronous set() to avoid mutating map during LRU eviction.
+      // Drop the partner before the current insertion completes, so cleanup cannot
+      // remove a replacement written after this eviction.
       const partner = partnerCacheKey(key);
       forgetIndicatorIdentityByKey(key);
       if (partner && partner !== key) {
-        queueMicrotask(() => {
-          indicatorByIdCache.get(partner)?.invalidate();
-          indicatorByIdCache.delete(partner);
-          forgetIndicatorIdentityByKey(partner);
-        });
+        indicatorByIdCache.peek(partner)?.invalidate();
+        indicatorByIdCache.delete(partner);
       }
     },
   },

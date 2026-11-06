@@ -14,6 +14,7 @@ import {
   IndicatorServiceError,
 } from '../services/indicators.service.js';
 import prisma from '../utils/prisma.js';
+import { VersionedTtlCache } from '../utils/lockTransactionCache.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import {
   TEMPLATE_ROW,
@@ -1270,6 +1271,29 @@ describe('indicators.service getIndicatorById', () => {
     const reFetched = await getIndicatorById('slug-target');
     assert.equal(reFetched?.id, 'slug-target');
     assert.equal(dbQueries > reReadQueries, true);
+  });
+
+  it('does not delete a freshly replaced partner after an eviction', async () => {
+    indicatorImpl['findMany'] = async () => [indicatorRow({ id: 'target', slug: 'target-slug' })];
+    const original = await getIndicatorById('target');
+    assert.ok(original);
+
+    // Fill the remaining slots without yielding, then evict the target ID entry.
+    for (let i = 0; i < 199; i++) {
+      indicatorByIdCache.set(
+        indicatorCacheKey('id', `decoy-${i}`),
+        new VersionedTtlCache({ ttlMs: 60_000, baseClient: prisma }),
+      );
+    }
+
+    // A fresh cache entry may be written before deferred eviction cleanup runs.
+    const slugKey = indicatorCacheKey('slug', 'target-slug');
+    indicatorByIdCache
+      .getOrCompute(slugKey, () => new VersionedTtlCache({ ttlMs: 60_000, baseClient: prisma }))
+      .setCommitted({ ...original, label: 'Freshly saved' });
+    await Promise.resolve();
+
+    assert.equal(indicatorByIdCache.peek(slugKey)?.get()?.label, 'Freshly saved');
   });
 
   it('keeps id and slug namespaces from colliding', async () => {
