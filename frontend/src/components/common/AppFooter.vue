@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
+import { RouterLink } from 'vue-router';
 import { getActivePinia } from 'pinia';
 import BaseLink from './BaseLink.vue';
 import logoBalikpapan from '@/assets/img/logo_balikpapan.webp';
@@ -228,24 +229,49 @@ const aboutLinks = [
       <!-- Partner Collaboration Logos Row -->
       <div class="mt-10 border-t border-white/10 pt-8 sm:mt-12 sm:pt-10">
         <div class="flex items-center justify-center gap-8 sm:gap-12 md:gap-16">
-          <img
-            :src="logoBps"
-            alt="Logo Badan Pusat Statistik (BPS)"
-            class="h-9 w-auto object-contain sm:h-11"
-            data-test="logo-bps"
-          />
-          <img
-            :src="logoItk"
-            alt="Logo Institut Teknologi Kalimantan (ITK)"
-            class="h-9 w-auto object-contain sm:h-11"
-            data-test="logo-itk"
-          />
-          <img
-            :src="logoVyomatantra"
-            alt="Logo Tim Inovasi Sosial VYOMATANTRA"
-            class="h-9 w-auto object-contain sm:h-11"
-            data-test="logo-vyomatantra"
-          />
+          <a
+            href="https://www.bps.go.id"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="focus-visible:ring-brand-indigo inline-flex items-center rounded-xs opacity-90 transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
+            aria-label="Kunjungi situs web Badan Pusat Statistik (BPS)"
+            data-test="link-logo-bps"
+          >
+            <img
+              :src="logoBps"
+              alt="Logo Badan Pusat Statistik (BPS)"
+              class="h-9 w-auto object-contain sm:h-11"
+              data-test="logo-bps"
+            />
+          </a>
+          <a
+            href="https://itk.ac.id"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="focus-visible:ring-brand-indigo inline-flex items-center rounded-xs opacity-90 transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
+            aria-label="Kunjungi situs web Institut Teknologi Kalimantan (ITK)"
+            data-test="link-logo-itk"
+          >
+            <img
+              :src="logoItk"
+              alt="Logo Institut Teknologi Kalimantan (ITK)"
+              class="h-9 w-auto object-contain sm:h-11"
+              data-test="logo-itk"
+            />
+          </a>
+          <RouterLink
+            to="/tentang/vyomatantra"
+            class="focus-visible:ring-brand-indigo inline-flex items-center rounded-xs opacity-90 transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
+            aria-label="Lihat profil Tim Inovasi Sosial VYOMATANTRA"
+            data-test="link-logo-vyomatantra"
+          >
+            <img
+              :src="logoVyomatantra"
+              alt="Logo Tim Inovasi Sosial VYOMATANTRA"
+              class="h-9 w-auto object-contain sm:h-11"
+              data-test="logo-vyomatantra"
+            />
+          </RouterLink>
         </div>
       </div>
 

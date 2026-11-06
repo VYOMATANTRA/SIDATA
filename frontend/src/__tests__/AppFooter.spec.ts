@@ -204,4 +204,74 @@ describe('AppFooter.vue', () => {
     expect(wrapper.find('a[href="/publikasi"]').exists()).toBe(true);
     expect(wrapper.find('a[href="/publikasi"]').text()).toBe('Publikasi');
   });
+
+  it('renders all real href destinations across the 3 navigation groups per SPEC §8', async () => {
+    const router = createMockRouter();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(AppFooter, {
+      global: { plugins: [router] },
+    });
+
+    // 1. Sumber Daya
+    const sumberDayaNav = wrapper.find('nav[aria-label="Navigasi Sumber Daya"]');
+    expect(sumberDayaNav.find('a[href="/publikasi"]').text()).toBe('Publikasi');
+    expect(sumberDayaNav.find('a[href="/peta"]').text()).toBe('Peta');
+    expect(sumberDayaNav.find('a[href="/permintaan-data"]').text()).toBe('Permintaan Data');
+    expect(sumberDayaNav.find('a[href="/ketua-rt"]').text()).toBe('Ketua RT');
+
+    // 2. Cerita (all 8 pages)
+    const ceritaNav = wrapper.find('nav[aria-label="Navigasi Cerita Statistik"]');
+    expect(ceritaNav.find('a[href="/cerita/kependudukan"]').exists()).toBe(true);
+    expect(ceritaNav.find('a[href="/cerita/pendidikan"]').exists()).toBe(true);
+    expect(ceritaNav.find('a[href="/cerita/kesehatan"]').exists()).toBe(true);
+    expect(ceritaNav.find('a[href="/cerita/pemerintahan-dan-kelembagaan"]').exists()).toBe(true);
+    expect(ceritaNav.find('a[href="/cerita/ekonomi-dan-ketertiban"]').exists()).toBe(true);
+    expect(ceritaNav.find('a[href="/cerita/geografis-dan-tata-ruang"]').exists()).toBe(true);
+    expect(ceritaNav.find('a[href="/cerita/infrastruktur-dan-perumahan"]').exists()).toBe(true);
+    expect(ceritaNav.find('a[href="/cerita/persampahan-dan-bank-sampah-unit"]').exists()).toBe(true);
+
+    // 3. Tentang (all 3 pages)
+    const tentangNav = wrapper.find('nav[aria-label="Navigasi Tentang Kelurahan"]');
+    expect(tentangNav.find('a[href="/tentang/kelurahan-manggar"]').text()).toBe('Kelurahan Manggar');
+    expect(tentangNav.find('a[href="/tentang/desa-cantik"]').text()).toBe(
+      'Program Desa/Kelurahan Cantik',
+    );
+    expect(tentangNav.find('a[href="/tentang/vyomatantra"]').text()).toBe(
+      'Inovasi Sosial VYOMATANTRA',
+    );
+  });
+
+  it('wraps the 3 Kolaborasi partner logos in accessible links with correct destinations', async () => {
+    const router = createMockRouter();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(AppFooter, {
+      global: { plugins: [router] },
+    });
+
+    // BPS outbound link
+    const bpsLink = wrapper.find('[data-test="link-logo-bps"]');
+    expect(bpsLink.exists()).toBe(true);
+    expect(bpsLink.attributes('href')).toBe('https://www.bps.go.id');
+    expect(bpsLink.attributes('target')).toBe('_blank');
+    expect(bpsLink.attributes('rel')).toContain('noopener');
+    expect(bpsLink.find('[data-test="logo-bps"]').exists()).toBe(true);
+
+    // ITK outbound link
+    const itkLink = wrapper.find('[data-test="link-logo-itk"]');
+    expect(itkLink.exists()).toBe(true);
+    expect(itkLink.attributes('href')).toBe('https://itk.ac.id');
+    expect(itkLink.attributes('target')).toBe('_blank');
+    expect(itkLink.attributes('rel')).toContain('noopener');
+    expect(itkLink.find('[data-test="logo-itk"]').exists()).toBe(true);
+
+    // Tim Inovasi Sosial VYOMATANTRA link
+    const vyomatantraLink = wrapper.find('[data-test="link-logo-vyomatantra"]');
+    expect(vyomatantraLink.exists()).toBe(true);
+    expect(vyomatantraLink.attributes('href')).toBe('/tentang/vyomatantra');
+    expect(vyomatantraLink.find('[data-test="logo-vyomatantra"]').exists()).toBe(true);
+  });
 });
