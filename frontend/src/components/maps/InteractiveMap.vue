@@ -211,6 +211,7 @@ function revealPoint(pointId: string) {
   const marker = markers.get(pointId);
   if (!marker) return;
 
+  userMovedViewport = true;
   markerLayerGroup.zoomToShowLayer(marker, () => {
     if (props.selectedPointId !== pointId) return;
     const point = props.points.find((item) => item.id === pointId);
@@ -301,6 +302,7 @@ function renderUserLocation() {
 
 function focusUserLocation() {
   if (!map || !props.userLocation) return;
+  userMovedViewport = true;
   map.setView(
     [props.userLocation.latitude, props.userLocation.longitude],
     Math.max(map.getZoom(), 16),
@@ -392,6 +394,8 @@ watch(
   },
   { deep: true },
 );
+
+watch(() => props.framePoints, frameInitialPoints, { deep: true });
 
 watch(
   () => props.selectedPointId,
