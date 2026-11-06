@@ -150,6 +150,86 @@ describe('previewRtLeadersImport and importRtLeadersCsv coordinate handling', ()
     return { client: mockClient as any, leaders, points, coverages, auditLogs };
   }
 
+  it('ignores WhatsApp true for an unchanged empty phone in preview and apply', async () => {
+    const { client, leaders, auditLogs } = createMockClient();
+    const { previewRtLeadersImport, importRtLeadersCsv } =
+      await import('../services/maps.service.js');
+    const csv = `${header}\n2,Ketua 2,,true,,,`;
+
+    const preview = await previewRtLeadersImport(csv, client);
+    assert.deepEqual(preview.rows[0]?.changedFields, []);
+    assert.equal(preview.summary.unchanged, 1);
+    const result = await importRtLeadersCsv(csv, actor, reqContext, client);
+    assert.equal(result.summary.unchanged, 1);
+    assert.equal(leaders.get(2).phone, '');
+    assert.equal(leaders.get(2).phoneIsWhatsapp, false);
+    assert.equal(auditLogs.length, 0);
+  });
+
+  it('uses the resulting phone when previewing and applying WhatsApp changes', async () => {
+    const { client, leaders } = createMockClient();
+    const { previewRtLeadersImport, importRtLeadersCsv } =
+      await import('../services/maps.service.js');
+    const csv = `${header}\n2,Ketua 2,081222,true,,,`;
+    const preview = await previewRtLeadersImport(csv, client);
+    assert.deepEqual(preview.rows[0]?.changedFields, ['phone', 'phoneIsWhatsapp']);
+    const result = await importRtLeadersCsv(csv, actor, reqContext, client);
+    assert.deepEqual(result.rows[0]?.changedFields, preview.rows[0]?.changedFields);
+    assert.equal(leaders.get(2).phone, '081222');
+    assert.equal(leaders.get(2).phoneIsWhatsapp, true);
+  });
+
+  it('does not enable WhatsApp on an empty phone when another field changes', async () => {
+    const { client, leaders } = createMockClient();
+    const { previewRtLeadersImport, importRtLeadersCsv } =
+      await import('../services/maps.service.js');
+    const csv = `${header}\n2,Updated Name,,true,,,`;
+    const preview = await previewRtLeadersImport(csv, client);
+    assert.deepEqual(preview.rows[0]?.changedFields, ['name']);
+    const result = await importRtLeadersCsv(csv, actor, reqContext, client);
+    assert.deepEqual(result.rows[0]?.changedFields, preview.rows[0]?.changedFields);
+    assert.equal(leaders.get(2).name, 'Updated Name');
+    assert.equal(leaders.get(2).phoneIsWhatsapp, false);
+  });
+
+  it('clears WhatsApp when the phone is explicitly cleared', async () => {
+    const { client, leaders } = createMockClient();
+    const { previewRtLeadersImport, importRtLeadersCsv } =
+      await import('../services/maps.service.js');
+    const csv = `${header}\n1,Ketua 1,\\N,true,,,`;
+    const preview = await previewRtLeadersImport(csv, client);
+    assert.deepEqual(preview.rows[0]?.changedFields, ['phone', 'phoneIsWhatsapp']);
+    const result = await importRtLeadersCsv(csv, actor, reqContext, client);
+    assert.deepEqual(result.rows[0]?.changedFields, preview.rows[0]?.changedFields);
+    assert.equal(leaders.get(1).phone, '');
+    assert.equal(leaders.get(1).phoneIsWhatsapp, false);
+  });
+
+  it('preserves an existing phone and applies a requested WhatsApp change', async () => {
+    const { client, leaders } = createMockClient();
+    const { previewRtLeadersImport, importRtLeadersCsv } =
+      await import('../services/maps.service.js');
+    const csv = `${header}\n1,Ketua 1,,false,,,`;
+    const preview = await previewRtLeadersImport(csv, client);
+    assert.deepEqual(preview.rows[0]?.changedFields, ['phoneIsWhatsapp']);
+    await importRtLeadersCsv(csv, actor, reqContext, client);
+    assert.equal(leaders.get(1).phone, '081234');
+    assert.equal(leaders.get(1).phoneIsWhatsapp, false);
+  });
+
+  it('repairs a legacy empty-phone WhatsApp flag when that flag is supplied', async () => {
+    const { client, leaders } = createMockClient();
+    leaders.get(2).phoneIsWhatsapp = true;
+    const { previewRtLeadersImport, importRtLeadersCsv } =
+      await import('../services/maps.service.js');
+    const csv = `${header}\n2,Ketua 2,,true,,,`;
+    const preview = await previewRtLeadersImport(csv, client);
+    assert.deepEqual(preview.rows[0]?.changedFields, ['phoneIsWhatsapp']);
+    const result = await importRtLeadersCsv(csv, actor, reqContext, client);
+    assert.deepEqual(result.rows[0]?.changedFields, preview.rows[0]?.changedFields);
+    assert.equal(leaders.get(2).phoneIsWhatsapp, false);
+  });
+
   it('recognizes identical coordinates and equivalent decimal spelling as unchanged', async () => {
     const { client } = createMockClient();
     const { previewRtLeadersImport } = await import('../services/maps.service.js');

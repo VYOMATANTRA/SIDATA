@@ -1768,6 +1768,15 @@ function hasCoordinateChanged(before: number | undefined, after: number | undefi
   return Math.abs(before - after) > 1e-7;
 }
 
+function importWhatsappValue(
+  existing: ImportLeaderRow,
+  row: RtLeaderImportRow,
+): boolean | undefined {
+  if (row.phone === undefined && row.phoneIsWhatsapp === undefined) return undefined;
+  const resultingPhone = (row.phone ?? existing.phone).trim();
+  return resultingPhone === '' ? false : (row.phoneIsWhatsapp ?? existing.phoneIsWhatsapp);
+}
+
 function importChangedFields(
   existing: ImportLeaderRow,
   existingPoint: ExistingRtPoint | undefined,
@@ -1776,7 +1785,8 @@ function importChangedFields(
   const changed: string[] = [];
   if (row.name !== undefined && hasFieldChanged(existing.name, row.name)) changed.push('name');
   if (row.phone !== undefined && hasFieldChanged(existing.phone, row.phone)) changed.push('phone');
-  if (row.phoneIsWhatsapp !== undefined && existing.phoneIsWhatsapp !== row.phoneIsWhatsapp) {
+  const resultingWhatsapp = importWhatsappValue(existing, row);
+  if (resultingWhatsapp !== undefined && existing.phoneIsWhatsapp !== resultingWhatsapp) {
     changed.push('phoneIsWhatsapp');
   }
   if (row.alamat !== undefined && hasFieldChanged(existing.alamat, row.alamat))
@@ -2034,16 +2044,10 @@ export async function importRtLeadersCsv(
         }
         if (row.phone !== undefined && hasFieldChanged(existing.phone, row.phone)) {
           leaderDataToUpdate.phone = row.phone;
-          if (row.phone.trim() === '') {
-            leaderDataToUpdate.phoneIsWhatsapp = false;
-            if (existing.phoneIsWhatsapp) {
-              changedFieldSet.add('phoneIsWhatsapp');
-            }
-          }
         }
-        if (row.phoneIsWhatsapp !== undefined && existing.phoneIsWhatsapp !== row.phoneIsWhatsapp) {
-          leaderDataToUpdate.phoneIsWhatsapp =
-            leaderDataToUpdate.phone === '' ? false : row.phoneIsWhatsapp;
+        const resultingWhatsapp = importWhatsappValue(existing, row);
+        if (resultingWhatsapp !== undefined && existing.phoneIsWhatsapp !== resultingWhatsapp) {
+          leaderDataToUpdate.phoneIsWhatsapp = resultingWhatsapp;
         }
         if (row.alamat !== undefined && hasFieldChanged(existing.alamat, row.alamat)) {
           leaderDataToUpdate.alamat = row.alamat;
