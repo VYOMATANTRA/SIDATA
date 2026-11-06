@@ -5,8 +5,10 @@
   "main": "index.js",
   "scripts": {
     "test": "bash -O globstar -c \"tsx --import ./src/__tests__/setupEnv.ts --test src/**/*.test.ts\"",
+    "test:integration": "node --import tsx --import ./tests/integration/setupIntegrationEnv.ts --test --test-concurrency=1 \"tests/integration/**/*.test.ts\"",
     "test:coverage": "node scripts/coverage.mjs",
     "dev:seed": "tsx scripts/dev-seed.ts",
+    "dev:cleanup-sample-rt": "tsx scripts/cleanup-legacy-sample-rt-leaders.ts",
     "seed:indicator": "tsx prisma/seeder_indicator.ts",
     "lint": "eslint .",
     "format": "prettier --write ."

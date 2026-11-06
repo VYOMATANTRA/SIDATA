@@ -60,27 +60,35 @@ npm ci
 
 Fill in `.env` with at least:
 
-| Variable                         | Description                                                                                          |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                   | MySQL connection string, e.g. `mysql://root:password@localhost:3306/sidata` (swap host `mysql` to `localhost` for local runs) |
-| `JWT_SECRET`                     | Secret used to sign access tokens                                                                    |
-| `JWT_REFRESH_SECRET`             | Secret used to sign refresh tokens                                                                   |
-| `CSRF_SECRET`                    | Secret used to sign CSRF tokens and cookies                                                          |
-| `COOKIE_ENCRYPTION_KEY`         | Secret used to encrypt temporary OAuth state and verifier cookies                                    |
-| `CORS_ORIGIN`                    | Frontend origin allowed to make credentialed requests, e.g. `http://localhost:5173`                  |
-| `GOOGLE_CLIENT_ID`               | Google OAuth2 Client ID                                                                              |
-| `GOOGLE_CLIENT_SECRET`           | Google OAuth2 Client Secret                                                                          |
-| `GOOGLE_CALLBACK_URL`           | Google OAuth2 Callback URL, e.g. `http://localhost:3000/api/auth/google/callback`                    |
-| `GOOGLE_OAUTH_SUCCESS_REDIRECT` | Frontend URL for successful OAuth redirect, e.g. `http://localhost:5173/auth/callback`              |
-| `GOOGLE_OAUTH_FAILURE_REDIRECT` | Frontend URL for failed OAuth redirect, e.g. `http://localhost:5173/login?error=oauth_failed`       |
-| `OAUTH_STATE_TTL_SECONDS`       | _(optional)_ TTL for the temporary `oauth_state` cookie, defaults to `300`                             |
-| `OAUTH_PKCE_TTL_SECONDS`         | _(optional)_ TTL for the temporary `oauth_verifier` cookie, defaults to `300`                          |
-| `TURNSTILE_SECRET`               | Cloudflare Turnstile anti-bot secret key (`1x0000000000000000000000000000000AA` for local testing)   |
-| `RESEND_API_KEY`                 | Resend API key for transactional emails                                                              |
-| `EMAIL_FROM`                     | Sender identity for transactional emails, e.g. `"SIDATA Kelurahan Manggar <onboarding@resend.dev>"`  |
-| `PORT`                           | _(optional)_ Backend port, defaults to `3000`                                                        |
+| Variable                        | Description                                                                                                                   |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                  | MySQL connection string, e.g. `mysql://root:password@localhost:3306/sidata` (swap host `mysql` to `localhost` for local runs) |
+| `JWT_SECRET`                    | Secret used to sign access tokens                                                                                             |
+| `JWT_REFRESH_SECRET`            | Secret used to sign refresh tokens                                                                                            |
+| `CSRF_SECRET`                   | Secret used to sign CSRF tokens and cookies                                                                                   |
+| `COOKIE_ENCRYPTION_KEY`         | Secret used to encrypt temporary OAuth state and verifier cookies                                                             |
+| `CORS_ORIGIN`                   | Frontend origin allowed to make credentialed requests, e.g. `http://localhost:5173`                                           |
+| `GOOGLE_CLIENT_ID`              | Google OAuth2 Client ID                                                                                                       |
+| `GOOGLE_CLIENT_SECRET`          | Google OAuth2 Client Secret                                                                                                   |
+| `GOOGLE_CALLBACK_URL`           | Google OAuth2 Callback URL, e.g. `http://localhost:3000/api/auth/google/callback`                                             |
+| `GOOGLE_OAUTH_SUCCESS_REDIRECT` | Frontend URL for successful OAuth redirect, e.g. `http://localhost:5173/auth/callback`                                        |
+| `GOOGLE_OAUTH_FAILURE_REDIRECT` | Frontend URL for failed OAuth redirect, e.g. `http://localhost:5173/login?error=oauth_failed`                                 |
+| `OAUTH_STATE_TTL_SECONDS`       | _(optional)_ TTL for the temporary `oauth_state` cookie, defaults to `300`                                                    |
+| `OAUTH_PKCE_TTL_SECONDS`        | _(optional)_ TTL for the temporary `oauth_verifier` cookie, defaults to `300`                                                 |
+| `TURNSTILE_SECRET`              | Cloudflare Turnstile anti-bot secret key (`1x0000000000000000000000000000000AA` for local testing)                            |
+| `RESEND_API_KEY`                | Resend API key for transactional emails                                                                                       |
+| `EMAIL_FROM`                    | Sender identity for transactional emails, e.g. `"SIDATA Kelurahan Manggar <onboarding@resend.dev>"`                           |
+| `PORT`                          | _(optional)_ Backend port, defaults to `3000`                                                                                 |
 
 The server validates required variables at boot and fails fast if any are missing. Optional variables fall back to documented defaults.
+
+In non-production environments, `npx prisma db seed` loads synthetic RT leaders and delegates
+recognized legacy-sample cleanup to the same transactional service used by the maintenance CLI.
+The cleanup is fingerprint-limited, preserves edited rows, and writes a count-only warning audit
+record in the same transaction when it changes data. For a manual cleanup, run
+`npm run dev:cleanup-sample-rt` from `backend/`; production requires the explicit `--force` flag.
+The public Ketua RT page refreshes its roster and `isSampleRoster` notice every 60 seconds while
+visible, keeping the last successful roster displayed if a refresh fails.
 
 The auth API issues CSRF tokens from `GET /api/auth/csrf-token`. Include the returned token in the `x-csrf-token` header on mutating auth requests.
 
@@ -143,6 +151,13 @@ Checklist for a new environment (Docker on a VPS). Background: [`AGENTS.md`](AGE
      `0 3 * * * cd /path/to/SIDATA/backend && npx tsx scripts/prune-audit-logs.ts >> /var/log/sidata-prune.log 2>&1`
      (needs `AUDIT_ADMIN_DATABASE_URL` and the other required backend variables in the root `.env`, and `npx` on cron's `PATH`).
 5. If behind a reverse proxy, set `TRUST_PROXY`.
+6. **Database initialization vs. upgrade runbook:**
+   - **Fresh installation:** Run `npx prisma db seed` with `NODE_ENV=production`. In production, seeding initializes 100 empty RT slots (`rtNumber` 1–100 with blank names/contacts and no spatial points) and initializes `maps.rt_leaders_sample_roster` to `false`. Real leader names, contacts, and coordinates must be entered through the CMS manual editor or imported via CSV.
+   - **Upgrading an existing database previously seeded with sample/dev data:** Because seeding uses `update: {}` to prevent overwriting existing rows, previously seeded synthetic records or points will survive a re-seed. Before public release, operators must verify whether recognized legacy synthetic records remain. If present, run the maintenance cleanup command from `backend/` during an authorized maintenance window with production configuration:
+     ```bash
+     npm run dev:cleanup-sample-rt -- --force
+     ```
+     This cleanup is fingerprint-limited: it resets recognized synthetic placeholder rows, removes synthetic RT points, preserves editor-modified rows, and writes a count-only audit log in the same transaction. Synthetic data that does not match narrow legacy fingerprints will not be automatically cleared; operators must verify and toggle the appropriate `maps.rt_leaders_sample_roster` flag via the Admin CMS (/admin/rukun-tetangga) or `PATCH /api/maps/rt-leaders/sample-status` once verified.
 
 ## Public Content Sources
 
@@ -165,13 +180,25 @@ verification rules.
 
 ### Backend (`backend/`)
 
-| Task                 | Command                                 |
-| -------------------- | --------------------------------------- |
-| Run unit tests       | `npm test`                              |
-| Lint                 | `npm run lint`                          |
-| Format code          | `npm run format`                        |
-| Run server           | `npx tsx src/index.ts`                  |
-| Run via Docker       | `docker compose up --build` (repo root) |
+| Task                    | Command                                                                 |
+| ----------------------- | ----------------------------------------------------------------------- |
+| Run unit tests          | `npm test`                                                              |
+| Run integration tests   | `docker compose -f docker-compose.test.yml run --rm backend-integration` |
+| Lint                    | `npm run lint`                                                          |
+| Format code             | `npm run format`                                                        |
+| Run server              | `npx tsx src/index.ts`                                                  |
+| Run via Docker          | `docker compose up --build` (repo root)                                 |
+
+Integration tests (`backend/tests/integration/`) need a real MySQL because they assert
+concurrency behaviour that a mocked client cannot reproduce: no InnoDB deadlocks under
+opposite-order imports, atomic rollback, no-op re-imports, and the seed-mode matrix. The
+Compose stack in `docker-compose.test.yml` starts a throwaway `mysql:8.4` on tmpfs, applies
+migrations, and runs the suite — it never reads the development database. The runner mounts
+`./backend` and therefore reuses the dependencies already installed by `npm ci`.
+
+They are intentionally excluded from `npm test` and CI: they require Docker, and they write
+to a live database. Run them locally before touching the RT import, spatial write paths, or
+`prisma/seed.ts`.
 
 ## Project Structure
 

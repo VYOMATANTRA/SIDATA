@@ -10,6 +10,14 @@ import {
 import { DEFAULT_CONTENT_BLOCKS } from '../src/services/contentBlocks.service.js';
 import { DEFAULT_COMPARISON_TEMPLATES } from '../src/services/comparisonTemplates.service.js';
 import { CERITA_PAGES } from './ceritaPages.js';
+import { RT_LEADERS_DATA } from '../src/data/rtLeadersData.js';
+import {
+  parseSeedPointTombstones,
+  RT_SEED_POINT_TOMBSTONES_KEY,
+  seedEmptyRtLeaderSlots,
+  seedRtLeaders,
+} from './seedRtLeaders.js';
+import { cleanLegacySampleRtData } from '../src/services/legacySampleRtCleanup.service.js';
 
 async function main() {
   console.log('Memulai proses seeding...');
@@ -38,104 +46,63 @@ async function main() {
     },
   });
 
-  // Seed sample RT Leaders (RT 01 - RT 03)
-  const rt1 = await prisma.rtLeader.upsert({
-    where: { rtNumber: 1 },
-    update: {},
-    create: {
-      rtNumber: 1,
-      name: 'Bambang Supriyanto',
-      phone: '081234567801',
-      phoneIsWhatsapp: true,
-      alamat: 'Jl. Mulawarman No. 12, RT 01, Manggar',
-    },
+  const shouldSeedSample =
+    process.env.SEED_SAMPLE_DATA === 'true' ||
+    (process.env.NODE_ENV === 'development' && process.env.SEED_SAMPLE_DATA !== 'false');
+
+  // Always run legacy cleanup in both production and development to reset any leftover synthetic records
+  await cleanLegacySampleRtData('seed', {
+    ...(process.env.NODE_ENV ? { nodeEnv: process.env.NODE_ENV } : {}),
   });
 
-  const rt2 = await prisma.rtLeader.upsert({
-    where: { rtNumber: 2 },
-    update: {},
-    create: {
-      rtNumber: 2,
-      name: 'Hj. Siti Aminah',
-      phone: '081234567802',
-      phoneIsWhatsapp: true,
-      alamat: 'Jl. Pemuda RT 02, Manggar',
-    },
-  });
+  if (!shouldSeedSample) {
+    // Production/safe mode starts with 100 empty slots. Real names, contacts, and coordinates
+    // enter through the CMS/CSV import and are never committed to the repository.
+    await seedEmptyRtLeaderSlots(
+      prisma,
+      Array.from({ length: 100 }, (_, index) => index + 1),
+    );
+    await prisma.systemSetting.upsert({
+      where: { key: 'maps.rt_leaders_sample_roster' },
+      create: { key: 'maps.rt_leaders_sample_roster', value: 'false' },
+      update: {},
+    });
+  } else {
+    const tombstoneSetting = await prisma.systemSetting.findUnique({
+      where: { key: RT_SEED_POINT_TOMBSTONES_KEY },
+    });
+    const skippedPointIds = parseSeedPointTombstones(tombstoneSetting?.value);
+    await seedRtLeaders(prisma, RT_LEADERS_DATA, { skippedPointIds });
 
-  const rt3 = await prisma.rtLeader.upsert({
-    where: { rtNumber: 3 },
-    update: {},
-    create: {
-      rtNumber: 3,
-      name: 'Ahmad Dahlan',
-      phone: '081234567803',
-      phoneIsWhatsapp: false,
-      alamat: 'Jl. Pantai Manggar RT 03',
-    },
-  });
+    await prisma.systemSetting.upsert({
+      where: { key: 'maps.rt_leaders_sample_roster' },
+      create: { key: 'maps.rt_leaders_sample_roster', value: 'true' },
+      update: {},
+    });
 
-  // Seed sample Spatial Points (Ketua RT points + Bank Sampah Unit)
-  const pointRt1 = await prisma.spatialPoint.upsert({
-    where: { id: '00000000-0000-0000-0000-000000000001' },
-    update: {},
-    create: {
-      id: '00000000-0000-0000-0000-000000000001',
-      name: 'Pos RT 01 Kelurahan Manggar',
-      type: 'ketua_rt',
-      latitude: -1.2235,
-      longitude: 116.9521,
-      metadata: {
-        keterangan: 'Posyandu dan Sekretariat RT 01',
-      },
-    },
-  });
-
-  await prisma.spatialPointRt.upsert({
-    where: {
-      pointId_rtNumber: {
-        pointId: pointRt1.id,
-        rtNumber: 1,
-      },
-    },
-    update: {},
-    create: {
-      pointId: pointRt1.id,
-      rtNumber: 1,
-    },
-  });
-
-  const pointBankSampah = await prisma.spatialPoint.upsert({
-    where: { id: '00000000-0000-0000-0000-000000000002' },
-    update: {},
-    create: {
-      id: '00000000-0000-0000-0000-000000000002',
-      name: 'Bank Sampah Sejahtera Manggar',
-      type: 'bank_sampah',
-      latitude: -1.225,
-      longitude: 116.955,
-      metadata: {
-        jadwal: 'Sabtu & Minggu 09.00 - 15.00 WITA',
-        pengelola: 'Ibu Rahmawati',
-      },
-    },
-  });
-
-  // Bank Sampah covers RT 1, RT 2, RT 3
-  for (const rtNum of [1, 2, 3]) {
-    await prisma.spatialPointRt.upsert({
-      where: {
-        pointId_rtNumber: {
-          pointId: pointBankSampah.id,
-          rtNumber: rtNum,
-        },
-      },
+    const pointBankSampah = await prisma.spatialPoint.upsert({
+      where: { id: '00000000-0000-0000-0000-000000000002' },
       update: {},
       create: {
-        pointId: pointBankSampah.id,
-        rtNumber: rtNum,
+        id: '00000000-0000-0000-0000-000000000002',
+        name: 'Bank Sampah Sejahtera Manggar',
+        type: 'bank_sampah',
+        latitude: -1.225,
+        longitude: 116.955,
+        metadata: {
+          jadwal: 'Sabtu & Minggu 09.00 - 15.00 WITA',
+          pengelola: 'Ibu Rahmawati',
+        },
       },
     });
+
+    for (const rtNum of [1, 2, 3]) {
+      await prisma.spatialPointRt.upsert({
+        where: { pointId_rtNumber: { pointId: pointBankSampah.id, rtNumber: rtNum } },
+        update: {},
+        create: { pointId: pointBankSampah.id, rtNumber: rtNum },
+      });
+    }
   }
 
   // Audit log retention defaults to "0" (keep forever) for every severity — a fresh install
@@ -252,7 +219,7 @@ async function main() {
     roleUser,
     roleEditor,
     roleAdmin,
-    sampleRt: [rt1.rtNumber, rt2.rtNumber, rt3.rtNumber],
+    totalRtLeaders: await prisma.rtLeader.count(),
     seededBlocks: DEFAULT_CONTENT_BLOCKS.map((b) => b.slug),
     seededComparisonTemplates: DEFAULT_COMPARISON_TEMPLATES.map((t) => t.slug),
   });

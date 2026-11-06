@@ -226,13 +226,23 @@ function isOperationResultWithChange<T>(val: unknown): val is OperationResultWit
 export type LockedOperationOutput<T> = T | OperationResultWithChange<T>;
 
 export interface TransactionRunner<Tx = unknown> {
-  $transaction: (fn: (tx: Tx) => Promise<unknown>) => Promise<unknown>;
+  $transaction: (
+    fn: (tx: Tx) => Promise<unknown>,
+    options?: { isolationLevel?: Prisma.TransactionIsolationLevel },
+  ) => Promise<unknown>;
 }
 
 export interface ExecuteLockedTransactionOptions<T, Tx = unknown> {
   client?: TransactionRunner<Tx> | undefined;
   lockQuery?: LockQueryOrFn<Tx> | undefined;
   cache?: CacheInvalidator | CacheInvalidator[] | undefined;
+  /**
+   * Defaults to the database's own level (REPEATABLE READ on MySQL). Writes that read a
+   * snapshot BEFORE taking their row locks must use ReadCommitted, otherwise a competing
+   * transaction that commits between the snapshot and the lock stays invisible and the
+   * post-lock decision runs on stale rows.
+   */
+  isolationLevel?: Prisma.TransactionIsolationLevel | undefined;
   onCommit?: ((result: T, didChange: boolean) => void | Promise<void>) | undefined;
   execute: (tx: Tx) => Promise<LockedOperationOutput<T>>;
 }
@@ -286,7 +296,7 @@ export async function executeLockedTransaction<T, Tx = unknown>(
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      txOutput = (await runner.$transaction(async (tx: Tx) => {
+      const runInTransaction = async (tx: Tx) => {
         // 1. Acquire lock if specified
         if (options.lockQuery) {
           if (typeof options.lockQuery === 'function') {
@@ -312,7 +322,12 @@ export async function executeLockedTransaction<T, Tx = unknown>(
         }
 
         return { result, didChange };
-      })) as OperationResultWithChange<T>;
+      };
+
+      txOutput = (await runner.$transaction(
+        runInTransaction,
+        options.isolationLevel ? { isolationLevel: options.isolationLevel } : undefined,
+      )) as OperationResultWithChange<T>;
 
       break;
     } catch (error) {
