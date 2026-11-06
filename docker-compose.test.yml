@@ -1,0 +1,56 @@
+# Disposable integration stack. Nothing here touches the development database:
+# MySQL runs on tmpfs and is discarded with the container.
+#
+#   docker compose -f docker-compose.test.yml run --rm backend-integration
+#   docker compose -f docker-compose.test.yml down --remove-orphans
+#
+# Every run migrates a fresh schema, then executes backend/tests/integration/**.
+# The runner mounts ./backend so it uses dependencies already installed on the
+# host (run `npm ci` in backend/ first); only MySQL is containerized. That keeps
+# the stack runnable offline while still exercising real, concurrent MySQL
+# transactions.
+name: sidata-test
+
+services:
+  mysql-test:
+    image: mysql:8.4
+    command: --innodb-print-all-deadlocks=ON
+    environment:
+      MYSQL_ROOT_PASSWORD: test-root
+      MYSQL_DATABASE: sidata_test
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-ptest-root"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+
+  backend-integration:
+    image: node:22-bookworm-slim
+    depends_on:
+      mysql-test:
+        condition: service_healthy
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    environment:
+      INTEGRATION_DATABASE_URL: mysql://root:test-root@mysql-test:3306/sidata_test
+      DATABASE_URL: mysql://root:test-root@mysql-test:3306/sidata_test
+      NODE_ENV: test
+      JWT_SECRET: integration-jwt-secret
+      JWT_REFRESH_SECRET: integration-jwt-refresh-secret
+      CSRF_SECRET: integration-csrf-secret
+      COOKIE_ENCRYPTION_KEY: integration-cookie-encryption-key
+      CORS_ORIGIN: http://localhost:5173
+      GOOGLE_CLIENT_ID: integration-google-client-id
+      GOOGLE_CLIENT_SECRET: integration-google-client-secret
+      GOOGLE_CALLBACK_URL: http://localhost:3000/api/auth/google/callback
+      GOOGLE_OAUTH_SUCCESS_REDIRECT: http://localhost:5173/auth/callback
+      GOOGLE_OAUTH_FAILURE_REDIRECT: http://localhost:5173/login?error=oauth_failed
+      TURNSTILE_SECRET: 1x0000000000000000000000000000000AA
+      RESEND_API_KEY: re_integration_key
+      EMAIL_FROM: SIDATA Integration <integration@example.com>
+    command: >-
+      sh -c "npx prisma generate && npx prisma migrate deploy && npm run test:integration"

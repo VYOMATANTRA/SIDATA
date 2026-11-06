@@ -45,6 +45,7 @@ Dev server runs on `http://localhost:5173` by default (Vite).
 | Lint                    | `npm run lint`                    | `backend/` |
 | Run tests               | `npm test`                        | `backend/` |
 | Run tests with coverage | `npm run test:coverage`           | `backend/` |
+| Run integration tests   | `docker compose -f docker-compose.test.yml run --rm backend-integration` | repo root |
 | Format                  | `npm run format`                  | `backend/` |
 | Run server              | `npx tsx src/index.ts` or similar | `backend/` |
 | Seed dev admin          | `npm run dev:seed`                | `backend/` |

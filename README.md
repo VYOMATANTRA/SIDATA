@@ -180,13 +180,25 @@ verification rules.
 
 ### Backend (`backend/`)
 
-| Task           | Command                                 |
-| -------------- | --------------------------------------- |
-| Run unit tests | `npm test`                              |
-| Lint           | `npm run lint`                          |
-| Format code    | `npm run format`                        |
-| Run server     | `npx tsx src/index.ts`                  |
-| Run via Docker | `docker compose up --build` (repo root) |
+| Task                    | Command                                                                 |
+| ----------------------- | ----------------------------------------------------------------------- |
+| Run unit tests          | `npm test`                                                              |
+| Run integration tests   | `docker compose -f docker-compose.test.yml run --rm backend-integration` |
+| Lint                    | `npm run lint`                                                          |
+| Format code             | `npm run format`                                                        |
+| Run server              | `npx tsx src/index.ts`                                                  |
+| Run via Docker          | `docker compose up --build` (repo root)                                 |
+
+Integration tests (`backend/tests/integration/`) need a real MySQL because they assert
+concurrency behaviour that a mocked client cannot reproduce: no InnoDB deadlocks under
+opposite-order imports, atomic rollback, no-op re-imports, and the seed-mode matrix. The
+Compose stack in `docker-compose.test.yml` starts a throwaway `mysql:8.4` on tmpfs, applies
+migrations, and runs the suite — it never reads the development database. The runner mounts
+`./backend` and therefore reuses the dependencies already installed by `npm ci`.
+
+They are intentionally excluded from `npm test` and CI: they require Docker, and they write
+to a live database. Run them locally before touching the RT import, spatial write paths, or
+`prisma/seed.ts`.
 
 ## Project Structure
 
