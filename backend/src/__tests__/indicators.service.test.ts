@@ -963,7 +963,7 @@ describe('indicators.service getIndicatorById', () => {
     assert.ok(dbHits >= 1);
   });
 
-  it('returns last-known-good when DB refresh throws after expiry', async () => {
+  it('keeps returning last-known-good on consecutive failed ID refreshes', async () => {
     indicatorImpl['findMany'] = async () => [indicatorRow({ label: 'Cached' })];
     assert.equal((await getIndicatorById('ind-1'))?.label, 'Cached');
 
@@ -976,6 +976,27 @@ describe('indicators.service getIndicatorById', () => {
     };
     const result = await getIndicatorById('ind-1');
     assert.equal(result?.label, 'Cached');
+    assert.equal((await getIndicatorById('ind-1'))?.label, 'Cached');
+
+    indicatorImpl['findMany'] = async () => [indicatorRow({ label: 'Recovered' })];
+    assert.equal((await getIndicatorById('ind-1'))?.label, 'Recovered');
+  });
+
+  it('does not extend the stale fallback deadline on repeated failed reads', async (t) => {
+    let now = 1_800_000_000_000;
+    t.mock.method(Date, 'now', () => now);
+    indicatorImpl['findMany'] = async () => [indicatorRow({ label: 'Cached' })];
+    assert.equal((await getIndicatorById('ind-1'))?.label, 'Cached');
+
+    indicatorImpl['findMany'] = async () => {
+      throw new Error('db unavailable');
+    };
+    now += 61_000;
+    assert.equal((await getIndicatorById('ind-1'))?.label, 'Cached');
+    now += INDICATOR_LKG_MAX_AGE_MS - 61_000;
+    assert.equal((await getIndicatorById('ind-1'))?.label, 'Cached');
+    now += 1;
+    await assert.rejects(() => getIndicatorById('ind-1'), /db unavailable/);
   });
 
   it('rethrows DB error when last-known-good is older than INDICATOR_LKG_MAX_AGE_MS', async () => {
@@ -1022,6 +1043,8 @@ describe('indicators.service getIndicatorById', () => {
       throw new Error('db unavailable');
     };
     assert.equal((await getIndicatorById('jumlah-penduduk'))?.label, 'Slug Reloaded');
+    assert.equal((await getIndicatorById('jumlah-penduduk'))?.label, 'Slug Reloaded');
+    assert.equal(indicatorByIdCache.has(indicatorCacheKey('id', 'jumlah-penduduk')), false);
   });
 
   it('rethrows programming errors (TypeError) rather than falling back to LKG', async () => {

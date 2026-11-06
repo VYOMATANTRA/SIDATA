@@ -769,6 +769,7 @@ export const getIndicatorById = async (
   // the probe slot's version, so a PATCH that lands mid-read would otherwise restore stale data.
   const epochAtStart = indicatorMutationEpoch;
   let result: IndicatorDto | null = null;
+  let servedStaleId = false;
   try {
     result = await getIndicatorEntryCache('id', lookup).getOrFetch(async (db) => {
       const candidates = await db.indicator.findMany({
@@ -791,11 +792,14 @@ export const getIndicatorById = async (
         idCache?.getLastKnownGood(null, INDICATOR_LKG_MAX_AGE_MS) ??
         slugCache?.getLastKnownGood(null, INDICATOR_LKG_MAX_AGE_MS) ??
         null;
-      if (lkg) return lkg;
+      if (lkg) {
+        servedStaleId = normalizeIndicatorLookup(lkg.id) === lookup;
+        return lkg;
+      }
     }
     throw err;
   } finally {
-    if (useSharedCache) {
+    if (useSharedCache && !servedStaleId) {
       // Drop probe slot on error, miss, or when lookup was a slug rather than the primary id
       if (!result || normalizeIndicatorLookup(result.id) !== lookup) {
         dropIndicatorCacheEntry('id', lookup);
