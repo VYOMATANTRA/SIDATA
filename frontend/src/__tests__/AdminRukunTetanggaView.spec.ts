@@ -95,6 +95,29 @@ describe('AdminRukunTetanggaView.vue', () => {
     expect(wrapper.text()).toContain('Edit RT 1');
   });
 
+  it('can save a later edit after submitting an unchanged leader', async () => {
+    const fetchMock = setupFetchMock();
+    const wrapper = mountView();
+    await flushPromises();
+
+    await wrapper.find('[data-test="rt-edit-1"]').trigger('click');
+    await wrapper.find('form').trigger('submit');
+    await flushPromises();
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(0);
+
+    await wrapper.find('[data-test="rt-edit-1"]').trigger('click');
+    const name = wrapper.find<HTMLInputElement>('input#rt-name');
+    expect(name.attributes('disabled')).toBeUndefined();
+    await name.setValue('Updated synthetic leader');
+    await wrapper.find('form').trigger('submit');
+    await flushPromises();
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]) => String(url).includes('/api/maps/rt-leaders/1') && init?.method === 'PATCH',
+      ),
+    ).toBe(true);
+  });
+
   it('deletes existing spatial point when location is cleared and saved (Section 5)', async () => {
     const requests: { url: string; method: string }[] = [];
     setupFetchMock((url, init) => {

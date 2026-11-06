@@ -156,7 +156,6 @@ async function saveLeader() {
     baseLongitude: base.longitude,
   };
 
-  isSaving.value = true;
   saveError.value = '';
 
   // 2. Compute contact patch (only send changed fields; omit unchanged empty name on fresh slot)
@@ -200,6 +199,7 @@ async function saveLeader() {
   }
 
   let contactSuccess = false;
+  isSaving.value = true;
   try {
     // Save contact first if changed
     if (Object.keys(contactPatch).length > 0) {
