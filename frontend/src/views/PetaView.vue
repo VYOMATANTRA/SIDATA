@@ -16,9 +16,13 @@ const mapsStore = useMapsStore();
 const settingsStore = useSettingsStore();
 const mapRef = ref<InstanceType<typeof InteractiveMap> | null>(null);
 
-onMounted(() => {
+function retryMapData() {
   void mapsStore.loadPoints();
   void mapsStore.loadSummary();
+}
+
+onMounted(() => {
+  retryMapData();
   if (!settingsStore.isLoaded && !settingsStore.isLoading) {
     void settingsStore.fetchPublicSettings();
   }
@@ -268,6 +272,21 @@ function requestUserLocation() {
         <div class="mt-4 flex justify-end">
           <MapSummaryDropdown :summary="mapsStore.summary" />
         </div>
+        <div
+          v-if="mapsStore.summaryError"
+          class="mt-2 text-right text-sm text-gray-700"
+          role="status"
+        >
+          <span>Ringkasan peta gagal dimuat. </span>
+          <button
+            type="button"
+            class="text-brand-navy underline"
+            :disabled="mapsStore.isSummaryLoading"
+            @click="mapsStore.loadSummary()"
+          >
+            Coba ringkasan lagi
+          </button>
+        </div>
 
         <p class="mt-3 text-base text-gray-700" aria-live="polite" data-test="peta-count">
           Menampilkan {{ visiblePoints.length }} dari {{ mapsStore.points.length }} titik.
@@ -283,7 +302,7 @@ function requestUserLocation() {
           <button
             type="button"
             class="rounded-btn bg-brand-navy hover:bg-brand-navy-deep focus-visible:outline-brand-navy mt-3 px-4 py-2.5 text-base font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2"
-            @click="mapsStore.loadPoints()"
+            @click="retryMapData"
           >
             Coba lagi
           </button>

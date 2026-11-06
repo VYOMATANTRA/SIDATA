@@ -187,4 +187,34 @@ describe('maps.ts Pinia Store', () => {
     expect(store.summary?.totalPoints).toBe(2);
     expect(store.summary?.pointsByType.ketua_rt).toBe(1);
   });
+
+  it('preserves summary on failure, recovers on retry, and ignores stale responses', async () => {
+    let resolveOld!: (response: Response) => void;
+    const old = new Promise<Response>((resolve) => {
+      resolveOld = resolve;
+    });
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce({ ok: true, json: async () => mockSummary } as Response)
+      .mockResolvedValueOnce({ ok: false, status: 503 } as Response)
+      .mockReturnValueOnce(old)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ...mockSummary, totalPoints: 8 }),
+      } as Response);
+    globalThis.fetch = fetchMock;
+    const store = useMapsStore();
+    await store.loadSummary();
+    await store.loadSummary();
+    expect(store.summary?.totalPoints).toBe(2);
+    expect(store.summaryError).toBeTruthy();
+    const stale = store.loadSummary();
+    expect(store.isSummaryLoading).toBe(true);
+    await store.loadSummary();
+    resolveOld({ ok: true, json: async () => ({ ...mockSummary, totalPoints: 3 }) } as Response);
+    await stale;
+    expect(store.summary?.totalPoints).toBe(8);
+    expect(store.summaryError).toBeNull();
+    expect(store.isSummaryLoading).toBe(false);
+  });
 });
