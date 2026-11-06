@@ -83,6 +83,7 @@ const saveError = ref('');
 
 const csvText = ref('');
 const inputRevision = ref(0);
+const isReadingCsv = ref(false);
 let previewSequence = 0;
 let fileReadToken = 0;
 
@@ -198,8 +199,8 @@ async function saveLeader() {
     return;
   }
 
-  let contactSuccess = false;
   isSaving.value = true;
+  let contactSuccess = false;
   try {
     // Save contact first if changed
     if (Object.keys(contactPatch).length > 0) {
@@ -268,6 +269,8 @@ async function saveLeader() {
 }
 
 function onCsvTextChange() {
+  fileReadToken += 1;
+  isReadingCsv.value = false;
   inputRevision.value += 1;
   acceptedPreview.value = null;
   importResult.value = '';
@@ -275,9 +278,15 @@ function onCsvTextChange() {
 }
 
 async function onCsvFile(event: Event) {
+  if (importBusy.value) return;
   const file = (event.target as HTMLInputElement).files?.[0];
   if (!file) return;
   const token = ++fileReadToken;
+  isReadingCsv.value = true;
+  inputRevision.value += 1;
+  acceptedPreview.value = null;
+  importResult.value = '';
+  importError.value = '';
   try {
     const text = await file.text();
     if (token !== fileReadToken) return;
@@ -290,10 +299,15 @@ async function onCsvFile(event: Event) {
     if (token === fileReadToken) {
       importError.value = 'Gagal membaca berkas CSV.';
     }
+  } finally {
+    if (token === fileReadToken) {
+      isReadingCsv.value = false;
+    }
   }
 }
 
 async function previewImport() {
+  if (importBusy.value || isReadingCsv.value) return;
   const currentText = csvText.value;
   if (!currentText.trim()) {
     importError.value = 'Pilih berkas CSV atau tempel isinya terlebih dahulu.';
@@ -332,7 +346,7 @@ async function previewImport() {
 }
 
 const canApplyImport = computed(() => {
-  if (importBusy.value) return false;
+  if (importBusy.value || isReadingCsv.value) return false;
   if (!acceptedPreview.value) return false;
   if (acceptedPreview.value.inputRevision !== inputRevision.value) return false;
   if (acceptedPreview.value.csv !== csvText.value) return false;
@@ -517,7 +531,12 @@ async function setSampleStatus(isSample: boolean) {
         @input="onCsvTextChange"
       />
       <div class="mt-3 flex gap-3">
-        <BaseButton variant="secondary" size="sm" :disabled="importBusy" @click="previewImport">
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          :disabled="importBusy || isReadingCsv"
+          @click="previewImport"
+        >
           Periksa CSV
         </BaseButton>
         <BaseButton

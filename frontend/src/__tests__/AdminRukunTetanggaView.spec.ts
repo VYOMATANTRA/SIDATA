@@ -308,4 +308,153 @@ describe('AdminRukunTetanggaView.vue', () => {
     ).toBeDefined();
     expect(wrapper.find('[data-test="rt-import-preview"]').exists()).toBe(false);
   });
+
+  it('invalidates a preview immediately when a replacement file starts reading', async () => {
+    const fetchMock = setupFetchMock((url) => {
+      if (url.includes('/import/preview')) {
+        return {
+          ok: true,
+          json: async () => ({
+            rows: [],
+            errors: [],
+            summary: { total: 1, changed: 1, unchanged: 0, errors: 0 },
+          }),
+        } as Response;
+      }
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    await wrapper.find('textarea#rt-csv-text').setValue('rtNumber,name\n1,First');
+    const previewButton = wrapper.findAll('button').find((b) => b.text().includes('Periksa CSV'))!;
+    await previewButton.trigger('click');
+    await flushPromises();
+    const apply = wrapper.find('[data-test="rt-apply-import"]');
+    expect(apply.attributes('disabled')).toBeUndefined();
+
+    let finish!: (text: string) => void;
+    const file = {
+      text: () =>
+        new Promise<string>((resolve) => {
+          finish = resolve;
+        }),
+    };
+    const fileInput = wrapper.find<HTMLInputElement>('[data-test="rt-csv-file"]');
+    Object.defineProperty(fileInput.element, 'files', { configurable: true, value: [file] });
+    await fileInput.trigger('change');
+    expect(apply.attributes('disabled')).toBeDefined();
+    expect(previewButton.attributes('disabled')).toBeDefined();
+    expect(wrapper.find('[data-test="rt-import-preview"]').exists()).toBe(false);
+    await apply.trigger('click');
+    await previewButton.trigger('click');
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/import'))).toHaveLength(0);
+    expect(
+      fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/import/preview')),
+    ).toHaveLength(1);
+
+    finish('rtNumber,name\n2,Replacement');
+    await flushPromises();
+    expect((wrapper.find('textarea#rt-csv-text').element as HTMLTextAreaElement).value).toContain(
+      'Replacement',
+    );
+    expect(apply.attributes('disabled')).toBeDefined();
+    await previewButton.trigger('click');
+    await flushPromises();
+    expect(apply.attributes('disabled')).toBeUndefined();
+  });
+
+  it('keeps the existing text and requires another preview when file reading fails', async () => {
+    setupFetchMock((url) =>
+      url.includes('/import/preview')
+        ? ({
+            ok: true,
+            json: async () => ({
+              rows: [],
+              errors: [],
+              summary: { total: 1, changed: 1, unchanged: 0, errors: 0 },
+            }),
+          } as Response)
+        : undefined,
+    );
+    const wrapper = mountView();
+    await flushPromises();
+    const textarea = wrapper.find<HTMLTextAreaElement>('textarea#rt-csv-text');
+    await textarea.setValue('rtNumber,name\n1,Existing');
+    const preview = wrapper.findAll('button').find((b) => b.text().includes('Periksa CSV'))!;
+    await preview.trigger('click');
+    await flushPromises();
+    const fileInput = wrapper.find<HTMLInputElement>('[data-test="rt-csv-file"]');
+    Object.defineProperty(fileInput.element, 'files', {
+      configurable: true,
+      value: [{ text: () => Promise.reject(new Error('read failure')) }],
+    });
+    await fileInput.trigger('change');
+    await flushPromises();
+    expect(textarea.element.value).toContain('Existing');
+    expect(wrapper.text()).toContain('Gagal membaca berkas CSV.');
+    expect(wrapper.find('[data-test="rt-apply-import"]').attributes('disabled')).toBeDefined();
+    expect(preview.attributes('disabled')).toBeUndefined();
+  });
+
+  it('ignores stale file reads when another file or manual input wins', async () => {
+    setupFetchMock();
+    const wrapper = mountView();
+    await flushPromises();
+    const input = wrapper.find<HTMLInputElement>('[data-test="rt-csv-file"]');
+    const textarea = wrapper.find<HTMLTextAreaElement>('textarea#rt-csv-text');
+    let finishFirst!: (text: string) => void;
+    let finishSecond!: (text: string) => void;
+    Object.defineProperty(input.element, 'files', {
+      configurable: true,
+      value: [
+        {
+          text: () =>
+            new Promise<string>((resolve) => {
+              finishFirst = resolve;
+            }),
+        },
+      ],
+    });
+    await input.trigger('change');
+    Object.defineProperty(input.element, 'files', {
+      configurable: true,
+      value: [
+        {
+          text: () =>
+            new Promise<string>((resolve) => {
+              finishSecond = resolve;
+            }),
+        },
+      ],
+    });
+    await input.trigger('change');
+    finishSecond('second file');
+    await flushPromises();
+    finishFirst('first file');
+    await flushPromises();
+    expect(textarea.element.value).toBe('second file');
+
+    let finishThird!: (text: string) => void;
+    Object.defineProperty(input.element, 'files', {
+      configurable: true,
+      value: [
+        {
+          text: () =>
+            new Promise<string>((resolve) => {
+              finishThird = resolve;
+            }),
+        },
+      ],
+    });
+    await input.trigger('change');
+    await textarea.setValue('manually edited');
+    finishThird('third file');
+    await flushPromises();
+    expect(textarea.element.value).toBe('manually edited');
+    expect(
+      wrapper
+        .findAll('button')
+        .find((b) => b.text().includes('Periksa CSV'))!
+        .attributes('disabled'),
+    ).toBeUndefined();
+  });
 });
