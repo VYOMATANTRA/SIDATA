@@ -3,11 +3,27 @@ import { mount, flushPromises } from '@vue/test-utils';
 import RtLocationPicker from '../components/maps/RtLocationPicker.vue';
 
 vi.mock('leaflet', () => {
-  const map = { setView: vi.fn(), on: vi.fn(), remove: vi.fn(), invalidateSize: vi.fn() };
+  const map = {
+    setView: vi.fn<() => unknown>(),
+    on: vi.fn<() => unknown>(),
+    remove: vi.fn<() => unknown>(),
+    invalidateSize: vi.fn<() => unknown>(),
+  };
   map.setView.mockReturnValue(map);
-  const marker = { addTo: vi.fn(), on: vi.fn(), setLatLng: vi.fn(), remove: vi.fn() };
+  const marker = {
+    addTo: vi.fn<() => unknown>(),
+    on: vi.fn<() => unknown>(),
+    setLatLng: vi.fn<() => unknown>(),
+    remove: vi.fn<() => unknown>(),
+  };
   marker.addTo.mockReturnValue(marker);
-  return { default: { map: () => map, marker: () => marker, tileLayer: () => ({ addTo: vi.fn() }) } };
+  return {
+    default: {
+      map: () => map,
+      marker: () => marker,
+      tileLayer: () => ({ addTo: vi.fn<() => unknown>() }),
+    },
+  };
 });
 
 describe('RT location picker coordinates', () => {
@@ -19,7 +35,9 @@ describe('RT location picker coordinates', () => {
     expect(wrapper.emitted('validity-change')?.slice(-1)[0]).toEqual([false]);
     expect(lat!.attributes('aria-invalid')).toBe('true');
     await lon!.setValue('116.95');
-    expect(wrapper.emitted('update:modelValue')?.slice(-1)[0]).toEqual([{ latitude: -1.25, longitude: 116.95 }]);
+    expect(wrapper.emitted('update:modelValue')?.slice(-1)[0]).toEqual([
+      { latitude: -1.25, longitude: 116.95 },
+    ]);
     expect(wrapper.emitted('validity-change')?.slice(-1)[0]).toEqual([true]);
     await lon!.setValue('181');
     expect(wrapper.emitted('validity-change')?.slice(-1)[0]).toEqual([false]);
