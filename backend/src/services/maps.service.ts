@@ -822,12 +822,7 @@ export const createCoverageSchema = z.object({ rtNumber: rtNumberField }).strict
 export const updateLeaderSchema = z
   .object({
     name: nameField.optional(),
-    phone: z
-      .string()
-      .trim()
-      .min(1, 'Nomor telepon wajib diisi')
-      .max(191, 'Nomor telepon maksimal 191 karakter')
-      .optional(),
+    phone: z.string().trim().max(191, 'Nomor telepon maksimal 191 karakter').optional(),
     phoneIsWhatsapp: z.boolean().optional(),
     alamat: z.string().trim().max(2000, 'Alamat maksimal 2000 karakter').nullable().optional(),
   })
@@ -1216,12 +1211,27 @@ export const createSpatialPoint = async (
   }
 };
 
+function assertExpectedPointOwner(point: SpatialPointWriteRow, expectedRtNumber?: number): void {
+  if (expectedRtNumber === undefined) return;
+  if (
+    point.type !== 'ketua_rt' ||
+    point.rtCoverages.length !== 1 ||
+    point.rtCoverages[0]?.rtNumber !== expectedRtNumber
+  ) {
+    throw new MapsServiceError(
+      'Lokasi RT telah berubah. Muat ulang data RT sebelum menyimpan.',
+      409,
+    );
+  }
+}
+
 export const updateSpatialPoint = async (
   id: unknown,
   rawInput: unknown,
   actor: AuditActor,
   reqContext: AuditRequestContext,
   client = prisma,
+  expectedRtNumber?: number,
 ): Promise<SpatialPointDTO> => {
   if (typeof id !== 'string' || id.trim() === '' || id.length > 191) {
     throw new MapsServiceError('ID titik spasial tidak valid.', 400);
@@ -1278,6 +1288,8 @@ export const updateSpatialPoint = async (
         if (!existing) {
           throw new MapsServiceError('Titik spasial tidak ditemukan.', 404);
         }
+
+        assertExpectedPointOwner(existing, expectedRtNumber);
 
         const typeChanged = input.type !== undefined && input.type !== existing.type;
         const rtsTouched = input.rts !== undefined;
@@ -1411,6 +1423,7 @@ export const deleteSpatialPoint = async (
   actor: AuditActor,
   reqContext: AuditRequestContext,
   client = prisma,
+  expectedRtNumber?: number,
 ): Promise<SpatialPointDTO> => {
   if (typeof id !== 'string' || id.trim() === '' || id.length > 191) {
     throw new MapsServiceError('ID titik spasial tidak valid.', 400);
@@ -1430,6 +1443,8 @@ export const deleteSpatialPoint = async (
         if (!existing) {
           throw new MapsServiceError('Titik spasial tidak ditemukan.', 404);
         }
+
+        assertExpectedPointOwner(existing, expectedRtNumber);
 
         // Deleting a point only RELEASES RT coverages (they cascade) — it cannot create a
         // multiple-points or multi-rt-point state, so no ketua_rt invariant assert here (and

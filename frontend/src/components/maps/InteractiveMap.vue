@@ -427,12 +427,13 @@ defineExpose({ revealPoint, focusUserLocation });
 onUnmounted(() => {
   isUnmounted = true;
   window.removeEventListener('resize', handleResize);
-  mapContainer.value?.removeEventListener('keydown', handleClusterKeydown);
-  mapContainer.value?.removeEventListener('wheel', handleUserInteraction);
-  mapContainer.value?.removeEventListener('touchstart', handleUserInteraction);
-  mapContainer.value?.removeEventListener('dblclick', handleUserInteraction);
-  mapContainer.value?.removeEventListener('click', handleUserInteraction);
-  mapContainer.value?.removeEventListener('keydown', handleUserInteraction);
+  const container = mapContainer.value;
+  container?.removeEventListener('keydown', handleClusterKeydown);
+  container?.removeEventListener('wheel', handleUserInteraction);
+  container?.removeEventListener('touchstart', handleUserInteraction);
+  container?.removeEventListener('dblclick', handleUserInteraction);
+  container?.removeEventListener('click', handleUserInteraction);
+  container?.removeEventListener('keydown', handleUserInteraction);
   if (sizeInvalidationTimer !== null) {
     window.clearTimeout(sizeInvalidationTimer);
     sizeInvalidationTimer = null;

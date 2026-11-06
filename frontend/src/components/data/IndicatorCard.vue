@@ -15,7 +15,7 @@ export interface IndicatorCardStat {
 
 export interface IndicatorCardModel {
   id: string;
-  type: 'skalar' | 'matriks';
+  type: 'skalar' | 'matriks' | 'konten' | 'pengaturan';
   title: string;
   /** Page title shown as the card kicker (e.g. "Kependudukan"). */
   kicker: string | null;
@@ -39,7 +39,7 @@ const emit = defineEmits<{
 <template>
   <article
     class="rounded-card flex h-full flex-col border border-slate-200 bg-white p-5 shadow-xs transition-shadow hover:shadow-md"
-    :aria-label="`${card.type === 'matriks' ? 'Tabel' : 'Indikator'} ${card.title}`"
+    :aria-label="`${card.type === 'matriks' ? 'Tabel' : card.type === 'konten' ? 'Blok Konten' : card.type === 'pengaturan' ? 'Pengaturan' : 'Indikator'} ${card.title}`"
   >
     <div class="flex items-start justify-between gap-3">
       <p class="text-xs font-semibold tracking-wide text-slate-500 uppercase">
@@ -48,17 +48,18 @@ const emit = defineEmits<{
 
       <span
         class="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold tracking-wide uppercase"
-        :class="
-          card.type === 'skalar'
-            ? 'bg-brand-cyan/20 text-brand-navy'
-            : 'bg-amber-100 text-amber-900'
-        "
+        :class="{
+          'bg-brand-cyan/20 text-brand-navy': card.type === 'skalar',
+          'bg-amber-100 text-amber-900': card.type === 'matriks',
+          'bg-indigo-100 text-indigo-900': card.type === 'konten',
+          'bg-emerald-100 text-emerald-900': card.type === 'pengaturan',
+        }"
       >
         {{ card.type }}
       </span>
     </div>
 
-    <h2 class="mt-1 text-lg leading-snug font-semibold text-brand-navy">
+    <h2 class="text-brand-navy mt-1 text-lg leading-snug font-semibold">
       {{ card.title }}
     </h2>
 

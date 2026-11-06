@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import DataManagementView from '../views/DataManagementView.vue';
 import type { Indicator } from '../stores/indicators.store';
 import type { IndicatorTable } from '../stores/indicatorTables.store';
+import { useAuthStore } from '../stores/auth';
 
 const CREATED = '2026-01-01T00:00:00.000Z';
 
@@ -85,6 +86,46 @@ function installFetchMock(overrides: FetchOverrides = {}) {
 
     if (url === '/api/indicators?pageSize=200') {
       return json({ indicators: [indicator], total: 1, page: 1, pageSize: 200 });
+    }
+
+    if (url === '/api/content-blocks') {
+      return json({
+        blocks: [
+          {
+            id: 'b-hero',
+            slug: 'landing-hero',
+            type: 'hero',
+            title: 'Sistem Informasi Data Terpadu Kelurahan',
+            body: 'Selamat datang di portal data kelurahan.',
+            metadata: null,
+            sortOrder: null,
+            createdAt: CREATED,
+            updatedAt: CREATED,
+          },
+          {
+            id: 'b-sambutan',
+            slug: 'landing-sambutan-lurah',
+            type: 'sambutan_lurah',
+            title: 'Sambutan Lurah Manggar',
+            body: 'Sambutan resmi.',
+            metadata: null,
+            sortOrder: null,
+            createdAt: CREATED,
+            updatedAt: CREATED,
+          },
+          {
+            id: 'b-profil',
+            slug: 'tentang-kelurahan-profil',
+            type: 'prose',
+            title: 'Profil Kelurahan Manggar',
+            body: 'Data profil.',
+            metadata: null,
+            sortOrder: null,
+            createdAt: CREATED,
+            updatedAt: CREATED,
+          },
+        ],
+      });
     }
 
     if (url === '/api/indicator-tables?pageSize=200') {
@@ -311,6 +352,66 @@ describe('DataManagementView.vue', () => {
 
     expect(patchBody).toEqual({ rows: [{ id: 'row-1', male: 250 }] });
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  it('switches to content blocks tab and lists editable content blocks', async () => {
+    const wrapper = mountView();
+    await flushPromises();
+
+    await wrapper.find('[data-test="tab-konten"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Sistem Informasi Data Terpadu Kelurahan');
+    expect(wrapper.text()).toContain('Sambutan Lurah Manggar');
+    expect(wrapper.text()).toContain('Profil Kelurahan Manggar');
+
+    const editHeroBtn = wrapper
+      .findAll('button')
+      .find((b) => b.text().includes('Sistem Informasi Data Terpadu'));
+    expect(editHeroBtn).toBeDefined();
+
+    wrapper.unmount();
+  });
+
+  it('hides public settings tab from non-admin editors', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore();
+    authStore.setAuth({ id: '2', email: 'editor@example.com', role: 'editor' }, 'token');
+
+    const wrapper = mount(DataManagementView, {
+      global: {
+        plugins: [pinia],
+        stubs: { RouterLink: true, teleport: true },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="tab-pengaturan"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('switches to public settings tab and displays public settings card for admins', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore();
+    authStore.setAuth({ id: '1', email: 'admin@example.com', role: 'admin' }, 'token');
+
+    const wrapper = mount(DataManagementView, {
+      global: {
+        plugins: [pinia],
+        stubs: { RouterLink: true, teleport: true },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.find('[data-test="tab-pengaturan"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Pengaturan Publik Portal');
+    expect(wrapper.text()).toContain('Kelurahan Manggar');
 
     wrapper.unmount();
   });

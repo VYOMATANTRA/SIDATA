@@ -102,7 +102,6 @@ describe('router auth guard retry behavior', () => {
     setActivePinia(pinia);
     const authStore = useAuthStore(pinia);
     authStore.clearAuth();
-
     globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async () => {
       return { ok: false, status: 401, json: async () => ({}) } as Response;
     });
@@ -141,6 +140,25 @@ describe('router auth guard retry behavior', () => {
     await router.push('/tentang');
     expect(router.currentRoute.value.path).toBe('/tentang/kelurahan-manggar');
     expect(router.currentRoute.value.name).toBe('tentang-kelurahan-manggar');
+  });
+
+  it('navigates to the public publications page', async () => {
+    sessionStorage.clear();
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore(pinia);
+    authStore.clearAuth();
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({}),
+    } as Response);
+
+    await router.push('/publikasi');
+
+    expect(router.currentRoute.value.path).toBe('/publikasi');
+    expect(router.currentRoute.value.name).toBe('publikasi');
   });
 
   it('protects /users route with authentication and admin role guards', async () => {
