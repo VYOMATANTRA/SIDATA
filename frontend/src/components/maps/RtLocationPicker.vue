@@ -16,11 +16,15 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'update:modelValue', value: PickedLocation | null): void;
+  (event: 'validity-change', value: boolean): void;
 }>();
 
 const container = ref<HTMLElement | null>(null);
 const accuracy = ref<number | null>(null);
 const locationError = ref('');
+const latitude = ref(props.modelValue ? String(props.modelValue.latitude) : '');
+const longitude = ref(props.modelValue ? String(props.modelValue.longitude) : '');
+const coordinateError = ref('');
 let map: L.Map | null = null;
 let marker: L.Marker | null = null;
 let isUnmounted = false;
@@ -72,6 +76,16 @@ onMounted(() => {
 watch(
   () => props.modelValue,
   (value) => {
+    if (
+      !value ||
+      Number(latitude.value) !== value.latitude ||
+      Number(longitude.value) !== value.longitude
+    ) {
+      latitude.value = value ? String(value.latitude) : '';
+      longitude.value = value ? String(value.longitude) : '';
+    }
+    coordinateError.value = '';
+    emit('validity-change', true);
     if (!value) {
       marker?.remove();
       marker = null;
@@ -81,6 +95,35 @@ watch(
   },
   { deep: true },
 );
+
+function updateCoordinates() {
+  const lat = latitude.value.trim();
+  const lon = longitude.value.trim();
+  if (!lat && !lon) {
+    coordinateError.value = '';
+    emit('validity-change', true);
+    emit('update:modelValue', null);
+    return;
+  }
+  const latValue = Number(lat);
+  const lonValue = Number(lon);
+  if (
+    !lat ||
+    !lon ||
+    !Number.isFinite(latValue) ||
+    !Number.isFinite(lonValue) ||
+    Math.abs(latValue) > 90 ||
+    Math.abs(lonValue) > 180
+  ) {
+    coordinateError.value =
+      'Masukkan lintang (-90 hingga 90) dan bujur (-180 hingga 180) yang valid.';
+    emit('validity-change', false);
+    return;
+  }
+  coordinateError.value = '';
+  emit('validity-change', true);
+  emit('update:modelValue', { latitude: latValue, longitude: lonValue });
+}
 
 function requestCurrentLocation() {
   locationError.value = '';
@@ -113,6 +156,10 @@ function clearLocation() {
   marker?.remove();
   marker = null;
   accuracy.value = null;
+  latitude.value = '';
+  longitude.value = '';
+  coordinateError.value = '';
+  emit('validity-change', true);
   emit('update:modelValue', null);
 }
 
@@ -126,6 +173,37 @@ onUnmounted(() => {
 
 <template>
   <div class="space-y-2">
+    <div class="grid gap-2 sm:grid-cols-2">
+      <label class="text-sm"
+        >Lintang
+        <input
+          v-model="latitude"
+          type="text"
+          inputmode="decimal"
+          :disabled="disabled"
+          :aria-invalid="coordinateError ? 'true' : undefined"
+          :aria-describedby="coordinateError ? 'rt-coordinate-error' : undefined"
+          class="block w-full rounded border border-slate-300 px-2 py-1"
+          @input="updateCoordinates"
+        />
+      </label>
+      <label class="text-sm"
+        >Bujur
+        <input
+          v-model="longitude"
+          type="text"
+          inputmode="decimal"
+          :disabled="disabled"
+          :aria-invalid="coordinateError ? 'true' : undefined"
+          :aria-describedby="coordinateError ? 'rt-coordinate-error' : undefined"
+          class="block w-full rounded border border-slate-300 px-2 py-1"
+          @input="updateCoordinates"
+        />
+      </label>
+    </div>
+    <p v-if="coordinateError" id="rt-coordinate-error" class="text-sm text-rose-700" role="alert">
+      {{ coordinateError }}
+    </p>
     <div
       ref="container"
       class="h-64 w-full overflow-hidden rounded border border-slate-300"
@@ -144,7 +222,7 @@ onUnmounted(() => {
       <button
         type="button"
         class="text-brand-navy rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
-        :disabled="disabled || !modelValue"
+        :disabled="disabled || (!modelValue && !latitude && !longitude)"
         data-test="rt-location-clear"
         @click="clearLocation"
       >
