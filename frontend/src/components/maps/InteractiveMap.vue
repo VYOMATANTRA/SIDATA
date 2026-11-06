@@ -332,7 +332,8 @@ onMounted(() => {
 
     // Standard OpenStreetMap Tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
+      maxZoom: 20,
+      maxNativeZoom: 19,
     }).addTo(map);
 
     // Add custom zoom control at bottom right

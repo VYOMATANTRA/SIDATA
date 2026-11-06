@@ -84,7 +84,7 @@ const defaultOrigin = computed(() => {
 
 const defaultZoom = computed(() => {
   const zoom = settingsStore.defaultCoordinates?.zoom;
-  return typeof zoom === 'number' && Number.isInteger(zoom) && zoom >= 1 && zoom <= 19
+  return typeof zoom === 'number' && Number.isInteger(zoom) && zoom >= 1 && zoom <= 20
     ? zoom
     : MANGGAR_MAP_DEFAULT_ZOOM;
 });

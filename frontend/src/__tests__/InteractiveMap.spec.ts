@@ -228,6 +228,10 @@ describe('InteractiveMap.vue', () => {
   it('initialises the map on the shared Manggar origin', async () => {
     await mountMap();
     expect(leafletMocks.setView).toHaveBeenCalledWith(MANGGAR_MAP_CENTER, MANGGAR_MAP_DEFAULT_ZOOM);
+    expect(leafletMocks.L.tileLayer).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ maxZoom: 20, maxNativeZoom: 19 }),
+    );
   });
 
   it('uses CMS default centre and zoom when supplied', async () => {
