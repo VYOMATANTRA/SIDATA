@@ -8,6 +8,7 @@ import { useIndicatorsStore } from '../stores/indicators.store';
 import { useLogout } from '../composables/useLogout';
 import AppNavbar from '../components/common/AppNavbar.vue';
 import AppFooter from '../components/common/AppFooter.vue';
+import { DEFAULT_NAV_ITEMS } from '@/config/publicNav';
 import SectionHero from '../components/landing/SectionHero.vue';
 import SectionSambutanLurah from '../components/landing/SectionSambutanLurah.vue';
 import StatOverview from '../components/common/StatOverview.vue';
@@ -205,38 +206,17 @@ async function handleLogout() {
 
       <!-- Navigation & Auth Dropdown Menu Slot -->
       <template #menu="{ close }">
-        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <router-link
-            to="/"
-            class="block rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
-            @click="close"
-          >
-            Beranda
-          </router-link>
-          <router-link
-            v-if="isRouteAvailable('/publikasi')"
-            to="/publikasi"
-            class="block rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
-            @click="close"
-          >
-            Publikasi
-          </router-link>
-          <router-link
-            v-if="isRouteAvailable('/peta')"
-            to="/peta"
-            class="block rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
-            @click="close"
-          >
-            Peta
-          </router-link>
-          <router-link
-            v-if="isRouteAvailable('/ketua-rt')"
-            to="/ketua-rt"
-            class="block rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
-            @click="close"
-          >
-            Ketua RT
-          </router-link>
+        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <template v-for="item in DEFAULT_NAV_ITEMS" :key="item.to">
+            <router-link
+              v-if="isRouteAvailable(item.to)"
+              :to="item.to"
+              class="block rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
+              @click="close"
+            >
+              {{ item.label }}
+            </router-link>
+          </template>
         </div>
 
         <!-- Auth Actions inside Dropdown Drawer -->

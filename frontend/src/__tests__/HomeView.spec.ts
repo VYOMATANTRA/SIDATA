@@ -486,6 +486,8 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
         { path: '/publikasi', component: { template: '<div>publikasi</div>' } },
         { path: '/peta', component: { template: '<div>peta</div>' } },
         { path: '/ketua-rt', component: { template: '<div>ketua-rt</div>' } },
+        { path: '/permintaan-data', component: { template: '<div>permintaan-data</div>' } },
+        { path: '/tentang/kelurahan-manggar', component: { template: '<div>tentang</div>' } },
         { path: '/cerita/:slug', component: { template: '<div>cerita</div>' } },
       ],
     });
@@ -505,6 +507,8 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
     expect(drawer.find('a[href="/publikasi"]').exists()).toBe(true);
     expect(drawer.find('a[href="/peta"]').exists()).toBe(true);
     expect(drawer.find('a[href="/ketua-rt"]').exists()).toBe(true);
+    expect(drawer.find('a[href="/permintaan-data"]').exists()).toBe(true);
+    expect(drawer.find('a[href="/tentang/kelurahan-manggar"]').exists()).toBe(true);
 
     // StatOverview CTA buttons are rendered now that /cerita/:slug matches
     const ceritaSection = wrapper.find('section#cerita-preview');

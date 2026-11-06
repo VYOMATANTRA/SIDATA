@@ -1,22 +1,12 @@
+<script lang="ts">
+export { DEFAULT_NAV_ITEMS, type NavItem } from '@/config/publicNav';
+</script>
+
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { RouterLink } from 'vue-router';
 import balikpapanLogo from '@/assets/img/logo_balikpapan.webp';
-import { useDrawerFocusTrap } from '../../composables/useDrawerFocusTrap';
-
-export interface NavItem {
-  label: string;
-  to: string;
-}
-
-const DEFAULT_NAV_ITEMS: readonly NavItem[] = [
-  { label: 'Beranda', to: '/' },
-  { label: 'Publikasi', to: '/publikasi' },
-  { label: 'Peta', to: '/peta' },
-  { label: 'Ketua RT', to: '/ketua-rt' },
-  { label: 'Permintaan Data', to: '/permintaan-data' },
-  { label: 'Tentang', to: '/tentang/kelurahan-manggar' },
-];
+import { DEFAULT_NAV_ITEMS } from '@/config/publicNav';
 
 export interface NavbarProps {
   variant?: 'navy' | 'white' | 'transparent';
@@ -43,7 +33,6 @@ const emit = defineEmits<{
 
 const isMenuOpen = ref(false);
 const toggleButtonRef = ref<HTMLButtonElement | null>(null);
-const drawerRef = ref<HTMLElement | null>(null);
 
 function toggleMenu() {
   isMenuOpen.value = !isMenuOpen.value;
@@ -57,13 +46,31 @@ function closeMenu() {
   }
 }
 
-useDrawerFocusTrap({
-  isOpen: isMenuOpen,
-  containerRef: drawerRef,
-  onEscape: () => {
+function isEventFromOpenDialog(event: KeyboardEvent): boolean {
+  if (event.defaultPrevented) return true;
+  const target =
+    (event.target instanceof HTMLElement ? event.target : null) ??
+    (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  if (target?.closest('[role="dialog"], [role="alertdialog"], dialog')) {
+    return true;
+  }
+  return Boolean(document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]'));
+}
+
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && isMenuOpen.value) {
+    if (isEventFromOpenDialog(event)) return;
     closeMenu();
     toggleButtonRef.value?.focus();
-  },
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown);
 });
 
 const isNavy = computed(() => props.variant === 'navy');
@@ -190,7 +197,6 @@ const hamburgerBarClasses = computed(() => {
         <div
           v-show="isMenuOpen"
           id="primary-navigation-menu"
-          ref="drawerRef"
           class="border-t border-white/10 px-6 py-6 shadow-xl"
           :class="isNavy ? 'bg-brand-navy text-white' : 'border-slate-200 bg-white text-slate-900'"
           data-test="nav-menu-drawer"

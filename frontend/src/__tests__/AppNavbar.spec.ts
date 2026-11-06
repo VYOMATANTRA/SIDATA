@@ -210,7 +210,7 @@ describe('AppNavbar.vue', () => {
     wrapper.unmount();
   });
 
-  it('traps Tab navigation within the mobile drawer while open', async () => {
+  it('allows natural tab navigation through drawer links and back to toggle button without keyboard trap (WCAG 2.1.2)', async () => {
     const router = createMockRouter();
     await router.push('/');
     await router.isReady();
@@ -222,30 +222,52 @@ describe('AppNavbar.vue', () => {
       attachTo: document.body,
     });
 
-    await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
+    const hamburger = wrapper.find<HTMLButtonElement>('[data-test="hamburger-btn"]');
+    await hamburger.trigger('click');
 
-    const focusables = wrapper.findAll<HTMLElement>('[data-test="nav-menu-drawer"] a');
-    expect(focusables.length).toBeGreaterThan(1);
-    const first = focusables[0]!.element;
-    const last = focusables[focusables.length - 1]!.element;
+    const focusables = wrapper.findAll<HTMLAnchorElement>('[data-test="nav-menu-drawer"] a');
+    expect(focusables.length).toBe(6);
 
-    // Focus last element and press Tab -> wraps to first
-    last.focus();
-    const tabEvent = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
-    window.dispatchEvent(tabEvent);
-    expect(document.activeElement).toBe(first);
+    // Focus can naturally move to all links and return to the hamburger toggle button
+    for (const link of focusables) {
+      link.element.focus();
+      expect(document.activeElement).toBe(link.element);
+    }
 
-    // Focus first element and press Shift+Tab -> wraps to last
-    first.focus();
-    const shiftTabEvent = new KeyboardEvent('keydown', {
-      key: 'Tab',
-      shiftKey: true,
-      bubbles: true,
-      cancelable: true,
+    // Crucially: focus can return to the toggle button (no keyboard trap)
+    hamburger.element.focus();
+    expect(document.activeElement).toBe(hamburger.element);
+
+    wrapper.unmount();
+  });
+
+  it('does not close mobile menu on Escape if the event originated from an open modal dialog', async () => {
+    const router = createMockRouter();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(AppNavbar, {
+      global: {
+        plugins: [router],
+      },
+      attachTo: document.body,
     });
-    window.dispatchEvent(shiftTabEvent);
-    expect(document.activeElement).toBe(last);
 
+    // Create an open dialog in the DOM to simulate an active modal (e.g. OtpVerificationModal)
+    const dialog = document.createElement('dialog');
+    dialog.setAttribute('open', '');
+    document.body.appendChild(dialog);
+
+    const hamburger = wrapper.find<HTMLButtonElement>('[data-test="hamburger-btn"]');
+    await hamburger.trigger('click');
+    expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(true);
+
+    // Escape fired while dialog is open must not close the navbar menu
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(true);
+
+    dialog.remove();
     wrapper.unmount();
   });
 });
