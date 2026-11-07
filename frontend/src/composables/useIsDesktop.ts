@@ -12,7 +12,8 @@ function readIsDesktop(): boolean {
 /**
  * Reactive boolean tracking whether the viewport is at or above the `md` desktop breakpoint
  * (`768px`). Shared by `AdminLayout` and `AdminHeader` so the header menu toggle and the layout's
- * mobile drawer state always agree on whether the sidebar is in desktop-rail or mobile-drawer mode.
+ * mobile drawer state always agree on whether the sidebar is in desktop-rail or mobile-drawer mode,
+ * and by the public `MapSummaryDropdown` to switch between its in-flow and overlay layouts.
  */
 export function useIsDesktop(onChange?: (matches: boolean) => void): { isDesktop: Ref<boolean> } {
   const isDesktop = ref(readIsDesktop());
