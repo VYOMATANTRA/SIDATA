@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, h } from 'vue';
+import { defineComponent, h, nextTick } from 'vue';
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import LocationPicker, {
   type LocationPickerProps,
   type PickerLocation,
 } from '../components/maps/LocationPicker.vue';
+import BaseModal from '../components/common/BaseModal.vue';
 import { leafletMap, leafletMarker, leafletState, resetLeafletMock } from './leafletMock';
 
 vi.mock('leaflet', async () => (await import('./leafletMock')).createLeafletMock());
@@ -292,11 +293,45 @@ describe('LocationPicker', () => {
       expect(lastEmitted(wrapper)).toEqual({ latitude: -1.3, longitude: 117.01, zoom: 15 });
     });
 
+    // The stored zoom (25) is above `maxZoom`, so the map settles on 20. If the picker did not
+    // silence the `moveend` its own `setView` triggers, that would be echoed back as a changed
+    // draft ({ zoom: 20 }); equal values would be de-duplicated and hide the missing guard.
     it('does not echo programmatic view changes back as edits', async () => {
       const wrapper = await mountPicker({ modelValue: VIEW, includeZoom: true });
-      await wrapper.setProps({ modelValue: { latitude: -1.3, longitude: 117, zoom: 12 } });
-      expect(leafletMap.setView).toHaveBeenLastCalledWith([-1.3, 117], 12, { animate: false });
+      await wrapper.setProps({ modelValue: { latitude: -1.3, longitude: 117, zoom: 25 } });
+      expect(leafletMap.setView).toHaveBeenLastCalledWith([-1.3, 117], 20, { animate: false });
+      expect(leafletState.zoom).toBe(20);
       expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+    });
+
+    it('starts from the stored view and does not echo a resize refresh', async () => {
+      let notify: () => void = () => undefined;
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(callback: () => void) {
+            notify = callback;
+          }
+          observe() {}
+          disconnect() {}
+        },
+      );
+      try {
+        const wrapper = await mountPicker({
+          modelValue: { latitude: -1.2251, longitude: 116.9438, zoom: 25 },
+          includeZoom: true,
+        });
+        expect(leafletState.center).toEqual({ lat: -1.2251, lng: 116.9438 });
+        expect(leafletState.zoom).toBe(20);
+        const container = wrapper.get('[data-test="location-picker-map"]').element;
+        Object.defineProperty(container, 'clientWidth', { configurable: true, value: 320 });
+        Object.defineProperty(container, 'clientHeight', { configurable: true, value: 288 });
+        notify();
+        expect(leafletMap.invalidateSize).toHaveBeenCalled();
+        expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+      } finally {
+        vi.unstubAllGlobals();
+      }
     });
 
     it('moves the view with the direction buttons and zoom buttons', async () => {
@@ -504,6 +539,54 @@ describe('LocationPicker', () => {
         expect(wrapper.emitted('update:modelValue')).toBeUndefined();
       } finally {
         vi.unstubAllGlobals();
+      }
+    });
+
+    it('closes a surrounding BaseModal only on the second Escape in keyboard mode', async () => {
+      const onClose = vi.fn<() => void>();
+      const modal = mount(BaseModal, {
+        props: { open: true, title: 'Dialog uji', onClose },
+        slots: { default: () => h(LocationPicker, { modelValue: PIN, label: 'Lokasi uji' }) },
+        attachTo: document.body,
+      });
+      mounted.push(modal);
+      await flushPromises();
+      const toggle = document.querySelector<HTMLButtonElement>(
+        '[data-test="location-picker-keyboard"]',
+      )!;
+      toggle.click();
+      await nextTick();
+      expect(toggle.getAttribute('aria-pressed')).toBe('true');
+      const region = document.querySelector<HTMLElement>('[data-test="location-picker-region"]')!;
+      const pressEscape = () =>
+        region.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+        );
+      pressEscape();
+      await nextTick();
+      expect(onClose).not.toHaveBeenCalled();
+      expect(toggle.getAttribute('aria-pressed')).toBe('false');
+      pressEscape();
+      await nextTick();
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('removes the window Escape listener on unmount', async () => {
+      const add = vi.spyOn(window, 'addEventListener');
+      const remove = vi.spyOn(window, 'removeEventListener');
+      try {
+        const wrapper = await mountPicker({ modelValue: PIN });
+        await click(wrapper, 'location-picker-keyboard');
+        const registered = add.mock.calls.find(
+          ([type, , capture]) => type === 'keydown' && capture,
+        );
+        expect(registered).toBeDefined();
+        wrapper.unmount();
+        mounted.pop();
+        expect(remove).toHaveBeenCalledWith('keydown', registered![1], true);
+      } finally {
+        add.mockRestore();
+        remove.mockRestore();
       }
     });
 

@@ -6,7 +6,9 @@
  *   vi.mock('leaflet', async () => (await import('./leafletMock')).createLeafletMock());
  *
  * and import `leafletState` / `resetLeafletState` from './leafletMock' to drive and inspect it.
- * The map keeps a centre and zoom so code that reads them back behaves like the real thing.
+ * The map keeps a centre and zoom so code that reads them back behaves like the real thing, and
+ * `setView` / `invalidateSize` / `panTo` fire `moveend` the way Leaflet does, so a component's
+ * feedback-loop guard is actually exercised.
  */
 import { vi } from 'vitest';
 
@@ -41,7 +43,7 @@ const handlerStub = () => ({ enable: vi.fn<() => void>(), disable: vi.fn<() => v
 export const leafletMap = {
   setView: vi.fn<(center: [number, number], zoom?: number, options?: unknown) => unknown>(),
   setZoom: vi.fn<(zoom: number, options?: unknown) => unknown>(),
-  panTo: vi.fn<(center: [number, number]) => unknown>(),
+  panTo: vi.fn<(center: [number, number], options?: unknown) => unknown>(),
   getCenter: vi.fn<() => { lat: number; lng: number }>(),
   getZoom: vi.fn<() => number>(),
   getBounds: vi.fn<() => { contains: (point: unknown) => boolean }>(),
@@ -67,6 +69,8 @@ function wire(): void {
   leafletMap.setView.mockImplementation((center, zoom) => {
     leafletState.center = { lat: center[0], lng: center[1] };
     if (typeof zoom === 'number') leafletState.zoom = zoom;
+    // Real Leaflet fires `moveend` synchronously for a non-animated setView.
+    leafletState.handlers.moveend?.();
     return leafletMap;
   });
   leafletMap.setZoom.mockImplementation((zoom) => {
@@ -75,6 +79,12 @@ function wire(): void {
   });
   leafletMap.panTo.mockImplementation((center) => {
     leafletState.center = { lat: center[0], lng: center[1] };
+    // Real Leaflet fires `moveend` once the pan finishes, i.e. after the call has returned.
+    queueMicrotask(() => leafletState.handlers.moveend?.());
+    return leafletMap;
+  });
+  leafletMap.invalidateSize.mockImplementation(() => {
+    leafletState.handlers.moveend?.();
     return leafletMap;
   });
   leafletMap.getCenter.mockImplementation(() => ({ ...leafletState.center }));
