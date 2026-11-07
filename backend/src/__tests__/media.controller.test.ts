@@ -568,3 +568,51 @@ describe('media delivery: sendFile failures map to honest statuses', () => {
     );
   });
 });
+
+describe('media storage under a dot-directory upload root', () => {
+  it('uploads, previews and downloads when UPLOAD_DIR sits inside a hidden directory', async () => {
+    const hiddenRoot = path.join(sandbox, '.hidden', '.local', 'uploads');
+    for (const sub of UPLOAD_SUBDIRS) await mkdir(path.join(hiddenRoot, sub), { recursive: true });
+    setUploadRootForTesting(hiddenRoot);
+
+    const res = await postUpload([
+      purposePart('publikasi-document'),
+      filePart('laporan.pdf', PDF_BYTES, 'application/pdf'),
+    ]);
+    assert.equal(res.statusCode, 201);
+    const id = (res.body as { media: { id: string } }).media.id;
+    // Content owns the attach in production; do it directly on the stub row here.
+    db.assets.set(id, { ...db.assets.get(id)!, attachedAt: new Date() });
+
+    const app = express();
+    app.get('/preview/:id', previewMediaHandler);
+    app.get('/download/:id', publicMediaDownloadHandler);
+    const server = http.createServer(app);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      for (const route of ['preview', 'download']) {
+        const response = await fetch(`${base}/${route}/${id}`);
+        assert.equal(response.status, 200, route);
+        assert.equal(response.headers.get('content-type'), 'application/pdf');
+        assert.equal(Buffer.from(await response.arrayBuffer()).equals(PDF_BYTES), true);
+      }
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  it('still refuses stored keys with dot or traversal segments', async () => {
+    for (const storageKey of ['photos/./x.webp', 'photos/../x.webp']) {
+      const asset = makeAsset({ id: ID, storageKey, attachedAt: new Date() });
+      db.assets.set(asset.id, asset);
+      const res = makeMediaRes();
+      await publicMediaImageHandler(
+        { params: { id: ID }, query: {} } as unknown as Request,
+        res as unknown as Response,
+      );
+      assert.equal(res.statusCode, 404, storageKey);
+      assert.equal(res.sentFile, undefined);
+    }
+  });
+});

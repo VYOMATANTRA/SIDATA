@@ -168,7 +168,11 @@ async function serveAsset(req: Request, res: Response, kind: ServeKind): Promise
     return await new Promise<void>((resolve) => {
       res.sendFile(
         file,
-        { dotfiles: 'deny', cacheControl: false, acceptRanges: true },
+        // 'allow' is deliberate: the library applies the dotfile rule to EVERY segment of the
+        // absolute path, so 'deny' would 500 for a legitimate UPLOAD_DIR like ~/.local/share/...
+        // The storage key (no dot segments, see lexicalResolve) and the realpath containment
+        // check in resolveStoredFile are what keep serving inside the root.
+        { dotfiles: 'allow', cacheControl: false, acceptRanges: true },
         (error?: Error) => {
           if (error && !res.headersSent) respondToSendFileError(res, error);
           resolve();
