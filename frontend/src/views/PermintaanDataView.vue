@@ -290,7 +290,7 @@ const officialSopDocuments: SopDocument[] = [
         <h2 id="alur-title" class="text-brand-navy text-lg font-bold">
           Alur Pengajuan Permohonan Informasi
         </h2>
-        <p class="text-brand-navy/90 mt-2 max-w-3xl text-base">
+        <p class="text-brand-navy mt-2 max-w-3xl text-base">
           Lima tahapan resmi permohonan data dan dokumen publik.
         </p>
 
@@ -392,7 +392,7 @@ const officialSopDocuments: SopDocument[] = [
         <h2 id="sla-title" class="text-brand-navy text-lg font-bold">
           Standar Waktu Layanan dan Ketentuan Biaya
         </h2>
-        <p class="text-brand-navy/90 mt-2 max-w-3xl text-base">
+        <p class="text-brand-navy mt-2 max-w-3xl text-base">
           Jaminan kepastian tenggat pemrosesan permohonan informasi publik.
         </p>
 
@@ -425,7 +425,7 @@ const officialSopDocuments: SopDocument[] = [
         </div>
 
         <div
-          class="text-brand-navy/80 mt-4 flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:justify-between"
+          class="text-brand-navy mt-4 flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:justify-between"
         >
           <p>
             * Standar waktu dan prosedur diselaraskan dengan SOP PPID Kota Balikpapan No.
@@ -535,7 +535,7 @@ const officialSopDocuments: SopDocument[] = [
 
     <!-- Ajukan permohonan -->
     <TentangFeatureBand heading="Ajukan Permohonan Informasi">
-      <p class="text-brand-navy/90 mt-2 max-w-3xl text-base">
+      <p class="text-brand-navy mt-2 max-w-3xl text-base">
         Pendaftaran, pengisian formulir daring, dan pelacakan status permohonan dilakukan di portal
         resmi PPID Kota Balikpapan.
       </p>

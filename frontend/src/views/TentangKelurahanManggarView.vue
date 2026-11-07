@@ -375,7 +375,7 @@ const wilayahStats = computed<StatItem[]>(() => [
     <section class="bg-surface-muted px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="wilayah-title">
       <div class="mx-auto max-w-5xl">
         <h2 id="wilayah-title" class="text-brand-navy text-lg font-bold">Gambaran Umum Wilayah</h2>
-        <p class="text-brand-navy/90 mt-2 max-w-3xl text-base">
+        <p class="text-brand-navy mt-2 max-w-3xl text-base">
           Karakteristik geografis dan pembagian administratif Kelurahan Manggar.
         </p>
 

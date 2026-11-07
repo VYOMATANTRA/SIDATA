@@ -19,12 +19,12 @@ withDefaults(
 
     <div
       v-else-if="showPlaceholder"
-      class="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-brand-navy/10 bg-surface-muted text-brand-navy/60"
+      class="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-brand-navy/10 bg-surface-muted text-text-muted"
       aria-hidden="true"
       data-test="team-photo-placeholder"
     >
       <svg
-        class="h-10 w-10 text-brand-navy/50"
+        class="h-10 w-10 text-text-muted"
         viewBox="0 0 24 24"
         fill="currentColor"
         focusable="false"

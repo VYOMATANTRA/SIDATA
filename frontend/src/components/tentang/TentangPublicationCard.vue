@@ -23,7 +23,7 @@ withDefaults(
 
     <div class="flex-1">
       <h3 class="text-lg font-semibold text-brand-navy">{{ title }}</h3>
-      <p class="mt-1 text-base text-brand-navy/90">{{ description }}</p>
+      <p class="mt-1 text-base text-brand-navy">{{ description }}</p>
     </div>
 
     <span

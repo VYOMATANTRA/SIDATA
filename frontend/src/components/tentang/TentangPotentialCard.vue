@@ -21,6 +21,6 @@ withDefaults(
     </span>
 
     <h3 class="mt-4 text-lg font-semibold text-brand-navy">{{ title }}</h3>
-    <p class="mt-2 text-base leading-relaxed text-brand-navy/90">{{ description }}</p>
+    <p class="mt-2 text-base leading-relaxed text-brand-navy">{{ description }}</p>
   </article>
 </template>

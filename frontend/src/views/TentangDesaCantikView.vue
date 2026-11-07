@@ -147,7 +147,7 @@ const collaborationLogos = [
         <h2 id="rujukan-title" class="text-brand-navy text-lg font-bold">
           Informasi Lebih Lanjut Mengenai Desa Cantik
         </h2>
-        <p class="text-brand-navy/90 mx-auto mt-2 max-w-2xl text-base">
+        <p class="text-brand-navy mx-auto mt-2 max-w-2xl text-base">
           Untuk mempelajari pedoman teknis nasional, publikasi metodologi, dan praktik baik program
           Desa Cantik di seluruh Indonesia, kunjungi portal resmi Badan Pusat Statistik.
         </p>
