@@ -5,6 +5,8 @@ import { createPinia, setActivePinia, type Pinia } from 'pinia';
 import { createRouter, createMemoryHistory, type Router } from 'vue-router';
 import HomeView from '../views/HomeView.vue';
 import PublicLayout from '../layouts/PublicLayout.vue';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const HOME_META = { layout: 'public', headerOverlay: true } as const;
 
@@ -143,7 +145,17 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
     await router.isReady();
 
     const wrapper = mountHome(pinia, router);
-    expect(wrapper.find('section#hero').classes().join(' ')).toContain('--public-header-height');
+    // The hero's top padding is `header height + extra`, and the header height variable that the
+    // class and the navbar both read must actually be defined with a length in main.css.
+    expect(wrapper.find('section#hero').classes()).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^pt-\[calc\(var\(--public-header-height\)\+\d+rem\)\]$/),
+      ]),
+    );
+    const mainCss = readFileSync(resolve(process.cwd(), 'src/assets/main.css'), 'utf8');
+    expect(mainCss).toMatch(/--public-header-height:\s*[\d.]+rem;/);
+    // The overlaying header pulls the page up by exactly that height (no gap, no double offset).
+    expect(wrapper.find('header').classes()).toContain('-mb-[var(--public-header-height)]');
     wrapper.unmount();
   });
 

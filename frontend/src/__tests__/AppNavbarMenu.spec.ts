@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import AppNavbar from '../components/common/AppNavbar.vue';
-import { stubViewport } from './helpers/viewport';
+import { stubViewport, stubResizableViewport } from './helpers/viewport';
 import { acquireBodyScrollLock } from '../utils/bodyScrollLock';
 
 function createMockRouter() {
@@ -342,5 +342,57 @@ describe('AppNavbar menu: desktop disclosure', () => {
     expect(documentRemove).toHaveBeenCalledWith('pointerdown', expect.any(Function));
     windowRemove.mockRestore();
     documentRemove.mockRestore();
+  });
+});
+
+describe('AppNavbar menu: resizing across the md breakpoint while open', () => {
+  beforeEach(() => {
+    document.body.style.overflow = '';
+  });
+
+  it('phone to desktop: releases the scroll lock, drops inert and dialog semantics, listens for outside clicks', async () => {
+    const viewport = stubResizableViewport(false);
+    const { wrapper } = await mountNavbar();
+    await toggle(wrapper).trigger('click');
+    expect(document.body.style.overflow).toBe('hidden');
+    expect(wrapper.find('[data-test="navbar-bar"]').attributes('inert')).toBeDefined();
+    expect(panel(wrapper).attributes('role')).toBe('dialog');
+
+    // Outside presses are ignored while modal (the backdrop handles them).
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    await wrapper.vm.$nextTick();
+    expect(toggle(wrapper).attributes('aria-expanded')).toBe('true');
+
+    viewport.setMatches(true);
+    await wrapper.vm.$nextTick();
+    expect(toggle(wrapper).attributes('aria-expanded')).toBe('true');
+    expect(document.body.style.overflow).toBe('');
+    expect(wrapper.find('[data-test="navbar-bar"]').attributes('inert')).toBeUndefined();
+    expect(panel(wrapper).attributes('role')).toBeUndefined();
+
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    await wrapper.vm.$nextTick();
+    expect(toggle(wrapper).attributes('aria-expanded')).toBe('false');
+    wrapper.unmount();
+  });
+
+  it('desktop to phone: locks scroll, makes the bar inert and stops the outside-click listener', async () => {
+    const viewport = stubResizableViewport(true);
+    const { wrapper } = await mountNavbar();
+    await toggle(wrapper).trigger('click');
+    expect(document.body.style.overflow).toBe('');
+
+    viewport.setMatches(false);
+    await wrapper.vm.$nextTick();
+    expect(document.body.style.overflow).toBe('hidden');
+    expect(wrapper.find('[data-test="navbar-bar"]').attributes('inert')).toBeDefined();
+    expect(panel(wrapper).attributes('role')).toBe('dialog');
+
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    await wrapper.vm.$nextTick();
+    expect(toggle(wrapper).attributes('aria-expanded')).toBe('true');
+
+    wrapper.unmount();
+    expect(document.body.style.overflow).toBe('');
   });
 });
