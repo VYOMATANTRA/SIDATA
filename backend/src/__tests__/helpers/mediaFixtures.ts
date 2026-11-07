@@ -147,7 +147,11 @@ export interface MediaFakeRes {
   body: unknown;
   headers: Record<string, string>;
   sentFile: string | undefined;
+  sendFileOptions: Record<string, unknown> | undefined;
+  /** When set, sendFile reports this error to its callback instead of sending. */
+  sendFileError: Error | undefined;
   headersSent: boolean;
+  removeHeader(name: string): void;
   status(code: number): MediaFakeRes;
   json(data: unknown): MediaFakeRes;
   setHeader(name: string, value: string): MediaFakeRes;
@@ -160,7 +164,12 @@ export function makeMediaRes(): MediaFakeRes {
     body: undefined,
     headers: {},
     sentFile: undefined,
+    sendFileOptions: undefined,
+    sendFileError: undefined,
     headersSent: false,
+    removeHeader(name) {
+      delete res.headers[name.toLowerCase()];
+    },
     status(code) {
       res.statusCode = code;
       return res;
@@ -174,7 +183,12 @@ export function makeMediaRes(): MediaFakeRes {
       res.headers[name.toLowerCase()] = value;
       return res;
     },
-    sendFile(file, _options, cb) {
+    sendFile(file, options, cb) {
+      res.sendFileOptions = options;
+      if (res.sendFileError) {
+        cb(res.sendFileError);
+        return;
+      }
       res.sentFile = file;
       res.statusCode ??= 200;
       res.headersSent = true;

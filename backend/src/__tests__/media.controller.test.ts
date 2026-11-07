@@ -1,6 +1,18 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  realpath,
+  rm,
+  symlink,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
+import express from 'express';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
@@ -437,5 +449,122 @@ describe('media delivery routes', () => {
     await publicMediaImageHandler(req(ID), asRes(res));
     assert.equal(res.statusCode, 404);
     assert.equal(res.sentFile, undefined);
+  });
+});
+
+describe('media delivery: sendFile failures map to honest statuses', () => {
+  const req = (id: string) => ({ params: { id }, query: {} }) as unknown as Request;
+  const asRes = (r: MediaFakeRes) => r as unknown as Response;
+
+  async function attachedPhoto(bytes: string | Buffer = 'webp-bytes') {
+    const asset = makeAsset({ id: ID, attachedAt: new Date() });
+    db.assets.set(asset.id, asset);
+    const full = path.join(root, ...asset.storageKey.split('/'));
+    await mkdir(path.dirname(full), { recursive: true });
+    await writeFile(full, bytes);
+    return { asset, full };
+  }
+
+  it('answers 416 (not 500) and logs nothing when the library reports a bad Range', async () => {
+    await attachedPhoto();
+    const res = makeMediaRes();
+    res.sendFileError = Object.assign(new Error('Requested Range Not Satisfiable'), {
+      status: 416,
+      headers: { 'Content-Range': 'bytes */11' },
+    });
+    const logged: unknown[][] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => void logged.push(args);
+    try {
+      await publicMediaImageHandler(req(ID), asRes(res));
+    } finally {
+      console.error = original;
+    }
+    assert.equal(res.statusCode, 416);
+    assert.equal(res.headers['content-range'], 'bytes */11');
+    assert.deepEqual(res.body, { error: 'Permintaan berkas tidak dapat dipenuhi.' });
+    assert.deepEqual(logged, []);
+  });
+
+  it('answers 404 with the friendly missing-file body for ENOENT, and 500 for real failures', async () => {
+    await attachedPhoto();
+    const gone = makeMediaRes();
+    gone.sendFileError = Object.assign(new Error(`ENOENT: no such file ${root}/x`), {
+      code: 'ENOENT',
+    });
+    await publicMediaImageHandler(req(ID), asRes(gone));
+    assert.equal(gone.statusCode, 404);
+    assert.deepEqual(gone.body, {
+      error: 'Berkas media tidak tersedia saat ini.',
+      code: 'MEDIA_FILE_MISSING',
+    });
+
+    const broken = makeMediaRes();
+    broken.sendFileError = new Error('EIO: disk on fire');
+    const original = console.error;
+    const logged: unknown[][] = [];
+    console.error = (...args: unknown[]) => void logged.push(args);
+    try {
+      await publicMediaImageHandler(req(ID), asRes(broken));
+    } finally {
+      console.error = original;
+    }
+    assert.equal(broken.statusCode, 500);
+    assert.deepEqual(broken.body, { error: 'Terjadi kesalahan internal server' });
+    assert.equal(logged.length, 1);
+  });
+
+  async function withServer<T>(
+    beforeSend: ((file: string) => Promise<void>) | null,
+    run: (base: string) => Promise<T>,
+  ): Promise<T> {
+    const app = express();
+    app.get('/:id', (request, response) => {
+      if (beforeSend) {
+        const real = response.sendFile.bind(response) as (...a: unknown[]) => void;
+        (response as unknown as { sendFile: unknown }).sendFile = (
+          file: string,
+          ...rest: unknown[]
+        ) => {
+          void beforeSend(file).then(() => real(file, ...rest));
+        };
+      }
+      return publicMediaImageHandler(request, response);
+    });
+    const server = http.createServer(app);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+      return await run(`http://127.0.0.1:${(server.address() as AddressInfo).port}`);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  }
+
+  it('real sendFile: an unsatisfiable Range on a real small file is 416 JSON', async () => {
+    await attachedPhoto('0123456789');
+    await withServer(null, async (base) => {
+      const ok = await fetch(`${base}/${ID}`, { headers: { Range: 'bytes=2-4' } });
+      assert.equal(ok.status, 206);
+      assert.equal(await ok.text(), '234');
+
+      const bad = await fetch(`${base}/${ID}`, { headers: { Range: 'bytes=999-9999' } });
+      assert.equal(bad.status, 416);
+      assert.equal(bad.headers.get('content-range'), 'bytes */10');
+      assert.deepEqual(await bad.json(), { error: 'Permintaan berkas tidak dapat dipenuhi.' });
+    });
+  });
+
+  it('real sendFile: a file removed after the DB lookup answers 404, not 500', async () => {
+    await attachedPhoto();
+    await withServer(
+      (file) => unlink(file),
+      async (base) => {
+        const res = await fetch(`${base}/${ID}`);
+        assert.equal(res.status, 404);
+        const body = (await res.json()) as { code: string };
+        assert.equal(body.code, 'MEDIA_FILE_MISSING');
+        assert.equal(JSON.stringify(body).includes(root), false);
+      },
+    );
   });
 });

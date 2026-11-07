@@ -44,6 +44,39 @@ function logError(context: string, error: unknown): void {
   );
 }
 
+const RANGE_UNSATISFIABLE_BODY = { error: 'Permintaan berkas tidak dapat dipenuhi.' } as const;
+
+/**
+ * Maps a `sendFile` failure to an honest status instead of a blanket 500: the `send` library
+ * attaches `status` (416 for an unsatisfiable Range, 404 for a vanished file, ...). A file
+ * deleted by cleanup between the DB lookup and the send surfaces as ENOENT/ENOTDIR and gets the
+ * same friendly body as any other missing file. Only genuine server errors are logged.
+ */
+function respondToSendFileError(res: Response, error: Error): void {
+  const { status, code, headers } = error as {
+    status?: number;
+    code?: string;
+    headers?: Record<string, string>;
+  };
+  const effective = code === 'ENOENT' || code === 'ENOTDIR' ? 404 : (status ?? 500);
+
+  // Entity headers chosen for a successful body must not ride along on an error response.
+  res.removeHeader('Content-Disposition');
+  res.setHeader('Cache-Control', CACHE_PRIVATE);
+  if (headers && effective !== 500) {
+    for (const [name, value] of Object.entries(headers)) res.setHeader(name, value);
+  }
+
+  if (effective >= 500) {
+    logError('Error saat mengirim berkas media:', error);
+    res.status(500).json(INTERNAL_ERROR_BODY);
+  } else if (effective === 404) {
+    res.status(404).json(FILE_MISSING_BODY);
+  } else {
+    res.status(effective).json(RANGE_UNSATISFIABLE_BODY);
+  }
+}
+
 export const uploadMediaHandler = async (
   req: MediaUploadRequest,
   res: Response,
@@ -137,10 +170,7 @@ async function serveAsset(req: Request, res: Response, kind: ServeKind): Promise
         file,
         { dotfiles: 'deny', cacheControl: false, acceptRanges: true },
         (error?: Error) => {
-          if (error && !res.headersSent) {
-            logError('Error saat mengirim berkas media:', error);
-            res.status(500).json(INTERNAL_ERROR_BODY);
-          }
+          if (error && !res.headersSent) respondToSendFileError(res, error);
           resolve();
         },
       );
