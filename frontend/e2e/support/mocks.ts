@@ -2,8 +2,6 @@ import type { Page, Route } from '@playwright/test';
 import { MAP_POINTS, MAP_SUMMARY, PUBLIC_SETTINGS } from './fixtures-data';
 import { TILE_PNG } from './tile';
 
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
-
 function json(route: Route, body: unknown, status = 200) {
   return route.fulfill({
     status,
@@ -13,9 +11,15 @@ function json(route: Route, body: unknown, status = 200) {
 }
 
 export interface MockHandle {
-  /** `METHOD /path` of every `/api/**` request no explicit mock claimed. Tests may assert on it. */
+  /**
+   * `METHOD /path` of every `/api/**` request no explicit mock claimed. The `test` fixture fails
+   * the test if this is non-empty, unless the test sets `allowUnmockedApi`.
+   */
   unmockedApi: string[];
-  /** Hosts outside localhost that the page tried to reach (all aborted; tiles are mocked). */
+  /**
+   * Hosts outside the app origin that the page tried to reach (all aborted; tiles are mocked).
+   * Recorded for inspection only: aborting fonts/analytics is expected, so it never fails a test.
+   */
   blockedExternal: string[];
 }
 
@@ -24,14 +28,17 @@ export interface MockHandle {
  * Playwright matches the most recently registered route first, so the order below is
  * catch-all (lowest priority) -> specific mocks (highest).
  */
-export async function installMocks(page: Page): Promise<MockHandle> {
+export async function installMocks(page: Page, baseURL: string): Promise<MockHandle> {
+  // Only the app's own origin (port included) is "local"; a stray service on another localhost
+  // port must not slip through the offline guarantee.
+  const appOrigin = new URL(baseURL).origin;
   const handle: MockHandle = { unmockedApi: [], blockedExternal: [] };
 
-  // 1. Anything that is not localhost is aborted (fonts, analytics, CDNs...).
+  // 1. Anything outside the app origin is aborted (fonts, analytics, CDNs...).
   await page.route(
-    (url) => !LOCAL_HOSTS.has(url.hostname),
+    (url) => url.origin !== appOrigin,
     (route) => {
-      handle.blockedExternal.push(new URL(route.request().url()).hostname);
+      handle.blockedExternal.push(new URL(route.request().url()).host);
       return route.abort('blockedbyclient');
     },
   );

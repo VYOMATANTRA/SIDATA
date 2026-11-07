@@ -26,9 +26,15 @@ function stripDevtools(plugins: PluginOption[] | undefined): PluginOption[] {
   });
 }
 
-const resolved = typeof appConfig === 'function' ? undefined : appConfig;
+if (typeof appConfig !== 'object' || appConfig === null || Array.isArray(appConfig)) {
+  // A function/promise config would otherwise silently drop the app's plugins (Vue, Tailwind).
+  throw new Error(
+    'e2e/vite.e2e.config.ts expects ../vite.config to default-export a plain object; ' +
+      'resolve the function form here before stripping devtools.',
+  );
+}
 
 export default defineConfig({
-  ...resolved,
-  plugins: stripDevtools(resolved?.plugins as PluginOption[] | undefined),
+  ...appConfig,
+  plugins: stripDevtools(appConfig.plugins as PluginOption[] | undefined),
 });
