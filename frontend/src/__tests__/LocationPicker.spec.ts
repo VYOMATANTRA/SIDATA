@@ -740,6 +740,17 @@ describe('LocationPicker', () => {
       expect(wrapper.emitted('update:modelValue')?.length).toBe(count + 1);
       expect(lastEmitted(wrapper)).toMatchObject({ zoom: 14 });
     });
+
+    it('ignores a stray moveend drifting about 1.2e-6 but emits once the drift passes the tolerance', async () => {
+      const wrapper = await mountPicker({ modelValue: VIEW, includeZoom: true });
+      // Beyond the de-dupe tolerance (5e-7) yet inside the stored-view guard tolerance (2e-6).
+      leafletState.center = { lat: -1.2251 + 1.2e-6, lng: 116.9438 };
+      leafletState.handlers.moveend?.();
+      expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+      leafletState.center = { lat: -1.2251 + 3e-6, lng: 116.9438 };
+      leafletState.handlers.moveend?.();
+      expect(wrapper.emitted('update:modelValue')?.length).toBe(1);
+    });
   });
 
   describe('reduced motion', () => {
@@ -817,6 +828,15 @@ describe('LocationPicker', () => {
       expect(leafletState.zoom).toBe(17);
       expect(wrapper.get('[data-test="location-picker-accuracy"]').text()).toContain('cukup dekat');
       expect(wrapper.text()).not.toMatch(/±|\d+ m\b/);
+    });
+
+    it('honours a custom testId for the accuracy hook', async () => {
+      const wrapper = await mountPicker({ detectable: true, testId: 'custom' });
+      await click(wrapper, 'custom-detect');
+      success({ coords: { latitude: -1.25, longitude: 116.95, accuracy: 12.4 } });
+      await flushPromises();
+      expect(wrapper.get('[data-test="custom-accuracy"]').text()).toContain('cukup dekat');
+      expect(wrapper.find('[data-test="location-picker-accuracy"]').exists()).toBe(false);
     });
 
     it('calls a coarse fix less precise, and forgets it when the parent changes the value', async () => {
@@ -1037,6 +1057,30 @@ describe('LocationPicker', () => {
       } finally {
         add.mockRestore();
         remove.mockRestore();
+      }
+    });
+
+    it('removes the window Escape listener when keyboard mode ends via focusout', async () => {
+      const remove = vi.spyOn(window, 'removeEventListener');
+      const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+      try {
+        const wrapper = await mountPicker({ modelValue: PIN });
+        const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
+        const region = wrapper.get('[data-test="location-picker-region"]');
+        await toggle.trigger('click');
+        region.element.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+        await nextTick();
+        expect(toggle.attributes('aria-pressed')).toBe('false');
+        expect(remove).toHaveBeenCalledWith('keydown', expect.any(Function), true);
+        const outer = vi.fn<() => void>();
+        document.addEventListener('keydown', outer, true);
+        await region.trigger('keydown', { key: 'Escape' });
+        document.removeEventListener('keydown', outer, true);
+        // The guard is gone, so Escape reaches a surrounding dialog's capture listener.
+        expect(outer).toHaveBeenCalledTimes(1);
+      } finally {
+        remove.mockRestore();
+        hasFocus.mockRestore();
       }
     });
 

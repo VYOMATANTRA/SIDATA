@@ -25,8 +25,10 @@ export const leafletState = {
   inBounds: true,
   markerCreated: 0,
   /**
-   * Simulates Leaflet ending a programmatic `setView` / `invalidateSize` somewhere other than the
-   * requested view (max-bounds or size adjustments): added to the centre before `moveend` fires.
+   * Simulates Leaflet adjusting the centre during `invalidateSize` (e.g. a half-pixel shift when
+   * the container size changes) and clamping the zoom: added to the centre before `moveend` fires.
+   * Real `setView` returns the requested centre exactly; this mock also applies the drift there so
+   * specs can exercise the picker's guards. The picker uses no `maxBounds`.
    */
   centerDrift: null as { lat: number; lng: number } | null,
 };
