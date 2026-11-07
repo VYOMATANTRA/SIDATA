@@ -33,6 +33,7 @@ Deploy target: Docker on a self-managed VPS (may change pending stakeholder inpu
 | Build for production | `npm run build`      | `frontend/` |
 | Type-check           | `npm run type-check` | `frontend/` |
 | Run unit tests       | `npm run test:unit`  | `frontend/` |
+| Run e2e tests (Playwright) | `npm run test:e2e` (one-time `npx playwright install chromium`; not in CI yet) | `frontend/` |
 | Lint & fix           | `npm run lint`       | `frontend/` |
 | Format code          | `npm run format`     | `frontend/` |
 

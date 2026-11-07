@@ -47,6 +47,32 @@ npm run build
 npm run test:unit
 ```
 
+### Run End-to-End Tests with [Playwright](https://playwright.dev/)
+
+Real-browser (Chromium) tests for what jsdom cannot prove: paint order, hit targets, scroll and
+focus, mobile viewports. Specs live in `e2e/`; Vitest ignores that folder.
+
+```sh
+npx playwright install chromium   # one-time browser download (about 300 MB)
+npm run test:e2e                  # all projects: mobile, mobile-small, desktop
+npm run test:e2e -- --project=mobile e2e/map-summary.spec.ts
+npm run test:e2e:ui               # Playwright UI mode
+```
+
+- Projects: `mobile` (375x812, touch), `mobile-small` (320x640, touch), `desktop` (1280x800).
+- The suite never touches a real backend or the internet. `e2e/support/mocks.ts` stubs `/api/**`
+  (maps points/summary, public settings, CSRF; `/api/auth/refresh` returns 401 so the visitor is
+  logged out) with synthetic data and answers OpenStreetMap tile requests with a generated PNG, so
+  real Leaflet tile and marker layers render. Import `test`/`expect` from `e2e/support/test`, which
+  applies those mocks automatically, and abort-block any other external host.
+- Playwright starts its own Vite dev server on port 5199 (`--strictPort`, never reused), so it does
+  not collide with `npm run dev` on 5173. That server drops Vue DevTools (`e2e/vite.e2e.config.ts`),
+  whose injected panel would otherwise sit on top of the page in hit tests.
+- Reports, traces and failure screenshots go to `e2e/.output/` (git-ignored). Open the HTML report
+  with `npx playwright show-report e2e/.output/report`.
+- E2E is not part of the default CI workflow yet; run it locally when changing map, overlay or
+  mobile-layout behaviour.
+
 ### Lint with [ESLint](https://eslint.org/)
 
 ```sh

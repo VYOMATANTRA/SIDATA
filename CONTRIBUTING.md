@@ -35,11 +35,19 @@ migrations, or adapters — this decision is settled and independent of hosting/
 | Dev server | `npm run dev`        |
 | Type-check | `npm run type-check` |
 | Unit tests | `npm run test:unit`  |
+| E2E tests  | `npm run test:e2e`   |
 | Lint & fix | `npm run lint`       |
 | Format     | `npm run format`     |
 | Build      | `npm run build`      |
 
 Run `npm run type-check` before `npm run build` to catch TypeScript issues early.
+
+`npm run test:e2e` runs the Playwright real-browser tests (Chromium; mobile 375x812, mobile 320x640
+and desktop 1280x800) for behaviour jsdom cannot prove, such as paint order, hit targets, focus and
+mobile layout. Install the browser once with `npx playwright install chromium`. The tests mock
+`/api/**` and map tiles, so they need no backend or network, and they start their own Vite server on
+port 5199. They are not part of CI yet, so run them locally when you change map, overlay or
+mobile-layout behaviour. See `frontend/README.md` for details.
 
 ### Backend (`backend/`)
 
