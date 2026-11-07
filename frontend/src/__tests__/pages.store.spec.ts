@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { usePagesStore } from '../stores/pages.store';
+import { READ_USER_MESSAGES } from '../utils/userMessages';
 
 function json(body: unknown, ok = true, status = ok ? 200 : 500): Response {
   return { ok, status, json: async () => body } as Response;
@@ -139,7 +140,10 @@ describe('pages store (CMS hierarchy)', () => {
     const store = usePagesStore();
     await store.fetchHierarchy();
 
-    expect(store.hierarchyError).toBe('boom');
+    expect(store.hierarchyError).toBe(
+      `Gagal memuat struktur halaman. ${READ_USER_MESSAGES.server}`,
+    );
+    expect(store.hierarchyError).not.toContain('boom');
     expect(store.isLoaded).toBe(false);
   });
 
@@ -199,7 +203,10 @@ describe('pages store (public page by slug)', () => {
     globalThis.fetch = fetchMock;
 
     const store = usePagesStore();
-    await Promise.all([store.fetchPageBySlug('kependudukan'), store.fetchPageBySlug('kependudukan')]);
+    await Promise.all([
+      store.fetchPageBySlug('kependudukan'),
+      store.fetchPageBySlug('kependudukan'),
+    ]);
 
     expect(callCount).toBe(1);
   });
@@ -220,14 +227,14 @@ describe('pages store (public page by slug)', () => {
   });
 
   it('records a network error without throwing', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockRejectedValue(new Error('Network error'));
+    const fetchMock = vi.fn<typeof fetch>().mockRejectedValue(new TypeError('Failed to fetch'));
     globalThis.fetch = fetchMock;
 
     const store = usePagesStore();
     const result = await store.fetchPageBySlug('kependudukan');
 
     expect(result).toBeNull();
-    expect(store.error).toBe('Network error');
+    expect(store.error).toBe(`Gagal memuat halaman. ${READ_USER_MESSAGES.network}`);
     expect(store.isLoading).toBe(false);
   });
 });

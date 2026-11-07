@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/auth'
 import BaseButton from '../components/common/BaseButton.vue'
 import BaseModal from '../components/common/BaseModal.vue'
 import { INPUT_CLASSES } from '../utils/formStyles'
+import { toUserMessage } from '../utils/userMessages'
 
 const usersStore = useUsersStore()
 const authStore = useAuthStore()
@@ -175,7 +176,7 @@ async function handleCreateUser() {
       createCloseTimer = null
     }, 1200)
   } catch (err: unknown) {
-    createError.value = err instanceof Error ? err.message : 'Gagal membuat pengguna.'
+    createError.value = toUserMessage(err, 'membuat pengguna').message
   } finally {
     isSubmitting.value = false
   }
@@ -188,7 +189,7 @@ async function handleUpdateRole() {
     await usersStore.updateUserRole(selectedUser.value.id, newRoleSelection.value)
     isRoleModalOpen.value = false
   } catch (err: unknown) {
-    alert(err instanceof Error ? err.message : 'Gagal memperbarui role')
+    alert(toUserMessage(err, 'memperbarui role').message)
   } finally {
     isSubmitting.value = false
   }
@@ -209,7 +210,7 @@ async function handleChangePassword() {
       passwordCloseTimer = null
     }, 1200)
   } catch (err: unknown) {
-    passwordError.value = err instanceof Error ? err.message : 'Gagal mengubah password pengguna.'
+    passwordError.value = toUserMessage(err, 'mengubah password pengguna').message
   } finally {
     isSubmitting.value = false
   }
@@ -227,11 +228,10 @@ async function handleConfirmAction() {
     isConfirmModalOpen.value = false
   } catch (err: unknown) {
     alert(
-      err instanceof Error
-        ? err.message
-        : confirmActionType.value === 'activate'
-          ? 'Gagal mengaktifkan pengguna'
-          : 'Gagal menonaktifkan pengguna',
+      toUserMessage(
+        err,
+        confirmActionType.value === 'activate' ? 'mengaktifkan pengguna' : 'menonaktifkan pengguna',
+      ).message,
     )
   } finally {
     isSubmitting.value = false

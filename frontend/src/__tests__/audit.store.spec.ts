@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useAuditStore } from '../stores/audit.store';
 import { useAuthStore } from '../stores/auth';
+import { READ_USER_MESSAGES, USER_MESSAGES } from '../utils/userMessages';
 
 const AUDIT_LOG = {
   id: 'log-1',
@@ -292,6 +293,7 @@ describe('audit store', () => {
       acknowledge: () =>
         ({
           ok: false,
+          status: 409,
           json: async () => ({ error: 'Audit log ini sudah di-acknowledge sebelumnya.' }),
         }) as Response,
     });
@@ -299,24 +301,24 @@ describe('audit store', () => {
     const store = useAuditStore();
     store.logs = [{ ...AUDIT_LOG }];
 
-    await expect(store.acknowledgeLog('log-1')).rejects.toThrow(
-      'Audit log ini sudah di-acknowledge sebelumnya.',
-    );
-    expect(store.error).toBe('Audit log ini sudah di-acknowledge sebelumnya.');
+    await expect(store.acknowledgeLog('log-1')).rejects.toMatchObject({ status: 409 });
+    expect(store.error).toBe(`Gagal meng-acknowledge audit log. ${USER_MESSAGES.conflict}`);
+    expect(store.error).not.toContain('sudah di-acknowledge');
     // Row left untouched on failure
     expect(store.logs[0]?.acknowledgedAt).toBeNull();
   });
 
   it('fetchLogs sets a friendly error message when the API fails', async () => {
     mockFetchWith({
-      list: () => ({ ok: false, json: async () => ({ error: 'Akses ditolak.' }) }) as Response,
+      list: () =>
+        ({ ok: false, status: 403, json: async () => ({ error: 'Akses ditolak.' }) }) as Response,
     });
 
     const store = useAuditStore();
     await store.fetchLogs();
 
     expect(store.logs).toHaveLength(0);
-    expect(store.error).toBe('Akses ditolak.');
+    expect(store.error).toBe(`Gagal memuat audit log. ${USER_MESSAGES.forbidden}`);
   });
 
   it('discards a stale fetchLogs response that resolves after a newer one', async () => {
@@ -407,29 +409,43 @@ describe('audit store', () => {
   it('fetchSummary errors land in summaryError, not the shared list error ref', async () => {
     mockFetchWith({
       summary: () =>
-        ({ ok: false, json: async () => ({ error: 'Ringkasan tidak tersedia.' }) }) as Response,
+        ({
+          ok: false,
+          status: 500,
+          json: async () => ({ error: 'Ringkasan tidak tersedia.' }),
+        }) as Response,
     });
 
     const store = useAuditStore();
     await store.fetchSummary();
 
-    expect(store.summaryError).toBe('Ringkasan tidak tersedia.');
+    expect(store.summaryError).toBe(
+      `Gagal memuat ringkasan audit log. ${READ_USER_MESSAGES.server}`,
+    );
     expect(store.error).toBeNull();
   });
 
   it('a summary failure does not mask or clear a concurrent list failure', async () => {
     mockFetchWith({
       list: () =>
-        ({ ok: false, json: async () => ({ error: 'Daftar tidak tersedia.' }) }) as Response,
+        ({
+          ok: false,
+          status: 500,
+          json: async () => ({ error: 'Daftar tidak tersedia.' }),
+        }) as Response,
       summary: () =>
-        ({ ok: false, json: async () => ({ error: 'Ringkasan tidak tersedia.' }) }) as Response,
+        ({
+          ok: false,
+          status: 403,
+          json: async () => ({ error: 'Ringkasan tidak tersedia.' }),
+        }) as Response,
     });
 
     const store = useAuditStore();
     await Promise.all([store.fetchLogs(), store.fetchSummary()]);
 
     // Both failures surface independently instead of one overwriting the other.
-    expect(store.error).toBe('Daftar tidak tersedia.');
-    expect(store.summaryError).toBe('Ringkasan tidak tersedia.');
+    expect(store.error).toBe(`Gagal memuat audit log. ${READ_USER_MESSAGES.server}`);
+    expect(store.summaryError).toBe(`Gagal memuat ringkasan audit log. ${USER_MESSAGES.forbidden}`);
   });
 });

@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import { apiErrorFromResponse } from '../utils/apiClient';
+import { toUserMessage } from '../utils/userMessages';
 
 export interface WeatherForecastEntry {
   datetime: string;
@@ -256,12 +258,7 @@ export const useWeatherStore = defineStore('weather', () => {
         }
 
         if (!res.ok) {
-          const errJson = await res.json().catch(() => null);
-          const detail =
-            errJson && typeof errJson === 'object' && typeof errJson.error === 'string'
-              ? `: ${errJson.error}`
-              : '';
-          throw new Error(`Gagal memuat data cuaca (HTTP ${res.status})${detail}`);
+          throw await apiErrorFromResponse(res, '/api/weather', 'GET');
         }
 
         const json = await res.json();
@@ -324,7 +321,7 @@ export const useWeatherStore = defineStore('weather', () => {
         if (currentGeneration !== fetchGeneration) {
           return null;
         }
-        error.value = err instanceof Error ? err.message : 'Gagal memuat data cuaca';
+        error.value = toUserMessage(err, 'memuat data cuaca', 'GET').message;
         return data.value;
       } finally {
         if (currentGeneration === fetchGeneration) {

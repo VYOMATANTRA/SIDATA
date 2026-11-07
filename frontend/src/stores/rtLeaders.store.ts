@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import { apiErrorFromResponse } from '../utils/apiClient';
+import { toUserMessage } from '../utils/userMessages';
 
 export interface RtLeader {
   rtNumber: number;
@@ -60,7 +62,11 @@ export const useRtLeadersStore = defineStore('rtLeaders', () => {
 
   async function fetchRtLeaders(force = false): Promise<void> {
     if (!force && inFlight) return inFlight;
-    if (!force && hasSettled.value && Date.now() - lastFetchedAt < RT_LEADERS_CACHE_TTL_MS - 1_000) {
+    if (
+      !force &&
+      hasSettled.value &&
+      Date.now() - lastFetchedAt < RT_LEADERS_CACHE_TTL_MS - 1_000
+    ) {
       return;
     }
 
@@ -78,7 +84,7 @@ export const useRtLeadersStore = defineStore('rtLeaders', () => {
         const response = await fetch(RT_LEADERS_ENDPOINT);
         if (currentRequestId !== activeRequestId) return;
         if (!response.ok) {
-          throw new Error(`Gagal memuat data Ketua RT (status ${response.status})`);
+          throw await apiErrorFromResponse(response, RT_LEADERS_ENDPOINT, 'GET');
         }
 
         const data = (await response.json()) as {
@@ -94,7 +100,7 @@ export const useRtLeadersStore = defineStore('rtLeaders', () => {
         lastFetchedAt = Date.now();
       } catch (err) {
         if (currentRequestId !== activeRequestId) return;
-        error.value = err instanceof Error ? err.message : 'Terjadi kesalahan jaringan';
+        error.value = toUserMessage(err, 'memuat data Ketua RT', 'GET').message;
       } finally {
         if (currentRequestId === activeRequestId) {
           isLoading.value = false;

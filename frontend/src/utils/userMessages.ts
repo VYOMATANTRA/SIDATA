@@ -186,8 +186,11 @@ function readableServerMessage(value: unknown): string | undefined {
  * @param error   Whatever was thrown: an ApiError, a fetch() rejection, or anything else.
  * @param context Optional action phrase, e.g. `'menyimpan indikator'`, which turns the result
  *                into `Gagal menyimpan indikator. <approved text>`.
+ * @param method  HTTP method of the request, for callers whose error carries none (a raw
+ *                `fetch()` rejection). Pass `'GET'` for reads so the text does not claim that
+ *                changes were not saved. An `ApiError` already records its own method.
  */
-export function toUserMessage(error: unknown, context?: string): UserMessage {
+export function toUserMessage(error: unknown, context?: string, method?: string): UserMessage {
   const { kind, status } = classifyFailure(error);
   const phrase = context?.trim().replace(/\.+$/, '');
   const record =
@@ -199,7 +202,7 @@ export function toUserMessage(error: unknown, context?: string): UserMessage {
   const base =
     kind === 'validation' && Object.keys(fieldErrors).length === 0
       ? (readableServerMessage(record['serverMessage']) ?? USER_MESSAGES.validation)
-      : approvedMessage(kind, record['method']);
+      : approvedMessage(kind, record['method'] ?? method);
   const message = phrase ? `Gagal ${phrase}. ${base}` : base;
 
   return { message, kind, status, fieldErrors };

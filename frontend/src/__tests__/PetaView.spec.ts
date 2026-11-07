@@ -6,6 +6,7 @@ import { defineComponent, h } from 'vue';
 import PetaView from '../views/PetaView.vue';
 import type { MapSummaryDTO, RtLeaderDTO, SpatialPointDTO } from '../types/maps';
 import { MANGGAR_MAP_ORIGIN } from '../constants/mapOrigin';
+import { READ_USER_MESSAGES } from '../utils/userMessages';
 
 const revealPointMock = vi.fn<(id: string) => void>();
 const MapStub = defineComponent({
@@ -417,7 +418,8 @@ describe('PetaView accessibility, filtering, and point selection', () => {
     const error = wrapper.find('[data-test="peta-error"]');
     expect(error.exists()).toBe(true);
     expect(error.attributes('role')).toBe('alert');
-    expect(error.text()).toContain('Gagal memuat titik spasial');
+    expect(error.text()).toContain(`Gagal memuat titik peta. ${READ_USER_MESSAGES.server}`);
+    expect(error.text()).not.toContain('500');
     expect(error.find('button').text()).toContain('Coba lagi');
   });
 

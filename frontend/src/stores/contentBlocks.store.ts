@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { apiRequestJson } from '../utils/apiClient';
+import { apiErrorFromResponse, apiRequestJson } from '../utils/apiClient';
+import { toUserMessage } from '../utils/userMessages';
 import { PUBLICATIONS } from '../content/publikasi';
 import { SOTK_MEMBERS } from '../content/tentang';
 
@@ -156,7 +157,7 @@ export const useContentBlocksStore = defineStore('contentBlocks', () => {
       try {
         const response = await fetch('/api/content-blocks');
         if (!response.ok) {
-          throw new Error(`Gagal memuat blok konten (status ${response.status})`);
+          throw await apiErrorFromResponse(response, '/api/content-blocks', 'GET');
         }
 
         const data = (await response.json()) as { blocks?: ContentBlock[] };
@@ -174,7 +175,7 @@ export const useContentBlocksStore = defineStore('contentBlocks', () => {
           isLoaded.value = true;
         }
       } catch (err) {
-        error.value = err instanceof Error ? err.message : 'Terjadi kesalahan jaringan';
+        error.value = toUserMessage(err, 'memuat blok konten', 'GET').message;
       } finally {
         isLoading.value = false;
         inFlight = null;

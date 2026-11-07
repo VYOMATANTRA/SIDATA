@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import type { StatItem } from '../components/common/StatCard.vue';
-import { apiFetch, apiRequestJson } from '../utils/apiClient';
+import { apiErrorFromResponse, apiFetch, apiRequestJson } from '../utils/apiClient';
+import { toUserMessage } from '../utils/userMessages';
 
 /**
  * Scalar indicator figures (SPEC §7). Read is public; writes need an editor/admin token.
@@ -58,10 +59,7 @@ export type IndicatorItem = IndicatorDto;
  * Drops a trailing fractional part that is exactly zero (e.g. "12480.0000" -> "12.480").
  * Preserves exact decimal digits without IEEE-754 precision loss.
  */
-export function formatIndicatorValue(
-  value: string | number,
-  unit?: string | null,
-): string {
+export function formatIndicatorValue(value: string | number, unit?: string | null): string {
   const strVal = String(value).trim();
   if (!strVal) return '';
 
@@ -119,7 +117,6 @@ export function resolveIconForIndicator(
 
   return 'person';
 }
-
 
 /** Public hero figures: short TTL so SPA sessions do not keep deleted/edited values forever. */
 export const BY_SLUG_TTL_MS = 60_000;
@@ -307,7 +304,7 @@ export const useIndicatorsStore = defineStore('indicators', () => {
         isLoaded.value = true;
       } catch (err) {
         // Do NOT treat 404 as loaded or empty — report error and keep existing data on failed refetch
-        error.value = err instanceof Error ? err.message : 'Gagal memuat daftar indikator.';
+        error.value = toUserMessage(err, 'memuat daftar indikator', 'GET').message;
       } finally {
         isLoading.value = false;
         inFlight = null;
@@ -370,7 +367,7 @@ export const useIndicatorsStore = defineStore('indicators', () => {
         const params = new URLSearchParams({ sectionId, pageSize: '200' });
         const response = await apiFetch(`/api/indicators?${params.toString()}`);
         if (!response.ok) {
-          throw new Error(`Gagal memuat indikator (status ${response.status})`);
+          throw await apiErrorFromResponse(response, '/api/indicators', 'GET');
         }
 
         const data = (await response.json()) as { indicators: Indicator[] };
@@ -384,7 +381,7 @@ export const useIndicatorsStore = defineStore('indicators', () => {
         // error for this section instead of rendering it as silently empty.
         errorsBySectionId.value = {
           ...errorsBySectionId.value,
-          [sectionId]: err instanceof Error ? err.message : 'Terjadi kesalahan jaringan',
+          [sectionId]: toUserMessage(err, 'memuat indikator', 'GET').message,
         };
         return [];
       } finally {
@@ -452,7 +449,7 @@ export const useIndicatorsStore = defineStore('indicators', () => {
             errorsBySlug.value = { ...errorsBySlug.value, [normalized]: null };
             return null;
           }
-          throw new Error(`Gagal memuat indikator (status ${response.status})`);
+          throw await apiErrorFromResponse(response, '/api/indicators/:id', 'GET');
         }
         const data = (await response.json()) as { indicator?: IndicatorDto };
         if (!isCurrent()) {
@@ -476,7 +473,7 @@ export const useIndicatorsStore = defineStore('indicators', () => {
         }
         errorsBySlug.value = {
           ...errorsBySlug.value,
-          [normalized]: err instanceof Error ? err.message : 'Terjadi kesalahan jaringan',
+          [normalized]: toUserMessage(err, 'memuat indikator', 'GET').message,
         };
         return null;
       } finally {

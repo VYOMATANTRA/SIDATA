@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useAuthStore } from './auth'
 import { getCsrfToken } from '../utils/csrf'
+import { apiErrorFromBody } from '../utils/apiClient'
+import { toUserMessage } from '../utils/userMessages'
 
 export type AuditSeverity = 'info' | 'warning' | 'critical'
 export type AuditOutcome = 'success' | 'failure'
@@ -119,7 +121,7 @@ export const useAuditStore = defineStore('audit', () => {
       })
       const data = await res.json()
       if (!res.ok) {
-        throw new Error(data.error || 'Gagal mengambil daftar audit log.')
+        throw apiErrorFromBody(res.status, data, 'GET')
       }
       // A newer fetch superseded this one while it was in flight — discard, or a slow
       // stale response would overwrite fresher logs/total/page.
@@ -131,7 +133,7 @@ export const useAuditStore = defineStore('audit', () => {
     } catch (err: unknown) {
       // Stale failures stay silent too: the newer request owns the error state.
       if (requestId !== listRequestId) return
-      error.value = err instanceof Error ? err.message : 'Terjadi kesalahan saat memuat audit log.'
+      error.value = toUserMessage(err, 'memuat audit log', 'GET').message
     } finally {
       if (requestId === listRequestId) loading.value = false
     }
@@ -150,14 +152,13 @@ export const useAuditStore = defineStore('audit', () => {
       })
       const data = await res.json()
       if (!res.ok) {
-        throw new Error(data.error || 'Gagal mengambil ringkasan audit log.')
+        throw apiErrorFromBody(res.status, data, 'GET')
       }
       summary.value = data
     } catch (err: unknown) {
       // Own error ref, not `error`: fetchLogs and fetchSummary run concurrently at mount
       // and one failure must not mask or clear the other's.
-      summaryError.value =
-        err instanceof Error ? err.message : 'Terjadi kesalahan saat memuat ringkasan audit log.'
+      summaryError.value = toUserMessage(err, 'memuat ringkasan audit log', 'GET').message
     }
   }
 
@@ -179,7 +180,7 @@ export const useAuditStore = defineStore('audit', () => {
       })
       const data = await res.json()
       if (!res.ok) {
-        throw new Error(data.error || 'Gagal mengambil hitungan aksi admin.')
+        throw apiErrorFromBody(res.status, data, 'GET')
       }
       const logs: AuditLogItem[] = data.logs || []
       adminActionCount.value = logs.filter((l) => l.actorRole?.toLowerCase() === 'admin').length
@@ -218,7 +219,7 @@ export const useAuditStore = defineStore('audit', () => {
       })
       const data = await res.json()
       if (!res.ok) {
-        throw new Error(data.error || 'Gagal meng-acknowledge audit log.')
+        throw apiErrorFromBody(res.status, data, 'PATCH')
       }
       if (summary.value && summary.value.openCritical > 0) {
         summary.value.openCritical -= 1
@@ -238,9 +239,8 @@ export const useAuditStore = defineStore('audit', () => {
       }
       return data
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Gagal meng-acknowledge audit log.'
-      error.value = msg
-      throw new Error(msg)
+      error.value = toUserMessage(err, 'meng-acknowledge audit log').message
+      throw err
     }
   }
 

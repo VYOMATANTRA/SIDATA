@@ -6,6 +6,7 @@ import RtLocationPicker, { type PickedLocation } from '../components/maps/RtLoca
 import { ApiError, apiRequestJson } from '../utils/apiClient';
 import { useAuthStore } from '../stores/auth';
 import { INPUT_CLASSES } from '../utils/formStyles';
+import { toUserMessage } from '../utils/userMessages';
 
 interface LeaderRow {
   rtNumber: number;
@@ -130,7 +131,7 @@ async function loadLeaders() {
     leaders.value = data.leaders;
     isSampleRoster.value = data.isSampleRoster === true;
   } catch (error) {
-    loadError.value = error instanceof Error ? error.message : 'Gagal memuat daftar Ketua RT.';
+    loadError.value = toUserMessage(error, 'memuat daftar Ketua RT', 'GET').message;
   } finally {
     isLoading.value = false;
   }
@@ -293,8 +294,6 @@ async function saveLeader() {
     closeEditor();
     await loadLeaders();
   } catch (error) {
-    const errMessage =
-      error instanceof Error ? error.message : 'Terjadi kesalahan saat menyimpan data.';
     if (
       writingLocation &&
       (locationOp === 'update' || locationOp === 'delete') &&
@@ -309,10 +308,10 @@ async function saveLeader() {
       saveError.value = `${contactNotice}Lokasi telah berubah atau dihapus. Muat ulang data RT sebelum menyimpan.`;
       await loadLeaders();
     } else if (contactSuccess && Object.keys(contactPatch).length > 0 && locationOp !== 'none') {
-      saveError.value = `Data kontak berhasil disimpan, namun lokasi gagal diperbarui: ${errMessage}`;
+      saveError.value = `Data kontak berhasil disimpan, namun lokasi gagal diperbarui: ${toUserMessage(error).message}`;
       void loadLeaders();
     } else {
-      saveError.value = errMessage;
+      saveError.value = toUserMessage(error, 'menyimpan data RT').message;
     }
   } finally {
     isSaving.value = false;
@@ -393,7 +392,7 @@ async function previewImport() {
   } catch (error) {
     if (seq === previewSequence && currentRevision === inputRevision.value) {
       acceptedPreview.value = null;
-      importError.value = error instanceof Error ? error.message : 'Gagal memeriksa CSV.';
+      importError.value = toUserMessage(error, 'memeriksa CSV').message;
     }
   } finally {
     if (seq === previewSequence) {
@@ -427,7 +426,7 @@ async function applyImport() {
     await loadLeaders();
   } catch (error) {
     acceptedPreview.value = null;
-    importError.value = error instanceof Error ? error.message : 'Gagal menerapkan CSV.';
+    importError.value = toUserMessage(error, 'menerapkan CSV').message;
   } finally {
     importBusy.value = false;
   }
@@ -458,7 +457,7 @@ async function setSampleStatus(isSample: boolean) {
       ? 'Daftar ditandai sebagai data contoh.'
       : 'Daftar ditandai sebagai data resmi.';
   } catch (error) {
-    importError.value = error instanceof Error ? error.message : 'Gagal mengubah status daftar.';
+    importError.value = toUserMessage(error, 'mengubah status daftar').message;
   } finally {
     importBusy.value = false;
   }

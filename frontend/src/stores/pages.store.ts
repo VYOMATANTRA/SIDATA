@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
-import { apiRequestJson } from '../utils/apiClient';
+import { apiErrorFromResponse, apiRequestJson } from '../utils/apiClient';
+import { toUserMessage } from '../utils/userMessages';
 
 /**
  * Reads the public page → chapter → section hierarchy (SPEC §2).
@@ -166,8 +167,7 @@ export const usePagesStore = defineStore('pages', () => {
         sections.value = flattened;
         isLoaded.value = true;
       } catch (err) {
-        hierarchyError.value =
-          err instanceof Error ? err.message : 'Gagal memuat struktur halaman.';
+        hierarchyError.value = toUserMessage(err, 'memuat struktur halaman', 'GET').message;
       } finally {
         isHierarchyLoading.value = false;
         hierarchyInFlight = null;
@@ -197,14 +197,14 @@ export const usePagesStore = defineStore('pages', () => {
           return null;
         }
         if (!response.ok) {
-          throw new Error(`Gagal memuat halaman (status ${response.status})`);
+          throw await apiErrorFromResponse(response, '/api/pages/:slug', 'GET');
         }
 
         const data = (await response.json()) as { page: PageDetail };
         pagesBySlug.value = { ...pagesBySlug.value, [slug]: data.page };
         return data.page;
       } catch (err) {
-        error.value = err instanceof Error ? err.message : 'Terjadi kesalahan jaringan';
+        error.value = toUserMessage(err, 'memuat halaman', 'GET').message;
         return null;
       } finally {
         isLoading.value = false;

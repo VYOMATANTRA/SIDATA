@@ -7,6 +7,7 @@ import {
   DEFAULT_HIGHLIGHTS_BLOCK,
 } from '../stores/contentBlocks.store';
 import { useAuthStore } from '../stores/auth';
+import { READ_USER_MESSAGES } from '../utils/userMessages';
 
 describe('contentBlocks store', () => {
   beforeEach(() => {
@@ -74,13 +75,13 @@ describe('contentBlocks store', () => {
   });
 
   it('gracefully handles network error and keeps fallback defaults', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockRejectedValue(new Error('Network error'));
+    const fetchMock = vi.fn<typeof fetch>().mockRejectedValue(new TypeError('Failed to fetch'));
     globalThis.fetch = fetchMock;
 
     const store = useContentBlocksStore();
     await store.fetchBlocks();
 
-    expect(store.error).toBe('Network error');
+    expect(store.error).toBe(`Gagal memuat blok konten. ${READ_USER_MESSAGES.network}`);
     expect(store.hero.title).toBe(DEFAULT_HERO_BLOCK.title);
     expect(store.isLoading).toBe(false);
   });

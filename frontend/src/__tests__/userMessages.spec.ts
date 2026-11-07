@@ -153,6 +153,17 @@ describe('toUserMessage mappings', () => {
     );
   });
 
+  it('uses the caller-supplied method when a raw fetch rejection carries none', () => {
+    const rejection = new TypeError('Failed to fetch');
+
+    expect(toUserMessage(rejection, 'memuat halaman', 'GET').message).toBe(
+      'Gagal memuat halaman. Tidak dapat terhubung ke server. Periksa koneksi lalu coba lagi.',
+    );
+    expect(toUserMessage(rejection, 'menyimpan halaman').message).toBe(
+      `Gagal menyimpan halaman. ${USER_MESSAGES.network}`,
+    );
+  });
+
   it('maps 429 to the rate-limit wording', () => {
     expect(toUserMessage(httpFailure(429)).message).toBe(
       'Terlalu banyak permintaan. Tunggu sebentar lalu coba lagi.',

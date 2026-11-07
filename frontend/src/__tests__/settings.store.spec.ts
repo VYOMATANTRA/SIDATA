@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useSettingsStore, DEFAULT_PUBLIC_SETTINGS } from '../stores/settings.store';
+import { READ_USER_MESSAGES } from '../utils/userMessages';
 
 describe('settings store', () => {
   beforeEach(() => {
@@ -75,14 +76,14 @@ describe('settings store', () => {
   });
 
   it('retains default settings gracefully when network fetch fails', async () => {
-    globalThis.fetch = vi.fn<typeof fetch>().mockRejectedValue(new Error('Network error'));
+    globalThis.fetch = vi.fn<typeof fetch>().mockRejectedValue(new TypeError('Failed to fetch'));
 
     const store = useSettingsStore();
     const result = await store.fetchPublicSettings();
 
     expect(result.appName).toBe(DEFAULT_PUBLIC_SETTINGS.appName);
     expect(store.appName).toBe(DEFAULT_PUBLIC_SETTINGS.appName);
-    expect(store.error).toBe('Network error');
+    expect(store.error).toBe(`Gagal memuat pengaturan publik. ${READ_USER_MESSAGES.network}`);
     expect(store.isLoading).toBe(false);
   });
 

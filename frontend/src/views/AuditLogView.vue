@@ -10,6 +10,7 @@ import {
   ChevronRightIcon,
 } from '@heroicons/vue/24/outline'
 import { useAuditStore, type AuditLogItem } from '../stores/audit.store'
+import { toUserMessage } from '../utils/userMessages'
 
 const auditStore = useAuditStore()
 
@@ -171,8 +172,7 @@ async function handleAcknowledge(log: AuditLogItem) {
   try {
     await auditStore.acknowledgeLog(log.id)
   } catch (err: unknown) {
-    acknowledgeError.value =
-      err instanceof Error ? err.message : 'Gagal meng-acknowledge audit log.'
+    acknowledgeError.value = toUserMessage(err, 'meng-acknowledge audit log').message
   } finally {
     acknowledgingId.value = null
   }

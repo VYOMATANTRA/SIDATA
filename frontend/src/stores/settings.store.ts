@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { apiRequestJson } from '../utils/apiClient';
+import { apiErrorFromResponse, apiRequestJson } from '../utils/apiClient';
+import { toUserMessage } from '../utils/userMessages';
 
 export interface CoordinatesSetting {
   lat: number;
@@ -98,7 +99,7 @@ export const useSettingsStore = defineStore('settings', () => {
         });
 
         if (!res.ok) {
-          throw new Error(`Gagal memuat pengaturan publik (HTTP ${res.status})`);
+          throw await apiErrorFromResponse(res, '/api/settings/public', 'GET');
         }
 
         const data = await res.json();
@@ -167,7 +168,7 @@ export const useSettingsStore = defineStore('settings', () => {
         }
         return settings.value;
       } catch (err) {
-        error.value = err instanceof Error ? err.message : 'Gagal memuat pengaturan publik';
+        error.value = toUserMessage(err, 'memuat pengaturan publik', 'GET').message;
         // Non-blocking fallback: retain defaults
         return settings.value;
       } finally {

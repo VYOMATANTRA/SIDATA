@@ -202,28 +202,41 @@ function logDiagnostic(label: string, detail: Record<string, unknown>): void {
   }
 }
 
-async function apiErrorFromResponse(
-  response: Response,
-  path: string,
+/**
+ * Builds an ApiError from an already-parsed error body. Stores that still call `fetch()`
+ * themselves use this at their `!res.ok` branch so the thrown error carries the same status,
+ * code and server sentence as one thrown by `apiRequestJson`.
+ */
+export function apiErrorFromBody(
+  status: number,
+  body: unknown,
   method: string,
-): Promise<ApiError> {
-  const body = await readErrorBody(response);
+  path = '',
+): ApiError {
   const serverMessage = serverMessageOf(body);
   const code = textField(fieldOf(body, 'code'));
   const message =
-    response.status === 401
+    status === 401
       ? SESSION_EXPIRED_MESSAGE
-      : (serverMessage ?? `Permintaan gagal (HTTP ${response.status}).`);
+      : (serverMessage ?? `Permintaan gagal (HTTP ${status}).`);
 
-  logDiagnostic('request failed', { path, status: response.status, code, serverMessage });
+  logDiagnostic('request failed', { path, status, code, serverMessage });
 
-  return new ApiError(message, response.status, {
+  return new ApiError(message, status, {
     code,
     body,
     fieldErrors: sanitizeFieldErrors(fieldOf(body, 'fieldErrors')),
     serverMessage,
-    method,
+    method: method.toUpperCase(),
   });
+}
+
+export async function apiErrorFromResponse(
+  response: Response,
+  path: string,
+  method: string,
+): Promise<ApiError> {
+  return apiErrorFromBody(response.status, await readErrorBody(response), method, path);
 }
 
 export async function apiRequestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
