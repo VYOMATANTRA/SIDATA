@@ -29,11 +29,20 @@ export const REFRESH_UNAVAILABLE_MESSAGE =
 /** `ApiError.code` used for failures where no HTTP response arrived at all. */
 export const NETWORK_ERROR_CODE = 'NETWORK_ERROR';
 
+/**
+ * Server codes that mean "someone saved this record after you loaded it". Only these get the
+ * concurrent-edit wording; any other 409 (duplicate name or email, item still in use) is a
+ * plain conflict with the existing data, and telling the user someone else edited it would be
+ * wrong.
+ */
+export const STALE_WRITE_CODES: ReadonlySet<string> = new Set(['STALE_WRITE']);
+
 export type FailureKind =
   | 'network'
   | 'session'
   | 'forbidden'
   | 'not_found'
+  | 'stale'
   | 'conflict'
   | 'payload_too_large'
   | 'validation'
@@ -46,8 +55,10 @@ export const USER_MESSAGES: Readonly<Record<FailureKind, string>> = {
   session: SESSION_EXPIRED_MESSAGE,
   forbidden: 'Anda tidak memiliki izin untuk tindakan ini.',
   not_found: 'Data yang dicari tidak ditemukan. Muat ulang halaman.',
-  conflict:
+  stale:
     'Data ini baru saja diubah oleh orang lain. Muat ulang untuk melihat versi terbaru; isian Anda tetap tersimpan di formulir.',
+  conflict:
+    'Perubahan belum tersimpan karena bentrok dengan data yang sudah ada. Periksa kembali isian Anda, lalu coba lagi.',
   payload_too_large: 'Berkas terlalu besar.',
   validation: 'Periksa kembali isian yang ditandai.',
   rate_limited: 'Terlalu banyak permintaan. Tunggu sebentar lalu coba lagi.',
@@ -71,6 +82,10 @@ function statusOf(error: unknown): number | null {
   }
   const { status } = error as { status: unknown };
   return typeof status === 'number' && Number.isInteger(status) ? status : null;
+}
+
+function codeOf(error: unknown): unknown {
+  return typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined;
 }
 
 function isNetworkFailure(error: unknown): boolean {
@@ -103,6 +118,9 @@ export function classifyFailure(error: unknown): { kind: FailureKind; status: nu
   }
   if (status === null) {
     return { kind: 'unknown', status: null };
+  }
+  if (status === 409 && STALE_WRITE_CODES.has(String(codeOf(error)))) {
+    return { kind: 'stale', status };
   }
   return { kind: kindForStatus(status), status };
 }

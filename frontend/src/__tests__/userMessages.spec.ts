@@ -61,10 +61,29 @@ describe('toUserMessage mappings', () => {
     );
   });
 
-  it('maps 409 to the concurrent-edit wording', () => {
+  it('maps a plain 409 to the neutral data-conflict wording', () => {
     expect(toUserMessage(httpFailure(409)).message).toBe(
+      'Perubahan belum tersimpan karena bentrok dengan data yang sudah ada. Periksa kembali isian Anda, lalu coba lagi.',
+    );
+  });
+
+  it('maps a 409 with a stale-write code to the concurrent-edit wording', () => {
+    const error = Object.assign(httpFailure(409), { code: 'STALE_WRITE' });
+    const result = toUserMessage(error);
+
+    expect(result.kind).toBe('stale');
+    expect(result.message).toBe(
       'Data ini baru saja diubah oleh orang lain. Muat ulang untuk melihat versi terbaru; isian Anda tetap tersimpan di formulir.',
     );
+  });
+
+  it('does not use the concurrent-edit wording for a duplicate-value 409', () => {
+    const error = Object.assign(httpFailure(409, 'Email ini sudah dipakai'), {
+      code: 'DUPLICATE_EMAIL',
+    });
+
+    expect(toUserMessage(error).kind).toBe('conflict');
+    expect(toUserMessage(error).message).not.toContain('diubah oleh orang lain');
   });
 
   it('maps 413 to the file-size wording', () => {
@@ -203,6 +222,9 @@ describe('toUserMessage field-level errors', () => {
 describe('classifyFailure', () => {
   it('keeps the original HTTP status available for programmatic handling', () => {
     expect(classifyFailure(httpFailure(409))).toEqual({ kind: 'conflict', status: 409 });
+    expect(
+      classifyFailure(Object.assign(httpFailure(409), { code: 'STALE_WRITE' })),
+    ).toEqual({ kind: 'stale', status: 409 });
     expect(classifyFailure(httpFailure(422))).toEqual({ kind: 'validation', status: 422 });
   });
 

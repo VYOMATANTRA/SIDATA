@@ -81,6 +81,17 @@ describe('apiClient error object', () => {
     expect(error.code).toBe('DUPLICATE_LABEL');
   });
 
+  it('uses the concurrent-edit wording only when the server reports a stale write', async () => {
+    const stale = await failureOf(
+      json({ error: 'Data sudah berubah', code: 'STALE_WRITE' }, 409),
+    );
+    const duplicate = await failureOf(json({ error: 'Email ini sudah dipakai' }, 409));
+
+    expect(stale.userMessage).toBe(USER_MESSAGES.stale);
+    expect(duplicate.userMessage).toBe(USER_MESSAGES.conflict);
+    expect(duplicate.userMessage).not.toContain('diubah oleh orang lain');
+  });
+
   it('keeps the TREND_KEYWORD_ACK_REQUIRED code and warnings for programmatic handling', async () => {
     const warnings = [{ ackKey: 'ack-1', matched: 'meningkat' }];
     const error = await failureOf(
