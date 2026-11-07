@@ -231,7 +231,7 @@ const aboutLinks = [
         <div class="flex items-center justify-center gap-8 sm:gap-12 md:gap-16">
           <a
             href="https://www.bps.go.id"
-            target="_blank"
+            aria-label="Kunjungi situs web Badan Pusat Statistik (BPS) (membuka tab baru)"
             rel="noopener noreferrer"
             class="focus-visible:ring-brand-indigo inline-flex items-center rounded-xs opacity-90 transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
             aria-label="Kunjungi situs web Badan Pusat Statistik (BPS)"
