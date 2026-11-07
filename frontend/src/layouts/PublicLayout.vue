@@ -40,7 +40,7 @@ const inertWhenMenuModal = computed(() =>
 // and nothing would tell a keyboard or screen-reader user the page changed. Like AdminLayout, move
 // focus to <main> when the route PATH changes (not on first load, and not for query/hash-only
 // changes that views use to sync filters), unless the view already placed focus inside <main> or
-// the user is typing in a field.
+// the user is typing in a field or focus sits inside a modal dialog.
 const mainRef = ref<HTMLElement | null>(null);
 
 function isEditable(el: Element | null): boolean {
@@ -55,6 +55,8 @@ watch(
     void nextTick(() => {
       const active = document.activeElement;
       if (isEditable(active) || (active && mainRef.value?.contains(active))) return;
+      // A freshly opened modal dialog owns focus; moving it to <main> would pull it out.
+      if (active?.closest('[aria-modal="true"]')) return;
       mainRef.value?.focus();
     });
   },

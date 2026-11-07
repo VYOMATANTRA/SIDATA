@@ -4,6 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import App from '../App.vue';
+import { useAuthStore } from '../stores/auth';
 import { stubViewport } from './helpers/viewport';
 import TentangPageLayout from '../components/tentang/TentangPageLayout.vue';
 
@@ -259,6 +260,23 @@ describe('PublicLayout (mounted by App for routes with meta.layout = public)', (
       await router.push('/publikasi');
       await flushPromises();
       expect(document.activeElement).toBe(inner);
+      wrapper.unmount();
+    });
+
+    it('does not steal focus from a modal dialog that opened during navigation', async () => {
+      const { wrapper, router } = await mountApp('/peta');
+      const dialog = document.createElement('div');
+      dialog.setAttribute('role', 'dialog');
+      dialog.setAttribute('aria-modal', 'true');
+      const button = document.createElement('button');
+      dialog.appendChild(button);
+      document.body.appendChild(dialog);
+      button.focus();
+
+      await router.push('/publikasi');
+      await flushPromises();
+      expect(document.activeElement).toBe(button);
+      dialog.remove();
       wrapper.unmount();
     });
 
