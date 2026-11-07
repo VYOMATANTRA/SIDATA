@@ -32,16 +32,22 @@ function json(body: unknown, status = 200): Response {
 let templates: ComparisonTemplate[];
 let deleteStatus: number;
 let methods: string[];
+let patchHandler: () => Response | Promise<Response>;
 
 function installFetch(): void {
   methods = [];
   deleteStatus = 200;
+  patchHandler = () => json({ template: templates[0] });
   globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = (init?.method ?? 'GET').toUpperCase();
     if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
     methods.push(`${method} ${url}`);
     if (method === 'GET' && url === '/api/comparison-templates') return json({ templates });
+    if (method === 'PATCH') return patchHandler();
+    if (url === '/api/comparison-templates/preview') {
+      return json({ valid: true, problems: [], previews: [] });
+    }
     if (method === 'DELETE') {
       return deleteStatus === 200
         ? json({ template: templates[0] })
@@ -202,6 +208,110 @@ describe('AdminTemplatKalimatView', () => {
       expect(error).toContain('Gagal menghapus templat kalimat.');
       expect(error).not.toMatch(/500|Template masih/);
       expect(wrapper.findAll('[data-test="template-card"]')).toHaveLength(2);
+      wrapper.unmount();
+    });
+  });
+
+  describe('editor dialog', () => {
+    const q = <T extends HTMLElement>(sel: string) => document.body.querySelector<T>(sel);
+    const press = (key: string) =>
+      document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+
+    async function openEditor() {
+      const wrapper = await mountView();
+      await wrapper.findAll('[data-test="edit"]')[0]!.trigger('click');
+      await flushPromises();
+      return wrapper;
+    }
+
+    it('closes without asking when nothing changed (Escape and Batal)', async () => {
+      const wrapper = await openEditor();
+      expect(q('[data-test="template-form"]')).not.toBeNull();
+
+      press('Escape');
+      await flushPromises();
+      expect(q('[data-test="template-form"]')).toBeNull();
+      expect(q('[data-test="discard-dialog"]')).toBeNull();
+
+      await wrapper.findAll('[data-test="edit"]')[0]!.trigger('click');
+      await flushPromises();
+      const cancel = Array.from(document.body.querySelectorAll('button')).find(
+        (b) => b.textContent?.trim() === 'Batal',
+      )!;
+      cancel.click();
+      await flushPromises();
+      expect(q('[data-test="template-form"]')).toBeNull();
+      expect(q('[data-test="discard-dialog"]')).toBeNull();
+      wrapper.unmount();
+    });
+
+    it('asks before discarding a changed draft, and "Tetap di sini" keeps it', async () => {
+      const wrapper = await openEditor();
+      const name = q<HTMLInputElement>('#templat-nama')!;
+      name.value = 'Nama baru';
+      name.dispatchEvent(new Event('input', { bubbles: true }));
+      await flushPromises();
+
+      press('Escape');
+      await flushPromises();
+      const dialog = q('[data-test="discard-dialog"]');
+      expect(dialog?.getAttribute('role')).toBe('alertdialog');
+      expect(dialog?.textContent).toContain('Perubahan belum disimpan. Tutup tanpa menyimpan?');
+      expect(document.activeElement).toBe(q('[data-test="discard-keep"]'));
+      expect(q('[data-test="discard-keep"]')?.textContent).toContain('Tetap di sini');
+
+      q<HTMLButtonElement>('[data-test="discard-keep"]')!.click();
+      await flushPromises();
+      expect(q('[data-test="discard-dialog"]')).toBeNull();
+      expect(q<HTMLInputElement>('#templat-nama')!.value).toBe('Nama baru');
+      expect(document.activeElement).toBe(q('#templat-nama'));
+      wrapper.unmount();
+    });
+
+    it('closes for good on "Tutup tanpa menyimpan"', async () => {
+      const wrapper = await openEditor();
+      const name = q<HTMLInputElement>('#templat-nama')!;
+      name.value = 'Nama baru';
+      name.dispatchEvent(new Event('input', { bubbles: true }));
+      await flushPromises();
+
+      press('Escape');
+      await flushPromises();
+      expect(q('[data-test="discard-confirm"]')?.textContent).toContain('Tutup tanpa menyimpan');
+      q<HTMLButtonElement>('[data-test="discard-confirm"]')!.click();
+      await flushPromises();
+
+      expect(q('[data-test="template-form"]')).toBeNull();
+      expect(q('[data-test="discard-dialog"]')).toBeNull();
+      wrapper.unmount();
+    });
+
+    it('cannot be dismissed while a save is in flight, and survives a failed save', async () => {
+      const wrapper = await openEditor();
+      let release: (r: Response) => void = () => {};
+      patchHandler = () => new Promise<Response>((resolve) => (release = resolve));
+      const name = q<HTMLInputElement>('#templat-nama')!;
+      name.value = 'Nama baru';
+      name.dispatchEvent(new Event('input', { bubbles: true }));
+      await flushPromises();
+
+      q<HTMLFormElement>('[data-test="template-form"]')!.dispatchEvent(
+        new Event('submit', { bubbles: true, cancelable: true }),
+      );
+      await flushPromises();
+      expect(methods).toContain('PATCH /api/comparison-templates/tpl-1');
+
+      press('Escape');
+      q<HTMLElement>('.fixed.inset-0')!.click();
+      await flushPromises();
+      expect(q('[data-test="template-form"]')).not.toBeNull();
+      expect(q('[data-test="discard-dialog"]')).toBeNull();
+      expect(q<HTMLButtonElement>('button[aria-label="Tutup dialog"]')!.disabled).toBe(true);
+
+      release(json({ error: 'gagal' }, 500));
+      await flushPromises();
+      expect(q('[data-test="template-form"]')).not.toBeNull();
+      expect(q<HTMLInputElement>('#templat-nama')!.value).toBe('Nama baru');
       wrapper.unmount();
     });
   });

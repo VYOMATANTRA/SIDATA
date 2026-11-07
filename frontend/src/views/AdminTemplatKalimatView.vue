@@ -20,6 +20,10 @@ import { describeBody } from '../utils/comparisonTemplateSegments';
 const store = useComparisonTemplatesStore();
 
 const editorOpen = ref(false);
+const editorBusy = ref(false);
+const discardPromptOpen = ref(false);
+const editorForm = ref<InstanceType<typeof ComparisonTemplateForm> | null>(null);
+const keepEditingButton = ref<HTMLButtonElement | null>(null);
 const editing = ref<ComparisonTemplate | null>(null);
 const deleting = ref<ComparisonTemplate | null>(null);
 const deleteBusy = ref(false);
@@ -60,7 +64,35 @@ function openEdit(template: ComparisonTemplate): void {
 
 function closeEditor(): void {
   editorOpen.value = false;
+  editorBusy.value = false;
+  discardPromptOpen.value = false;
   editing.value = null;
+}
+
+// Cancel button, Escape and backdrop all land here. A save in flight is never interrupted
+// (BaseModal also refuses while `busy`); a draft that differs from the loaded template asks first.
+function requestCloseEditor(): void {
+  if (editorBusy.value) return;
+  if (discardPromptOpen.value) {
+    // Escape or backdrop while the question is showing means "stay".
+    keepEditing();
+    return;
+  }
+  if (editorForm.value?.isDirty()) {
+    discardPromptOpen.value = true;
+    void nextTick(() => keepEditingButton.value?.focus());
+    return;
+  }
+  closeEditor();
+}
+
+function keepEditing(): void {
+  discardPromptOpen.value = false;
+  void nextTick(() => {
+    document
+      .querySelector<HTMLElement>('[data-test="template-form"] input[type="text"]')
+      ?.focus();
+  });
 }
 
 function handleSaved(template: ComparisonTemplate): void {
@@ -232,15 +264,56 @@ function retry(): void {
       :open="editorOpen"
       :title="editing ? 'Ubah templat kalimat' : 'Tambah templat kalimat'"
       size="xl"
-      @close="closeEditor"
+      :busy="editorBusy"
+      @close="requestCloseEditor"
     >
+      <!-- v-show, not v-if, while the question is up: the draft must survive "Tetap di sini". -->
       <ComparisonTemplateForm
         v-if="editorOpen"
+        v-show="!discardPromptOpen"
+        ref="editorForm"
         :key="editing?.id ?? 'baru'"
         :template="editing"
         @saved="handleSaved"
-        @cancel="closeEditor"
+        @cancel="requestCloseEditor"
+        @busy="editorBusy = $event"
       />
+
+      <div
+        v-if="editorOpen && discardPromptOpen"
+        role="alertdialog"
+        aria-labelledby="templat-buang-judul"
+        aria-describedby="templat-buang-isi"
+        class="space-y-4"
+        data-test="discard-dialog"
+      >
+        <h3 id="templat-buang-judul" class="text-brand-navy text-base font-semibold">
+          Perubahan belum disimpan
+        </h3>
+        <p id="templat-buang-isi" class="text-brand-navy text-sm">
+          Perubahan belum disimpan. Tutup tanpa menyimpan?
+        </p>
+        <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <BaseButton
+            variant="secondary"
+            size="md"
+            class="min-h-11"
+            data-test="discard-confirm"
+            @click="closeEditor"
+          >
+            Tutup tanpa menyimpan
+          </BaseButton>
+          <button
+            ref="keepEditingButton"
+            type="button"
+            class="bg-brand-navy hover:bg-brand-navy/90 focus-visible:outline-focus-ring min-h-11 rounded-btn px-5 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+            data-test="discard-keep"
+            @click="keepEditing"
+          >
+            Tetap di sini
+          </button>
+        </div>
+      </div>
     </BaseModal>
 
     <BaseModal
