@@ -19,6 +19,10 @@ import {
  * one role-aware account area. Rendered inside `AppNavbar`'s menu panel (a modal sheet on mobile,
  * an anchored panel on desktop), which owns open/close, focus and scroll behaviour. Plain links
  * and buttons only; this is site navigation, not an application menu (no `role="menu"`).
+ *
+ * Colours are fixed white-on-navy: the public shell always renders AppNavbar with a navy panel
+ * (`navy` / `transparent` variants). Do not mount this inside `variant="white"`, whose panel is
+ * `bg-surface` and would make this content white-on-white.
  */
 const props = withDefaults(defineProps<{ open?: boolean }>(), { open: true });
 const emit = defineEmits<{ (e: 'navigate'): void }>();

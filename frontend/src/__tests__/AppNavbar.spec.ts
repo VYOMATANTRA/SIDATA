@@ -360,6 +360,19 @@ describe('AppNavbar.vue', () => {
     wrapper.unmount();
   });
 
+  it('keeps the sticky header above page overlays (z-50) and below modals and the skip link', async () => {
+    const router = createMockRouter();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(AppNavbar, { props: { sticky: true }, global: { plugins: [router] } });
+    const classes = wrapper.find('header').classes();
+    expect(classes).toContain('sticky');
+    expect(classes).toContain('z-[55]');
+    expect(classes).not.toContain('z-40');
+    wrapper.unmount();
+  });
+
   describe('publicNav utilities', () => {
     it('exact matches home route for isNavItemActive', () => {
       expect(isNavItemActive('/', '/')).toBe(true);

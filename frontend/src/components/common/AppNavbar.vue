@@ -154,6 +154,8 @@ const isLight = computed(
   () => (props.foreground ?? (props.variant === 'white' ? 'dark' : 'light')) === 'light',
 );
 const isTransparent = computed(() => props.variant === 'transparent');
+// The default menu slot adapts to the panel colour; the `menu` slot content (PublicNavigationMenu)
+// is white-on-navy and must only be used with the navy panel (not `variant="white"`).
 const hasNavyPanel = computed(() => props.variant !== 'white');
 
 const containerClasses = computed(() => [
@@ -164,7 +166,7 @@ const containerClasses = computed(() => [
       ? 'bg-surface shadow-xs'
       : 'bg-transparent',
   isLight.value ? 'text-white' : 'text-brand-navy',
-  props.sticky ? 'sticky top-0 z-40' : 'relative',
+  props.sticky ? 'sticky top-0 z-[55]' : 'relative', // layer order: see main.css
   props.overlay ? '-mb-[var(--public-header-height)]' : '',
 ]);
 

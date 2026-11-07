@@ -100,6 +100,17 @@
     --public-header-height: 4.5rem;
 }
 
+/*
+ * Public layer order, lowest to highest (Tailwind arbitrary z-index values):
+ *   0   map root (`isolate z-0`; Leaflet panes 200-700 stay inside it)
+ *   30  chapter table-of-contents sheet
+ *   50  map summary overlay (absolute, inside the page)
+ *   55  sticky public header (AppNavbar). Its menu backdrop (z-40) and sheet (z-50) live inside
+ *       the header's stacking context, so they always paint above the header content
+ *   58  modal dialogs (BaseModal, OtpVerificationModal)
+ *   60  skip link when focused
+ * Do not raise page content above 50 or the header could be covered.
+ */
 @media (min-width: 40rem) {
     :root {
         --public-header-height: 5rem;

@@ -174,7 +174,7 @@ onBeforeUnmount(() => {
     <Transition name="modal-fade">
       <div
         v-if="open"
-        class="bg-brand-navy/60 fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
+        class="bg-brand-navy/60 fixed inset-0 z-[58] flex items-end justify-center sm:items-center sm:p-4"
         role="presentation"
         @click.self="handleOverlayClick"
       >
