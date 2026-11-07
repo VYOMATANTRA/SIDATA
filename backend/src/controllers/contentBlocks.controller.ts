@@ -3,11 +3,13 @@ import type { AuthRequest } from '../middlewares/auth.middleware.js';
 import { extractRequestActor } from '../utils/actor.js';
 import { extractRequestContext } from '../utils/requestContext.js';
 import {
-  ContentBlockServiceError,
   getAllContentBlocks,
   getContentBlockBySlug,
   updateContentBlock,
 } from '../services/contentBlocks.service.js';
+import { deleteProseBlock } from '../services/proseBlocks.service.js';
+import { sendHierarchyError } from '../utils/hierarchyAuthoring.js';
+import { authoringHandler, expectedUpdatedAtFromQuery, paramOf } from './hierarchyHandler.js';
 
 export const getContentBlocksHandler = async (
   _req: Request,
@@ -72,8 +74,8 @@ export const updateContentBlockHandler = async (
       block: updated,
     });
   } catch (error) {
-    if (error instanceof ContentBlockServiceError) {
-      return res.status(error.statusCode).json({ error: error.message });
+    if (sendHierarchyError(res, error)) {
+      return;
     }
     console.error(
       'Error saat memperbarui content block:',
@@ -82,3 +84,17 @@ export const updateContentBlockHandler = async (
     return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
   }
 };
+
+// DELETE /api/content-blocks/:slug?expectedUpdatedAt=… — section prose blocks only.
+export const deleteContentBlockHandler = authoringHandler({
+  errorLabel: 'menghapus content block',
+  run: async (req, actor, context) => {
+    const result = await deleteProseBlock(
+      paramOf(req, 'slug'),
+      expectedUpdatedAtFromQuery(req),
+      actor,
+      context,
+    );
+    return { message: 'Blok konten berhasil dihapus', ...result };
+  },
+});

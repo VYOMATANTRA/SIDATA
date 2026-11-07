@@ -5,7 +5,12 @@ import {
   createPageHandler,
   deletePageHandler,
   reorderPagesHandler,
+  updatePageHandler,
 } from '../controllers/pages.controller.js';
+import {
+  createChapterHandler,
+  reorderChaptersHandler,
+} from '../controllers/chapters.controller.js';
 import { verifyToken } from '../middlewares/auth.middleware.js';
 import { requireEditorOrAdmin } from '../middlewares/role.middleware.js';
 import {
@@ -47,6 +52,32 @@ router.delete(
   requireEditorOrAdmin,
   pagesWriteLimiter,
   deletePageHandler,
+);
+
+// Chapter authoring under a page (same guards; chapter edit/delete live in chapters.routes.ts)
+router.patch(
+  '/:slug',
+  apiLimiter,
+  verifyToken,
+  requireEditorOrAdmin,
+  pagesWriteLimiter,
+  updatePageHandler,
+);
+router.post(
+  '/:slug/chapters',
+  apiLimiter,
+  verifyToken,
+  requireEditorOrAdmin,
+  pagesWriteLimiter,
+  createChapterHandler,
+);
+router.put(
+  '/:slug/chapters/reorder',
+  apiLimiter,
+  verifyToken,
+  requireEditorOrAdmin,
+  pagesWriteLimiter,
+  reorderChaptersHandler,
 );
 
 export default router;
