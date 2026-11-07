@@ -454,6 +454,72 @@ describe('LocationPicker', () => {
     });
   });
 
+  describe('viewport mode details', () => {
+    const VIEW: PickerLocation = { latitude: -1.2251, longitude: 116.9438, zoom: 13 };
+
+    it('turns double-click zoom off so a double-click cannot re-centre twice and zoom', async () => {
+      await mountPicker({ modelValue: VIEW, includeZoom: true });
+      expect(leafletState.mapOptions).toMatchObject({ doubleClickZoom: false });
+      await mountPicker({ modelValue: PIN, testId: 'pin' });
+      expect(leafletState.mapOptions).toMatchObject({ doubleClickZoom: true });
+    });
+
+    it('never re-enables double-click zoom in viewport mode when editing is unlocked again', async () => {
+      const wrapper = await mountPicker({ modelValue: VIEW, includeZoom: true, readonly: true });
+      leafletMap.doubleClickZoom.enable.mockClear();
+      await wrapper.setProps({ readonly: false });
+      expect(leafletMap.dragging.enable).toHaveBeenCalled();
+      expect(leafletMap.doubleClickZoom.enable).not.toHaveBeenCalled();
+    });
+
+    it('ignores a moveend whose centre and zoom are still the stored view', async () => {
+      const wrapper = await mountPicker({ modelValue: VIEW, includeZoom: true });
+      // e.g. Leaflet's window-resize handler re-reporting the same view
+      leafletState.handlers.moveend?.();
+      expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+      leafletState.center = { lat: -1.2251004, lng: 116.9438004 };
+      leafletState.handlers.moveend?.();
+      expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+    });
+  });
+
+  describe('reduced motion', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    function stubMotion(reduce: boolean) {
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: reduce && query.includes('prefers-reduced-motion'),
+        media: query,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      }));
+    }
+
+    it('turns off inertia, zoom and fade animation and animated pans when reduced motion is requested', async () => {
+      stubMotion(true);
+      leafletState.inBounds = false;
+      const wrapper = await mountPicker({ modelValue: PIN });
+      expect(leafletState.mapOptions).toMatchObject({
+        inertia: false,
+        zoomAnimation: false,
+        fadeAnimation: false,
+      });
+      await wrapper.setProps({ modelValue: { latitude: -1.5, longitude: 117 } });
+      expect(leafletMap.panTo).toHaveBeenLastCalledWith([-1.5, 117], { animate: false });
+    });
+
+    it('keeps Leaflet animations and animated pans otherwise', async () => {
+      stubMotion(false);
+      leafletState.inBounds = false;
+      const wrapper = await mountPicker({ modelValue: PIN });
+      expect(leafletState.mapOptions).not.toHaveProperty('inertia');
+      await wrapper.setProps({ modelValue: { latitude: -1.5, longitude: 117 } });
+      expect(leafletMap.panTo).toHaveBeenLastCalledWith([-1.5, 117], { animate: true });
+    });
+  });
+
   describe('device location', () => {
     type Success = (position: {
       coords: { latitude: number; longitude: number; accuracy: number };

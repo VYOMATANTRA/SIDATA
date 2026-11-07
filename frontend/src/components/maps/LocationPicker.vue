@@ -242,9 +242,22 @@ function emitValue(location: GeoPoint, zoom?: number): void {
   emit('update:modelValue', next);
 }
 
+/** Visitors who ask for less motion get no pan inertia, animated pans or zoom/fade animation. */
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
+let reducedMotion = false;
+
 function markerIcon(): L.DivIcon {
   return L.divIcon({
     className: 'location-picker-pin',
+    // Leaflet takes this icon as an HTML string, outside Vue's template and Tailwind's class
+    // scan, so the brand navy (--color-brand-navy) and white are written as hex here.
     html: '<svg viewBox="0 0 28 28" width="28" height="28" aria-hidden="true" focusable="false"><circle cx="14" cy="14" r="11" fill="#0A2353" stroke="#FFFFFF" stroke-width="3"/><circle cx="14" cy="14" r="3.5" fill="#FFFFFF"/></svg>',
     iconSize: [28, 28],
     iconAnchor: [14, 14],
@@ -302,7 +315,7 @@ function syncFromValue(initial = false): void {
   placeMarker(value);
   if (initial) return;
   if (!map.getBounds().contains([value.latitude, value.longitude])) {
-    runSilently(() => map?.panTo([value.latitude, value.longitude]));
+    runSilently(() => map?.panTo([value.latitude, value.longitude], { animate: !reducedMotion }));
   }
 }
 
@@ -325,7 +338,8 @@ function setInteractivity(): void {
   const bag = map as unknown as Record<string, { enable(): void; disable(): void } | undefined>;
   for (const name of handlers) {
     const handler = bag[name];
-    if (on) handler?.enable();
+    // Viewport mode re-centres on a click; a double-click would fire two re-centres plus a zoom.
+    if (on && !(viewport.value && name === 'doubleClickZoom')) handler?.enable();
     else handler?.disable();
   }
   const dragging = marker?.dragging;
@@ -350,6 +364,16 @@ function handleMoveEnd(): void {
   if (syncing || !viewport.value || !editable.value || !map) return;
   const center = viewCenter();
   if (!center) return;
+  // Leaflet's own window-resize handler fires `moveend` outside `runSilently`; a view that is
+  // still the stored one is not an edit and must not mark the form dirty.
+  const stored = props.modelValue;
+  if (
+    stored &&
+    near(center, stored) &&
+    map.getZoom() === clampZoom(stored.zoom ?? NaN, props.minZoom, props.maxZoom)
+  ) {
+    return;
+  }
   cancelDetect();
   emitValue(center, map.getZoom());
 }
@@ -382,7 +406,10 @@ onMounted(() => {
         ? props.focusZoom
         : props.initialZoom;
     viewZoom.value = startZoom;
+    reducedMotion = prefersReducedMotion();
     map = L.map(container.value, {
+      doubleClickZoom: !viewport.value,
+      ...(reducedMotion ? { inertia: false, zoomAnimation: false, fadeAnimation: false } : {}),
       zoomControl: false,
       keyboard: false,
       scrollWheelZoom: false,
@@ -463,7 +490,7 @@ function nudge(direction: PickerDirection, large = false, viaKeyboard = false): 
   }
   emitValue(moved);
   if (!map.getBounds().contains([moved.latitude, moved.longitude])) {
-    runSilently(() => map?.panTo([moved.latitude, moved.longitude]));
+    runSilently(() => map?.panTo([moved.latitude, moved.longitude], { animate: !reducedMotion }));
   }
   const message = `Pin digeser ke ${DIRECTION_LABELS[direction]}.`;
   if (viaKeyboard) announceNudge(message);
@@ -662,9 +689,9 @@ const buttonClasses =
         focusable="false"
         data-test="location-picker-crosshair"
       >
-        <path d="M18 3v10M18 23v10M3 18h10M23 18h10" stroke="#FFFFFF" stroke-width="5" />
-        <path d="M18 3v10M18 23v10M3 18h10M23 18h10" stroke="#0A2353" stroke-width="2" />
-        <circle cx="18" cy="18" r="2.5" fill="#0A2353" stroke="#FFFFFF" stroke-width="1.5" />
+        <path d="M18 3v10M18 23v10M3 18h10M23 18h10" class="stroke-white" stroke-width="5" />
+        <path d="M18 3v10M18 23v10M3 18h10M23 18h10" class="stroke-brand-navy" stroke-width="2" />
+        <circle cx="18" cy="18" r="2.5" class="fill-brand-navy stroke-white" stroke-width="1.5" />
       </svg>
     </div>
 
