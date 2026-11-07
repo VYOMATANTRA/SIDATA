@@ -6,8 +6,8 @@ import {
   getAllContentBlocks,
   getContentBlockBySlug,
   updateContentBlock,
-  deleteProseBlock,
 } from '../services/contentBlocks.service.js';
+import { deleteProseBlock } from '../services/proseBlocks.service.js';
 import { sendHierarchyError } from '../utils/hierarchyAuthoring.js';
 import { authoringHandler, expectedUpdatedAtFromQuery, paramOf } from './hierarchyHandler.js';
 

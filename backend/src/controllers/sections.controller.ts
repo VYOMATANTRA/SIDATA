@@ -4,7 +4,7 @@ import {
   deleteSection,
   reorderSections,
 } from '../services/sections.service.js';
-import { createProseBlock, reorderProseBlocks } from '../services/contentBlocks.service.js';
+import { createProseBlock, reorderProseBlocks } from '../services/proseBlocks.service.js';
 import { authoringHandler, expectedUpdatedAtFromQuery, paramOf } from './hierarchyHandler.js';
 
 // POST /api/chapters/:id/sections

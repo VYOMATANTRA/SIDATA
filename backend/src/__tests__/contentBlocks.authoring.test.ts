@@ -4,6 +4,8 @@ import {
   createProseBlock,
   deleteProseBlock,
   reorderProseBlocks,
+} from '../services/proseBlocks.service.js';
+import {
   updateContentBlock,
   contentBlocksCache,
   getSlugCache,
