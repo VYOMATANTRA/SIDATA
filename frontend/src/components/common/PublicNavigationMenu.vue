@@ -100,7 +100,7 @@ const BUTTON_BASE =
 </script>
 
 <template>
-  <div class="space-y-6" data-test="public-menu">
+  <div class="space-y-6 md:space-y-5" data-test="public-menu">
     <ul v-if="showHome" class="space-y-1">
       <li>
         <RouterLink
@@ -153,7 +153,7 @@ const BUTTON_BASE =
     <div
       role="group"
       aria-label="Akun"
-      class="border-t border-white/15 pt-5"
+      class="border-t border-white/15 pt-5 md:pt-4"
       data-test="menu-account"
     >
       <template v-if="authStore.isAuthenticated">

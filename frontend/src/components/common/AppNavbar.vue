@@ -315,7 +315,7 @@ const panelFocusRingClasses = computed(() =>
             :role="isModal ? 'dialog' : undefined"
             :aria-modal="isModal ? 'true' : undefined"
             :aria-label="isModal ? 'Menu navigasi' : undefined"
-            class="md:rounded-card fixed inset-y-0 right-0 z-50 flex w-[min(88vw,22rem)] flex-col overflow-hidden border-l shadow-xl md:absolute md:inset-y-auto md:top-full md:right-6 md:mt-2 md:max-h-[calc(100dvh-var(--public-header-height)-1.5rem)] md:w-[46rem] md:max-w-[calc(100vw-3rem)] md:border lg:right-8"
+            class="md:rounded-card fixed inset-y-0 right-0 z-50 flex w-[min(88vw,22rem)] flex-col overflow-hidden border-l shadow-xl md:absolute md:inset-y-auto md:top-full md:right-6 md:mt-2 md:max-h-[calc(100dvh-var(--public-header-height)-1rem)] md:w-[46rem] md:max-w-[calc(100vw-3rem)] md:border lg:right-8"
             :class="panelClasses"
             data-test="nav-menu-drawer"
           >
@@ -337,7 +337,7 @@ const panelFocusRingClasses = computed(() =>
               </button>
             </div>
 
-            <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5">
+            <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 md:py-4">
               <slot name="menu" :close="closeAndRestoreFocus" :open="isMenuOpen">
                 <ul class="grid grid-cols-1 gap-1 sm:grid-cols-2">
                   <li v-for="item in navItems" :key="item.to">
