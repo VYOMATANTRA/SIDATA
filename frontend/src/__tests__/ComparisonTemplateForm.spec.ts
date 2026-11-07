@@ -320,6 +320,34 @@ describe('ComparisonTemplateForm', () => {
       wrapper.unmount();
     });
 
+    it('drops the stale "confirmation cancelled" notice on the next edit and on a new save', async () => {
+      const wrapper = mountForm(makeTemplate({ body: FLAGGED_BODY }));
+      saveResponses.push(
+        () => json(ackWarnings(['key-1']), 422),
+        () => json({ template: makeTemplate() }),
+      );
+      await submit(wrapper);
+      await wrapper.find('[data-test="builder-body"] textarea').setValue('Berdasarkan data lain ');
+      expect(wrapper.find('[data-test="warning-notice"]').exists()).toBe(true);
+
+      await wrapper.find('[data-test="builder-body"] textarea').setValue('Berdasarkan data baru ');
+      expect(wrapper.find('[data-test="warning-notice"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="trend-warnings"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('makes each acknowledgment a single click target of at least 44px', async () => {
+      const wrapper = mountForm(makeTemplate({ body: FLAGGED_BODY }));
+      saveResponses.push(() => json(ackWarnings(['key-1']), 422));
+      await submit(wrapper);
+
+      const label = wrapper.find('[data-test="confirm-label"]');
+      expect(label.classes()).toContain('min-h-11');
+      expect(label.find('input[type="checkbox"]').exists()).toBe(true);
+      expect(label.text()).toContain('Saya sudah memeriksa kata');
+      wrapper.unmount();
+    });
+
     it('keeps confirmations when only an unrelated field changes', async () => {
       const wrapper = mountForm(makeTemplate({ body: FLAGGED_BODY }));
       saveResponses.push(() => json(ackWarnings(['key-1']), 422));
@@ -424,6 +452,35 @@ describe('ComparisonTemplateForm', () => {
     });
   });
 
+  describe('dirty and busy signals for the host', () => {
+    it('reports isDirty only once the draft differs from the loaded template', async () => {
+      const wrapper = mountForm();
+      const form = wrapper.vm as unknown as { isDirty: () => boolean };
+      expect(form.isDirty()).toBe(false);
+
+      await wrapper.find('#templat-nama').setValue('Nama lain');
+      expect(form.isDirty()).toBe(true);
+
+      await wrapper.find('#templat-nama').setValue('Perbandingan tahunan');
+      expect(form.isDirty()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('emits busy true while saving and false afterwards', async () => {
+      const wrapper = mountForm();
+      let release: (r: Response) => void = () => {};
+      saveResponses.push(() => new Promise<Response>((resolve) => (release = resolve)));
+      await wrapper.find('form').trigger('submit');
+      await flushPromises();
+      expect(wrapper.emitted('busy')?.at(-1)).toEqual([true]);
+
+      release(json({ template: makeTemplate() }));
+      await flushPromises();
+      expect(wrapper.emitted('busy')?.at(-1)).toEqual([false]);
+      wrapper.unmount();
+    });
+  });
+
   describe('live preview', () => {
     it('debounces: several edits inside the window cause a single preview request', async () => {
       vi.useFakeTimers();
@@ -458,7 +515,11 @@ describe('ComparisonTemplateForm', () => {
       expect(wrapper.find('[data-test="preview-note"]').text()).toContain(
         'tidak ditampilkan untuk contoh ini',
       );
-      expect(wrapper.find('[data-test="preview"] [aria-live="polite"]').exists()).toBe(true);
+      // Only a short status is announced; the sentences stay outside the live region.
+      const live = wrapper.find('[data-test="preview"] [aria-live="polite"]');
+      expect(live.text()).toBe('Pratinjau diperbarui');
+      expect(live.find('[data-test="preview-item"]').exists()).toBe(false);
+      expect(live.element.contains(items[0]!.element)).toBe(false);
       wrapper.unmount();
     });
 

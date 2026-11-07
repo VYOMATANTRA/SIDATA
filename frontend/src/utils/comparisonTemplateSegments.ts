@@ -233,7 +233,7 @@ const SLUG_MAX = 100;
 export function slugifyLabel(label: string): string {
   const base = label
     .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/\p{M}/gu, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')

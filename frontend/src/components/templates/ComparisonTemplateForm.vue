@@ -44,6 +44,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'saved', template: ComparisonTemplate): void;
   (e: 'cancel'): void;
+  /** True while a save is in flight, so the host can refuse to dismiss the editor. */
+  (e: 'busy', value: boolean): void;
 }>();
 
 const store = useComparisonTemplatesStore();
@@ -60,6 +62,7 @@ const segments = ref<Record<SentenceField, TemplateSegment[]>>({
 
 const submitted = ref(false);
 const saving = ref(false);
+watch(saving, (value) => emit('busy', value));
 const serverError = ref('');
 const touched = ref<Set<string>>(new Set());
 
@@ -71,6 +74,16 @@ const serialized = computed<Record<SentenceField, string>>(() => ({
   trendTurun: serializeSegments(segments.value.trendTurun).trim(),
   trendTetap: serializeSegments(segments.value.trendTetap).trim(),
 }));
+
+// What the form held when it opened, so the host can tell whether closing would lose edits.
+const baseline = JSON.stringify([
+  label.value.trim(),
+  ...SENTENCE_FIELDS.map((field) => serialized.value[field]),
+]);
+const isDirty = (): boolean =>
+  JSON.stringify([label.value.trim(), ...SENTENCE_FIELDS.map((f) => serialized.value[f])]) !==
+  baseline;
+defineExpose({ isDirty });
 
 const labelError = computed(() => {
   const value = label.value.trim();
@@ -139,7 +152,11 @@ const awaitingConfirmation = computed(
 watch(
   () => serialized.value.body,
   () => {
-    if (pendingWarnings.value.length === 0) return;
+    // Any edit to the sentence makes a leftover "confirmation cancelled" notice stale.
+    if (pendingWarnings.value.length === 0) {
+      warningNotice.value = '';
+      return;
+    }
     pendingWarnings.value = [];
     confirmed.value = {};
     warningNotice.value =
@@ -167,6 +184,7 @@ async function handleSubmit(): Promise<void> {
   if (saving.value) return;
   submitted.value = true;
   serverError.value = '';
+  warningNotice.value = '';
   if (hasLocalErrors.value || awaitingConfirmation.value) return;
 
   saving.value = true;
@@ -262,6 +280,14 @@ watch(() => SENTENCE_FIELDS.map((f) => serialized.value[f]).join('\u0000'), sche
 });
 
 onBeforeUnmount(cancelPreview);
+
+// Only a short status is announced; the sentences themselves sit outside the live region so
+// every debounced update does not re-read up to four full sentences.
+const previewAnnouncement = computed(() => {
+  if (previewStatus.value === 'ready') return 'Pratinjau diperbarui';
+  if (previewStatus.value === 'error') return 'Pratinjau belum bisa dimuat';
+  return '';
+});
 
 const usageNote = computed(() => {
   const count = props.template?.usageCount ?? 0;
@@ -368,7 +394,11 @@ const usageNote = computed(() => {
         Contoh dengan angka rekaan, dibuat dengan cara yang sama seperti di halaman publik.
       </p>
 
-      <div aria-live="polite" :aria-busy="previewStatus === 'loading'" class="mt-3 space-y-3">
+      <p class="sr-only" role="status" aria-live="polite" data-test="preview-status">
+        {{ previewAnnouncement }}
+      </p>
+
+      <div :aria-busy="previewStatus === 'loading'" class="mt-3 space-y-3">
         <p
           v-if="previewStatus === 'incomplete'"
           class="text-text-muted text-sm"
@@ -439,20 +469,21 @@ const usageNote = computed(() => {
           <p class="text-text-muted mt-1 text-xs">
             Kutipan: “{{ readableExcerpt(warning.excerpt) }}”
           </p>
-          <div class="mt-2 flex items-start gap-3">
+          <label
+            :for="fieldId(`konfirmasi-${index}`)"
+            class="text-brand-navy mt-2 flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium"
+            data-test="confirm-label"
+          >
             <input
               :id="fieldId(`konfirmasi-${index}`)"
               v-model="confirmed[warning.ackKey]"
               type="checkbox"
-              class="border-border-strong text-brand-navy focus-visible:outline-focus-ring mt-1 h-5 w-5 shrink-0 rounded-xs focus-visible:outline-2 focus-visible:outline-offset-2"
+              class="border-border-strong text-brand-navy focus-visible:outline-focus-ring h-5 w-5 shrink-0 rounded-xs focus-visible:outline-2 focus-visible:outline-offset-2"
             />
-            <label
-              :for="fieldId(`konfirmasi-${index}`)"
-              class="text-brand-navy min-h-6 text-sm font-medium"
-            >
+            <span>
               Saya sudah memeriksa kata "{{ warning.phrase }}" ini dan tetap ingin menyimpannya.
-            </label>
-          </div>
+            </span>
+          </label>
         </li>
       </ul>
     </section>
