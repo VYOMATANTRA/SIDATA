@@ -1,6 +1,11 @@
 import { useAuthStore } from '../stores/auth';
 import { getCsrfToken } from './csrf';
-import { REFRESH_UNAVAILABLE_MESSAGE, SESSION_EXPIRED_MESSAGE } from './userMessages';
+import {
+  REFRESH_UNAVAILABLE_MESSAGE,
+  SESSION_EXPIRED_MESSAGE,
+  sanitizeFieldErrors,
+  toUserMessage,
+} from './userMessages';
 
 export { REFRESH_UNAVAILABLE_MESSAGE, SESSION_EXPIRED_MESSAGE };
 
@@ -14,14 +19,39 @@ export { REFRESH_UNAVAILABLE_MESSAGE, SESSION_EXPIRED_MESSAGE };
  */
 const MUTATING_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
 
-/** Error carrying the HTTP status, so callers can branch on 409/422 without string matching. */
+/** Facts a failed response carries alongside its message. */
+export interface ApiErrorInit {
+  /** Server `code` (e.g. `TREND_KEYWORD_ACK_REQUIRED`), kept for programmatic handling. */
+  code?: string;
+  /** Parsed JSON error body (e.g. `warnings`). Diagnostic only, never rendered. */
+  body?: unknown;
+  /** Field-level messages, present only when the server sends a field map. */
+  fieldErrors?: Record<string, string>;
+}
+
+/**
+ * Error carrying the HTTP status, so callers can branch on 409/422 without string matching.
+ *
+ * `message` keeps the server's text for existing callers and diagnostics. Banners and dialogs
+ * must render `userMessage` (or `toUserMessage(error, context)` for an action-specific line),
+ * never `message`.
+ */
 export class ApiError extends Error {
   status: number;
+  code: string | undefined;
+  body: unknown;
+  fieldErrors: Record<string, string>;
+  /** Approved plain-Indonesian text for a banner or dialog. Never the raw server message. */
+  userMessage: string;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, init: ApiErrorInit = {}) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.code = init.code;
+    this.body = init.body;
+    this.fieldErrors = init.fieldErrors ?? {};
+    this.userMessage = toUserMessage(this).message;
   }
 }
 
@@ -100,22 +130,58 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
  * over the top of the original failure.
  */
 export async function readErrorMessage(response: Response, fallback: string): Promise<string> {
+  const body = await readErrorBody(response);
+  return textField(fieldOf(body, 'error')) ?? textField(fieldOf(body, 'message')) ?? fallback;
+}
+
+/** Parses an error response's JSON body; a non-JSON body (HTML error page) yields undefined. */
+async function readErrorBody(response: Response): Promise<unknown> {
   try {
-    const data = (await response.json()) as { error?: string; message?: string };
-    return data.error || data.message || fallback;
+    return await response.json();
   } catch {
-    return fallback;
+    return undefined;
   }
+}
+
+function fieldOf(body: unknown, key: string): unknown {
+  return typeof body === 'object' && body !== null
+    ? (body as Record<string, unknown>)[key]
+    : undefined;
+}
+
+function textField(value: unknown): string | undefined {
+  return typeof value === 'string' && value !== '' ? value : undefined;
+}
+
+/** Raw failure details go to the dev console only. Nothing logged here reaches the UI. */
+function logDiagnostic(label: string, detail: Record<string, unknown>): void {
+  if (import.meta.env.DEV) {
+    console.warn(`[apiClient] ${label}`, detail);
+  }
+}
+
+async function apiErrorFromResponse(response: Response, path: string): Promise<ApiError> {
+  const body = await readErrorBody(response);
+  const serverMessage = textField(fieldOf(body, 'error')) ?? textField(fieldOf(body, 'message'));
+  const code = textField(fieldOf(body, 'code'));
+  const message =
+    response.status === 401
+      ? SESSION_EXPIRED_MESSAGE
+      : (serverMessage ?? `Permintaan gagal (HTTP ${response.status}).`);
+
+  logDiagnostic('request failed', { path, status: response.status, code, serverMessage });
+
+  return new ApiError(message, response.status, {
+    code,
+    body,
+    fieldErrors: sanitizeFieldErrors(fieldOf(body, 'fieldErrors')),
+  });
 }
 
 export async function apiRequestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await apiFetch(path, init);
   if (!response.ok) {
-    const message =
-      response.status === 401
-        ? SESSION_EXPIRED_MESSAGE
-        : await readErrorMessage(response, `Permintaan gagal (HTTP ${response.status}).`);
-    throw new ApiError(message, response.status);
+    throw await apiErrorFromResponse(response, path);
   }
   return (await response.json()) as T;
 }
