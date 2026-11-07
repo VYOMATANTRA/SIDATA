@@ -66,10 +66,7 @@ const chartItems = computed<BarDiagramItem[]>(() => {
           <caption class="sr-only">
             {{
               table.title
-            }}, periode
-            {{
-              table.period
-            }}
+            }}, periode {{ table.period }}
           </caption>
           <thead>
             <tr class="border-b border-slate-200 text-left text-slate-500">

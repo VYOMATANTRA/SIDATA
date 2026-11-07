@@ -1,42 +1,42 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
-import { ClockIcon, MagnifyingGlassIcon, PlusIcon } from '@heroicons/vue/24/outline';
-import { useUsersStore, type UserItem } from '../stores/users.store';
-import { useAuthStore } from '../stores/auth';
-import BaseButton from '../components/common/BaseButton.vue';
-import BaseModal from '../components/common/BaseModal.vue';
-import { INPUT_CLASSES } from '../utils/formStyles';
+import { ref, computed, onMounted } from 'vue'
+import { ClockIcon, MagnifyingGlassIcon, PlusIcon } from '@heroicons/vue/24/outline'
+import { useUsersStore, type UserItem } from '../stores/users.store'
+import { useAuthStore } from '../stores/auth'
+import BaseButton from '../components/common/BaseButton.vue'
+import BaseModal from '../components/common/BaseModal.vue'
+import { INPUT_CLASSES } from '../utils/formStyles'
 
-const usersStore = useUsersStore();
-const authStore = useAuthStore();
+const usersStore = useUsersStore()
+const authStore = useAuthStore()
 
-const searchQuery = ref('');
-const isCreateModalOpen = ref(false);
-const isRoleModalOpen = ref(false);
-const isPasswordModalOpen = ref(false);
-const isConfirmModalOpen = ref(false);
-const confirmActionType = ref<'deactivate' | 'activate'>('deactivate');
+const searchQuery = ref('')
+const isCreateModalOpen = ref(false)
+const isRoleModalOpen = ref(false)
+const isPasswordModalOpen = ref(false)
+const isConfirmModalOpen = ref(false)
+const confirmActionType = ref<'deactivate' | 'activate'>('deactivate')
 
-const selectedUser = ref<UserItem | null>(null);
-const newRoleSelection = ref('');
+const selectedUser = ref<UserItem | null>(null)
+const newRoleSelection = ref('')
 
 // Form state for creating user
 const createForm = ref({
   email: '',
   roleId: '',
   password: '',
-});
-const createError = ref('');
-const createSuccess = ref('');
-const isSubmitting = ref(false);
-let createCloseTimer: ReturnType<typeof setTimeout> | null = null;
+})
+const createError = ref('')
+const createSuccess = ref('')
+const isSubmitting = ref(false)
+let createCloseTimer: ReturnType<typeof setTimeout> | null = null
 
 // Form state for changing user password
-const newPassword = ref('');
-const isNewPasswordTouched = ref(false);
-const passwordError = ref('');
-const passwordSuccess = ref('');
-let passwordCloseTimer: ReturnType<typeof setTimeout> | null = null;
+const newPassword = ref('')
+const isNewPasswordTouched = ref(false)
+const passwordError = ref('')
+const passwordSuccess = ref('')
+let passwordCloseTimer: ReturnType<typeof setTimeout> | null = null
 
 const COMMON_WEAK_PASSWORDS = [
   '12345678',
@@ -48,183 +48,183 @@ const COMMON_WEAK_PASSWORDS = [
   'qwerty123',
   'indonesia',
   'admin1234',
-];
+]
 
 function isWeakPassword(pwd: string, mail: string): boolean {
-  const lower = pwd.toLowerCase();
-  if (COMMON_WEAK_PASSWORDS.includes(lower)) return true;
+  const lower = pwd.toLowerCase()
+  if (COMMON_WEAK_PASSWORDS.includes(lower)) return true
   if (mail) {
-    const parts = mail.split('@');
-    const prefix = (parts[0] || '').toLowerCase();
-    if (prefix && prefix.length >= 3 && lower.includes(prefix)) return true;
+    const parts = mail.split('@')
+    const prefix = (parts[0] || '').toLowerCase()
+    if (prefix && prefix.length >= 3 && lower.includes(prefix)) return true
   }
-  return false;
+  return false
 }
 
 const newPasswordError = computed(() => {
-  if (!isNewPasswordTouched.value) return '';
-  if (!newPassword.value) return 'Password wajib diisi';
-  if (newPassword.value.length < 8) return 'Password minimal harus 8 karakter.';
-  if (newPassword.value.length > 128) return 'Password terlalu panjang (maksimal 128 karakter).';
+  if (!isNewPasswordTouched.value) return ''
+  if (!newPassword.value) return 'Password wajib diisi'
+  if (newPassword.value.length < 8) return 'Password minimal harus 8 karakter.'
+  if (newPassword.value.length > 128) return 'Password terlalu panjang (maksimal 128 karakter).'
   if (isWeakPassword(newPassword.value, selectedUser.value?.email || ''))
-    return 'Password terlalu lemah atau umum digunakan.';
-  return '';
-});
+    return 'Password terlalu lemah atau umum digunakan.'
+  return ''
+})
 
 const isNewPasswordValid = computed(() => {
-  if (!newPassword.value) return false;
-  if (newPassword.value.length < 8 || newPassword.value.length > 128) return false;
-  if (isWeakPassword(newPassword.value, selectedUser.value?.email || '')) return false;
-  return true;
-});
+  if (!newPassword.value) return false
+  if (newPassword.value.length < 8 || newPassword.value.length > 128) return false
+  if (isWeakPassword(newPassword.value, selectedUser.value?.email || '')) return false
+  return true
+})
 
 const filteredUsers = computed(() => {
-  if (!searchQuery.value.trim()) return usersStore.users;
-  const q = searchQuery.value.toLowerCase().trim();
+  if (!searchQuery.value.trim()) return usersStore.users
+  const q = searchQuery.value.toLowerCase().trim()
   return usersStore.users.filter(
     (u) =>
       u.email.toLowerCase().includes(q) ||
       u.role?.name.toLowerCase().includes(q) ||
       (u.deletedAt ? 'nonaktif' : 'aktif').includes(q),
-  );
-});
+  )
+})
 
 onMounted(async () => {
-  await Promise.all([usersStore.fetchUsers(), usersStore.fetchRoles()]);
-});
+  await Promise.all([usersStore.fetchUsers(), usersStore.fetchRoles()])
+})
 
 function openCreateModal() {
   if (createCloseTimer) {
-    clearTimeout(createCloseTimer);
-    createCloseTimer = null;
+    clearTimeout(createCloseTimer)
+    createCloseTimer = null
   }
   const defaultRole =
-    usersStore.roles.find((r) => r.name.toLowerCase() === 'user') || usersStore.roles[0];
+    usersStore.roles.find((r) => r.name.toLowerCase() === 'user') || usersStore.roles[0]
 
   createForm.value = {
     email: '',
     roleId: defaultRole?.id || '',
     password: generateRandomPassword(),
-  };
-  createError.value = '';
-  createSuccess.value = '';
-  isCreateModalOpen.value = true;
+  }
+  createError.value = ''
+  createSuccess.value = ''
+  isCreateModalOpen.value = true
 }
 
 function openRoleModal(user: UserItem) {
-  selectedUser.value = user;
-  newRoleSelection.value = user.roleId;
-  isRoleModalOpen.value = true;
+  selectedUser.value = user
+  newRoleSelection.value = user.roleId
+  isRoleModalOpen.value = true
 }
 
 function openPasswordModal(user: UserItem) {
   if (passwordCloseTimer) {
-    clearTimeout(passwordCloseTimer);
-    passwordCloseTimer = null;
+    clearTimeout(passwordCloseTimer)
+    passwordCloseTimer = null
   }
-  selectedUser.value = user;
-  newPassword.value = '';
-  isNewPasswordTouched.value = false;
-  passwordError.value = '';
-  passwordSuccess.value = '';
-  isPasswordModalOpen.value = true;
+  selectedUser.value = user
+  newPassword.value = ''
+  isNewPasswordTouched.value = false
+  passwordError.value = ''
+  passwordSuccess.value = ''
+  isPasswordModalOpen.value = true
 }
 
 function openConfirmModal(user: UserItem, action: 'deactivate' | 'activate') {
-  selectedUser.value = user;
-  confirmActionType.value = action;
-  isConfirmModalOpen.value = true;
+  selectedUser.value = user
+  confirmActionType.value = action
+  isConfirmModalOpen.value = true
 }
 
 const confirmTitle = computed(() =>
   confirmActionType.value === 'activate' ? 'Aktifkan Pengguna?' : 'Nonaktifkan Pengguna?',
-);
+)
 
 const confirmDescription = computed(() => {
-  const email = selectedUser.value?.email ?? '';
+  const email = selectedUser.value?.email ?? ''
   return confirmActionType.value === 'activate'
     ? `Akun ${email} akan diaktifkan kembali dan dapat masuk seperti biasa.`
-    : `Akun ${email} akan dinonaktifkan dan tidak dapat masuk sampai diaktifkan kembali.`;
-});
+    : `Akun ${email} akan dinonaktifkan dan tidak dapat masuk sampai diaktifkan kembali.`
+})
 
 function generateRandomPassword() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-  const array = new Uint32Array(12);
-  crypto.getRandomValues(array);
-  let pass = '';
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'
+  const array = new Uint32Array(12)
+  crypto.getRandomValues(array)
+  let pass = ''
   for (let i = 0; i < 12; i++) {
-    pass += chars.charAt(array[i]! % chars.length);
+    pass += chars.charAt(array[i]! % chars.length)
   }
-  return pass;
+  return pass
 }
 
 async function handleCreateUser() {
-  createError.value = '';
-  createSuccess.value = '';
+  createError.value = ''
+  createSuccess.value = ''
   if (!createForm.value.email || !createForm.value.roleId || !createForm.value.password) {
-    createError.value = 'Semua field wajib diisi.';
-    return;
+    createError.value = 'Semua field wajib diisi.'
+    return
   }
 
-  isSubmitting.value = true;
+  isSubmitting.value = true
   try {
-    const res = await usersStore.createUser(createForm.value);
-    createSuccess.value = res.message || 'Pengguna berhasil dibuat.';
+    const res = await usersStore.createUser(createForm.value)
+    createSuccess.value = res.message || 'Pengguna berhasil dibuat.'
     createCloseTimer = setTimeout(() => {
-      isCreateModalOpen.value = false;
-      createCloseTimer = null;
-    }, 1200);
+      isCreateModalOpen.value = false
+      createCloseTimer = null
+    }, 1200)
   } catch (err: unknown) {
-    createError.value = err instanceof Error ? err.message : 'Gagal membuat pengguna.';
+    createError.value = err instanceof Error ? err.message : 'Gagal membuat pengguna.'
   } finally {
-    isSubmitting.value = false;
+    isSubmitting.value = false
   }
 }
 
 async function handleUpdateRole() {
-  if (!selectedUser.value || !newRoleSelection.value) return;
-  isSubmitting.value = true;
+  if (!selectedUser.value || !newRoleSelection.value) return
+  isSubmitting.value = true
   try {
-    await usersStore.updateUserRole(selectedUser.value.id, newRoleSelection.value);
-    isRoleModalOpen.value = false;
+    await usersStore.updateUserRole(selectedUser.value.id, newRoleSelection.value)
+    isRoleModalOpen.value = false
   } catch (err: unknown) {
-    alert(err instanceof Error ? err.message : 'Gagal memperbarui role');
+    alert(err instanceof Error ? err.message : 'Gagal memperbarui role')
   } finally {
-    isSubmitting.value = false;
+    isSubmitting.value = false
   }
 }
 
 async function handleChangePassword() {
-  isNewPasswordTouched.value = true;
-  if (!isNewPasswordValid.value || !selectedUser.value) return;
+  isNewPasswordTouched.value = true
+  if (!isNewPasswordValid.value || !selectedUser.value) return
 
-  isSubmitting.value = true;
-  passwordError.value = '';
-  passwordSuccess.value = '';
+  isSubmitting.value = true
+  passwordError.value = ''
+  passwordSuccess.value = ''
   try {
-    const res = await usersStore.changeUserPassword(selectedUser.value.id, newPassword.value);
-    passwordSuccess.value = res.message || 'Password pengguna berhasil diperbarui.';
+    const res = await usersStore.changeUserPassword(selectedUser.value.id, newPassword.value)
+    passwordSuccess.value = res.message || 'Password pengguna berhasil diperbarui.'
     passwordCloseTimer = setTimeout(() => {
-      isPasswordModalOpen.value = false;
-      passwordCloseTimer = null;
-    }, 1200);
+      isPasswordModalOpen.value = false
+      passwordCloseTimer = null
+    }, 1200)
   } catch (err: unknown) {
-    passwordError.value = err instanceof Error ? err.message : 'Gagal mengubah password pengguna.';
+    passwordError.value = err instanceof Error ? err.message : 'Gagal mengubah password pengguna.'
   } finally {
-    isSubmitting.value = false;
+    isSubmitting.value = false
   }
 }
 
 async function handleConfirmAction() {
-  if (!selectedUser.value) return;
-  isSubmitting.value = true;
+  if (!selectedUser.value) return
+  isSubmitting.value = true
   try {
     if (confirmActionType.value === 'activate') {
-      await usersStore.reactivateUser(selectedUser.value.id);
+      await usersStore.reactivateUser(selectedUser.value.id)
     } else {
-      await usersStore.deleteUser(selectedUser.value.id);
+      await usersStore.deleteUser(selectedUser.value.id)
     }
-    isConfirmModalOpen.value = false;
+    isConfirmModalOpen.value = false
   } catch (err: unknown) {
     alert(
       err instanceof Error
@@ -232,9 +232,9 @@ async function handleConfirmAction() {
         : confirmActionType.value === 'activate'
           ? 'Gagal mengaktifkan pengguna'
           : 'Gagal menonaktifkan pengguna',
-    );
+    )
   } finally {
-    isSubmitting.value = false;
+    isSubmitting.value = false
   }
 }
 </script>

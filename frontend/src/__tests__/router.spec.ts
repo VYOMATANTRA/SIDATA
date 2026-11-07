@@ -279,10 +279,7 @@ describe('router auth guard retry behavior', () => {
       setActivePinia(pinia);
       const authStore = useAuthStore(pinia);
 
-      authStore.setAuth(
-        { id: '30', email: 'editor@manggar.go.id', role: 'editor' },
-        'editor-token',
-      );
+      authStore.setAuth({ id: '30', email: 'editor@manggar.go.id', role: 'editor' }, 'editor-token');
       await router.push('/');
       await router.push('/dashboard');
 

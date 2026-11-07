@@ -275,9 +275,7 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
               `/api/indicator-tables/${encodeURIComponent(summary.id)}`,
             );
             if (!detailResponse.ok) {
-              throw new Error(
-                `Gagal memuat detail tabel matriks (status ${detailResponse.status})`,
-              );
+              throw new Error(`Gagal memuat detail tabel matriks (status ${detailResponse.status})`);
             }
             const detailData = (await detailResponse.json()) as { table: IndicatorTableDetail };
             return detailData.table;

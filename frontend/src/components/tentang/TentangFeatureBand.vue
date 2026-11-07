@@ -12,7 +12,7 @@ const headingId = useId();
     :aria-labelledby="heading ? headingId : undefined"
   >
     <div class="mx-auto max-w-5xl">
-      <h2 v-if="heading" :id="headingId" class="text-brand-navy text-lg font-bold">
+      <h2 v-if="heading" :id="headingId" class="text-lg font-bold text-brand-navy">
         {{ heading }}
       </h2>
       <slot />

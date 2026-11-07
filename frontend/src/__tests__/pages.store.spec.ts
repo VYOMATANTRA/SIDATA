@@ -199,10 +199,7 @@ describe('pages store (public page by slug)', () => {
     globalThis.fetch = fetchMock;
 
     const store = usePagesStore();
-    await Promise.all([
-      store.fetchPageBySlug('kependudukan'),
-      store.fetchPageBySlug('kependudukan'),
-    ]);
+    await Promise.all([store.fetchPageBySlug('kependudukan'), store.fetchPageBySlug('kependudukan')]);
 
     expect(callCount).toBe(1);
   });

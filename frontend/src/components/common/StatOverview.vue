@@ -81,7 +81,7 @@ const containerStyle = computed(() => {
       isFullBleed
         ? 'relative overflow-hidden px-4 py-16 sm:px-8 sm:py-20 md:py-24'
         : bgImage
-          ? 'relative space-y-5 overflow-hidden rounded-2xl p-6 shadow-xl sm:space-y-6 sm:p-8 md:p-10'
+          ? 'relative overflow-hidden rounded-2xl p-6 sm:p-8 md:p-10 shadow-xl space-y-5 sm:space-y-6'
           : 'max-w-4xl space-y-5 sm:space-y-6',
       align === 'center' ? 'items-center text-center' : 'items-start text-left',
       containerClass,

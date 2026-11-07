@@ -55,13 +55,13 @@ const iconSrc = computed<string | null>(() => {
 </script>
 
 <template>
-  <span class="inline-flex shrink-0 items-center justify-center">
+  <span class="inline-flex items-center justify-center shrink-0">
     <img
       v-if="iconSrc"
       :src="iconSrc"
       :alt="alt || ''"
       aria-hidden="true"
-      class="h-full w-full object-contain brightness-0 invert filter"
+      class="w-full h-full object-contain filter brightness-0 invert"
       data-test="weather-icon-img"
     />
     <svg
@@ -74,7 +74,7 @@ const iconSrc = computed<string | null>(() => {
       stroke-linecap="round"
       stroke-linejoin="round"
       aria-hidden="true"
-      class="h-full w-full"
+      class="w-full h-full"
       data-test="weather-icon-fallback"
     >
       <circle cx="12" cy="12" r="5" />

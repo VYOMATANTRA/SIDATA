@@ -17,13 +17,11 @@ const titleId = useId();
 <template>
   <section class="relative isolate overflow-hidden" :aria-labelledby="titleId">
     <img :src="image" alt="" class="absolute inset-0 h-full w-full object-cover" />
-    <div class="bg-brand-navy/75 absolute inset-0" aria-hidden="true" />
+    <div class="absolute inset-0 bg-brand-navy/75" aria-hidden="true" />
 
     <div class="relative px-4 pt-32 pb-28 sm:px-6 sm:pt-40 sm:pb-36">
       <div class="mx-auto max-w-5xl">
-        <p class="text-brand-cyan text-base font-medium tracking-[0.2em] uppercase">
-          {{ eyebrow }}
-        </p>
+        <p class="text-base font-medium tracking-[0.2em] text-brand-cyan uppercase">{{ eyebrow }}</p>
         <h1 :id="titleId" class="mt-3 text-xl text-white">{{ title }}</h1>
         <p class="mt-4 max-w-xl text-base leading-relaxed text-white/90">{{ subtitle }}</p>
       </div>

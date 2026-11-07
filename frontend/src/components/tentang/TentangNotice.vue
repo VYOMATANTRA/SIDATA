@@ -15,18 +15,18 @@ const headingId = useId();
 
 <template>
   <section
-    class="border-brand-navy/20 bg-brand-cyan/20 border-y px-4 py-5 sm:px-6"
+    class="border-y border-brand-navy/20 bg-brand-cyan/20 px-4 py-5 sm:px-6"
     :aria-labelledby="headingId"
   >
     <div class="mx-auto flex max-w-5xl items-start gap-3">
       <span
-        class="bg-brand-navy flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white"
+        class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-navy text-white"
         aria-hidden="true"
       >
         <TentangIcon :name="icon" />
       </span>
 
-      <div class="text-brand-navy text-base leading-relaxed">
+      <div class="text-base leading-relaxed text-brand-navy">
         <h2 :id="headingId" class="font-bold">{{ heading }}</h2>
         <div class="mt-1 space-y-2">
           <slot />

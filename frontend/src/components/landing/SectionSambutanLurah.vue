@@ -49,7 +49,7 @@ const photoUrl = computed(() => {
 
 <template>
   <div
-    class="from-brand-navy to-brand-navy-deep relative overflow-hidden border-b border-white/10 bg-gradient-to-b px-4 pt-12 pb-0 text-white sm:px-6 sm:pt-16 sm:pb-0 lg:px-8"
+    class="relative overflow-hidden border-b border-white/10 bg-gradient-to-b from-brand-navy to-brand-navy-deep px-4 pt-12 pb-0 text-white sm:px-6 sm:pt-16 sm:pb-0 lg:px-8"
   >
     <div class="mx-auto flex w-full max-w-5xl justify-center">
       <HugeQuote
@@ -67,3 +67,4 @@ const photoUrl = computed(() => {
     </div>
   </div>
 </template>
+

@@ -33,9 +33,7 @@ const route = useRoute();
 const trail = computed<NormalizedSegment[]>(() => {
   const configured = route.meta.breadcrumb;
   if (Array.isArray(configured)) {
-    return configured.map((segment) =>
-      typeof segment === 'string' ? { label: segment } : segment,
-    );
+    return configured.map((segment) => (typeof segment === 'string' ? { label: segment } : segment));
   }
   return typeof route.meta.title === 'string' ? [{ label: route.meta.title }] : [];
 });

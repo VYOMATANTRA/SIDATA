@@ -58,7 +58,10 @@ export type IndicatorItem = IndicatorDto;
  * Drops a trailing fractional part that is exactly zero (e.g. "12480.0000" -> "12.480").
  * Preserves exact decimal digits without IEEE-754 precision loss.
  */
-export function formatIndicatorValue(value: string | number, unit?: string | null): string {
+export function formatIndicatorValue(
+  value: string | number,
+  unit?: string | null,
+): string {
   const strVal = String(value).trim();
   if (!strVal) return '';
 
@@ -116,6 +119,7 @@ export function resolveIconForIndicator(
 
   return 'person';
 }
+
 
 /** Public hero figures: short TTL so SPA sessions do not keep deleted/edited values forever. */
 export const BY_SLUG_TTL_MS = 60_000;

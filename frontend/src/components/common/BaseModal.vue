@@ -188,14 +188,14 @@ onBeforeUnmount(() => {
           :aria-labelledby="titleId"
           :aria-describedby="description ? descriptionId : undefined"
           tabindex="-1"
-          class="sm:rounded-card flex h-full max-h-none w-full flex-col overflow-hidden bg-white shadow-2xl outline-none sm:h-auto sm:max-h-[90vh]"
+          class="flex h-full max-h-none w-full flex-col overflow-hidden bg-white shadow-2xl outline-none sm:h-auto sm:max-h-[90vh] sm:rounded-card"
           :class="sizeClasses"
         >
           <header
             class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-7 sm:py-5"
           >
             <div class="min-w-0">
-              <h2 :id="titleId" class="text-brand-navy text-lg leading-snug font-semibold">
+              <h2 :id="titleId" class="text-lg leading-snug font-semibold text-brand-navy">
                 {{ title }}
               </h2>
               <p v-if="description" :id="descriptionId" class="mt-1 text-sm text-slate-500">
@@ -206,7 +206,7 @@ onBeforeUnmount(() => {
 
             <button
               type="button"
-              class="focus-visible:ring-brand-navy hover:text-brand-navy -mr-1.5 shrink-0 rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              class="focus-visible:ring-brand-navy -mr-1.5 shrink-0 rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="busy"
               aria-label="Tutup dialog"
               @click="requestClose"
@@ -231,7 +231,7 @@ onBeforeUnmount(() => {
 
           <footer
             v-if="$slots.footer"
-            class="sm:rounded-b-card border-t border-slate-200 bg-slate-50 px-5 py-4 sm:px-7"
+            class="border-t border-slate-200 bg-slate-50 px-5 py-4 sm:rounded-b-card sm:px-7"
           >
             <slot name="footer" />
           </footer>

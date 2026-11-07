@@ -1,11 +1,11 @@
-import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
-import { getCsrfToken } from '../utils/csrf';
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+import { getCsrfToken } from '../utils/csrf'
 
 export interface UserProfile {
-  id: string;
-  email: string;
-  role: string;
+  id: string
+  email: string
+  role: string
 }
 
 /**
@@ -16,107 +16,107 @@ export interface UserProfile {
  * - `transient` — the refresh could not be attempted (network) or the server failed (5xx).
  *   The session may still be valid, so callers must not tell the user to log in again.
  */
-export type RefreshOutcome = 'ok' | 'denied' | 'transient';
+export type RefreshOutcome = 'ok' | 'denied' | 'transient'
 
-const SETUP_TOKEN_KEY = 'sidata_setup_token';
+const SETUP_TOKEN_KEY = 'sidata_setup_token'
 
 function getStoredSetupToken(): string | null {
-  if (typeof window === 'undefined' || !window.sessionStorage) return null;
+  if (typeof window === 'undefined' || !window.sessionStorage) return null
   try {
-    return sessionStorage.getItem(SETUP_TOKEN_KEY);
+    return sessionStorage.getItem(SETUP_TOKEN_KEY)
   } catch {
-    return null;
+    return null
   }
 }
 
 function saveStoredSetupToken(token: string) {
-  if (typeof window === 'undefined' || !window.sessionStorage) return;
+  if (typeof window === 'undefined' || !window.sessionStorage) return
   try {
-    sessionStorage.setItem(SETUP_TOKEN_KEY, token);
+    sessionStorage.setItem(SETUP_TOKEN_KEY, token)
   } catch {}
 }
 
 function removeStoredSetupToken() {
-  if (typeof window === 'undefined' || !window.sessionStorage) return;
+  if (typeof window === 'undefined' || !window.sessionStorage) return
   try {
-    sessionStorage.removeItem(SETUP_TOKEN_KEY);
+    sessionStorage.removeItem(SETUP_TOKEN_KEY)
   } catch {}
 }
 
 export const useAuthStore = defineStore('auth', () => {
-  const initialSetupToken = getStoredSetupToken();
-  const user = ref<UserProfile | null>(null);
-  const accessToken = ref<string | null>(null);
-  const isInitialized = ref(false);
-  const setupToken = ref<string | null>(initialSetupToken);
-  const mustChangePassword = ref(!!initialSetupToken);
+  const initialSetupToken = getStoredSetupToken()
+  const user = ref<UserProfile | null>(null)
+  const accessToken = ref<string | null>(null)
+  const isInitialized = ref(false)
+  const setupToken = ref<string | null>(initialSetupToken)
+  const mustChangePassword = ref(!!initialSetupToken)
 
   // Set once a refresh attempt gets a definitive 401/403 back — the server saying "this
   // session is not valid," as opposed to "something went wrong." Retrying a definitive
   // denial can't change the answer, so this suppresses further initAuth() attempts for the
   // rest of the tab's life. Network errors and 5xx must NOT set this — those are transient,
   // and silent refresh must keep retrying on the next navigation (see router/index.ts).
-  const refreshDenied = ref(false);
+  const refreshDenied = ref(false)
 
   // Shares one in-flight request across concurrent initAuth() callers (e.g. router guards
   // firing on rapid navigations) instead of each firing its own csrf-token + refresh pair.
-  let inFlight: Promise<RefreshOutcome> | null = null;
+  let inFlight: Promise<RefreshOutcome> | null = null
 
   // Monotonically increasing generation counter to invalidate in-flight silent refreshes
   // when an explicit logout or clearAuth occurs while a request is pending.
-  let authEpoch = 0;
+  let authEpoch = 0
 
-  const isAuthenticated = computed(() => !!accessToken.value);
-  const isAdmin = computed(() => user.value?.role?.toLowerCase() === 'admin');
-  const isEditor = computed(() => user.value?.role?.toLowerCase() === 'editor');
+  const isAuthenticated = computed(() => !!accessToken.value)
+  const isAdmin = computed(() => user.value?.role?.toLowerCase() === 'admin')
+  const isEditor = computed(() => user.value?.role?.toLowerCase() === 'editor')
   /**
    * Content editing is Editor or Admin (SPEC §3). Mirrors the backend's
    * `requireEditorOrAdmin` guard so the UI does not offer actions the API would reject.
    */
-  const canEditData = computed(() => isAdmin.value || isEditor.value);
+  const canEditData = computed(() => isAdmin.value || isEditor.value)
 
   function setAuth(newUser: UserProfile, token: string) {
-    authEpoch++;
-    user.value = newUser;
-    accessToken.value = token;
-    isInitialized.value = true;
-    refreshDenied.value = false;
-    setupToken.value = null;
-    mustChangePassword.value = false;
-    removeStoredSetupToken();
+    authEpoch++
+    user.value = newUser
+    accessToken.value = token
+    isInitialized.value = true
+    refreshDenied.value = false
+    setupToken.value = null
+    mustChangePassword.value = false
+    removeStoredSetupToken()
   }
 
   function setSetupAuth(token: string) {
-    setupToken.value = token;
-    mustChangePassword.value = true;
-    saveStoredSetupToken(token);
+    setupToken.value = token
+    mustChangePassword.value = true
+    saveStoredSetupToken(token)
   }
 
   function clearAuth(keepSetup = false) {
-    authEpoch++;
-    user.value = null;
-    accessToken.value = null;
-    isInitialized.value = true;
-    refreshDenied.value = false;
+    authEpoch++
+    user.value = null
+    accessToken.value = null
+    isInitialized.value = true
+    refreshDenied.value = false
     if (!keepSetup) {
-      setupToken.value = null;
-      mustChangePassword.value = false;
-      removeStoredSetupToken();
+      setupToken.value = null
+      mustChangePassword.value = false
+      removeStoredSetupToken()
     }
   }
 
   async function performInitAuth(): Promise<RefreshOutcome> {
-    const currentEpoch = ++authEpoch;
+    const currentEpoch = ++authEpoch
     try {
-      const csrfToken = await getCsrfToken();
+      const csrfToken = await getCsrfToken()
       if (currentEpoch !== authEpoch) {
-        return 'transient';
+        return 'transient'
       }
       if (!csrfToken) {
         // getCsrfToken() collapses a network/5xx failure into ''. Sending an empty header would
         // make /refresh answer 403, which this function reads as a dead session — so a brief
         // hiccup on the CSRF endpoint would log the user out. Treat it as transient instead.
-        return 'transient';
+        return 'transient'
       }
       const res = await fetch('/api/auth/refresh', {
         method: 'POST',
@@ -124,10 +124,10 @@ export const useAuthStore = defineStore('auth', () => {
         headers: {
           'x-csrf-token': csrfToken,
         },
-      });
+      })
 
       if (currentEpoch !== authEpoch) {
-        return 'transient';
+        return 'transient'
       }
 
       if (!res.ok) {
@@ -143,38 +143,38 @@ export const useAuthStore = defineStore('auth', () => {
 
         if (denied) {
           if (currentEpoch === authEpoch) {
-            clearAuth(mustChangePassword.value);
-            refreshDenied.value = true;
+            clearAuth(mustChangePassword.value)
+            refreshDenied.value = true
           }
-          return 'denied';
+          return 'denied'
         }
 
         // A 5xx (or a network blip) must not destroy a session that may still be valid: keep
         // the in-memory token and let the next navigation or request retry.
-        return 'transient';
+        return 'transient'
       }
 
-      const data = await res.json();
+      const data = await res.json()
       if (currentEpoch !== authEpoch) {
-        return 'transient';
+        return 'transient'
       }
 
       if (data.accessToken) {
-        setAuth(data.user || { id: '', email: '', role: '' }, data.accessToken);
-        return 'ok';
+        setAuth(data.user || { id: '', email: '', role: '' }, data.accessToken)
+        return 'ok'
       }
 
       if (currentEpoch === authEpoch) {
-        clearAuth(mustChangePassword.value);
+        clearAuth(mustChangePassword.value)
       }
-      return 'denied';
+      return 'denied'
     } catch {
       // Network failure: transient, exactly like a 5xx. Clearing here would log the user out
       // of a session the server never rejected.
-      return 'transient';
+      return 'transient'
     } finally {
       if (currentEpoch === authEpoch) {
-        isInitialized.value = true;
+        isInitialized.value = true
       }
     }
   }
@@ -191,16 +191,16 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function refreshSession(): Promise<RefreshOutcome> {
     if (refreshDenied.value) {
-      return 'denied';
+      return 'denied'
     }
 
     if (!inFlight) {
       inFlight = performInitAuth().finally(() => {
-        inFlight = null;
-      });
+        inFlight = null
+      })
     }
 
-    return inFlight;
+    return inFlight
   }
 
   /**
@@ -209,14 +209,14 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function initAuth(): Promise<boolean> {
     if (isInitialized.value && accessToken.value) {
-      return true;
+      return true
     }
 
     if (refreshDenied.value) {
-      return false;
+      return false
     }
 
-    return (await refreshSession()) === 'ok';
+    return (await refreshSession()) === 'ok'
   }
 
   /**
@@ -225,12 +225,12 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function logout(): Promise<{ success: boolean; error?: string }> {
     try {
-      let csrfToken = await getCsrfToken();
+      let csrfToken = await getCsrfToken()
       if (!csrfToken) {
         return {
           success: false,
           error: 'Gagal memvalidasi token keamanan (CSRF). Silakan coba lagi.',
-        };
+        }
       }
 
       let res = await fetch('/api/auth/logout', {
@@ -239,15 +239,15 @@ export const useAuthStore = defineStore('auth', () => {
         headers: {
           'x-csrf-token': csrfToken,
         },
-      });
+      })
 
       if (res.status === 403) {
-        csrfToken = await getCsrfToken();
+        csrfToken = await getCsrfToken()
         if (!csrfToken) {
           return {
             success: false,
             error: 'Gagal memvalidasi token keamanan (CSRF). Silakan coba lagi.',
-          };
+          }
         }
         res = await fetch('/api/auth/logout', {
           method: 'POST',
@@ -255,7 +255,7 @@ export const useAuthStore = defineStore('auth', () => {
           headers: {
             'x-csrf-token': csrfToken,
           },
-        });
+        })
       }
 
       // A 401 from /api/auth/logout means the session is already considered unauthenticated/expired
@@ -268,17 +268,17 @@ export const useAuthStore = defineStore('auth', () => {
         return {
           success: false,
           error: 'Gagal keluar dari sesi. Silakan coba lagi.',
-        };
+        }
       }
 
-      clearAuth();
-      refreshDenied.value = true;
-      return { success: true };
+      clearAuth()
+      refreshDenied.value = true
+      return { success: true }
     } catch {
       return {
         success: false,
         error: 'Terjadi kesalahan jaringan saat keluar. Silakan coba lagi.',
-      };
+      }
     }
   }
 
@@ -299,5 +299,5 @@ export const useAuthStore = defineStore('auth', () => {
     initAuth,
     refreshSession,
     logout,
-  };
-});
+  }
+})

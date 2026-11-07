@@ -152,7 +152,10 @@ const containerVariantClasses = computed(() => {
       class="relative mt-6 flex min-h-[280px] items-end justify-between sm:mt-10 sm:min-h-[340px] md:mt-12 md:min-h-[400px] lg:min-h-[460px]"
     >
       <!-- Bottom Left: Author Name & Position/Role using SectionTextArea -->
-      <div class="relative z-10 w-auto pb-6 sm:pb-8 md:pb-10" data-test="author-details">
+      <div
+        class="relative z-10 w-auto pb-6 sm:pb-8 md:pb-10"
+        data-test="author-details"
+      >
         <SectionTextArea
           :title="authorName"
           :description="effectiveAuthorPosition"
@@ -166,7 +169,7 @@ const containerVariantClasses = computed(() => {
           </template>
           <template v-else #title>
             <span
-              class="text-lg font-bold tracking-tight whitespace-nowrap sm:text-2xl md:text-3xl"
+              class="whitespace-nowrap text-lg font-bold tracking-tight sm:text-2xl md:text-3xl"
             >
               {{ authorName }}
             </span>
@@ -186,7 +189,7 @@ const containerVariantClasses = computed(() => {
 
       <!-- Bottom Right: Dynamic Portrait Photo or Elegant Silhouette Placeholder -->
       <div
-        class="pointer-events-none absolute -right-2 bottom-0 z-0 flex items-end justify-end sm:pointer-events-auto sm:static sm:right-auto sm:bottom-auto sm:shrink-0"
+        class="absolute -right-2 bottom-0 z-0 flex items-end justify-end pointer-events-none sm:pointer-events-auto sm:static sm:right-auto sm:bottom-auto sm:shrink-0"
         data-test="portrait-container"
       >
         <slot name="image">
@@ -203,7 +206,7 @@ const containerVariantClasses = computed(() => {
           <!-- Placeholder (when imageSrc is omitted or fails to load) -->
           <div
             v-else
-            class="mr-4 mb-6 flex h-56 w-44 flex-col items-center justify-center rounded-2xl border-2 border-dashed p-4 text-center transition-colors sm:mr-0 sm:mb-8 sm:h-72 sm:w-60 md:mb-10"
+            class="mb-6 mr-4 flex h-56 w-44 flex-col items-center justify-center rounded-2xl border-2 border-dashed p-4 text-center transition-colors sm:mb-8 sm:mr-0 sm:h-72 sm:w-60 md:mb-10"
             :class="[
               variant === 'light'
                 ? 'border-slate-300 bg-slate-100/80 text-slate-600'
