@@ -153,6 +153,41 @@ describe('LocationPicker', () => {
       expect(lastEmitted(wrapper)!.latitude).toBeCloseTo(PIN.latitude, 5);
     });
 
+    it('lets a pointer click on the toggle turn keyboard mode off and back on', async () => {
+      const wrapper = await mountPicker({ modelValue: PIN });
+      const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
+      const region = wrapper.get('[data-test="location-picker-region"]');
+      expect(toggle.text()).toBe('Mode keyboard');
+      await toggle.trigger('click');
+      expect(toggle.attributes('aria-pressed')).toBe('true');
+      // A real click: focus leaves the region towards the toggle, then the click fires.
+      region.element.dispatchEvent(
+        new FocusEvent('focusout', { bubbles: true, relatedTarget: toggle.element }),
+      );
+      await toggle.trigger('click');
+      expect(toggle.attributes('aria-pressed')).toBe('false');
+      expect(toggle.text()).toBe('Mode keyboard');
+      await toggle.trigger('click');
+      expect(toggle.attributes('aria-pressed')).toBe('true');
+    });
+
+    it('keeps keyboard mode on a window blur but leaves it when focus moves elsewhere', async () => {
+      const wrapper = await mountPicker({ modelValue: PIN });
+      const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
+      const region = wrapper.get('[data-test="location-picker-region"]');
+      await toggle.trigger('click');
+      region.element.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+      await nextTick();
+      expect(toggle.attributes('aria-pressed')).toBe('true');
+      const elsewhere = document.createElement('button');
+      document.body.append(elsewhere);
+      region.element.dispatchEvent(
+        new FocusEvent('focusout', { bubbles: true, relatedTarget: elsewhere }),
+      );
+      await nextTick();
+      expect(toggle.attributes('aria-pressed')).toBe('false');
+    });
+
     it('lets Escape leave keyboard mode without bubbling to a surrounding dialog', async () => {
       const wrapper = await mountPicker({ modelValue: PIN });
       const outer = vi.fn<() => void>();

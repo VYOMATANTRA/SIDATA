@@ -571,7 +571,12 @@ watch(keyboardMode, (on) => {
 function onFocusOut(event: FocusEvent): void {
   if (!keyboardMode.value) return;
   const next = event.relatedTarget;
-  if (next instanceof Node && region.value?.contains(next)) return;
+  // No related target means the window lost focus (alt-tab); keep the mode for when it returns.
+  if (!(next instanceof Node)) return;
+  if (region.value?.contains(next)) return;
+  // A pointer click on the toggle blurs the region first; the toggle's own click handler owns
+  // the on/off decision, otherwise this would switch off and the click would switch it back on.
+  if (next === keyboardToggle.value) return;
   keyboardMode.value = false;
 }
 
@@ -719,7 +724,7 @@ const buttonClasses =
           :data-test="`${testId}-keyboard`"
           @click="toggleKeyboardMode"
         >
-          {{ keyboardMode ? 'Matikan mode keyboard' : 'Aktifkan mode keyboard' }}
+          Mode keyboard
         </button>
       </div>
     </div>
