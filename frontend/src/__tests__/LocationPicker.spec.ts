@@ -327,6 +327,42 @@ describe('LocationPicker', () => {
       );
     });
 
+    it('keeps focus in the region when + or - keys reach the zoom limits in keyboard mode', async () => {
+      const wrapper = await mountPicker({ modelValue: PIN, minZoom: 15, maxZoom: 19 });
+      const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
+      const region = wrapper.get('[data-test="location-picker-region"]');
+      await toggle.trigger('click');
+      await flushPromises();
+      (region.element as HTMLElement).focus();
+      expect(document.activeElement).toBe(region.element);
+      for (let i = 0; i < 4; i += 1) await region.trigger('keydown', { key: '+' });
+      await flushPromises();
+      expect(
+        wrapper.get('[data-test="location-picker-zoom-in"]').attributes('disabled'),
+      ).toBeDefined();
+      expect(document.activeElement).toBe(region.element);
+      expect(toggle.attributes('aria-pressed')).toBe('true');
+      for (let i = 0; i < 6; i += 1) await region.trigger('keydown', { key: '-' });
+      await flushPromises();
+      expect(
+        wrapper.get('[data-test="location-picker-zoom-out"]').attributes('disabled'),
+      ).toBeDefined();
+      expect(document.activeElement).toBe(region.element);
+      expect(toggle.attributes('aria-pressed')).toBe('true');
+    });
+
+    it('hands focus to the zoom-in button after the zoom-out button disables itself', async () => {
+      const wrapper = await mountPicker({ modelValue: PIN, minZoom: 16 });
+      const zoomOut = wrapper.get('[data-test="location-picker-zoom-out"]');
+      (zoomOut.element as HTMLElement).focus();
+      await zoomOut.trigger('click');
+      await flushPromises();
+      expect(zoomOut.attributes('disabled')).toBeDefined();
+      expect(document.activeElement).toBe(
+        wrapper.get('[data-test="location-picker-zoom-in"]').element,
+      );
+    });
+
     it('clears the pin only when clearable', async () => {
       const plain = await mountPicker({ modelValue: PIN });
       expect(plain.find('[data-test="location-picker-clear"]').exists()).toBe(false);
@@ -401,7 +437,9 @@ describe('LocationPicker', () => {
       const wrapper = await mountPicker();
       const live = wrapper.get('[data-test="location-picker-announcement"]');
       const seen: string[] = [];
-      const observer = new MutationObserver(() => seen.push(live.element.textContent?.trim() ?? ''));
+      const observer = new MutationObserver(() =>
+        seen.push(live.element.textContent?.trim() ?? ''),
+      );
       observer.observe(live.element, { childList: true, characterData: true, subtree: true });
       try {
         clickMap(-1.2, 116.9);
@@ -648,7 +686,7 @@ describe('LocationPicker', () => {
       const wrapper = await mountPicker({ modelValue: VIEW, includeZoom: true });
       leafletState.center = { lat: -1.2251 + 0.0001, lng: 116.9438 };
       leafletState.handlers.moveend?.();
-      expect(lastEmitted(wrapper)).toEqual({ latitude: -1.2250, longitude: 116.9438, zoom: 13 });
+      expect(lastEmitted(wrapper)).toEqual({ latitude: -1.225, longitude: 116.9438, zoom: 13 });
       const count = wrapper.emitted('update:modelValue')?.length ?? 0;
       leafletState.center = { lat: -1.2251, lng: 116.9438 };
       leafletState.zoom = 14;

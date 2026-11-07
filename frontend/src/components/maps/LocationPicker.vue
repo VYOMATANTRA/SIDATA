@@ -520,6 +520,9 @@ function zoomBy(delta: 1 | -1): void {
   if (!map || !canZoom.value) return;
   const next = clampZoom(viewZoom.value + delta, props.minZoom, props.maxZoom);
   if (next === viewZoom.value) return;
+  // Only a button press leaves focus on a zoom button; a `+`/`-` key press keeps it in the region.
+  const pressed = delta > 0 ? zoomInButton.value : zoomOutButton.value;
+  const fromButton = pressed !== null && document.activeElement === pressed;
   viewZoom.value = next;
   if (viewport.value) {
     const center = viewCenter();
@@ -528,7 +531,9 @@ function zoomBy(delta: 1 | -1): void {
     runSilently(() => map?.setZoom(next, { animate: false }));
   }
   announce(delta > 0 ? 'Peta diperbesar.' : 'Peta diperkecil.');
-  // A button that just disabled itself must not drop focus on the page body (WCAG 2.4.3).
+  // A button that just disabled itself must not drop focus on the page body (WCAG 2.4.3). When
+  // the zoom came from a key, focus is in the region and must stay there.
+  if (!fromButton) return;
   void nextTick(() => {
     if (delta > 0 && atMaxZoom.value) zoomOutButton.value?.focus();
     if (delta < 0 && atMinZoom.value) zoomInButton.value?.focus();
