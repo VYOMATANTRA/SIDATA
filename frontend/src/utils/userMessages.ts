@@ -174,10 +174,23 @@ export function sanitizeFieldErrors(fieldMap: unknown): Record<string, string> {
   return result;
 }
 
+// camelCase or snake_case identifiers are field names from the API, not words a reader knows.
+const TECHNICAL_KEY = /\b[a-z]+[A-Z][A-Za-z]*\b|\b[a-z]+(?:_[a-z]+)+\b/;
+
+/** Approved wording for a refused template attach (indicators.service `assertTemplateAttachable`). */
+export const TEMPLATE_ATTACH_MESSAGE =
+  'Templat kalimat hanya bisa dipakai pada indikator yang memiliki nilai dan periode sebelumnya.';
+
 function readableServerMessage(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const text = value.trim();
-  return text !== '' && text.length <= MAX_SERVER_MESSAGE_LENGTH ? text : undefined;
+  if (text === '' || text.length > MAX_SERVER_MESSAGE_LENGTH) return undefined;
+  if (TECHNICAL_KEY.test(text)) {
+    // Never show a field name to the user: use approved wording for the known template case,
+    // and the generic validation sentence for anything else.
+    return /template perbandingan/i.test(text) ? TEMPLATE_ATTACH_MESSAGE : undefined;
+  }
+  return text;
 }
 
 /**

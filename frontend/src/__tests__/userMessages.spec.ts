@@ -109,6 +109,31 @@ describe('toUserMessage mappings', () => {
     expect(toUserMessage(Object.assign(error, { status: 422 })).kind).toBe('validation');
   });
 
+  it('never shows an API field name: template attach refusals get approved wording', () => {
+    const attach = Object.assign(httpFailure(400), {
+      serverMessage:
+        'Template perbandingan membutuhkan value_previous dan period_previous (nilai dan periode tahun lalu). Lepaskan template (comparisonTemplateId: null) jika indikator ini bukan perbandingan berpasangan.',
+    });
+    const notComputed = Object.assign(httpFailure(400), {
+      serverMessage:
+        'Template perbandingan hanya dapat dipakai pada indikator perbandingan terkomputasi (isComputedComparison: true).',
+    });
+    const expected =
+      'Gagal menyimpan perubahan indikator. Templat kalimat hanya bisa dipakai pada indikator yang memiliki nilai dan periode sebelumnya.';
+
+    expect(toUserMessage(attach, 'menyimpan perubahan indikator').message).toBe(expected);
+    expect(toUserMessage(notComputed, 'menyimpan perubahan indikator').message).toBe(expected);
+    expect(expected).not.toMatch(/comparisonTemplateId|_previous|isComputed/);
+  });
+
+  it('falls back to the general text for any other sentence that names a field key', () => {
+    const error = Object.assign(httpFailure(400), {
+      serverMessage: 'Field sortOrder harus berupa angka.',
+    });
+
+    expect(toUserMessage(error).message).toBe('Periksa kembali isian yang ditandai.');
+  });
+
   it('prefers the general text when a validation failure carries a field map', () => {
     const error = Object.assign(httpFailure(422), {
       serverMessage: 'Validasi gagal',
