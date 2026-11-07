@@ -197,4 +197,20 @@ describe('maps.controller :rtNumber handlers', () => {
       }
     }
   });
+
+  it('tags a stale-ownership 409 with code STALE_WRITE and leaves other 409s untagged', async () => {
+    stubMethod(tx as unknown as AnyRecord, 'spatialPoint', {
+      findUnique: async () => ({ id: 'point-1', type: 'bank_sampah', rtCoverages: [] }),
+    });
+    const stale = makeRes();
+    await deletePointHandler(
+      { ...makeReq({ id: 'point-1' }), query: { expectedRtNumber: '5' } } as never,
+      stale as never,
+    );
+    assert.equal(stale.statusCode, 409);
+    assert.deepEqual(stale.body, {
+      error: 'Lokasi RT telah berubah. Muat ulang data RT sebelum menyimpan.',
+      code: 'STALE_WRITE',
+    });
+  });
 });

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { apiRequestJson } from '../utils/apiClient';
+import { apiErrorFromResponse, apiRequestJson } from '../utils/apiClient';
+import { toUserMessage } from '../utils/userMessages';
 
 /**
  * The four fixed-shape matrix tables (SPEC §7): normalized rows, one row per logical group.
@@ -186,7 +187,7 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
         total.value = typeof data.total === 'number' ? data.total : tables.value.length;
         isLoaded.value = true;
       } catch (err) {
-        error.value = err instanceof Error ? err.message : 'Gagal memuat daftar tabel indikator.';
+        error.value = toUserMessage(err, 'memuat daftar tabel indikator', 'GET').message;
       } finally {
         isLoading.value = false;
         inFlight = null;
@@ -262,7 +263,7 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
         const params = new URLSearchParams({ sectionId, pageSize: '200' });
         const listResponse = await fetch(`/api/indicator-tables?${params.toString()}`);
         if (!listResponse.ok) {
-          throw new Error(`Gagal memuat tabel matriks (status ${listResponse.status})`);
+          throw await apiErrorFromResponse(listResponse, '/api/indicator-tables', 'GET');
         }
         const listData = (await listResponse.json()) as {
           tables: Array<{ id: string }>;
@@ -275,7 +276,7 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
               `/api/indicator-tables/${encodeURIComponent(summary.id)}`,
             );
             if (!detailResponse.ok) {
-              throw new Error(`Gagal memuat detail tabel matriks (status ${detailResponse.status})`);
+              throw await apiErrorFromResponse(detailResponse, '/api/indicator-tables/:id', 'GET');
             }
             const detailData = (await detailResponse.json()) as { table: IndicatorTableDetail };
             return detailData.table;
@@ -290,7 +291,7 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
         // never "the fetch failed". The error lives in errorsBySectionId instead.
         errorsBySectionId.value = {
           ...errorsBySectionId.value,
-          [sectionId]: err instanceof Error ? err.message : 'Terjadi kesalahan jaringan',
+          [sectionId]: toUserMessage(err, 'memuat tabel indikator', 'GET').message,
         };
         return [];
       } finally {

@@ -2,6 +2,8 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { authFetch } from '../utils/authFetch';
 import { getCsrfToken } from '../utils/csrf';
+import { apiErrorFromBody } from '../utils/apiClient';
+import { toUserMessage } from '../utils/userMessages';
 
 export interface AuditRetentionPolicy {
   info: number;
@@ -100,6 +102,14 @@ export function formatDurationLabel(days: number | unknown): string {
   return `${days} Hari`;
 }
 
+/** The server answered 200 with a retention payload this client cannot read. Our own text. */
+class RetentionFormatError extends Error {
+  constructor() {
+    super('Format pengaturan retensi dari server tidak valid.');
+    this.name = 'RetentionFormatError';
+  }
+}
+
 export const useAuditRetentionStore = defineStore('auditRetention', () => {
   const retention = ref<AuditRetentionPolicy>({
     info: 0,
@@ -125,7 +135,7 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `Gagal memuat pengaturan retensi audit (HTTP ${res.status})`);
+        throw apiErrorFromBody(res.status, body, 'GET');
       }
 
       const data = await res.json().catch(() => null);
@@ -135,16 +145,16 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
           : null;
 
       if (!parsed) {
-        throw new Error('Format pengaturan retensi dari server tidak valid.');
+        throw new RetentionFormatError();
       }
 
       retention.value = parsed;
       return true;
     } catch (err) {
       error.value =
-        err instanceof Error
+        err instanceof RetentionFormatError
           ? err.message
-          : 'Terjadi kesalahan jaringan saat memuat retensi audit.';
+          : toUserMessage(err, 'memuat pengaturan retensi audit', 'GET').message;
       return false;
     } finally {
       isLoading.value = false;
@@ -176,9 +186,7 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(
-          body.error || `Gagal memperbarui pengaturan retensi audit (HTTP ${res.status})`,
-        );
+        throw apiErrorFromBody(res.status, body, 'PUT');
       }
 
       const data = await res.json().catch(() => null);
@@ -187,7 +195,7 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
         if (record.retention !== undefined && record.retention !== null) {
           const parsed = parseRetention(record.retention);
           if (!parsed) {
-            throw new Error('Format pengaturan retensi dari server tidak valid.');
+            throw new RetentionFormatError();
           }
           retention.value = parsed;
         } else {
@@ -207,9 +215,9 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
       return true;
     } catch (err) {
       error.value =
-        err instanceof Error
+        err instanceof RetentionFormatError
           ? err.message
-          : 'Terjadi kesalahan jaringan saat memperbarui retensi audit.';
+          : toUserMessage(err, 'memperbarui pengaturan retensi audit').message;
       return false;
     } finally {
       isSaving.value = false;

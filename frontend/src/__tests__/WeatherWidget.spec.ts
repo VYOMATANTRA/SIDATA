@@ -6,6 +6,7 @@ import WeatherIcon from '../components/weather/WeatherIcon.vue';
 import WeatherCurrentCard from '../components/weather/WeatherCurrentCard.vue';
 import WeatherUpcomingCard from '../components/weather/WeatherUpcomingCard.vue';
 import { useWeatherStore } from '../stores/weather.store';
+import { READ_USER_MESSAGES } from '../utils/userMessages';
 
 describe('WeatherWidget.vue & Sub-Components (TDD & Accessibility)', () => {
   const mockWeatherData = {
@@ -588,7 +589,7 @@ describe('WeatherWidget.vue & Sub-Components (TDD & Accessibility)', () => {
 
       await vi.waitUntil(() => wrapper.find('[data-test="weather-stale-error"]').exists());
       expect(wrapper.find('[data-test="weather-stale-error"]').text()).toContain(
-        'Koneksi ke BMKG terputus',
+        `Gagal memuat data cuaca. ${READ_USER_MESSAGES.server}`,
       );
     });
 

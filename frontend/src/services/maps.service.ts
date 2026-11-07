@@ -1,3 +1,4 @@
+import { apiErrorFromResponse } from '../utils/apiClient';
 import type { SpatialPointDTO, MapSummaryDTO, SpatialPointFilter } from '../types/maps';
 
 const BASE_URL = '/api/maps';
@@ -10,7 +11,7 @@ export async function fetchSpatialPoints(filter?: SpatialPointFilter): Promise<S
   const url = `${BASE_URL}/points${params.toString() ? `?${params.toString()}` : ''}`;
   const res = await fetch(url, { credentials: 'include' });
   if (!res.ok) {
-    throw new Error(`Gagal memuat titik spasial (status ${res.status})`);
+    throw await apiErrorFromResponse(res, url, 'GET');
   }
   const data = (await res.json()) as { points: SpatialPointDTO[]; total: number };
   return data.points;
@@ -19,7 +20,7 @@ export async function fetchSpatialPoints(filter?: SpatialPointFilter): Promise<S
 export async function fetchMapSummary(): Promise<MapSummaryDTO> {
   const res = await fetch(`${BASE_URL}/summary`, { credentials: 'include' });
   if (!res.ok) {
-    throw new Error(`Gagal memuat ringkasan peta (status ${res.status})`);
+    throw await apiErrorFromResponse(res, `${BASE_URL}/summary`, 'GET');
   }
   return res.json() as Promise<MapSummaryDTO>;
 }

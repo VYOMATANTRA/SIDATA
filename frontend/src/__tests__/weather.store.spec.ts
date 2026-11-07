@@ -7,6 +7,7 @@ import {
   findCurrentForecastIndex,
   type WeatherForecastEntry,
 } from '../stores/weather.store';
+import { READ_USER_MESSAGES } from '../utils/userMessages';
 
 describe('Weather Pinia Store & Utilities (weather.store.ts)', () => {
   beforeEach(() => {
@@ -319,18 +320,19 @@ describe('Weather Pinia Store & Utilities (weather.store.ts)', () => {
 
       expect(res).toBeNull();
       expect(store.isLoading).toBe(false);
-      expect(store.error).toContain('HTTP 502');
+      expect(store.error).toBe(`Gagal memuat data cuaca. ${READ_USER_MESSAGES.server}`);
+      expect(store.error).not.toContain('502');
     });
 
     it('handles network throw exceptions gracefully', async () => {
-      globalThis.fetch = vi.fn<typeof fetch>().mockRejectedValue(new Error('Network offline'));
+      globalThis.fetch = vi.fn<typeof fetch>().mockRejectedValue(new TypeError('Failed to fetch'));
 
       const store = useWeatherStore();
       const res = await store.fetchWeather();
 
       expect(res).toBeNull();
       expect(store.isLoading).toBe(false);
-      expect(store.error).toBe('Network offline');
+      expect(store.error).toBe(`Gagal memuat data cuaca. ${READ_USER_MESSAGES.network}`);
     });
 
     it('derives currentEntry and upcomingEntries based on simulated reference time', async () => {
@@ -450,7 +452,7 @@ describe('Weather Pinia Store & Utilities (weather.store.ts)', () => {
       expect(store.windDirectionLocalized).toBe('Selatan'); // entry 0 is 'S' -> 'Selatan'
     });
 
-    it('extracts server-provided error message from response JSON', async () => {
+    it('shows approved wording instead of the server-provided error message', async () => {
       globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
         ok: false,
         status: 502,
@@ -460,8 +462,9 @@ describe('Weather Pinia Store & Utilities (weather.store.ts)', () => {
       const store = useWeatherStore();
       await store.fetchWeather();
 
-      expect(store.error).toContain('Gagal mengambil data cuaca dari BMKG');
-      expect(store.error).toContain('HTTP 502');
+      expect(store.error).toBe(`Gagal memuat data cuaca. ${READ_USER_MESSAGES.server}`);
+      expect(store.error).not.toContain('BMKG');
+      expect(store.error).not.toContain('502');
     });
 
     it('refreshes stale client cache when older than client cache TTL', async () => {

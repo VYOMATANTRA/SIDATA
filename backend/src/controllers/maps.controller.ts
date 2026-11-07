@@ -316,7 +316,9 @@ export const createPointHandler = async (req: AuthRequest, res: Response): Promi
     return res.status(201).json({ message: 'Titik spasial berhasil dibuat', point });
   } catch (error) {
     if (error instanceof MapsServiceError) {
-      return res.status(error.statusCode).json({ error: error.message });
+      return res
+        .status(error.statusCode)
+        .json(error.code ? { error: error.message, code: error.code } : { error: error.message });
     }
     console.error(
       'Error saat membuat titik spasial:',
@@ -348,7 +350,9 @@ export const updatePointHandler = async (req: AuthRequest, res: Response): Promi
     return res.status(200).json({ message: 'Titik spasial berhasil diperbarui', point });
   } catch (error) {
     if (error instanceof MapsServiceError) {
-      return res.status(error.statusCode).json({ error: error.message });
+      return res
+        .status(error.statusCode)
+        .json(error.code ? { error: error.message, code: error.code } : { error: error.message });
     }
     console.error(
       'Error saat memperbarui titik spasial:',
@@ -371,7 +375,9 @@ export const deletePointHandler = async (req: AuthRequest, res: Response): Promi
     return res.status(200).json({ message: 'Titik spasial berhasil dihapus', point });
   } catch (error) {
     if (error instanceof MapsServiceError) {
-      return res.status(error.statusCode).json({ error: error.message });
+      return res
+        .status(error.statusCode)
+        .json(error.code ? { error: error.message, code: error.code } : { error: error.message });
     }
     console.error(
       'Error saat menghapus titik spasial:',
@@ -396,7 +402,9 @@ export const createPointCoverageHandler = async (
     return res.status(201).json({ message: 'Coverage RT berhasil dibuat', coverage });
   } catch (error) {
     if (error instanceof MapsServiceError) {
-      return res.status(error.statusCode).json({ error: error.message });
+      return res
+        .status(error.statusCode)
+        .json(error.code ? { error: error.message, code: error.code } : { error: error.message });
     }
     console.error(
       'Error saat membuat coverage RT:',
@@ -426,7 +434,9 @@ export const deletePointCoverageHandler = async (
     return res.status(200).json({ message: 'Coverage RT berhasil dihapus', coverage });
   } catch (error) {
     if (error instanceof MapsServiceError) {
-      return res.status(error.statusCode).json({ error: error.message });
+      return res
+        .status(error.statusCode)
+        .json(error.code ? { error: error.message, code: error.code } : { error: error.message });
     }
     console.error(
       'Error saat menghapus coverage RT:',
@@ -448,7 +458,9 @@ export const updateRtLeaderHandler = async (req: AuthRequest, res: Response): Pr
     return res.status(200).json({ message: 'Ketua RT berhasil diperbarui', leader });
   } catch (error) {
     if (error instanceof MapsServiceError) {
-      return res.status(error.statusCode).json({ error: error.message });
+      return res
+        .status(error.statusCode)
+        .json(error.code ? { error: error.message, code: error.code } : { error: error.message });
     }
     console.error(
       'Error saat memperbarui Ketua RT:',
@@ -489,7 +501,9 @@ export const importRtLeaderCsvHandler = async (
     return res.status(200).json({ message: 'Impor Ketua RT berhasil', ...result });
   } catch (error) {
     if (error instanceof MapsServiceError) {
-      return res.status(error.statusCode).json({ error: error.message });
+      return res
+        .status(error.statusCode)
+        .json(error.code ? { error: error.message, code: error.code } : { error: error.message });
     }
     console.error(
       'Error saat mengimpor Ketua RT:',
@@ -516,7 +530,9 @@ export const setRtLeaderSampleStatusHandler = async (
     return res.status(200).json({ message: 'Status contoh daftar Ketua RT diperbarui', ...result });
   } catch (error) {
     if (error instanceof MapsServiceError) {
-      return res.status(error.statusCode).json({ error: error.message });
+      return res
+        .status(error.statusCode)
+        .json(error.code ? { error: error.message, code: error.code } : { error: error.message });
     }
     console.error(
       'Error saat memperbarui status daftar Ketua RT:',

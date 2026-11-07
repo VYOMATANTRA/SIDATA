@@ -8,6 +8,7 @@ import {
   type AuditRetentionPolicy,
 } from '../stores/auditRetention.store';
 import { useAuthStore } from '../stores/auth';
+import { READ_USER_MESSAGES } from '../utils/userMessages';
 
 describe('validateRetentionPolicy helper', () => {
   it('rejects negative numbers', () => {
@@ -139,7 +140,8 @@ describe('useAuditRetentionStore', () => {
     const store = useAuditRetentionStore();
     await store.fetchRetention();
 
-    expect(store.error).toBe('Terjadi kesalahan internal server');
+    expect(store.error).toBe(`Gagal memuat pengaturan retensi audit. ${READ_USER_MESSAGES.server}`);
+    expect(store.error).not.toContain('internal server');
     expect(store.isLoading).toBe(false);
   });
 

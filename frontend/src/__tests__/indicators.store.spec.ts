@@ -10,6 +10,7 @@ import {
   normalizeIndicatorSlug,
 } from '../stores/indicators.store';
 import { useAuthStore } from '../stores/auth';
+import { READ_USER_MESSAGES, USER_MESSAGES } from '../utils/userMessages';
 
 function json(body: unknown, ok = true, status = ok ? 200 : 500): Response {
   return { ok, status, json: async () => body } as Response;
@@ -151,7 +152,7 @@ describe('indicators store (CMS list and edits)', () => {
     const store = useIndicatorsStore();
     await store.fetchIndicators();
 
-    expect(store.error).toBe('Gagal');
+    expect(store.error).toBe(`Gagal memuat daftar indikator. ${READ_USER_MESSAGES.server}`);
     expect(store.isLoaded).toBe(false);
     expect(store.indicators).toEqual([]);
   });
@@ -258,7 +259,7 @@ describe('indicators store (global / landing page indicators)', () => {
     expect(store.indicators).toEqual([]);
     expect(store.isLoaded).toBe(false);
     expect(store.isLoading).toBe(false);
-    expect(store.error).toBe('Not Found');
+    expect(store.error).toBe(`Gagal memuat daftar indikator. ${USER_MESSAGES.not_found}`);
   });
 
   it('keeps previously loaded indicators on a failed refetch', async () => {
@@ -301,7 +302,8 @@ describe('indicators store (global / landing page indicators)', () => {
     } as Response);
 
     await store.fetchIndicators(true);
-    expect(store.error).toBe('Server error');
+    expect(store.error).toBe(`Gagal memuat daftar indikator. ${READ_USER_MESSAGES.server}`);
+    expect(store.error).not.toContain('Server error');
     // Crucial: old data is preserved, not wiped!
     expect(store.indicators).toHaveLength(1);
     expect(store.indicators[0]?.slug).toBe('penduduk');
@@ -347,7 +349,7 @@ describe('indicators store (global / landing page indicators)', () => {
     } as Response);
 
     await store.fetchIndicators(true);
-    expect(store.error).toBe('Not Found');
+    expect(store.error).toBe(`Gagal memuat daftar indikator. ${USER_MESSAGES.not_found}`);
     // Old data is preserved, not wiped!
     expect(store.indicators).toHaveLength(1);
     expect(store.indicators[0]?.slug).toBe('penduduk');
@@ -617,7 +619,9 @@ describe('indicators store (public per-section reads)', () => {
     const result = await store.fetchBySectionId('sec-1');
 
     expect(result).toEqual([]);
-    expect(store.errorsBySectionId['sec-1']).toContain('500');
+    expect(store.errorsBySectionId['sec-1']).toBe(
+      `Gagal memuat indikator. ${READ_USER_MESSAGES.server}`,
+    );
     // A failed fetch must never be written into bySectionId as [] — that would be
     // indistinguishable from a section that genuinely has no indicators.
     expect(store.bySectionId['sec-1']).toBeUndefined();
@@ -636,7 +640,9 @@ describe('indicators store (public per-section reads)', () => {
     const store = useIndicatorsStore();
     await Promise.all([store.fetchBySectionId('sec-fail'), store.fetchBySectionId('sec-ok')]);
 
-    expect(store.errorsBySectionId['sec-fail']).toContain('500');
+    expect(store.errorsBySectionId['sec-fail']).toBe(
+      `Gagal memuat indikator. ${READ_USER_MESSAGES.server}`,
+    );
     expect(store.errorsBySectionId['sec-ok']).toBeNull();
     expect(store.bySectionId['sec-ok']).toEqual([sampleIndicator]);
     expect(store.loadingBySectionId['sec-fail']).toBe(false);
@@ -725,7 +731,9 @@ describe('indicators store (single indicator reads by slug)', () => {
     const store = useIndicatorsStore();
     await Promise.all([store.fetchBySlug('fail-slug'), store.fetchBySlug('ok-slug')]);
 
-    expect(store.errorsBySlug['fail-slug']).toContain('500');
+    expect(store.errorsBySlug['fail-slug']).toBe(
+      `Gagal memuat indikator. ${READ_USER_MESSAGES.server}`,
+    );
     expect(store.errorsBySlug['ok-slug']).toBeNull();
     expect(store.bySlug['ok-slug']).toEqual(sampleIndicator);
     expect(store.loadingBySlug['fail-slug']).toBe(false);
@@ -803,7 +811,9 @@ describe('indicators store (single indicator reads by slug)', () => {
     const result = await store.fetchBySlug('jumlah-penduduk', true);
     expect(result).toBeNull();
     expect(store.bySlug['jumlah-penduduk']?.valueCurrent).toBe('53098');
-    expect(store.errorsBySlug['jumlah-penduduk']).toContain('500');
+    expect(store.errorsBySlug['jumlah-penduduk']).toBe(
+      `Gagal memuat indikator. ${READ_USER_MESSAGES.server}`,
+    );
   });
 
   it('evicts cached slug entry when a refetch returns 404', async () => {

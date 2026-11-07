@@ -26,6 +26,7 @@ import { useSettingsStore, type PublicSettings } from '../stores/settings.store'
 import { useAuthStore } from '../stores/auth';
 import { formatDecimalId } from '../utils/formatNumber';
 import { INPUT_CLASSES } from '../utils/formStyles';
+import { toUserMessage } from '../utils/userMessages';
 
 /**
  * CMS entry point for indicator data, content blocks, and public settings (SPEC §3/§4).
@@ -255,8 +256,8 @@ function announce(message: string): void {
   statusMessage.value = message;
 }
 
-function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message ? error.message : fallback;
+function errorMessage(error: unknown, action: string, method?: string): string {
+  return toUserMessage(error, action, method).message;
 }
 
 async function loadAll(): Promise<void> {
@@ -338,7 +339,7 @@ async function openTable(table: IndicatorTable): Promise<void> {
   try {
     activeTable.value = await tablesStore.fetchTableDetail(table.id);
   } catch (error) {
-    serverError.value = errorMessage(error, 'Gagal memuat rincian tabel. Silakan coba lagi.');
+    serverError.value = errorMessage(error, 'memuat rincian tabel', 'GET');
   } finally {
     isTableDetailLoading.value = false;
   }
@@ -369,7 +370,7 @@ async function handleContentBlockSubmit(payload: {
     resetEditor();
     announce(`Perubahan blok konten “${updated.title ?? updated.slug}” disimpan.`);
   } catch (error) {
-    serverError.value = errorMessage(error, 'Gagal menyimpan perubahan blok konten.');
+    serverError.value = errorMessage(error, 'menyimpan perubahan blok konten');
   } finally {
     saving.value = false;
   }
@@ -383,7 +384,7 @@ async function handleSettingsSubmit(patch: Partial<PublicSettings>): Promise<voi
     resetEditor();
     announce('Pengaturan publik portal berhasil disimpan.');
   } catch (error) {
-    serverError.value = errorMessage(error, 'Gagal menyimpan pengaturan publik.');
+    serverError.value = errorMessage(error, 'menyimpan pengaturan publik');
   } finally {
     saving.value = false;
   }
@@ -400,7 +401,7 @@ async function handleScalarSubmit(patch: IndicatorPatch): Promise<void> {
     resetEditor();
     announce(`Perubahan indikator “${target.label}” disimpan.`);
   } catch (error) {
-    serverError.value = errorMessage(error, 'Gagal menyimpan perubahan indikator.');
+    serverError.value = errorMessage(error, 'menyimpan perubahan indikator');
   } finally {
     saving.value = false;
   }
@@ -422,7 +423,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
     // Deliberately no refetch. Replacing `activeTable` would hand the form a new `table` prop,
     // and its watcher resets every draft — the failed row and the rows that were never sent.
     // The request wrote nothing, so the drafts are still exactly what the editor typed.
-    serverError.value = errorMessage(error, 'Gagal menyimpan perubahan tabel.');
+    serverError.value = errorMessage(error, 'menyimpan perubahan tabel');
   } finally {
     saving.value = false;
   }

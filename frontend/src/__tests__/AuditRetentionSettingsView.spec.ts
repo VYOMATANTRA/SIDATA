@@ -4,6 +4,7 @@ import { setActivePinia, createPinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import AuditRetentionSettingsView from '../views/AuditRetentionSettingsView.vue';
 import { useAuthStore } from '../stores/auth';
+import { READ_USER_MESSAGES, USER_MESSAGES } from '../utils/userMessages';
 
 function createTestRouter() {
   return createRouter({
@@ -220,7 +221,8 @@ describe('AuditRetentionSettingsView Client-Side Validation & Error Handling (No
 
     const serverAlert = wrapper.find('[data-test="server-error-banner"]');
     expect(serverAlert.exists()).toBe(true);
-    expect(serverAlert.text()).toContain('Database transaction lock timeout');
+    expect(serverAlert.text()).toContain(USER_MESSAGES.server);
+    expect(serverAlert.text()).not.toContain('Database transaction lock timeout');
   });
 
   it('disables save button and displays load error with retry button when initial fetch fails (non-happy path)', async () => {
@@ -244,7 +246,9 @@ describe('AuditRetentionSettingsView Client-Side Validation & Error Handling (No
     // 2. Server error banner and retry button are shown
     const serverAlert = wrapper.find('[data-test="server-error-banner"]');
     expect(serverAlert.exists()).toBe(true);
-    expect(serverAlert.text()).toContain('Gagal memuat pengaturan retensi audit dari server');
+    expect(serverAlert.text()).toContain(
+      `Gagal memuat pengaturan retensi audit. ${READ_USER_MESSAGES.server}`,
+    );
 
     const retryBtn = wrapper.find('button[data-test="retry-btn"]');
     expect(retryBtn.exists()).toBe(true);
