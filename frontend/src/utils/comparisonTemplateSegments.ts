@@ -46,7 +46,7 @@ export const TEMPLATE_CHIPS: readonly TemplateChip[] = [
   {
     slot: 'trend',
     name: 'Keterangan perubahan',
-    help: 'Diisi otomatis dengan teks "saat nilai naik", "turun", atau "tetap" sesuai angkanya.',
+    help: 'Diganti otomatis dengan kalimat dari kolom "Saat nilai naik", "Saat nilai turun", atau "Saat nilai tetap" sesuai arah angka.',
   },
 ];
 

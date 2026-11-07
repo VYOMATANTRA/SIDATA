@@ -499,12 +499,19 @@ const usageNote = computed(() => {
       >
         Centang konfirmasi pada setiap peringatan di atas untuk melanjutkan.
       </p>
-      <BaseButton variant="secondary" size="md" :disabled="saving" @click="emit('cancel')">
+      <BaseButton
+        variant="secondary"
+        size="md"
+        class="min-h-11"
+        :disabled="saving"
+        @click="emit('cancel')"
+      >
         Batal
       </BaseButton>
       <BaseButton
         type="submit"
         size="md"
+        class="min-h-11"
         :disabled="saving || awaitingConfirmation"
         :aria-describedby="awaitingConfirmation ? 'templat-simpan-bantuan' : undefined"
         data-test="save"

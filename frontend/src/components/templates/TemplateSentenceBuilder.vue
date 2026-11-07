@@ -288,6 +288,10 @@ const BUTTON =
       </button>
     </div>
 
+    <p class="text-text-muted mt-2 text-xs" data-test="space-hint">
+      Spasi di antara bagian tidak ditambahkan otomatis — ketik sendiri di bagian teks.
+    </p>
+
     <p
       v-if="mode === 'body' && trendTaken"
       :id="trendNoteId"
