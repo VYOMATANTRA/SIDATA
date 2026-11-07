@@ -9,7 +9,9 @@ import {
 } from './audit.service.js';
 import {
   HierarchyServiceError,
+  MAX_SORT_ORDER,
   RESERVED_SLUGS,
+  hasControlCharacters,
   STALE_WRITE_CODE,
   assertFresh,
   expectedUpdatedAtSchema,
@@ -53,19 +55,6 @@ export function isValidPageSlug(raw: unknown): raw is string {
 }
 
 export const RESERVED_PAGE_SLUGS = RESERVED_SLUGS;
-export const MAX_PAGE_SORT_ORDER = 2_147_483_647;
-
-const INVISIBLE_OR_BIDI_REGEX = /[\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/u;
-
-function hasControlCharacters(str: string): boolean {
-  for (let i = 0; i < str.length; i++) {
-    const code = str.charCodeAt(i);
-    if ((code >= 0 && code <= 31) || code === 127) {
-      return true;
-    }
-  }
-  return INVISIBLE_OR_BIDI_REGEX.test(str);
-}
 
 function hasPrototypePollution(val: unknown, depth = 0): boolean {
   if (depth > 10) return true;
@@ -94,6 +83,8 @@ function hasPrototypePollution(val: unknown, depth = 0): boolean {
   return false;
 }
 
+// Kept local on purpose: unlike slugifyTitle it does not strip diacritics (NFKD), and page slugs
+// derived from titles must stay byte-identical to the ones already published.
 function slugify(text: string): string {
   return text
     .toLowerCase()
@@ -327,7 +318,7 @@ export const createPage = async (
       typeof input.sortOrder !== 'number' ||
       !Number.isInteger(input.sortOrder) ||
       input.sortOrder < 0 ||
-      input.sortOrder > MAX_PAGE_SORT_ORDER
+      input.sortOrder > MAX_SORT_ORDER
     ) {
       throw new PageServiceError(
         'Urutan (sortOrder) harus berupa bilangan bulat antara 0 dan 2147483647',
@@ -351,7 +342,7 @@ export const createPage = async (
         const agg = await tx.page.aggregate({
           _max: { sortOrder: true },
         });
-        if (agg._max.sortOrder !== null && agg._max.sortOrder >= MAX_PAGE_SORT_ORDER) {
+        if (agg._max.sortOrder !== null && agg._max.sortOrder >= MAX_SORT_ORDER) {
           throw new PageServiceError(
             'Urutan halaman telah mencapai batas maksimum (2147483647)',
             400,
@@ -668,7 +659,7 @@ export const reorderPages = async (
       typeof itemObj.sortOrder !== 'number' ||
       !Number.isInteger(itemObj.sortOrder) ||
       itemObj.sortOrder < 0 ||
-      itemObj.sortOrder > MAX_PAGE_SORT_ORDER
+      itemObj.sortOrder > MAX_SORT_ORDER
     ) {
       throw new PageServiceError(
         'Urutan (sortOrder) harus berupa bilangan bulat antara 0 dan 2147483647',

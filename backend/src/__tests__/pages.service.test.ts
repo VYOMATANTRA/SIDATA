@@ -8,11 +8,11 @@ import {
   deletePage,
   reorderPages,
   PageServiceError,
-  MAX_PAGE_SORT_ORDER,
   toPageSummary,
   isValidPageSlug,
 } from '../services/pages.service.js';
 import type { AuditActor, AuditRequestContext } from '../services/audit.service.js';
+import { MAX_SORT_ORDER } from '../utils/hierarchyAuthoring.js';
 import prisma from '../utils/prisma.js';
 
 const EXPECTED_FIND_MANY_ARGS = {
@@ -1106,21 +1106,21 @@ describe('pages.service', () => {
       assert.equal(assignedSortOrder, 8);
     });
 
-    it('throws 400 PageServiceError when auto-assigned sortOrder exceeds MAX_PAGE_SORT_ORDER (INT overflow defense)', async () => {
+    it('throws 400 PageServiceError when auto-assigned sortOrder exceeds MAX_SORT_ORDER (INT overflow defense)', async () => {
       stubFindUnique(async () => null);
 
       prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
         const fakeTx = {
           page: {
             create: async (args: { data: { sortOrder: number } }) => {
-              if (args.data.sortOrder > MAX_PAGE_SORT_ORDER) {
+              if (args.data.sortOrder > MAX_SORT_ORDER) {
                 const dbOverflowErr = new Error('Value out of range for column sort_order');
                 (dbOverflowErr as unknown as { code: string }).code = 'ER_WARN_DATA_OUT_OF_RANGE';
                 throw dbOverflowErr;
               }
               return summaryRow({ id: 'p-new', ...args.data });
             },
-            aggregate: async () => ({ _max: { sortOrder: MAX_PAGE_SORT_ORDER } }),
+            aggregate: async () => ({ _max: { sortOrder: MAX_SORT_ORDER } }),
           },
           auditLog: {
             create: async () => ({ id: 'audit-1' }),
