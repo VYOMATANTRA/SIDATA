@@ -26,6 +26,10 @@ const FILE_MISSING_BODY = {
   error: 'Berkas media tidak tersedia saat ini.',
   code: 'MEDIA_FILE_MISSING',
 } as const;
+const STORAGE_UNAVAILABLE_BODY = {
+  error: 'Penyimpanan media sedang tidak tersedia.',
+  code: 'MEDIA_STORAGE_UNAVAILABLE',
+} as const;
 const INTERNAL_ERROR_BODY = { error: 'Terjadi kesalahan internal server' } as const;
 
 // One hour, revalidated: detaching an asset (un-publishing) must take effect within a bounded time
@@ -141,7 +145,14 @@ async function serveAsset(req: Request, res: Response, kind: ServeKind): Promise
     const wantsThumbnail = req.query['variant'] === 'thumbnail';
     if (wantsThumbnail && asset.kind !== 'photo') return res.status(404).json(NOT_FOUND_BODY);
 
-    const root = await getUploadRoot();
+    let root: string;
+    try {
+      root = await getUploadRoot();
+    } catch (error) {
+      // Unusable UPLOAD_DIR (see src/index.ts): a clean 503 with no path, never an unhandled 500.
+      logError('Penyimpanan media tidak tersedia:', error);
+      return res.status(503).json(STORAGE_UNAVAILABLE_BODY);
+    }
     const storageKey = wantsThumbnail ? buildThumbnailKey(asset.id) : asset.storageKey;
     const file = await resolveStoredFile(root, storageKey);
     if (!file) return res.status(404).json(FILE_MISSING_BODY);

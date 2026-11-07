@@ -113,7 +113,7 @@ async function assertNotOverlapping(
  * Boot-time preparation of the upload root: validates where it really is, creates it plus the
  * fixed subdirectories, proves it is writable, and returns its canonical (realpath) form — the
  * only form the rest of the media code ever compares against. Throws UploadRootError with an
- * operator-facing message; callers (src/index.ts) log it and refuse to start.
+ * operator-facing message; callers (src/index.ts at boot, the media request paths per request) log it and degrade media to 503.
  */
 export async function initUploadRoot(
   configured: string,

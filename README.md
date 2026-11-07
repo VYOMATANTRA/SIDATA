@@ -161,8 +161,10 @@ Checklist for a new environment (Docker on a VPS). Background: [`AGENTS.md`](AGE
      so it needs no grants change.
    - Create the host directory for the bind mount (`UPLOADS_HOST_DIR`, default `./uploads`) and make it
      writable by the user the backend runs as (the dev image runs as root). The server creates the
-     `_staging/`, `photos/`, `documents/` and `derivatives/` subdirectories itself and refuses to start,
-     with a clear log line, if `UPLOAD_DIR` is unwritable or inside `backend/` or `frontend/`.
+     `_staging/`, `photos/`, `documents/` and `derivatives/` subdirectories itself and checks `UPLOAD_DIR` at boot. If it is unwritable or inside `backend/` or `frontend/`, the server
+     still starts but logs a loud `WARNING: media storage is NOT usable` block; uploads and media delivery
+     answer 503 `MEDIA_STORAGE_UNAVAILABLE` (no path in the body) while everything else keeps serving, and
+     media recovers on its own (no restart) once the directory is fixed. Watch the boot log for that warning.
    - The editor preview route (`/api/media/<id>/preview`) needs the `Authorization` header; the CMS loads it
      with the authenticated API client and a blob URL, so the proxy must pass that header through.
    - **Back up the uploads directory and the `media_assets` table together**, from the same point in

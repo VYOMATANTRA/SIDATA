@@ -6,30 +6,63 @@ import { MEDIA_ORIGINAL_NAME_MAX_LENGTH, type MediaKindName } from './mediaPolic
 import { initUploadRoot, isInsideOrEqual } from './uploadRoot.js';
 
 // ---------------------------------------------------------------------------------------------
-// Upload root (canonical realpath), initialized once and cached.
+// Upload root (canonical realpath), initialized lazily; only a successful init is cached.
 // ---------------------------------------------------------------------------------------------
 
-let rootPromise: Promise<string> | null = null;
-
-/**
- * The canonical upload root. Boot (src/index.ts) awaits this first so a bad UPLOAD_DIR stops the
- * process; request paths just reuse the cached promise. A failed init is not cached, so a repaired
- * mount recovers without a restart.
- */
-export function getUploadRoot(): Promise<string> {
-  if (!rootPromise) {
-    const attempt = initUploadRoot(UPLOAD_DIR);
-    rootPromise = attempt;
-    attempt.catch(() => {
-      if (rootPromise === attempt) rootPromise = null;
-    });
-  }
-  return rootPromise;
+export interface UploadRootProvider {
+  get(): Promise<string>;
+  /** Test seam: pin the cached root (null forgets it). */
+  set(root: string | Error | null): void;
 }
 
-/** Test seam: pin the cached root to an already-prepared temporary directory (null resets). */
-export function setUploadRootForTesting(root: string | null): void {
-  rootPromise = root === null ? null : Promise.resolve(root);
+/**
+ * Lazily initializes the upload root and caches the SUCCESS only. A failed init is forgotten, so
+ * the next caller retries and media recovers as soon as the storage becomes usable (mount fixed,
+ * permissions repaired) without a restart.
+ */
+export function createUploadRootProvider(init: () => Promise<string>): UploadRootProvider {
+  let rootPromise: Promise<string> | null = null;
+  return {
+    get() {
+      if (!rootPromise) {
+        const attempt = init();
+        rootPromise = attempt;
+        attempt.catch(() => {
+          if (rootPromise === attempt) rootPromise = null;
+        });
+      }
+      return rootPromise;
+    },
+    set(root) {
+      if (root === null) {
+        rootPromise = null;
+      } else if (root instanceof Error) {
+        rootPromise = Promise.reject(root);
+        rootPromise.catch(() => undefined); // pinned failure: handled where it is awaited
+      } else {
+        rootPromise = Promise.resolve(root);
+      }
+    },
+  };
+}
+
+const defaultProvider = createUploadRootProvider(() => initUploadRoot(UPLOAD_DIR));
+
+/**
+ * The canonical upload root. Boot (src/index.ts) probes it once and only WARNS on failure: the
+ * rest of the API keeps serving, and every media request that needs the root retries here and
+ * answers 503 MEDIA_STORAGE_UNAVAILABLE while it is unusable. Failures are never cached.
+ */
+export function getUploadRoot(): Promise<string> {
+  return defaultProvider.get();
+}
+
+/**
+ * Test seam: pin the cached root to an already-prepared temporary directory, or pin a failure
+ * (an Error) to simulate an unusable UPLOAD_DIR. null resets.
+ */
+export function setUploadRootForTesting(root: string | Error | null): void {
+  defaultProvider.set(root);
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -32,7 +32,8 @@ import {
   type MediaUploadRequest,
 } from '../middlewares/mediaUpload.middleware.js';
 import { DOCUMENT_MAX_BYTES } from '../utils/mediaPolicy.js';
-import { setUploadRootForTesting } from '../utils/mediaStorage.js';
+import { createUploadRootProvider, setUploadRootForTesting } from '../utils/mediaStorage.js';
+import { UploadRootError } from '../utils/uploadRoot.js';
 import { UPLOAD_SUBDIRS } from '../utils/uploadRoot.js';
 import { installMediaDbStub, makeAsset, type MediaDbStub } from './helpers/mediaDbStub.js';
 import {
@@ -664,5 +665,105 @@ describe('GET /api/media/:id/preview authentication contract', () => {
       p.user.findUnique = originalFindUser;
       await new Promise((resolve) => server.close(resolve));
     }
+  });
+});
+
+describe('unusable upload root degrades media cleanly', () => {
+  const broken = () => new UploadRootError('UPLOAD_DIR is not usable (EACCES).');
+  const EXPECTED = {
+    error: 'Penyimpanan media sedang tidak tersedia.',
+    code: 'MEDIA_STORAGE_UNAVAILABLE',
+  };
+
+  async function silently<T>(fn: () => Promise<T>): Promise<T> {
+    const original = console.error;
+    console.error = () => undefined;
+    try {
+      return await fn();
+    } finally {
+      console.error = original;
+    }
+  }
+
+  it('uploads answer 503 MEDIA_STORAGE_UNAVAILABLE', async () => {
+    setUploadRootForTesting(broken());
+    const res = await silently(() =>
+      postUpload([
+        purposePart('publikasi-document'),
+        filePart('laporan.pdf', PDF_BYTES, 'application/pdf'),
+      ]),
+    );
+    assert.equal(res.statusCode, 503);
+    assert.deepEqual(res.body, EXPECTED);
+    assert.equal(db.assets.size, 0);
+  });
+
+  it('public and preview routes answer a clean 503 JSON with no path, not a 500', async () => {
+    setUploadRootForTesting(broken());
+    db.assets.set(ID, makeAsset({ id: ID, attachedAt: new Date() }));
+    const request = { params: { id: ID }, query: {} } as unknown as Request;
+    for (const handler of [publicMediaImageHandler, previewMediaHandler]) {
+      const res = makeMediaRes();
+      await silently(async () => handler(request, res as unknown as Response));
+      assert.equal(res.statusCode, 503);
+      assert.deepEqual(res.body, EXPECTED);
+      assert.equal(JSON.stringify(res.body).includes(root), false);
+    }
+    // Unattached/unknown assets still answer the indistinguishable 404 before storage is consulted.
+    db.assets.set(ID_DOC, makeAsset({ id: ID_DOC, attachedAt: null }));
+    const res = makeMediaRes();
+    await publicMediaImageHandler(
+      { params: { id: ID_DOC }, query: {} } as unknown as Request,
+      res as unknown as Response,
+    );
+    assert.equal(res.statusCode, 404);
+  });
+
+  it('a failed root init is never cached: the next call retries and succeeds', async () => {
+    let calls = 0;
+    const provider = createUploadRootProvider(async () => {
+      calls += 1;
+      if (calls < 3) throw new UploadRootError('UPLOAD_DIR is not usable (EACCES).');
+      return '/srv/uploads';
+    });
+    await assert.rejects(provider.get(), UploadRootError);
+    await assert.rejects(provider.get(), UploadRootError);
+    assert.equal(await provider.get(), '/srv/uploads');
+    // Success is cached: no further init.
+    assert.equal(await provider.get(), '/srv/uploads');
+    assert.equal(calls, 3);
+  });
+
+  it('concurrent callers share one in-flight init and a rejection clears it exactly once', async () => {
+    let calls = 0;
+    const provider = createUploadRootProvider(async () => {
+      calls += 1;
+      throw new UploadRootError('nope');
+    });
+    const results = await Promise.allSettled([provider.get(), provider.get(), provider.get()]);
+    assert.equal(calls, 1);
+    assert.equal(
+      results.every((r) => r.status === 'rejected'),
+      true,
+    );
+    await Promise.allSettled([provider.get()]);
+    assert.equal(calls, 2);
+  });
+
+  it('media works again once the storage becomes usable', async () => {
+    setUploadRootForTesting(broken());
+    const failed = await silently(() =>
+      postUpload([
+        purposePart('publikasi-document'),
+        filePart('laporan.pdf', PDF_BYTES, 'application/pdf'),
+      ]),
+    );
+    assert.equal(failed.statusCode, 503);
+    setUploadRootForTesting(root); // what a fixed mount looks like to the next request
+    const ok = await postUpload([
+      purposePart('publikasi-document'),
+      filePart('laporan.pdf', PDF_BYTES, 'application/pdf'),
+    ]);
+    assert.equal(ok.statusCode, 201);
   });
 });
