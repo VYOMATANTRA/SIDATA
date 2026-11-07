@@ -449,6 +449,7 @@ onUnmounted(() => {
   window.removeEventListener('keydown', escapeGuard, true);
   geoRequest += 1;
   window.clearTimeout(resizeTimer);
+  clearTogglePress();
   clearAnnouncement();
   resizeObserver?.disconnect();
   resizeObserver = null;
@@ -589,7 +590,30 @@ function detectLocation(): void {
   );
 }
 
+/**
+ * Set while a pointer press on the keyboard toggle is in flight. Browsers that do not focus a
+ * button on click (Safari, Firefox on macOS, iOS Safari) blur the region with no related target
+ * before the click fires; without this flag that would read as a click-away and end the mode,
+ * and the click would then switch it straight back on.
+ */
+let togglePressing = false;
+let togglePressTimer: number | undefined;
+const TOGGLE_PRESS_TIMEOUT_MS = 300;
+
+function clearTogglePress(): void {
+  togglePressing = false;
+  window.clearTimeout(togglePressTimer);
+}
+
+function markTogglePress(): void {
+  togglePressing = true;
+  window.clearTimeout(togglePressTimer);
+  // A press dragged off the button never produces a click; do not leave the flag stuck.
+  togglePressTimer = window.setTimeout(clearTogglePress, TOGGLE_PRESS_TIMEOUT_MS);
+}
+
 function toggleKeyboardMode(): void {
+  clearTogglePress();
   if (!editable.value) return;
   keyboardMode.value = !keyboardMode.value;
   announce(
@@ -652,6 +676,7 @@ function onFocusOut(event: FocusEvent): void {
   if (!(next instanceof Node)) {
     // No related target: either the window lost focus (alt-tab; keep the mode for when it
     // returns) or a click landed on non-focusable page content (the document still has focus).
+    if (togglePressing) return;
     if (typeof document !== 'undefined' && document.hasFocus()) keyboardMode.value = false;
     return;
   }
@@ -806,6 +831,9 @@ const buttonClasses =
           :aria-pressed="keyboardMode"
           :aria-describedby="keysId"
           :data-test="`${testId}-keyboard`"
+          @pointerdown="markTogglePress"
+          @mousedown="markTogglePress"
+          @touchstart.passive="markTogglePress"
           @click="toggleKeyboardMode"
         >
           Mode keyboard

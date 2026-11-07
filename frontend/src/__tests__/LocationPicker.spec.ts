@@ -171,6 +171,62 @@ describe('LocationPicker', () => {
       expect(toggle.attributes('aria-pressed')).toBe('true');
     });
 
+    it('does not double-flip when the browser blurs the region without focusing the toggle', async () => {
+      const wrapper = await mountPicker({ modelValue: PIN });
+      const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
+      const region = wrapper.get('[data-test="location-picker-region"]');
+      const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+      try {
+        await toggle.trigger('click');
+        expect(toggle.attributes('aria-pressed')).toBe('true');
+        // Safari/Firefox on macOS: pointerdown, then a blur with no related target, then click.
+        await toggle.trigger('pointerdown');
+        region.element.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+        await toggle.trigger('click');
+        expect(toggle.attributes('aria-pressed')).toBe('false');
+        // A normal click while OFF turns it ON.
+        await toggle.trigger('pointerdown');
+        await toggle.trigger('click');
+        expect(toggle.attributes('aria-pressed')).toBe('true');
+      } finally {
+        hasFocus.mockRestore();
+      }
+    });
+
+    it('still ends keyboard mode on a click-away without a toggle press in progress', async () => {
+      const wrapper = await mountPicker({ modelValue: PIN });
+      const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
+      const region = wrapper.get('[data-test="location-picker-region"]');
+      const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+      try {
+        await toggle.trigger('click');
+        region.element.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+        await nextTick();
+        expect(toggle.attributes('aria-pressed')).toBe('false');
+      } finally {
+        hasFocus.mockRestore();
+      }
+    });
+
+    it('forgets a toggle press that never produced a click', async () => {
+      vi.useFakeTimers();
+      const wrapper = await mountPicker({ modelValue: PIN });
+      const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
+      const region = wrapper.get('[data-test="location-picker-region"]');
+      const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+      try {
+        await toggle.trigger('click');
+        await toggle.trigger('pointerdown');
+        vi.advanceTimersByTime(400);
+        region.element.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+        await nextTick();
+        expect(toggle.attributes('aria-pressed')).toBe('false');
+      } finally {
+        hasFocus.mockRestore();
+        vi.useRealTimers();
+      }
+    });
+
     it('leaves keyboard mode when focus moves to another control', async () => {
       const wrapper = await mountPicker({ modelValue: PIN });
       const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
