@@ -244,7 +244,7 @@ const modalDescription = computed(() => {
     return `Slug: ${activeContentBlock.value.slug} · Tipe: ${activeContentBlock.value.type}`;
   }
   if (isEditingSettings.value) {
-    return 'Pengaturan profil institusi, kontak pelayanan, dan titik koordinat peta default.';
+    return 'Pengaturan profil institusi, kontak pelayanan, dan tampilan awal peta.';
   }
   const sectionId = activeScalar.value?.sectionId ?? activeTable.value?.sectionId;
   if (!sectionId) return undefined;

@@ -75,6 +75,8 @@ const fieldErrors = computed<Record<string, string | undefined>>(() => {
   }
 
   const view = mapView.value;
+  // Defensive: the picker only emits normalised, clamped views, so this branch is a safety net
+  // for a malformed value from a future caller rather than a state an editor can reach.
   if (
     view === null ||
     !Number.isFinite(view.latitude) ||
@@ -121,6 +123,7 @@ const dirty = computed(() => {
   const saved = props.settings;
   const view = mapView.value;
   const savedView = saved.defaultCoordinates;
+  // `!savedView` is defensive: the backend always supplies default coordinates.
   const viewChanged =
     view === null ||
     !savedView ||
