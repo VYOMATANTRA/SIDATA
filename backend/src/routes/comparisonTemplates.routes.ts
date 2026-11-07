@@ -13,6 +13,7 @@ import {
   apiLimiter,
   comparisonTemplatesWriteLimiter,
   comparisonTemplatesPreviewLimiter,
+  comparisonTemplatesPreviewPreAuthLimiter,
 } from '../middlewares/rateLimit.middleware.js';
 
 const router = Router();
@@ -33,10 +34,12 @@ router.post(
 );
 // Live preview: a POST only because it carries a draft body, so it is CSRF-protected like the
 // other mutating routes. It stores nothing and fires while an admin types, so it has its own
-// roomier per-user bucket instead of draining the save budget.
+// roomier per-user bucket instead of draining the save budget. It deliberately skips the shared
+// apiLimiter (300/15min per IP, also used by public routes): a separate, generous pre-auth guard
+// stops unauthenticated floods, and the per-user limiter is the real ceiling once authenticated.
 router.post(
   '/preview',
-  apiLimiter,
+  comparisonTemplatesPreviewPreAuthLimiter,
   verifyToken,
   requireAdmin,
   comparisonTemplatesPreviewLimiter,

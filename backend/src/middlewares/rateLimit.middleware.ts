@@ -75,6 +75,11 @@ export const comparisonTemplatesWriteLimiter = createUserKeyedLimiter(100);
 // gets its own roomier bucket keyed by user ID rather than draining the 100/15min save budget)
 export const comparisonTemplatesPreviewLimiter = createUserKeyedLimiter(1000);
 
+// Pre-auth flood guard for the preview route only. A separate instance from the shared
+// apiLimiter (so preview traffic never drains the 300/15min public-site budget), with a cap high
+// enough that admins behind one NAT are bound by the per-user limiter above, not by this one.
+export const comparisonTemplatesPreviewPreAuthLimiter = createLimiter(5000);
+
 // Indicator tables CMS write operations rate limiter (dedicated 100 req/15min bucket keyed by
 // user ID, separate from indicatorsWriteLimiter so matrix-table edits and scalar-figure edits
 // do not drain each other)

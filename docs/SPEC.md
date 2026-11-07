@@ -359,7 +359,8 @@ clearing the pair still detaches the template in the same request.
   create (suffix `-2`, `-3`… on collision, retried if another admin takes it first), never shown,
   never edited.
 - **Live preview** comes from `POST /api/comparison-templates/preview` (Admin-only, CSRF, own
-  per-user limiter), which renders the draft through the same `renderComparison` the public read
+  per-user limiter of 1000 req/15min, behind a separate generous pre-auth IP guard rather than the
+  shared public `apiLimiter`), which renders the draft through the same `renderComparison` the public read
   path uses over synthetic naik / turun / tetap / zero-previous examples, so exact decimals, id-ID
   numbers and the "no percentage of a zero base" rule are identical. An unfinished draft answers 200
   with `valid: false` and plain-language `problems`; it stores and audits nothing. The client

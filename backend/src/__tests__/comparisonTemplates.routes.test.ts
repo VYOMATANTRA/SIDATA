@@ -16,6 +16,7 @@ import {
   apiLimiter,
   comparisonTemplatesWriteLimiter,
   comparisonTemplatesPreviewLimiter,
+  comparisonTemplatesPreviewPreAuthLimiter,
   contentBlocksWriteLimiter,
   indicatorsWriteLimiter,
   settingsWriteLimiter,
@@ -127,14 +128,26 @@ describe('comparisonTemplates.routes wiring', () => {
   });
 
   describe('live preview is admin-only with its own roomier limiter', () => {
-    it('POST /preview runs apiLimiter → verifyToken → requireAdmin → preview limiter → handler', () => {
+    it('POST /preview runs pre-auth guard → verifyToken → requireAdmin → per-user preview limiter → handler', () => {
       assert.deepEqual(handlesOf('post', '/preview'), [
-        apiLimiter,
+        comparisonTemplatesPreviewPreAuthLimiter,
         verifyToken,
         requireAdmin,
         comparisonTemplatesPreviewLimiter,
         previewComparisonTemplateHandler,
       ]);
+    });
+
+    it('does not use the shared apiLimiter, and auth/role come before the per-user limiter', () => {
+      const handles = handlesOf('post', '/preview');
+
+      assert.equal(handles.includes(apiLimiter as never), false);
+      assert.notEqual(comparisonTemplatesPreviewPreAuthLimiter, apiLimiter);
+      assert.ok(handles.includes(comparisonTemplatesPreviewLimiter as never));
+      const idx = (h: unknown) => handles.indexOf(h);
+      assert.ok(idx(verifyToken) < idx(requireAdmin));
+      assert.ok(idx(requireAdmin) < idx(comparisonTemplatesPreviewLimiter));
+      assert.ok(idx(comparisonTemplatesPreviewLimiter) < idx(previewComparisonTemplateHandler));
     });
 
     it('is not reachable by editors and does not drain the save bucket', () => {
