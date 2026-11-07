@@ -262,6 +262,7 @@ describe('AppFooter.vue', () => {
     expect(bpsLink.attributes('href')).toBe('https://www.bps.go.id');
     expect(bpsLink.attributes('target')).toBe('_blank');
     expect(bpsLink.attributes('rel')).toContain('noopener');
+    expect(bpsLink.attributes('aria-label')).toContain('(membuka tab baru)');
     expect(bpsLink.find('[data-test="logo-bps"]').exists()).toBe(true);
 
     // ITK outbound link
@@ -270,6 +271,7 @@ describe('AppFooter.vue', () => {
     expect(itkLink.attributes('href')).toBe('https://itk.ac.id');
     expect(itkLink.attributes('target')).toBe('_blank');
     expect(itkLink.attributes('rel')).toContain('noopener');
+    expect(itkLink.attributes('aria-label')).toContain('(membuka tab baru)');
     expect(itkLink.find('[data-test="logo-itk"]').exists()).toBe(true);
 
     // Tim Inovasi Sosial VYOMATANTRA link

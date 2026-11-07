@@ -203,6 +203,7 @@ async function resendOtp() {
   <div
     role="dialog"
     aria-modal="true"
+    aria-labelledby="otp-verification-title"
     v-if="isOpen"
     class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
   >
@@ -228,7 +229,9 @@ async function resendOtp() {
             />
           </svg>
         </div>
-        <h3 class="text-xl font-bold text-slate-800">Verifikasi Kode OTP</h3>
+        <h3 id="otp-verification-title" class="text-xl font-bold text-slate-800">
+          Verifikasi Kode OTP
+        </h3>
         <p class="mt-1 text-sm text-slate-500">
           Masukkan 6 digit kode yang dikirim ke <br />
           <span class="font-semibold text-slate-700">{{ email }}</span>

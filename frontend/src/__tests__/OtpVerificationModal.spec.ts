@@ -174,4 +174,22 @@ describe('OtpVerificationModal network requests', () => {
 
     vi.useRealTimers();
   });
+
+  it('marks root container with role="dialog", aria-modal="true", and aria-labelledby pointing to title', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+
+    const wrapper = mount(OtpVerificationModal, {
+      props: { isOpen: true, email: 'user@example.com' },
+      global: { plugins: [pinia] },
+    });
+
+    const dialog = wrapper.find('[role="dialog"]');
+    expect(dialog.exists()).toBe(true);
+    expect(dialog.attributes('aria-modal')).toBe('true');
+    expect(dialog.attributes('aria-labelledby')).toBe('otp-verification-title');
+    const title = wrapper.find('#otp-verification-title');
+    expect(title.exists()).toBe(true);
+    expect(title.text()).toBe('Verifikasi Kode OTP');
+  });
 });

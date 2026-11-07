@@ -254,21 +254,35 @@ describe('AppNavbar.vue', () => {
       attachTo: document.body,
     });
 
-    // Create an open dialog in the DOM to simulate an active modal (e.g. OtpVerificationModal)
-    const dialog = document.createElement('dialog');
-    dialog.setAttribute('open', '');
-    document.body.appendChild(dialog);
-
     const hamburger = wrapper.find<HTMLButtonElement>('[data-test="hamburger-btn"]');
     await hamburger.trigger('click');
     expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(true);
 
-    // Escape fired while dialog is open must not close the navbar menu
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    // Simulate an open modal dialog (e.g. OtpVerificationModal) with focused element inside
+    const modal = document.createElement('div');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'otp-verification-title');
+    const modalInput = document.createElement('input');
+    modal.appendChild(modalInput);
+    document.body.appendChild(modal);
+    modalInput.focus();
+
+    // Escape fired while focus is inside the modal dialog must not close the navbar menu
+    modalInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     await wrapper.vm.$nextTick();
     expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(true);
 
-    dialog.remove();
+    // Conversely, when focus is inside the navbar menu, Escape must close the drawer
+    const drawerLink = wrapper.find<HTMLAnchorElement>('[data-test="nav-menu-drawer"] a');
+    drawerLink.element.focus();
+    drawerLink.element.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(false);
+
+    modal.remove();
     wrapper.unmount();
   });
 
