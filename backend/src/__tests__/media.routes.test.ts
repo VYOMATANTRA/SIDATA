@@ -5,7 +5,11 @@ import mediaRouter from '../routes/media.routes.js';
 import { verifyToken } from '../middlewares/auth.middleware.js';
 import { requireEditorOrAdmin } from '../middlewares/role.middleware.js';
 import { acceptMediaUpload } from '../middlewares/mediaUpload.middleware.js';
-import { mediaReadLimiter, mediaWriteLimiter } from '../middlewares/rateLimit.middleware.js';
+import {
+  apiLimiter,
+  mediaReadLimiter,
+  mediaWriteLimiter,
+} from '../middlewares/rateLimit.middleware.js';
 import { doubleCsrfProtection } from '../middlewares/csrf.middleware.js';
 import { uploadMediaHandler } from '../controllers/media.controller.js';
 
@@ -37,6 +41,8 @@ describe('media routes: wiring', () => {
     const handles = layer.route.stack.map((s) => s.handle);
     const idx = (fn: unknown) => handles.indexOf(fn as never);
 
+    assert.ok(idx(apiLimiter) !== -1, 'a per-IP limiter must run before token verification');
+    assert.ok(idx(apiLimiter) < idx(verifyToken));
     assert.ok(idx(verifyToken) !== -1 && idx(requireEditorOrAdmin) !== -1);
     assert.ok(idx(mediaWriteLimiter) !== -1 && idx(acceptMediaUpload) !== -1);
     assert.ok(idx(verifyToken) < idx(requireEditorOrAdmin));
