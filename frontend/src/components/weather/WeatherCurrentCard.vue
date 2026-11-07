@@ -83,9 +83,11 @@ const srWindDirectionText = computed(() =>
         >
           Perkiraan Cuaca {{ locationName || 'Manggar' }}
         </p>
-        <span class="text-brand-cyan text-xs font-bold tracking-wider uppercase">
-          {{ stale ? 'DATA TERAKHIR' : 'SAAT INI' }}
-        </span>
+          <div class="flex items-center gap-1.5 text-xs font-bold tracking-wider uppercase mt-0.5">
+            <span class="text-white">{{ stale ? 'DATA TERAKHIR' : 'SAAT INI' }}</span>
+            <span class="text-white/40">•</span>
+            <span class="text-slate-300 font-semibold text-[11px]">SUMBER: BMKG</span>
+          </div>
       </div>
 
       <div
