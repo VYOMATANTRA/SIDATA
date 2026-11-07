@@ -338,6 +338,41 @@ saved, so changing the wording needs a fresh acknowledgment. Overrides are logge
 (`comparison_template.keyword_warning_overridden`, §3) for after-the-fact tracing only, not
 proactive catching — see §6 for why.
 
+**Authoring and selection UI.** Admin authors templates at *Sistem → Templat kalimat*
+(`/admin/sistem/templat-kalimat`, Admin-only; an Editor is redirected even by direct URL). Editors
+only choose: `ScalarIndicatorForm` shows a "Templat kalimat perbandingan" selector, with a
+"Tanpa templat" option, when the indicator is already flagged `is_computed_comparison` **and** its
+draft has both a previous value and a previous period; a pair alone never makes it appear, and
+clearing the pair still detaches the template in the same request.
+
+- **No syntax is shown to people.** The sentence is edited as an ordered list of parts (free text
+  and named chips) with add, remove and move up/down buttons — no textarea showing braces, no
+  drag-only ordering. Chips are UI-only names for the slots: Nama indikator `{label}`, Satuan
+  `{unit}`, Nilai sekarang `{value_current}`, Nilai sebelumnya `{value_previous}`, Periode sekarang
+  `{period_current}`, Periode sebelumnya `{period_previous}`, Selisih `{delta}`, Persentase
+  perubahan `{delta_percent}`, Keterangan perubahan `{trend}`. Stored data and the API are
+  unchanged. Free text drops braces as typed; any unrecognised or legacy braces in an existing
+  body parse into a removable "Bagian tidak dikenali" part and block saving until removed.
+- **Fields.** Nama templat (`label`), Susunan kalimat (`body`, exactly one "Keterangan perubahan"
+  chip; a second cannot be added), Saat nilai naik / turun / tetap (`trendNaik` / `trendTurun` /
+  `trendTetap`; every chip except "Keterangan perubahan"). The `slug` is generated from the name on
+  create (suffix `-2`, `-3`… on collision, retried if another admin takes it first), never shown,
+  never edited.
+- **Live preview** comes from `POST /api/comparison-templates/preview` (Admin-only, CSRF, own
+  per-user limiter), which renders the draft through the same `renderComparison` the public read
+  path uses over synthetic naik / turun / tetap / zero-previous examples, so exact decimals, id-ID
+  numbers and the "no percentage of a zero base" rule are identical. An unfinished draft answers 200
+  with `valid: false` and plain-language `problems`; it stores and audits nothing. The client
+  debounces it and skips it while its own checks fail.
+- **Trend-keyword acknowledgment.** On `422 TREND_KEYWORD_ACK_REQUIRED` the form lists each flagged
+  phrase with a plain warning and one confirmation checkbox per phrase; the app echoes the `ackKey`s
+  in `acknowledgedWarnings` and clears them after any edit to the main sentence. Status, code and
+  key are never displayed, and the server's 400/422 sentence (which quotes placeholder syntax) is
+  never shown for template saves — only approved wording from `toUserMessage`.
+- **Delete.** Confirmation names the template. An in-use template (usage count > 0, or a `409`)
+  explains with the count that indicators must be detached or reassigned first. The "Terpasang"
+  badge derives from `usageCount`.
+
 **Tier 2 — general narrative** (page prose, Sambutan Lurah). Free text, house-style-guided, no
 system enforcement.
 
@@ -414,7 +449,8 @@ RESTRICT` (MySQL forbids CASCADE/SET NULL on a column used in a `CHECK`), so a t
   enforces the §5 attach rule in the database. Read via `GET /api/comparison-templates` and
   `/:id` (Editor or Admin — templates are not public content, only the rendered sentence is);
   mutated via Admin-only `POST` / `PATCH /:id` / `DELETE /:id` (CSRF-protected, logged as
-  `comparison_template.created` / `.updated` / `.deleted`, plus the override action in §3).
+  `comparison_template.created` / `.updated` / `.deleted`, plus the override action in §3), and the
+  Admin-only, stateless `POST /preview` of §5 (no table access, no audit row).
   Seeded with a default `perbandingan-tahunan` template.
 
 Weather widget data (§8) has no table here, and isn't merely uncovered by this pass — it's
@@ -562,9 +598,10 @@ Admin-only **Sistem** group (Akun pengguna, Templat kalimat, Konfigurasi sistem,
 Visibility is driven by a single role-to-items map (`frontend/src/config/adminNav.ts`) that the
 route guards also read from, so the sidebar and the guards cannot disagree about who can reach a
 given page — a resource a role isn't authorized for is absent from the sidebar entirely, not
-merely disabled. Cerita, Templat kalimat, and Konfigurasi sistem are not built yet; their sidebar
-entries carry a "Segera hadir" badge and open a minimal placeholder view rather than being hidden.
-Rukun Tetangga opens its real management view; Peta and Publikasi still open placeholders.
+merely disabled. Cerita and Konfigurasi sistem are not built yet; their sidebar entries carry a
+"Segera hadir" badge and open a minimal placeholder view rather than being hidden. Rukun Tetangga
+and Templat kalimat (§5) open their real management views; Peta and Publikasi still open
+placeholders.
 
 ## 9. Explicitly Out of Scope
 
