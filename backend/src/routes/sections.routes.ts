@@ -1,8 +1,17 @@
 import { Router } from 'express';
-import { updateSectionHandler, deleteSectionHandler } from '../controllers/sections.controller.js';
+import {
+  updateSectionHandler,
+  deleteSectionHandler,
+  createSectionBlockHandler,
+  reorderSectionBlocksHandler,
+} from '../controllers/sections.controller.js';
 import { verifyToken } from '../middlewares/auth.middleware.js';
 import { requireEditorOrAdmin } from '../middlewares/role.middleware.js';
-import { apiLimiter, pagesWriteLimiter } from '../middlewares/rateLimit.middleware.js';
+import {
+  apiLimiter,
+  pagesWriteLimiter,
+  contentBlocksWriteLimiter,
+} from '../middlewares/rateLimit.middleware.js';
 
 const router = Router();
 
@@ -24,6 +33,24 @@ router.delete(
   requireEditorOrAdmin,
   pagesWriteLimiter,
   deleteSectionHandler,
+);
+
+// Section prose blocks (budgeted with the other content-block writes)
+router.post(
+  '/:id/content-blocks',
+  apiLimiter,
+  verifyToken,
+  requireEditorOrAdmin,
+  contentBlocksWriteLimiter,
+  createSectionBlockHandler,
+);
+router.put(
+  '/:id/content-blocks/reorder',
+  apiLimiter,
+  verifyToken,
+  requireEditorOrAdmin,
+  contentBlocksWriteLimiter,
+  reorderSectionBlocksHandler,
 );
 
 export default router;
