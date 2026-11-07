@@ -3,7 +3,7 @@ import { mount, type VueWrapper } from '@vue/test-utils';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import AppNavbar from '../components/common/AppNavbar.vue';
 import { stubViewport, stubResizableViewport } from './helpers/viewport';
-import { acquireBodyScrollLock } from '../utils/bodyScrollLock';
+import { acquireBodyScrollLock, resetBodyScrollLockForTests } from '../utils/bodyScrollLock';
 
 function createMockRouter() {
   return createRouter({
@@ -14,6 +14,23 @@ function createMockRouter() {
     ],
   });
 }
+
+// Every wrapper mounted through `mountNavbar`, so `afterEach` can unmount the ones a failed test
+// never reached; otherwise a stray listener/scroll lock leaks into the following tests.
+const mounted: VueWrapper[] = [];
+
+function cleanupMounted() {
+  for (const w of mounted.splice(0)) {
+    try {
+      w.unmount();
+    } catch {
+      // Already unmounted by the test itself.
+    }
+  }
+  resetBodyScrollLockForTests();
+}
+
+afterEach(cleanupMounted);
 
 async function mountNavbar(path = '/') {
   const router = createMockRouter();
@@ -26,6 +43,7 @@ async function mountNavbar(path = '/') {
       menu: `<template #menu="{ close }"><a href="/first" data-test="first">Pertama</a><a href="/last" data-test="last">Terakhir</a></template>`,
     },
   });
+  mounted.push(wrapper);
   return { wrapper, router };
 }
 

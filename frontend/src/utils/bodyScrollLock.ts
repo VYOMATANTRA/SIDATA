@@ -28,3 +28,14 @@ export function acquireBodyScrollLock(): () => void {
     }
   };
 }
+
+/**
+ * TEST ONLY. Drops every outstanding lock and restores `document.body.style.overflow`, so a test
+ * that fails before releasing its lock cannot leak the module-level holder count into later tests.
+ * Never call this from application code.
+ */
+export function resetBodyScrollLockForTests(): void {
+  holders = 0;
+  if (typeof document !== 'undefined') document.body.style.overflow = previousOverflow;
+  previousOverflow = '';
+}
