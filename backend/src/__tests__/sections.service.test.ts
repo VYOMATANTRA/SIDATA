@@ -137,6 +137,11 @@ describe('sections.service', () => {
       db.addSection({ id: 'sec-1', slug: 'ringkasan' });
     });
 
+    it('runs the delete transaction at READ COMMITTED', async () => {
+      await deleteSection('sec-1', T0_ISO, actor, ctx);
+      assert.deepEqual(db.transactionOptions, [{ isolationLevel: 'ReadCommitted' }]);
+    });
+
     it('deletes an empty section, bumps the chapter token and audits at warning', async () => {
       const result = await deleteSection('sec-1', T0_ISO, actor, ctx);
 

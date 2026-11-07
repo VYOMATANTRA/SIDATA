@@ -247,6 +247,11 @@ describe('chapters.service', () => {
       db.addChapter({ id: 'ch-1', slug: 'jumlah-penduduk' });
     });
 
+    it('runs the delete transaction at READ COMMITTED', async () => {
+      await deleteChapter('ch-1', T0_ISO, actor, ctx);
+      assert.deepEqual(db.transactionOptions, [{ isolationLevel: 'ReadCommitted' }]);
+    });
+
     it('deletes an empty chapter (and its empty sections), touches the page, audits at warning', async () => {
       db.addSection({ id: 'sec-1', chapterId: 'ch-1' });
 

@@ -197,6 +197,11 @@ describe('contentBlocks authoring (section prose blocks)', () => {
       db.addBlock({ id: 'b1', slug: 'pendahuluan', title: 'Pendahuluan', sortOrder: 0 });
     });
 
+    it('runs the delete transaction at READ COMMITTED', async () => {
+      await deleteProseBlock('pendahuluan', T0_ISO, actor, ctx);
+      assert.deepEqual(db.transactionOptions, [{ isolationLevel: 'ReadCommitted' }]);
+    });
+
     it('deletes a section prose block, bumps the section token, audits at warning without the body', async () => {
       const result = await deleteProseBlock('pendahuluan', T0_ISO, actor, ctx);
 

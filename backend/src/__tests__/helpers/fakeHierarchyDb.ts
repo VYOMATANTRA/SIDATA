@@ -131,6 +131,8 @@ export class FakeHierarchyDb {
   indicator = new Table(this, 'indicator');
   indicatorTable = new Table(this, 'indicatorTable');
   auditRows: Row[] = [];
+  /** The options argument of every `$transaction` call, e.g. to assert `isolationLevel`. */
+  transactionOptions: unknown[] = [];
   /** Every `$queryRaw` statement in order, e.g. to assert page → chapter lock ordering. */
   lockLog: string[] = [];
   failAudit = false;
@@ -339,7 +341,8 @@ export function installFakeHierarchyDb(): FakeHierarchyHandle {
   }
   target.auditLog = db.auditLog;
   target.$queryRaw = ((sql: Prisma.Sql) => db.$queryRaw(sql)) as AnyFn;
-  target.$transaction = (async (fn: (tx: unknown) => Promise<unknown>) => {
+  target.$transaction = (async (fn: (tx: unknown) => Promise<unknown>, options?: unknown) => {
+    db.transactionOptions.push(options);
     const snap = db.snapshot();
     // The "tx" is the db itself, so model getters resolve to the same tables.
     const tx = {
