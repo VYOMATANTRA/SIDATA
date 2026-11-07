@@ -23,7 +23,7 @@ function collectableWhere(cutoff: Date) {
 }
 
 export interface MediaCleanupClient {
-  mediaAsset: Pick<typeof prisma.mediaAsset, 'findMany' | 'deleteMany'>;
+  mediaAsset: Pick<typeof prisma.mediaAsset, 'findMany' | 'count' | 'deleteMany'>;
 }
 
 export interface MediaCleanupOptions {
@@ -38,8 +38,17 @@ export interface MediaCleanupOptions {
 
 export interface MediaCleanupResult {
   stagingRemoved: number;
+  /** Rows deleted together with all their files. */
   assetsRemoved: number;
+  /** File/directory removals that failed. The row is kept and the next run retries. */
   filesFailed: number;
+  /** Rows kept because at least one of their files could not be removed (retried next run). */
+  assetsRetained: number;
+  /**
+   * Assets that content attached after their files were already removed (the residual window
+   * documented on runMediaCleanup). They now serve 404 MEDIA_FILE_MISSING and need re-uploading.
+   */
+  assetsRaced: number;
   dryRun: boolean;
 }
 
@@ -94,10 +103,21 @@ async function cleanStaging(root: string, cutoffMs: number, dryRun: boolean): Pr
 
 /**
  * Deletes (a) staging directories older than the grace period and (b) unattached asset rows and
- * their files whose grace period (measured from detachment, else upload) has passed. Safe to re-run: every step tolerates already-missing
- * files, and a row is deleted with `attached_at IS NULL` and the age condition in the WHERE so an
- * asset that content attached (or re-detached) in the meantime is never removed. The row goes first and files second; the reverse
- * order could leave an attached asset pointing at a deleted file.
+ * their files whose grace period (measured from detachment, else upload) has passed. Safe to
+ * re-run: every step tolerates already-missing files.
+ *
+ * Ordering per asset: files first, row second. Deleting the row first would turn a failed file
+ * delete into a permanent orphan (nothing references the file any more, so no later run finds
+ * it). With files first, a failed delete keeps the row and the next run simply retries.
+ *
+ * Race safety: the row is re-verified as still collectable (`attached_at IS NULL`, age condition)
+ * immediately before any file is touched, and the final row delete repeats that condition, so an
+ * asset that content attached earlier is never deleted, and `attachMedia`'s recount still
+ * rolls back an attach that loses to the row delete. The residual window is an attach committing
+ * in the few milliseconds between the re-verification and the row delete: the asset is then
+ * attached but its files are gone. The row delete matches nothing, the asset is counted in
+ * `assetsRaced` and logged, and it serves a plain 404 (MEDIA_FILE_MISSING) until re-uploaded.
+ * That is the price of removing files first without holding a lock across file I/O.
  */
 export async function runMediaCleanup(options: MediaCleanupOptions): Promise<MediaCleanupResult> {
   const now = options.now ?? new Date();
@@ -109,6 +129,8 @@ export async function runMediaCleanup(options: MediaCleanupOptions): Promise<Med
 
   let assetsRemoved = 0;
   let filesFailed = 0;
+  let assetsRetained = 0;
+  let assetsRaced = 0;
   let lastId = '';
 
   for (;;) {
@@ -126,21 +148,40 @@ export async function runMediaCleanup(options: MediaCleanupOptions): Promise<Med
         assetsRemoved += 1;
         continue;
       }
-      const { count } = await client.mediaAsset.deleteMany({
+
+      // Re-verify right before touching files: attached (or re-detached) since the scan -> skip.
+      const stillCollectable = await client.mediaAsset.count({
         where: { id: asset.id, ...collectableWhere(cutoff) },
       });
-      if (count !== 1) continue; // attached (or removed) in the meantime
-      assetsRemoved += 1;
+      if (stillCollectable !== 1) continue;
 
       const results = await Promise.all([
         removeInsideRoot(options.root, asset.storageKey, false),
         removeInsideRoot(options.root, `${DERIVATIVES_DIR}/${asset.id}`, true),
       ]);
-      filesFailed += results.filter((r) => r === 'failed').length;
+      const failed = results.filter((r) => r === 'failed').length;
+      if (failed > 0) {
+        // Keep the row so the next run retries; nothing is orphaned.
+        filesFailed += failed;
+        assetsRetained += 1;
+        continue;
+      }
+
+      const { count } = await client.mediaAsset.deleteMany({
+        where: { id: asset.id, ...collectableWhere(cutoff) },
+      });
+      if (count === 1) {
+        assetsRemoved += 1;
+      } else {
+        assetsRaced += 1;
+        console.error(
+          `Aset media ${asset.id} dilampirkan saat pembersihan berjalan; berkasnya sudah terhapus dan perlu diunggah ulang.`,
+        );
+      }
     }
   }
 
-  if (!dryRun && stagingRemoved + assetsRemoved > 0) {
+  if (!dryRun && stagingRemoved + assetsRemoved + filesFailed + assetsRaced > 0) {
     const record = options.recordAudit ?? recordAuditLog;
     await record({
       action: AUDIT_ACTIONS.MEDIA_CLEANUP,
@@ -151,10 +192,12 @@ export async function runMediaCleanup(options: MediaCleanupOptions): Promise<Med
         stagingRemoved,
         assetsRemoved,
         filesFailed,
+        assetsRetained,
+        assetsRaced,
         graceHours: Math.round(options.graceMs / 3_600_000),
       },
     });
   }
 
-  return { stagingRemoved, assetsRemoved, filesFailed, dryRun };
+  return { stagingRemoved, assetsRemoved, filesFailed, assetsRetained, assetsRaced, dryRun };
 }

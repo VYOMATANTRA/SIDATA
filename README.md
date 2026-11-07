@@ -175,7 +175,7 @@ Checklist for a new environment (Docker on a VPS). Background: [`AGENTS.md`](AGE
    - Schedule `npm run media:cleanup` (daily is plenty). It removes `_staging/` directories and
      unattached uploads whose grace period (24 h, `MEDIA_CLEANUP_GRACE_HOURS` or
      `--grace-hours=N`) has passed, counted from the moment content detached them (`detached_at`), or from
-     the upload for assets that were never attached and writes a count-only `media.cleanup` audit row. It uses the app's normal DB
+     the upload for assets that were never attached and writes a count-only `media.cleanup` audit row (including files that failed to delete: those rows are kept and retried on the next run, and the script exits 1 so cron notices). It uses the app's normal DB
      user (no privileged connection needed). Host cron, from `backend/`:
      `30 3 * * * cd /path/to/SIDATA/backend && npm run media:cleanup >> /var/log/sidata-media-cleanup.log 2>&1`;
      under Compose: `docker compose exec backend npm run media:cleanup` from the host's cron. Add

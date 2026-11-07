@@ -81,6 +81,10 @@ function fakeClient(assets: MediaAsset[], opts: { raceLoses?: Set<string> } = {}
           .filter((a) => collectable(a, args.where) && a.id > args.where.id.gt)
           .sort((x, y) => x.id.localeCompare(y.id))
           .slice(0, args.take)) as never,
+      count: (async (args: { where: CollectWhere & { id: string } }) => {
+        const row = rows.get(args.where.id);
+        return row && collectable(row, args.where) ? 1 : 0;
+      }) as never,
       deleteMany: (async (args: { where: CollectWhere & { id: string } }) => {
         const row = rows.get(args.where.id);
         if (opts.raceLoses?.has(args.where.id)) {
@@ -199,10 +203,16 @@ describe('runMediaCleanup: unattached assets', () => {
     assert.equal(existsSync(attachedFiles.derivative), true);
   });
 
-  it('leaves files alone when the attach race is lost by the cleanup (count 0)', async () => {
-    const racy = asset(ID_OLD);
-    const files = await putAssetFiles(racy);
-    const { client } = fakeClient([racy], { raceLoses: new Set([ID_OLD]) });
+  it('never deletes an asset attached before its files are touched (re-verified first)', async () => {
+    const attachedMeanwhile = asset(ID_OLD);
+    const files = await putAssetFiles(attachedMeanwhile);
+    const { client, rows } = fakeClient([attachedMeanwhile]);
+    // Attached after the scan but before the re-verification.
+    const count = client.mediaAsset.count;
+    (client.mediaAsset as { count: unknown }).count = (async (args: never) => {
+      rows.get(ID_OLD)!.attachedAt = NOW;
+      return (count as (a: never) => Promise<number>)(args);
+    }) as never;
     const result = await runMediaCleanup({
       root,
       graceMs: GRACE,
@@ -211,8 +221,39 @@ describe('runMediaCleanup: unattached assets', () => {
       recordAudit: noAudit().record,
     });
     assert.equal(result.assetsRemoved, 0);
-    assert.equal(existsSync(files.file), true);
+    assert.equal(result.assetsRaced, 0);
+    assert.equal(existsSync(files.file), true, 'files untouched');
     assert.equal(existsSync(files.derivative), true);
+    assert.equal(rows.has(ID_OLD), true);
+  });
+
+  it('reports (and keeps the row of) an asset attached in the residual window after file removal', async () => {
+    const racy = asset(ID_OLD);
+    const files = await putAssetFiles(racy);
+    const { client, rows } = fakeClient([racy], { raceLoses: new Set([ID_OLD]) });
+    const audit = noAudit();
+    const logged: unknown[][] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => void logged.push(args);
+    let result;
+    try {
+      result = await runMediaCleanup({
+        root,
+        graceMs: GRACE,
+        now: NOW,
+        client,
+        recordAudit: audit.record,
+      });
+    } finally {
+      console.error = original;
+    }
+    assert.equal(result.assetsRemoved, 0);
+    assert.equal(result.assetsRaced, 1);
+    assert.equal(rows.has(ID_OLD), true, 'the attached row is never deleted');
+    assert.equal(existsSync(files.file), false, 'documented residual window: files already gone');
+    assert.equal(logged.length, 1);
+    assert.equal(audit.entries.length, 1);
+    assert.equal(audit.entries[0]!.metadata?.['assetsRaced'], 1);
   });
 
   it('tolerates files that are already gone', async () => {
@@ -296,6 +337,83 @@ describe('runMediaCleanup: unattached assets', () => {
     });
     assert.equal(result.assetsRemoved, 450);
     assert.equal(deletes.length, 450);
+  });
+});
+
+describe('runMediaCleanup: files before row', () => {
+  it('keeps the row when a file cannot be removed, counts it, and a rerun retries', async () => {
+    const oldAsset = asset(ID_OLD);
+    const files = await putAssetFiles(oldAsset);
+    const { client, rows, deletes } = fakeClient([oldAsset]);
+    const audit = noAudit();
+    const options = { root, graceMs: GRACE, now: NOW, client, recordAudit: audit.record };
+
+    // A directory where the file should be makes rm(..., { recursive: false }) fail (EISDIR).
+    await rm(files.file);
+    await mkdir(path.join(files.file, 'blocker'), { recursive: true });
+    const original = console.error;
+    console.error = () => undefined;
+    let first;
+    try {
+      first = await runMediaCleanup(options);
+    } finally {
+      console.error = original;
+    }
+    assert.equal(first.assetsRemoved, 0);
+    assert.equal(first.filesFailed, 1);
+    assert.equal(first.assetsRetained, 1);
+    assert.deepEqual(deletes, [], 'row kept so nothing is orphaned');
+    assert.equal(rows.has(ID_OLD), true);
+    assert.equal(audit.entries.length, 1, 'failures are audited with counts');
+    assert.equal(audit.entries[0]!.metadata?.['filesFailed'], 1);
+    assert.equal(audit.entries[0]!.metadata?.['assetsRetained'], 1);
+
+    // Storage becomes healthy again: the rerun picks the same row up and finishes the job.
+    await rm(files.file, { recursive: true, force: true });
+    const second = await runMediaCleanup(options);
+    assert.equal(second.assetsRemoved, 1);
+    assert.equal(second.filesFailed, 0);
+    assert.deepEqual(deletes, [ID_OLD]);
+    assert.equal(existsSync(files.derivative), false);
+  });
+
+  it('deletes both the files and the row on success, and removes files before the row', async () => {
+    const oldAsset = asset(ID_OLD);
+    const files = await putAssetFiles(oldAsset);
+    const { client } = fakeClient([oldAsset]);
+    let filesGoneAtRowDelete: boolean | null = null;
+    const deleteMany = client.mediaAsset.deleteMany;
+    (client.mediaAsset as { deleteMany: unknown }).deleteMany = (async (args: never) => {
+      filesGoneAtRowDelete = !existsSync(files.file) && !existsSync(files.derivative);
+      return (deleteMany as (a: never) => Promise<{ count: number }>)(args);
+    }) as never;
+    const result = await runMediaCleanup({
+      root,
+      graceMs: GRACE,
+      now: NOW,
+      client,
+      recordAudit: noAudit().record,
+    });
+    assert.equal(result.assetsRemoved, 1);
+    assert.equal(filesGoneAtRowDelete, true);
+    assert.equal(existsSync(files.file), false);
+  });
+
+  it('leaves an attached asset and its files completely untouched', async () => {
+    const attached = asset(ID_ATT, { attachedAt: new Date(NOW.getTime() - 40 * HOUR) });
+    const files = await putAssetFiles(attached);
+    const { client, deletes } = fakeClient([attached]);
+    const result = await runMediaCleanup({
+      root,
+      graceMs: GRACE,
+      now: NOW,
+      client,
+      recordAudit: noAudit().record,
+    });
+    assert.deepEqual([result.assetsRemoved, result.filesFailed, result.assetsRaced], [0, 0, 0]);
+    assert.deepEqual(deletes, []);
+    assert.equal(existsSync(files.file), true);
+    assert.equal(existsSync(files.derivative), true);
   });
 });
 
@@ -404,6 +522,8 @@ describe('runMediaCleanup: audit', () => {
       stagingRemoved: 1,
       assetsRemoved: 1,
       filesFailed: 0,
+      assetsRetained: 0,
+      assetsRaced: 0,
       graceHours: 24,
     });
     const serialized = JSON.stringify(entry);

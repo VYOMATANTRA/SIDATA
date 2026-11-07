@@ -3,7 +3,8 @@
 //   - `_staging/` upload directories older than the grace period (aborted/crashed uploads), and
 //   - unattached `media_assets` rows and their files whose grace period has passed, measured from
 //     `detached_at` when content detached the asset, else from `created_at` (uploads an editor
-//     never saved into content).
+//     never saved into content). Files are removed before the row, so a failed file delete keeps
+//     the row and the next run retries (exit code 1 flags it for cron).
 // Attached assets are never touched. Safe to re-run at any time.
 //
 // Uses the app's normal DB connection (media_assets keeps full DML in the grants script, unlike
@@ -51,9 +52,15 @@ async function main() {
   console.log(
     `${dryRun ? '[dry-run] Would remove' : 'Removed'}: ${result.stagingRemoved} staging dir(s), ` +
       `${result.assetsRemoved} unattached asset(s) older than ${graceHours}h` +
-      (result.filesFailed > 0 ? ` (${result.filesFailed} file removal(s) failed; see log)` : '') +
+      (result.filesFailed > 0
+        ? ` (${result.filesFailed} file removal(s) failed; ${result.assetsRetained} asset row(s) kept for the next run)`
+        : '') +
+      (result.assetsRaced > 0
+        ? ` (${result.assetsRaced} asset(s) were attached mid-run and lost their files; see log)`
+        : '') +
       '.',
   );
+  if (result.filesFailed > 0 || result.assetsRaced > 0) process.exitCode = 1;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
