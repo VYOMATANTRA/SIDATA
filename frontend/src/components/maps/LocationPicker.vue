@@ -177,8 +177,16 @@ const NUDGE_ANNOUNCE_DELAY_MS = 600;
 /** Transient message for the hidden live region; cleared after a few seconds. */
 function announce(message: string): void {
   window.clearTimeout(nudgeAnnounceTimer);
-  announcement.value = message;
   window.clearTimeout(announceTimer);
+  if (announcement.value === message) {
+    // Identical text would not mutate the live region, so assistive tech would stay silent.
+    announcement.value = '';
+    void nextTick(() => {
+      if (!isUnmounted) announcement.value = message;
+    });
+  } else {
+    announcement.value = message;
+  }
   announceTimer = window.setTimeout(() => {
     announcement.value = '';
   }, ANNOUNCEMENT_TTL_MS);
@@ -364,8 +372,9 @@ function handleMoveEnd(): void {
   if (syncing || !viewport.value || !editable.value || !map) return;
   const center = viewCenter();
   if (!center) return;
-  // Leaflet's own window-resize handler fires `moveend` outside `runSilently`; a view that is
-  // still the stored one is not an edit and must not mark the form dirty.
+  // Leaflet's own debounced window-resize handler fires `moveend` outside `runSilently`; a view
+  // that is still the stored one (same centre within tolerance, same clamped zoom) is not an edit
+  // and must not mark the form dirty. A genuine pan moves the centre past the tolerance.
   const stored = props.modelValue;
   if (
     stored &&
@@ -640,8 +649,12 @@ watch(keyboardMode, (on) => {
 function onFocusOut(event: FocusEvent): void {
   if (!keyboardMode.value) return;
   const next = event.relatedTarget;
-  // No related target means the window lost focus (alt-tab); keep the mode for when it returns.
-  if (!(next instanceof Node)) return;
+  if (!(next instanceof Node)) {
+    // No related target: either the window lost focus (alt-tab; keep the mode for when it
+    // returns) or a click landed on non-focusable page content (the document still has focus).
+    if (typeof document !== 'undefined' && document.hasFocus()) keyboardMode.value = false;
+    return;
+  }
   if (region.value?.contains(next)) return;
   // A pointer click on the toggle blurs the region first; the toggle's own click handler owns
   // the on/off decision, otherwise this would switch off and the click would switch it back on.
@@ -687,7 +700,7 @@ const buttonClasses =
         viewBox="0 0 36 36"
         aria-hidden="true"
         focusable="false"
-        data-test="location-picker-crosshair"
+        :data-test="`${testId}-crosshair`"
       >
         <path d="M18 3v10M18 23v10M3 18h10M23 18h10" class="stroke-white" stroke-width="5" />
         <path d="M18 3v10M18 23v10M3 18h10M23 18h10" class="stroke-brand-navy" stroke-width="2" />
@@ -698,11 +711,11 @@ const buttonClasses =
     <p
       :id="statusId"
       class="text-brand-navy text-sm font-medium"
-      data-test="location-picker-status"
+      :data-test="`${testId}-status`"
     >
       {{ statusText }}
     </p>
-    <p role="status" aria-live="polite" class="sr-only" data-test="location-picker-announcement">
+    <p role="status" aria-live="polite" class="sr-only" :data-test="`${testId}-announcement`">
       {{ announcement }}
     </p>
 
@@ -807,7 +820,7 @@ const buttonClasses =
       keluar.
     </p>
 
-    <p v-if="accuracyText" class="text-text-muted text-xs" data-test="location-picker-accuracy">
+    <p v-if="accuracyText" class="text-text-muted text-xs" :data-test="`${testId}-accuracy`">
       {{ accuracyText }}
     </p>
     <p

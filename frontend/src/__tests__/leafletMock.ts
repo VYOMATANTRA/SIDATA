@@ -24,6 +24,11 @@ export const leafletState = {
   mapOptions: undefined as Record<string, unknown> | undefined,
   inBounds: true,
   markerCreated: 0,
+  /**
+   * Simulates Leaflet ending a programmatic `setView` / `invalidateSize` somewhere other than the
+   * requested view (max-bounds or size adjustments): added to the centre before `moveend` fires.
+   */
+  centerDrift: null as { lat: number; lng: number } | null,
 };
 
 export function resetLeafletState(): void {
@@ -36,9 +41,19 @@ export function resetLeafletState(): void {
   leafletState.mapOptions = undefined;
   leafletState.inBounds = true;
   leafletState.markerCreated = 0;
+  leafletState.centerDrift = null;
 }
 
 const handlerStub = () => ({ enable: vi.fn<() => void>(), disable: vi.fn<() => void>() });
+
+function applyDrift(): void {
+  const drift = leafletState.centerDrift;
+  if (!drift) return;
+  leafletState.center = {
+    lat: leafletState.center.lat + drift.lat,
+    lng: leafletState.center.lng + drift.lng,
+  };
+}
 
 export const leafletMap = {
   setView: vi.fn<(center: [number, number], zoom?: number, options?: unknown) => unknown>(),
@@ -69,6 +84,7 @@ function wire(): void {
   leafletMap.setView.mockImplementation((center, zoom) => {
     leafletState.center = { lat: center[0], lng: center[1] };
     if (typeof zoom === 'number') leafletState.zoom = zoom;
+    applyDrift();
     // Real Leaflet fires `moveend` synchronously for a non-animated setView.
     leafletState.handlers.moveend?.();
     return leafletMap;
@@ -84,6 +100,7 @@ function wire(): void {
     return leafletMap;
   });
   leafletMap.invalidateSize.mockImplementation(() => {
+    applyDrift();
     leafletState.handlers.moveend?.();
     return leafletMap;
   });

@@ -171,14 +171,11 @@ describe('LocationPicker', () => {
       expect(toggle.attributes('aria-pressed')).toBe('true');
     });
 
-    it('keeps keyboard mode on a window blur but leaves it when focus moves elsewhere', async () => {
+    it('leaves keyboard mode when focus moves to another control', async () => {
       const wrapper = await mountPicker({ modelValue: PIN });
       const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
       const region = wrapper.get('[data-test="location-picker-region"]');
       await toggle.trigger('click');
-      region.element.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
-      await nextTick();
-      expect(toggle.attributes('aria-pressed')).toBe('true');
       const elsewhere = document.createElement('button');
       document.body.append(elsewhere);
       region.element.dispatchEvent(
@@ -186,6 +183,39 @@ describe('LocationPicker', () => {
       );
       await nextTick();
       expect(toggle.attributes('aria-pressed')).toBe('false');
+    });
+
+    it('leaves keyboard mode when a click lands on non-focusable content', async () => {
+      const wrapper = await mountPicker({ modelValue: PIN });
+      const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
+      const region = wrapper.get('[data-test="location-picker-region"]');
+      await toggle.trigger('click');
+      // No related target, but the document keeps focus: the user clicked elsewhere in the page.
+      const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+      try {
+        region.element.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+        await nextTick();
+        expect(toggle.attributes('aria-pressed')).toBe('false');
+        expect(region.attributes('tabindex')).toBeUndefined();
+      } finally {
+        hasFocus.mockRestore();
+      }
+    });
+
+    it('keeps keyboard mode when the whole window loses focus', async () => {
+      const wrapper = await mountPicker({ modelValue: PIN });
+      const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
+      const region = wrapper.get('[data-test="location-picker-region"]');
+      await toggle.trigger('click');
+      const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+      try {
+        region.element.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+        await nextTick();
+        expect(toggle.attributes('aria-pressed')).toBe('true');
+        expect(region.attributes('tabindex')).toBe('0');
+      } finally {
+        hasFocus.mockRestore();
+      }
     });
 
     it('lets Escape leave keyboard mode without bubbling to a surrounding dialog', async () => {
@@ -310,6 +340,40 @@ describe('LocationPicker', () => {
       expect(live.text()).toBe('Pin digeser ke barat.');
       expect(live.text()).not.toContain('\u200b');
     });
+
+    it('re-announces an identical message by clearing the live region first', async () => {
+      const wrapper = await mountPicker();
+      const live = wrapper.get('[data-test="location-picker-announcement"]');
+      const seen: string[] = [];
+      const observer = new MutationObserver(() => seen.push(live.element.textContent?.trim() ?? ''));
+      observer.observe(live.element, { childList: true, characterData: true, subtree: true });
+      try {
+        clickMap(-1.2, 116.9);
+        await flushPromises();
+        expect(live.text()).toBe('Pin diletakkan.');
+        seen.length = 0;
+        clickMap(-1.21, 116.91);
+        await flushPromises();
+        await Promise.resolve();
+        expect(live.text()).toBe('Pin diletakkan.');
+        // Observed DOM mutations: emptied, then the same text again.
+        expect(seen).toEqual(['', 'Pin diletakkan.']);
+      } finally {
+        observer.disconnect();
+      }
+    });
+
+    it('derives every data-test hook from the testId prop', async () => {
+      const wrapper = await mountPicker({
+        modelValue: PIN,
+        testId: 'custom',
+        includeZoom: true,
+      });
+      for (const suffix of ['status', 'announcement', 'crosshair', 'region', 'keyboard']) {
+        expect(wrapper.find(`[data-test="custom-${suffix}"]`).exists()).toBe(true);
+        expect(wrapper.find(`[data-test="location-picker-${suffix}"]`).exists()).toBe(false);
+      }
+    });
   });
 
   describe('disabled and read-only', () => {
@@ -387,15 +451,44 @@ describe('LocationPicker', () => {
       expect(lastEmitted(wrapper)).toEqual({ latitude: -1.3, longitude: 117.01, zoom: 15 });
     });
 
-    // The stored zoom (25) is above `maxZoom`, so the map settles on 20. If the picker did not
-    // silence the `moveend` its own `setView` triggers, that would be echoed back as a changed
-    // draft ({ zoom: 20 }); equal values would be de-duplicated and hide the missing guard.
+    // Leaflet may end a programmatic move away from the requested view (clamping, max-bounds),
+    // so the `moveend` it fires carries a centre that is not near `modelValue`. Only the
+    // `syncing` guard can keep that from being echoed back as an edit.
     it('does not echo programmatic view changes back as edits', async () => {
       const wrapper = await mountPicker({ modelValue: VIEW, includeZoom: true });
       await wrapper.setProps({ modelValue: { latitude: -1.3, longitude: 117, zoom: 25 } });
       expect(leafletMap.setView).toHaveBeenLastCalledWith([-1.3, 117], 20, { animate: false });
       expect(leafletState.zoom).toBe(20);
       expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+    });
+
+    it('does not echo a drifted programmatic move or resize refresh (syncing guard)', async () => {
+      let notify: () => void = () => undefined;
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(callback: () => void) {
+            notify = callback;
+          }
+          observe() {}
+          disconnect() {}
+        },
+      );
+      try {
+        const wrapper = await mountPicker({ modelValue: VIEW, includeZoom: true });
+        leafletState.centerDrift = { lat: 0.01, lng: 0.01 };
+        await wrapper.setProps({ modelValue: { latitude: -1.3, longitude: 117, zoom: 14 } });
+        expect(leafletState.center.lat).toBeCloseTo(-1.29, 5);
+        expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+        const container = wrapper.get('[data-test="location-picker-map"]').element;
+        Object.defineProperty(container, 'clientWidth', { configurable: true, value: 320 });
+        Object.defineProperty(container, 'clientHeight', { configurable: true, value: 288 });
+        notify();
+        expect(leafletMap.invalidateSize).toHaveBeenCalled();
+        expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+      } finally {
+        vi.unstubAllGlobals();
+      }
     });
 
     it('starts from the stored view and does not echo a resize refresh', async () => {
@@ -472,14 +565,40 @@ describe('LocationPicker', () => {
       expect(leafletMap.doubleClickZoom.enable).not.toHaveBeenCalled();
     });
 
-    it('ignores a moveend whose centre and zoom are still the stored view', async () => {
+    it('ignores a moveend outside a programmatic move that is still the stored view', async () => {
       const wrapper = await mountPicker({ modelValue: VIEW, includeZoom: true });
-      // e.g. Leaflet's window-resize handler re-reporting the same view
+      // e.g. Leaflet's own debounced window-resize handler re-reporting the same view
       leafletState.handlers.moveend?.();
       expect(wrapper.emitted('update:modelValue')).toBeUndefined();
       leafletState.center = { lat: -1.2251004, lng: 116.9438004 };
       leafletState.handlers.moveend?.();
       expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+    });
+
+    // `emitValue` de-duplicates equal drafts, so a stored zoom the map had to clamp (25 -> 20) is
+    // what shows the stored-view guard working: without it, the clamped zoom would be emitted.
+    it('treats a clamped stored zoom as the stored view when a stray moveend arrives', async () => {
+      const wrapper = await mountPicker({
+        modelValue: { latitude: -1.2251, longitude: 116.9438, zoom: 25 },
+        includeZoom: true,
+      });
+      expect(leafletState.zoom).toBe(20);
+      leafletState.center = { lat: -1.2251004, lng: 116.9438004 };
+      leafletState.handlers.moveend?.();
+      expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+    });
+
+    it('never swallows a genuine pan or zoom away from the stored view', async () => {
+      const wrapper = await mountPicker({ modelValue: VIEW, includeZoom: true });
+      leafletState.center = { lat: -1.2251 + 0.0001, lng: 116.9438 };
+      leafletState.handlers.moveend?.();
+      expect(lastEmitted(wrapper)).toEqual({ latitude: -1.2250, longitude: 116.9438, zoom: 13 });
+      const count = wrapper.emitted('update:modelValue')?.length ?? 0;
+      leafletState.center = { lat: -1.2251, lng: 116.9438 };
+      leafletState.zoom = 14;
+      leafletState.handlers.moveend?.();
+      expect(wrapper.emitted('update:modelValue')?.length).toBe(count + 1);
+      expect(lastEmitted(wrapper)).toMatchObject({ zoom: 14 });
     });
   });
 
