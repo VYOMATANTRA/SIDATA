@@ -1,15 +1,22 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, nextTick, watch } from 'vue';
 import FormField from '../common/FormField.vue';
 import FormErrorSummary from '../common/FormErrorSummary.vue';
 import BaseButton from '../common/BaseButton.vue';
+import LocationPicker, { type PickerLocation } from '../maps/LocationPicker.vue';
 import type { PublicSettings } from '../../stores/settings.store';
 import { MANGGAR_MAP_ORIGIN, MANGGAR_MAP_DEFAULT_ZOOM } from '../../constants/mapOrigin';
 import { INPUT_CLASSES } from '../../utils/formStyles';
 
+/** Same bounds the API enforces for `defaultCoordinates` (backend `coordinatesSchema`). */
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 20;
+
 export interface PublicSettingsFormProps {
   settings: PublicSettings;
+  /** A save is in flight: the form is locked and a second submit is ignored. */
   busy?: boolean;
+  /** Plain-Indonesian failure text for the last save (the parent maps API errors with `toUserMessage`). */
   serverError?: string;
   idPrefix?: string;
 }
@@ -38,15 +45,17 @@ const contactWhatsapp = ref(props.settings.contactWhatsapp ?? '');
 const contactEmail = ref(props.settings.contactEmail ?? '');
 const contactAddress = ref(props.settings.contactAddress ?? '');
 
-const lat = ref<number | string>(
-  props.settings.defaultCoordinates?.lat ?? MANGGAR_MAP_ORIGIN.latitude,
-);
-const lon = ref<number | string>(
-  props.settings.defaultCoordinates?.lon ?? MANGGAR_MAP_ORIGIN.longitude,
-);
-const zoom = ref<number | string>(
-  props.settings.defaultCoordinates?.zoom ?? MANGGAR_MAP_DEFAULT_ZOOM,
-);
+/**
+ * The default map view is edited visually: the picker owns latitude, longitude and zoom, so the
+ * form only ever holds one `{ latitude, longitude, zoom }` draft. It is mapped to the API's
+ * `{ lat, lon, zoom }` on submit.
+ */
+const initialView: PickerLocation = {
+  latitude: props.settings.defaultCoordinates?.lat ?? MANGGAR_MAP_ORIGIN.latitude,
+  longitude: props.settings.defaultCoordinates?.lon ?? MANGGAR_MAP_ORIGIN.longitude,
+  zoom: props.settings.defaultCoordinates?.zoom ?? MANGGAR_MAP_DEFAULT_ZOOM,
+};
+const mapView = ref<PickerLocation | null>({ ...initialView });
 
 const submitted = ref(false);
 
@@ -65,33 +74,19 @@ const fieldErrors = computed<Record<string, string | undefined>>(() => {
     errors.contactEmail = 'Format email tidak valid.';
   }
 
+  const view = mapView.value;
   if (
-    lat.value === '' ||
-    lat.value === null ||
-    Number.isNaN(Number(lat.value)) ||
-    Number(lat.value) < -90 ||
-    Number(lat.value) > 90
+    view === null ||
+    !Number.isFinite(view.latitude) ||
+    !Number.isFinite(view.longitude) ||
+    Math.abs(view.latitude) > 90 ||
+    Math.abs(view.longitude) > 180 ||
+    typeof view.zoom !== 'number' ||
+    !Number.isInteger(view.zoom) ||
+    view.zoom < MIN_ZOOM ||
+    view.zoom > MAX_ZOOM
   ) {
-    errors.lat = 'Latitude harus berupa angka antara -90 dan 90.';
-  }
-  if (
-    lon.value === '' ||
-    lon.value === null ||
-    Number.isNaN(Number(lon.value)) ||
-    Number(lon.value) < -180 ||
-    Number(lon.value) > 180
-  ) {
-    errors.lon = 'Longitude harus berupa angka antara -180 dan 180.';
-  }
-  if (
-    zoom.value === '' ||
-    zoom.value === null ||
-    Number.isNaN(Number(zoom.value)) ||
-    Number(zoom.value) < 1 ||
-    Number(zoom.value) > 20 ||
-    !Number.isInteger(Number(zoom.value))
-  ) {
-    errors.zoom = 'Zoom harus berupa bilangan bulat antara 1 dan 20.';
+    errors.mapView = 'Tampilan peta belum valid. Geser atau perbesar peta untuk memilihnya lagi.';
   }
 
   return errors;
@@ -106,23 +101,75 @@ const fieldOrder = [
   'contactWhatsapp',
   'contactEmail',
   'contactAddress',
-  'lat',
-  'lon',
-  'zoom',
+  'mapView',
 ];
+
+/** The picker's first focusable control carries this id so the error summary can focus it. */
+function errorTargetId(name: string): string {
+  return name === 'mapView' ? `${fieldId('mapView')}-focus` : fieldId(name);
+}
 
 const errorEntries = computed(() =>
   fieldOrder
-    .map((name) => ({ fieldId: fieldId(name), message: fieldErrors.value[name] }))
+    .map((name) => ({ fieldId: errorTargetId(name), message: fieldErrors.value[name] }))
     .filter((entry): entry is { fieldId: string; message: string } => Boolean(entry.message)),
 );
 
 const summaryErrors = computed(() => (submitted.value ? errorEntries.value : []));
 
+const dirty = computed(() => {
+  const saved = props.settings;
+  const view = mapView.value;
+  const savedView = saved.defaultCoordinates;
+  const viewChanged =
+    view === null ||
+    !savedView ||
+    Math.abs(view.latitude - savedView.lat) > 1e-6 ||
+    Math.abs(view.longitude - savedView.lon) > 1e-6 ||
+    view.zoom !== savedView.zoom;
+  return (
+    viewChanged ||
+    appName.value !== (saved.appName ?? '') ||
+    institutionName.value !== (saved.institutionName ?? '') ||
+    tagline.value !== (saved.tagline ?? '') ||
+    administrativeArea.value !== (saved.administrativeArea ?? '') ||
+    contactPhone.value !== (saved.contactPhone ?? '') ||
+    contactWhatsapp.value !== (saved.contactWhatsapp ?? '') ||
+    contactEmail.value !== (saved.contactEmail ?? '') ||
+    contactAddress.value !== (saved.contactAddress ?? '')
+  );
+});
+
+/** Always says what is true: saved, unsaved, saving, or a failed save with the draft kept. */
+const saveStateText = computed(() => {
+  if (props.busy) return 'Menyimpan perubahan…';
+  if (props.serverError) return 'Perubahan belum tersimpan. Isian Anda masih ada di formulir.';
+  if (dirty.value) return 'Ada perubahan yang belum disimpan.';
+  return 'Belum ada perubahan.';
+});
+
+// The parent flips `busy` right after it receives `submit`, but a second click can land before
+// that re-render. This guard closes the gap until the parent has had its turn.
+let submitGuard = false;
+
+watch(
+  () => props.busy,
+  (isBusy) => {
+    if (!isBusy) submitGuard = false;
+  },
+);
+
 function handleSubmit(): void {
   submitted.value = true;
-  if (errorEntries.value.length > 0 || props.busy) return;
+  if (props.busy || submitGuard) return;
+  const view = mapView.value;
+  if (errorEntries.value.length > 0 || view === null) return;
 
+  submitGuard = true;
+  void nextTick(() => {
+    // A parent that never reports busy must not lock the form for good.
+    if (!props.busy) submitGuard = false;
+  });
   emit('submit', {
     appName: appName.value.trim(),
     institutionName: institutionName.value.trim(),
@@ -133,9 +180,9 @@ function handleSubmit(): void {
     contactEmail: contactEmail.value.trim(),
     contactAddress: contactAddress.value.trim(),
     defaultCoordinates: {
-      lat: Number(lat.value),
-      lon: Number(lon.value),
-      zoom: Number(zoom.value),
+      lat: view.latitude,
+      lon: view.longitude,
+      zoom: view.zoom ?? MANGGAR_MAP_DEFAULT_ZOOM,
     },
   });
 }
@@ -149,8 +196,8 @@ function handleSubmit(): void {
       :form-error="serverError"
     />
 
-    <fieldset class="rounded-card space-y-4 border border-slate-200 bg-slate-50 p-4">
-      <legend class="px-1 text-xs font-semibold tracking-wider text-slate-700 uppercase">
+    <fieldset class="rounded-card border-border bg-surface-muted space-y-4 border p-4">
+      <legend class="text-brand-navy px-1 text-xs font-semibold tracking-wider uppercase">
         Identitas Portal
       </legend>
 
@@ -217,8 +264,8 @@ function handleSubmit(): void {
       </FormField>
     </fieldset>
 
-    <fieldset class="rounded-card space-y-4 border border-slate-200 bg-slate-50 p-4">
-      <legend class="px-1 text-xs font-semibold tracking-wider text-slate-700 uppercase">
+    <fieldset class="rounded-card border-border bg-surface-muted space-y-4 border p-4">
+      <legend class="text-brand-navy px-1 text-xs font-semibold tracking-wider uppercase">
         Kontak &amp; Pelayanan
       </legend>
 
@@ -277,79 +324,40 @@ function handleSubmit(): void {
       </FormField>
     </fieldset>
 
-    <fieldset class="rounded-card space-y-4 border border-slate-200 bg-slate-50 p-4">
-      <legend class="px-1 text-xs font-semibold tracking-wider text-slate-700 uppercase">
-        Koordinat Peta Default
-      </legend>
+    <div class="rounded-card border-border bg-surface-muted border p-4">
+      <LocationPicker
+        v-model="mapView"
+        :id-prefix="fieldId('mapView')"
+        test-id="settings-map-view"
+        label="Atur tampilan peta"
+        help-text="Geser dan perbesar peta sampai bagian yang ingin ditampilkan berada tepat di tanda silang. Titik tengah dan tingkat perbesaran saat ini akan menjadi tampilan awal peta untuk pengunjung."
+        :error="submitted ? fieldErrors.mapView : undefined"
+        :initial-center="[MANGGAR_MAP_ORIGIN.latitude, MANGGAR_MAP_ORIGIN.longitude]"
+        :initial-zoom="MANGGAR_MAP_DEFAULT_ZOOM"
+        :min-zoom="MIN_ZOOM"
+        :max-zoom="MAX_ZOOM"
+        :disabled="busy"
+        include-zoom
+      />
+    </div>
 
-      <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <FormField
-          :id="fieldId('lat')"
-          label="Latitude"
-          :error="submitted ? fieldErrors.lat : undefined"
-          required
-          v-slot="{ describedBy, invalid }"
-        >
-          <input
-            :id="fieldId('lat')"
-            v-model.number="lat"
-            type="number"
-            step="any"
-            :class="INPUT_CLASSES"
-            :aria-describedby="describedBy"
-            :aria-invalid="invalid ? 'true' : undefined"
-            required
-          />
-        </FormField>
-
-        <FormField
-          :id="fieldId('lon')"
-          label="Longitude"
-          :error="submitted ? fieldErrors.lon : undefined"
-          required
-          v-slot="{ describedBy, invalid }"
-        >
-          <input
-            :id="fieldId('lon')"
-            v-model.number="lon"
-            type="number"
-            step="any"
-            :class="INPUT_CLASSES"
-            :aria-describedby="describedBy"
-            :aria-invalid="invalid ? 'true' : undefined"
-            required
-          />
-        </FormField>
-
-        <FormField
-          :id="fieldId('zoom')"
-          label="Default Zoom"
-          :error="submitted ? fieldErrors.zoom : undefined"
-          required
-          v-slot="{ describedBy, invalid }"
-        >
-          <input
-            :id="fieldId('zoom')"
-            v-model.number="zoom"
-            type="number"
-            min="1"
-            max="20"
-            :class="INPUT_CLASSES"
-            :aria-describedby="describedBy"
-            :aria-invalid="invalid ? 'true' : undefined"
-            required
-          />
-        </FormField>
+    <div class="border-border space-y-3 border-t pt-3">
+      <p
+        role="status"
+        aria-live="polite"
+        class="text-text-muted text-sm"
+        data-test="settings-save-state"
+      >
+        {{ saveStateText }}
+      </p>
+      <div class="flex items-center justify-end gap-3">
+        <BaseButton variant="secondary" size="md" :disabled="busy" @click="emit('cancel')">
+          Batal
+        </BaseButton>
+        <BaseButton type="submit" variant="primary" size="md" :disabled="busy">
+          {{ busy ? 'Menyimpan…' : 'Simpan perubahan' }}
+        </BaseButton>
       </div>
-    </fieldset>
-
-    <div class="flex items-center justify-end gap-3 border-t border-slate-200 pt-3">
-      <BaseButton variant="secondary" size="md" :disabled="busy" @click="emit('cancel')">
-        Batal
-      </BaseButton>
-      <BaseButton type="submit" variant="primary" size="md" :disabled="busy">
-        {{ busy ? 'Menyimpan…' : 'Simpan Pengaturan' }}
-      </BaseButton>
     </div>
   </form>
 </template>
