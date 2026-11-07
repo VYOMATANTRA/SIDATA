@@ -174,23 +174,90 @@ export function sanitizeFieldErrors(fieldMap: unknown): Record<string, string> {
   return result;
 }
 
-// camelCase or snake_case identifiers are field names from the API, not words a reader knows.
-const TECHNICAL_KEY = /\b[a-z]+[A-Z][A-Za-z]*\b|\b[a-z]+(?:_[a-z]+)+\b/;
+/**
+ * Internal API field, parameter and table names that appear inside backend error sentences.
+ * A sentence naming any of them (as a whole token) is never shown. An explicit list, not a
+ * camelCase/snake_case heuristic: units and acronyms ("kWh", "eKTP") and e-mail addresses
+ * would be false positives of a pattern.
+ */
+export const HIDDEN_API_TOKENS: readonly string[] = [
+  'comparisonTemplateId',
+  'comparisonTemplate',
+  'isComputedComparison',
+  'isSample',
+  'value_previous',
+  'period_previous',
+  'value_current',
+  'period_current',
+  'valuePrevious',
+  'periodPrevious',
+  'valueCurrent',
+  'periodCurrent',
+  'rowKey',
+  'sectionId',
+  'chapterId',
+  'pageId',
+  'pageSlug',
+  'tableId',
+  'templateId',
+  'pointId',
+  'pointIds',
+  'roleId',
+  'sortOrder',
+  'expectedUpdatedAt',
+  'expectedRtNumber',
+  'acknowledgedWarnings',
+  'ackKey',
+  'trendNaik',
+  'trendTurun',
+  'trendTetap',
+  'pageSize',
+  'includeStale',
+  'rtNumber',
+  'rt_number',
+  'point_id',
+  'section_id',
+  'chapter_id',
+  'page_id',
+  'setting_key',
+  'comparison_templates',
+  'content_blocks',
+  'indicator_tables',
+  'indicator_table_rows',
+  'rt_leaders',
+  'spatial_points',
+  'spatial_point_rt',
+  'system_settings',
+];
+
+const HIDDEN_TOKEN_PATTERN = new RegExp(`\\b(?:${HIDDEN_API_TOKENS.join('|')})\\b`);
+
+/** Enum-like values the backend puts in sentences, with the words a reader knows. */
+const FRIENDLY_TERMS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\bketua_rt\b/g, 'Ketua RT'],
+  [/\bbank_sampah\b/g, 'Bank Sampah'],
+  [/\bfasilitas_umum\b/g, 'Fasilitas Umum'],
+];
 
 /** Approved wording for a refused template attach (indicators.service `assertTemplateAttachable`). */
 export const TEMPLATE_ATTACH_MESSAGE =
   'Templat kalimat hanya bisa dipakai pada indikator yang memiliki nilai dan periode sebelumnya.';
 
+/** Approved wording for an orphaned half of the previous value/period pair. */
+export const PREVIOUS_PAIR_MESSAGE = 'Nilai dan periode sebelumnya harus diisi berpasangan.';
+
+const TEMPLATE_ATTACH_SOURCE =
+  /^Template perbandingan (?:membutuhkan value_previous|hanya dapat dipakai pada indikator perbandingan terkomputasi)/;
+const PREVIOUS_PAIR_SOURCE = /^value_previous dan period_previous harus diisi berpasangan/;
+
 function readableServerMessage(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const text = value.trim();
   if (text === '' || text.length > MAX_SERVER_MESSAGE_LENGTH) return undefined;
-  if (TECHNICAL_KEY.test(text)) {
-    // Never show a field name to the user: use approved wording for the known template case,
-    // and the generic validation sentence for anything else.
-    return /template perbandingan/i.test(text) ? TEMPLATE_ATTACH_MESSAGE : undefined;
-  }
-  return text;
+  if (TEMPLATE_ATTACH_SOURCE.test(text)) return TEMPLATE_ATTACH_MESSAGE;
+  if (PREVIOUS_PAIR_SOURCE.test(text)) return PREVIOUS_PAIR_MESSAGE;
+  const friendly = FRIENDLY_TERMS.reduce((acc, [pattern, term]) => acc.replace(pattern, term), text);
+  return HIDDEN_TOKEN_PATTERN.test(friendly) ? undefined : friendly;
 }
 
 /**

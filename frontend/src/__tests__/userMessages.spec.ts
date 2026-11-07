@@ -1,7 +1,11 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   classifyFailure,
+  HIDDEN_API_TOKENS,
   NETWORK_ERROR_CODE,
+  PREVIOUS_PAIR_MESSAGE,
   sanitizeFieldErrors,
   SESSION_EXPIRED_MESSAGE,
   toUserMessage,
@@ -124,6 +128,72 @@ describe('toUserMessage mappings', () => {
     expect(toUserMessage(attach, 'menyimpan perubahan indikator').message).toBe(expected);
     expect(toUserMessage(notComputed, 'menyimpan perubahan indikator').message).toBe(expected);
     expect(expected).not.toMatch(/comparisonTemplateId|_previous|isComputed/);
+  });
+
+  it('shows legitimate mixed-case and underscore text unchanged', () => {
+    for (const text of [
+      'Daya 450 kWh tidak valid.',
+      'Nomor eKTP wajib diisi.',
+      'Gunakan perangkat iOS terbaru.',
+      'Tekanan 120 mmHg terlalu tinggi.',
+      'Hubungi info_kelurahan@manggar.id untuk bantuan.',
+      'Lihat https://example.id/data_publik/fileName.pdf untuk rincian.',
+      'Template perbandingan tidak ditemukan.',
+    ]) {
+      const error = Object.assign(httpFailure(400), { serverMessage: text });
+      expect(toUserMessage(error).message).toBe(text);
+    }
+  });
+
+  it('hides a sentence that names any denylisted API token', () => {
+    for (const token of HIDDEN_API_TOKENS) {
+      const error = Object.assign(httpFailure(400), { serverMessage: `Kolom ${token} tidak valid.` });
+      expect(toUserMessage(error).message).toBe('Periksa kembali isian yang ditandai.');
+    }
+  });
+
+  it('shows a ketua_rt sentence with friendly terms', () => {
+    const error = Object.assign(httpFailure(400), {
+      serverMessage: 'Titik ketua_rt "A" harus mencakup tepat satu RT.',
+    });
+    expect(toUserMessage(error).message).toBe('Titik Ketua RT "A" harus mencakup tepat satu RT.');
+  });
+
+  it('maps the previous value/period pair message to approved wording', () => {
+    const error = Object.assign(httpFailure(400), {
+      serverMessage:
+        'value_previous dan period_previous harus diisi berpasangan (keduanya ada atau keduanya kosong).',
+    });
+    expect(toUserMessage(error).message).toBe(PREVIOUS_PAIR_MESSAGE);
+  });
+
+  it('does not relabel an unrelated template sentence that names a token', () => {
+    const error = Object.assign(httpFailure(400), {
+      serverMessage: 'comparisonTemplateId maksimal 191 karakter',
+    });
+    expect(toUserMessage(error).message).toBe('Periksa kembali isian yang ditandai.');
+  });
+
+  it('never leaks a denylisted token from any real backend message literal', () => {
+    const root = join(__dirname, '../../../backend/src');
+    const literal = /'([^'\n]{12,})'|"([^"\n]{12,})"|`([^`\n]{12,})`/g;
+    let checked = 0;
+    for (const dir of ['services', 'controllers']) {
+      for (const file of readdirSync(join(root, dir)).filter((f) => f.endsWith('.ts'))) {
+        const source = readFileSync(join(root, dir, file), 'utf8');
+        for (const match of source.matchAll(literal)) {
+          const text = match[1] ?? match[2] ?? match[3] ?? '';
+          if (text.includes('${') || !/ /.test(text)) continue;
+          const error = Object.assign(httpFailure(400), { serverMessage: text });
+          const shown = toUserMessage(error).message;
+          checked += 1;
+          for (const token of HIDDEN_API_TOKENS) {
+            expect(shown, `${file}: ${text}`).not.toMatch(new RegExp(`\\b${token}\\b`));
+          }
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(100);
   });
 
   it('falls back to the general text for any other sentence that names a field key', () => {
