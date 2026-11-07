@@ -23,6 +23,7 @@ import {
   expectedUpdatedAtSchema,
   idParamSchema,
   isUniqueViolation,
+  MAX_SLUG_LENGTH,
   MAX_SORT_ORDER,
   parseOrThrow,
   planReorder,
@@ -855,9 +856,11 @@ export const createProseBlock = async (
           throw new ContentBlockServiceError('Bagian tidak ditemukan', 404);
         }
 
-        // content_blocks.slug is globally unique, so collisions are resolved table-wide.
+        // content_blocks.slug is globally unique, so collisions are resolved table-wide. The
+        // lookup prefix is shortened so a suffixed name of a near-limit slug (which
+        // resolveUniqueSlug truncates to fit `-N`) is still among the rows we load.
         const sameSlug = await tx.contentBlock.findMany({
-          where: { slug: { startsWith: baseSlug } },
+          where: { slug: { startsWith: baseSlug.slice(0, MAX_SLUG_LENGTH - 8) } },
           select: { slug: true },
         });
         const slug = resolveUniqueSlug(baseSlug, new Set(sameSlug.map((b) => b.slug)));

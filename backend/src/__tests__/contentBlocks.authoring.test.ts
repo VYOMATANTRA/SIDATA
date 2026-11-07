@@ -81,6 +81,16 @@ describe('contentBlocks authoring (section prose blocks)', () => {
       assert.equal(result.block.slug, 'pendahuluan-3');
     });
 
+    it('suffixes a slug that already exists at the 100-character cap', async () => {
+      const long = 'a'.repeat(100);
+      db.addBlock({ id: 'b1', slug: long });
+      db.addBlock({ id: 'b2', slug: `${'a'.repeat(98)}-2`, sortOrder: 1 });
+
+      const result = await createProseBlock('sec-1', { title: long, body: 'x' }, actor, ctx);
+      assert.equal(result.block.slug, `${'a'.repeat(98)}-3`);
+      assert.equal(result.block.slug.length, 100);
+    });
+
     it('refuses to mint a slug that equals a standalone singleton slot', async () => {
       for (const block of DEFAULT_CONTENT_BLOCKS) {
         await assert.rejects(
