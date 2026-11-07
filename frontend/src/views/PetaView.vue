@@ -16,6 +16,11 @@ const mapsStore = useMapsStore();
 const settingsStore = useSettingsStore();
 const mapRef = ref<InstanceType<typeof InteractiveMap> | null>(null);
 
+/** The in-flow summary disclosure moves the map on mobile; re-measure so tiles don't misrender. */
+function onSummaryLayoutChange() {
+  mapRef.value?.invalidateSize?.();
+}
+
 function retryMapData() {
   void mapsStore.loadPoints();
   void mapsStore.loadSummary();
@@ -269,8 +274,8 @@ function requestUserLocation() {
       <div class="mx-auto max-w-6xl">
         <h2 id="peta-title" class="text-brand-navy text-lg font-bold">Sebaran Titik Spasial</h2>
 
-        <div class="mt-4 flex justify-end">
-          <MapSummaryDropdown :summary="mapsStore.summary" />
+        <div class="mt-4 md:flex md:justify-end">
+          <MapSummaryDropdown :summary="mapsStore.summary" @layout-change="onSummaryLayoutChange" />
         </div>
         <div
           v-if="mapsStore.summaryError"
