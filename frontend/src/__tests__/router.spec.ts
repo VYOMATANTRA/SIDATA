@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
-import router from '../router/index';
+import router, { scrollBehavior } from '../router/index';
+import type { RouteLocationNormalized } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 
 describe('router auth guard retry behavior', () => {
@@ -334,5 +335,46 @@ describe('router auth guard retry behavior', () => {
     await router.push('/settings/audit-retention');
     expect(router.currentRoute.value.name).toBe('audit-retention-settings');
     expect(router.currentRoute.value.meta.title).toBe('Pengaturan Retensi Audit');
+  });
+});
+
+describe('router scrollBehavior', () => {
+  const loc = (path: string, hash = '') =>
+    ({ path, hash, fullPath: path + hash }) as unknown as RouteLocationNormalized;
+
+  it('resets to the top when the path changes (public and admin)', async () => {
+    expect(await scrollBehavior(loc('/peta'), loc('/'), null)).toEqual({
+      top: 0,
+      left: 0,
+      behavior: 'auto',
+    });
+    expect(await scrollBehavior(loc('/users'), loc('/data'), null)).toMatchObject({ top: 0 });
+  });
+
+  it('restores the saved position on back/forward', async () => {
+    const saved = { left: 0, top: 1500 };
+    expect(await scrollBehavior(loc('/peta'), loc('/'), saved)).toBe(saved);
+  });
+
+  it('keeps the position on a query-only change', async () => {
+    expect(await scrollBehavior(loc('/peta'), loc('/peta'), null)).toBe(false);
+  });
+
+  it('scrolls to the hash target using its scroll-margin-top, on path or hash-only changes', async () => {
+    const el = document.createElement('section');
+    el.id = 'bab-1';
+    el.style.scrollMarginTop = '88px';
+    document.body.appendChild(el);
+    const expected = { el, top: 88, behavior: 'auto' };
+    expect(await scrollBehavior(loc('/cerita/x', '#bab-1'), loc('/'), null)).toEqual(expected);
+    expect(await scrollBehavior(loc('/cerita/x', '#bab-1'), loc('/cerita/x'), null)).toEqual(
+      expected,
+    );
+    el.remove();
+  });
+
+  it('falls back to top (path change) or nothing (same path) for a missing hash target', async () => {
+    expect(await scrollBehavior(loc('/a', '#none'), loc('/b'), null)).toMatchObject({ top: 0 });
+    expect(await scrollBehavior(loc('/a', '#none'), loc('/a'), null)).toBe(false);
   });
 });

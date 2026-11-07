@@ -1,4 +1,10 @@
-import { createRouter, createWebHistory } from 'vue-router';
+import { nextTick } from 'vue';
+import {
+  createRouter,
+  createWebHistory,
+  type RouteLocationNormalized,
+  type RouterScrollBehavior,
+} from 'vue-router';
 import { getActivePinia } from 'pinia';
 import { useAuthStore } from '../stores/auth';
 import { useSettingsStore } from '../stores/settings.store';
@@ -45,8 +51,45 @@ export function rolesFor(path: string): AdminNavRole[] {
   return rolesByPath.get(path) ?? ['admin'];
 }
 
+/**
+ * Scroll policy for every route (public and admin):
+ * - back/forward restores the saved position;
+ * - a hash that resolves to an element scrolls to it, clearing the sticky header by the element's
+ *   own computed `scroll-margin-top` (vue-router positions with getBoundingClientRect, which
+ *   ignores that CSS). `.public-shell [id]` sets it from `--public-header-height`, so public pages
+ *   clear the header with no hardcoded number, and admin pages (no such rule) get 0;
+ * - a path change otherwise resets to the top;
+ * - query-only changes keep the position (views use them to sync filters).
+ * Always `behavior: 'auto'` (never smooth, so reduced-motion needs no special case). Waits one tick
+ * so the new route component has rendered before measuring.
+ */
+export const scrollBehavior: RouterScrollBehavior = async (
+  to: RouteLocationNormalized,
+  from: RouteLocationNormalized,
+  savedPosition,
+) => {
+  if (savedPosition) return savedPosition;
+  await nextTick();
+  if (to.hash) {
+    let id = to.hash.slice(1);
+    try {
+      id = decodeURIComponent(id);
+    } catch {
+      // keep the raw id
+    }
+    const el = document.getElementById(id);
+    if (el) {
+      const top = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+      return { el, top, behavior: 'auto' };
+    }
+  }
+  if (to.path !== from.path) return { top: 0, left: 0, behavior: 'auto' };
+  return false;
+};
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
+  scrollBehavior,
   routes: [
     {
       path: '/',

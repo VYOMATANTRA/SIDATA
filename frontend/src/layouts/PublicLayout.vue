@@ -57,7 +57,8 @@ watch(
       if (isEditable(active) || (active && mainRef.value?.contains(active))) return;
       // A freshly opened modal dialog owns focus; moving it to <main> would pull it out.
       if (active?.closest('[aria-modal="true"]')) return;
-      mainRef.value?.focus();
+      // The router owns scrolling; focus is for keyboard/AT users only.
+      mainRef.value?.focus({ preventScroll: true });
     });
   },
 );

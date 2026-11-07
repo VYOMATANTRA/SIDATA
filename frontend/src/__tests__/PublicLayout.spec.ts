@@ -219,9 +219,11 @@ describe('PublicLayout (mounted by App for routes with meta.layout = public)', (
       const { wrapper, router } = await mountApp('/peta');
       wrapper.find<HTMLElement>('[data-test="hamburger-btn"]').element.focus();
 
+      const focusSpy = vi.spyOn(wrapper.find('main').element as HTMLElement, 'focus');
       await router.push('/publikasi');
       await flushPromises();
       expect(document.activeElement).toBe(wrapper.find('main').element);
+      expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
       wrapper.unmount();
     });
 
