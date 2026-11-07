@@ -293,6 +293,51 @@ describe('PublicLayout (mounted by App for routes with meta.layout = public)', (
     });
   });
 
+  describe('menu slot wiring', () => {
+    it('passes the open state to the menu: a failed logout alert lives while open, is gone on close and not stale on reopen', async () => {
+      globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input);
+        if (url.includes('csrf-token')) {
+          return { ok: true, status: 200, json: async () => ({ csrfToken: 'csrf' }) } as Response;
+        }
+        if (url.includes('/api/auth/logout')) {
+          return { ok: false, status: 500, json: async () => ({}) } as Response;
+        }
+        if (url.startsWith('/api/pages')) {
+          return { ok: true, status: 200, json: async () => ({ pages: [] }) } as Response;
+        }
+        return { ok: true, status: 200, json: async () => ({ settings: {} }) } as Response;
+      });
+      const { wrapper, pinia } = await mountApp('/peta');
+      useAuthStore(pinia).setAuth({ id: '1', email: 'user@manggar.go.id', role: 'user' }, 'tok');
+      await flushPromises();
+
+      const toggle = () => wrapper.find('[data-test="hamburger-btn"]');
+      const alert = () => wrapper.find('[data-test="menu-logout-error"]');
+
+      await toggle().trigger('click');
+      expect(toggle().attributes('aria-expanded')).toBe('true');
+      await wrapper.find('[data-test="menu-logout-btn"]').trigger('click');
+      await vi.waitUntil(() => alert().exists());
+      await flushPromises();
+      // Still there while the menu stays open, and the session was kept.
+      expect(alert().exists()).toBe(true);
+      expect(alert().attributes('role')).toBe('alert');
+      expect(useAuthStore(pinia).isAuthenticated).toBe(true);
+
+      await toggle().trigger('click');
+      expect(toggle().attributes('aria-expanded')).toBe('false');
+      await flushPromises();
+      expect(alert().exists()).toBe(false);
+
+      await toggle().trigger('click');
+      expect(toggle().attributes('aria-expanded')).toBe('true');
+      await flushPromises();
+      expect(alert().exists()).toBe(false);
+      wrapper.unmount();
+    });
+  });
+
   describe('mobile menu modality', () => {
     it('makes the skip link, main and footer inert while the mobile sheet is open, and restores them', async () => {
       stubViewport(false);
