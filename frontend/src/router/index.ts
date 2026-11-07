@@ -1,7 +1,6 @@
 import {
   createRouter,
   createWebHistory,
-  type RouteLocationNormalized,
   type RouterScrollBehavior,
 } from 'vue-router';
 import { getActivePinia } from 'pinia';

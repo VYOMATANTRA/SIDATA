@@ -108,7 +108,7 @@ describe('CeritaPageView', () => {
           : 'blocks';
       return { ok: true, json: async () => ({ [key]: [] }) } as Response;
     });
-    const scrollIntoView = vi.fn();
+    const scrollIntoView = vi.fn<() => void>();
     Element.prototype.scrollIntoView = scrollIntoView;
 
     const { pinia, router } = await setupAndPush('kependudukan');
