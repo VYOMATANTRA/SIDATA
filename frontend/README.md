@@ -55,16 +55,23 @@ focus, mobile viewports. Specs live in `e2e/`; Vitest ignores that folder.
 ```sh
 npx playwright install chromium   # one-time browser download (about 300 MB)
 npm run test:e2e                  # all projects: mobile, mobile-small, desktop
-npm run test:e2e -- --project=mobile e2e/map-summary.spec.ts
+npm run test:e2e -- --project=mobile e2e/map-summary.mobile.spec.ts
+npm run test:e2e -- --project=desktop e2e/map-summary.desktop.spec.ts
 npm run test:e2e:ui               # Playwright UI mode
 ```
 
 - Projects: `mobile` (375x812, touch), `mobile-small` (320x640, touch), `desktop` (1280x800).
+  Specs are split by filename: `*.mobile.spec.ts` runs in `mobile` and `mobile-small`,
+  `*.desktop.spec.ts` runs in `desktop`.
 - The suite never touches a real backend or the internet. `e2e/support/mocks.ts` stubs `/api/**`
   (maps points/summary, public settings, CSRF; `/api/auth/refresh` returns 401 so the visitor is
   logged out) with synthetic data and answers OpenStreetMap tile requests with a generated PNG, so
   real Leaflet tile and marker layers render. Import `test`/`expect` from `e2e/support/test`, which
   applies those mocks automatically, and abort-block any other external host.
+- A test FAILS on any unmocked `/api` call, so a missing mock is caught instead of silently hitting
+  nothing. Opt out per test or file with `test.use({ allowUnmockedApi: true })` (option defined in
+  `e2e/support/test.ts`). External hosts (e.g. Google Fonts) are aborted and recorded but never fail
+  a test.
 - Playwright starts its own Vite dev server on port 5199 (`--strictPort`, never reused), so it does
   not collide with `npm run dev` on 5173. That server drops Vue DevTools (`e2e/vite.e2e.config.ts`),
   whose injected panel would otherwise sit on top of the page in hit tests.
