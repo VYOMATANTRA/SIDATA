@@ -72,6 +72,16 @@ describe('AppNavbar menu: mobile modal sheet', () => {
     wrapper.unmount();
   });
 
+  it('keeps the close button first in DOM order so tab order matches its visual position', async () => {
+    const { wrapper } = await mountNavbar();
+    await toggle(wrapper).trigger('click');
+
+    const close = wrapper.find('[data-test="menu-close-btn"]').element;
+    const first = wrapper.find('[data-test="first"]').element;
+    expect(close.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    wrapper.unmount();
+  });
+
   it('traps Tab and Shift+Tab inside the sheet', async () => {
     const { wrapper } = await mountNavbar();
     await toggle(wrapper).trigger('click');
