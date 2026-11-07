@@ -10,6 +10,7 @@ export interface LinkProps {
   rel?: string;
   size?: 'sm' | 'md' | 'lg';
   state?: 'default' | 'hover';
+  /** `indigo` is a deprecated alias of `navy`; the brand is navy + white. */
   variant?: 'navy' | 'indigo' | 'white';
   label?: string;
   leftIcon?: Component | string;
@@ -75,11 +76,18 @@ const rootProps = computed(() => {
   };
 });
 
+const isInert = computed(() => props.disabled || (!isRouterLink.value && !isAnchor.value));
+
 const rootClasses = computed(() => {
-  if (props.disabled || (!isRouterLink.value && !isAnchor.value)) {
-    return 'group pointer-events-none inline-flex cursor-not-allowed items-center rounded-xs no-underline opacity-50 select-none focus-visible:outline-none';
+  if (isInert.value) {
+    return 'group pointer-events-none inline-flex cursor-not-allowed items-center rounded-xs no-underline select-none focus-visible:outline-none';
   }
-  return 'group focus-visible:ring-brand-indigo inline-flex cursor-pointer items-center rounded-xs no-underline select-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none';
+  // Navy ring with a white offset on light surfaces; white ring with a navy offset on navy ones.
+  const ring =
+    props.variant === 'white'
+      ? 'focus-visible:ring-focus-ring-inverse focus-visible:ring-offset-surface-inverse'
+      : 'focus-visible:ring-focus-ring focus-visible:ring-offset-surface';
+  return `group ${ring} inline-flex cursor-pointer items-center rounded-xs no-underline select-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none`;
 });
 
 const sizeClasses = computed(() => {
@@ -95,11 +103,14 @@ const sizeClasses = computed(() => {
 });
 
 const colorClasses = computed(() => {
+  if (isInert.value) {
+    // Readable but quieter than an active link; no opacity so contrast is predictable.
+    return props.variant === 'white' ? 'text-text-inverse-muted' : 'text-text-muted';
+  }
   switch (props.variant) {
-    case 'indigo':
-      return 'text-brand-indigo';
     case 'white':
-      return 'text-white';
+      return 'text-text-inverse';
+    case 'indigo':
     case 'navy':
     default:
       return 'text-brand-navy';

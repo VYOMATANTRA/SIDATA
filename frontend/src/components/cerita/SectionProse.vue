@@ -8,7 +8,7 @@ defineProps<SectionProseProps>();
 
 <template>
   <p
-    class="max-w-prose text-base leading-relaxed whitespace-pre-line text-slate-700"
+    class="max-w-prose text-base leading-relaxed whitespace-pre-line text-text-muted"
     data-test="section-prose"
   >
     {{ body }}

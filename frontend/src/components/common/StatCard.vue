@@ -64,7 +64,7 @@ const variantClasses = computed(() => {
     case 'navy':
       return 'bg-brand-navy border border-white/10 text-white shadow-md';
     case 'light':
-      return 'bg-white border border-slate-200/90 text-slate-900 shadow-xs';
+      return 'bg-white border border-border text-brand-navy shadow-xs';
     case 'dark':
     default:
       // Exact Figma dark card matching screenshot
@@ -230,7 +230,7 @@ const variantClasses = computed(() => {
           <span
             class="order-2 mt-1 max-w-full text-[10px] leading-tight sm:text-xs md:text-sm"
             :class="
-              variant === 'light' ? 'font-medium text-slate-600' : 'font-normal text-slate-200'
+              variant === 'light' ? 'font-medium text-text-muted' : 'font-normal text-text-inverse'
             "
           >
             {{ item.label }}
@@ -258,7 +258,7 @@ const variantClasses = computed(() => {
       <slot name="empty">
         <p
           class="text-sm italic"
-          :class="variant === 'light' ? 'text-slate-500' : 'text-slate-400'"
+          :class="variant === 'light' ? 'text-text-muted' : 'text-text-inverse-muted'"
         >
           Tidak ada data statistik yang ditampilkan.
         </p>

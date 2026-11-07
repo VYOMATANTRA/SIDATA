@@ -276,12 +276,12 @@ describe('Common SectionHero.vue', () => {
     });
 
     const section = wrapper.find('[data-test="section-hero"]');
-    expect(section.classes()).toContain('bg-slate-50');
-    expect(section.classes()).toContain('text-slate-900');
+    expect(section.classes()).toContain('bg-surface-muted');
+    expect(section.classes()).toContain('text-brand-navy');
     expect(section.attributes('style')).toBeFalsy();
 
     const highlight = wrapper.find('.font-bold');
-    expect(highlight.classes()).toContain('text-slate-900');
+    expect(highlight.classes()).toContain('text-brand-navy');
   });
 
   it('applies default hero background image and dark gradient overlay for default dark variant', () => {

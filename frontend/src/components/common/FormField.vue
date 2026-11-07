@@ -47,21 +47,21 @@ const describedBy = computed(() => {
 
 <template>
   <div>
-    <label :for="id" class="block text-sm font-medium text-slate-700">
+    <label :for="id" class="block text-sm font-medium text-text-muted">
       {{ label }}
-      <span v-if="required" class="text-rose-600">
+      <span v-if="required" class="text-status-error">
         <span aria-hidden="true">*</span>
         <span class="sr-only">(wajib diisi)</span>
       </span>
     </label>
 
-    <p v-if="hint" :id="hintId" class="mt-1 text-xs leading-snug text-slate-500">{{ hint }}</p>
+    <p v-if="hint" :id="hintId" class="mt-1 text-xs leading-snug text-text-muted">{{ hint }}</p>
 
     <div class="mt-1.5">
       <slot :described-by="describedBy" :invalid="invalid" />
     </div>
 
-    <p v-if="error" :id="errorId" class="mt-1.5 text-xs font-medium text-rose-600">
+    <p v-if="error" :id="errorId" class="mt-1.5 text-xs font-medium text-status-error">
       {{ error }}
     </p>
   </div>

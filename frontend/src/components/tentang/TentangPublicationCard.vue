@@ -13,7 +13,7 @@ withDefaults(
 </script>
 
 <template>
-  <div class="flex flex-col gap-4 rounded-btn bg-brand-cyan p-5 sm:flex-row sm:items-center">
+  <div class="flex flex-col gap-4 rounded-btn bg-surface-muted p-5 sm:flex-row sm:items-center">
     <span
       class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-navy text-white"
       aria-hidden="true"
@@ -23,7 +23,7 @@ withDefaults(
 
     <div class="flex-1">
       <h3 class="text-lg font-semibold text-brand-navy">{{ title }}</h3>
-      <p class="mt-1 text-base text-brand-navy/90">{{ description }}</p>
+      <p class="mt-1 text-base text-brand-navy">{{ description }}</p>
     </div>
 
     <span

@@ -10,7 +10,7 @@ withDefaults(defineProps<{ steps: StepItem[] }>(), { steps: () => [] });
 </script>
 
 <template>
-  <ol class="divide-y divide-gray-200" data-test="procedure-steps">
+  <ol class="divide-y divide-border" data-test="procedure-steps">
     <li
       v-for="item in steps"
       :key="item.step"
@@ -25,8 +25,8 @@ withDefaults(defineProps<{ steps: StepItem[] }>(), { steps: () => [] });
 
       <div>
         <h3 class="text-base font-bold text-brand-navy">{{ item.title }}</h3>
-        <p class="mt-1 text-base leading-relaxed text-gray-800">{{ item.description }}</p>
-        <ul class="mt-2 list-disc space-y-1 pl-5 text-base text-gray-700">
+        <p class="mt-1 text-base leading-relaxed text-brand-navy">{{ item.description }}</p>
+        <ul class="mt-2 list-disc space-y-1 pl-5 text-base text-text-muted">
           <li v-for="(detail, index) in item.details" :key="index">{{ detail }}</li>
         </ul>
       </div>

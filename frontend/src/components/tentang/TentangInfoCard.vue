@@ -16,10 +16,10 @@ const headingId = useId();
 </script>
 
 <template>
-  <section class="rounded-btn border border-gray-400 bg-white p-5" :aria-labelledby="headingId">
+  <section class="rounded-btn border border-border bg-white p-5" :aria-labelledby="headingId">
     <div class="flex flex-wrap items-center gap-3">
       <span
-        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-indigo text-white"
+        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-navy text-white"
         aria-hidden="true"
       >
         <TentangIcon :name="icon" />
@@ -27,13 +27,13 @@ const headingId = useId();
       <h2 :id="headingId" class="text-base font-bold text-brand-navy">{{ heading }}</h2>
       <span
         v-if="badge"
-        class="rounded-[5px] bg-brand-cyan px-2 py-0.5 text-sm font-medium text-brand-navy"
+        class="rounded-[5px] bg-surface-muted px-2 py-0.5 text-sm font-medium text-brand-navy"
       >
         {{ badge }}
       </span>
     </div>
 
-    <div class="mt-3 space-y-3 text-base leading-relaxed text-gray-800">
+    <div class="mt-3 space-y-3 text-base leading-relaxed text-brand-navy">
       <slot />
     </div>
   </section>
