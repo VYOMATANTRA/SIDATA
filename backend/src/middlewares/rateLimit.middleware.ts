@@ -76,6 +76,15 @@ export const comparisonTemplatesWriteLimiter = createUserKeyedLimiter(100);
 // do not drain each other)
 export const indicatorTablesWriteLimiter = createUserKeyedLimiter(100);
 
+// Media uploads (multipart, sharp re-encode) are the most expensive writes in the API: a tighter,
+// dedicated per-user bucket, so uploading does not drain (or get drained by) other CMS edits.
+export const mediaWriteLimiter = createUserKeyedLimiter(60);
+
+// Public media delivery (images/downloads) and editor previews. Roomier than apiLimiter: one
+// content page can reference many images, and visitors on a shared NAT would otherwise lock
+// each other out of the same page.
+export const mediaReadLimiter = createLimiter(600);
+
 // Settings write operations rate limiter (dedicated 100 req/15min bucket keyed by admin user ID,
 // separate from userManagementWriteLimiter so settings edits and user management do not drain each other)
 export const settingsWriteLimiter = createUserKeyedLimiter(100);

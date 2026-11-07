@@ -1,4 +1,7 @@
 // Preloads test environment variables before modules are imported during unit test execution.
+import os from 'node:os';
+import path from 'node:path';
+
 process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL =
   process.env.DATABASE_URL || 'mysql://root:password@localhost:3306/sidata_test';
@@ -21,3 +24,7 @@ process.env.TURNSTILE_SECRET =
   process.env.TURNSTILE_SECRET || '1x0000000000000000000000000000000AA';
 process.env.RESEND_API_KEY = process.env.RESEND_API_KEY || 're_test_key';
 process.env.EMAIL_FROM = process.env.EMAIL_FROM || 'SIDATA Test <onboarding@resend.dev>';
+
+// Safety net: tests that reach the media upload root without pinning their own temporary
+// directory must never write into the repository's real uploads/ folder.
+process.env.UPLOAD_DIR = path.join(os.tmpdir(), `sidata-test-uploads-${process.pid}`);

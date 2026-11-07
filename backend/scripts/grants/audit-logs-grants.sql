@@ -56,6 +56,7 @@ GRANT ALL PRIVILEGES ON `<DB_NAME>`.`chapters` TO '<APP_DB_USER>'@'<APP_DB_HOST>
 GRANT ALL PRIVILEGES ON `<DB_NAME>`.`sections` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
 GRANT ALL PRIVILEGES ON `<DB_NAME>`.`indicator_tables` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
 GRANT ALL PRIVILEGES ON `<DB_NAME>`.`indicator_table_rows` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
+GRANT ALL PRIVILEGES ON `<DB_NAME>`.`media_assets` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
 
 -- 3. Restricted access to audit_logs: read everything, insert new rows, and update only the two
 --    acknowledge columns (MySQL supports column-scoped UPDATE grants). No DELETE, no

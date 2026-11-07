@@ -15,3 +15,7 @@ coverage
 .eslintcache
 .prettierrc.json
 eslint.config.js
+
+# Uploaded media is runtime data, never part of an image
+uploads
+/uploads

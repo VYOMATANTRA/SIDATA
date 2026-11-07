@@ -10,6 +10,7 @@
     "dev:seed": "tsx scripts/dev-seed.ts",
     "dev:cleanup-sample-rt": "tsx scripts/cleanup-legacy-sample-rt-leaders.ts",
     "seed:indicator": "tsx prisma/seeder_indicator.ts",
+    "media:cleanup": "tsx scripts/cleanup-media.ts",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
@@ -29,6 +30,9 @@
     "express-rate-limit": "^8.6.1",
     "google-auth-library": "^9.15.1",
     "jsonwebtoken": "^9.0.3",
+    "multer": "^2.5.0",
+    "sharp": "^0.35.5",
+    "yauzl": "^3.4.0",
     "zod": "^4.4.3",
     "zxcvbn": "^4.4.2"
   },
@@ -44,7 +48,9 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.3.0",
     "@types/node": "^26.1.1",
+    "@types/yauzl": "^3.4.0",
     "@types/zxcvbn": "^4.4.5",
     "@typescript-eslint/eslint-plugin": "^8.65.0",
     "@typescript-eslint/parser": "^8.65.0",

@@ -17,6 +17,8 @@ Two optional env vars control the Google OAuth cookie lifetimes: `OAUTH_STATE_TT
 
 Two more env vars are optional but matter for the audit trail (see the Audit Trail subsection below): `TRUST_PROXY` (Express `trust proxy` setting — set this behind any reverse proxy, or `req.ip` on every audit log row/rate-limiter bucket/CSRF session key resolves to the proxy, not the client) and `AUDIT_ADMIN_DATABASE_URL` (a privileged DB connection used only by `backend/scripts/`, never by the running server). `AUDIT_PRUNE_SCHEDULE` (5-field cron expression, default `0 3 * * *`) sets when the opt-in `audit-pruner` Compose sidecar runs.
 
+`UPLOAD_DIR` is optional and sets where uploaded media (photos, documents, data files) lives on disk. Unset/empty means `<repo-root>/uploads`; a relative value resolves against the repository root (derived from the module location, never `process.cwd()`); an absolute value is used as-is. The server creates it at boot, proves it is writable, and refuses to start if its real path is inside `backend/` or `frontend/` (or contains them). It is never exposed in an API response or public setting. Under Docker Compose it is fixed to `/var/lib/sidata/uploads` and bind-mounted from `UPLOADS_HOST_DIR` (default `./uploads`). `MEDIA_CLEANUP_GRACE_HOURS` (default `24`) is the grace period for `npm run media:cleanup`.
+
 ## Database
 
 DB engine is **MySQL**, full stop — but you'll correctly see @prisma/adapter-mariadb in code, since that's Prisma 7's single driver adapter for both engines. Don't 'correct' it.
@@ -51,6 +53,7 @@ Dev server runs on `http://localhost:5173` by default (Vite).
 | Seed dev admin          | `npm run dev:seed`                | `backend/` |
 | Cleanup sample RT data  | `npm run dev:cleanup-sample-rt`   | `backend/` |
 | Seed indicators         | `npm run seed:indicator`          | `backend/` |
+| Clean stale media       | `npm run media:cleanup`           | `backend/` |
 | Run via Docker          | `docker compose up --build`       | repo root  |
 
 Backend runs on port from `PORT` env var (default 3000). Prisma client is generated to `generated/prisma/`.
@@ -108,6 +111,7 @@ Key details:
 - `src/services/`: Business logic sitting between controllers and external/data sources (`users.service.ts` — user management & role administration, `profile.service.ts` — self-service credential updates, `weather.service.ts` — caches and transforms BMKG forecasts, `audit.service.ts` — audit log writes/reads and the `AUDIT_ACTIONS` severity table, `settings.service.ts` — public portal, audit retention, and operational weather settings, `maps.service.ts` — spatial points querying, RT leader coordinate resolution, editor/admin spatial point/coverage/RT-leader writes, CSV roster preview/apply, and the explicit sample-roster status with the shared ketua_rt 1:1 invariant enforcement (SPEC §7), and audit, `legacySampleRtCleanup.service.ts` — shared transactional seed/CLI cleanup and count-only maintenance audit, `pages.service.ts` — page → chapter → section hierarchy reads, atomic page creation, deletion, and deadlock-free reordering, `contentBlocks.service.ts` — CMS prose/content block queries and edits, `indicators.service.ts` — scalar figure CRUD with tier-1 pairing validation, template attachment and rendered `comparison`, and audit, `indicatorTables.service.ts` — matrix-table CRUD with per-kind cell-shape validation, SQL-SUM totals, and audit, `comparisonTemplates.service.ts` — admin-authored sentence templates with warn-on-save trend-keyword acknowledgment and audit, plus the `DEFAULT_COMPARISON_TEMPLATES` seed data)
 - `src/middlewares/`: Express middleware (`auth.middleware.ts` for JWT, `csrf.middleware.ts` for CSRF protection, `role.middleware.ts` for role-based authorization, `turnstile.middleware.ts` for anti-bot, `rateLimit.middleware.ts` — per-route rate limiters)
 - `src/utils/`: `jwt.ts` (token signing), `oauth.ts` (Google OAuth PKCE & token verification), `otp.ts` (OTP hashing & expiry), `mailer.ts` (transactional email), `turnstile.ts` (Turnstile API client), `prisma.ts` (Prisma instance — wraps `audit_logs` writes in an append-only guard, see Audit Trail below), `bmkg.ts` (BMKG API fetch + response validation), `auditLogGuard.ts` (the append-only guard's pure logic), `actor.ts` / `requestContext.ts` (pull `{id, email, role}` and `{ipAddress, userAgent}` off a request for audit entries), `lockTransactionCache.ts` (versioned TTL cache and row-level lock transaction scaffold), `comparator.ts` (canonicalized JSON deep equality for diffs and mutations), `keyedCache.ts` (generic bounded LRU keyed cache with recency tracking), `comparisonProse.ts` (tier-1 template structure validation and exact-decimal comparison rendering), `trendKeywords.ts` (the code-owned trend/superlative word list, matcher, and per-occurrence acknowledgment key), `rtSeedPoints.ts` (deterministic RT seed ids and deletion tombstones), `legacySampleRtFingerprints.ts` (fingerprints for recognized legacy synthetic RT records)
+- Media storage (SPEC.md §7 `media_assets`): `src/routes/media.routes.ts` + `src/controllers/media.controller.ts` (upload, editor preview, public image, public download), `src/middlewares/mediaUpload.middleware.ts` (multer disk staging into `<UPLOAD_DIR>/_staging/<uploadId>/`, one file per request), `src/services/media.service.ts` (validate, re-encode, store, audit; exports `attachMedia(tx, ids, {purpose})` / `detachMedia` for content transactions), `src/services/mediaCleanup.service.ts` + `scripts/cleanup-media.ts`, and `src/utils/`: `uploadRoot.ts` (UPLOAD_DIR resolution and boot validation), `mediaPolicy.ts` (every limit, allowed type and the purpose allowlist), `mediaSignature.ts` (magic-byte detection, OOXML inspection, CSV sanity), `mediaImage.ts` (sharp WebP re-encode, EXIF stripping, thumbnails), `mediaStorage.ts` (layout, realpath containment, display-name and header helpers)
 - `prisma/schema.prisma`: ORM schema (MySQL)
 - `prisma/seed.ts`: Seeds default roles (`user`, `admin`, `editor`), default audit retention settings (keep-forever), default public settings (`publicSeedMap`), default operational weather config, default content blocks (`DEFAULT_CONTENT_BLOCKS`), default tier-1 comparison templates (`DEFAULT_COMPARISON_TEMPLATES`), the 8 Cerita pages and their chapters (data in `prisma/ceritaPages.ts`), sample RT leaders (development/testing only, skipped when NODE_ENV=production), and spatial points; delegates legacy cleanup to `legacySampleRtCleanup.service.ts`
 - `prisma/seedRtLeaders.ts`, `src/data/rtLeadersData.ts`: create-only RT seed helpers and the development-only synthetic map/contact data
@@ -135,6 +139,26 @@ Every admin user-management action and security-relevant auth event writes an `a
 
 - **Tamper defense is two layers.** Layer 1 is app-level: the Prisma client singleton in `src/utils/prisma.ts` is `$extends`-wrapped so `auditLog.update`/`.delete`/`.deleteMany`/`.upsert` throw unless the write touches only `acknowledgedAt`/`acknowledgedById` (logic in `src/utils/auditLogGuard.ts`). This is a guardrail against careless app code, not a security boundary. Layer 2 is the one that actually holds: `backend/scripts/grants/audit-logs-grants.sql` strips the app's runtime DB user down to `SELECT`, `INSERT`, and column-scoped `UPDATE` on `audit_logs` — no `DELETE`, no unrestricted `UPDATE` — via MySQL grants. **Run that script once per environment**, or the app's DB user retains its default full rights on the table and layer 2 is absent.
 - **Retention pruning runs outside the app.** `backend/scripts/prune-audit-logs.ts` connects with `AUDIT_ADMIN_DATABASE_URL` — a separate, privileged DB connection, never the app's — because deleting rows is exactly what layer 2 just took away from the app user. Run it on a schedule: the opt-in `audit-pruner` Compose sidecar (`docker compose --profile ops up -d --build audit-pruner`, schedule via `AUDIT_PRUNE_SCHEDULE`) or a host cron entry — see the Deployment checklist in `README.md`, which also covers applying the grants script once per environment. It reads the per-severity retention settings (`GET`/`PATCH /api/settings/audit-retention`, admin-only), never prunes an unacknowledged `critical` row regardless of age, and writes its own `audit.pruned` summary row.
+
+#### Media Storage
+
+Uploads (photos, PDF/DOCX documents, XLSX/CSV data) share one service; see `docs/SPEC.md` §7 for the
+product rules. Things to know when touching it:
+
+- **Layout under `UPLOAD_DIR`**: `photos/<purpose>/<ownerKey>/<assetId>.webp`,
+  `documents/<purpose>/<ownerKey>/<assetId>.<ext>`, `derivatives/<assetId>/thumbnail.webp`, `_staging/`.
+  `purpose` comes from the server-side allowlist in `mediaPolicy.ts`; `ownerKey` is chosen by the server
+  (fixed key for singletons, the uploader's user id otherwise). A client-supplied filename, title or slug
+  never reaches a path.
+- **Validation is by file signature**, not extension or client MIME. Limits live in `mediaPolicy.ts` only.
+- **Serving** resolves `storage_key` under the canonical upload root with a realpath containment check and
+  derives `Content-Type` from the stored extension. Public routes return 404 unless `attached_at` is set.
+- **Content PRs** attach media inside their own transaction with `attachMedia(tx, ids, { purpose })` and
+  call `detachMedia` when a reference is removed. Do not set `attached_at` any other way.
+- **New table grants**: `media_assets` is in `scripts/grants/audit-logs-grants.sql`.
+- **Run `npm run media:cleanup` on a schedule** (see README Deployment) or abandoned uploads accumulate.
+- sharp ships prebuilt binaries for linux x64/arm64 including musl (`node:22-alpine`); the image build
+  needs no compiler toolchain.
 
 ## Tech Stack Summary
 

@@ -126,6 +126,10 @@ cp .env.example .env
 docker compose up --build
 ```
 
+Uploaded media is bind-mounted from `UPLOADS_HOST_DIR` (default `./uploads`, git-ignored) into the
+backend container at `/var/lib/sidata/uploads` (`UPLOAD_DIR`), so it survives rebuilds. Outside Docker,
+`UPLOAD_DIR` is optional and defaults to `<repo-root>/uploads`.
+
 ## Deployment
 
 Checklist for a new environment (Docker on a VPS). Background: [`AGENTS.md`](AGENTS.md) "Audit Trail",
@@ -151,7 +155,34 @@ Checklist for a new environment (Docker on a VPS). Background: [`AGENTS.md`](AGE
      `0 3 * * * cd /path/to/SIDATA/backend && npx tsx scripts/prune-audit-logs.ts >> /var/log/sidata-prune.log 2>&1`
      (needs `AUDIT_ADMIN_DATABASE_URL` and the other required backend variables in the root `.env`, and `npx` on cron's `PATH`).
 5. If behind a reverse proxy, set `TRUST_PROXY`.
-6. **Database initialization vs. upgrade runbook:**
+6. **Media uploads (`media_assets` + `UPLOAD_DIR`).**
+   - Apply the grants script (step 3) again after the migration that adds `media_assets`; it already
+     contains that table's line.
+   - Create the host directory for the bind mount (`UPLOADS_HOST_DIR`, default `./uploads`) and make it
+     writable by the user the backend runs as (the dev image runs as root). The server creates the
+     `_staging/`, `photos/`, `documents/` and `derivatives/` subdirectories itself and refuses to start,
+     with a clear log line, if `UPLOAD_DIR` is unwritable or inside `backend/` or `frontend/`.
+   - **Back up the uploads directory and the `media_assets` table together**, from the same point in
+     time. Either one alone is unrecoverable: rows without files serve 404, files without rows are never
+     reachable and are not cleaned up.
+   - The reverse proxy must route `/api/media` to the backend like the rest of `/api`, allow request
+     bodies of at least 21 MiB there (nginx: `client_max_body_size 21m;` on that location; the default
+     1 MiB would reject every real upload), and must not serve the uploads directory itself: the API
+     is the only reader, because it enforces the attached/private rule.
+   - Schedule `npm run media:cleanup` (daily is plenty). It removes `_staging/` directories and
+     unattached uploads older than the grace period (24 h, `MEDIA_CLEANUP_GRACE_HOURS` or
+     `--grace-hours=N`) and writes a count-only `media.cleanup` audit row. It uses the app's normal DB
+     user (no privileged connection needed). Host cron, from `backend/`:
+     `30 3 * * * cd /path/to/SIDATA/backend && npm run media:cleanup >> /var/log/sidata-media-cleanup.log 2>&1`;
+     under Compose: `docker compose exec backend npm run media:cleanup` from the host's cron. Add
+     `-- --dry-run` first to see what it would remove.
+   - **Moving `UPLOAD_DIR` to a new location:** (1) pause writes (stop the backend, or block `POST
+     /api/media` at the proxy); (2) copy the whole tree preserving structure, e.g.
+     `rsync -a old/ new/`; (3) verify, e.g. `diff -r old new` or matching file counts and sizes, and
+     spot-check a few `/api/media/<id>` URLs after the switch; (4) point `UPLOAD_DIR` (or
+     `UPLOADS_HOST_DIR`) at the new location and restart; (5) keep the old copy until verified. Storage
+     keys in the database are relative, so no rows change.
+7. **Database initialization vs. upgrade runbook:**
    - **Fresh installation:** Run `npx prisma db seed` with `NODE_ENV=production`. In production, seeding initializes 100 empty RT slots (`rtNumber` 1–100 with blank names/contacts and no spatial points) and initializes `maps.rt_leaders_sample_roster` to `false`. Real leader names, contacts, and coordinates must be entered through the CMS manual editor or imported via CSV.
    - **Upgrading an existing database previously seeded with sample/dev data:** Because seeding uses `update: {}` to prevent overwriting existing rows, previously seeded synthetic records or points will survive a re-seed. Before public release, operators must verify whether recognized legacy synthetic records remain. If present, run the maintenance cleanup command from `backend/` during an authorized maintenance window with production configuration:
      ```bash
@@ -186,6 +217,7 @@ verification rules.
 | Run integration tests   | `docker compose -f docker-compose.test.yml run --rm backend-integration` |
 | Lint                    | `npm run lint`                                                          |
 | Format code             | `npm run format`                                                        |
+| Clean stale media       | `npm run media:cleanup` (`-- --dry-run`, `-- --grace-hours=N`)          |
 | Run server              | `npx tsx src/index.ts`                                                  |
 | Run via Docker          | `docker compose up --build` (repo root)                                 |
 

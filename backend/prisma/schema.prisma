@@ -39,6 +39,7 @@ model User {
   AuditLogsAcknowledged  AuditLog[]      @relation("AuditLogAcknowledgedBy")
   SystemSettingsUpdated  SystemSetting[] @relation("SystemSettingUpdatedBy")
   ContentBlocksUpdated   ContentBlock[]  @relation("ContentBlockUpdatedBy")
+  MediaAssetsCreated     MediaAsset[]    @relation("MediaAssetCreatedBy")
 
   @@index([auth_provider, provider_id])
   @@map("users")
@@ -355,4 +356,37 @@ model IndicatorTableRow {
   @@unique([tableId, rowKey])
   @@index([tableId, sortOrder])
   @@map("indicator_table_rows")
+}
+
+enum MediaKind {
+  photo
+  document
+  data
+}
+
+/// Uploaded photos, documents and data files (SPEC.md §7). Bytes live under UPLOAD_DIR, addressed
+/// by the relative `storage_key`; this row is the only thing the public API resolves. An asset is
+/// private until `attached_at` is set by attachMedia() inside a content transaction.
+model MediaAsset {
+  id          String    @id @default(uuid())
+  provider    String    @default("local") @db.VarChar(20)
+  storageKey  String    @unique @map("storage_key") @db.VarChar(512)
+  kind        MediaKind
+  purpose     String    @db.VarChar(64)
+  ownerKey    String    @map("owner_key") @db.VarChar(64)
+  mimeType    String    @map("mime_type") @db.VarChar(100)
+  byteSize    Int       @map("byte_size")
+  width       Int?
+  height      Int?
+  originalName String   @map("original_name") @db.VarChar(255)
+  createdById String?   @map("created_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  attachedAt  DateTime? @map("attached_at")
+
+  createdBy User? @relation("MediaAssetCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([attachedAt, createdAt])
+  @@index([purpose, ownerKey])
+  @@index([createdById])
+  @@map("media_assets")
 }

@@ -1,0 +1,441 @@
+import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import { mkdir, mkdtemp, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, it } from 'node:test';
+import type { Request, Response } from 'express';
+import {
+  previewMediaHandler,
+  publicMediaDownloadHandler,
+  publicMediaImageHandler,
+  uploadMediaHandler,
+} from '../controllers/media.controller.js';
+import {
+  acceptMediaUpload,
+  type MediaUploadRequest,
+} from '../middlewares/mediaUpload.middleware.js';
+import { DOCUMENT_MAX_BYTES } from '../utils/mediaPolicy.js';
+import { setUploadRootForTesting } from '../utils/mediaStorage.js';
+import { UPLOAD_SUBDIRS } from '../utils/uploadRoot.js';
+import { installMediaDbStub, makeAsset, type MediaDbStub } from './helpers/mediaDbStub.js';
+import {
+  PDF_BYTES,
+  buildDocx,
+  buildMultipartRequest,
+  makeImage,
+  makeMediaRes,
+  type MediaFakeRes,
+  type MultipartPart,
+} from './helpers/mediaFixtures.js';
+
+const ID = '11111111-1111-4111-8111-111111111111';
+const ID_DOC = '22222222-2222-4222-8222-222222222222';
+
+let sandbox: string;
+let root: string;
+let db: MediaDbStub;
+
+beforeEach(async () => {
+  sandbox = await realpath(await mkdtemp(path.join(os.tmpdir(), 'sidata-mediactl-')));
+  root = path.join(sandbox, 'uploads');
+  for (const sub of UPLOAD_SUBDIRS) await mkdir(path.join(root, sub), { recursive: true });
+  setUploadRootForTesting(root);
+  db = installMediaDbStub();
+});
+
+afterEach(async () => {
+  db.restore();
+  setUploadRootForTesting(null);
+  await rm(sandbox, { recursive: true, force: true });
+});
+
+async function stagingEntries(): Promise<string[]> {
+  return readdir(path.join(root, '_staging'));
+}
+
+/** Runs the real transport middleware, then the handler, as the router would. */
+async function postUpload(parts: MultipartPart[]): Promise<MediaFakeRes> {
+  const req = buildMultipartRequest(parts) as unknown as MediaUploadRequest;
+  const res = makeMediaRes();
+  let proceeded = false;
+  await new Promise<void>((resolve) => {
+    const finish = () => resolve();
+    // The middleware either calls next() (success) or answers the response itself (error).
+    const originalJson = res.json.bind(res);
+    res.json = (data: unknown) => {
+      const out = originalJson(data);
+      finish();
+      return out;
+    };
+    void acceptMediaUpload(req, res as unknown as Response, () => {
+      proceeded = true;
+      finish();
+    });
+  });
+  if (proceeded) {
+    await uploadMediaHandler(req, res as unknown as Response);
+  }
+  return res;
+}
+
+const filePart = (filename: string, data: Buffer, contentType = 'application/octet-stream') =>
+  ({ name: 'file', filename, data, contentType }) satisfies MultipartPart;
+const purposePart = (value: string) => ({ name: 'purpose', value }) satisfies MultipartPart;
+
+describe('POST /api/media transport + handler', () => {
+  it('accepts a photo, answers 201 with a path-free body, and leaves no staging bytes', async () => {
+    const res = await postUpload([
+      purposePart('cerita'),
+      filePart('foto.jpg', await makeImage('jpeg', 120, 90, true), 'image/jpeg'),
+    ]);
+    assert.equal(res.statusCode, 201);
+    const media = (res.body as { media: Record<string, unknown> }).media;
+    assert.equal(media['kind'], 'photo');
+    assert.equal(media['mimeType'], 'image/webp');
+    assert.match(String(media['previewUrl']), /^\/api\/media\/[0-9a-f-]{36}\/preview$/);
+    const serialized = JSON.stringify(res.body);
+    assert.equal(serialized.includes(root), false);
+    assert.equal(serialized.includes('_staging'), false);
+    assert.equal(serialized.includes('photos/'), false);
+    assert.deepEqual(await stagingEntries(), []);
+    assert.equal(db.assets.size, 1);
+  });
+
+  it('accepts the purpose field even when it arrives after the file part', async () => {
+    const res = await postUpload([
+      filePart('laporan.pdf', PDF_BYTES, 'application/pdf'),
+      purposePart('publikasi-document'),
+    ]);
+    assert.equal(res.statusCode, 201);
+  });
+
+  it('rejects an executable renamed to .jpg and deletes its staging bytes', async () => {
+    const res = await postUpload([
+      purposePart('cerita'),
+      filePart('virus.jpg', Buffer.from('MZ\x90\x00\x03\x00\x00\x00 fake exe body'), 'image/jpeg'),
+    ]);
+    assert.equal(res.statusCode, 415);
+    assert.equal((res.body as { code: string }).code, 'UNSUPPORTED_TYPE');
+    assert.deepEqual(await stagingEntries(), []);
+    assert.equal(db.assets.size, 0);
+  });
+
+  it('rejects a macro-enabled DOCX and cleans staging', async () => {
+    const res = await postUpload([
+      purposePart('publikasi-document'),
+      filePart('makro.docx', buildDocx([{ name: 'word/vbaProject.bin', data: 'x' }])),
+    ]);
+    assert.equal(res.statusCode, 415);
+    assert.equal((res.body as { code: string }).code, 'MACRO_ENABLED');
+    assert.deepEqual(await stagingEntries(), []);
+  });
+
+  it('rejects an unsupported extension at the transport before any bytes are staged', async () => {
+    const res = await postUpload([
+      purposePart('cerita'),
+      filePart(
+        'logo.svg',
+        Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'),
+        'image/svg+xml',
+      ),
+    ]);
+    assert.equal(res.statusCode, 415);
+    assert.deepEqual(await stagingEntries(), []);
+  });
+
+  it('rejects a file over the transport ceiling with 413 and removes the partial staging file', async () => {
+    const oversize = Buffer.concat([PDF_BYTES, Buffer.alloc(DOCUMENT_MAX_BYTES + 1024)]);
+    const res = await postUpload([
+      purposePart('publikasi-document'),
+      filePart('big.pdf', oversize),
+    ]);
+    assert.equal(res.statusCode, 413);
+    assert.equal((res.body as { code: string }).code, 'FILE_TOO_LARGE');
+    assert.deepEqual(await stagingEntries(), []);
+    assert.equal(db.assets.size, 0);
+  });
+
+  it('rejects a photo over its own 5 MiB limit even though it is under the transport ceiling', async () => {
+    const jpegHead = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
+    const big = Buffer.concat([jpegHead, Buffer.alloc(5 * 1024 * 1024)]);
+    const res = await postUpload([purposePart('cerita'), filePart('big.jpg', big, 'image/jpeg')]);
+    assert.equal(res.statusCode, 413);
+    assert.equal((res.body as { code: string }).code, 'FILE_TOO_LARGE');
+    assert.deepEqual(await stagingEntries(), []);
+  });
+
+  it('rejects more than one file part', async () => {
+    const res = await postUpload([
+      purposePart('cerita'),
+      filePart('a.jpg', await makeImage('jpeg'), 'image/jpeg'),
+      filePart('b.jpg', await makeImage('jpeg'), 'image/jpeg'),
+    ]);
+    assert.equal(res.statusCode, 400);
+    assert.equal((res.body as { code: string }).code, 'INVALID_UPLOAD');
+    assert.deepEqual(await stagingEntries(), []);
+    assert.equal(db.assets.size, 0);
+  });
+
+  it('rejects a file under the wrong field name', async () => {
+    const res = await postUpload([
+      purposePart('cerita'),
+      { name: 'attachment', filename: 'a.jpg', data: await makeImage('jpeg') },
+    ]);
+    assert.equal(res.statusCode, 400);
+    assert.deepEqual(await stagingEntries(), []);
+  });
+
+  it('answers 400 FILE_REQUIRED when the request has no file', async () => {
+    const res = await postUpload([purposePart('cerita')]);
+    assert.equal(res.statusCode, 400);
+    assert.equal((res.body as { code: string }).code, 'FILE_REQUIRED');
+    assert.deepEqual(await stagingEntries(), []);
+  });
+
+  it('rejects an invalid purpose and cleans staging', async () => {
+    const res = await postUpload([
+      purposePart('../../etc'),
+      filePart('a.jpg', await makeImage('jpeg'), 'image/jpeg'),
+    ]);
+    assert.equal(res.statusCode, 400);
+    assert.equal((res.body as { code: string }).code, 'INVALID_PURPOSE');
+    assert.deepEqual(await stagingEntries(), []);
+    assert.deepEqual(await readdir(path.join(root, 'photos')), []);
+  });
+
+  it('never uses the client filename on disk: traversal names are neutralised', async () => {
+    const res = await postUpload([
+      purposePart('publikasi-document'),
+      filePart('../../../../tmp/pwn.pdf', PDF_BYTES, 'application/pdf'),
+    ]);
+    assert.equal(res.statusCode, 201);
+    const stored = [...db.assets.values()][0]!;
+    assert.equal(stored.originalName, 'pwn.pdf');
+    assert.equal(existsSync(path.join(sandbox, 'pwn.pdf')), false);
+    assert.equal(existsSync(path.join(os.tmpdir(), 'pwn.pdf')), false);
+  });
+});
+
+describe('media delivery routes', () => {
+  async function putFile(key: string, bytes: Buffer | string): Promise<string> {
+    const full = path.join(root, ...key.split('/'));
+    await mkdir(path.dirname(full), { recursive: true });
+    await writeFile(full, bytes);
+    return full;
+  }
+
+  const req = (id: string, query: Record<string, unknown> = {}) =>
+    ({ params: { id }, query }) as unknown as Request;
+  const asRes = (r: MediaFakeRes) => r as unknown as Response;
+
+  it('public image: refuses an unattached asset with 404 and no detail', async () => {
+    const asset = makeAsset({ id: ID, attachedAt: null });
+    db.assets.set(asset.id, asset);
+    await putFile(asset.storageKey, 'webp-bytes');
+    const res = makeMediaRes();
+    await publicMediaImageHandler(req(ID), asRes(res));
+    assert.equal(res.statusCode, 404);
+    assert.deepEqual(res.body, { error: 'Media tidak ditemukan.', code: 'MEDIA_NOT_FOUND' });
+    assert.equal(res.sentFile, undefined);
+  });
+
+  it('public image: unattached is indistinguishable from nonexistent and malformed ids', async () => {
+    const missing = makeMediaRes();
+    await publicMediaImageHandler(req('99999999-9999-4999-8999-999999999999'), asRes(missing));
+    const malformed = makeMediaRes();
+    await publicMediaImageHandler(req('../../etc/passwd'), asRes(malformed));
+    const unattachedAsset = makeAsset({ id: ID, attachedAt: null });
+    db.assets.set(unattachedAsset.id, unattachedAsset);
+    const unattached = makeMediaRes();
+    await publicMediaImageHandler(req(ID), asRes(unattached));
+    assert.deepEqual(missing.body, unattached.body);
+    assert.deepEqual(malformed.body, unattached.body);
+    assert.equal(missing.statusCode, 404);
+    assert.equal(malformed.statusCode, 404);
+  });
+
+  it('public image: serves an attached photo with nosniff and long immutable caching', async () => {
+    const asset = makeAsset({ id: ID, attachedAt: new Date() });
+    db.assets.set(asset.id, asset);
+    const file = await putFile(asset.storageKey, 'webp-bytes');
+    const res = makeMediaRes();
+    await publicMediaImageHandler(req(ID), asRes(res));
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.sentFile, file);
+    assert.equal(res.headers['content-type'], 'image/webp');
+    assert.equal(res.headers['x-content-type-options'], 'nosniff');
+    assert.equal(res.headers['cache-control'], 'public, max-age=31536000, immutable');
+    assert.match(res.headers['content-security-policy'] ?? '', /default-src 'none'/);
+    assert.equal(res.headers['content-disposition'], undefined);
+  });
+
+  it('public image: serves the thumbnail variant for attached photos only', async () => {
+    const asset = makeAsset({ id: ID, attachedAt: new Date() });
+    db.assets.set(asset.id, asset);
+    const thumb = await putFile(`derivatives/${ID}/thumbnail.webp`, 'thumb');
+    const res = makeMediaRes();
+    await publicMediaImageHandler(req(ID, { variant: 'thumbnail' }), asRes(res));
+    assert.equal(res.sentFile, thumb);
+
+    const doc = makeAsset({
+      id: ID_DOC,
+      kind: 'document',
+      storageKey: `documents/publikasi-document/u1/${ID_DOC}.pdf`,
+      attachedAt: new Date(),
+    });
+    db.assets.set(doc.id, doc);
+    const bad = makeMediaRes();
+    await publicMediaDownloadHandler(req(ID_DOC, { variant: 'thumbnail' }), asRes(bad));
+    assert.equal(bad.statusCode, 404);
+  });
+
+  it('public image route never serves documents or data, attached or not', async () => {
+    const doc = makeAsset({
+      id: ID_DOC,
+      kind: 'document',
+      storageKey: `documents/publikasi-document/u1/${ID_DOC}.pdf`,
+      attachedAt: new Date(),
+    });
+    db.assets.set(doc.id, doc);
+    await putFile(doc.storageKey, PDF_BYTES);
+    const res = makeMediaRes();
+    await publicMediaImageHandler(req(ID_DOC), asRes(res));
+    assert.equal(res.statusCode, 404);
+  });
+
+  it('download: refuses unattached documents and photos', async () => {
+    const doc = makeAsset({
+      id: ID_DOC,
+      kind: 'document',
+      storageKey: `documents/publikasi-document/u1/${ID_DOC}.pdf`,
+      attachedAt: null,
+    });
+    db.assets.set(doc.id, doc);
+    await putFile(doc.storageKey, PDF_BYTES);
+    const unattached = makeMediaRes();
+    await publicMediaDownloadHandler(req(ID_DOC), asRes(unattached));
+    assert.equal(unattached.statusCode, 404);
+
+    const photo = makeAsset({ id: ID, attachedAt: new Date() });
+    db.assets.set(photo.id, photo);
+    await putFile(photo.storageKey, 'x');
+    const photoRes = makeMediaRes();
+    await publicMediaDownloadHandler(req(ID), asRes(photoRes));
+    assert.equal(photoRes.statusCode, 404);
+  });
+
+  it('download: serves an attached document as an attachment with a safe filename', async () => {
+    const doc = makeAsset({
+      id: ID_DOC,
+      kind: 'document',
+      mimeType: 'text/html', // a tampered DB value must not decide the served type
+      storageKey: `documents/publikasi-document/u1/${ID_DOC}.pdf`,
+      originalName: 'Laporan "2025"\r\n.exe',
+      attachedAt: new Date(),
+    });
+    db.assets.set(doc.id, doc);
+    const file = await putFile(doc.storageKey, PDF_BYTES);
+    const res = makeMediaRes();
+    await publicMediaDownloadHandler(req(ID_DOC), asRes(res));
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.sentFile, file);
+    assert.equal(res.headers['content-type'], 'application/pdf');
+    assert.equal(res.headers['x-content-type-options'], 'nosniff');
+    assert.equal(res.headers['cache-control'], 'public, max-age=31536000, immutable');
+    const disposition = res.headers['content-disposition'] ?? '';
+    assert.match(disposition, /^attachment; filename="[A-Za-z0-9._-]+\.pdf"; filename\*=UTF-8''/);
+    assert.doesNotMatch(disposition, /[\r\n]/);
+    assert.doesNotMatch(disposition, /exe/);
+  });
+
+  it('preview: serves unattached assets, privately, and documents only as attachments', async () => {
+    const photo = makeAsset({ id: ID, attachedAt: null });
+    db.assets.set(photo.id, photo);
+    await putFile(photo.storageKey, 'x');
+    const photoRes = makeMediaRes();
+    await previewMediaHandler(req(ID), asRes(photoRes));
+    assert.equal(photoRes.statusCode, 200);
+    assert.equal(photoRes.headers['cache-control'], 'private, no-store');
+    assert.equal(photoRes.headers['content-disposition'], undefined);
+
+    const doc = makeAsset({
+      id: ID_DOC,
+      kind: 'data',
+      storageKey: `documents/sumber-daya-data/u1/${ID_DOC}.csv`,
+      attachedAt: null,
+    });
+    db.assets.set(doc.id, doc);
+    await putFile(doc.storageKey, 'a,b\n');
+    const docRes = makeMediaRes();
+    await previewMediaHandler(req(ID_DOC), asRes(docRes));
+    assert.equal(docRes.statusCode, 200);
+    assert.equal(docRes.headers['content-type'], 'text/csv; charset=utf-8');
+    assert.match(docRes.headers['content-disposition'] ?? '', /^attachment;/);
+    assert.equal(docRes.headers['cache-control'], 'private, no-store');
+  });
+
+  it('preview: attached assets are still not cached publicly through the editor route', async () => {
+    const photo = makeAsset({ id: ID, attachedAt: new Date() });
+    db.assets.set(photo.id, photo);
+    await putFile(photo.storageKey, 'x');
+    const res = makeMediaRes();
+    await previewMediaHandler(req(ID), asRes(res));
+    assert.equal(res.headers['cache-control'], 'private, no-store');
+  });
+
+  it('answers a friendly 404 with no path when the file is missing on disk', async () => {
+    const asset = makeAsset({ id: ID, attachedAt: new Date() });
+    db.assets.set(asset.id, asset);
+    const res = makeMediaRes();
+    await publicMediaImageHandler(req(ID), asRes(res));
+    assert.equal(res.statusCode, 404);
+    assert.deepEqual(res.body, {
+      error: 'Berkas media tidak tersedia saat ini.',
+      code: 'MEDIA_FILE_MISSING',
+    });
+    const serialized = JSON.stringify(res.body);
+    assert.equal(serialized.includes(root), false);
+    assert.equal(serialized.includes('photos'), false);
+  });
+
+  it('contains path traversal in a corrupted storageKey', async () => {
+    await writeFile(path.join(sandbox, 'secret.webp'), 'secret');
+    for (const storageKey of ['../secret.webp', '/etc/passwd', 'photos/../../secret.webp']) {
+      const asset = makeAsset({ id: ID, storageKey, attachedAt: new Date() });
+      db.assets.set(asset.id, asset);
+      const res = makeMediaRes();
+      await publicMediaImageHandler(req(ID), asRes(res));
+      assert.equal(res.statusCode, 404, `must not serve ${storageKey}`);
+      assert.equal(res.sentFile, undefined);
+      assert.equal(JSON.stringify(res.body).includes('secret'), false);
+    }
+  });
+
+  it('contains a symlink planted inside the root that points outside it', async () => {
+    const secret = path.join(sandbox, 'secret.webp');
+    await writeFile(secret, 'secret');
+    const asset = makeAsset({ id: ID, attachedAt: new Date() });
+    db.assets.set(asset.id, asset);
+    await mkdir(path.dirname(path.join(root, asset.storageKey)), { recursive: true });
+    await symlink(secret, path.join(root, asset.storageKey));
+    const res = makeMediaRes();
+    await publicMediaImageHandler(req(ID), asRes(res));
+    assert.equal(res.statusCode, 404);
+    assert.equal(res.sentFile, undefined);
+  });
+
+  it('refuses to serve a stored extension the policy does not define', async () => {
+    const asset = makeAsset({
+      id: ID,
+      storageKey: `photos/cerita/u1/${ID}.html`,
+      attachedAt: new Date(),
+    });
+    db.assets.set(asset.id, asset);
+    await putFile(asset.storageKey, '<script>alert(1)</script>');
+    const res = makeMediaRes();
+    await publicMediaImageHandler(req(ID), asRes(res));
+    assert.equal(res.statusCode, 404);
+    assert.equal(res.sentFile, undefined);
+  });
+});

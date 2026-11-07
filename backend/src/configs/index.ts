@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'node:path';
+import { resolveUploadDirPath } from '../utils/uploadRoot.js';
 
 dotenv.config({ path: path.resolve(import.meta.dirname, '../../../.env') });
 
@@ -101,3 +102,11 @@ export const TRUST_PROXY = process.env.TRUST_PROXY;
 // falling back to DATABASE_URL if it's unset. See backend/scripts/prune-audit-logs.ts and
 // backend/scripts/grants/audit-logs-grants.sql.
 export const AUDIT_ADMIN_DATABASE_URL = process.env.AUDIT_ADMIN_DATABASE_URL;
+
+// Where uploaded media (photos, documents, data files) lives on disk. Optional — unset/blank
+// means <repo-root>/uploads; a relative value resolves against the repository root (located from
+// this module's path, like the .env above, never process.cwd()); an absolute value is used as-is.
+// This is only the *resolved, unverified* path: src/index.ts runs initUploadRoot() at boot, which
+// creates it, proves it is writable, and refuses roots inside backend/ or frontend/. Never expose
+// it in an API response or public setting.
+export const UPLOAD_DIR = resolveUploadDirPath(process.env.UPLOAD_DIR);
