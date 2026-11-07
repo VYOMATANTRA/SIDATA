@@ -380,6 +380,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   isUnmounted = true;
+  window.removeEventListener('keydown', escapeGuard, true);
   geoRequest += 1;
   window.clearTimeout(resizeTimer);
   resizeObserver?.disconnect();
@@ -542,15 +543,30 @@ function onKeydown(event: KeyboardEvent): void {
   } else if (event.key === '-' || event.key === '_') {
     event.preventDefault();
     zoomBy(-1);
-  } else if (event.key === 'Escape') {
-    // Leave keyboard mode without also closing a surrounding dialog.
-    event.preventDefault();
-    event.stopPropagation();
-    keyboardMode.value = false;
-    announce('Mode keyboard nonaktif.');
-    void nextTick(() => keyboardToggle.value?.focus());
   }
 }
+
+/**
+ * Escape leaves keyboard mode. A surrounding `BaseModal` closes on Escape from a capture
+ * listener on `document`, which runs before any handler on this component, so while keyboard
+ * mode is on we intercept Escape one step earlier, on `window` in the capture phase, and keep
+ * it from reaching the dialog. Outside keyboard mode Escape is left alone (it closes the dialog).
+ */
+function escapeGuard(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || !keyboardMode.value) return;
+  if (!(event.target instanceof Node) || !region.value?.contains(event.target)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  keyboardMode.value = false;
+  announce('Mode keyboard nonaktif.');
+  void nextTick(() => keyboardToggle.value?.focus());
+}
+
+watch(keyboardMode, (on) => {
+  if (typeof window === 'undefined') return;
+  if (on) window.addEventListener('keydown', escapeGuard, true);
+  else window.removeEventListener('keydown', escapeGuard, true);
+});
 
 function onFocusOut(event: FocusEvent): void {
   if (!keyboardMode.value) return;
@@ -693,6 +709,7 @@ const buttonClasses =
           Hapus pin
         </button>
         <button
+          :id="`${baseId}-focus`"
           ref="keyboardToggle"
           type="button"
           :class="buttonClasses"

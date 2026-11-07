@@ -155,16 +155,27 @@ describe('LocationPicker', () => {
     it('lets Escape leave keyboard mode without bubbling to a surrounding dialog', async () => {
       const wrapper = await mountPicker({ modelValue: PIN });
       const outer = vi.fn<() => void>();
-      document.body.addEventListener('keydown', outer);
+      document.addEventListener('keydown', outer, true);
       await click(wrapper, 'location-picker-keyboard');
       await wrapper
         .get('[data-test="location-picker-region"]')
         .trigger('keydown', { key: 'Escape' });
-      document.body.removeEventListener('keydown', outer);
+      document.removeEventListener('keydown', outer, true);
       expect(outer).not.toHaveBeenCalled();
       expect(wrapper.get('[data-test="location-picker-keyboard"]').attributes('aria-pressed')).toBe(
         'false',
       );
+    });
+
+    it('leaves Escape alone outside keyboard mode so a surrounding dialog can still close', async () => {
+      const wrapper = await mountPicker({ modelValue: PIN });
+      const outer = vi.fn<() => void>();
+      document.addEventListener('keydown', outer, true);
+      await wrapper
+        .get('[data-test="location-picker-region"]')
+        .trigger('keydown', { key: 'Escape' });
+      document.removeEventListener('keydown', outer, true);
+      expect(outer).toHaveBeenCalledTimes(1);
     });
 
     it('zooms the view with the buttons and with + and - in keyboard mode, without emitting', async () => {
