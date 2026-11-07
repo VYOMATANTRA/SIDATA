@@ -22,7 +22,7 @@ function isElementVisible(el: HTMLElement): boolean {
   return style.display !== 'none' && style.visibility !== 'hidden';
 }
 
-function isEventFromOpenDialog(event: KeyboardEvent): boolean {
+export function isEventFromOpenDialog(event: KeyboardEvent): boolean {
   if (event.defaultPrevented) return true;
   const target =
     (event.target instanceof HTMLElement ? event.target : null) ??

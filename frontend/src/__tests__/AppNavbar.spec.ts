@@ -34,7 +34,7 @@ describe('AppNavbar.vue', () => {
     expect(wrapper.find('nav').attributes('aria-label')).toBe('Navigasi Utama');
   });
 
-  it('renders white variant with solid bg-white and high contrast text colors', async () => {
+  it('renders white variant with a solid surface and dark navy text', async () => {
     const router = createMockRouter();
     await router.push('/');
     await router.isReady();
@@ -48,12 +48,12 @@ describe('AppNavbar.vue', () => {
       },
     });
 
-    expect(wrapper.find('header').classes()).toContain('bg-white');
-    expect(wrapper.find('[data-test="navbar-title"]').classes()).toContain('text-slate-900');
-    expect(wrapper.find('[data-test="navbar-subtitle"]').classes()).toContain('text-slate-500');
+    expect(wrapper.find('header').classes()).toContain('bg-surface');
+    expect(wrapper.find('[data-test="navbar-title"]').classes()).toContain('text-brand-navy');
+    expect(wrapper.find('[data-test="navbar-subtitle"]').classes()).toContain('text-text-muted');
   });
 
-  it('renders transparent variant with correct high contrast text colors', async () => {
+  it('keeps white foreground on the transparent background (background and foreground are separate)', async () => {
     const router = createMockRouter();
     await router.push('/');
     await router.isReady();
@@ -67,9 +67,35 @@ describe('AppNavbar.vue', () => {
       },
     });
 
+    const header = wrapper.find('header');
+    expect(header.classes()).toContain('bg-transparent');
+    expect(header.classes()).toContain('text-white');
+    expect(header.classes().join(' ')).not.toContain('backdrop-blur');
+    expect(wrapper.find('[data-test="navbar-title"]').classes()).toContain('text-white');
+    expect(wrapper.find('[data-test="navbar-scrim"]').exists()).toBe(true);
+  });
+
+  it('lets the foreground be set independently of the background', async () => {
+    const router = createMockRouter();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(AppNavbar, {
+      props: { variant: 'transparent', foreground: 'dark' },
+      global: { plugins: [router] },
+    });
+
     expect(wrapper.find('header').classes()).toContain('bg-transparent');
-    expect(wrapper.find('[data-test="navbar-title"]').classes()).toContain('text-slate-900');
-    expect(wrapper.find('[data-test="navbar-subtitle"]').classes()).toContain('text-slate-500');
+    expect(wrapper.find('[data-test="navbar-title"]').classes()).toContain('text-brand-navy');
+  });
+
+  it('shows no scrim on a solid navy bar', async () => {
+    const router = createMockRouter();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(AppNavbar, { global: { plugins: [router] } });
+    expect(wrapper.find('[data-test="navbar-scrim"]').exists()).toBe(false);
   });
 
   it('uses dark hamburger icon bars on white variant for non-text contrast', async () => {
@@ -87,7 +113,7 @@ describe('AppNavbar.vue', () => {
     });
 
     const bar = wrapper.find('[data-test="hamburger-btn"] span');
-    expect(bar.classes()).toContain('bg-slate-800');
+    expect(bar.classes()).toContain('bg-brand-navy');
   });
 
   it('supports custom title and subtitle props', async () => {
@@ -273,7 +299,8 @@ describe('AppNavbar.vue', () => {
     await wrapper.vm.$nextTick();
     expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(true);
 
-    // Conversely, when focus is inside the navbar menu, Escape must close the drawer
+    // Once the dialog is gone, Escape from inside the navbar menu must close the drawer
+    modal.remove();
     const drawerLink = wrapper.find<HTMLAnchorElement>('[data-test="nav-menu-drawer"] a');
     drawerLink.element.focus();
     drawerLink.element.dispatchEvent(
@@ -282,7 +309,6 @@ describe('AppNavbar.vue', () => {
     await wrapper.vm.$nextTick();
     expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(false);
 
-    modal.remove();
     wrapper.unmount();
   });
 

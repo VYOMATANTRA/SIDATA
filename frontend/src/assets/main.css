@@ -92,6 +92,20 @@
     --radius-card: 12px;
 }
 
+/*
+ * Public header height: one value for every header state so the header never shifts layout. The
+ * navbar bar, the hero's top clearance and in-page anchor offsets (scroll-margin) all read it.
+ */
+:root {
+    --public-header-height: 4.5rem;
+}
+
+@media (min-width: 40rem) {
+    :root {
+        --public-header-height: 5rem;
+    }
+}
+
 @layer base {
     h1 {
         font-size: var(--text-xl);
