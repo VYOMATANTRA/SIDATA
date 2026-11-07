@@ -73,8 +73,18 @@ export interface UploadRootInitOptions {
   forbiddenDirs?: readonly string[];
 }
 
+/** This backend's own directory, wherever it is mounted (/app in the container). */
+const BACKEND_DIR = path.resolve(import.meta.dirname, '../..');
+
 function defaultForbiddenDirs(): string[] {
-  return [path.join(REPO_ROOT, 'backend'), path.join(REPO_ROOT, 'frontend')];
+  return [
+    ...new Set([
+      BACKEND_DIR,
+      path.join(REPO_ROOT, 'backend'),
+      path.join(path.dirname(BACKEND_DIR), 'frontend'),
+      path.join(REPO_ROOT, 'frontend'),
+    ]),
+  ];
 }
 
 async function assertNotOverlapping(
