@@ -271,7 +271,7 @@ describe('media delivery routes', () => {
     assert.equal(malformed.statusCode, 404);
   });
 
-  it('public image: serves an attached photo with nosniff and long immutable caching', async () => {
+  it('public image: serves an attached photo with nosniff and one-hour revalidated caching', async () => {
     const asset = makeAsset({ id: ID, attachedAt: new Date() });
     db.assets.set(asset.id, asset);
     const file = await putFile(asset.storageKey, 'webp-bytes');
@@ -281,7 +281,7 @@ describe('media delivery routes', () => {
     assert.equal(res.sentFile, file);
     assert.equal(res.headers['content-type'], 'image/webp');
     assert.equal(res.headers['x-content-type-options'], 'nosniff');
-    assert.equal(res.headers['cache-control'], 'public, max-age=31536000, immutable');
+    assert.equal(res.headers['cache-control'], 'public, max-age=3600, must-revalidate');
     assert.match(res.headers['content-security-policy'] ?? '', /default-src 'none'/);
     assert.equal(res.headers['content-disposition'], undefined);
   });
@@ -358,7 +358,7 @@ describe('media delivery routes', () => {
     assert.equal(res.sentFile, file);
     assert.equal(res.headers['content-type'], 'application/pdf');
     assert.equal(res.headers['x-content-type-options'], 'nosniff');
-    assert.equal(res.headers['cache-control'], 'public, max-age=31536000, immutable');
+    assert.equal(res.headers['cache-control'], 'public, max-age=3600, must-revalidate');
     const disposition = res.headers['content-disposition'] ?? '';
     assert.match(disposition, /^attachment; filename="[A-Za-z0-9._-]+\.pdf"; filename\*=UTF-8''/);
     assert.doesNotMatch(disposition, /[\r\n]/);

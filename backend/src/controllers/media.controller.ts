@@ -28,7 +28,9 @@ const FILE_MISSING_BODY = {
 } as const;
 const INTERNAL_ERROR_BODY = { error: 'Terjadi kesalahan internal server' } as const;
 
-const CACHE_ATTACHED = 'public, max-age=31536000, immutable';
+// One hour, revalidated: detaching an asset (un-publishing) must take effect within a bounded time
+// rather than a year, and `must-revalidate` stops stale copies being served past that.
+const CACHE_ATTACHED = 'public, max-age=3600, must-revalidate';
 const CACHE_PRIVATE = 'private, no-store';
 
 type ServeKind = 'public-image' | 'public-download' | 'preview';
