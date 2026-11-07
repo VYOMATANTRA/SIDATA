@@ -5,6 +5,9 @@ import { defineConfig, devices } from '@playwright/test';
  * mobile viewports). Unit tests stay in Vitest; see the "End-to-end tests" section of
  * `frontend/README.md`.
  *
+ * Specs are named `*.mobile.spec.ts` or `*.desktop.spec.ts`; each project only matches its own
+ * suffix, so nothing is skipped at runtime.
+ *
  * Tests never reach a real backend or the internet: `e2e/support/mocks.ts` stubs `/api/**` and the
  * OpenStreetMap tile host. Vite is started on a dedicated port so it cannot collide with (or
  * silently reuse) a developer's `npm run dev` on 5173.
@@ -14,7 +17,6 @@ const BASE_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: '**/*.spec.ts',
   outputDir: './e2e/.output/test-results',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
@@ -37,6 +39,7 @@ export default defineConfig({
         isMobile: true,
         hasTouch: true,
       },
+      testMatch: '**/*.mobile.spec.ts',
     },
     {
       name: 'mobile-small',
@@ -47,10 +50,12 @@ export default defineConfig({
         isMobile: true,
         hasTouch: true,
       },
+      testMatch: '**/*.mobile.spec.ts',
     },
     {
       name: 'desktop',
       use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } },
+      testMatch: '**/*.desktop.spec.ts',
     },
   ],
   webServer: {
