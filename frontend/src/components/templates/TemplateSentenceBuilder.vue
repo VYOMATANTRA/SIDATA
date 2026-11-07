@@ -106,9 +106,16 @@ function remove(index: number): void {
       : segment.kind === 'unknown'
         ? 'bagian tidak dikenali'
         : 'teks';
-  update(props.modelValue.filter((_, i) => i !== index));
+  const remaining = props.modelValue.filter((_, i) => i !== index);
+  update(remaining);
   announcement.value = `Bagian ${name} dihapus.`;
-  focusSelector('[data-action="add-text"]');
+  // Land on the row that took this one's place, else the previous row, else the add button.
+  const neighbour = remaining[index] ?? remaining[index - 1];
+  focusSelector(
+    neighbour
+      ? `[data-segment-id="${neighbour.id}"] [data-action="remove"]`
+      : '[data-action="add-text"]',
+  );
 }
 
 function move(index: number, delta: -1 | 1): void {
@@ -119,8 +126,19 @@ function move(index: number, delta: -1 | 1): void {
   next.splice(target, 0, item!);
   update(next);
   announcement.value = `Bagian dipindah ke urutan ${target + 1} dari ${next.length}.`;
-  // Re-parenting a node can drop focus; put it back on the same control at its new position.
-  focusSelector(`[data-segment-id="${item!.id}"] [data-action="${delta < 0 ? 'up' : 'down'}"]`);
+  // Keep focus on the moved row. The button just used is disabled once the row reaches an
+  // end (and focus() on a disabled button is a no-op), so fall back to the opposite move
+  // button, then to the row's remove button.
+  const row = `[data-segment-id="${item!.id}"]`;
+  const same = delta < 0 ? 'up' : 'down';
+  const opposite = delta < 0 ? 'down' : 'up';
+  void nextTick(() => {
+    const scope = listRef.value?.closest('fieldset');
+    const candidates = [same, opposite, 'remove'].map((action) =>
+      scope?.querySelector<HTMLButtonElement>(`${row} [data-action="${action}"]`),
+    );
+    candidates.find((button) => button && !button.disabled)?.focus();
+  });
 }
 
 const BUTTON =

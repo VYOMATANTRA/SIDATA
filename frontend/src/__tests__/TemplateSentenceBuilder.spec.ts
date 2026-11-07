@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defineComponent, ref } from 'vue';
+import { defineComponent, nextTick, ref } from 'vue';
 import { mount } from '@vue/test-utils';
 import TemplateSentenceBuilder from '../components/templates/TemplateSentenceBuilder.vue';
 import {
@@ -135,6 +135,75 @@ describe('TemplateSentenceBuilder', () => {
     await rows()[0]!.find('[data-action="down"]').trigger('click');
     expect(serializeSegments(state.value)).toBe('{trend}A{label}');
     wrapper.unmount();
+  });
+
+  describe('focus management', () => {
+    const three = () => [textSegment('a'), textSegment('b'), textSegment('c')];
+    const rowOf = (el: Element | null) => el?.closest('[data-segment-id]') ?? null;
+
+    it('keeps focus inside the moved row when moving to the first position', async () => {
+      const { wrapper, state } = mountBuilder('variant', three());
+      const movedId = state.value[1]!.id;
+
+      await wrapper.findAll('[data-action="up"]')[1]!.trigger('click');
+      await nextTick();
+
+      const active = document.activeElement;
+      expect(active?.tagName).toBe('BUTTON');
+      expect(rowOf(active)?.getAttribute('data-segment-id')).toBe(String(movedId));
+      expect(wrapper.find(`[data-segment-id="${movedId}"]`).element).toBe(rowOf(active));
+      wrapper.unmount();
+    });
+
+    it('keeps focus inside the moved row when moving to the last position', async () => {
+      const { wrapper, state } = mountBuilder('variant', three());
+      const movedId = state.value[1]!.id;
+
+      await wrapper.findAll('[data-action="down"]')[1]!.trigger('click');
+      await nextTick();
+
+      const active = document.activeElement;
+      expect(active?.tagName).toBe('BUTTON');
+      expect((active as HTMLButtonElement).disabled).toBe(false);
+      expect(rowOf(active)?.getAttribute('data-segment-id')).toBe(String(movedId));
+      wrapper.unmount();
+    });
+
+    it('focuses the new text part field after adding text', async () => {
+      const { wrapper, state } = mountBuilder('variant', three());
+
+      await wrapper.find('[data-action="add-text"]').trigger('click');
+      await nextTick();
+
+      const added = state.value[3]!;
+      expect(document.activeElement?.tagName).toBe('TEXTAREA');
+      expect(rowOf(document.activeElement)?.getAttribute('data-segment-id')).toBe(String(added.id));
+      wrapper.unmount();
+    });
+
+    it('focuses the next row after removing a middle part, the previous after the last', async () => {
+      const { wrapper, state } = mountBuilder('variant', three());
+      const [first, , third] = state.value;
+
+      await wrapper.findAll('[data-action="remove"]')[1]!.trigger('click');
+      await nextTick();
+      expect(rowOf(document.activeElement)?.getAttribute('data-segment-id')).toBe(String(third!.id));
+
+      await wrapper.findAll('[data-action="remove"]')[1]!.trigger('click');
+      await nextTick();
+      expect(rowOf(document.activeElement)?.getAttribute('data-segment-id')).toBe(String(first!.id));
+      wrapper.unmount();
+    });
+
+    it('focuses the add-text button after removing the only part', async () => {
+      const { wrapper } = mountBuilder('variant', [textSegment('a')]);
+
+      await wrapper.find('[data-action="remove"]').trigger('click');
+      await nextTick();
+
+      expect(document.activeElement).toBe(wrapper.find('[data-action="add-text"]').element);
+      wrapper.unmount();
+    });
   });
 
   it('uses real buttons with accessible names that include the part and its position', () => {
