@@ -112,8 +112,10 @@ describe('MapSummaryDropdown.vue (shared behaviour)', () => {
     expect(wrapper.find('button').attributes('aria-expanded')).toBe('true');
     wrapper.unmount();
   });
+});
 
-  it('emits layout-change after opening and closing settle', async () => {
+describe('MapSummaryDropdown.vue (mobile, in-flow disclosure)', () => {
+  it('emits layout-change after opening and closing settle, since it pushes the map', async () => {
     stubViewport(false);
     const wrapper = mountSummary();
     expect(wrapper.emitted('layout-change')).toBeUndefined();
@@ -123,9 +125,7 @@ describe('MapSummaryDropdown.vue (shared behaviour)', () => {
     expect(wrapper.emitted('layout-change')).toHaveLength(2);
     wrapper.unmount();
   });
-});
 
-describe('MapSummaryDropdown.vue (mobile, in-flow disclosure)', () => {
   it('is a full-width in-flow block, not an absolutely positioned card', async () => {
     stubViewport(false);
     const wrapper = mountSummary();
@@ -164,6 +164,15 @@ describe('MapSummaryDropdown.vue (mobile, in-flow disclosure)', () => {
 });
 
 describe('MapSummaryDropdown.vue (desktop, overlay)', () => {
+  it('does not emit layout-change when opening or closing, since the map does not move', async () => {
+    stubViewport(true);
+    const wrapper = mountSummary();
+    await wrapper.find('button').trigger('click');
+    await wrapper.find('button').trigger('click');
+    expect(wrapper.emitted('layout-change')).toBeUndefined();
+    wrapper.unmount();
+  });
+
   it('floats the panel above the map with its own stacking, bounded to the viewport', async () => {
     stubViewport(true);
     const wrapper = mountSummary();
@@ -200,6 +209,34 @@ describe('MapSummaryDropdown.vue (desktop, overlay)', () => {
     await button.trigger('keydown', { key: 'Escape' });
     expect(button.attributes('aria-expanded')).toBe('false');
     expect(document.activeElement).toBe(button.element);
+    wrapper.unmount();
+  });
+});
+
+describe('MapSummaryDropdown.vue (breakpoint change)', () => {
+  it('closes an open panel and notifies the parent when the viewport crosses the breakpoint', async () => {
+    let onChange: ((event: { matches: boolean }) => void) | undefined;
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn<(query: string) => unknown>().mockReturnValue({
+        matches: true,
+        addEventListener: (_type: string, cb: (event: { matches: boolean }) => void) => {
+          onChange = cb;
+        },
+        removeEventListener: vi.fn<() => void>(),
+      }),
+    );
+    const wrapper = mountSummary();
+    const button = wrapper.find('button');
+    await button.trigger('click');
+    expect(button.attributes('aria-expanded')).toBe('true');
+
+    onChange?.({ matches: false });
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+    expect(wrapper.attributes('data-layout')).toBe('inline');
+    expect(button.attributes('aria-expanded')).toBe('false');
+    expect(wrapper.emitted('layout-change')).toBeDefined();
     wrapper.unmount();
   });
 });

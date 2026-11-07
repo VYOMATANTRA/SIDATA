@@ -11,9 +11,10 @@ defineProps<Props>();
 
 const emit = defineEmits<{
   /**
-   * Fired after the DOM has settled whenever opening/closing or the breakpoint changes the
-   * summary's footprint. On mobile the disclosure is in normal flow and pushes the map, so the
-   * parent should call the map's `invalidateSize()`.
+   * Fired after the DOM has settled when the summary's footprint may have changed the map's
+   * size: opening/closing while in-flow (mobile, where the disclosure pushes the map), and
+   * crossing the breakpoint. The desktop overlay floats above the map, so toggling it never emits.
+   * The parent should call the map's `invalidateSize()`.
    */
   (e: 'layout-change'): void;
 }>();
@@ -30,7 +31,26 @@ function toggleDropdown() {
   isOpen.value = !isOpen.value;
 }
 
-watch([isOpen, isDesktop], () => emit('layout-change'), { flush: 'post' });
+// Only the in-flow layout resizes the map when toggled; the desktop overlay does not.
+watch(
+  isOpen,
+  () => {
+    if (!isDesktop.value) emit('layout-change');
+  },
+  { flush: 'post' },
+);
+
+// Outside-click dismissal is desktop-only, so a panel left open across the breakpoint would
+// become undismissable by click and flip layout under the user: close it instead. Crossing the
+// breakpoint itself changes how much room the map gets, so always tell the parent.
+watch(
+  isDesktop,
+  () => {
+    isOpen.value = false;
+    emit('layout-change');
+  },
+  { flush: 'post' },
+);
 
 function handleClickOutside(event: MouseEvent) {
   // The in-flow disclosure is page content, not a popup: only the overlay dismisses on outside click.
