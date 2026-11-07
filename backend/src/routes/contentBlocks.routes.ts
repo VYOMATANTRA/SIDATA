@@ -3,6 +3,7 @@ import {
   getContentBlocksHandler,
   getContentBlockBySlugHandler,
   updateContentBlockHandler,
+  deleteContentBlockHandler,
 } from '../controllers/contentBlocks.controller.js';
 import { verifyToken } from '../middlewares/auth.middleware.js';
 import { requireEditorOrAdmin } from '../middlewares/role.middleware.js';
@@ -22,6 +23,17 @@ router.patch(
   requireEditorOrAdmin,
   contentBlocksWriteLimiter,
   updateContentBlockHandler,
+);
+
+// Section prose blocks only; standalone singleton blocks are rejected by the service (409).
+// Creation and reordering live under /api/sections/:id/content-blocks (sections.routes.ts).
+router.delete(
+  '/:slug',
+  apiLimiter,
+  verifyToken,
+  requireEditorOrAdmin,
+  contentBlocksWriteLimiter,
+  deleteContentBlockHandler,
 );
 
 export default router;

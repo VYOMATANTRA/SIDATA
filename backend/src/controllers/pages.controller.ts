@@ -7,11 +7,14 @@ import {
   getPagesWithSections,
   getPageBySlug,
   createPage,
+  updatePage,
   deletePage,
   reorderPages,
   PageServiceError,
   isValidPageSlug,
 } from '../services/pages.service.js';
+import { authoringHandler, paramOf } from './hierarchyHandler.js';
+import { parseExpectedUpdatedAtQuery, sendHierarchyError } from '../utils/hierarchyAuthoring.js';
 
 export const listPages = async (req: Request, res: Response): Promise<Response> => {
   try {
@@ -91,15 +94,21 @@ export const deletePageHandler = async (
     }
 
     const { slug } = req.params;
-    const deleted = await deletePage(slug as string, actor, extractRequestContext(req));
+    // The precondition is optional here for backwards compatibility with existing clients.
+    const rawExpected = req.query?.['expectedUpdatedAt'];
+    const expectedUpdatedAt =
+      rawExpected === undefined ? undefined : parseExpectedUpdatedAtQuery(rawExpected);
+    const deleted = await deletePage(slug as string, actor, extractRequestContext(req), undefined, {
+      expectedUpdatedAt,
+    });
 
     return res.status(200).json({
       message: 'Halaman berhasil dihapus',
       page: deleted,
     });
   } catch (error) {
-    if (error instanceof PageServiceError) {
-      return res.status(error.statusCode).json({ error: error.message });
+    if (sendHierarchyError(res, error)) {
+      return;
     }
     console.error(
       'Error saat menghapus halaman:',
@@ -140,3 +149,12 @@ export const reorderPagesHandler = async (
     return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
   }
 };
+
+// PATCH /api/pages/:slug
+export const updatePageHandler = authoringHandler({
+  errorLabel: 'memperbarui halaman',
+  run: async (req, actor, context) => {
+    const page = await updatePage(paramOf(req, 'slug'), req.body, actor, context);
+    return { message: 'Halaman berhasil diperbarui', page };
+  },
+});

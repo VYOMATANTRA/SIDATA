@@ -67,7 +67,16 @@ const expectedPageDto = (slug = 'kependudukan') => ({
       number: null,
       title: 'Jumlah Penduduk',
       sortOrder: 0,
-      sections: [{ id: 'sec-1', slug: 'ringkasan', title: null, sortOrder: 0 }],
+      updatedAt: UPDATED.toISOString(),
+      sections: [
+        {
+          id: 'sec-1',
+          slug: 'ringkasan',
+          title: null,
+          sortOrder: 0,
+          updatedAt: UPDATED.toISOString(),
+        },
+      ],
     },
   ],
   createdAt: CREATED.toISOString(),
@@ -80,6 +89,8 @@ describe('pages.controller', () => {
   let originalTransaction: typeof prisma.$transaction;
   let originalContentBlockCount: typeof prisma.contentBlock.count;
   let originalPageCount: typeof prisma.page.count;
+  let originalIndicatorCount: typeof prisma.indicator.count;
+  let originalIndicatorTableCount: typeof prisma.indicatorTable.count;
   let originalConsoleError: typeof console.error;
   let findManyCalls: unknown[][];
   let findUniqueCalls: unknown[][];
@@ -113,6 +124,11 @@ describe('pages.controller', () => {
     originalTransaction = prisma.$transaction;
     originalContentBlockCount = prisma.contentBlock.count;
     originalPageCount = prisma.page.count;
+    originalIndicatorCount = prisma.indicator.count;
+    originalIndicatorTableCount = prisma.indicatorTable.count;
+    // deletePage counts every dependent type; default them to "none attached".
+    prisma.indicator.count = (async () => 0) as unknown as typeof prisma.indicator.count;
+    prisma.indicatorTable.count = (async () => 0) as unknown as typeof prisma.indicatorTable.count;
     originalConsoleError = console.error;
     findManyCalls = [];
     findUniqueCalls = [];
@@ -139,6 +155,8 @@ describe('pages.controller', () => {
     prisma.$transaction = originalTransaction;
     prisma.contentBlock.count = originalContentBlockCount;
     prisma.page.count = originalPageCount;
+    prisma.indicator.count = originalIndicatorCount;
+    prisma.indicatorTable.count = originalIndicatorTableCount;
     console.error = originalConsoleError;
   });
 
@@ -298,7 +316,10 @@ describe('pages.controller', () => {
               number: null,
               title: 'Jumlah Penduduk',
               sortOrder: 0,
-              sections: [{ id: 's1', slug: 'ringkasan', title: null, sortOrder: 0 }],
+              updatedAt: UPDATED,
+              sections: [
+                { id: 's1', slug: 'ringkasan', title: null, sortOrder: 0, updatedAt: UPDATED },
+              ],
             },
           ],
         },
@@ -322,7 +343,16 @@ describe('pages.controller', () => {
                 number: null,
                 title: 'Jumlah Penduduk',
                 sortOrder: 0,
-                sections: [{ id: 's1', slug: 'ringkasan', title: null, sortOrder: 0 }],
+                updatedAt: UPDATED.toISOString(),
+                sections: [
+                  {
+                    id: 's1',
+                    slug: 'ringkasan',
+                    title: null,
+                    sortOrder: 0,
+                    updatedAt: UPDATED.toISOString(),
+                  },
+                ],
               },
             ],
             createdAt: CREATED.toISOString(),

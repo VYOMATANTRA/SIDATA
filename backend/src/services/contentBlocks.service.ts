@@ -14,14 +14,22 @@ import {
 } from '../utils/lockTransactionCache.js';
 import { hasFieldChanged } from '../utils/comparator.js';
 import { KeyedLruCache } from '../utils/keyedCache.js';
+import {
+  HierarchyServiceError,
+  assertFresh,
+  expectedUpdatedAtSchema,
+  hasControlCharacters as hasSharedControlCharacters,
+} from '../utils/hierarchyAuthoring.js';
 
-export class ContentBlockServiceError extends Error {
-  statusCode: number;
-
-  constructor(message: string, statusCode: number) {
-    super(message);
+export class ContentBlockServiceError extends HierarchyServiceError {
+  constructor(
+    message: string,
+    statusCode: number,
+    code?: string,
+    details?: Record<string, unknown>,
+  ) {
+    super(message, statusCode, code, details);
     this.name = 'ContentBlockServiceError';
-    this.statusCode = statusCode;
   }
 }
 
@@ -427,7 +435,19 @@ export function validateBlockMetadata(
 
 export const updateContentBlockSchema = z
   .object({
-    title: z.string().trim().max(255, 'Judul maksimal 255 karakter').nullable().optional(),
+    // Same content rules as titleSchema (no control/bidi characters, no HTML); null and a blank
+    // string stay valid because both clear the title.
+    title: z
+      .string()
+      .trim()
+      .max(255, 'Judul maksimal 255 karakter')
+      .refine(
+        (v) => !hasSharedControlCharacters(v),
+        'Judul mengandung karakter kontrol yang tidak valid',
+      )
+      .refine((v) => !/<[a-z!/]/i.test(v), 'Judul tidak boleh mengandung tag HTML')
+      .nullable()
+      .optional(),
     body: z
       .string()
       .trim()
@@ -454,6 +474,8 @@ export const updateContentBlockSchema = z
       })
       .transform((val) => (val === undefined ? undefined : (val as Record<string, unknown> | null)))
       .optional(),
+    /** Optional optimistic-concurrency precondition (SPEC §3); enforced when present. */
+    expectedUpdatedAt: expectedUpdatedAtSchema.optional(),
   })
   .strict()
   .refine(
@@ -510,7 +532,7 @@ export const invalidateContentBlocksCache = (slug?: string): void => {
   }
 };
 
-function formatContentBlock(block: {
+export function formatContentBlock(block: {
   id: string;
   sectionId: string | null;
   type: string;
@@ -683,6 +705,10 @@ export const updateContentBlock = async (
           `Blok konten dengan slug '${normalizedSlug}' tidak ditemukan`,
           404,
         );
+      }
+
+      if (input.expectedUpdatedAt !== undefined) {
+        assertFresh(existing.updatedAt, input.expectedUpdatedAt, 'Blok konten');
       }
 
       const changes: Record<string, { before: unknown; after: unknown }> = {};

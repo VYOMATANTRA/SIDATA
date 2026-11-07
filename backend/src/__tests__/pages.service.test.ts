@@ -8,11 +8,11 @@ import {
   deletePage,
   reorderPages,
   PageServiceError,
-  MAX_PAGE_SORT_ORDER,
   toPageSummary,
   isValidPageSlug,
 } from '../services/pages.service.js';
 import type { AuditActor, AuditRequestContext } from '../services/audit.service.js';
+import { HierarchyServiceError, MAX_SORT_ORDER } from '../utils/hierarchyAuthoring.js';
 import prisma from '../utils/prisma.js';
 
 const EXPECTED_FIND_MANY_ARGS = {
@@ -92,6 +92,8 @@ describe('pages.service', () => {
   let originalPageCount: typeof prisma.page.count;
   let originalPageDelete: typeof prisma.page.delete;
   let originalPageUpdate: typeof prisma.page.update;
+  let originalIndicatorCount: typeof prisma.indicator.count;
+  let originalIndicatorTableCount: typeof prisma.indicatorTable.count;
   let findManyCalls: unknown[][];
   let findUniqueCalls: unknown[][];
   let pageCountCalls: unknown[][];
@@ -125,6 +127,11 @@ describe('pages.service', () => {
     originalPageCount = prisma.page.count;
     originalPageDelete = prisma.page.delete;
     originalPageUpdate = prisma.page.update;
+    originalIndicatorCount = prisma.indicator.count;
+    originalIndicatorTableCount = prisma.indicatorTable.count;
+    // deletePage counts every dependent type; default them to "none attached".
+    prisma.indicator.count = (async () => 0) as unknown as typeof prisma.indicator.count;
+    prisma.indicatorTable.count = (async () => 0) as unknown as typeof prisma.indicatorTable.count;
     findManyCalls = [];
     findUniqueCalls = [];
     pageCountCalls = [];
@@ -148,6 +155,8 @@ describe('pages.service', () => {
     prisma.page.count = originalPageCount;
     prisma.page.delete = originalPageDelete;
     prisma.page.update = originalPageUpdate;
+    prisma.indicator.count = originalIndicatorCount;
+    prisma.indicatorTable.count = originalIndicatorTableCount;
   });
 
   describe('getPages', () => {
@@ -309,7 +318,16 @@ describe('pages.service', () => {
           number: null,
           title: 'Jumlah Penduduk',
           sortOrder: 0,
-          sections: [{ id: 'section-1', slug: 'ringkasan', title: null, sortOrder: 0 }],
+          updatedAt: FIXED_UPDATED,
+          sections: [
+            {
+              id: 'section-1',
+              slug: 'ringkasan',
+              title: null,
+              sortOrder: 0,
+              updatedAt: FIXED_UPDATED,
+            },
+          ],
         },
       ],
       ...overrides,
@@ -354,7 +372,16 @@ describe('pages.service', () => {
             number: null,
             title: 'Jumlah Penduduk',
             sortOrder: 0,
-            sections: [{ id: 'section-1', slug: 'ringkasan', title: null, sortOrder: 0 }],
+            updatedAt: FIXED_UPDATED.toISOString(),
+            sections: [
+              {
+                id: 'section-1',
+                slug: 'ringkasan',
+                title: null,
+                sortOrder: 0,
+                updatedAt: FIXED_UPDATED.toISOString(),
+              },
+            ],
           },
         ],
         createdAt: FIXED_CREATED.toISOString(),
@@ -457,9 +484,22 @@ describe('pages.service', () => {
             number: '2.1',
             title: 'Wilayah Administrasi',
             sortOrder: 0,
+            updatedAt: FIXED_UPDATED.toISOString(),
             sections: [
-              { id: 's-1', slug: 'luas', title: 'Luas', sortOrder: 0 },
-              { id: 's-2', slug: 'batas', title: null, sortOrder: 1 },
+              {
+                id: 's-1',
+                slug: 'luas',
+                title: 'Luas',
+                sortOrder: 0,
+                updatedAt: FIXED_UPDATED.toISOString(),
+              },
+              {
+                id: 's-2',
+                slug: 'batas',
+                title: null,
+                sortOrder: 1,
+                updatedAt: FIXED_UPDATED.toISOString(),
+              },
             ],
           },
         ],
@@ -502,16 +542,23 @@ describe('pages.service', () => {
         'slug',
         'sortOrder',
         'title',
+        'updatedAt',
       ]);
       const [section] = chapter.sections;
       assert.ok(section);
-      assert.deepStrictEqual(Object.keys(section).sort(), ['id', 'slug', 'sortOrder', 'title']);
+      assert.deepStrictEqual(Object.keys(section).sort(), [
+        'id',
+        'slug',
+        'sortOrder',
+        'title',
+        'updatedAt',
+      ]);
 
-      // Explicitly: no pageId/chapterId/timestamps on children.
-      for (const key of ['pageId', 'createdAt', 'updatedAt', 'leaked']) {
+      // Children expose only updatedAt (the SPEC §3 concurrency token): no pageId/chapterId/createdAt.
+      for (const key of ['pageId', 'createdAt', 'leaked']) {
         assert.equal(key in chapter, false, `chapter must not expose ${key}`);
       }
-      for (const key of ['chapterId', 'createdAt', 'updatedAt', 'leaked']) {
+      for (const key of ['chapterId', 'createdAt', 'leaked']) {
         assert.equal(key in section, false, `section must not expose ${key}`);
       }
     });
@@ -1059,21 +1106,21 @@ describe('pages.service', () => {
       assert.equal(assignedSortOrder, 8);
     });
 
-    it('throws 400 PageServiceError when auto-assigned sortOrder exceeds MAX_PAGE_SORT_ORDER (INT overflow defense)', async () => {
+    it('throws 400 PageServiceError when auto-assigned sortOrder exceeds MAX_SORT_ORDER (INT overflow defense)', async () => {
       stubFindUnique(async () => null);
 
       prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
         const fakeTx = {
           page: {
             create: async (args: { data: { sortOrder: number } }) => {
-              if (args.data.sortOrder > MAX_PAGE_SORT_ORDER) {
+              if (args.data.sortOrder > MAX_SORT_ORDER) {
                 const dbOverflowErr = new Error('Value out of range for column sort_order');
                 (dbOverflowErr as unknown as { code: string }).code = 'ER_WARN_DATA_OUT_OF_RANGE';
                 throw dbOverflowErr;
               }
               return summaryRow({ id: 'p-new', ...args.data });
             },
-            aggregate: async () => ({ _max: { sortOrder: MAX_PAGE_SORT_ORDER } }),
+            aggregate: async () => ({ _max: { sortOrder: MAX_SORT_ORDER } }),
           },
           auditLog: {
             create: async () => ({ id: 'audit-1' }),
@@ -1127,7 +1174,7 @@ describe('pages.service', () => {
       await assert.rejects(
         deletePage('kependudukan', actor, context),
         (err: unknown) =>
-          err instanceof PageServiceError &&
+          err instanceof HierarchyServiceError &&
           err.statusCode === 409 &&
           err.message.includes('tidak dapat dihapus') &&
           err.message.includes('blok konten'),
