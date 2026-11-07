@@ -228,15 +228,36 @@ export const HIDDEN_API_TOKENS: readonly string[] = [
   'spatial_points',
   'spatial_point_rt',
   'system_settings',
+  'audit_logs',
+  'acknowledgedAt',
+  'acknowledgedById',
 ];
 
-const HIDDEN_TOKEN_PATTERN = new RegExp(`\\b(?:${HIDDEN_API_TOKENS.join('|')})\\b`);
+/** Camel-case API name to its lower-case concatenated, snake_case and kebab-case spellings. */
+function tokenSpellings(token: string): string[] {
+  const words = token
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[\s_-]+/);
+  return [words.join(''), words.join('_'), words.join('-')];
+}
 
-/** Enum-like values the backend puts in sentences, with the words a reader knows. */
+/**
+ * Matched against the lower-cased sentence, so `RowKey`, `foo_rowKey`, `rowKeys`, `row_key`
+ * and `row-key2` are all caught. A trailing plural `s` or digits are tolerated.
+ */
+const HIDDEN_TOKEN_PATTERN = new RegExp(
+  `(?<![a-z0-9])(?:${[...new Set(HIDDEN_API_TOKENS.flatMap(tokenSpellings))].join('|')})(?:s|\\d+)?(?![a-z0-9])`,
+);
+
+/**
+ * Enum-like values the backend puts in sentences, with the words a reader knows. Only
+ * standalone tokens: not part of a URL, path, file name, code span or longer identifier.
+ */
 const FRIENDLY_TERMS: ReadonlyArray<readonly [RegExp, string]> = [
-  [/\bketua_rt\b/g, 'Ketua RT'],
-  [/\bbank_sampah\b/g, 'Bank Sampah'],
-  [/\bfasilitas_umum\b/g, 'Fasilitas Umum'],
+  [/(?<![\w/.\-`])ketua_rt(?![\w/\-`]|\.\w)/g, 'Ketua RT'],
+  [/(?<![\w/.\-`])bank_sampah(?![\w/\-`]|\.\w)/g, 'Bank Sampah'],
+  [/(?<![\w/.\-`])fasilitas_umum(?![\w/\-`]|\.\w)/g, 'Fasilitas Umum'],
 ];
 
 /** Approved wording for a refused template attach (indicators.service `assertTemplateAttachable`). */
@@ -246,9 +267,36 @@ export const TEMPLATE_ATTACH_MESSAGE =
 /** Approved wording for an orphaned half of the previous value/period pair. */
 export const PREVIOUS_PAIR_MESSAGE = 'Nilai dan periode sebelumnya harus diisi berpasangan.';
 
+/** Approved wording for a computed-comparison indicator that lacks its previous value/period. */
+export const PREVIOUS_REQUIRED_MESSAGE =
+  'Nilai dan periode sebelumnya harus diisi untuk indikator perbandingan.';
+
+export const UNKNOWN_FIELD_MESSAGE =
+  'Ada isian yang tidak dikenali. Muat ulang halaman lalu coba lagi.';
+export const INPUT_MISMATCH_MESSAGE = 'Isian belum sesuai. Periksa kembali isian yang ditandai.';
+export const CSV_FORMAT_MESSAGE =
+  'Format berkas CSV tidak sesuai. Unduh contoh berkas lalu coba lagi.';
+export const RT_CONFLICT_MESSAGE =
+  'Data Ketua RT/RT bertentangan. Periksa kembali koordinat dan RT yang dipilih.';
+
 const TEMPLATE_ATTACH_SOURCE =
   /^Template perbandingan (?:membutuhkan value_previous|hanya dapat dipakai pada indikator perbandingan terkomputasi)/;
 const PREVIOUS_PAIR_SOURCE = /^value_previous dan period_previous harus diisi berpasangan/;
+const PREVIOUS_REQUIRED_SOURCE =
+  /^Indikator perbandingan terkomputasi membutuhkan (?:value_previous|period_previous)/;
+const CSV_HEADER_SOURCE = /^Header CSV harus\b/;
+const RT_INVARIANT_SOURCE = /^Invariant (?:Ketua RT|ketua_rt)\/RT dilanggar/i;
+const UNRECOGNIZED_SOURCE = /tidak dikenali\b[^"]*"|Unrecognized keys?\b/i;
+const VALIDATION_PREFIX = /^Validasi [^:]{1,60} gagal:/i;
+
+/** Zod's default English wording, which must never reach an operator. */
+const ZOD_PATTERNS: readonly RegExp[] = [
+  /(?:^|[\s:,;])(?:Invalid (?:input|option|type|value|enum)|Too (?:big|small)|Unrecognized keys?|Required|Expected|Unexpected)\b/,
+  /\breceived (?:undefined|null|number|string|object|array|boolean|nan)\b/i,
+  /\bexpected (?:one of|string|number|boolean|object|array|record)\b/i,
+];
+
+const QUOTED_ID = /"c[a-z0-9]{20,}"/g;
 
 function readableServerMessage(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
@@ -256,8 +304,18 @@ function readableServerMessage(value: unknown): string | undefined {
   if (text === '' || text.length > MAX_SERVER_MESSAGE_LENGTH) return undefined;
   if (TEMPLATE_ATTACH_SOURCE.test(text)) return TEMPLATE_ATTACH_MESSAGE;
   if (PREVIOUS_PAIR_SOURCE.test(text)) return PREVIOUS_PAIR_MESSAGE;
-  const friendly = FRIENDLY_TERMS.reduce((acc, [pattern, term]) => acc.replace(pattern, term), text);
-  return HIDDEN_TOKEN_PATTERN.test(friendly) ? undefined : friendly;
+  if (PREVIOUS_REQUIRED_SOURCE.test(text)) return PREVIOUS_REQUIRED_MESSAGE;
+  if (CSV_HEADER_SOURCE.test(text)) return CSV_FORMAT_MESSAGE;
+  if (RT_INVARIANT_SOURCE.test(text)) return RT_CONFLICT_MESSAGE;
+  if (UNRECOGNIZED_SOURCE.test(text)) return UNKNOWN_FIELD_MESSAGE;
+  if (ZOD_PATTERNS.some((pattern) => pattern.test(text))) {
+    return VALIDATION_PREFIX.test(text) ? INPUT_MISMATCH_MESSAGE : undefined;
+  }
+  const friendly = FRIENDLY_TERMS.reduce(
+    (acc, [pattern, term]) => acc.replace(pattern, term),
+    text.replace(QUOTED_ID, '').replace(/ {2,}/g, ' '),
+  );
+  return HIDDEN_TOKEN_PATTERN.test(friendly.toLowerCase()) ? undefined : friendly;
 }
 
 /**

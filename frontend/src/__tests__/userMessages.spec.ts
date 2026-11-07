@@ -3,12 +3,17 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   classifyFailure,
+  CSV_FORMAT_MESSAGE,
   HIDDEN_API_TOKENS,
+  INPUT_MISMATCH_MESSAGE,
   NETWORK_ERROR_CODE,
   PREVIOUS_PAIR_MESSAGE,
+  PREVIOUS_REQUIRED_MESSAGE,
+  RT_CONFLICT_MESSAGE,
   sanitizeFieldErrors,
   SESSION_EXPIRED_MESSAGE,
   toUserMessage,
+  UNKNOWN_FIELD_MESSAGE,
   USER_MESSAGES,
 } from '../utils/userMessages';
 
@@ -147,7 +152,9 @@ describe('toUserMessage mappings', () => {
 
   it('hides a sentence that names any denylisted API token', () => {
     for (const token of HIDDEN_API_TOKENS) {
-      const error = Object.assign(httpFailure(400), { serverMessage: `Kolom ${token} tidak valid.` });
+      const error = Object.assign(httpFailure(400), {
+        serverMessage: `Kolom ${token} tidak valid.`,
+      });
       expect(toUserMessage(error).message).toBe('Periksa kembali isian yang ditandai.');
     }
   });
@@ -174,26 +181,147 @@ describe('toUserMessage mappings', () => {
     expect(toUserMessage(error).message).toBe('Periksa kembali isian yang ditandai.');
   });
 
-  it('never leaks a denylisted token from any real backend message literal', () => {
+  it('never shows an API-looking or English-default sentence from any real backend literal', () => {
+    // Independent of HIDDEN_API_TOKENS on purpose: removing a token from the denylist must make
+    // this scan fail, not silently stay green.
+    const structural =
+      /\b[a-z]+[A-Z]\w*\b|\b[a-z]+_[a-z_]+\b|\b(?:Invalid|Unrecognized|Too (?:big|small))\b|\breceived (?:undefined|null|number|string|object|array|boolean)\b/;
+    // Reviewed allowlist of legitimate mixed-case terms and non-sentence shapes.
+    const allowed = [
+      /\bkWh\b|\beKTP\b|\biOS\b|\bmmHg\b|\bWhatsApp\b|\bphoneIsWhatsapp\b/g, // units, acronyms, brand
+      /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, // e-mail addresses
+      /https?:\/\/\S+/g, // URLs
+    ];
     const root = join(__dirname, '../../../backend/src');
     const literal = /'([^'\n]{12,})'|"([^"\n]{12,})"|`([^`\n]{12,})`/g;
     let checked = 0;
-    for (const dir of ['services', 'controllers']) {
+    for (const dir of ['services', 'controllers', 'middlewares', 'utils']) {
       for (const file of readdirSync(join(root, dir)).filter((f) => f.endsWith('.ts'))) {
         const source = readFileSync(join(root, dir, file), 'utf8');
         for (const match of source.matchAll(literal)) {
-          const text = match[1] ?? match[2] ?? match[3] ?? '';
-          if (text.includes('${') || !/ /.test(text)) continue;
+          const raw = match[1] ?? match[2] ?? match[3] ?? '';
+          const text = raw.replace(/\$\{[^}]*\}/g, 'X');
+          if (text.length < 12 || !/ /.test(text)) continue;
+          // Not messages: seed template bodies ("{delta}"), regex-paired code fragments (they
+          // start or end mid-expression) and developer-only errors thrown for programmer
+          // mistakes, which never travel as a 400 (`name: ...` prefix or English internals).
+          if (/[{}]/.test(text) || /^[\s,)?&|]|[\s(=!]$/.test(text)) continue;
+          if (
+            /^(?:withTimeoutFallback|formatDecimalId|executeLockedTransaction):|^ttlMs /.test(text)
+          )
+            continue;
           const error = Object.assign(httpFailure(400), { serverMessage: text });
           const shown = toUserMessage(error).message;
+          if (shown === USER_MESSAGES.validation) continue;
           checked += 1;
-          for (const token of HIDDEN_API_TOKENS) {
-            expect(shown, `${file}: ${text}`).not.toMatch(new RegExp(`\\b${token}\\b`));
-          }
+          const scrubbed = allowed.reduce((acc, pattern) => acc.replace(pattern, ''), shown);
+          expect(scrubbed, `${file}: ${text}`).not.toMatch(structural);
         }
       }
     }
     expect(checked).toBeGreaterThan(100);
+  });
+
+  it('hides zod default English text and shows approved wording for known shapes', () => {
+    const fallback = USER_MESSAGES.validation;
+    const hidden = [
+      'Invalid input: expected string, received number',
+      'Invalid input',
+      'Too big: expected string to have <=191 characters',
+      'Too small: expected array to have >=1 items',
+      'Invalid option: expected one of "age_pyramid"|"ethnicity"',
+      'Required',
+      'Judul: Expected string, received undefined',
+    ];
+    for (const serverMessage of hidden) {
+      const error = Object.assign(httpFailure(422), { serverMessage });
+      expect([serverMessage, toUserMessage(error).message]).toEqual([serverMessage, fallback]);
+    }
+    const joined = Object.assign(httpFailure(400), {
+      serverMessage:
+        'Validasi metadata gagal: Invalid input: expected string, received number, Invalid input: expected string, received undefined',
+    });
+    expect(toUserMessage(joined).message).toBe(INPUT_MISMATCH_MESSAGE);
+  });
+
+  it('shows ordinary Indonesian validation sentences untouched', () => {
+    for (const text of [
+      'Wajib diisi.',
+      'Format tidak valid.',
+      'Nilai terlalu besar.',
+      'Judul harus diisi.',
+    ]) {
+      const error = Object.assign(httpFailure(400), { serverMessage: text });
+      expect(toUserMessage(error).message).toBe(text);
+    }
+  });
+
+  it('maps echoed-key sentences to one approved wording', () => {
+    for (const serverMessage of [
+      'Unrecognized key: "badge"',
+      'Terdapat bidang pengaturan yang tidak dikenali: "secret_flag"',
+      'Unrecognized keys: "a", "b"',
+    ]) {
+      const error = Object.assign(httpFailure(400), { serverMessage });
+      expect([serverMessage, toUserMessage(error).message]).toEqual([serverMessage, UNKNOWN_FIELD_MESSAGE]);
+    }
+  });
+
+  it('maps the computed-comparison and CSV header sentences to approved wording', () => {
+    const cases: Array<[string, string]> = [
+      [
+        'Indikator perbandingan terkomputasi membutuhkan value_previous (nilai tahun lalu).',
+        PREVIOUS_REQUIRED_MESSAGE,
+      ],
+      [
+        'Indikator perbandingan terkomputasi membutuhkan period_previous (periode tahun lalu).',
+        PREVIOUS_REQUIRED_MESSAGE,
+      ],
+      ['Header CSV harus: rtNumber,name,phone', CSV_FORMAT_MESSAGE],
+    ];
+    for (const [serverMessage, expected] of cases) {
+      const error = Object.assign(httpFailure(400), { serverMessage });
+      expect(toUserMessage(error).message).toBe(expected);
+    }
+  });
+
+  it('catches compound, cased and plural spellings of denylisted names', () => {
+    for (const token of [
+      'foo_rowKey',
+      'RowKey',
+      'rowKeys',
+      'sectionIds',
+      'Rt_Number',
+      'point_ids',
+      'row-key',
+    ]) {
+      const error = Object.assign(httpFailure(400), { serverMessage: `Kolom ${token} salah.` });
+      expect([token, toUserMessage(error).message]).toEqual([token, USER_MESSAGES.validation]);
+    }
+  });
+
+  it('strips raw point ids and maps the RT invariant sentence', () => {
+    const id = 'cm1abcdefghijklmnopqrstuv';
+    const point = Object.assign(httpFailure(400), {
+      serverMessage: `Titik ketua_rt "${id}" harus mencakup tepat satu RT.`,
+    });
+    expect(toUserMessage(point).message).toBe('Titik Ketua RT harus mencakup tepat satu RT.');
+    const invariant = Object.assign(httpFailure(400), {
+      serverMessage: 'Invariant ketua_rt/RT dilanggar.',
+    });
+    expect(toUserMessage(invariant).message).toBe(RT_CONFLICT_MESSAGE);
+  });
+
+  it('leaves URLs and code containing enum values untouched', () => {
+    for (const text of [
+      'Lihat https://x.id/ketua_rt/1 untuk rincian.',
+      'Gunakan `ketua_rt` persis.',
+      'Berkas ketua_rt.csv tidak valid.',
+      'Folder bank_sampah-data salah.',
+    ]) {
+      const error = Object.assign(httpFailure(400), { serverMessage: text });
+      expect([text, toUserMessage(error).message]).toEqual([text, text]);
+    }
   });
 
   it('falls back to the general text for any other sentence that names a field key', () => {

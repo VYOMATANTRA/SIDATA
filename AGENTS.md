@@ -71,6 +71,8 @@ Backend runs on port from `PORT` env var (default 3000). Prisma client is genera
 
 **Accessibility** — frontend markup MUST use semantic HTML and SHOULD conform to WCAG 2.1 Level A. See `docs/ACCESSIBILITY.md` for the concrete rules; apply them while writing a component, not as a retrofit.
 
+**Frontend error messages** — operators see the backend sentence only for 400/422, filtered by `readableServerMessage` in `frontend/src/utils/userMessages.ts`. Backend sentences that name API fields must be added to `HIDDEN_API_TOKENS` there, and new backend 400 messages shown to operators should be plain Indonesian (no field names, no zod/English defaults).
+
 ## Architecture
 
 ### Frontend Structure
