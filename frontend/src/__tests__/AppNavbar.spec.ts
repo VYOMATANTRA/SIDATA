@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import AppNavbar from '../components/common/AppNavbar.vue';
+import { isNavItemActive } from '@/config/publicNav';
 
 function createMockRouter() {
   return createRouter({
@@ -145,7 +146,41 @@ describe('AppNavbar.vue', () => {
     wrapper.unmount();
   });
 
-  it('closes mobile menu when Escape key is pressed', async () => {
+  it('closes mobile menu when Escape key is pressed and restores focus to hamburger toggle button', async () => {
+    const router = createMockRouter();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(AppNavbar, {
+      global: {
+        plugins: [router],
+      },
+      attachTo: document.body,
+    });
+
+    const hamburger = wrapper.find<HTMLButtonElement>('[data-test="hamburger-btn"]');
+    // Open menu
+    await hamburger.trigger('click');
+    expect(hamburger.attributes('aria-expanded')).toBe('true');
+    expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(true);
+
+    // Focus something inside drawer
+    const firstLink = wrapper.find<HTMLAnchorElement>('[data-test="nav-menu-drawer"] a');
+    firstLink.element.focus();
+    expect(document.activeElement).toBe(firstLink.element);
+
+    // Press Escape
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(false);
+    expect(hamburger.attributes('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(hamburger.element);
+
+    wrapper.unmount();
+  });
+
+  it('renders complete default public navigation items in drawer when no custom menu slot is passed', async () => {
     const router = createMockRouter();
     await router.push('/');
     await router.isReady();
@@ -159,13 +194,159 @@ describe('AppNavbar.vue', () => {
 
     // Open menu
     await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
+
+    const drawer = wrapper.find('[data-test="nav-menu-drawer"]');
+    expect(drawer.find('a[href="/"]').text()).toBe('Beranda');
+    expect(drawer.find('a[href="/publikasi"]').text()).toBe('Publikasi');
+    expect(drawer.find('a[href="/peta"]').text()).toBe('Peta');
+    expect(drawer.find('a[href="/ketua-rt"]').text()).toBe('Ketua RT');
+    expect(drawer.find('a[href="/permintaan-data"]').text()).toBe('Permintaan Data');
+    expect(drawer.find('a[href="/tentang/kelurahan-manggar"]').text()).toBe('Tentang');
+
+    // Clicking a nav link closes drawer
+    await drawer.find('a[href="/publikasi"]').trigger('click');
+    await wrapper.vm.$nextTick();
+    expect(drawer.isVisible()).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  it('allows natural tab navigation through drawer links and back to toggle button without keyboard trap (WCAG 2.1.2)', async () => {
+    const router = createMockRouter();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(AppNavbar, {
+      global: {
+        plugins: [router],
+      },
+      attachTo: document.body,
+    });
+
+    const hamburger = wrapper.find<HTMLButtonElement>('[data-test="hamburger-btn"]');
+    await hamburger.trigger('click');
+
+    const focusables = wrapper.findAll<HTMLAnchorElement>('[data-test="nav-menu-drawer"] a');
+    expect(focusables.length).toBe(6);
+
+    // Focus can naturally move to all links and return to the hamburger toggle button
+    for (const link of focusables) {
+      link.element.focus();
+      expect(document.activeElement).toBe(link.element);
+    }
+
+    // Crucially: focus can return to the toggle button (no keyboard trap)
+    hamburger.element.focus();
+    expect(document.activeElement).toBe(hamburger.element);
+
+    wrapper.unmount();
+  });
+
+  it('does not close mobile menu on Escape if the event originated from an open modal dialog', async () => {
+    const router = createMockRouter();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(AppNavbar, {
+      global: {
+        plugins: [router],
+      },
+      attachTo: document.body,
+    });
+
+    const hamburger = wrapper.find<HTMLButtonElement>('[data-test="hamburger-btn"]');
+    await hamburger.trigger('click');
     expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(true);
 
-    // Press Escape
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    await wrapper.vm.$nextTick();
+    // Simulate an open modal dialog (e.g. OtpVerificationModal) with focused element inside
+    const modal = document.createElement('div');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'otp-verification-title');
+    const modalInput = document.createElement('input');
+    modal.appendChild(modalInput);
+    document.body.appendChild(modal);
+    modalInput.focus();
 
+    // Escape fired while focus is inside the modal dialog must not close the navbar menu
+    modalInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(true);
+
+    // Conversely, when focus is inside the navbar menu, Escape must close the drawer
+    const drawerLink = wrapper.find<HTMLAnchorElement>('[data-test="nav-menu-drawer"] a');
+    drawerLink.element.focus();
+    drawerLink.element.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    await wrapper.vm.$nextTick();
     expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(false);
+
+    modal.remove();
     wrapper.unmount();
+  });
+
+  it('filters out unregistered routes from the navigation drawer', async () => {
+    const limitedRouter = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', component: { template: '<div>Home</div>' } },
+        { path: '/publikasi', component: { template: '<div>Publikasi</div>' } },
+      ],
+    });
+    await limitedRouter.push('/');
+    await limitedRouter.isReady();
+
+    const wrapper = mount(AppNavbar, {
+      global: { plugins: [limitedRouter] },
+      attachTo: document.body,
+    });
+
+    await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
+    const drawerLinks = wrapper.findAll('[data-test="nav-menu-drawer"] a');
+    expect(drawerLinks.length).toBe(2);
+    expect(wrapper.find('a[href="/"]').exists()).toBe(true);
+    expect(wrapper.find('a[href="/publikasi"]').exists()).toBe(true);
+    expect(wrapper.find('a[href="/peta"]').exists()).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  it('marks current route and /tentang subpaths with aria-current="page" and active class', async () => {
+    const router = createMockRouter();
+    await router.push('/tentang/desa-cantik');
+    await router.isReady();
+
+    const wrapper = mount(AppNavbar, {
+      global: { plugins: [router] },
+      attachTo: document.body,
+    });
+
+    await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
+    const tentangLink = wrapper.find('a[href="/tentang/kelurahan-manggar"]');
+    expect(tentangLink.exists()).toBe(true);
+    expect(tentangLink.attributes('aria-current')).toBe('page');
+    expect(tentangLink.classes()).toContain('bg-white/20');
+
+    const homeLink = wrapper.find('a[href="/"]');
+    expect(homeLink.attributes('aria-current')).toBeUndefined();
+
+    wrapper.unmount();
+  });
+
+  describe('publicNav utilities', () => {
+    it('exact matches home route for isNavItemActive', () => {
+      expect(isNavItemActive('/', '/')).toBe(true);
+      expect(isNavItemActive('/', '/publikasi')).toBe(false);
+    });
+
+    it('matches /tentang subpaths for isNavItemActive', () => {
+      expect(isNavItemActive('/tentang/kelurahan-manggar', '/tentang/kelurahan-manggar')).toBe(
+        true,
+      );
+      expect(isNavItemActive('/tentang/kelurahan-manggar', '/tentang/desa-cantik')).toBe(true);
+      expect(isNavItemActive('/tentang/kelurahan-manggar', '/tentang/vyomatantra')).toBe(true);
+      expect(isNavItemActive('/tentang/kelurahan-manggar', '/peta')).toBe(false);
+    });
   });
 });

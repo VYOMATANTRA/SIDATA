@@ -486,6 +486,8 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
         { path: '/publikasi', component: { template: '<div>publikasi</div>' } },
         { path: '/peta', component: { template: '<div>peta</div>' } },
         { path: '/ketua-rt', component: { template: '<div>ketua-rt</div>' } },
+        { path: '/permintaan-data', component: { template: '<div>permintaan-data</div>' } },
+        { path: '/tentang/kelurahan-manggar', component: { template: '<div>tentang</div>' } },
         { path: '/cerita/:slug', component: { template: '<div>cerita</div>' } },
       ],
     });
@@ -505,6 +507,8 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
     expect(drawer.find('a[href="/publikasi"]').exists()).toBe(true);
     expect(drawer.find('a[href="/peta"]').exists()).toBe(true);
     expect(drawer.find('a[href="/ketua-rt"]').exists()).toBe(true);
+    expect(drawer.find('a[href="/permintaan-data"]').exists()).toBe(true);
+    expect(drawer.find('a[href="/tentang/kelurahan-manggar"]').exists()).toBe(true);
 
     // StatOverview CTA buttons are rendered now that /cerita/:slug matches
     const ceritaSection = wrapper.find('section#cerita-preview');
@@ -643,7 +647,11 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
         return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response;
       }
       if (url.includes('/api/auth/logout')) {
-        return { ok: false, status: 401, json: async () => ({ error: 'Unauthorized' }) } as Response;
+        return {
+          ok: false,
+          status: 401,
+          json: async () => ({ error: 'Unauthorized' }),
+        } as Response;
       }
       return { ok: true, json: async () => ({}) } as Response;
     });
@@ -681,5 +689,26 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
 
     expect(authStore.isAuthenticated).toBe(true);
     expect(router.currentRoute.value.path).toBe('/');
+  });
+
+  it('renders available nav items in mobile menu drawer with active state on current route', async () => {
+    const { pinia, router } = setupHomeView();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(HomeView, { global: { plugins: [pinia, router] } });
+    await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
+
+    const drawer = wrapper.find('[data-test="nav-menu-drawer"]');
+    expect(drawer.exists()).toBe(true);
+
+    // In setupHomeView, only '/' is registered from DEFAULT_NAV_ITEMS
+    const berandaLink = drawer.find('a[href="/"]');
+    expect(berandaLink.exists()).toBe(true);
+    expect(berandaLink.attributes('aria-current')).toBe('page');
+    expect(berandaLink.classes()).toContain('bg-white/20');
+
+    // Unregistered routes like /publikasi are filtered out
+    expect(drawer.find('a[href="/publikasi"]').exists()).toBe(false);
   });
 });

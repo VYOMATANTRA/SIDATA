@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { RouterLink } from 'vue-router';
+import { useRouter, useRoute, RouterLink } from 'vue-router';
 import balikpapanLogo from '@/assets/img/logo_balikpapan.webp';
+import { getAvailableNavItems, isNavItemActive } from '@/config/publicNav';
 
 export interface NavbarProps {
   variant?: 'navy' | 'white' | 'transparent';
@@ -26,7 +27,13 @@ const emit = defineEmits<{
   (e: 'logoClick'): void;
 }>();
 
+const router = useRouter();
+const route = useRoute();
+const currentPath = computed(() => route?.path ?? '/');
+const navItems = computed(() => getAvailableNavItems(router));
+
 const isMenuOpen = ref(false);
+const toggleButtonRef = ref<HTMLButtonElement | null>(null);
 
 function toggleMenu() {
   isMenuOpen.value = !isMenuOpen.value;
@@ -40,9 +47,22 @@ function closeMenu() {
   }
 }
 
+function isEventFromOpenDialog(event: KeyboardEvent): boolean {
+  if (event.defaultPrevented) return true;
+  const target =
+    (event.target instanceof HTMLElement ? event.target : null) ??
+    (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  if (target?.closest('[role="dialog"], [role="alertdialog"], dialog')) {
+    return true;
+  }
+  return false;
+}
+
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && isMenuOpen.value) {
+    if (isEventFromOpenDialog(event)) return;
     closeMenu();
+    toggleButtonRef.value?.focus();
   }
 }
 
@@ -89,9 +109,7 @@ const hamburgerBarClasses = computed(() => {
 <template>
   <header class="w-full transition-colors duration-200" :class="containerClasses">
     <nav aria-label="Navigasi Utama" class="w-full">
-      <div
-        class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 sm:px-8 sm:py-5"
-      >
+      <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 sm:px-8 sm:py-5">
         <!-- Brand & Identity Lockup -->
         <div class="flex items-center">
           <RouterLink
@@ -139,6 +157,7 @@ const hamburgerBarClasses = computed(() => {
 
           <!-- Hamburger Toggle Button: Solid corners & equal row heights -->
           <button
+            ref="toggleButtonRef"
             type="button"
             class="focus-visible:ring-brand-indigo inline-flex h-10 w-10 items-center justify-center p-1 transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:outline-none"
             :aria-expanded="isMenuOpen"
@@ -183,16 +202,25 @@ const hamburgerBarClasses = computed(() => {
         >
           <div class="mx-auto max-w-7xl space-y-4">
             <slot name="menu" :close="closeMenu">
-              <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 <RouterLink
-                  to="/"
+                  v-for="item in navItems"
+                  :key="item.to"
+                  :to="item.to"
                   class="rounded-btn focus-visible:ring-brand-indigo block px-4 py-2.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
-                  :class="
-                    isNavy ? 'text-white hover:bg-white/10' : 'text-slate-800 hover:bg-slate-100'
-                  "
+                  :class="[
+                    isNavy
+                      ? isNavItemActive(item.to, currentPath)
+                        ? 'bg-white/20 font-semibold text-white'
+                        : 'text-white hover:bg-white/10'
+                      : isNavItemActive(item.to, currentPath)
+                        ? 'bg-slate-200 font-semibold text-slate-900'
+                        : 'text-slate-800 hover:bg-slate-100',
+                  ]"
+                  :aria-current="isNavItemActive(item.to, currentPath) ? 'page' : undefined"
                   @click="closeMenu"
                 >
-                  Beranda
+                  {{ item.label }}
                 </RouterLink>
               </div>
             </slot>

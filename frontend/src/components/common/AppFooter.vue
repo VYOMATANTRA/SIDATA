@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
+import { RouterLink } from 'vue-router';
 import { getActivePinia } from 'pinia';
 import BaseLink from './BaseLink.vue';
+import { computeLinkRel } from '@/utils/link';
 import logoBalikpapan from '@/assets/img/logo_balikpapan.webp';
 import logoDesaCantik from '@/assets/img/logo_desa_cantik.webp';
 import logoSdgsDesa from '@/assets/img/sdgs_desa.webp';
@@ -10,6 +12,7 @@ import logoBps from '@/assets/img/logo_bps.webp';
 import logoItk from '@/assets/img/logo_itk.webp';
 import logoVyomatantra from '@/assets/img/logo_vyomatantra.webp';
 import { useSettingsStore } from '../../stores/settings.store';
+import { FOOTER_RESOURCE_LINKS, FOOTER_STORY_LINKS, FOOTER_ABOUT_LINKS } from '@/config/publicNav';
 
 const DEFAULT_PHONE = '(0542) 746123';
 const DEFAULT_ADDRESS_LINES = [
@@ -56,31 +59,60 @@ const displayAddressText = computed(() => {
   return DEFAULT_ADDRESS_LINES.join(', ');
 });
 
-// Resource Links (Sumber Daya)
-const resourceLinks = [
-  { label: 'Publikasi', to: '/publikasi' },
-  { label: 'Peta', to: '/peta' },
-  { label: 'Permintaan Data', to: '/permintaan-data' },
-  { label: 'Ketua RT', to: '/ketua-rt' },
-];
+// Resource Links (Sumber Daya) per SPEC §8
+const resourceLinks = FOOTER_RESOURCE_LINKS;
 
-// Story & Statistics Links (Cerita)
-const storyLinks = [
-  { label: 'Demografi Kependudukan', to: '/cerita/kependudukan' },
-  { label: 'Pendidikan', to: '/cerita/pendidikan' },
-  { label: 'Kesehatan', to: '/cerita/kesehatan' },
-  { label: 'Pemerintahan & Kelembagaan', to: '/cerita/pemerintahan-dan-kelembagaan' },
-  { label: 'Ekonomi & Ketertiban', to: '/cerita/ekonomi-dan-ketertiban' },
-  { label: 'Geografis & Tata Ruang', to: '/cerita/geografis-dan-tata-ruang' },
-  { label: 'Infrastruktur & Perumahan', to: '/cerita/infrastruktur-dan-perumahan' },
-  { label: 'Persampahan & Bank Sampah Unit', to: '/cerita/persampahan-dan-bank-sampah-unit' },
-];
+// Story & Statistics Links (Cerita) per SPEC §8
+const storyLinks = FOOTER_STORY_LINKS;
 
-// About Links (Tentang)
-const aboutLinks = [
-  { label: 'Kelurahan Manggar', to: '/tentang/kelurahan-manggar' },
-  { label: 'Program Desa/Kelurahan Cantik', to: '/tentang/desa-cantik' },
-  { label: 'Inovasi Sosial VYOMATANTRA', to: '/tentang/vyomatantra' },
+// About Links (Tentang) per SPEC §8
+const aboutLinks = FOOTER_ABOUT_LINKS;
+
+const PARTNER_LINK_CLASS =
+  'focus-visible:ring-brand-indigo inline-flex items-center rounded-xs opacity-90 transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:outline-none';
+
+interface PartnerLink {
+  key: string;
+  href?: string;
+  to?: string;
+  target?: string;
+  ariaLabel: string;
+  dataTest: string;
+  logoSrc: string;
+  logoAlt: string;
+  logoDataTest: string;
+}
+
+const partnerLinks: PartnerLink[] = [
+  {
+    key: 'bps',
+    href: 'https://www.bps.go.id',
+    target: '_blank',
+    ariaLabel: 'Kunjungi situs web Badan Pusat Statistik (BPS) (membuka tab baru)',
+    dataTest: 'link-logo-bps',
+    logoSrc: logoBps,
+    logoAlt: 'Logo Badan Pusat Statistik (BPS)',
+    logoDataTest: 'logo-bps',
+  },
+  {
+    key: 'itk',
+    href: 'https://itk.ac.id',
+    target: '_blank',
+    ariaLabel: 'Kunjungi situs web Institut Teknologi Kalimantan (ITK) (membuka tab baru)',
+    dataTest: 'link-logo-itk',
+    logoSrc: logoItk,
+    logoAlt: 'Logo Institut Teknologi Kalimantan (ITK)',
+    logoDataTest: 'logo-itk',
+  },
+  {
+    key: 'vyomatantra',
+    to: '/tentang/vyomatantra',
+    ariaLabel: 'Lihat profil Tim Inovasi Sosial VYOMATANTRA',
+    dataTest: 'link-logo-vyomatantra',
+    logoSrc: logoVyomatantra,
+    logoAlt: 'Logo Tim Inovasi Sosial VYOMATANTRA',
+    logoDataTest: 'logo-vyomatantra',
+  },
 ];
 </script>
 
@@ -228,24 +260,30 @@ const aboutLinks = [
       <!-- Partner Collaboration Logos Row -->
       <div class="mt-10 border-t border-white/10 pt-8 sm:mt-12 sm:pt-10">
         <div class="flex items-center justify-center gap-8 sm:gap-12 md:gap-16">
-          <img
-            :src="logoBps"
-            alt="Logo Badan Pusat Statistik (BPS)"
-            class="h-9 w-auto object-contain sm:h-11"
-            data-test="logo-bps"
-          />
-          <img
-            :src="logoItk"
-            alt="Logo Institut Teknologi Kalimantan (ITK)"
-            class="h-9 w-auto object-contain sm:h-11"
-            data-test="logo-itk"
-          />
-          <img
-            :src="logoVyomatantra"
-            alt="Logo Tim Inovasi Sosial VYOMATANTRA"
-            class="h-9 w-auto object-contain sm:h-11"
-            data-test="logo-vyomatantra"
-          />
+          <component
+            :is="partner.to ? RouterLink : 'a'"
+            v-for="partner in partnerLinks"
+            :key="partner.key"
+            v-bind="
+              partner.to
+                ? { to: partner.to }
+                : {
+                    href: partner.href,
+                    target: partner.target,
+                    rel: computeLinkRel(partner.href, partner.target),
+                  }
+            "
+            :class="PARTNER_LINK_CLASS"
+            :aria-label="partner.ariaLabel"
+            :data-test="partner.dataTest"
+          >
+            <img
+              :src="partner.logoSrc"
+              :alt="partner.logoAlt"
+              class="h-9 w-auto object-contain sm:h-11"
+              :data-test="partner.logoDataTest"
+            />
+          </component>
         </div>
       </div>
 
