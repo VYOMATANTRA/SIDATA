@@ -63,7 +63,7 @@ describe('toUserMessage mappings', () => {
 
   it('maps a plain 409 to the neutral data-conflict wording', () => {
     expect(toUserMessage(httpFailure(409)).message).toBe(
-      'Perubahan belum tersimpan karena bentrok dengan data yang sudah ada. Periksa kembali isian Anda, lalu coba lagi.',
+      'Tindakan tidak dapat dilakukan karena data ini bentrok dengan data lain yang sudah ada atau masih dipakai. Periksa kembali, lalu coba lagi.',
     );
   });
 
@@ -86,13 +86,71 @@ describe('toUserMessage mappings', () => {
     expect(toUserMessage(error).message).not.toContain('diubah oleh orang lain');
   });
 
-  it('maps 413 to the file-size wording', () => {
-    expect(toUserMessage(httpFailure(413)).message).toBe('Berkas terlalu besar.');
+  it('maps 413 to the too-much-content wording', () => {
+    expect(toUserMessage(httpFailure(413)).message).toBe(
+      'Isi yang dikirim terlalu besar. Persingkat teks atau kurangi jumlah baris.',
+    );
   });
 
   it('maps 400 and 422 to the validation wording', () => {
     expect(toUserMessage(httpFailure(400)).message).toBe('Periksa kembali isian yang ditandai.');
     expect(toUserMessage(httpFailure(422)).message).toBe('Periksa kembali isian yang ditandai.');
+  });
+
+  it('shows the server sentence for a 400/422 that has no field map', () => {
+    const error = Object.assign(httpFailure(400), {
+      serverMessage: 'Judul halaman tidak boleh memuat HTML.',
+    });
+
+    expect(toUserMessage(error).message).toBe('Judul halaman tidak boleh memuat HTML.');
+    expect(toUserMessage(error, 'menambah halaman').message).toBe(
+      'Gagal menambah halaman. Judul halaman tidak boleh memuat HTML.',
+    );
+    expect(toUserMessage(Object.assign(error, { status: 422 })).kind).toBe('validation');
+  });
+
+  it('prefers the general text when a validation failure carries a field map', () => {
+    const error = Object.assign(httpFailure(422), {
+      serverMessage: 'Validasi gagal',
+      fieldErrors: { label: 'Label wajib diisi' },
+    });
+
+    expect(toUserMessage(error).message).toBe('Periksa kembali isian yang ditandai.');
+  });
+
+  it('falls back to the general text for an empty or oversized server sentence', () => {
+    for (const serverMessage of ['', '   ', 'x'.repeat(301), 42]) {
+      const error = Object.assign(httpFailure(400), { serverMessage });
+      expect(toUserMessage(error).message).toBe('Periksa kembali isian yang ditandai.');
+    }
+  });
+
+  it('never shows a server sentence for statuses other than 400/422', () => {
+    for (const status of [401, 403, 404, 409, 413, 429, 500, 502, 503]) {
+      const error = Object.assign(httpFailure(status), {
+        serverMessage: 'SQLSTATE[23000]: Duplicate entry at Object.<anonymous> (stack)',
+      });
+      expect(toUserMessage(error).message).not.toContain('SQLSTATE');
+    }
+  });
+
+  it('words network and server failures neutrally for reads', () => {
+    const net = (method: string) =>
+      Object.assign(new Error('x'), { code: NETWORK_ERROR_CODE, status: 0, method });
+
+    expect(toUserMessage(net('GET')).message).toBe(
+      'Tidak dapat terhubung ke server. Periksa koneksi lalu coba lagi.',
+    );
+    expect(toUserMessage(net('HEAD')).message).not.toContain('belum tersimpan');
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+      expect(toUserMessage(net(method)).message).toBe(USER_MESSAGES.network);
+    }
+    expect(toUserMessage(Object.assign(httpFailure(500), { method: 'GET' })).message).toBe(
+      'Terjadi kendala di server. Coba lagi beberapa saat lagi.',
+    );
+    expect(toUserMessage(Object.assign(httpFailure(500), { method: 'PATCH' })).message).toBe(
+      USER_MESSAGES.server,
+    );
   });
 
   it('maps 429 to the rate-limit wording', () => {
@@ -222,9 +280,10 @@ describe('toUserMessage field-level errors', () => {
 describe('classifyFailure', () => {
   it('keeps the original HTTP status available for programmatic handling', () => {
     expect(classifyFailure(httpFailure(409))).toEqual({ kind: 'conflict', status: 409 });
-    expect(
-      classifyFailure(Object.assign(httpFailure(409), { code: 'STALE_WRITE' })),
-    ).toEqual({ kind: 'stale', status: 409 });
+    expect(classifyFailure(Object.assign(httpFailure(409), { code: 'STALE_WRITE' }))).toEqual({
+      kind: 'stale',
+      status: 409,
+    });
     expect(classifyFailure(httpFailure(422))).toEqual({ kind: 'validation', status: 422 });
   });
 

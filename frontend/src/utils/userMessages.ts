@@ -1,7 +1,8 @@
 /**
  * Plain-Indonesian messages for the failures a non-technical operator can run into.
  *
- * Banners and dialogs must only ever show text from this module. HTTP statuses, server
+ * Banners and dialogs must only ever show text from this module. The single exception is the
+ * server's own sentence for a 400/422 validation failure (see `toUserMessage`). HTTP statuses, server
  * exception strings, API response objects and database errors are diagnostics: they stay on
  * the error object (`status`, `code`, `body`) and in the dev console, never on screen.
  *
@@ -58,13 +59,38 @@ export const USER_MESSAGES: Readonly<Record<FailureKind, string>> = {
   stale:
     'Data ini baru saja diubah oleh orang lain. Muat ulang untuk melihat versi terbaru; isian Anda tetap tersimpan di formulir.',
   conflict:
-    'Perubahan belum tersimpan karena bentrok dengan data yang sudah ada. Periksa kembali isian Anda, lalu coba lagi.',
-  payload_too_large: 'Berkas terlalu besar.',
+    'Tindakan tidak dapat dilakukan karena data ini bentrok dengan data lain yang sudah ada atau masih dipakai. Periksa kembali, lalu coba lagi.',
+  payload_too_large: 'Isi yang dikirim terlalu besar. Persingkat teks atau kurangi jumlah baris.',
   validation: 'Periksa kembali isian yang ditandai.',
   rate_limited: 'Terlalu banyak permintaan. Tunggu sebentar lalu coba lagi.',
   server: 'Terjadi kendala di server. Perubahan belum tersimpan. Coba lagi beberapa saat lagi.',
   unknown: 'Terjadi kendala di server. Perubahan belum tersimpan. Coba lagi beberapa saat lagi.',
 };
+
+/**
+ * Wording for failed reads (GET/HEAD). Nothing was being saved, so "Perubahan belum tersimpan"
+ * would be wrong; only the kinds that mention saving need a neutral variant.
+ */
+export const READ_USER_MESSAGES: Readonly<Partial<Record<FailureKind, string>>> = {
+  network: 'Tidak dapat terhubung ke server. Periksa koneksi lalu coba lagi.',
+  server: 'Terjadi kendala di server. Coba lagi beberapa saat lagi.',
+  unknown: 'Terjadi kendala di server. Coba lagi beberapa saat lagi.',
+};
+
+/** True for HTTP methods that never change data. An unknown method counts as a write. */
+export function isReadMethod(method: unknown): boolean {
+  if (typeof method !== 'string') return false;
+  const upper = method.toUpperCase();
+  return upper === 'GET' || upper === 'HEAD';
+}
+
+/** Approved text for a failure kind, worded for a read or a write request. */
+export function approvedMessage(kind: FailureKind, method?: unknown): string {
+  return (isReadMethod(method) ? READ_USER_MESSAGES[kind] : undefined) ?? USER_MESSAGES[kind];
+}
+
+/** Longest server message surfaced for a 400/422; anything longer is not a readable sentence. */
+const MAX_SERVER_MESSAGE_LENGTH = 300;
 
 export interface UserMessage {
   /** Approved text for a banner or dialog. Contains no status code or server string. */
@@ -85,7 +111,9 @@ function statusOf(error: unknown): number | null {
 }
 
 function codeOf(error: unknown): unknown {
-  return typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined;
+  return typeof error === 'object' && error !== null
+    ? (error as { code?: unknown }).code
+    : undefined;
 }
 
 function isNetworkFailure(error: unknown): boolean {
@@ -146,6 +174,12 @@ export function sanitizeFieldErrors(fieldMap: unknown): Record<string, string> {
   return result;
 }
 
+function readableServerMessage(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const text = value.trim();
+  return text !== '' && text.length <= MAX_SERVER_MESSAGE_LENGTH ? text : undefined;
+}
+
 /**
  * Maps any failure to approved user-facing text.
  *
@@ -156,12 +190,17 @@ export function sanitizeFieldErrors(fieldMap: unknown): Record<string, string> {
 export function toUserMessage(error: unknown, context?: string): UserMessage {
   const { kind, status } = classifyFailure(error);
   const phrase = context?.trim().replace(/\.+$/, '');
-  const base = USER_MESSAGES[kind];
+  const record =
+    typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : {};
+  const fieldErrors = kind === 'validation' ? sanitizeFieldErrors(record['fieldErrors']) : {};
+  // Validation failures are the one place the server's own sentence is shown: the backend
+  // answers 400/422 with a short, user-oriented Indonesian reason ("Judul tidak boleh memuat
+  // HTML"). Every other status keeps approved wording so 5xx/SQL/stack text never leaks.
+  const base =
+    kind === 'validation' && Object.keys(fieldErrors).length === 0
+      ? (readableServerMessage(record['serverMessage']) ?? USER_MESSAGES.validation)
+      : approvedMessage(kind, record['method']);
   const message = phrase ? `Gagal ${phrase}. ${base}` : base;
-  const fieldErrors =
-    kind === 'validation' && typeof error === 'object' && error !== null
-      ? sanitizeFieldErrors((error as { fieldErrors?: unknown }).fieldErrors)
-      : {};
 
   return { message, kind, status, fieldErrors };
 }

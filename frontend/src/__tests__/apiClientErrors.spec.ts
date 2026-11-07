@@ -7,7 +7,7 @@ import {
   REFRESH_UNAVAILABLE_MESSAGE,
   SESSION_EXPIRED_MESSAGE,
 } from '../utils/apiClient';
-import { toUserMessage, USER_MESSAGES } from '../utils/userMessages';
+import { READ_USER_MESSAGES, toUserMessage, USER_MESSAGES } from '../utils/userMessages';
 
 const EDITOR = { id: 'u-1', email: 'editor@example.com', role: 'editor' };
 
@@ -82,9 +82,7 @@ describe('apiClient error object', () => {
   });
 
   it('uses the concurrent-edit wording only when the server reports a stale write', async () => {
-    const stale = await failureOf(
-      json({ error: 'Data sudah berubah', code: 'STALE_WRITE' }, 409),
-    );
+    const stale = await failureOf(json({ error: 'Data sudah berubah', code: 'STALE_WRITE' }, 409));
     const duplicate = await failureOf(json({ error: 'Email ini sudah dipakai' }, 409));
 
     expect(stale.userMessage).toBe(USER_MESSAGES.stale);
@@ -108,14 +106,15 @@ describe('apiClient error object', () => {
     expect(error.status).toBe(422);
     expect(error.code).toBe('TREND_KEYWORD_ACK_REQUIRED');
     expect(error.body).toMatchObject({ warnings });
-    expect(error.userMessage).toBe(USER_MESSAGES.validation);
-    expect(error.userMessage).not.toContain('{trend}');
+    // A 422 without a field map shows the server's own sentence.
+    expect(error.userMessage).toBe('Body template memuat kata tren di luar slot {trend}.');
+    expect(error.serverMessage).toBe('Body template memuat kata tren di luar slot {trend}.');
   });
 
   it.each([
     [403, 'Anda tidak memiliki izin untuk tindakan ini.', 'Akses ditolak oleh policy role'],
     [404, 'Data yang dicari tidak ditemukan. Muat ulang halaman.', 'Row 42 not found'],
-    [413, 'Berkas terlalu besar.', 'entity.too.large 524288 bytes'],
+    [413, USER_MESSAGES.payload_too_large, 'entity.too.large 524288 bytes'],
     [429, 'Terlalu banyak permintaan. Tunggu sebentar lalu coba lagi.', 'rate limit bucket x'],
     [500, USER_MESSAGES.server, 'SQLSTATE[23000]: Duplicate entry'],
   ])(
@@ -130,12 +129,57 @@ describe('apiClient error object', () => {
     },
   );
 
-  it('shows the general validation text for a 400 without a field map', async () => {
-    const error = await failureOf(json({ error: 'ID indikator tidak valid' }, 400));
+  it('shows the server sentence for a 400 without a field map', async () => {
+    const error = await failureOf(json({ error: 'Judul halaman tidak boleh memuat HTML.' }, 400));
 
-    expect(error.userMessage).toBe('Periksa kembali isian yang ditandai.');
+    expect(error.userMessage).toBe('Judul halaman tidak boleh memuat HTML.');
+    expect(error.serverMessage).toBe('Judul halaman tidak boleh memuat HTML.');
     expect(error.fieldErrors).toEqual({});
-    expect(error.userMessage).not.toContain('ID indikator');
+  });
+
+  it('falls back to the general text when a 400 body carries no message', async () => {
+    const error = await failureOf(json({}, 400));
+
+    expect(error.message).toBe('Permintaan gagal (HTTP 400).');
+    expect(error.serverMessage).toBeUndefined();
+    expect(error.userMessage).toBe(USER_MESSAGES.validation);
+    expect(error.userMessage).not.toContain('HTTP 400');
+  });
+
+  it('shows only approved text for a 500 that carries a technical message', async () => {
+    const raw =
+      'PrismaClientKnownRequestError: SQLSTATE[23000] at Object.<anonymous> (/app/x.js:1)';
+    const error = await failureOf(json({ error: raw }, 500));
+
+    expect(error.userMessage).toBe(USER_MESSAGES.server);
+    expect(error.userMessage).not.toContain('Prisma');
+    expect(toUserMessage(error, 'menyimpan indikator').message).toBe(
+      `Gagal menyimpan indikator. ${USER_MESSAGES.server}`,
+    );
+  });
+
+  it('uses the concurrent-edit wording for the Ketua RT stale-ownership 409 the backend sends', async () => {
+    const error = await failureOf(
+      json(
+        {
+          error: 'Lokasi RT telah berubah. Muat ulang data RT sebelum menyimpan.',
+          code: 'STALE_WRITE',
+        },
+        409,
+      ),
+    );
+
+    expect(error.status).toBe(409);
+    expect(error.code).toBe('STALE_WRITE');
+    expect(error.userMessage).toBe(USER_MESSAGES.stale);
+  });
+
+  it('uses the neutral conflict wording for the RT-already-covered 409 (no code)', async () => {
+    const error = await failureOf(
+      json({ error: 'RT 5 sudah dicakup oleh titik ketua_rt lain (p-2)' }, 409),
+    );
+
+    expect(error.userMessage).toBe(USER_MESSAGES.conflict);
   });
 
   it('exposes a server field map as fieldErrors while keeping the general validation text', async () => {
@@ -189,6 +233,21 @@ describe('apiClient error object', () => {
     const error = await apiRequestJson('/api/indicators').catch((e: unknown) => e);
 
     expect((error as ApiError).message).toBe(REFRESH_UNAVAILABLE_MESSAGE);
+    expect((error as ApiError).userMessage).toBe(READ_USER_MESSAGES.server);
+  });
+
+  it('keeps the saving wording when a write hits a transient refresh failure', async () => {
+    useAuthStore().setAuth(EDITOR, 'expired-token');
+    stubFetch((url) => {
+      if (url === '/api/auth/refresh') return json({ error: 'boom' }, 503);
+      return json({ error: 'Token tidak valid' }, 401);
+    });
+
+    const error = await apiRequestJson('/api/indicators/ind-1', {
+      method: 'PATCH',
+      body: '{}',
+    }).catch((e: unknown) => e);
+
     expect((error as ApiError).userMessage).toBe(USER_MESSAGES.server);
   });
 
@@ -226,9 +285,22 @@ describe('apiClient error object', () => {
       expect(error).toBeInstanceOf(ApiError);
       expect((error as ApiError).status).toBe(0);
       expect((error as ApiError).code).toBe('NETWORK_ERROR');
-      expect((error as ApiError).message).toBe(USER_MESSAGES.network);
-      expect((error as ApiError).userMessage).toBe(USER_MESSAGES.network);
+      expect((error as ApiError).message).toBe(READ_USER_MESSAGES.network);
+      expect((error as ApiError).userMessage).toBe(READ_USER_MESSAGES.network);
+      expect((error as ApiError).userMessage).not.toContain('belum tersimpan');
       expect((error as ApiError).userMessage).not.toContain('Failed to fetch');
+    });
+
+    it('keeps the "belum tersimpan" wording when a write cannot reach the server', async () => {
+      stubFetch(offline);
+
+      const error = await apiRequestJson('/api/indicators/ind-1', {
+        method: 'PATCH',
+        body: '{}',
+      }).catch((e: unknown) => e);
+
+      expect((error as ApiError).method).toBe('PATCH');
+      expect((error as ApiError).userMessage).toBe(USER_MESSAGES.network);
     });
 
     it('wraps a network failure on the replay after a refresh the same way', async () => {
@@ -244,7 +316,7 @@ describe('apiClient error object', () => {
       const error = await apiRequestJson('/api/indicators').catch((e: unknown) => e);
 
       expect((error as ApiError).code).toBe('NETWORK_ERROR');
-      expect((error as ApiError).userMessage).toBe(USER_MESSAGES.network);
+      expect((error as ApiError).userMessage).toBe(READ_USER_MESSAGES.network);
       expect(dataCalls).toBe(2);
     });
 
@@ -263,7 +335,7 @@ describe('apiClient error object', () => {
       const error = await apiRequestJson('/api/indicators').catch((e: unknown) => e);
       const banner = toUserMessage(error, 'memuat indikator').message;
 
-      expect(banner).toBe(`Gagal memuat indikator. ${USER_MESSAGES.network}`);
+      expect(banner).toBe(`Gagal memuat indikator. ${READ_USER_MESSAGES.network}`);
       expect(banner).not.toContain('Failed to fetch');
     });
   });

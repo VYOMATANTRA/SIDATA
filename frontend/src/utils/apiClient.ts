@@ -4,9 +4,9 @@ import {
   NETWORK_ERROR_CODE,
   REFRESH_UNAVAILABLE_MESSAGE,
   SESSION_EXPIRED_MESSAGE,
+  approvedMessage,
   sanitizeFieldErrors,
   toUserMessage,
-  USER_MESSAGES,
 } from './userMessages';
 
 export { REFRESH_UNAVAILABLE_MESSAGE, SESSION_EXPIRED_MESSAGE };
@@ -29,6 +29,14 @@ export interface ApiErrorInit {
   body?: unknown;
   /** Field-level messages, present only when the server sends a field map. */
   fieldErrors?: Record<string, string>;
+  /**
+   * The text the server sent in its error body, undefined when it sent none. Kept apart from
+   * `message` (which falls back to a synthetic "Permintaan gagal (HTTP n)") so
+   * `toUserMessage` can tell a real server sentence from the placeholder.
+   */
+  serverMessage?: string;
+  /** HTTP method of the failed request; reads get wording that does not mention saving. */
+  method?: string;
 }
 
 /**
@@ -43,6 +51,8 @@ export class ApiError extends Error {
   code: string | undefined;
   body: unknown;
   fieldErrors: Record<string, string>;
+  serverMessage: string | undefined;
+  method: string | undefined;
   /** Approved plain-Indonesian text for a banner or dialog. Never the raw server message. */
   userMessage: string;
 
@@ -53,6 +63,8 @@ export class ApiError extends Error {
     this.code = init.code;
     this.body = init.body;
     this.fieldErrors = init.fieldErrors ?? {};
+    this.serverMessage = init.serverMessage;
+    this.method = init.method;
     this.userMessage = toUserMessage(this).message;
   }
 }
@@ -100,7 +112,11 @@ async function send(path: string, init: RequestInit): Promise<Response> {
   } catch (error) {
     if (isAbortError(error)) throw error;
     logDiagnostic('network failure', { path, error: String(error) });
-    throw new ApiError(USER_MESSAGES.network, 0, { code: NETWORK_ERROR_CODE });
+    const method = (init.method ?? 'GET').toUpperCase();
+    throw new ApiError(approvedMessage('network', method), 0, {
+      code: NETWORK_ERROR_CODE,
+      method,
+    });
   }
 }
 
@@ -133,7 +149,9 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
       // The refresh endpoint failed, not the session: throwing here (rather than returning the
       // original 401) keeps the caller from showing "please log in again" to a user who is
       // still signed in.
-      throw new ApiError(REFRESH_UNAVAILABLE_MESSAGE, 503);
+      throw new ApiError(REFRESH_UNAVAILABLE_MESSAGE, 503, {
+        method: (init.method ?? 'GET').toUpperCase(),
+      });
     }
     if (outcome === 'denied') {
       return response;
@@ -147,17 +165,6 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   // Safe to replay because every body in this app is a JSON string. A streaming body would have
   // been consumed by the first attempt.
   return send(path, init);
-}
-
-/**
- * Pulls the message out of an error response. The backend answers with `{ error }` for
- * service/validation failures and `{ message }` on success bodies; a non-JSON body (an HTML
- * error page, an empty 502) falls back to the caller's generic text rather than throwing
- * over the top of the original failure.
- */
-export async function readErrorMessage(response: Response, fallback: string): Promise<string> {
-  const body = await readErrorBody(response);
-  return textField(fieldOf(body, 'error')) ?? textField(fieldOf(body, 'message')) ?? fallback;
 }
 
 /** Parses an error response's JSON body; a non-JSON body (HTML error page) yields undefined. */
@@ -179,6 +186,15 @@ function textField(value: unknown): string | undefined {
   return typeof value === 'string' && value !== '' ? value : undefined;
 }
 
+/**
+ * The message an error body carries. The backend answers with `{ error }` for service and
+ * validation failures and `{ message }` on success bodies; undefined when the body is not JSON
+ * or has neither.
+ */
+function serverMessageOf(body: unknown): string | undefined {
+  return textField(fieldOf(body, 'error')) ?? textField(fieldOf(body, 'message'));
+}
+
 /** Raw failure details go to the dev console only. Nothing logged here reaches the UI. */
 function logDiagnostic(label: string, detail: Record<string, unknown>): void {
   if (import.meta.env.DEV) {
@@ -186,9 +202,13 @@ function logDiagnostic(label: string, detail: Record<string, unknown>): void {
   }
 }
 
-async function apiErrorFromResponse(response: Response, path: string): Promise<ApiError> {
+async function apiErrorFromResponse(
+  response: Response,
+  path: string,
+  method: string,
+): Promise<ApiError> {
   const body = await readErrorBody(response);
-  const serverMessage = textField(fieldOf(body, 'error')) ?? textField(fieldOf(body, 'message'));
+  const serverMessage = serverMessageOf(body);
   const code = textField(fieldOf(body, 'code'));
   const message =
     response.status === 401
@@ -201,13 +221,15 @@ async function apiErrorFromResponse(response: Response, path: string): Promise<A
     code,
     body,
     fieldErrors: sanitizeFieldErrors(fieldOf(body, 'fieldErrors')),
+    serverMessage,
+    method,
   });
 }
 
 export async function apiRequestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await apiFetch(path, init);
   if (!response.ok) {
-    throw await apiErrorFromResponse(response, path);
+    throw await apiErrorFromResponse(response, path, (init.method ?? 'GET').toUpperCase());
   }
   return (await response.json()) as T;
 }
