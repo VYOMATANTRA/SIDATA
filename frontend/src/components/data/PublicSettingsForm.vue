@@ -144,6 +144,9 @@ const dirty = computed(() => {
 });
 
 /** Always says what is true: saved, unsaved, saving, or a failed save with the draft kept. */
+/** Lets the dialog ask "is there unsaved work?" before it closes. */
+defineExpose({ isDirty: dirty });
+
 const saveStateText = computed(() => {
   if (props.busy) return 'Menyimpan perubahan…';
   if (props.serverError) return 'Perubahan belum tersimpan. Isian Anda masih ada di formulir.';
@@ -354,10 +357,16 @@ function handleSubmit(): void {
         {{ saveStateText }}
       </p>
       <div class="flex items-center justify-end gap-3">
-        <BaseButton variant="secondary" size="md" :disabled="busy" @click="emit('cancel')">
+        <BaseButton
+          variant="secondary"
+          size="md"
+          class="min-h-11"
+          :disabled="busy"
+          @click="emit('cancel')"
+        >
           Batal
         </BaseButton>
-        <BaseButton type="submit" variant="primary" size="md" :disabled="busy">
+        <BaseButton type="submit" variant="primary" size="md" class="min-h-11" :disabled="busy">
           {{ busy ? 'Menyimpan…' : 'Simpan perubahan' }}
         </BaseButton>
       </div>

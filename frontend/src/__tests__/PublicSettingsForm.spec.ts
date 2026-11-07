@@ -206,6 +206,20 @@ describe('PublicSettingsForm.vue', () => {
     wrapper.unmount();
   });
 
+  it('exposes dirtiness and keeps every button at least 44px tall', async () => {
+    const wrapper = mountForm();
+    await flushPromises();
+    expect((wrapper.vm as unknown as { isDirty: boolean }).isDirty).toBe(false);
+    await wrapper.find('input#settings-appName').setValue('Lain');
+    expect((wrapper.vm as unknown as { isDirty: boolean }).isDirty).toBe(true);
+    const actions = wrapper
+      .findAll('button')
+      .filter((button) => ['Batal', 'Simpan perubahan'].includes(button.text()));
+    expect(actions).toHaveLength(2);
+    for (const button of actions) expect(button.classes()).toContain('min-h-11');
+    wrapper.unmount();
+  });
+
   it('emits cancel from the Batal button', async () => {
     const wrapper = mountForm();
     const cancel = wrapper.findAll('button').find((button) => button.text() === 'Batal');
@@ -289,26 +303,179 @@ describe('PublicSettingsForm in the CMS dialog', () => {
     vi.restoreAllMocks();
   });
 
-  it('starts from the stored view, and Batal leaves the stored settings untouched', async () => {
-    const patches = installFetch([]);
-    const { wrapper, store } = await openSettingsDialog();
-
+  it('starts from the stored view', async () => {
+    installFetch([]);
+    const { wrapper } = await openSettingsDialog();
     expect(dialogRoot().find('[role="dialog"]').exists()).toBe(true);
     expect(leafletState.center).toEqual({ lat: -1.3, lng: 117.0 });
     expect(leafletState.zoom).toBe(15);
-
-    panTo(-1.5, 117.5, 10);
-    await flushPromises();
-    const cancel = dialogRoot()
-      .findAll('[role="dialog"] button')
-      .find((button) => button.text() === 'Batal');
-    await cancel?.trigger('click');
-    await flushPromises();
-
-    expect(dialogRoot().find('[role="dialog"]').exists()).toBe(false);
-    expect(store.settings.defaultCoordinates).toEqual({ lat: -1.3, lon: 117.0, zoom: 15 });
-    expect(patches).toHaveLength(0);
     wrapper.unmount();
+  });
+
+  describe('protecting unsaved changes', () => {
+    const prompt = () => dialogRoot().find('[data-test="settings-discard-prompt"]');
+    const dialogButton = (label: string) =>
+      dialogRoot()
+        .findAll('[role="dialog"] button')
+        .find((button) => button.text() === label);
+    const pressEscape = () =>
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    async function makeDirty() {
+      panTo(-1.5, 117.5, 10);
+      await flushPromises();
+    }
+
+    it('closes a clean form at once, with no prompt, via Batal, Escape and the backdrop', async () => {
+      installFetch([]);
+      const { wrapper } = await openSettingsDialog();
+      await dialogButton('Batal')?.trigger('click');
+      await flushPromises();
+      expect(prompt().exists()).toBe(false);
+      expect(dialogRoot().find('[role="dialog"]').exists()).toBe(false);
+      wrapper.unmount();
+
+      installFetch([]);
+      const second = await openSettingsDialog();
+      pressEscape();
+      await flushPromises();
+      expect(dialogRoot().find('[role="dialog"]').exists()).toBe(false);
+      second.wrapper.unmount();
+
+      installFetch([]);
+      const third = await openSettingsDialog();
+      await dialogRoot().find('[role="presentation"]').trigger('click');
+      await flushPromises();
+      expect(dialogRoot().find('[role="dialog"]').exists()).toBe(false);
+      third.wrapper.unmount();
+    });
+
+    it('asks before discarding a dirty draft and keeps the draft on "Tetap di sini"', async () => {
+      const patches = installFetch([]);
+      const { wrapper } = await openSettingsDialog();
+      await dialogRoot().find('input#settings-appName').setValue('Nama baru');
+      await makeDirty();
+
+      await dialogButton('Batal')?.trigger('click');
+      await flushPromises();
+
+      const alert = prompt();
+      expect(alert.exists()).toBe(true);
+      expect(alert.attributes('role')).toBe('alertdialog');
+      expect(alert.attributes('aria-labelledby')).toBe('settings-discard-title');
+      expect(alert.attributes('aria-describedby')).toBe('settings-discard-body');
+      expect(alert.text()).toContain('Perubahan belum disimpan');
+      expect(alert.text()).toContain('Tutup tanpa menyimpan perubahan?');
+      expect(document.activeElement?.textContent?.trim()).toBe('Tetap di sini');
+      expect(dialogRoot().find('[role="dialog"] form').isVisible()).toBe(false);
+
+      await dialogRoot().find('[data-test="settings-discard-keep"]').trigger('click');
+      await flushPromises();
+      expect(prompt().exists()).toBe(false);
+      const form = dialogRoot().find('[role="dialog"] form');
+      expect(form.isVisible()).toBe(true);
+      expect((dialogRoot().find('input#settings-appName').element as HTMLInputElement).value).toBe(
+        'Nama baru',
+      );
+      expect(patches).toHaveLength(0);
+      wrapper.unmount();
+    });
+
+    it('discards the draft on "Tutup tanpa menyimpan" and leaves the stored settings unchanged', async () => {
+      const patches = installFetch([]);
+      const { wrapper, store } = await openSettingsDialog();
+      await makeDirty();
+      await dialogButton('Batal')?.trigger('click');
+      await flushPromises();
+      await dialogRoot().find('[data-test="settings-discard-confirm"]').trigger('click');
+      await flushPromises();
+
+      expect(dialogRoot().find('[role="dialog"]').exists()).toBe(false);
+      expect(store.settings.defaultCoordinates).toEqual({ lat: -1.3, lon: 117.0, zoom: 15 });
+      expect(patches).toHaveLength(0);
+      wrapper.unmount();
+    });
+
+    it('prompts on Escape and on the backdrop, and both mean "stay" while the prompt is shown', async () => {
+      installFetch([]);
+      const { wrapper } = await openSettingsDialog();
+      await makeDirty();
+
+      pressEscape();
+      await flushPromises();
+      expect(prompt().exists()).toBe(true);
+
+      pressEscape();
+      await flushPromises();
+      expect(prompt().exists()).toBe(true);
+      expect(dialogRoot().find('[role="dialog"]').exists()).toBe(true);
+
+      await dialogRoot().find('[role="presentation"]').trigger('click');
+      await flushPromises();
+      expect(prompt().exists()).toBe(true);
+      expect(dialogRoot().find('[role="dialog"]').exists()).toBe(true);
+      wrapper.unmount();
+    });
+
+    it('prompts when the close button is used with a dirty draft', async () => {
+      installFetch([]);
+      const { wrapper } = await openSettingsDialog();
+      await makeDirty();
+      await dialogRoot().find('[aria-label="Tutup dialog"]').trigger('click');
+      await flushPromises();
+      expect(prompt().exists()).toBe(true);
+      wrapper.unmount();
+    });
+
+    it('cannot be dismissed while a save is in flight', async () => {
+      let release: (response: Response) => void = () => undefined;
+      globalThis.fetch = vi.fn<typeof fetch>(
+        async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = String(input);
+          if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-token' });
+          if (url === '/api/settings/public' && init?.method === 'PATCH') {
+            return new Promise<Response>((resolve) => {
+              release = resolve;
+            });
+          }
+          if (url === '/api/settings/public') return json({ settings: SETTINGS });
+          if (url === '/api/pages?include=sections') return json({ pages: [] });
+          if (url === '/api/indicators?pageSize=200') {
+            return json({ indicators: [], total: 0, page: 1, pageSize: 200 });
+          }
+          if (url === '/api/indicator-tables?pageSize=200') {
+            return json({ tables: [], total: 0, page: 1, pageSize: 200 });
+          }
+          if (url === '/api/content-blocks') return json({ blocks: [] });
+          throw new Error(`unexpected fetch: ${url}`);
+        },
+      ) as typeof fetch;
+      const { wrapper } = await openSettingsDialog();
+      await makeDirty();
+      await dialogRoot().find('[role="dialog"] form').trigger('submit');
+      await flushPromises();
+
+      pressEscape();
+      await dialogRoot().find('[role="presentation"]').trigger('click');
+      await flushPromises();
+      expect(dialogRoot().find('[role="dialog"]').exists()).toBe(true);
+      expect(prompt().exists()).toBe(false);
+
+      release(json({ message: 'ok', settings: SETTINGS }));
+      await flushPromises();
+      wrapper.unmount();
+    });
+
+    it('closes without a prompt after a successful save', async () => {
+      installFetch([json({ message: 'ok', settings: SETTINGS })]);
+      const { wrapper } = await openSettingsDialog();
+      await makeDirty();
+      await dialogRoot().find('[role="dialog"] form').trigger('submit');
+      await flushPromises();
+      expect(prompt().exists()).toBe(false);
+      expect(dialogRoot().find('[role="dialog"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
   });
 
   it('keeps the draft and shows a plain-Indonesian message when saving fails, then saves on retry', async () => {

@@ -90,6 +90,11 @@ const activeTableId = ref<string | null>(null);
 const activeTable = ref<IndicatorTableDetail | null>(null);
 const activeContentBlock = ref<ContentBlock | null>(null);
 const isEditingSettings = ref(false);
+const settingsForm = ref<InstanceType<typeof PublicSettingsForm> | null>(null);
+const settingsDiscardPromptOpen = ref(false);
+const settingsKeepButton = ref<HTMLButtonElement | null>(null);
+/** Control that had focus when the discard prompt opened, so "Tetap di sini" can give it back. */
+let settingsFocusBeforePrompt: HTMLElement | null = null;
 
 const isTableDetailLoading = ref(false);
 const saving = ref(false);
@@ -346,6 +351,8 @@ async function openTable(table: IndicatorTable): Promise<void> {
 }
 
 function resetEditor(): void {
+  settingsDiscardPromptOpen.value = false;
+  settingsFocusBeforePrompt = null;
   activeScalar.value = null;
   activeTableId.value = null;
   activeTable.value = null;
@@ -374,6 +381,37 @@ async function handleContentBlockSubmit(payload: {
   } finally {
     saving.value = false;
   }
+}
+
+/**
+ * Batal, Escape, the close button and the backdrop all land here for the settings dialog. A dirty
+ * draft asks first; while the prompt is up, Escape and the backdrop mean "stay".
+ */
+function requestCloseSettings(): void {
+  if (saving.value || settingsDiscardPromptOpen.value) return;
+  if (!settingsForm.value?.isDirty) {
+    resetEditor();
+    return;
+  }
+  const active = document.activeElement;
+  settingsFocusBeforePrompt = active instanceof HTMLElement ? active : null;
+  settingsDiscardPromptOpen.value = true;
+  void nextTick(() => settingsKeepButton.value?.focus());
+}
+
+function keepEditingSettings(): void {
+  settingsDiscardPromptOpen.value = false;
+  const target = settingsFocusBeforePrompt;
+  settingsFocusBeforePrompt = null;
+  void nextTick(() => {
+    if (target?.isConnected) target.focus();
+    else document.getElementById('settings-appName')?.focus();
+  });
+}
+
+function handleModalClose(): void {
+  if (isEditingSettings.value) requestCloseSettings();
+  else resetEditor();
 }
 
 async function handleSettingsSubmit(patch: Partial<PublicSettings>): Promise<void> {
@@ -600,7 +638,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
       :description="modalDescription"
       :size="modalSize"
       :busy="saving"
-      @close="resetEditor"
+      @close="handleModalClose"
     >
       <p v-if="isTableDetailLoading" class="text-sm text-slate-600" aria-live="polite">
         Memuat rincian tabel…
@@ -635,16 +673,54 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
 
       <PublicSettingsForm
         v-else-if="isEditingSettings"
+        v-show="!settingsDiscardPromptOpen"
+        ref="settingsForm"
         :settings="settingsStore.settings"
         :busy="saving"
         :server-error="serverError"
         @submit="handleSettingsSubmit"
-        @cancel="resetEditor"
+        @cancel="requestCloseSettings"
       />
 
       <p v-else-if="serverError" role="alert" class="text-sm text-rose-700">
         {{ serverError }}
       </p>
+
+      <div
+        v-if="isEditingSettings && settingsDiscardPromptOpen"
+        role="alertdialog"
+        aria-labelledby="settings-discard-title"
+        aria-describedby="settings-discard-body"
+        class="space-y-4"
+        data-test="settings-discard-prompt"
+      >
+        <h3 id="settings-discard-title" class="text-brand-navy text-base font-semibold">
+          Perubahan belum disimpan
+        </h3>
+        <p id="settings-discard-body" class="text-brand-navy text-sm">
+          Tutup tanpa menyimpan perubahan?
+        </p>
+        <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <BaseButton
+            variant="secondary"
+            size="md"
+            class="min-h-11"
+            data-test="settings-discard-confirm"
+            @click="resetEditor"
+          >
+            Tutup tanpa menyimpan
+          </BaseButton>
+          <button
+            ref="settingsKeepButton"
+            type="button"
+            class="bg-brand-navy hover:bg-brand-navy/90 focus-visible:outline-focus-ring min-h-11 rounded-btn px-5 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+            data-test="settings-discard-keep"
+            @click="keepEditingSettings"
+          >
+            Tetap di sini
+          </button>
+        </div>
+      </div>
     </BaseModal>
   </div>
 </template>
