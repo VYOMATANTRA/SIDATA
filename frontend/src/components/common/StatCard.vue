@@ -230,7 +230,7 @@ const variantClasses = computed(() => {
           <span
             class="order-2 mt-1 max-w-full text-[10px] leading-tight sm:text-xs md:text-sm"
             :class="
-              variant === 'light' ? 'font-medium text-text-muted' : 'font-normal text-text-inverse-muted'
+              variant === 'light' ? 'font-medium text-text-muted' : 'font-normal text-text-inverse'
             "
           >
             {{ item.label }}
