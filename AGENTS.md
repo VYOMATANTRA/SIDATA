@@ -154,7 +154,9 @@ product rules. Things to know when touching it:
 - **Serving** resolves `storage_key` under the canonical upload root with a realpath containment check and
   derives `Content-Type` from the stored extension. Public routes return 404 unless `attached_at` is set.
 - **Content PRs** attach media inside their own transaction with `attachMedia(tx, ids, { purpose })` and
-  call `detachMedia` when a reference is removed. Do not set `attached_at` any other way.
+  call `detachMedia` when a reference is removed. Do not set `attached_at`/`detached_at` any other way:
+  `detachMedia` stamps `detached_at`, `attachMedia` clears it, and cleanup ages an unattached asset from
+  `COALESCE(detached_at, created_at)` so a swapped-out old asset keeps a full grace period.
 - **New table grants**: `media_assets` is in `scripts/grants/audit-logs-grants.sql`.
 - **Run `npm run media:cleanup` on a schedule** (see README Deployment) or abandoned uploads accumulate.
 - sharp ships prebuilt binaries for linux x64/arm64 including musl (`node:22-alpine`); the image build

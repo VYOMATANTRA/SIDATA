@@ -382,6 +382,9 @@ model MediaAsset {
   createdById String?   @map("created_by_id")
   createdAt   DateTime  @default(now()) @map("created_at")
   attachedAt  DateTime? @map("attached_at")
+  /// Set by detachMedia, cleared by attachMedia. Cleanup measures an unattached asset's age from
+  /// COALESCE(detachedAt, createdAt), so a swapped-out old asset still gets a full grace period.
+  detachedAt  DateTime? @map("detached_at")
 
   createdBy User? @relation("MediaAssetCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
 

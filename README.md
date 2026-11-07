@@ -157,7 +157,8 @@ Checklist for a new environment (Docker on a VPS). Background: [`AGENTS.md`](AGE
 5. If behind a reverse proxy, set `TRUST_PROXY`.
 6. **Media uploads (`media_assets` + `UPLOAD_DIR`).**
    - Apply the grants script (step 3) again after the migration that adds `media_assets`; it already
-     contains that table's line.
+     contains that table's line. The later `add_media_assets_detached_at` migration only adds a column,
+     so it needs no grants change.
    - Create the host directory for the bind mount (`UPLOADS_HOST_DIR`, default `./uploads`) and make it
      writable by the user the backend runs as (the dev image runs as root). The server creates the
      `_staging/`, `photos/`, `documents/` and `derivatives/` subdirectories itself and refuses to start,
@@ -170,8 +171,9 @@ Checklist for a new environment (Docker on a VPS). Background: [`AGENTS.md`](AGE
      1 MiB would reject every real upload), and must not serve the uploads directory itself: the API
      is the only reader, because it enforces the attached/private rule.
    - Schedule `npm run media:cleanup` (daily is plenty). It removes `_staging/` directories and
-     unattached uploads older than the grace period (24 h, `MEDIA_CLEANUP_GRACE_HOURS` or
-     `--grace-hours=N`) and writes a count-only `media.cleanup` audit row. It uses the app's normal DB
+     unattached uploads whose grace period (24 h, `MEDIA_CLEANUP_GRACE_HOURS` or
+     `--grace-hours=N`) has passed, counted from the moment content detached them (`detached_at`), or from
+     the upload for assets that were never attached and writes a count-only `media.cleanup` audit row. It uses the app's normal DB
      user (no privileged connection needed). Host cron, from `backend/`:
      `30 3 * * * cd /path/to/SIDATA/backend && npm run media:cleanup >> /var/log/sidata-media-cleanup.log 2>&1`;
      under Compose: `docker compose exec backend npm run media:cleanup` from the host's cron. Add

@@ -10,6 +10,18 @@ type ErrnoError = Error & { code?: string };
 export const DEFAULT_MEDIA_CLEANUP_GRACE_HOURS = 24;
 const ASSET_BATCH_SIZE = 200;
 
+/**
+ * Unattached AND past the grace period. An unattached asset's age runs from the moment it was
+ * detached (COALESCE(detachedAt, createdAt) < cutoff); one that was never attached is aged from
+ * its upload. Shared by the scan and the guarded delete so both agree on what is collectable.
+ */
+function collectableWhere(cutoff: Date) {
+  return {
+    attachedAt: null,
+    OR: [{ detachedAt: { lt: cutoff } }, { detachedAt: null, createdAt: { lt: cutoff } }],
+  };
+}
+
 export interface MediaCleanupClient {
   mediaAsset: Pick<typeof prisma.mediaAsset, 'findMany' | 'deleteMany'>;
 }
@@ -82,9 +94,9 @@ async function cleanStaging(root: string, cutoffMs: number, dryRun: boolean): Pr
 
 /**
  * Deletes (a) staging directories older than the grace period and (b) unattached asset rows and
- * their files older than the grace period. Safe to re-run: every step tolerates already-missing
- * files, and a row is deleted with `attached_at IS NULL` in the WHERE so an asset that content
- * attached in the meantime is never removed. The row goes first and files second; the reverse
+ * their files whose grace period (measured from detachment, else upload) has passed. Safe to re-run: every step tolerates already-missing
+ * files, and a row is deleted with `attached_at IS NULL` and the age condition in the WHERE so an
+ * asset that content attached (or re-detached) in the meantime is never removed. The row goes first and files second; the reverse
  * order could leave an attached asset pointing at a deleted file.
  */
 export async function runMediaCleanup(options: MediaCleanupOptions): Promise<MediaCleanupResult> {
@@ -101,7 +113,7 @@ export async function runMediaCleanup(options: MediaCleanupOptions): Promise<Med
 
   for (;;) {
     const batch = await client.mediaAsset.findMany({
-      where: { attachedAt: null, createdAt: { lt: cutoff }, id: { gt: lastId } },
+      where: { ...collectableWhere(cutoff), id: { gt: lastId } },
       orderBy: { id: 'asc' },
       take: ASSET_BATCH_SIZE,
       select: { id: true, storageKey: true },
@@ -115,7 +127,7 @@ export async function runMediaCleanup(options: MediaCleanupOptions): Promise<Med
         continue;
       }
       const { count } = await client.mediaAsset.deleteMany({
-        where: { id: asset.id, attachedAt: null },
+        where: { id: asset.id, ...collectableWhere(cutoff) },
       });
       if (count !== 1) continue; // attached (or removed) in the meantime
       assetsRemoved += 1;

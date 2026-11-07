@@ -385,8 +385,8 @@ describe('attachMedia / detachMedia', () => {
           return args.where.id.in.flatMap((id) => (rows.has(id) ? [rows.get(id)!] : []));
         },
         updateMany: async (args: {
-          where: { id: { in: string[] }; attachedAt?: null };
-          data: { attachedAt: Date | null };
+          where: { id: { in: string[] }; attachedAt?: null | { not: null } };
+          data: { attachedAt: Date | null; detachedAt?: Date | null };
         }) => {
           calls.push({ method: 'updateMany', args });
           let count = 0;
@@ -394,7 +394,15 @@ describe('attachMedia / detachMedia', () => {
             const row = rows.get(id);
             if (!row) continue;
             if (args.where.attachedAt === null && row.attachedAt !== null) continue;
+            if (
+              args.where.attachedAt !== undefined &&
+              args.where.attachedAt !== null &&
+              row.attachedAt === null
+            ) {
+              continue;
+            }
             row.attachedAt = args.data.attachedAt;
+            if (args.data.detachedAt !== undefined) row.detachedAt = args.data.detachedAt;
             count += 1;
           }
           return { count };
@@ -485,7 +493,25 @@ describe('attachMedia / detachMedia', () => {
       (e: unknown) => e instanceof MediaServiceError && e.code === 'MEDIA_PURPOSE_MISMATCH',
     );
     assert.notEqual(rows.get(ID_A)!.attachedAt, null);
-    await detachMedia(tx, [ID_A], { purpose: 'cerita' });
+    const when = new Date('2026-07-01T00:00:00Z');
+    await detachMedia(tx, [ID_A], { purpose: 'cerita' }, when);
     assert.equal(rows.get(ID_A)!.attachedAt, null);
+    assert.equal(rows.get(ID_A)!.detachedAt?.toISOString(), when.toISOString());
+  });
+
+  it('detachMedia does not move detachedAt of an asset that is already unattached', async () => {
+    const first = new Date('2026-07-01T00:00:00Z');
+    const { tx, rows } = fakeTx([makeAsset({ id: ID_A, detachedAt: first })]);
+    await detachMedia(tx, [ID_A], { purpose: 'cerita' }, new Date('2026-08-01T00:00:00Z'));
+    assert.equal(rows.get(ID_A)!.detachedAt?.toISOString(), first.toISOString());
+  });
+
+  it('attachMedia clears detachedAt again', async () => {
+    const { tx, rows } = fakeTx([
+      makeAsset({ id: ID_A, detachedAt: new Date('2026-07-01T00:00:00Z') }),
+    ]);
+    await attachMedia(tx, [ID_A], { purpose: 'cerita' }, new Date('2026-07-02T00:00:00Z'));
+    assert.notEqual(rows.get(ID_A)!.attachedAt, null);
+    assert.equal(rows.get(ID_A)!.detachedAt, null);
   });
 });

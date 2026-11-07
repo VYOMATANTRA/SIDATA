@@ -1,8 +1,9 @@
 // Scheduled cleanup for uploaded media (docs/SPEC.md §7 media_assets). Run it from cron, like the
 // audit pruner: it removes
 //   - `_staging/` upload directories older than the grace period (aborted/crashed uploads), and
-//   - unattached `media_assets` rows and their files older than the grace period (uploads an
-//     editor never saved into content, or assets content has since detached).
+//   - unattached `media_assets` rows and their files whose grace period has passed, measured from
+//     `detached_at` when content detached the asset, else from `created_at` (uploads an editor
+//     never saved into content).
 // Attached assets are never touched. Safe to re-run at any time.
 //
 // Uses the app's normal DB connection (media_assets keeps full DML in the grants script, unlike

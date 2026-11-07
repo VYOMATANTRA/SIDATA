@@ -245,7 +245,8 @@ export async function attachMedia(
 
   await tx.mediaAsset.updateMany({
     where: { id: { in: ids }, attachedAt: null },
-    data: { attachedAt: now },
+    // detachedAt is cleared too: a re-attached asset is no longer in its cleanup grace period.
+    data: { attachedAt: now, detachedAt: null },
   });
 
   const stillThere = await tx.mediaAsset.count({ where: { id: { in: ids } } });
@@ -255,18 +256,22 @@ export async function attachMedia(
 }
 
 /**
- * Takes assets back out of public delivery (attachedAt = null). The next `media:cleanup` run
- * removes them once they are older than its grace period, like any other unattached upload.
+ * Takes assets back out of public delivery (attachedAt = null) and stamps detachedAt. The next
+ * `media:cleanup` run removes them once COALESCE(detachedAt, createdAt) is older than its grace
+ * period — measured from the detach, not the upload, so an old asset that content just swapped
+ * out keeps its full grace period (e.g. to undo the change). Already-unattached assets keep
+ * their existing detachedAt, so repeating a detach never extends the clock.
  */
 export async function detachMedia(
   tx: MediaTransactionClient,
   assetIds: readonly string[],
   context: MediaAttachContext,
+  now: Date = new Date(),
 ): Promise<void> {
   const ids = await loadAndCheck(tx, assetIds, context);
   if (ids.length === 0) return;
   await tx.mediaAsset.updateMany({
-    where: { id: { in: ids } },
-    data: { attachedAt: null },
+    where: { id: { in: ids }, attachedAt: { not: null } },
+    data: { attachedAt: null, detachedAt: now },
   });
 }

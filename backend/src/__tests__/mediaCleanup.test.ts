@@ -12,6 +12,11 @@ import {
 import type { AuditEntry } from '../services/audit.service.js';
 import { UPLOAD_SUBDIRS } from '../utils/uploadRoot.js';
 import { parseGraceHours } from '../../scripts/cleanup-media.js';
+import {
+  attachMedia,
+  detachMedia,
+  type MediaTransactionClient,
+} from '../services/media.service.js';
 import { makeAsset } from './helpers/mediaDbStub.js';
 import type { MediaAsset } from '../../generated/prisma/client.js';
 
@@ -51,30 +56,37 @@ async function putAssetFiles(asset: MediaAsset): Promise<{ file: string; derivat
   return { file, derivative };
 }
 
+interface CollectWhere {
+  attachedAt: null;
+  OR: Array<{ detachedAt: { lt: Date } } | { detachedAt: null; createdAt: { lt: Date } }>;
+}
+
+/** Evaluates the cleanup's where-clause the way MySQL would: COALESCE(detachedAt, createdAt). */
+function collectable(row: MediaAsset, where: CollectWhere): boolean {
+  if (row.attachedAt !== null) return false;
+  return where.OR.some((clause) =>
+    'createdAt' in clause
+      ? row.detachedAt === null && row.createdAt < clause.createdAt.lt
+      : row.detachedAt !== null && row.detachedAt < clause.detachedAt.lt,
+  );
+}
+
 function fakeClient(assets: MediaAsset[], opts: { raceLoses?: Set<string> } = {}) {
   const rows = new Map(assets.map((a) => [a.id, a]));
   const deletes: string[] = [];
   const client: MediaCleanupClient = {
     mediaAsset: {
-      findMany: (async (args: {
-        where: { attachedAt: null; createdAt: { lt: Date }; id: { gt: string } };
-        take: number;
-      }) =>
+      findMany: (async (args: { where: CollectWhere & { id: { gt: string } }; take: number }) =>
         [...rows.values()]
-          .filter(
-            (a) =>
-              a.attachedAt === null &&
-              a.createdAt < args.where.createdAt.lt &&
-              a.id > args.where.id.gt,
-          )
+          .filter((a) => collectable(a, args.where) && a.id > args.where.id.gt)
           .sort((x, y) => x.id.localeCompare(y.id))
           .slice(0, args.take)) as never,
-      deleteMany: (async (args: { where: { id: string; attachedAt: null } }) => {
+      deleteMany: (async (args: { where: CollectWhere & { id: string } }) => {
         const row = rows.get(args.where.id);
         if (opts.raceLoses?.has(args.where.id)) {
           if (row) row.attachedAt = NOW; // attached between the read and the delete
         }
-        if (!row || row.attachedAt !== null) return { count: 0 };
+        if (!row || !collectable(row, args.where)) return { count: 0 };
         rows.delete(args.where.id);
         deletes.push(args.where.id);
         return { count: 1 };
@@ -284,6 +296,95 @@ describe('runMediaCleanup: unattached assets', () => {
     });
     assert.equal(result.assetsRemoved, 450);
     assert.equal(deletes.length, 450);
+  });
+});
+
+describe('runMediaCleanup: grace period after detach', () => {
+  function txOver(rows: Map<string, MediaAsset>): MediaTransactionClient {
+    return {
+      mediaAsset: {
+        findMany: async (args: { where: { id: { in: string[] } } }) =>
+          args.where.id.in.flatMap((id) => (rows.has(id) ? [rows.get(id)!] : [])),
+        updateMany: async (args: {
+          where: { id: { in: string[] }; attachedAt?: null | { not: null } };
+          data: { attachedAt: Date | null; detachedAt?: Date | null };
+        }) => {
+          let count = 0;
+          for (const id of args.where.id.in) {
+            const row = rows.get(id);
+            if (!row) continue;
+            if (args.where.attachedAt === null && row.attachedAt !== null) continue;
+            if (args.where.attachedAt && row.attachedAt === null) continue;
+            row.attachedAt = args.data.attachedAt;
+            if (args.data.detachedAt !== undefined) row.detachedAt = args.data.detachedAt;
+            count += 1;
+          }
+          return { count };
+        },
+        count: async (args: { where: { id: { in: string[] } } }) =>
+          args.where.id.in.filter((id) => rows.has(id)).length,
+      },
+    } as unknown as MediaTransactionClient;
+  }
+
+  it('an old asset detached just now survives cleanup; it goes only after the grace from detachedAt', async () => {
+    // Uploaded 48h ago (older than the grace), attached, then swapped out 1h before NOW.
+    const old = asset(ID_OLD, { attachedAt: new Date(NOW.getTime() - 40 * HOUR) });
+    const files = await putAssetFiles(old);
+    const { client, rows, deletes } = fakeClient([old]);
+    const tx = txOver(rows);
+    await detachMedia(tx, [ID_OLD], { purpose: 'cerita' }, new Date(NOW.getTime() - 1 * HOUR));
+    const run = (at: Date) =>
+      runMediaCleanup({
+        root,
+        graceMs: GRACE,
+        now: at,
+        client,
+        recordAudit: noAudit().record,
+      });
+
+    assert.equal((await run(NOW)).assetsRemoved, 0);
+    assert.equal(existsSync(files.file), true);
+
+    // 23h59m after the detach: still inside the grace period.
+    assert.equal((await run(new Date(NOW.getTime() + 22 * HOUR + 59 * 60_000))).assetsRemoved, 0);
+    assert.deepEqual(deletes, []);
+
+    // Past the grace period measured from detachedAt: collected.
+    assert.equal((await run(new Date(NOW.getTime() + 24 * HOUR))).assetsRemoved, 1);
+    assert.deepEqual(deletes, [ID_OLD]);
+    assert.equal(existsSync(files.file), false);
+  });
+
+  it('an asset re-attached after being detached is never collected', async () => {
+    const old = asset(ID_OLD, { attachedAt: new Date(NOW.getTime() - 40 * HOUR) });
+    const files = await putAssetFiles(old);
+    const { client, rows } = fakeClient([old]);
+    const tx = txOver(rows);
+    await detachMedia(tx, [ID_OLD], { purpose: 'cerita' }, new Date(NOW.getTime() - 30 * HOUR));
+    await attachMedia(tx, [ID_OLD], { purpose: 'cerita' }, new Date(NOW.getTime() - 2 * HOUR));
+    assert.equal(rows.get(ID_OLD)!.detachedAt, null);
+    const result = await runMediaCleanup({
+      root,
+      graceMs: GRACE,
+      now: new Date(NOW.getTime() + 100 * HOUR),
+      client,
+      recordAudit: noAudit().record,
+    });
+    assert.equal(result.assetsRemoved, 0);
+    assert.equal(existsSync(files.file), true);
+  });
+
+  it('a never-attached upload is still aged from createdAt', async () => {
+    const { client, deletes } = fakeClient([asset(ID_OLD)]);
+    await runMediaCleanup({
+      root,
+      graceMs: GRACE,
+      now: NOW,
+      client,
+      recordAudit: noAudit().record,
+    });
+    assert.deepEqual(deletes, [ID_OLD]);
   });
 });
 
