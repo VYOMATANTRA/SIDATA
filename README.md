@@ -163,6 +163,8 @@ Checklist for a new environment (Docker on a VPS). Background: [`AGENTS.md`](AGE
      writable by the user the backend runs as (the dev image runs as root). The server creates the
      `_staging/`, `photos/`, `documents/` and `derivatives/` subdirectories itself and refuses to start,
      with a clear log line, if `UPLOAD_DIR` is unwritable or inside `backend/` or `frontend/`.
+   - The editor preview route (`/api/media/<id>/preview`) needs the `Authorization` header; the CMS loads it
+     with the authenticated API client and a blob URL, so the proxy must pass that header through.
    - **Back up the uploads directory and the `media_assets` table together**, from the same point in
      time. Either one alone is unrecoverable: rows without files serve 404, files without rows are never
      reachable and are not cleaned up.

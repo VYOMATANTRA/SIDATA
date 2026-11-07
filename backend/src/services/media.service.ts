@@ -45,6 +45,14 @@ export interface MediaAssetDto {
   width: number | null;
   height: number | null;
   originalName: string;
+  /**
+   * API PATH (same origin, e.g. `/api/media/<id>/preview`), not a browser-loadable URL. The route
+   * is Editor/Admin-only and authenticates with an `Authorization: Bearer` header, which `<img src>`
+   * and `<a href>` cannot send. The CMS must fetch it with the authenticated API client and show
+   * the result through a blob URL (`URL.createObjectURL`). There are deliberately no signed
+   * preview URLs. Public pages use `/api/media/<id>` and `/api/media/<id>/download` instead, once
+   * content has attached the asset.
+   */
   previewUrl: string;
 }
 

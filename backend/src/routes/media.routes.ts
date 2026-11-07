@@ -30,7 +30,9 @@ router.post(
   uploadMediaHandler,
 );
 
-// Editor preview: serves any asset, attached or not.
+// Editor preview: serves any asset, attached or not. It authenticates with the Authorization
+// header only (no cookie, no signed URL), so a bare <img src>/<a href> gets a 401: the CMS fetches it
+// with the authenticated API client and renders a blob URL. The DTO's `previewUrl` is this path.
 router.get(
   '/:id/preview',
   mediaReadLimiter,

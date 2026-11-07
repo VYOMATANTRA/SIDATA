@@ -13,6 +13,10 @@ import {
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import express from 'express';
+import jwt from 'jsonwebtoken';
+import mediaRouter from '../routes/media.routes.js';
+import { JWT_SECRET } from '../configs/index.js';
+import prisma from '../utils/prisma.js';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
@@ -613,6 +617,52 @@ describe('media storage under a dot-directory upload root', () => {
       );
       assert.equal(res.statusCode, 404, storageKey);
       assert.equal(res.sentFile, undefined);
+    }
+  });
+});
+
+describe('GET /api/media/:id/preview authentication contract', () => {
+  it('answers 401 without a token and 200 with an editor Bearer token', async () => {
+    const asset = makeAsset({ id: ID, attachedAt: null });
+    db.assets.set(asset.id, asset);
+    const full = path.join(root, ...asset.storageKey.split('/'));
+    await mkdir(path.dirname(full), { recursive: true });
+    await writeFile(full, 'webp-bytes');
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only stub of the singleton
+    const p = prisma as any;
+    const originalFindUser = p.user.findUnique;
+    p.user.findUnique = async ({ where }: { where: { id: string } }) => ({
+      id: where.id,
+      email: 'editor@example.com',
+      deletedAt: null,
+      role: { name: 'editor' },
+    });
+
+    const app = express();
+    app.use('/api/media', mediaRouter);
+    const server = http.createServer(app);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/media/${ID}`;
+
+      const anonymous = await fetch(`${base}/preview`);
+      assert.equal(anonymous.status, 401);
+
+      const token = jwt.sign({ id: 'editor-1' }, JWT_SECRET, { expiresIn: '5m' });
+      const authed = await fetch(`${base}/preview`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.equal(authed.status, 200);
+      assert.equal(authed.headers.get('cache-control'), 'private, no-store');
+      assert.equal(await authed.text(), 'webp-bytes');
+
+      // The same unattached asset stays invisible on the public route.
+      const publicRoute = await fetch(base);
+      assert.equal(publicRoute.status, 404);
+    } finally {
+      p.user.findUnique = originalFindUser;
+      await new Promise((resolve) => server.close(resolve));
     }
   });
 });

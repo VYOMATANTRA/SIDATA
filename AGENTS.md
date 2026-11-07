@@ -153,6 +153,10 @@ product rules. Things to know when touching it:
 - **Validation is by file signature**, not extension or client MIME. Limits live in `mediaPolicy.ts` only.
 - **Serving** resolves `storage_key` under the canonical upload root with a realpath containment check and
   derives `Content-Type` from the stored extension. Public routes return 404 unless `attached_at` is set.
+- **Editor preview contract**: `previewUrl` in the upload response is an API *path* (`/api/media/<id>/preview`),
+  not a browser-loadable URL. The route needs an `Authorization: Bearer` header, so the CMS must fetch it with
+  the authenticated API client (`apiFetch`) and display a blob URL (`URL.createObjectURL`); a bare `<img src>`
+  or `<a href>` gets 401. Decision: no signed URLs. Public pages use `/api/media/<id>` and `/download`.
 - **Content PRs** attach media inside their own transaction with `attachMedia(tx, ids, { purpose })` and
   call `detachMedia` when a reference is removed. Do not set `attached_at`/`detached_at` any other way:
   `detachMedia` stamps `detached_at`, `attachMedia` clears it, and cleanup ages an unattached asset from
