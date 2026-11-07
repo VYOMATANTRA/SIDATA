@@ -33,7 +33,7 @@ Deploy target: Docker on a self-managed VPS (may change pending stakeholder inpu
 | Build for production | `npm run build`      | `frontend/` |
 | Type-check           | `npm run type-check` | `frontend/` |
 | Run unit tests       | `npm run test:unit`  | `frontend/` |
-| Run e2e tests (Playwright) | `npm run test:e2e` (one-time `npx playwright install chromium`; not in CI yet) | `frontend/` |
+| Run e2e tests        | `npm run test:e2e`   | `frontend/` |
 | Lint & fix           | `npm run lint`       | `frontend/` |
 | Format code          | `npm run format`     | `frontend/` |
 
@@ -91,6 +91,7 @@ Backend runs on port from `PORT` env var (default 3000). Prisma client is genera
 - `src/__tests__/`: Unit tests with Vitest
 - `src/assets/`: Static assets, including `main.css` (Tailwind entry, imported in `main.ts`)
 - Styling: Tailwind CSS via Vite plugin
+- `e2e/` + `playwright.config.ts`: Playwright real-browser tests (offline mocks, own Vite on dedicated port 5199; one-time `npx playwright install chromium`); not in CI yet
 
 Key details:
 
