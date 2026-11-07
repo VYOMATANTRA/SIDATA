@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
+import { acquireBodyScrollLock } from '../../utils/bodyScrollLock';
 
 /**
  * Accessible modal dialog primitive.
@@ -40,8 +41,7 @@ const titleId = `${baseId}-title`;
 const descriptionId = `${baseId}-description`;
 
 let previouslyFocused: HTMLElement | null = null;
-let previousBodyOverflow = '';
-let scrollLocked = false;
+let releaseScrollLock: (() => void) | null = null;
 
 const sizeClasses = computed(() => {
   switch (props.size) {
@@ -83,16 +83,13 @@ function handleOverlayClick(): void {
 }
 
 function lockScroll(): void {
-  if (typeof document === 'undefined' || scrollLocked) return;
-  previousBodyOverflow = document.body.style.overflow;
-  document.body.style.overflow = 'hidden';
-  scrollLocked = true;
+  if (releaseScrollLock) return;
+  releaseScrollLock = acquireBodyScrollLock();
 }
 
 function unlockScroll(): void {
-  if (typeof document === 'undefined' || !scrollLocked) return;
-  document.body.style.overflow = previousBodyOverflow;
-  scrollLocked = false;
+  releaseScrollLock?.();
+  releaseScrollLock = null;
 }
 
 function restoreFocus(): void {
