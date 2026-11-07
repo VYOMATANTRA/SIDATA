@@ -422,7 +422,12 @@ function handleEscape(event: KeyboardEvent) {
   emit('escape');
 }
 
-defineExpose({ revealPoint, focusUserLocation });
+/** Re-measure after a sibling above the map expands or collapses. */
+function invalidateSize() {
+  map?.invalidateSize();
+}
+
+defineExpose({ revealPoint, focusUserLocation, invalidateSize });
 
 onUnmounted(() => {
   isUnmounted = true;
@@ -450,9 +455,15 @@ onUnmounted(() => {
 
 <template>
   <div
-    class="rounded-btn relative h-[420px] w-full overflow-hidden border border-gray-300 bg-gray-100 sm:h-[520px] lg:h-[640px]"
+    class="rounded-btn relative isolate z-0 h-[420px] w-full overflow-hidden border border-gray-300 bg-gray-100 sm:h-[520px] lg:h-[640px]"
+    data-test="interactive-map"
     @keydown="handleEscape"
   >
+    <!--
+      The root is a local stacking boundary (`isolate z-0`): Leaflet's panes (z-index 200-700) and
+      controls (800-1000) stay ordered among themselves but cannot compete with page UI such as
+      the summary overlay. Do not remove it or raise page z-indexes to compensate.
+    -->
     <div ref="mapContainer" data-test="map-canvas" class="h-full w-full" />
   </div>
 </template>

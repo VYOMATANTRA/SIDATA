@@ -8,6 +8,7 @@ import type { MapSummaryDTO, RtLeaderDTO, SpatialPointDTO } from '../types/maps'
 import { MANGGAR_MAP_ORIGIN } from '../constants/mapOrigin';
 
 const revealPointMock = vi.fn<(id: string) => void>();
+const invalidateSizeMock = vi.fn<() => void>();
 const MapStub = defineComponent({
   name: 'InteractiveMap',
   props: {
@@ -18,7 +19,7 @@ const MapStub = defineComponent({
   },
   emits: ['select-point', 'escape'],
   setup(_props, { expose, emit }) {
-    expose({ revealPoint: revealPointMock });
+    expose({ revealPoint: revealPointMock, invalidateSize: invalidateSizeMock });
     return () =>
       h('div', { 'data-test': 'map-stub' }, [
         h('button', {
@@ -132,6 +133,7 @@ async function mountReady() {
 
 beforeEach(() => {
   revealPointMock.mockClear();
+  invalidateSizeMock.mockClear();
   vi.stubGlobal(
     'fetch',
     vi.fn<typeof fetch>().mockImplementation(async (input) => {
@@ -185,7 +187,21 @@ describe('PetaView accessibility, filtering, and point selection', () => {
     expect(count.text()).toBe('Menampilkan 3 dari 3 titik.');
 
     // The summary control is kept as its own dropdown
-    expect(wrapper.text()).toContain('Ringkasan Data');
+    expect(wrapper.text()).toContain('Ringkasan data');
+  });
+
+  it('re-measures the map after the in-flow summary disclosure opens or closes', async () => {
+    const wrapper = await mountReady();
+    invalidateSizeMock.mockClear();
+
+    const trigger = wrapper.find('[data-test="map-summary-dropdown"] button');
+    await trigger.trigger('click');
+    await flushPromises();
+    expect(invalidateSizeMock).toHaveBeenCalledTimes(1);
+
+    await trigger.trigger('click');
+    await flushPromises();
+    expect(invalidateSizeMock).toHaveBeenCalledTimes(2);
   });
 
   it('lists five points per page, nearest-first, with a distance and a type label', async () => {

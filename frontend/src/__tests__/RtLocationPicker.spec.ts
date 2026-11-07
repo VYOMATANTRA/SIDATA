@@ -47,4 +47,12 @@ describe('RT location picker coordinates', () => {
     expect(wrapper.emitted('update:modelValue')?.slice(-1)[0]).toEqual([null]);
     wrapper.unmount();
   });
+
+  it('gives the map its own stacking boundary so Leaflet panes cannot cover page UI', async () => {
+    const wrapper = mount(RtLocationPicker, { props: { modelValue: null } });
+    await flushPromises();
+    const classes = wrapper.find('[data-test="rt-location-picker"]').classes();
+    expect(classes).toEqual(expect.arrayContaining(['relative', 'isolate', 'z-0']));
+    wrapper.unmount();
+  });
 });
