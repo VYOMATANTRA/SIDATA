@@ -276,7 +276,7 @@ function formatPhone(value: string): string {
             name="rt-search"
             placeholder="Contoh: 007 atau Andi"
             autocomplete="off"
-            class="rounded-btn text-brand-navy focus-visible:border-brand-navy focus-visible:outline-brand-navy mt-2 w-full max-w-md border border-border bg-white px-4 py-2.5 text-base placeholder:text-text-muted focus-visible:outline-2 focus-visible:outline-offset-2"
+            class="rounded-btn text-brand-navy focus-visible:border-brand-navy focus-visible:outline-brand-navy mt-2 w-full max-w-md border border-border-strong bg-white px-4 py-2.5 text-base placeholder:text-text-muted focus-visible:outline-2 focus-visible:outline-offset-2"
             data-test="rt-search"
           />
           <p class="mt-3 text-base text-text-muted" aria-live="polite" data-test="rt-count">
@@ -473,7 +473,7 @@ function formatPhone(value: string): string {
                 <select
                   id="page-size-select"
                   v-model.number="pageSize"
-                  class="rounded-btn text-brand-navy focus-visible:outline-brand-navy border border-border bg-white px-2.5 py-1.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
+                  class="rounded-btn text-brand-navy focus-visible:outline-brand-navy border border-border-strong bg-white px-2.5 py-1.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
                   data-test="page-size-select"
                 >
                   <option :value="10">10</option>
