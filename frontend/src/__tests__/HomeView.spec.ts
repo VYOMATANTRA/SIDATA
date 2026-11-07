@@ -690,4 +690,25 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
     expect(authStore.isAuthenticated).toBe(true);
     expect(router.currentRoute.value.path).toBe('/');
   });
+
+  it('renders available nav items in mobile menu drawer with active state on current route', async () => {
+    const { pinia, router } = setupHomeView();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(HomeView, { global: { plugins: [pinia, router] } });
+    await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
+
+    const drawer = wrapper.find('[data-test="nav-menu-drawer"]');
+    expect(drawer.exists()).toBe(true);
+
+    // In setupHomeView, only '/' is registered from DEFAULT_NAV_ITEMS
+    const berandaLink = drawer.find('a[href="/"]');
+    expect(berandaLink.exists()).toBe(true);
+    expect(berandaLink.attributes('aria-current')).toBe('page');
+    expect(berandaLink.classes()).toContain('bg-white/20');
+
+    // Unregistered routes like /publikasi are filtered out
+    expect(drawer.find('a[href="/publikasi"]').exists()).toBe(false);
+  });
 });

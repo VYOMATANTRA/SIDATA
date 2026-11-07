@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import AppNavbar from '../components/common/AppNavbar.vue';
+import { isNavItemActive } from '@/config/publicNav';
 
 function createMockRouter() {
   return createRouter({
@@ -269,5 +270,69 @@ describe('AppNavbar.vue', () => {
 
     dialog.remove();
     wrapper.unmount();
+  });
+
+  it('filters out unregistered routes from the navigation drawer', async () => {
+    const limitedRouter = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', component: { template: '<div>Home</div>' } },
+        { path: '/publikasi', component: { template: '<div>Publikasi</div>' } },
+      ],
+    });
+    await limitedRouter.push('/');
+    await limitedRouter.isReady();
+
+    const wrapper = mount(AppNavbar, {
+      global: { plugins: [limitedRouter] },
+      attachTo: document.body,
+    });
+
+    await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
+    const drawerLinks = wrapper.findAll('[data-test="nav-menu-drawer"] a');
+    expect(drawerLinks.length).toBe(2);
+    expect(wrapper.find('a[href="/"]').exists()).toBe(true);
+    expect(wrapper.find('a[href="/publikasi"]').exists()).toBe(true);
+    expect(wrapper.find('a[href="/peta"]').exists()).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  it('marks current route and /tentang subpaths with aria-current="page" and active class', async () => {
+    const router = createMockRouter();
+    await router.push('/tentang/desa-cantik');
+    await router.isReady();
+
+    const wrapper = mount(AppNavbar, {
+      global: { plugins: [router] },
+      attachTo: document.body,
+    });
+
+    await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
+    const tentangLink = wrapper.find('a[href="/tentang/kelurahan-manggar"]');
+    expect(tentangLink.exists()).toBe(true);
+    expect(tentangLink.attributes('aria-current')).toBe('page');
+    expect(tentangLink.classes()).toContain('bg-white/20');
+
+    const homeLink = wrapper.find('a[href="/"]');
+    expect(homeLink.attributes('aria-current')).toBeUndefined();
+
+    wrapper.unmount();
+  });
+
+  describe('publicNav utilities', () => {
+    it('exact matches home route for isNavItemActive', () => {
+      expect(isNavItemActive('/', '/')).toBe(true);
+      expect(isNavItemActive('/', '/publikasi')).toBe(false);
+    });
+
+    it('matches /tentang subpaths for isNavItemActive', () => {
+      expect(isNavItemActive('/tentang/kelurahan-manggar', '/tentang/kelurahan-manggar')).toBe(
+        true,
+      );
+      expect(isNavItemActive('/tentang/kelurahan-manggar', '/tentang/desa-cantik')).toBe(true);
+      expect(isNavItemActive('/tentang/kelurahan-manggar', '/tentang/vyomatantra')).toBe(true);
+      expect(isNavItemActive('/tentang/kelurahan-manggar', '/peta')).toBe(false);
+    });
   });
 });

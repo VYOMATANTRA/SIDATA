@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, computed, onMounted } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useSettingsStore } from '../stores/settings.store';
 import { useContentBlocksStore } from '../stores/contentBlocks.store';
@@ -8,7 +8,11 @@ import { useIndicatorsStore } from '../stores/indicators.store';
 import { useLogout } from '../composables/useLogout';
 import AppNavbar from '../components/common/AppNavbar.vue';
 import AppFooter from '../components/common/AppFooter.vue';
-import { DEFAULT_NAV_ITEMS } from '@/config/publicNav';
+import {
+  isRouteAvailable as checkRouteAvailable,
+  getAvailableNavItems,
+  isNavItemActive,
+} from '@/config/publicNav';
 import SectionHero from '../components/landing/SectionHero.vue';
 import SectionSambutanLurah from '../components/landing/SectionSambutanLurah.vue';
 import StatOverview from '../components/common/StatOverview.vue';
@@ -118,6 +122,9 @@ const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
 ];
 
 const router = useRouter();
+const route = useRoute();
+const currentPath = computed(() => route?.path ?? '/');
+const navItems = computed(() => getAvailableNavItems(router));
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
 const contentBlocksStore = useContentBlocksStore();
@@ -128,7 +135,7 @@ const isLoggingOut = ref(false);
 const logoutError = ref('');
 
 function isRouteAvailable(path: string): boolean {
-  return router.resolve(path).matched.length > 0;
+  return checkRouteAvailable(router, path);
 }
 
 onMounted(async () => {
@@ -207,16 +214,21 @@ async function handleLogout() {
       <!-- Navigation & Auth Dropdown Menu Slot -->
       <template #menu="{ close }">
         <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          <template v-for="item in DEFAULT_NAV_ITEMS" :key="item.to">
-            <router-link
-              v-if="isRouteAvailable(item.to)"
-              :to="item.to"
-              class="block rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
-              @click="close"
-            >
-              {{ item.label }}
-            </router-link>
-          </template>
+          <router-link
+            v-for="item in navItems"
+            :key="item.to"
+            :to="item.to"
+            class="block rounded-lg px-4 py-2.5 text-sm font-medium transition-colors"
+            :class="
+              isNavItemActive(item.to, currentPath)
+                ? 'bg-white/20 font-semibold text-white'
+                : 'text-white hover:bg-white/10'
+            "
+            :aria-current="isNavItemActive(item.to, currentPath) ? 'page' : undefined"
+            @click="close"
+          >
+            {{ item.label }}
+          </router-link>
         </div>
 
         <!-- Auth Actions inside Dropdown Drawer -->

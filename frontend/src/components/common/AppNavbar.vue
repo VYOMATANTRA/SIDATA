@@ -1,12 +1,8 @@
-<script lang="ts">
-export { DEFAULT_NAV_ITEMS, type NavItem } from '@/config/publicNav';
-</script>
-
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { RouterLink } from 'vue-router';
+import { useRouter, useRoute, RouterLink } from 'vue-router';
 import balikpapanLogo from '@/assets/img/logo_balikpapan.webp';
-import { DEFAULT_NAV_ITEMS } from '@/config/publicNav';
+import { getAvailableNavItems, isNavItemActive } from '@/config/publicNav';
 
 export interface NavbarProps {
   variant?: 'navy' | 'white' | 'transparent';
@@ -31,6 +27,11 @@ const emit = defineEmits<{
   (e: 'logoClick'): void;
 }>();
 
+const router = useRouter();
+const route = useRoute();
+const currentPath = computed(() => route?.path ?? '/');
+const navItems = computed(() => getAvailableNavItems(router));
+
 const isMenuOpen = ref(false);
 const toggleButtonRef = ref<HTMLButtonElement | null>(null);
 
@@ -54,7 +55,7 @@ function isEventFromOpenDialog(event: KeyboardEvent): boolean {
   if (target?.closest('[role="dialog"], [role="alertdialog"], dialog')) {
     return true;
   }
-  return false;
+  return Boolean(document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]'));
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -203,13 +204,20 @@ const hamburgerBarClasses = computed(() => {
             <slot name="menu" :close="closeMenu">
               <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 <RouterLink
-                  v-for="item in DEFAULT_NAV_ITEMS"
+                  v-for="item in navItems"
                   :key="item.to"
                   :to="item.to"
                   class="rounded-btn focus-visible:ring-brand-indigo block px-4 py-2.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
-                  :class="
-                    isNavy ? 'text-white hover:bg-white/10' : 'text-slate-800 hover:bg-slate-100'
-                  "
+                  :class="[
+                    isNavy
+                      ? isNavItemActive(item.to, currentPath)
+                        ? 'bg-white/20 font-semibold text-white'
+                        : 'text-white hover:bg-white/10'
+                      : isNavItemActive(item.to, currentPath)
+                        ? 'bg-slate-200 font-semibold text-slate-900'
+                        : 'text-slate-800 hover:bg-slate-100',
+                  ]"
+                  :aria-current="isNavItemActive(item.to, currentPath) ? 'page' : undefined"
                   @click="closeMenu"
                 >
                   {{ item.label }}
