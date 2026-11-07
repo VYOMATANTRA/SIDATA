@@ -127,7 +127,8 @@ let marker: L.Marker | null = null;
 let isUnmounted = false;
 let syncing = false;
 let geoRequest = 0;
-let announceFlip = false;
+let announceTimer: number | undefined;
+let nudgeAnnounceTimer: number | undefined;
 let resizeObserver: ResizeObserver | null = null;
 let resizeTimer: number | undefined;
 /** Last value emitted but not yet echoed back by the parent; keeps rapid key presses accurate. */
@@ -138,8 +139,8 @@ const atMinZoom = computed(() => viewZoom.value <= props.minZoom);
 const atMaxZoom = computed(() => viewZoom.value >= props.maxZoom);
 const canZoom = computed(() => viewInteractive.value);
 
+/** Persistent state line, always derived from `modelValue` so it can never go stale. */
 const statusText = computed(() => {
-  if (announcement.value) return announcement.value;
   const base = viewport.value
     ? hasValue.value
       ? 'Tampilan peta sudah diatur.'
@@ -149,6 +150,14 @@ const statusText = computed(() => {
       : 'Belum ada pin.';
   if (props.readonly) return `${base} Peta hanya dapat dilihat.`;
   return base;
+});
+
+/** Device accuracy in plain words; no number is shown. */
+const accuracyText = computed(() => {
+  if (accuracy.value === null) return '';
+  return accuracy.value <= 50
+    ? 'Lokasi perangkat terdeteksi dan cukup dekat.'
+    : 'Lokasi perangkat terdeteksi tetapi kurang tepat; geser peta atau pin bila perlu.';
 });
 
 const groupDescribedBy = computed(() => {
@@ -162,10 +171,33 @@ const groupDescribedBy = computed(() => {
 
 const directions: ReadonlyArray<PickerDirection> = ['north', 'south', 'east', 'west'];
 
+const ANNOUNCEMENT_TTL_MS = 4000;
+const NUDGE_ANNOUNCE_DELAY_MS = 600;
+
+/** Transient message for the hidden live region; cleared after a few seconds. */
 function announce(message: string): void {
-  announceFlip = !announceFlip;
-  // A zero-width suffix lets a repeated message (two presses of "utara") be announced again.
-  announcement.value = announceFlip ? message : `${message}​`;
+  window.clearTimeout(nudgeAnnounceTimer);
+  announcement.value = message;
+  window.clearTimeout(announceTimer);
+  announceTimer = window.setTimeout(() => {
+    announcement.value = '';
+  }, ANNOUNCEMENT_TTL_MS);
+}
+
+/** Held arrow keys: announce once, shortly after the last nudge, not on every repeat. */
+function announceNudge(message: string): void {
+  window.clearTimeout(nudgeAnnounceTimer);
+  nudgeAnnounceTimer = window.setTimeout(() => announce(message), NUDGE_ANNOUNCE_DELAY_MS);
+}
+
+function clearAnnouncement(): void {
+  window.clearTimeout(announceTimer);
+  window.clearTimeout(nudgeAnnounceTimer);
+  announcement.value = '';
+}
+
+function sameValue(a: PickerLocation | null, b: PickerLocation | null): boolean {
+  return sameLocation(a, b) && (a?.zoom ?? null) === (b?.zoom ?? null);
 }
 
 function runSilently(action: () => void): void {
@@ -205,9 +237,7 @@ function emitValue(location: GeoPoint, zoom?: number): void {
       }
     : normalized;
   const current = latest();
-  if (current && sameLocation(current, next) && (current.zoom ?? null) === (next.zoom ?? null)) {
-    return;
-  }
+  if (current && sameValue(current, next)) return;
   pending = { value: next };
   emit('update:modelValue', next);
 }
@@ -383,6 +413,7 @@ onUnmounted(() => {
   window.removeEventListener('keydown', escapeGuard, true);
   geoRequest += 1;
   window.clearTimeout(resizeTimer);
+  clearAnnouncement();
   resizeObserver?.disconnect();
   resizeObserver = null;
   map?.remove();
@@ -393,6 +424,12 @@ onUnmounted(() => {
 watch(
   () => props.modelValue,
   () => {
+    // A value that is not the one this picker just emitted came from the parent (reset, reload):
+    // drop messages and the device accuracy that described the previous value.
+    if (!(pending && sameValue(pending.value, props.modelValue))) {
+      clearAnnouncement();
+      accuracy.value = null;
+    }
     pending = null;
     syncFromValue();
   },
@@ -407,7 +444,7 @@ watch([() => props.disabled, () => props.readonly], () => {
   setInteractivity();
 });
 
-function nudge(direction: PickerDirection, large = false): void {
+function nudge(direction: PickerDirection, large = false, viaKeyboard = false): void {
   if (!editable.value || !map) return;
   cancelDetect();
   const base = viewport.value ? viewCenter() : latest();
@@ -419,14 +456,18 @@ function nudge(direction: PickerDirection, large = false): void {
   const moved = moveLocation(base, direction, viewZoom.value, large);
   if (viewport.value) {
     applyView(moved, viewZoom.value);
-    announce(`Peta digeser ke ${DIRECTION_LABELS[direction]}.`);
+    const message = `Peta digeser ke ${DIRECTION_LABELS[direction]}.`;
+    if (viaKeyboard) announceNudge(message);
+    else announce(message);
     return;
   }
   emitValue(moved);
   if (!map.getBounds().contains([moved.latitude, moved.longitude])) {
     runSilently(() => map?.panTo([moved.latitude, moved.longitude]));
   }
-  announce(`Pin digeser ke ${DIRECTION_LABELS[direction]}.`);
+  const message = `Pin digeser ke ${DIRECTION_LABELS[direction]}.`;
+  if (viaKeyboard) announceNudge(message);
+  else announce(message);
 }
 
 function placePinAtCenter(): void {
@@ -468,7 +509,8 @@ function clearLocation(): void {
 }
 
 function detectLocation(): void {
-  if (!editable.value) return;
+  // The button stays enabled (aria-disabled) while searching so it never loses keyboard focus.
+  if (!editable.value || detecting.value) return;
   locationError.value = '';
   accuracy.value = null;
   if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -534,7 +576,7 @@ function onKeydown(event: KeyboardEvent): void {
   const direction = arrows[event.key];
   if (direction) {
     event.preventDefault();
-    nudge(direction, event.shiftKey);
+    nudge(direction, event.shiftKey, true);
     return;
   }
   if (event.key === '+' || event.key === '=') {
@@ -628,12 +670,13 @@ const buttonClasses =
 
     <p
       :id="statusId"
-      role="status"
-      aria-live="polite"
       class="text-brand-navy text-sm font-medium"
       data-test="location-picker-status"
     >
       {{ statusText }}
+    </p>
+    <p role="status" aria-live="polite" class="sr-only" data-test="location-picker-announcement">
+      {{ announcement }}
     </p>
 
     <p v-if="error" :id="errorId" class="text-status-error text-xs font-medium">{{ error }}</p>
@@ -695,8 +738,9 @@ const buttonClasses =
         <button
           v-if="detectable"
           type="button"
-          :class="buttonClasses"
-          :disabled="!editable || detecting"
+          :class="[buttonClasses, detecting ? 'cursor-wait opacity-70' : '']"
+          :disabled="!editable"
+          :aria-disabled="detecting ? 'true' : undefined"
           :aria-describedby="locationError ? detectErrorId : undefined"
           :data-test="`${testId}-detect`"
           @click="detectLocation"
@@ -736,8 +780,8 @@ const buttonClasses =
       keluar.
     </p>
 
-    <p v-if="accuracy !== null" class="text-text-muted text-xs">
-      Perkiraan akurasi lokasi perangkat ±{{ Math.round(accuracy) }} m.
+    <p v-if="accuracyText" class="text-text-muted text-xs" data-test="location-picker-accuracy">
+      {{ accuracyText }}
     </p>
     <p
       v-if="locationError"

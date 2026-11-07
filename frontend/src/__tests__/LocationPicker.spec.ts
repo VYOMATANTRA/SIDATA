@@ -96,8 +96,8 @@ describe('LocationPicker', () => {
       await click(wrapper, 'location-picker-west');
       await click(wrapper, 'location-picker-west');
       expect(lastEmitted(wrapper)!.longitude).toBeLessThan(PIN.longitude);
-      expect(wrapper.get('[data-test="location-picker-status"]').text()).toContain(
-        'Pin digeser ke barat',
+      expect(wrapper.get('[data-test="location-picker-announcement"]').text()).toBe(
+        'Pin digeser ke barat.',
       );
     });
 
@@ -250,6 +250,65 @@ describe('LocationPicker', () => {
       await wrapper.setProps({ modelValue: null });
       expect(wrapper.get('[data-test="clearable-clear"]').attributes('disabled')).toBeDefined();
       expect(leafletMarker.remove).toHaveBeenCalled();
+    });
+  });
+
+  describe('status and announcements', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('derives the persistent state line from the value, outside the live region', async () => {
+      const wrapper = await mountPicker();
+      const status = wrapper.get('[data-test="location-picker-status"]');
+      expect(status.text()).toBe('Belum ada pin.');
+      expect(status.attributes('aria-live')).toBeUndefined();
+      clickMap(-1.2, 116.9);
+      await wrapper.setProps({ modelValue: lastEmitted(wrapper) });
+      expect(status.text()).toBe('Posisi pin sudah diatur.');
+      await wrapper.setProps({ modelValue: null });
+      expect(status.text()).toBe('Belum ada pin.');
+    });
+
+    it('announces transient messages politely, clears them after a while and on outside changes', async () => {
+      vi.useFakeTimers();
+      const wrapper = await mountPicker();
+      const live = wrapper.get('[data-test="location-picker-announcement"]');
+      expect(live.attributes('aria-live')).toBe('polite');
+      expect(live.classes()).toContain('sr-only');
+      clickMap(-1.2, 116.9);
+      await nextTick();
+      expect(live.text()).toBe('Pin diletakkan.');
+      vi.advanceTimersByTime(4100);
+      await nextTick();
+      expect(live.text()).toBe('');
+
+      clickMap(-1.21, 116.91);
+      await wrapper.setProps({ modelValue: lastEmitted(wrapper) });
+      expect(live.text()).toBe('Pin diletakkan.');
+      await wrapper.setProps({ modelValue: null });
+      expect(live.text()).toBe('');
+    });
+
+    it('coalesces held arrow keys into one announcement after the last nudge', async () => {
+      vi.useFakeTimers();
+      const wrapper = await mountPicker({ modelValue: PIN });
+      await click(wrapper, 'location-picker-keyboard');
+      const live = wrapper.get('[data-test="location-picker-announcement"]');
+      const region = wrapper.get('[data-test="location-picker-region"]');
+      const texts: string[] = [];
+      for (let i = 0; i < 5; i += 1) {
+        await region.trigger('keydown', { key: 'ArrowUp' });
+        vi.advanceTimersByTime(100);
+        await nextTick();
+        texts.push(live.text());
+      }
+      expect(texts.every((text) => !text.includes('Pin digeser'))).toBe(true);
+      await region.trigger('keydown', { key: 'ArrowLeft' });
+      vi.advanceTimersByTime(600);
+      await nextTick();
+      expect(live.text()).toBe('Pin digeser ke barat.');
+      expect(live.text()).not.toContain('\u200b');
     });
   });
 
@@ -424,14 +483,45 @@ describe('LocationPicker', () => {
       expect(wrapper.find('[data-test="location-picker-detect"]').exists()).toBe(false);
     });
 
-    it('turns a detected position into a draft only, and shows the accuracy', async () => {
+    it('turns a detected position into a draft only, and describes the accuracy in words', async () => {
       const wrapper = await mountPicker({ detectable: true });
       await click(wrapper, 'location-picker-detect');
       success({ coords: { latitude: -1.25, longitude: 116.95, accuracy: 12.4 } });
       await flushPromises();
       expect(lastEmitted(wrapper)).toEqual({ latitude: -1.25, longitude: 116.95 });
       expect(leafletState.zoom).toBe(17);
-      expect(wrapper.text()).toContain('±12 m');
+      expect(wrapper.get('[data-test="location-picker-accuracy"]').text()).toContain('cukup dekat');
+      expect(wrapper.text()).not.toMatch(/±|\d+ m\b/);
+    });
+
+    it('calls a coarse fix less precise, and forgets it when the parent changes the value', async () => {
+      const wrapper = await mountPicker({ detectable: true });
+      await click(wrapper, 'location-picker-detect');
+      success({ coords: { latitude: -1.25, longitude: 116.95, accuracy: 900 } });
+      await flushPromises();
+      await wrapper.setProps({ modelValue: lastEmitted(wrapper) });
+      expect(wrapper.get('[data-test="location-picker-accuracy"]').text()).toContain(
+        'kurang tepat',
+      );
+      await wrapper.setProps({ modelValue: { latitude: -1.3, longitude: 116.9 } });
+      expect(wrapper.find('[data-test="location-picker-accuracy"]').exists()).toBe(false);
+    });
+
+    it('keeps the detect button enabled and focused while searching', async () => {
+      const wrapper = await mountPicker({ detectable: true });
+      const detect = wrapper.get('[data-test="location-picker-detect"]');
+      (detect.element as HTMLElement).focus();
+      await detect.trigger('click');
+      expect(detect.attributes('disabled')).toBeUndefined();
+      expect(detect.attributes('aria-disabled')).toBe('true');
+      expect(document.activeElement).toBe(detect.element);
+      expect(detect.text()).toContain('Mencari lokasi');
+      await detect.trigger('click');
+      expect(navigator.geolocation.getCurrentPosition).toHaveBeenCalledTimes(1);
+      success({ coords: { latitude: -1.25, longitude: 116.95, accuracy: 5 } });
+      await flushPromises();
+      expect(detect.attributes('aria-disabled')).toBeUndefined();
+      expect(document.activeElement).toBe(detect.element);
     });
 
     it('shows a friendly, associated message when permission is denied', async () => {
