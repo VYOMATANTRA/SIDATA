@@ -206,7 +206,7 @@ onBeforeUnmount(() => {
 
             <button
               type="button"
-              class="focus-visible:ring-brand-navy -mr-1.5 shrink-0 rounded-full p-2 text-text-muted transition-colors hover:bg-surface-muted hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              class="focus-visible:ring-focus-ring -mr-1.5 shrink-0 rounded-full p-2 text-text-muted transition-colors hover:bg-surface-muted hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-text-muted"
               :disabled="busy"
               aria-label="Tutup dialog"
               @click="requestClose"
