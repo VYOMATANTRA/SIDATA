@@ -1,0 +1,124 @@
+/**
+ * Shared Leaflet stand-in for the location-picker specs (jsdom cannot render a real map).
+ *
+ * Usage in a spec:
+ *
+ *   vi.mock('leaflet', async () => (await import('./leafletMock')).createLeafletMock());
+ *
+ * and import `leafletState` / `resetLeafletState` from './leafletMock' to drive and inspect it.
+ * The map keeps a centre and zoom so code that reads them back behaves like the real thing.
+ */
+import { vi } from 'vitest';
+
+type Handler = (event?: unknown) => void;
+
+export const leafletState = {
+  center: { lat: 0, lng: 0 },
+  zoom: 0,
+  handlers: {} as Record<string, Handler>,
+  markerHandlers: {} as Record<string, Handler>,
+  markerLatLng: { lat: 0, lng: 0 },
+  markerOptions: undefined as Record<string, unknown> | undefined,
+  mapOptions: undefined as Record<string, unknown> | undefined,
+  inBounds: true,
+  markerCreated: 0,
+};
+
+export function resetLeafletState(): void {
+  leafletState.center = { lat: 0, lng: 0 };
+  leafletState.zoom = 0;
+  leafletState.handlers = {};
+  leafletState.markerHandlers = {};
+  leafletState.markerLatLng = { lat: 0, lng: 0 };
+  leafletState.markerOptions = undefined;
+  leafletState.mapOptions = undefined;
+  leafletState.inBounds = true;
+  leafletState.markerCreated = 0;
+}
+
+const handlerStub = () => ({ enable: vi.fn<() => void>(), disable: vi.fn<() => void>() });
+
+export const leafletMap = {
+  setView: vi.fn<(center: [number, number], zoom?: number, options?: unknown) => unknown>(),
+  setZoom: vi.fn<(zoom: number, options?: unknown) => unknown>(),
+  panTo: vi.fn<(center: [number, number]) => unknown>(),
+  getCenter: vi.fn<() => { lat: number; lng: number }>(),
+  getZoom: vi.fn<() => number>(),
+  getBounds: vi.fn<() => { contains: (point: unknown) => boolean }>(),
+  on: vi.fn<(name: string, handler: Handler) => unknown>(),
+  remove: vi.fn<() => unknown>(),
+  invalidateSize: vi.fn<() => unknown>(),
+  dragging: handlerStub(),
+  touchZoom: handlerStub(),
+  doubleClickZoom: handlerStub(),
+  boxZoom: handlerStub(),
+};
+
+export const leafletMarker = {
+  addTo: vi.fn<() => unknown>(),
+  on: vi.fn<(name: string, handler: Handler) => unknown>(),
+  setLatLng: vi.fn<(latLng: [number, number]) => unknown>(),
+  getLatLng: vi.fn<() => { lat: number; lng: number }>(),
+  remove: vi.fn<() => unknown>(),
+  dragging: handlerStub(),
+};
+
+function wire(): void {
+  leafletMap.setView.mockImplementation((center, zoom) => {
+    leafletState.center = { lat: center[0], lng: center[1] };
+    if (typeof zoom === 'number') leafletState.zoom = zoom;
+    return leafletMap;
+  });
+  leafletMap.setZoom.mockImplementation((zoom) => {
+    leafletState.zoom = zoom;
+    return leafletMap;
+  });
+  leafletMap.panTo.mockImplementation((center) => {
+    leafletState.center = { lat: center[0], lng: center[1] };
+    return leafletMap;
+  });
+  leafletMap.getCenter.mockImplementation(() => ({ ...leafletState.center }));
+  leafletMap.getZoom.mockImplementation(() => leafletState.zoom);
+  leafletMap.getBounds.mockImplementation(() => ({ contains: () => leafletState.inBounds }));
+  leafletMap.on.mockImplementation((name, handler) => {
+    leafletState.handlers[name] = handler;
+    return leafletMap;
+  });
+  leafletMarker.addTo.mockImplementation(() => leafletMarker);
+  leafletMarker.on.mockImplementation((name, handler) => {
+    leafletState.markerHandlers[name] = handler;
+    return leafletMarker;
+  });
+  leafletMarker.setLatLng.mockImplementation((latLng) => {
+    leafletState.markerLatLng = { lat: latLng[0], lng: latLng[1] };
+    return leafletMarker;
+  });
+  leafletMarker.getLatLng.mockImplementation(() => ({ ...leafletState.markerLatLng }));
+}
+
+/** Clears call history, state and re-installs implementations. Call from `beforeEach`. */
+export function resetLeafletMock(): void {
+  vi.clearAllMocks();
+  resetLeafletState();
+  wire();
+}
+
+export function createLeafletMock() {
+  wire();
+  return {
+    default: {
+      map: (_element: unknown, options?: Record<string, unknown>) => {
+        leafletState.mapOptions = options;
+        return leafletMap;
+      },
+      marker: (latLng: [number, number], options?: Record<string, unknown>) => {
+        leafletState.markerCreated += 1;
+        leafletState.markerLatLng = { lat: latLng[0], lng: latLng[1] };
+        leafletState.markerOptions = options;
+        return leafletMarker;
+      },
+      divIcon: (options: unknown) => options,
+      tileLayer: () => ({ addTo: vi.fn<() => unknown>() }),
+    },
+  };
+}

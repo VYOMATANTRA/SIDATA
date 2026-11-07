@@ -1,0 +1,740 @@
+<script setup lang="ts">
+/**
+ * Shared visual location picker. Staff place a point (or a whole map view) by looking at a map;
+ * they never see or type latitude, longitude or a zoom number.
+ *
+ * Two behaviours, chosen by `includeZoom`:
+ *
+ * - **Pin mode** (`includeZoom` false, default): the value is one point. Click or tap the map to
+ *   drop the pin, drag the pin to refine. Zoom only changes what the editor sees; it is not part
+ *   of the value. Used for a Ketua RT home (`RtLocationPicker.vue`).
+ * - **Viewport mode** (`includeZoom` true): the value is the map view itself. A fixed crosshair
+ *   marks the centre; panning and zooming the map defines `{ latitude, longitude, zoom }`. Used
+ *   for the default public map view in `PublicSettingsForm.vue`.
+ *
+ * Every action also has a non-pointer path: direction buttons, zoom buttons, a labelled keyboard
+ * mode (arrow keys, Shift for a larger step, + and - to zoom, Esc to leave) and, for pin mode,
+ * a button that drops the pin at the map centre.
+ *
+ * The picker only ever emits a draft through `update:modelValue`; saving is the parent form's
+ * job. "Use my device location" is a draft change like any other, never an automatic save.
+ */
+import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'vue';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { MANGGAR_MAP_CENTER, MANGGAR_MAP_DEFAULT_ZOOM } from '../../constants/mapOrigin';
+import {
+  DIRECTION_LABELS,
+  clampZoom,
+  moveLocation,
+  normalizeLocation,
+  sameLocation,
+  type GeoPoint,
+  type PickerDirection,
+} from '../../utils/geoPicker';
+
+export interface PickerLocation {
+  latitude: number;
+  longitude: number;
+  /** Present only when `includeZoom` is true. */
+  zoom?: number;
+}
+
+export interface LocationPickerProps {
+  modelValue: PickerLocation | null;
+  /** Visible group label, e.g. "Lokasi rumah Ketua RT". */
+  label: string;
+  helpText?: string;
+  /** Validation message owned by the parent form; announced and tied to the group. */
+  error?: string;
+  /** Prefix for every generated id. Defaults to a unique id, so several pickers can coexist. */
+  idPrefix?: string;
+  /** `[lat, lon]` the map opens on when there is no value. */
+  initialCenter?: [number, number];
+  initialZoom?: number;
+  /** Zoom used when jumping to an existing pin or a detected device location (pin mode). */
+  focusZoom?: number;
+  minZoom?: number;
+  maxZoom?: number;
+  /** Form is busy: every control is disabled. */
+  disabled?: boolean;
+  /** Value is shown but cannot be changed. */
+  readonly?: boolean;
+  /** Pin mode only: show a "Hapus pin" action. */
+  clearable?: boolean;
+  /** Viewport mode: the zoom level is part of the edited value. */
+  includeZoom?: boolean;
+  /** Show the optional "Gunakan lokasi perangkat" action. */
+  detectable?: boolean;
+  /** `data-test` prefix for buttons (`-detect`, `-clear`, ...). */
+  testId?: string;
+  /** `data-test` of the map container. Defaults to `${testId}-map`. */
+  mapTestId?: string;
+}
+
+const props = withDefaults(defineProps<LocationPickerProps>(), {
+  helpText: undefined,
+  error: undefined,
+  idPrefix: undefined,
+  initialCenter: () => [MANGGAR_MAP_CENTER[0], MANGGAR_MAP_CENTER[1]],
+  initialZoom: MANGGAR_MAP_DEFAULT_ZOOM,
+  focusZoom: 17,
+  minZoom: 1,
+  maxZoom: 20,
+  disabled: false,
+  readonly: false,
+  clearable: false,
+  includeZoom: false,
+  detectable: false,
+  testId: 'location-picker',
+  mapTestId: undefined,
+});
+
+const emit = defineEmits<{
+  (event: 'update:modelValue', value: PickerLocation | null): void;
+}>();
+
+const generatedId = useId();
+const baseId = computed(() => props.idPrefix ?? `location-picker-${generatedId}`);
+const helpId = computed(() => `${baseId.value}-help`);
+const errorId = computed(() => `${baseId.value}-error`);
+const statusId = computed(() => `${baseId.value}-status`);
+const keysId = computed(() => `${baseId.value}-keys`);
+const detectErrorId = computed(() => `${baseId.value}-detect-error`);
+const mapDataTest = computed(() => props.mapTestId ?? `${props.testId}-map`);
+
+const container = ref<HTMLElement | null>(null);
+const region = ref<HTMLElement | null>(null);
+const keyboardToggle = ref<HTMLButtonElement | null>(null);
+const zoomInButton = ref<HTMLButtonElement | null>(null);
+const zoomOutButton = ref<HTMLButtonElement | null>(null);
+const centerPinButton = ref<HTMLButtonElement | null>(null);
+
+const viewport = computed(() => props.includeZoom);
+const editable = computed(() => !props.disabled && !props.readonly);
+/** Pin mode lets a read-only viewer still look around; viewport mode's view *is* the value. */
+const viewInteractive = computed(() => (viewport.value ? editable.value : !props.disabled));
+
+const keyboardMode = ref(false);
+const announcement = ref('');
+const locationError = ref('');
+const accuracy = ref<number | null>(null);
+const detecting = ref(false);
+const viewZoom = ref(props.initialZoom);
+
+let map: L.Map | null = null;
+let marker: L.Marker | null = null;
+let isUnmounted = false;
+let syncing = false;
+let geoRequest = 0;
+let announceFlip = false;
+let resizeObserver: ResizeObserver | null = null;
+let resizeTimer: number | undefined;
+/** Last value emitted but not yet echoed back by the parent; keeps rapid key presses accurate. */
+let pending: { value: PickerLocation | null } | null = null;
+
+const hasValue = computed(() => props.modelValue !== null);
+const atMinZoom = computed(() => viewZoom.value <= props.minZoom);
+const atMaxZoom = computed(() => viewZoom.value >= props.maxZoom);
+const canZoom = computed(() => viewInteractive.value);
+
+const statusText = computed(() => {
+  if (announcement.value) return announcement.value;
+  const base = viewport.value
+    ? hasValue.value
+      ? 'Tampilan peta sudah diatur.'
+      : 'Tampilan peta belum diatur.'
+    : hasValue.value
+      ? 'Posisi pin sudah diatur.'
+      : 'Belum ada pin.';
+  if (props.readonly) return `${base} Peta hanya dapat dilihat.`;
+  return base;
+});
+
+const groupDescribedBy = computed(() => {
+  const ids = [
+    props.helpText ? helpId.value : null,
+    props.error ? errorId.value : null,
+    statusId.value,
+  ];
+  return ids.filter((id): id is string => Boolean(id)).join(' ');
+});
+
+const directions: ReadonlyArray<PickerDirection> = ['north', 'south', 'east', 'west'];
+
+function announce(message: string): void {
+  announceFlip = !announceFlip;
+  // A zero-width suffix lets a repeated message (two presses of "utara") be announced again.
+  announcement.value = announceFlip ? message : `${message}​`;
+}
+
+function runSilently(action: () => void): void {
+  const previous = syncing;
+  syncing = true;
+  try {
+    action();
+  } finally {
+    syncing = previous;
+  }
+}
+
+function latest(): PickerLocation | null {
+  return pending ? pending.value : props.modelValue;
+}
+
+function viewCenter(): GeoPoint | null {
+  if (!map) return null;
+  const center = map.getCenter();
+  return normalizeLocation({ latitude: center.lat, longitude: center.lng });
+}
+
+function cancelDetect(): void {
+  geoRequest += 1;
+  detecting.value = false;
+}
+
+/** Emits a draft value. Out-of-world values are normalised; duplicates are dropped. */
+function emitValue(location: GeoPoint, zoom?: number): void {
+  if (!editable.value) return;
+  const normalized = normalizeLocation(location);
+  if (!normalized) return;
+  const next: PickerLocation = viewport.value
+    ? {
+        ...normalized,
+        zoom: clampZoom(zoom ?? viewZoom.value, props.minZoom, props.maxZoom),
+      }
+    : normalized;
+  const current = latest();
+  if (current && sameLocation(current, next) && (current.zoom ?? null) === (next.zoom ?? null)) {
+    return;
+  }
+  pending = { value: next };
+  emit('update:modelValue', next);
+}
+
+function markerIcon(): L.DivIcon {
+  return L.divIcon({
+    className: 'location-picker-pin',
+    html: '<svg viewBox="0 0 28 28" width="28" height="28" aria-hidden="true" focusable="false"><circle cx="14" cy="14" r="11" fill="#0A2353" stroke="#FFFFFF" stroke-width="3"/><circle cx="14" cy="14" r="3.5" fill="#FFFFFF"/></svg>',
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+}
+
+function placeMarker(location: GeoPoint): void {
+  if (!map) return;
+  if (!marker) {
+    marker = L.marker([location.latitude, location.longitude], {
+      draggable: editable.value,
+      keyboard: false,
+      icon: markerIcon(),
+    }).addTo(map);
+    marker.on('dragend', () => {
+      const next = marker?.getLatLng();
+      if (!next) return;
+      cancelDetect();
+      emitValue({ latitude: next.lat, longitude: next.lng });
+      announce('Pin dipindahkan.');
+    });
+  } else {
+    marker.setLatLng([location.latitude, location.longitude]);
+  }
+}
+
+function near(a: GeoPoint, b: GeoPoint): boolean {
+  return Math.abs(a.latitude - b.latitude) < 2e-6 && Math.abs(a.longitude - b.longitude) < 2e-6;
+}
+
+/** Brings the map and marker in line with `modelValue` without emitting anything. */
+function syncFromValue(initial = false): void {
+  if (!map) return;
+  const value = props.modelValue;
+  if (viewport.value) {
+    const target: GeoPoint = value ?? {
+      latitude: props.initialCenter[0],
+      longitude: props.initialCenter[1],
+    };
+    const zoom = clampZoom(value?.zoom ?? props.initialZoom, props.minZoom, props.maxZoom);
+    const center = viewCenter();
+    if (!center || !near(center, target) || map.getZoom() !== zoom) {
+      runSilently(() =>
+        map?.setView([target.latitude, target.longitude], zoom, { animate: false }),
+      );
+    }
+    viewZoom.value = zoom;
+    return;
+  }
+  if (!value) {
+    marker?.remove();
+    marker = null;
+    return;
+  }
+  placeMarker(value);
+  if (initial) return;
+  if (!map.getBounds().contains([value.latitude, value.longitude])) {
+    runSilently(() => map?.panTo([value.latitude, value.longitude]));
+  }
+}
+
+/** Viewport mode: move the map view and report it as the new draft. */
+function applyView(location: GeoPoint, zoom: number): void {
+  const normalized = normalizeLocation(location);
+  if (!normalized || !map) return;
+  const nextZoom = clampZoom(zoom, props.minZoom, props.maxZoom);
+  viewZoom.value = nextZoom;
+  runSilently(() =>
+    map?.setView([normalized.latitude, normalized.longitude], nextZoom, { animate: false }),
+  );
+  emitValue(normalized, nextZoom);
+}
+
+function setInteractivity(): void {
+  if (!map) return;
+  const on = viewInteractive.value;
+  const handlers = ['dragging', 'touchZoom', 'doubleClickZoom', 'boxZoom'] as const;
+  const bag = map as unknown as Record<string, { enable(): void; disable(): void } | undefined>;
+  for (const name of handlers) {
+    const handler = bag[name];
+    if (on) handler?.enable();
+    else handler?.disable();
+  }
+  const dragging = marker?.dragging;
+  if (editable.value) dragging?.enable();
+  else dragging?.disable();
+}
+
+function handleMapClick(event: L.LeafletMouseEvent): void {
+  if (!editable.value) return;
+  cancelDetect();
+  const location = { latitude: event.latlng.lat, longitude: event.latlng.lng };
+  if (viewport.value) {
+    applyView(location, viewZoom.value);
+    announce('Tampilan peta dipusatkan pada titik yang dipilih.');
+  } else {
+    emitValue(location);
+    announce('Pin diletakkan.');
+  }
+}
+
+function handleMoveEnd(): void {
+  if (syncing || !viewport.value || !editable.value || !map) return;
+  const center = viewCenter();
+  if (!center) return;
+  cancelDetect();
+  emitValue(center, map.getZoom());
+}
+
+function handleZoomEnd(): void {
+  if (!map) return;
+  viewZoom.value = clampZoom(map.getZoom(), props.minZoom, props.maxZoom);
+}
+
+function refreshSize(): void {
+  if (!map || !container.value) return;
+  // A hidden tab or closed dialog reports 0x0; resizing then would shift the centre.
+  if (container.value.clientWidth === 0 || container.value.clientHeight === 0) return;
+  runSilently(() => map?.invalidateSize());
+  syncFromValue(true);
+}
+
+onMounted(() => {
+  isUnmounted = false;
+  nextTick(() => {
+    if (isUnmounted || !container.value) return;
+    const value = props.modelValue;
+    const start: GeoPoint = value ?? {
+      latitude: props.initialCenter[0],
+      longitude: props.initialCenter[1],
+    };
+    const startZoom = viewport.value
+      ? clampZoom(value?.zoom ?? props.initialZoom, props.minZoom, props.maxZoom)
+      : value
+        ? props.focusZoom
+        : props.initialZoom;
+    viewZoom.value = startZoom;
+    map = L.map(container.value, {
+      zoomControl: false,
+      keyboard: false,
+      scrollWheelZoom: false,
+      minZoom: props.minZoom,
+      maxZoom: props.maxZoom,
+    }).setView([start.latitude, start.longitude], startZoom);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxNativeZoom: 19,
+      maxZoom: props.maxZoom,
+      attribution: '&copy; OpenStreetMap contributors',
+    }).addTo(map);
+    map.on('click', handleMapClick);
+    map.on('moveend', handleMoveEnd);
+    map.on('zoomend', handleZoomEnd);
+    if (!viewport.value && value) placeMarker(value);
+    if (!viewInteractive.value || !editable.value) setInteractivity();
+
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => refreshSize());
+      resizeObserver.observe(container.value);
+    }
+    resizeTimer = window.setTimeout(refreshSize, 100);
+  });
+});
+
+onUnmounted(() => {
+  isUnmounted = true;
+  geoRequest += 1;
+  window.clearTimeout(resizeTimer);
+  resizeObserver?.disconnect();
+  resizeObserver = null;
+  map?.remove();
+  map = null;
+  marker = null;
+});
+
+watch(
+  () => props.modelValue,
+  () => {
+    pending = null;
+    syncFromValue();
+  },
+  { deep: true },
+);
+
+watch([() => props.disabled, () => props.readonly], () => {
+  if (!editable.value) {
+    cancelDetect();
+    keyboardMode.value = false;
+  }
+  setInteractivity();
+});
+
+function nudge(direction: PickerDirection, large = false): void {
+  if (!editable.value || !map) return;
+  cancelDetect();
+  const base = viewport.value ? viewCenter() : latest();
+  if (!base) {
+    // Pin mode without a pin: the first action drops one at the map centre.
+    placePinAtCenter();
+    return;
+  }
+  const moved = moveLocation(base, direction, viewZoom.value, large);
+  if (viewport.value) {
+    applyView(moved, viewZoom.value);
+    announce(`Peta digeser ke ${DIRECTION_LABELS[direction]}.`);
+    return;
+  }
+  emitValue(moved);
+  if (!map.getBounds().contains([moved.latitude, moved.longitude])) {
+    runSilently(() => map?.panTo([moved.latitude, moved.longitude]));
+  }
+  announce(`Pin digeser ke ${DIRECTION_LABELS[direction]}.`);
+}
+
+function placePinAtCenter(): void {
+  if (!editable.value || viewport.value) return;
+  const center = viewCenter();
+  if (!center) return;
+  cancelDetect();
+  emitValue(center);
+  announce('Pin diletakkan di tengah peta.');
+}
+
+function zoomBy(delta: 1 | -1): void {
+  if (!map || !canZoom.value) return;
+  const next = clampZoom(viewZoom.value + delta, props.minZoom, props.maxZoom);
+  if (next === viewZoom.value) return;
+  viewZoom.value = next;
+  if (viewport.value) {
+    const center = viewCenter();
+    if (center) applyView(center, next);
+  } else {
+    runSilently(() => map?.setZoom(next, { animate: false }));
+  }
+  announce(delta > 0 ? 'Peta diperbesar.' : 'Peta diperkecil.');
+  // A button that just disabled itself must not drop focus on the page body (WCAG 2.4.3).
+  void nextTick(() => {
+    if (delta > 0 && atMaxZoom.value) zoomOutButton.value?.focus();
+    if (delta < 0 && atMinZoom.value) zoomInButton.value?.focus();
+  });
+}
+
+function clearLocation(): void {
+  if (!editable.value || viewport.value || !props.clearable) return;
+  cancelDetect();
+  accuracy.value = null;
+  pending = { value: null };
+  emit('update:modelValue', null);
+  announce('Pin dihapus.');
+  void nextTick(() => centerPinButton.value?.focus());
+}
+
+function detectLocation(): void {
+  if (!editable.value) return;
+  locationError.value = '';
+  accuracy.value = null;
+  if (typeof navigator === 'undefined' || !navigator.geolocation) {
+    locationError.value = 'Perangkat ini tidak mendukung deteksi lokasi.';
+    return;
+  }
+  const request = ++geoRequest;
+  detecting.value = true;
+  announce('Mencari lokasi perangkat…');
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      // Ignore late results: after unmount, after a manual change, or once editing is locked.
+      if (isUnmounted || request !== geoRequest || !editable.value) return;
+      detecting.value = false;
+      const location = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+      accuracy.value = position.coords.accuracy;
+      if (viewport.value) {
+        applyView(location, props.focusZoom);
+      } else {
+        emitValue(location);
+        viewZoom.value = props.focusZoom;
+        runSilently(() =>
+          map?.setView([location.latitude, location.longitude], props.focusZoom, {
+            animate: false,
+          }),
+        );
+      }
+      announce('Lokasi perangkat dipakai sebagai usulan. Periksa lalu sesuaikan jika perlu.');
+    },
+    (error) => {
+      if (isUnmounted || request !== geoRequest) return;
+      detecting.value = false;
+      locationError.value =
+        error.code === error.PERMISSION_DENIED
+          ? 'Izin lokasi tidak diberikan; atur peta secara manual.'
+          : 'Lokasi tidak dapat ditentukan; atur peta secara manual.';
+      announce('Lokasi perangkat tidak tersedia.');
+    },
+    { timeout: 10000 },
+  );
+}
+
+function toggleKeyboardMode(): void {
+  if (!editable.value) return;
+  keyboardMode.value = !keyboardMode.value;
+  announce(
+    keyboardMode.value
+      ? 'Mode keyboard aktif. Gunakan tombol panah untuk menggeser.'
+      : 'Mode keyboard nonaktif.',
+  );
+  if (keyboardMode.value) void nextTick(() => region.value?.focus());
+}
+
+function onKeydown(event: KeyboardEvent): void {
+  if (!keyboardMode.value || !editable.value) return;
+  if (event.ctrlKey || event.altKey || event.metaKey) return;
+  const arrows: Record<string, PickerDirection> = {
+    ArrowUp: 'north',
+    ArrowDown: 'south',
+    ArrowRight: 'east',
+    ArrowLeft: 'west',
+  };
+  const direction = arrows[event.key];
+  if (direction) {
+    event.preventDefault();
+    nudge(direction, event.shiftKey);
+    return;
+  }
+  if (event.key === '+' || event.key === '=') {
+    event.preventDefault();
+    zoomBy(1);
+  } else if (event.key === '-' || event.key === '_') {
+    event.preventDefault();
+    zoomBy(-1);
+  } else if (event.key === 'Escape') {
+    // Leave keyboard mode without also closing a surrounding dialog.
+    event.preventDefault();
+    event.stopPropagation();
+    keyboardMode.value = false;
+    announce('Mode keyboard nonaktif.');
+    void nextTick(() => keyboardToggle.value?.focus());
+  }
+}
+
+function onFocusOut(event: FocusEvent): void {
+  if (!keyboardMode.value) return;
+  const next = event.relatedTarget;
+  if (next instanceof Node && region.value?.contains(next)) return;
+  keyboardMode.value = false;
+}
+
+const buttonClasses =
+  'inline-flex min-h-11 min-w-11 items-center justify-center rounded-btn border-2 border-brand-navy bg-surface px-3 py-2 text-sm font-medium text-brand-navy transition-colors hover:bg-brand-navy hover:text-text-inverse focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-surface disabled:text-text-muted disabled:hover:bg-surface disabled:hover:text-text-muted';
+</script>
+
+<template>
+  <fieldset
+    class="min-w-0 space-y-3 border-0 p-0"
+    :aria-describedby="groupDescribedBy"
+    :data-test="testId"
+  >
+    <legend class="text-brand-navy text-sm font-medium">{{ label }}</legend>
+
+    <p v-if="helpText" :id="helpId" class="text-text-muted text-xs leading-snug">{{ helpText }}</p>
+
+    <slot />
+
+    <div
+      ref="region"
+      :data-test="`${testId}-region`"
+      class="rounded-card focus-visible:outline-focus-ring relative isolate z-0 focus-visible:outline-2 focus-visible:outline-offset-2"
+      :role="keyboardMode ? 'group' : undefined"
+      :tabindex="keyboardMode ? 0 : undefined"
+      :aria-label="keyboardMode ? `Peta ${label}, mode keyboard aktif` : undefined"
+      :aria-describedby="keyboardMode ? keysId : undefined"
+      @keydown="onKeydown"
+      @focusout="onFocusOut"
+    >
+      <div
+        ref="container"
+        class="rounded-card border-border-strong bg-surface-muted relative isolate z-0 h-72 w-full overflow-hidden border"
+        :data-test="mapDataTest"
+      />
+      <svg
+        v-if="viewport"
+        class="pointer-events-none absolute top-1/2 left-1/2 z-10 h-9 w-9 -translate-x-1/2 -translate-y-1/2"
+        viewBox="0 0 36 36"
+        aria-hidden="true"
+        focusable="false"
+        data-test="location-picker-crosshair"
+      >
+        <path d="M18 3v10M18 23v10M3 18h10M23 18h10" stroke="#FFFFFF" stroke-width="5" />
+        <path d="M18 3v10M18 23v10M3 18h10M23 18h10" stroke="#0A2353" stroke-width="2" />
+        <circle cx="18" cy="18" r="2.5" fill="#0A2353" stroke="#FFFFFF" stroke-width="1.5" />
+      </svg>
+    </div>
+
+    <p
+      :id="statusId"
+      role="status"
+      aria-live="polite"
+      class="text-brand-navy text-sm font-medium"
+      data-test="location-picker-status"
+    >
+      {{ statusText }}
+    </p>
+
+    <p v-if="error" :id="errorId" class="text-status-error text-xs font-medium">{{ error }}</p>
+
+    <div class="space-y-2">
+      <div
+        role="group"
+        :aria-label="viewport ? 'Geser peta' : 'Geser pin'"
+        class="grid grid-cols-2 gap-2 sm:grid-cols-4"
+      >
+        <button
+          v-for="direction in directions"
+          :key="direction"
+          type="button"
+          :class="buttonClasses"
+          :disabled="!editable || (!viewport && !hasValue)"
+          :data-test="`${testId}-${direction}`"
+          @click="nudge(direction)"
+        >
+          Geser ke {{ DIRECTION_LABELS[direction] }}
+        </button>
+      </div>
+
+      <div role="group" aria-label="Perbesar atau perkecil peta" class="grid grid-cols-2 gap-2">
+        <button
+          ref="zoomInButton"
+          type="button"
+          :class="buttonClasses"
+          :disabled="!canZoom || atMaxZoom"
+          :data-test="`${testId}-zoom-in`"
+          @click="zoomBy(1)"
+        >
+          Perbesar
+        </button>
+        <button
+          ref="zoomOutButton"
+          type="button"
+          :class="buttonClasses"
+          :disabled="!canZoom || atMinZoom"
+          :data-test="`${testId}-zoom-out`"
+          @click="zoomBy(-1)"
+        >
+          Perkecil
+        </button>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <button
+          v-if="!viewport"
+          ref="centerPinButton"
+          type="button"
+          :class="buttonClasses"
+          :disabled="!editable"
+          :data-test="`${testId}-center`"
+          @click="placePinAtCenter"
+        >
+          Letakkan pin di tengah peta
+        </button>
+        <button
+          v-if="detectable"
+          type="button"
+          :class="buttonClasses"
+          :disabled="!editable || detecting"
+          :aria-describedby="locationError ? detectErrorId : undefined"
+          :data-test="`${testId}-detect`"
+          @click="detectLocation"
+        >
+          {{ detecting ? 'Mencari lokasi…' : 'Gunakan lokasi perangkat' }}
+        </button>
+        <button
+          v-if="clearable && !viewport"
+          type="button"
+          :class="buttonClasses"
+          :disabled="!editable || !hasValue"
+          :data-test="`${testId}-clear`"
+          @click="clearLocation"
+        >
+          Hapus pin
+        </button>
+        <button
+          ref="keyboardToggle"
+          type="button"
+          :class="buttonClasses"
+          :disabled="!editable"
+          :aria-pressed="keyboardMode"
+          :aria-describedby="keysId"
+          :data-test="`${testId}-keyboard`"
+          @click="toggleKeyboardMode"
+        >
+          {{ keyboardMode ? 'Matikan mode keyboard' : 'Aktifkan mode keyboard' }}
+        </button>
+      </div>
+    </div>
+
+    <p :id="keysId" class="text-text-muted text-xs leading-snug">
+      <strong class="text-brand-navy font-semibold">Mode keyboard:</strong>
+      aktifkan, lalu tekan tombol panah untuk menggeser {{ viewport ? 'peta' : 'pin' }}. Tahan Shift
+      untuk langkah lebih besar. Tekan + untuk memperbesar, − untuk memperkecil, dan Esc untuk
+      keluar.
+    </p>
+
+    <p v-if="accuracy !== null" class="text-text-muted text-xs">
+      Perkiraan akurasi lokasi perangkat ±{{ Math.round(accuracy) }} m.
+    </p>
+    <p
+      v-if="locationError"
+      :id="detectErrorId"
+      role="alert"
+      class="text-status-error text-sm font-medium"
+    >
+      {{ locationError }}
+    </p>
+  </fieldset>
+</template>
+
+<style>
+.leaflet-container {
+  font-family: inherit;
+}
+
+.location-picker-pin {
+  background: transparent !important;
+  border: none !important;
+}
+</style>

@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import { MANGGAR_MAP_CENTER, MANGGAR_MAP_DEFAULT_ZOOM } from '../../constants/mapOrigin';
+/**
+ * Ketua RT home location: a thin wrapper over the shared `LocationPicker` in pin mode. Public
+ * props and events are unchanged (`modelValue`, `disabled`, `update:modelValue`,
+ * `validity-change`) so `AdminRukunTetanggaView` needs no edits. There are no coordinate fields:
+ * the pin is placed and refined on the map or with the keyboard buttons.
+ */
+import { computed } from 'vue';
+import LocationPicker, { type PickerLocation } from './LocationPicker.vue';
 
 export interface PickedLocation {
   latitude: number;
@@ -19,228 +23,29 @@ const emit = defineEmits<{
   (event: 'validity-change', value: boolean): void;
 }>();
 
-const container = ref<HTMLElement | null>(null);
-const accuracy = ref<number | null>(null);
-const locationError = ref('');
-const latitude = ref(props.modelValue ? String(props.modelValue.latitude) : '');
-const longitude = ref(props.modelValue ? String(props.modelValue.longitude) : '');
-const coordinateError = ref('');
-let map: L.Map | null = null;
-let marker: L.Marker | null = null;
-let isUnmounted = false;
-
-function setLocation(location: PickedLocation) {
-  if (props.disabled) return;
-  emit('update:modelValue', location);
-}
-
-function placeMarker(location: PickedLocation) {
-  if (!map) return;
-  if (!marker) {
-    marker = L.marker([location.latitude, location.longitude], {
-      draggable: !props.disabled,
-    }).addTo(map);
-    marker.on('dragend', () => {
-      const next = marker?.getLatLng();
-      if (next) setLocation({ latitude: next.lat, longitude: next.lng });
-    });
-  } else {
-    marker.setLatLng([location.latitude, location.longitude]);
-  }
-}
-
-onMounted(() => {
-  isUnmounted = false;
-  nextTick(() => {
-    if (isUnmounted || !container.value) return;
-    const start = props.modelValue ?? {
-      latitude: MANGGAR_MAP_CENTER[0],
-      longitude: MANGGAR_MAP_CENTER[1],
-    };
-    map = L.map(container.value).setView(
-      [start.latitude, start.longitude],
-      props.modelValue ? 17 : MANGGAR_MAP_DEFAULT_ZOOM,
-    );
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors',
-    }).addTo(map);
-    map.on('click', (event: L.LeafletMouseEvent) => {
-      setLocation({ latitude: event.latlng.lat, longitude: event.latlng.lng });
-    });
-    if (props.modelValue) placeMarker(props.modelValue);
-    window.setTimeout(() => map?.invalidateSize(), 100);
-  });
-});
-
-watch(
-  () => props.modelValue,
-  (value) => {
-    if (
-      !value ||
-      Number(latitude.value) !== value.latitude ||
-      Number(longitude.value) !== value.longitude
-    ) {
-      latitude.value = value ? String(value.latitude) : '';
-      longitude.value = value ? String(value.longitude) : '';
-    }
-    coordinateError.value = '';
-    emit('validity-change', true);
-    if (!value) {
-      marker?.remove();
-      marker = null;
-      return;
-    }
-    placeMarker(value);
-  },
-  { deep: true },
+const value = computed<PickerLocation | null>(() =>
+  props.modelValue
+    ? { latitude: props.modelValue.latitude, longitude: props.modelValue.longitude }
+    : null,
 );
 
-function updateCoordinates() {
-  const lat = latitude.value.trim();
-  const lon = longitude.value.trim();
-  if (!lat && !lon) {
-    coordinateError.value = '';
-    emit('validity-change', true);
-    emit('update:modelValue', null);
-    return;
-  }
-  const latValue = Number(lat);
-  const lonValue = Number(lon);
-  if (
-    !lat ||
-    !lon ||
-    !Number.isFinite(latValue) ||
-    !Number.isFinite(lonValue) ||
-    Math.abs(latValue) > 90 ||
-    Math.abs(lonValue) > 180
-  ) {
-    coordinateError.value =
-      'Masukkan lintang (-90 hingga 90) dan bujur (-180 hingga 180) yang valid.';
-    emit('validity-change', false);
-    return;
-  }
-  coordinateError.value = '';
+function update(next: PickerLocation | null): void {
+  // Pin positions come from the map, so they are always valid; the event stays for the view.
   emit('validity-change', true);
-  emit('update:modelValue', { latitude: latValue, longitude: lonValue });
+  emit('update:modelValue', next ? { latitude: next.latitude, longitude: next.longitude } : null);
 }
-
-function requestCurrentLocation() {
-  locationError.value = '';
-  accuracy.value = null;
-  if (!navigator.geolocation) {
-    locationError.value = 'Perangkat ini tidak mendukung deteksi lokasi.';
-    return;
-  }
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      const location = {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-      };
-      accuracy.value = position.coords.accuracy;
-      setLocation(location);
-      map?.setView([location.latitude, location.longitude], 17);
-    },
-    (error) => {
-      locationError.value =
-        error.code === error.PERMISSION_DENIED
-          ? 'Izin lokasi tidak diberikan; pilih titik secara manual.'
-          : 'Lokasi tidak dapat ditentukan; pilih titik secara manual.';
-    },
-    { timeout: 10000 },
-  );
-}
-
-function clearLocation() {
-  marker?.remove();
-  marker = null;
-  accuracy.value = null;
-  latitude.value = '';
-  longitude.value = '';
-  coordinateError.value = '';
-  emit('validity-change', true);
-  emit('update:modelValue', null);
-}
-
-onUnmounted(() => {
-  isUnmounted = true;
-  map?.remove();
-  map = null;
-  marker = null;
-});
 </script>
 
 <template>
-  <div class="space-y-2">
-    <div class="grid gap-2 sm:grid-cols-2">
-      <label class="text-sm"
-        >Lintang
-        <input
-          v-model="latitude"
-          type="text"
-          inputmode="decimal"
-          :disabled="disabled"
-          :aria-invalid="coordinateError ? 'true' : undefined"
-          :aria-describedby="coordinateError ? 'rt-coordinate-error' : undefined"
-          class="block w-full rounded border border-slate-300 px-2 py-1"
-          @input="updateCoordinates"
-        />
-      </label>
-      <label class="text-sm"
-        >Bujur
-        <input
-          v-model="longitude"
-          type="text"
-          inputmode="decimal"
-          :disabled="disabled"
-          :aria-invalid="coordinateError ? 'true' : undefined"
-          :aria-describedby="coordinateError ? 'rt-coordinate-error' : undefined"
-          class="block w-full rounded border border-slate-300 px-2 py-1"
-          @input="updateCoordinates"
-        />
-      </label>
-    </div>
-    <p v-if="coordinateError" id="rt-coordinate-error" class="text-sm text-rose-700" role="alert">
-      {{ coordinateError }}
-    </p>
-    <div
-      ref="container"
-      class="relative isolate z-0 h-64 w-full overflow-hidden rounded border border-slate-300"
-      data-test="rt-location-picker"
-    />
-    <div class="flex flex-wrap gap-2">
-      <button
-        type="button"
-        class="text-brand-navy rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
-        :disabled="disabled"
-        data-test="rt-location-detect"
-        @click="requestCurrentLocation"
-      >
-        Gunakan lokasi saat ini
-      </button>
-      <button
-        type="button"
-        class="text-brand-navy rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
-        :disabled="disabled || (!modelValue && !latitude && !longitude)"
-        data-test="rt-location-clear"
-        @click="clearLocation"
-      >
-        Hapus titik
-      </button>
-    </div>
-    <p class="text-xs text-slate-600">
-      Klik peta untuk menempatkan pin, lalu geser untuk menyesuaikan. Perangkat location belum tentu
-      sama dengan lokasi rumah Ketua RT.
-      <span v-if="accuracy !== null">Perkiraan akurasi ±{{ Math.round(accuracy) }} m.</span>
-    </p>
-    <p v-if="locationError" class="text-sm text-rose-700" role="alert">{{ locationError }}</p>
-    <p v-if="!modelValue" class="text-sm text-slate-600">Lokasi belum dipilih.</p>
-  </div>
+  <LocationPicker
+    :model-value="value"
+    label="Lokasi rumah Ketua RT"
+    help-text="Klik atau ketuk peta untuk meletakkan pin, lalu geser pin untuk menyesuaikan. Lokasi perangkat belum tentu sama dengan lokasi rumah Ketua RT."
+    test-id="rt-location"
+    map-test-id="rt-location-picker"
+    :disabled="disabled"
+    clearable
+    detectable
+    @update:model-value="update"
+  />
 </template>
-
-<style>
-.leaflet-container {
-  font-family: inherit;
-}
-</style>
