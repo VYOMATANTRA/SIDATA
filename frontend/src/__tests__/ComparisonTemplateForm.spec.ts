@@ -472,11 +472,11 @@ describe('ComparisonTemplateForm', () => {
       saveResponses.push(() => new Promise<Response>((resolve) => (release = resolve)));
       await wrapper.find('form').trigger('submit');
       await flushPromises();
-      expect(wrapper.emitted('busy')?.at(-1)).toEqual([true]);
+      expect(wrapper.emitted('busy')?.slice(-1)[0]).toEqual([true]);
 
       release(json({ template: makeTemplate() }));
       await flushPromises();
-      expect(wrapper.emitted('busy')?.at(-1)).toEqual([false]);
+      expect(wrapper.emitted('busy')?.slice(-1)[0]).toEqual([false]);
       wrapper.unmount();
     });
   });
