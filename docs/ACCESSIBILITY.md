@@ -133,10 +133,12 @@ the gap between policy and reality is visible, not hidden by the fact that this 
    header, footer, focus moved to `<main>` on route change). The remaining routed views outside it
    (login, register, setup-password, the OAuth callback and `/dashboard`) lack a shared skip link
    and landmark structure (`/dashboard` has its own `<main>`).
-2. The three modals in `UserManagement.vue` and `OtpVerificationModal.vue` have no `role="dialog"`,
-   `aria-modal`, `aria-labelledby`, focus trap, Escape handling, or focus restore. New work should
-   use `BaseModal.vue` (dialog semantics, focus trap, Escape, focus restore, scroll lock, full-screen
-   sheet on mobile) — the gap is the legacy modals, not the primitive.
+2. The three modals in `UserManagement.vue` have no `role="dialog"`, `aria-modal`,
+   `aria-labelledby`, focus trap, Escape handling, or focus restore. `OtpVerificationModal.vue` has
+   the dialog semantics (`role="dialog"`, `aria-modal`, `aria-labelledby`) but still lacks a focus
+   trap, Escape handling, focus restore, and a body scroll lock. New work should use `BaseModal.vue`
+   (dialog semantics, focus trap, Escape, focus restore, scroll lock, full-screen sheet on mobile) —
+   the gap is the legacy modals, not the primitive.
 3. Form labels across `LoginView.vue`, `RegisterView.vue`, `SetupPassword.vue`, and
    `UserManagement.vue` are sibling `<label>` elements with no `for`/`id` pairing — not
    programmatically associated with their inputs. No credential field sets `autocomplete`. No
