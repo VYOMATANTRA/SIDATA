@@ -155,6 +155,50 @@ describe('LocationPicker', () => {
       expect(lastEmitted(wrapper)!.latitude).toBeCloseTo(PIN.latitude, 5);
     });
 
+    describe('keyboard mode focus', () => {
+      it('moves focus to the region (not the attribution link) after a click, without scrolling', async () => {
+        const wrapper = await mountPicker({ modelValue: PIN });
+        const region = wrapper.get('[data-test="location-picker-region"]').element as HTMLElement;
+        const attribution = document.createElement('a');
+        attribution.href = 'https://www.openstreetmap.org/copyright';
+        region.appendChild(attribution);
+        const focusSpy = vi.spyOn(region, 'focus');
+        await click(wrapper, 'location-picker-keyboard');
+        await flushPromises();
+        expect(document.activeElement).toBe(region);
+        expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+      });
+
+      it('does the same when the toggle is activated with Enter', async () => {
+        const wrapper = await mountPicker({ modelValue: PIN });
+        const region = wrapper.get('[data-test="location-picker-region"]').element as HTMLElement;
+        const focusSpy = vi.spyOn(region, 'focus');
+        const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
+        (toggle.element as HTMLElement).focus();
+        await toggle.trigger('keydown', { key: 'Enter' });
+        await toggle.trigger('click');
+        await flushPromises();
+        expect(document.activeElement).toBe(region);
+        expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+      });
+    });
+
+    it('moves the viewport by exactly whole pixels per arrow press, six presses covering 96px', async () => {
+      const wrapper = await mountPicker({
+        modelValue: { latitude: -1.2251, longitude: 116.9438, zoom: 13 },
+        includeZoom: true,
+      });
+      await click(wrapper, 'location-picker-keyboard');
+      const region = wrapper.get('[data-test="location-picker-region"]');
+      for (let i = 0; i < 6; i += 1) await region.trigger('keydown', { key: 'ArrowRight' });
+      expect(leafletMap.panBy).toHaveBeenCalledTimes(6);
+      for (const call of leafletMap.panBy.mock.calls) {
+        expect(call).toEqual([[16, 0], { animate: false }]);
+      }
+      await region.trigger('keydown', { key: 'ArrowUp', shiftKey: true });
+      expect(leafletMap.panBy).toHaveBeenLastCalledWith([0, -80], { animate: false });
+    });
+
     it('lets a pointer click on the toggle turn keyboard mode off and back on', async () => {
       const wrapper = await mountPicker({ modelValue: PIN });
       const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
@@ -435,6 +479,22 @@ describe('LocationPicker', () => {
       expect(live.text()).not.toContain('\u200b');
     });
 
+    it('coalesces rapid zoom steps into one announcement of the final direction', async () => {
+      vi.useFakeTimers();
+      const wrapper = await mountPicker({ modelValue: PIN });
+      const live = wrapper.get('[data-test="location-picker-announcement"]');
+      for (let i = 0; i < 5; i += 1) {
+        await click(wrapper, 'location-picker-zoom-in');
+        vi.advanceTimersByTime(100);
+        await nextTick();
+        expect(live.text()).toBe('');
+      }
+      await click(wrapper, 'location-picker-zoom-out');
+      vi.advanceTimersByTime(600);
+      await nextTick();
+      expect(live.text()).toBe('Peta diperkecil.');
+    });
+
     it('re-announces an identical message by clearing the live region first', async () => {
       vi.useFakeTimers();
       const wrapper = await mountPicker();
@@ -473,6 +533,10 @@ describe('LocationPicker', () => {
         void click(wrapper, 'location-picker-north');
         void click(wrapper, 'location-picker-zoom-in');
         vi.advanceTimersByTime(200);
+        await nextTick();
+        expect(live.text()).toBe('Pin digeser ke utara.');
+        // The zoom announcement is coalesced and arrives after the quiet period.
+        vi.advanceTimersByTime(600);
         await nextTick();
         expect(live.text()).toBe('Peta diperbesar.');
       });
@@ -780,11 +844,17 @@ describe('LocationPicker', () => {
       expect(leafletMap.panTo).toHaveBeenLastCalledWith([-1.5, 117], { animate: false });
     });
 
+    it('never lets a drag coast: inertia is off whatever the motion preference', async () => {
+      stubMotion(false);
+      await mountPicker({ modelValue: PIN });
+      expect(leafletState.mapOptions).toMatchObject({ inertia: false });
+    });
+
     it('keeps Leaflet animations and animated pans otherwise', async () => {
       stubMotion(false);
       leafletState.inBounds = false;
       const wrapper = await mountPicker({ modelValue: PIN });
-      expect(leafletState.mapOptions).not.toHaveProperty('inertia');
+      expect(leafletState.mapOptions).not.toHaveProperty('zoomAnimation');
       await wrapper.setProps({ modelValue: { latitude: -1.5, longitude: 117 } });
       expect(leafletMap.panTo).toHaveBeenLastCalledWith([-1.5, 117], { animate: true });
     });

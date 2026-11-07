@@ -71,6 +71,15 @@ export function moveLocation(
   return normalizeLocation(moved) ?? from;
 }
 
+/** Screen offset `[x, y]` in pixels for one step (y grows downwards, so north is negative). */
+export function directionOffset(direction: PickerDirection, large = false): [number, number] {
+  const pixels = large ? LARGE_STEP_PIXELS : STEP_PIXELS;
+  if (direction === 'north') return [0, -pixels];
+  if (direction === 'south') return [0, pixels];
+  if (direction === 'east') return [pixels, 0];
+  return [-pixels, 0];
+}
+
 export const DIRECTION_LABELS: Readonly<Record<PickerDirection, string>> = {
   north: 'utara',
   south: 'selatan',

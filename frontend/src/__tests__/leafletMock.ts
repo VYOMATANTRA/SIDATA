@@ -60,6 +60,7 @@ function applyDrift(): void {
 export const leafletMap = {
   setView: vi.fn<(center: [number, number], zoom?: number, options?: unknown) => unknown>(),
   setZoom: vi.fn<(zoom: number, options?: unknown) => unknown>(),
+  panBy: vi.fn<(offset: [number, number], options?: unknown) => unknown>(),
   panTo: vi.fn<(center: [number, number], options?: unknown) => unknown>(),
   getCenter: vi.fn<() => { lat: number; lng: number }>(),
   getZoom: vi.fn<() => number>(),
@@ -93,6 +94,17 @@ function wire(): void {
   });
   leafletMap.setZoom.mockImplementation((zoom) => {
     leafletState.zoom = zoom;
+    return leafletMap;
+  });
+  leafletMap.panBy.mockImplementation((offset) => {
+    // Whole-pixel pan at the current zoom (Web Mercator, 256 px tiles), like Leaflet's `panBy`.
+    const perPixel = 360 / (256 * 2 ** leafletState.zoom);
+    const cos = Math.cos((leafletState.center.lat * Math.PI) / 180);
+    leafletState.center = {
+      lat: leafletState.center.lat - offset[1] * perPixel * cos,
+      lng: leafletState.center.lng + offset[0] * perPixel,
+    };
+    leafletState.handlers.moveend?.();
     return leafletMap;
   });
   leafletMap.panTo.mockImplementation((center) => {

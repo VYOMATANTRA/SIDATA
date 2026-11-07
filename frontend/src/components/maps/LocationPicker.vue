@@ -26,6 +26,7 @@ import { MANGGAR_MAP_CENTER, MANGGAR_MAP_DEFAULT_ZOOM } from '../../constants/ma
 import {
   DIRECTION_LABELS,
   clampZoom,
+  directionOffset,
   moveLocation,
   normalizeLocation,
   sameLocation,
@@ -427,7 +428,9 @@ onMounted(() => {
     reducedMotion = prefersReducedMotion();
     map = L.map(container.value, {
       doubleClickZoom: !viewport.value,
-      ...(reducedMotion ? { inertia: false, zoomAnimation: false, fadeAnimation: false } : {}),
+      // A position picker needs precision: a fast drag must not coast hundreds of pixels away.
+      inertia: false,
+      ...(reducedMotion ? { zoomAnimation: false, fadeAnimation: false } : {}),
       zoomControl: false,
       keyboard: false,
       scrollWheelZoom: false,
@@ -500,14 +503,19 @@ function nudge(direction: PickerDirection, large = false, viaKeyboard = false): 
     placePinAtCenter();
     return;
   }
-  const moved = moveLocation(base, direction, viewZoom.value, large);
   if (viewport.value) {
-    applyView(moved, viewZoom.value);
+    // Pan by whole screen pixels: re-centring on a computed coordinate makes Leaflet truncate the
+    // fractional pixel of every step (`_tryAnimatedPan`), so six presses covered 91px, not 96.
+    const [dx, dy] = directionOffset(direction, large);
+    runSilently(() => map?.panBy([dx, dy], { animate: false }));
+    const center = viewCenter();
+    if (center) emitValue(center, viewZoom.value);
     const message = `Peta digeser ke ${DIRECTION_LABELS[direction]}.`;
     if (viaKeyboard) announceNudge(message);
     else announce(message);
     return;
   }
+  const moved = moveLocation(base, direction, viewZoom.value, large);
   emitValue(moved);
   if (!map.getBounds().contains([moved.latitude, moved.longitude])) {
     runSilently(() => map?.panTo([moved.latitude, moved.longitude], { animate: !reducedMotion }));
@@ -540,7 +548,8 @@ function zoomBy(delta: 1 | -1): void {
   } else {
     runSilently(() => map?.setZoom(next, { animate: false }));
   }
-  announce(delta > 0 ? 'Peta diperbesar.' : 'Peta diperkecil.');
+  // Rapid zoom steps are announced once, with the final direction, like held arrow keys.
+  announceNudge(delta > 0 ? 'Peta diperbesar.' : 'Peta diperkecil.');
   // A button that just disabled itself must not drop focus on the page body (WCAG 2.4.3). When
   // the zoom came from a key, focus is in the region and must stay there.
   if (!fromButton) return;
@@ -636,7 +645,21 @@ function toggleKeyboardMode(): void {
       ? 'Mode keyboard aktif. Gunakan tombol panah untuk menggeser.'
       : 'Mode keyboard nonaktif.',
   );
-  if (keyboardMode.value) void nextTick(() => region.value?.focus());
+  if (keyboardMode.value) void focusRegionWhenReady();
+}
+
+/**
+ * The region only carries `tabindex="0"` once the mode has re-rendered, so it is made focusable
+ * first, then focused after the render. `preventScroll` keeps the browser from scrolling the
+ * surrounding dialog to the focused element, which shifted the controls under the pointer.
+ */
+async function focusRegionWhenReady(): Promise<void> {
+  const element = region.value;
+  if (!element) return;
+  element.tabIndex = 0;
+  await nextTick();
+  if (isUnmounted || !keyboardMode.value) return;
+  region.value?.focus({ preventScroll: true });
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -714,7 +737,7 @@ const buttonClasses =
   >
     <legend class="text-brand-navy text-sm font-medium">{{ label }}</legend>
 
-    <p v-if="helpText" :id="helpId" class="text-text-muted text-xs leading-snug">{{ helpText }}</p>
+    <p v-if="helpText" :id="helpId" class="text-text-muted text-sm leading-snug">{{ helpText }}</p>
 
     <slot />
 
@@ -755,7 +778,7 @@ const buttonClasses =
       {{ announcement }}
     </p>
 
-    <p v-if="error" :id="errorId" class="text-status-error text-xs font-medium">{{ error }}</p>
+    <p v-if="error" :id="errorId" class="text-status-error text-sm font-medium">{{ error }}</p>
 
     <div class="space-y-2">
       <div
@@ -852,14 +875,14 @@ const buttonClasses =
       </div>
     </div>
 
-    <p :id="keysId" class="text-text-muted text-xs leading-snug">
+    <p :id="keysId" class="text-text-muted text-sm leading-snug">
       <strong class="text-brand-navy font-semibold">Mode keyboard:</strong>
       aktifkan, lalu tekan tombol panah untuk menggeser {{ viewport ? 'peta' : 'pin' }}. Tahan Shift
       untuk langkah lebih besar. Tekan + untuk memperbesar, − untuk memperkecil, dan Esc untuk
       keluar.
     </p>
 
-    <p v-if="accuracyText" class="text-text-muted text-xs" :data-test="`${testId}-accuracy`">
+    <p v-if="accuracyText" class="text-text-muted text-sm" :data-test="`${testId}-accuracy`">
       {{ accuracyText }}
     </p>
     <p
