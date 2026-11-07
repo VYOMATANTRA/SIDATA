@@ -21,6 +21,7 @@ import {
   assertPlainObject,
   baseSlugFromTitle,
   expectedUpdatedAtSchema,
+  hasControlCharacters as hasSharedControlCharacters,
   idParamSchema,
   isUniqueViolation,
   MAX_SLUG_LENGTH,
@@ -446,7 +447,19 @@ export function validateBlockMetadata(
 
 export const updateContentBlockSchema = z
   .object({
-    title: z.string().trim().max(255, 'Judul maksimal 255 karakter').nullable().optional(),
+    // Same content rules as titleSchema (no control/bidi characters, no HTML); null and a blank
+    // string stay valid because both clear the title.
+    title: z
+      .string()
+      .trim()
+      .max(255, 'Judul maksimal 255 karakter')
+      .refine(
+        (v) => !hasSharedControlCharacters(v),
+        'Judul mengandung karakter kontrol yang tidak valid',
+      )
+      .refine((v) => !/<[a-z!/]/i.test(v), 'Judul tidak boleh mengandung tag HTML')
+      .nullable()
+      .optional(),
     body: z
       .string()
       .trim()

@@ -436,6 +436,24 @@ describe('contentBlocks authoring (section prose blocks)', () => {
       assert.equal(db.auditRows[0]!.action, 'content_block.updated');
     });
 
+    it('rejects an HTML or control-character title with 400, nothing written', async () => {
+      for (const title of ['<b>Judul</b>', 'Judul\u0000', 'Judul\u202Eterbalik']) {
+        await assert.rejects(
+          updateContentBlock('pendahuluan', { title }, actor, ctx),
+          expectError(400),
+        );
+      }
+      assert.equal(db.contentBlock.rows[0]!.title, 'Pendahuluan');
+      assert.equal(db.auditRows.length, 0);
+    });
+
+    it('accepts a clean title and still allows null to clear it', async () => {
+      const renamed = await updateContentBlock('pendahuluan', { title: 'Judul Baru' }, actor, ctx);
+      assert.equal(renamed.title, 'Judul Baru');
+      const cleared = await updateContentBlock('pendahuluan', { title: null }, actor, ctx);
+      assert.equal(cleared.title, null);
+    });
+
     it('stays optional for existing clients', async () => {
       const updated = await updateContentBlock('pendahuluan', { body: 'Tanpa token' }, actor, ctx);
       assert.equal(updated.body, 'Tanpa token');
