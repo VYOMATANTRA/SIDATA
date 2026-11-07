@@ -54,7 +54,7 @@ function isEventFromOpenDialog(event: KeyboardEvent): boolean {
   if (target?.closest('[role="dialog"], [role="alertdialog"], dialog')) {
     return true;
   }
-  return Boolean(document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]'));
+  return false;
 }
 
 function handleKeydown(event: KeyboardEvent) {
