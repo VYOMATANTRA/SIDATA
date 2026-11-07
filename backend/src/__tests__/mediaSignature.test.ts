@@ -17,6 +17,7 @@ import {
   validateStagedFile,
   type MediaValidationCode,
 } from '../utils/mediaSignature.js';
+import { scanCsvFile } from '../utils/mediaCsv.js';
 import { PDF_BYTES, buildDocx, buildXlsx, buildZip, makeImage } from './helpers/mediaFixtures.js';
 
 let dir: string;
@@ -260,5 +261,91 @@ describe('inspectOoxmlArchive', () => {
       () => inspectOoxmlArchive(file, 0),
       (error: unknown) => error instanceof MediaValidationError && error.code === 'INVALID_ARCHIVE',
     );
+  });
+});
+
+describe('CSV formula-injection scan', () => {
+  const rejected: Array<[string, string]> = [
+    ['=HYPERLINK', 'a,b\n1,=HYPERLINK("http://evil.example","x")\n'],
+    ['+cmd', "a,b\n+cmd|' /C calc'!A0,2\n"],
+    ['@SUM', '@SUM(A1:A9),x\n'],
+    ['-cmd pipe', "a\n-cmd|' /C calc'!A0\n"],
+    ['formula in quoted field', 'a,b\n1,"=1+1"\n'],
+    ['formula after escaped quote cell', 'a,b\n"say ""hi""",=2+2\n'],
+    ['formula on a quoted multi-line row', 'a,b\n"line1\nline2",@x\n'],
+    ['leading tab', 'a,b\n1,\t=1+1\n'],
+    ['leading CR inside quotes', 'a,b\n1,"\r=1+1"\n'],
+    ['minus then text', 'a\n-5abc\n'],
+    ['plain "-" alone', 'a\n-\n'],
+    ['formula in the last cell without newline', 'a,b\n1,=1+1'],
+  ];
+  const accepted: Array<[string, string]> = [
+    ['negative integer', 'a,b\n-5,2\n'],
+    ['plus decimal', 'a,b\n+3.2,x\n'],
+    ['comma decimal in quotes', 'a,b\n"-0,5",x\n'],
+    ['exponent', 'a\n-1e-3\n'],
+    ['plain number', 'a,b\n3.2,4\n'],
+    ['quoted comma', 'a,b\n"a,b",c\n'],
+    ['plain text', 'rt,nama\n1,Budi\n2,Siti\n'],
+    ['apostrophe-prefixed formula', "a,b\n'=1+1,'@x\n"],
+    ['formula chars mid-cell', 'a,b\nx=1,y+2\na-b,c@d\n'],
+    ['empty cells and CRLF', 'a,b,c\r\n1,,\r\n\r\n,2,\r\n'],
+    [
+      'escaped quotes and embedded newline',
+      'a,b\n"say ""=hi""\n=not a formula, it is inside quotes",x\n',
+    ],
+    ['CRLF number', 'a\r\n-5\r\n'],
+  ];
+
+  for (const [name, text] of rejected) {
+    it(`rejects: ${name}`, async () => {
+      await rejectsWith(Buffer.from(text), 'x.csv', 'CSV_FORMULA');
+    });
+  }
+
+  it('tells the editor to prefix the value with an apostrophe, in Indonesian', async () => {
+    await assert.rejects(
+      async () => validateStagedFile(await stage(Buffer.from('a\n=1+1\n')), 'x.csv'),
+      (error: unknown) =>
+        error instanceof MediaValidationError &&
+        error.statusCode === 415 &&
+        /tanda petik tunggal/.test(error.message),
+    );
+  });
+
+  for (const [name, text] of accepted) {
+    it(`accepts: ${name}`, async () => {
+      const detected = await validateStagedFile(await stage(Buffer.from(text)), 'x.csv');
+      assert.equal(detected.typeKey, 'csv');
+    });
+  }
+
+  it('gives the same verdict whatever the chunk size (cells split across chunk boundaries)', async () => {
+    const corpus = [...rejected, ...accepted].map(([name, text]) => [
+      name,
+      Buffer.from(`\ufeff${text}`, 'utf8'),
+    ]) as Array<[string, Buffer]>;
+    corpus.push(['multibyte', Buffer.from('nama\nSiti Ñandú 日本語\n"é,ü",=x\n', 'utf8')]);
+    for (const [name, bytes] of corpus) {
+      const file = await stage(bytes);
+      const whole = await scanCsvFile(file, 1 << 20);
+      for (const chunk of [1, 2, 3, 5, 7]) {
+        assert.deepEqual(await scanCsvFile(file, chunk), whole, `${name} @ chunk ${chunk}`);
+      }
+    }
+  });
+
+  it('keeps UTF-8 strictness across a split multi-byte sequence', async () => {
+    const valid = await stage(Buffer.from('a\nÑ日\n'));
+    assert.deepEqual(await scanCsvFile(valid, 1), { ok: true });
+    const broken = await stage(Buffer.from([0x61, 0x0a, 0xe6, 0x97]));
+    assert.deepEqual(await scanCsvFile(broken, 1), { ok: false, reason: 'binary' });
+  });
+
+  it('streams a large CSV without loading it whole', async () => {
+    const row = 'rt,nama,jumlah\n';
+    const body = Buffer.from(row + '1,Budi,-5\n'.repeat(200_000));
+    const file = await stage(body);
+    assert.deepEqual(await scanCsvFile(file), { ok: true });
   });
 });

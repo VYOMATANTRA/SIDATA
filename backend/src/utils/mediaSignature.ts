@@ -1,4 +1,4 @@
-import { open, readFile, stat } from 'node:fs/promises';
+import { open, stat } from 'node:fs/promises';
 import path from 'node:path';
 import yauzl from 'yauzl';
 import {
@@ -10,6 +10,7 @@ import {
   type MediaTypeKey,
   type MediaTypePolicy,
 } from './mediaPolicy.js';
+import { scanCsvFile } from './mediaCsv.js';
 
 export type MediaValidationCode =
   | 'EMPTY_FILE'
@@ -19,6 +20,7 @@ export type MediaValidationCode =
   | 'MACRO_ENABLED'
   | 'INVALID_ARCHIVE'
   | 'INVALID_CSV'
+  | 'CSV_FORMULA'
   | 'INVALID_IMAGE';
 
 /** A file the policy refuses. Messages are safe to show the uploader (no paths, no bytes). */
@@ -215,24 +217,6 @@ export function inspectOoxmlArchive(
   });
 }
 
-const MARKUP_START = new RegExp('^\\ufeff?\\s*<[a-z!?]', 'i');
-
-function csvBytesAreSane(buffer: Buffer): boolean {
-  if (buffer.includes(0)) return false;
-  let text: string;
-  try {
-    text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(buffer);
-  } catch {
-    return false;
-  }
-  // Tabs and line breaks are the only legitimate control characters in a CSV.
-  // eslint-disable-next-line no-control-regex
-  if (/[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(text)) return false;
-  // Markup wearing a .csv extension (HTML/SVG/XML) is refused outright.
-  if (MARKUP_START.test(text)) return false;
-  return true;
-}
-
 /**
  * Decides what a staged file really is, from its bytes. Extension and client MIME are never
  * trusted to *grant* a type — a recognised signature is required (CSV, which has none, is the
@@ -316,7 +300,15 @@ export async function validateStagedFile(
   }
 
   if (typeKey === 'csv') {
-    if (!csvBytesAreSane(await readFile(filePath))) {
+    const scan = await scanCsvFile(filePath);
+    if (!scan.ok && scan.reason === 'formula') {
+      throw new MediaValidationError(
+        'CSV_FORMULA',
+        "Ada sel CSV yang diawali =, +, -, atau @ sehingga akan dibaca sebagai rumus oleh Excel/Google Sheets. Tambahkan tanda petik tunggal (') di depan nilai tersebut (misalnya '=SUM(A1)), lalu unggah ulang. Angka biasa seperti -5 atau +3,2 tidak bermasalah.",
+        415,
+      );
+    }
+    if (!scan.ok) {
       throw new MediaValidationError(
         'INVALID_CSV',
         'Berkas CSV harus berupa teks UTF-8 yang valid tanpa karakter biner.',
