@@ -25,7 +25,7 @@ defineProps<ChapterSectionProps>();
 <template>
   <section :id="chapter.slug" class="scroll-mt-24 py-10" data-test="chapter-section">
     <h2 class="flex items-baseline gap-3 text-lg font-semibold text-brand-navy">
-      <span v-if="chapter.number" class="text-brand-navy/40 text-base tabular-nums">{{
+      <span v-if="chapter.number" class="text-text-muted text-base tabular-nums">{{
         chapter.number
       }}</span>
       {{ chapter.title }}
