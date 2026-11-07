@@ -556,6 +556,10 @@ describe('maps.service updateSpatialPoint', () => {
         409,
       );
       await assertServiceError(deleteSpatialPoint(point.id, ACTOR, CONTEXT, undefined, 5), 409);
+      await assert.rejects(
+        deleteSpatialPoint(point.id, ACTOR, CONTEXT, undefined, 5),
+        (err: unknown) => err instanceof MapsServiceError && err.code === 'STALE_WRITE',
+      );
       assert.equal(points.get(point.id)?.latitude, point.latitude);
       assert.deepEqual(coveragesOf(point.id), rts);
       assert.equal(auditRows.length, auditsBefore);
