@@ -484,9 +484,9 @@ export interface DeletedPageDTO {
 export const deletePage = async (
   rawSlug: string,
   actor: AuditActor,
-  reqContext?: AuditRequestContext,
+  reqContext: AuditRequestContext | undefined,
   client = prisma,
-  options?: { expectedUpdatedAt?: string | undefined },
+  options: { expectedUpdatedAt: string },
 ): Promise<DeletedPageDTO> => {
   if (!isValidPageSlug(rawSlug)) {
     throw new PageServiceError(
@@ -512,9 +512,7 @@ export const deletePage = async (
     throw new PageServiceError('Halaman tidak ditemukan', 404);
   }
 
-  if (options?.expectedUpdatedAt !== undefined) {
-    assertFresh(existingPage.updatedAt, options.expectedUpdatedAt, 'Halaman');
-  }
+  assertFresh(existingPage.updatedAt, options.expectedUpdatedAt, 'Halaman');
 
   const dependents = await countSectionDependents(client, { pageId: existingPage.id });
   if (hasDependents(dependents)) {
@@ -541,12 +539,9 @@ export const deletePage = async (
 
   try {
     return await client.$transaction(async (tx) => {
-      // With a precondition the delete is a compare-and-swap on updatedAt (P2025 = lost the race).
+      // The delete is a compare-and-swap on updatedAt (P2025 = lost the race).
       const deleted = await tx.page.delete({
-        where:
-          options?.expectedUpdatedAt !== undefined
-            ? { id: existingPage.id, updatedAt: existingPage.updatedAt }
-            : { id: existingPage.id },
+        where: { id: existingPage.id, updatedAt: existingPage.updatedAt },
       });
 
       await buildAuditLog(
@@ -587,14 +582,11 @@ export const deletePage = async (
         );
       }
       if (err.code === 'P2025') {
-        if (options?.expectedUpdatedAt !== undefined) {
-          throw new PageServiceError(
-            'Halaman telah diubah oleh pengguna lain. Muat ulang data lalu coba lagi.',
-            409,
-            STALE_WRITE_CODE,
-          );
-        }
-        throw new PageServiceError('Halaman tidak ditemukan', 404);
+        throw new PageServiceError(
+          'Halaman telah diubah oleh pengguna lain. Muat ulang data lalu coba lagi.',
+          409,
+          STALE_WRITE_CODE,
+        );
       }
     }
     throw err;

@@ -161,9 +161,11 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
     `updatedAt`, or the parent's for a reorder (`DELETE` sends it as a query parameter). A mismatch is
     `409` with code `STALE_WRITE` and `details.currentUpdatedAt`. Creating, deleting or reordering children also
     bumps the parent's `updatedAt`, so the parent token covers its ordered child list; every write response
-    returns the fresh target and parent tokens. Exceptions kept for existing clients: `PATCH
-    /api/content-blocks/:slug` and `DELETE /api/pages/:slug` accept `expectedUpdatedAt` optionally and enforce
-    it when present. The existing page-list reorder has no parent and takes none.
+    returns the fresh target and parent tokens. `DELETE /api/pages/:slug`
+    requires it too (400 when missing or invalid), so a stale tab cannot delete a page that gained new
+    chapters. The one exception kept for existing clients: `PATCH /api/content-blocks/:slug` accepts
+    `expectedUpdatedAt` optionally and enforces it when present. The existing page-list reorder has no parent
+    and takes none.
   - **Locking.** Locks are taken parent-first (page → chapter → section → block) and children in ascending id
     order, so concurrent authoring cannot deadlock. A no-op reorder, and a retitle to the same title, write
     nothing and audit nothing.

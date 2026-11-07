@@ -37,6 +37,7 @@ const expectedFindUniqueArgs = (slug: string) => ({
 const FIXED_CREATED = new Date('2026-10-01T00:00:00.000Z');
 // Non-zero time and milliseconds so a lossy date conversion would show up.
 const FIXED_UPDATED = new Date(Date.UTC(2026, 9, 9, 7, 45, 30, 123));
+const TOKEN = FIXED_UPDATED.toISOString();
 
 const summaryRow = (overrides: Record<string, unknown> = {}) => ({
   id: 'page-1',
@@ -1146,7 +1147,7 @@ describe('pages.service', () => {
     it('rejects invalid slug format (uppercase, special chars, whitespace, empty, backslash) (400)', async () => {
       for (const badSlug of ['', '   ', 'Kependudukan', 'a_b', 'a/b', 'a\\b', '-a', 'a-']) {
         await assert.rejects(
-          deletePage(badSlug, actor, context),
+          deletePage(badSlug, actor, context, undefined, { expectedUpdatedAt: TOKEN }),
           (err: unknown) =>
             err instanceof PageServiceError &&
             err.statusCode === 400 &&
@@ -1155,11 +1156,25 @@ describe('pages.service', () => {
       }
     });
 
+    it('throws 409 STALE_WRITE when expectedUpdatedAt does not match the page', async () => {
+      stubFindUnique(async () => summaryRow({ id: 'p-1', slug: 'kependudukan' }));
+
+      await assert.rejects(
+        deletePage('kependudukan', actor, context, undefined, {
+          expectedUpdatedAt: '2026-01-01T00:00:00.000Z',
+        }),
+        (err: unknown) =>
+          err instanceof HierarchyServiceError &&
+          err.statusCode === 409 &&
+          err.code === 'STALE_WRITE',
+      );
+    });
+
     it('throws 404 Not Found when page does not exist', async () => {
       stubFindUnique(async () => null);
 
       await assert.rejects(
-        deletePage('halaman-tiada', actor, context),
+        deletePage('halaman-tiada', actor, context, undefined, { expectedUpdatedAt: TOKEN }),
         (err: unknown) =>
           err instanceof PageServiceError &&
           err.statusCode === 404 &&
@@ -1172,7 +1187,7 @@ describe('pages.service', () => {
       prisma.contentBlock.count = (async () => 3) as unknown as typeof prisma.contentBlock.count;
 
       await assert.rejects(
-        deletePage('kependudukan', actor, context),
+        deletePage('kependudukan', actor, context, undefined, { expectedUpdatedAt: TOKEN }),
         (err: unknown) =>
           err instanceof HierarchyServiceError &&
           err.statusCode === 409 &&
@@ -1193,7 +1208,7 @@ describe('pages.service', () => {
       }) as unknown as typeof prisma.$transaction;
 
       await assert.rejects(
-        deletePage('kependudukan', actor, context),
+        deletePage('kependudukan', actor, context, undefined, { expectedUpdatedAt: TOKEN }),
         (err: unknown) =>
           err instanceof PageServiceError &&
           err.statusCode === 409 &&
@@ -1202,7 +1217,7 @@ describe('pages.service', () => {
       );
     });
 
-    it('catches Prisma P2025 record not found race condition and converts to 404 Not Found', async () => {
+    it('catches Prisma P2025 record not found race condition and converts to 409 STALE_WRITE', async () => {
       stubFindUnique(async () => summaryRow({ id: 'p-1', slug: 'kependudukan' }));
       prisma.contentBlock.count = (async () => 0) as unknown as typeof prisma.contentBlock.count;
 
@@ -1214,11 +1229,9 @@ describe('pages.service', () => {
       }) as unknown as typeof prisma.$transaction;
 
       await assert.rejects(
-        deletePage('kependudukan', actor, context),
+        deletePage('kependudukan', actor, context, undefined, { expectedUpdatedAt: TOKEN }),
         (err: unknown) =>
-          err instanceof PageServiceError &&
-          err.statusCode === 404 &&
-          err.message.includes('tidak ditemukan'),
+          err instanceof PageServiceError && err.statusCode === 409 && err.code === 'STALE_WRITE',
       );
     });
 
@@ -1243,7 +1256,7 @@ describe('pages.service', () => {
       }) as unknown as typeof prisma.$transaction;
 
       await assert.rejects(
-        deletePage('kependudukan', actor, context),
+        deletePage('kependudukan', actor, context, undefined, { expectedUpdatedAt: TOKEN }),
         (err: unknown) => err === auditBoom,
       );
     });
@@ -1280,7 +1293,9 @@ describe('pages.service', () => {
         return fn(fakeTx as unknown as typeof prisma);
       }) as unknown as typeof prisma.$transaction;
 
-      const result = await deletePage('kependudukan', actor, context);
+      const result = await deletePage('kependudukan', actor, context, undefined, {
+        expectedUpdatedAt: TOKEN,
+      });
 
       assert.deepStrictEqual(result, {
         id: 'p-1',
@@ -1288,7 +1303,7 @@ describe('pages.service', () => {
         title: 'Kependudukan',
         sortOrder: 0,
       });
-      assert.deepStrictEqual(deletedWhere, { id: 'p-1' });
+      assert.deepStrictEqual(deletedWhere, { id: 'p-1', updatedAt: FIXED_UPDATED });
       assert.deepStrictEqual(auditLogData, {
         action: 'page.deleted',
         severity: 'warning',
@@ -1345,7 +1360,7 @@ describe('pages.service', () => {
         return fn(fakeTx as unknown as typeof prisma);
       }) as unknown as typeof prisma.$transaction;
 
-      await deletePage('kependudukan', actor);
+      await deletePage('kependudukan', actor, undefined, undefined, { expectedUpdatedAt: TOKEN });
 
       assert.deepStrictEqual(auditLogData, {
         action: 'page.deleted',
@@ -1376,6 +1391,7 @@ describe('pages.service', () => {
         slug: 'kependudukan',
         title: 'Kependudukan',
         sortOrder: 0,
+        updatedAt: FIXED_UPDATED,
         chapters: [
           { slug: 'demografi', _count: { sections: 2 } },
           { slug: 'ketenagakerjaan', _count: { sections: 1 } },
@@ -1399,7 +1415,7 @@ describe('pages.service', () => {
         return fn(fakeTx as unknown as typeof prisma);
       }) as unknown as typeof prisma.$transaction;
 
-      await deletePage('kependudukan', actor, context);
+      await deletePage('kependudukan', actor, context, undefined, { expectedUpdatedAt: TOKEN });
 
       assert.ok(auditLogData);
       assert.deepStrictEqual((auditLogData as unknown as { metadata: unknown }).metadata, {

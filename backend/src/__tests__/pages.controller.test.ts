@@ -23,6 +23,8 @@ const UPDATED = new Date('2026-10-09T08:15:00.000Z');
 
 const reqWithSlug = (slug: unknown) => ({ params: { slug } }) as unknown as Request;
 
+const TOKEN = UPDATED.toISOString();
+
 const pageRow = (slug = 'kependudukan') => ({
   id: 'page-1',
   slug,
@@ -713,18 +715,52 @@ describe('pages.controller', () => {
       for (const badSlug of ['', 'Kependudukan', 'a_b', 'bad\\slug']) {
         const res = fakeRes();
         await deletePageHandler(
-          { params: { slug: badSlug }, user: { id: 'u1', role: 'editor' } } as never,
+          {
+            params: { slug: badSlug },
+            query: { expectedUpdatedAt: TOKEN },
+            user: { id: 'u1', role: 'editor' },
+          } as never,
           res,
         );
         assert.equal(res.status, 400);
       }
     });
 
+    it('returns 400 when expectedUpdatedAt is missing or invalid', async () => {
+      for (const query of [{}, { expectedUpdatedAt: 'yesterday' }]) {
+        const res = fakeRes();
+        await deletePageHandler(
+          { params: { slug: 'kependudukan' }, query, user: { id: 'u1', role: 'editor' } } as never,
+          res,
+        );
+        assert.equal(res.status, 400);
+      }
+    });
+
+    it('returns 409 STALE_WRITE when expectedUpdatedAt is stale', async () => {
+      stubFindUnique(async () => pageRow('kependudukan'));
+      const res = fakeRes();
+      await deletePageHandler(
+        {
+          params: { slug: 'kependudukan' },
+          query: { expectedUpdatedAt: '2020-01-01T00:00:00.000Z' },
+          user: { id: 'u1', role: 'editor' },
+        } as never,
+        res,
+      );
+      assert.equal(res.status, 409);
+      assert.equal((res.body as { code?: string }).code, 'STALE_WRITE');
+    });
+
     it('returns 404 when service throws 404 Not Found', async () => {
       stubFindUnique(async () => null);
       const res = fakeRes();
       await deletePageHandler(
-        { params: { slug: 'tidak-ada' }, user: { id: 'u1', role: 'editor' } } as never,
+        {
+          params: { slug: 'tidak-ada' },
+          query: { expectedUpdatedAt: TOKEN },
+          user: { id: 'u1', role: 'editor' },
+        } as never,
         res,
       );
       assert.equal(res.status, 404);
@@ -736,7 +772,11 @@ describe('pages.controller', () => {
       prisma.contentBlock.count = (async () => 1) as unknown as typeof prisma.contentBlock.count;
       const res = fakeRes();
       await deletePageHandler(
-        { params: { slug: 'kependudukan' }, user: { id: 'u1', role: 'editor' } } as never,
+        {
+          params: { slug: 'kependudukan' },
+          query: { expectedUpdatedAt: TOKEN },
+          user: { id: 'u1', role: 'editor' },
+        } as never,
         res,
       );
       assert.equal(res.status, 409);
@@ -748,7 +788,11 @@ describe('pages.controller', () => {
       });
       const res = fakeRes();
       await deletePageHandler(
-        { params: { slug: 'kependudukan' }, user: { id: 'u1', role: 'editor' } } as never,
+        {
+          params: { slug: 'kependudukan' },
+          query: { expectedUpdatedAt: TOKEN },
+          user: { id: 'u1', role: 'editor' },
+        } as never,
         res,
       );
       assert.equal(res.status, 500);
@@ -774,6 +818,7 @@ describe('pages.controller', () => {
       await deletePageHandler(
         {
           params: { slug: 'kependudukan' },
+          query: { expectedUpdatedAt: TOKEN },
           user: { id: 'u1', email: 'editor@manggar.go.id', role: 'editor' },
           ip: '127.0.0.1',
           get: () => 'test-agent',

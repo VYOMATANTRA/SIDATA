@@ -110,24 +110,29 @@ describe('pages.service authoring additions', () => {
       db.indicator.rows.push({ id: 'i1', sectionId: 'sec-1' });
       db.indicator.rows.push({ id: 'i2', sectionId: 'sec-1' });
 
-      await assert.rejects(deletePage('kependudukan', actor, ctx), (err: unknown) => {
-        expectError(409, 'HAS_DEPENDENTS')(err);
-        assert.deepEqual((err as HierarchyServiceError).details, {
-          dependencies: { contentBlocks: 1, indicators: 2, indicatorTables: 0 },
-        });
-        return true;
-      });
+      await assert.rejects(
+        deletePage('kependudukan', actor, ctx, undefined, { expectedUpdatedAt: T0_ISO }),
+        (err: unknown) => {
+          expectError(409, 'HAS_DEPENDENTS')(err);
+          assert.deepEqual((err as HierarchyServiceError).details, {
+            dependencies: { contentBlocks: 1, indicators: 2, indicatorTables: 0 },
+          });
+          return true;
+        },
+      );
       assert.equal(db.page.rows.length, 1);
     });
 
-    it('stays backwards compatible: no precondition needed', async () => {
-      const result = await deletePage('kependudukan', actor, ctx);
+    it('deletes when the token matches', async () => {
+      const result = await deletePage('kependudukan', actor, ctx, undefined, {
+        expectedUpdatedAt: T0_ISO,
+      });
       assert.equal(result.slug, 'kependudukan');
       assert.equal(db.page.rows.length, 0);
       assert.equal(db.chapter.rows.length, 0);
     });
 
-    it('enforces expectedUpdatedAt when supplied (stale -> 409 STALE_WRITE, match -> deleted)', async () => {
+    it('enforces expectedUpdatedAt (stale -> 409 STALE_WRITE, match -> deleted)', async () => {
       await assert.rejects(
         deletePage('kependudukan', actor, ctx, undefined, { expectedUpdatedAt: STALE }),
         expectError(409, 'STALE_WRITE'),

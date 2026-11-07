@@ -94,10 +94,8 @@ export const deletePageHandler = async (
     }
 
     const { slug } = req.params;
-    // The precondition is optional here for backwards compatibility with existing clients.
-    const rawExpected = req.query?.['expectedUpdatedAt'];
-    const expectedUpdatedAt =
-      rawExpected === undefined ? undefined : parseExpectedUpdatedAtQuery(rawExpected);
+    // The version token is required: a stale tab must not delete a page that gained new content.
+    const expectedUpdatedAt = parseExpectedUpdatedAtQuery(req.query?.['expectedUpdatedAt']);
     const deleted = await deletePage(slug as string, actor, extractRequestContext(req), undefined, {
       expectedUpdatedAt,
     });

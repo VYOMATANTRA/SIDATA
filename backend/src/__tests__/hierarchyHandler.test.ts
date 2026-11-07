@@ -133,7 +133,12 @@ describe('deletePageHandler expectedUpdatedAt query', () => {
   });
   afterEach(() => handle.restore());
 
-  it('is optional (legacy clients) but, when present, must be fresh', async () => {
+  it('is required (400 when missing) and must be fresh', async () => {
+    const missing = fakeRes();
+    await deletePageHandler(editorReq({ params: { slug: 'kependudukan' }, query: {} }), missing);
+    assert.equal(missing.status, 400);
+    assert.equal(db.page.rows.length, 1);
+
     const stale = fakeRes();
     await deletePageHandler(
       editorReq({
@@ -171,7 +176,13 @@ describe('deletePageHandler expectedUpdatedAt query', () => {
     db.indicatorTable.rows.push({ id: 't1', sectionId: 'sec-1' });
 
     const res = fakeRes();
-    await deletePageHandler(editorReq({ params: { slug: 'kependudukan' }, query: {} }), res);
+    await deletePageHandler(
+      editorReq({
+        params: { slug: 'kependudukan' },
+        query: { expectedUpdatedAt: T0.toISOString() },
+      }),
+      res,
+    );
 
     assert.equal(res.status, 409);
     const body = res.body as { code: string; details: { dependencies: Record<string, number> } };
