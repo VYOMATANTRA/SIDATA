@@ -271,7 +271,7 @@ the admin base layout shell from §8), organized into three accessible tabbed ca
 3. **Pengaturan Publik Portal:** Displays system portal settings and opens `PublicSettingsForm`. Admins
    can update identity settings (`public.app_name`, `public.institution_name`, `public.tagline`,
    `public.administrative_area`), public contact channels (`public.contact_phone`, `public.contact_whatsapp`,
-   `public.contact_email`, `public.contact_address`), and default map coordinates & zoom (`public.default_coordinates`).
+   `public.contact_email`, `public.contact_address`), and the default map view (`public.default_coordinates`, edited visually on a map picker: staff pan and zoom the map instead of typing latitude, longitude or a zoom number; the stored value stays `{ lat, lon, zoom }`).
    Mutations use `PATCH /api/settings/public` (audited as `settings.public_updated`).
 
 A matrix-table save is one atomic request: `PATCH /api/indicator-tables/:id` carries the table
@@ -463,7 +463,8 @@ displayed dataset has an address value. A prominent sample-data notice follows t
 collapsible bands — flat table only.
 
 Operational roster entry is available in the CMS: manual editing of name, phone, WhatsApp flag,
-address, and optional coordinates, plus CSV preview/apply. CSV columns are
+address, and an optional home location set by placing a pin on a map (no coordinate fields; the
+same `LocationPicker` as the default map view, in pin mode), plus CSV preview/apply. CSV columns are
 `rtNumber,name,phone,phoneIsWhatsapp,alamat,latitude,longitude`; blank cells preserve existing
 values, omitted RTs are never deleted, and the whole import rolls back if any row is invalid.
 Coordinates create or update the RT's 1:1 `ketua_rt` spatial point.
@@ -513,7 +514,7 @@ Provides three tabbed operational interfaces:
 
 1. **Indikator & Tabel**: Searchable and filterable list of all scalar indicators and matrix tables with modal editing forms (`ScalarIndicatorForm` and `TableIndicatorForm`).
 2. **Blok Konten & Profil**: Direct editing of narrative content blocks (`landing-hero`, `landing-sambutan-lurah`, `landing-highlights`, `tentang-kelurahan-profil`, `publikasi-katalog`) using `ContentBlockForm`.
-3. **Pengaturan Publik Portal** (admin only): Management of public metadata (`public.*` keys: app name, institution, tagline, contact channels, default map coordinates and zoom) using `PublicSettingsForm`. Editors do not see this tab; `PATCH /api/settings/public` requires the admin role.
+3. **Pengaturan Publik Portal** (admin only): Management of public metadata (`public.*` keys: app name, institution, tagline, contact channels, default map view) using `PublicSettingsForm`. The default map view is set with the shared `LocationPicker` ("Atur tampilan peta"): panning and zooming the map, or its direction/zoom buttons and keyboard mode, define the center and zoom; there is no numeric latitude, longitude or zoom entry. Nothing is saved until "Simpan perubahan"; "Batal" leaves the stored view unchanged. The API still validates latitude -90..90, longitude -180..180 and integer zoom 1..20. Editors do not see this tab; `PATCH /api/settings/public` requires the admin role.
 
 **Dynamic View & Component Integration:**
 
