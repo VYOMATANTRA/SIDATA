@@ -11,6 +11,9 @@ const route = useRoute();
 
 const isMobileSidebarOpen = ref(false);
 const mainRef = ref<HTMLElement | null>(null);
+// The admin shell is `h-dvh` and scrolls this inner container, so the router's window-level
+// scroll reset is a no-op here; the path-change watcher below resets it instead.
+const contentShellRef = ref<HTMLElement | null>(null);
 
 function openMobileSidebar() {
   isMobileSidebarOpen.value = true;
@@ -32,8 +35,8 @@ useIsDesktop((matchesDesktop) => {
 // Seeds the header from route meta on every navigation so there is never a stale title/subtitle;
 // a routed view can still override with a dynamic subtitle in its own onMounted (runs after this).
 // Also closes the mobile sidebar drawer so a tapped link doesn't leave it open over the new page,
-// and moves focus to <main> on subsequent path changes unless the new view has already placed
-// focus inside <main>. Watches route.path (not fullPath) so a view that syncs filters/search to
+// resets the inner content scroller to the top, and moves focus to <main> on subsequent path
+// changes unless the new view has already placed focus inside <main>. Watches route.path (not fullPath) so a view that syncs filters/search to
 // the query string or hash doesn't retrigger this and wipe out a dynamic subtitle.
 watch(
   () => route.path,
@@ -43,6 +46,7 @@ watch(
     setAdminHeader(title, subtitle);
     closeMobileSidebar();
     if (oldPath !== undefined && newPath !== oldPath) {
+      if (contentShellRef.value) contentShellRef.value.scrollTop = 0;
       void nextTick(() => {
         const active = document.activeElement as HTMLElement | null;
         if (!active || !mainRef.value?.contains(active)) {
@@ -77,6 +81,7 @@ watch(
     <div
       class="flex min-w-0 flex-1 flex-col overflow-y-auto"
       :inert="isMobileSidebarOpen ? true : undefined"
+      ref="contentShellRef"
       data-test="admin-content-shell"
     >
       <AdminHeader :mobile-open="isMobileSidebarOpen" @open-menu="openMobileSidebar" />

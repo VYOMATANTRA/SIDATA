@@ -183,6 +183,25 @@ describe('AdminLayout.vue', () => {
     );
   });
 
+  it('resets the inner content scroller on a path change but not on a query-only change', async () => {
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, { global: { plugins: [router] }, attachTo: document.body });
+    const shell = wrapper.find('[data-test="admin-content-shell"]').element as HTMLElement;
+    shell.scrollTop = 400;
+
+    await router.push('/admin?q=x');
+    await wrapper.vm.$nextTick();
+    expect(shell.scrollTop).toBe(400);
+
+    await router.push('/admin/cerita');
+    await wrapper.vm.$nextTick();
+    expect(shell.scrollTop).toBe(0);
+    wrapper.unmount();
+  });
+
   it('moves focus to <main> after navigating between admin pages, without hijacking focus on initial mount', async () => {
     const router = createTestRouter();
     await router.push('/admin');
