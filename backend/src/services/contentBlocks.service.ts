@@ -953,6 +953,9 @@ export const deleteProseBlock = async (
   return executeLockedTransaction({
     client,
     // Lock order is always section → block, matching create/reorder.
+    // The lock function starts with a plain read (to find the parent), which would pin an old
+    // snapshot before the locks are taken; ReadCommitted makes every post-lock read current.
+    isolationLevel: 'ReadCommitted',
     lockQuery: async (tx) => {
       const rows = await tx.$queryRaw<Array<{ section_id: string | null }>>(
         Prisma.sql`SELECT section_id FROM content_blocks WHERE slug = ${slug}`,
