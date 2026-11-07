@@ -256,7 +256,7 @@ describe('AdminTemplatKalimatView', () => {
       await flushPromises();
       const dialog = q('[data-test="discard-dialog"]');
       expect(dialog?.getAttribute('role')).toBe('alertdialog');
-      expect(dialog?.textContent).toContain('Perubahan belum disimpan. Tutup tanpa menyimpan?');
+      expect(dialog?.textContent).toContain('Tutup tanpa menyimpan perubahan?');
       expect(document.activeElement).toBe(q('[data-test="discard-keep"]'));
       expect(q('[data-test="discard-keep"]')?.textContent).toContain('Tetap di sini');
 
@@ -265,6 +265,51 @@ describe('AdminTemplatKalimatView', () => {
       expect(q('[data-test="discard-dialog"]')).toBeNull();
       expect(q<HTMLInputElement>('#templat-nama')!.value).toBe('Nama baru');
       expect(document.activeElement).toBe(q('#templat-nama'));
+      wrapper.unmount();
+    });
+
+    it('treats Escape and a backdrop click on the prompt as "stay"', async () => {
+      const wrapper = await openEditor();
+      const name = q<HTMLInputElement>('#templat-nama')!;
+      name.value = 'Nama baru';
+      name.dispatchEvent(new Event('input', { bubbles: true }));
+      await flushPromises();
+
+      const dismissers: Array<() => void> = [
+        () => press('Escape'),
+        () => (q('[data-test="discard-dialog"]')!.closest('[role="presentation"]') as HTMLElement).click(),
+      ];
+      for (const dismiss of dismissers) {
+        press('Escape');
+        await flushPromises();
+        expect(q('[data-test="discard-dialog"]')).not.toBeNull();
+
+        dismiss();
+        await flushPromises();
+        expect(q('[data-test="discard-dialog"]')).toBeNull();
+        expect(q('[data-test="template-form"]')).not.toBeNull();
+        expect(q<HTMLInputElement>('#templat-nama')!.value).toBe('Nama baru');
+      }
+      wrapper.unmount();
+    });
+
+    it('returns focus to the opener after "Tutup tanpa menyimpan"', async () => {
+      const wrapper = await mountView();
+      const opener = wrapper.findAll('[data-test="edit"]')[0]!.element as HTMLElement;
+      opener.focus();
+      await wrapper.findAll('[data-test="edit"]')[0]!.trigger('click');
+      await flushPromises();
+      const name = q<HTMLInputElement>('#templat-nama')!;
+      name.value = 'Nama baru';
+      name.dispatchEvent(new Event('input', { bubbles: true }));
+      await flushPromises();
+
+      press('Escape');
+      await flushPromises();
+      q<HTMLButtonElement>('[data-test="discard-confirm"]')!.click();
+      await flushPromises();
+      expect(q('[data-test="template-form"]')).toBeNull();
+      expect(document.activeElement).toBe(opener);
       wrapper.unmount();
     });
 

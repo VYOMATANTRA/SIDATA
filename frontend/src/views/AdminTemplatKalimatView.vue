@@ -291,7 +291,7 @@ function retry(): void {
           Perubahan belum disimpan
         </h3>
         <p id="templat-buang-isi" class="text-brand-navy text-sm">
-          Perubahan belum disimpan. Tutup tanpa menyimpan?
+          Tutup tanpa menyimpan perubahan?
         </p>
         <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <BaseButton
