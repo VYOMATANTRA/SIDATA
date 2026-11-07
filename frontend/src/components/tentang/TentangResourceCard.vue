@@ -21,7 +21,7 @@ withDefaults(
   <article class="rounded-btn bg-brand-navy-deep flex flex-col p-5">
     <div class="flex items-center gap-3">
       <span
-        class="bg-brand-indigo flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
+        class="bg-white flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-brand-navy"
         aria-hidden="true"
       >
         <TentangIcon :name="icon" />
@@ -38,7 +38,7 @@ withDefaults(
         <RouterLink
           v-if="to"
           :to="to"
-          class="bg-brand-cyan text-brand-navy inline-flex items-center gap-2 rounded-[5px] px-4 py-1.5 text-base font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          class="bg-surface-muted text-brand-navy inline-flex items-center gap-2 rounded-[5px] px-4 py-1.5 text-base font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         >
           <span>{{ ctaLabel ?? 'Buka' }}</span>
           <span aria-hidden="true">&rarr;</span>
@@ -48,7 +48,7 @@ withDefaults(
           :href="href"
           target="_blank"
           rel="noopener noreferrer"
-          class="bg-brand-cyan text-brand-navy inline-flex items-center gap-2 rounded-[5px] px-4 py-1.5 text-base font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          class="bg-surface-muted text-brand-navy inline-flex items-center gap-2 rounded-[5px] px-4 py-1.5 text-base font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         >
           <span>{{ ctaLabel ?? 'Buka' }}</span>
           <span aria-hidden="true">&rarr;</span>

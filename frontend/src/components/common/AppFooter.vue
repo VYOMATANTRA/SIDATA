@@ -69,7 +69,7 @@ const storyLinks = FOOTER_STORY_LINKS;
 const aboutLinks = FOOTER_ABOUT_LINKS;
 
 const PARTNER_LINK_CLASS =
-  'focus-visible:ring-brand-indigo inline-flex items-center rounded-xs opacity-90 transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:outline-none';
+  'focus-visible:ring-focus-ring-inverse inline-flex items-center rounded-xs opacity-90 transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:outline-none';
 
 interface PartnerLink {
   key: string;
@@ -146,7 +146,7 @@ const partnerLinks: PartnerLink[] = [
               data-test="logo-desa-cantik"
             />
             <div class="flex min-w-0 flex-col text-left">
-              <span class="text-xs font-normal tracking-wide text-slate-200/90 sm:text-sm">
+              <span class="text-xs font-normal tracking-wide text-text-inverse-muted sm:text-sm">
                 Kelurahan Cinta Statistik
               </span>
               <span class="text-base leading-tight font-bold tracking-tight text-white sm:text-lg">
@@ -158,7 +158,7 @@ const partnerLinks: PartnerLink[] = [
 
           <!-- Office Address Block -->
           <address
-            class="space-y-1 text-xs leading-relaxed text-slate-200/90 not-italic sm:text-sm"
+            class="space-y-1 text-xs leading-relaxed text-text-inverse-muted not-italic sm:text-sm"
           >
             <p class="font-medium text-white">
               {{ displayAddressText }}
@@ -289,7 +289,7 @@ const partnerLinks: PartnerLink[] = [
 
       <!-- Copyright Section -->
       <div
-        class="mt-8 border-t border-white/10 pt-6 text-center text-xs text-slate-300/80 sm:mt-10 sm:text-sm"
+        class="mt-8 border-t border-white/10 pt-6 text-center text-xs text-text-inverse-muted sm:mt-10 sm:text-sm"
       >
         <p data-test="copyright-text">&copy; {{ year }}. Hak cipta dilindungi undang-undang.</p>
       </div>

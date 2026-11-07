@@ -15,7 +15,7 @@ const headingId = useId();
 
 <template>
   <section
-    class="border-y border-brand-navy/20 bg-brand-cyan/20 px-4 py-5 sm:px-6"
+    class="border-y border-brand-navy/20 bg-surface-muted px-4 py-5 sm:px-6"
     :aria-labelledby="headingId"
   >
     <div class="mx-auto flex max-w-5xl items-start gap-3">

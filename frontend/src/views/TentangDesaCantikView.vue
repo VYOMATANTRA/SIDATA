@@ -123,7 +123,7 @@ const collaborationLogos = [
         <h2 id="pilar-title" class="text-brand-navy text-lg font-bold">
           Implementasi di Kelurahan Manggar
         </h2>
-        <p class="mt-2 max-w-3xl text-base text-gray-700">
+        <p class="mt-2 max-w-3xl text-base text-text-muted">
           Empat fokus utama pelaksanaan pembinaan Desa Cantik di lingkungan Kelurahan Manggar.
         </p>
 
@@ -142,7 +142,7 @@ const collaborationLogos = [
     </section>
 
     <!-- Rujukan resmi -->
-    <section class="bg-brand-cyan px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="rujukan-title">
+    <section class="bg-surface-muted px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="rujukan-title">
       <div class="mx-auto max-w-5xl text-center">
         <h2 id="rujukan-title" class="text-brand-navy text-lg font-bold">
           Informasi Lebih Lanjut Mengenai Desa Cantik

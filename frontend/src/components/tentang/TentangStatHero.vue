@@ -24,13 +24,13 @@ const labelId = useId();
       </p>
       <p class="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <span class="text-xl font-bold text-brand-navy">{{ value }}</span>
-        <span class="text-lg font-semibold text-brand-teal-deep">{{ unit }}</span>
+        <span class="text-lg font-semibold text-brand-navy">{{ unit }}</span>
       </p>
-      <p class="mt-2 max-w-2xl text-base text-gray-700">{{ caption }}</p>
-      <p v-if="subcaption" class="mt-1 text-sm text-gray-500">{{ subcaption }}</p>
+      <p class="mt-2 max-w-2xl text-base text-text-muted">{{ caption }}</p>
+      <p v-if="subcaption" class="mt-1 text-sm text-text-muted">{{ subcaption }}</p>
       <p
         v-if="hedgeNote"
-        class="mt-3 inline-block rounded border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-800"
+        class="mt-3 inline-block rounded border border-status-warning-border bg-status-warning-surface px-3 py-1.5 text-xs text-status-warning"
       >
         {{ hedgeNote }}
       </p>

@@ -261,31 +261,31 @@ const officialSopDocuments: SopDocument[] = [
     <section class="bg-white px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="jenis-title">
       <div class="mx-auto max-w-5xl">
         <h2 id="jenis-title" class="text-brand-navy text-lg font-bold">Jenis Informasi Publik</h2>
-        <p class="mt-2 max-w-3xl text-base text-gray-700">
+        <p class="mt-2 max-w-3xl text-base text-text-muted">
           Kenali tiga kelas informasi sebelum mengajukan permohonan.
         </p>
 
-        <div class="rounded-btn mt-5 border border-gray-300 bg-white">
+        <div class="rounded-btn mt-5 border border-border bg-white">
           <dl
-            class="grid grid-cols-1 divide-y divide-gray-200 sm:grid-cols-3 sm:divide-x sm:divide-y-0"
+            class="grid grid-cols-1 divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0"
           >
             <div v-for="item in informationClasses" :key="item.title" class="p-5">
               <dt class="text-brand-navy text-base font-bold">{{ item.title }}</dt>
-              <dd class="mt-1 text-base leading-relaxed text-gray-800">
+              <dd class="mt-1 text-base leading-relaxed text-brand-navy">
                 {{ item.description }}
               </dd>
             </div>
           </dl>
         </div>
 
-        <p class="mt-3 text-sm text-gray-600">
+        <p class="mt-3 text-sm text-text-muted">
           Informasi yang dikecualikan diatur dalam Surat Keputusan tersendiri di portal PPID.
         </p>
       </div>
     </section>
 
     <!-- Alur permohonan -->
-    <section class="bg-brand-cyan px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="alur-title">
+    <section class="bg-surface-muted px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="alur-title">
       <div class="mx-auto max-w-5xl">
         <h2 id="alur-title" class="text-brand-navy text-lg font-bold">
           Alur Pengajuan Permohonan Informasi
@@ -306,7 +306,7 @@ const officialSopDocuments: SopDocument[] = [
         <h2 id="eskalasi-title" class="text-brand-navy text-lg font-bold">
           Jika Permohonan Ditolak atau Tidak Dijawab
         </h2>
-        <p class="mt-2 max-w-3xl text-base text-gray-700">
+        <p class="mt-2 max-w-3xl text-base text-text-muted">
           Permohonan yang tidak terpenuhi atau ditolak dapat Anda lanjutkan melalui tahapan eskalasi
           resmi berikut.
         </p>
@@ -315,7 +315,7 @@ const officialSopDocuments: SopDocument[] = [
           <li
             v-for="(stage, index) in escalationPath"
             :key="stage.title"
-            class="rounded-btn flex flex-col justify-between border border-gray-300 bg-white p-5"
+            class="rounded-btn flex flex-col justify-between border border-border bg-white p-5"
           >
             <div>
               <div class="flex items-center gap-3">
@@ -327,22 +327,22 @@ const officialSopDocuments: SopDocument[] = [
                 </span>
                 <h3 class="text-brand-navy text-base font-bold">{{ stage.title }}</h3>
               </div>
-              <p class="text-brand-indigo mt-2 text-xs font-semibold">{{ stage.target }}</p>
-              <p class="mt-2 text-sm leading-relaxed text-gray-800">{{ stage.note }}</p>
+              <p class="text-brand-navy mt-2 text-xs font-semibold">{{ stage.target }}</p>
+              <p class="mt-2 text-sm leading-relaxed text-brand-navy">{{ stage.note }}</p>
             </div>
           </li>
         </ol>
 
         <!-- 7 Alasan Sah Keberatan -->
-        <div class="rounded-btn border-brand-navy/20 bg-brand-cyan/10 mt-6 border p-5 sm:p-6">
+        <div class="rounded-btn border-brand-navy/20 bg-surface-muted mt-6 border p-5 sm:p-6">
           <h3 class="text-brand-navy text-base font-bold">
             7 Alasan Sah Pengajuan Keberatan (Perki No. 1/2021 &amp; SOP PPID)
           </h3>
-          <p class="mt-1 text-sm text-gray-700">
+          <p class="mt-1 text-sm text-text-muted">
             Pemohon berhak mengajukan keberatan tertulis kepada Atasan PPID Kota Balikpapan
             berdasarkan salah satu dari kondisi berikut:
           </p>
-          <ul class="mt-3 grid grid-cols-1 gap-2.5 text-sm text-gray-800 sm:grid-cols-2">
+          <ul class="mt-3 grid grid-cols-1 gap-2.5 text-sm text-brand-navy sm:grid-cols-2">
             <li
               v-for="(reason, rIdx) in objectionReasons"
               :key="rIdx"
@@ -373,7 +373,7 @@ const officialSopDocuments: SopDocument[] = [
               href="https://ppid.balikpapan.go.id/assets/content_pdf/1699149426486.pdf"
               target="_blank"
               rel="noopener noreferrer"
-              class="hover:text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] items-center gap-1.5 font-medium text-gray-700 underline focus-visible:outline-2 focus-visible:outline-offset-2"
+              class="hover:text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] items-center gap-1.5 font-medium text-text-muted underline focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               <span>Unduh Tata Cara Keberatan (PDF)</span>
               <span class="sr-only"
@@ -387,7 +387,7 @@ const officialSopDocuments: SopDocument[] = [
     </section>
 
     <!-- Standar waktu layanan -->
-    <section class="bg-brand-cyan px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="sla-title">
+    <section class="bg-surface-muted px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="sla-title">
       <div class="mx-auto max-w-5xl">
         <h2 id="sla-title" class="text-brand-navy text-lg font-bold">
           Standar Waktu Layanan dan Ketentuan Biaya
@@ -396,8 +396,8 @@ const officialSopDocuments: SopDocument[] = [
           Jaminan kepastian tenggat pemrosesan permohonan informasi publik.
         </p>
 
-        <div class="rounded-btn mt-5 overflow-x-auto border border-gray-300 bg-white">
-          <table class="min-w-full divide-y divide-gray-200 text-left text-sm text-gray-800">
+        <div class="rounded-btn mt-5 overflow-x-auto border border-border bg-white">
+          <table class="min-w-full divide-y divide-border text-left text-sm text-brand-navy">
             <caption class="sr-only">
               Tabel Standar Waktu Layanan Informasi Publik dan Ketentuan Biaya Permohonan
             </caption>
@@ -408,15 +408,15 @@ const officialSopDocuments: SopDocument[] = [
                 <th scope="col" class="px-4 py-3.5 sm:px-6">Keterangan / Regulasi</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-gray-200 bg-white">
+            <tbody class="divide-y divide-border bg-white">
               <tr v-for="rule in slaRules" :key="rule.stage" class="transition-colors">
                 <th scope="row" class="text-brand-navy px-4 py-4 align-top font-semibold sm:px-6">
                   {{ rule.stage }}
                 </th>
-                <td class="text-brand-indigo px-4 py-4 align-top font-medium sm:px-6">
+                <td class="text-brand-navy px-4 py-4 align-top font-medium sm:px-6">
                   {{ rule.duration }}
                 </td>
-                <td class="px-4 py-4 align-top text-gray-700 sm:px-6">
+                <td class="px-4 py-4 align-top text-text-muted sm:px-6">
                   {{ rule.regulation }}
                 </td>
               </tr>
@@ -457,7 +457,7 @@ const officialSopDocuments: SopDocument[] = [
             <h2 id="sop-title" class="text-brand-navy text-lg font-bold">
               Dokumen Standar Operasional Prosedur (SOP) &amp; Regulasi Resmi
             </h2>
-            <p class="mt-2 max-w-3xl text-base text-gray-700">
+            <p class="mt-2 max-w-3xl text-base text-text-muted">
               Kumpulan SOP PPID dan peraturan resmi sebagai rujukan pelayanan informasi publik.
             </p>
           </div>
@@ -479,12 +479,12 @@ const officialSopDocuments: SopDocument[] = [
           <article
             v-for="doc in officialSopDocuments"
             :key="doc.id"
-            class="rounded-btn flex flex-col justify-between border border-gray-300 bg-white p-5 transition-shadow hover:shadow-md"
+            class="rounded-btn flex flex-col justify-between border border-border bg-white p-5 transition-shadow hover:shadow-md"
           >
             <div>
               <div class="flex items-center justify-between gap-2">
                 <span
-                  class="bg-brand-cyan/40 text-brand-navy inline-block rounded-[5px] px-2 py-0.5 text-xs font-semibold"
+                  class="bg-surface-muted text-brand-navy inline-block rounded-[5px] px-2 py-0.5 text-xs font-semibold"
                 >
                   {{ doc.category }}
                 </span>
@@ -500,11 +500,11 @@ const officialSopDocuments: SopDocument[] = [
                 {{ doc.title }}
               </h3>
 
-              <p class="text-brand-indigo mt-1 text-xs font-medium">
+              <p class="text-brand-navy mt-1 text-xs font-medium">
                 {{ doc.refNumber }}
               </p>
 
-              <p class="mt-2.5 text-sm leading-relaxed text-gray-700">
+              <p class="mt-2.5 text-sm leading-relaxed text-text-muted">
                 {{ doc.description }}
               </p>
             </div>
@@ -513,7 +513,7 @@ const officialSopDocuments: SopDocument[] = [
               :href="doc.url"
               target="_blank"
               rel="noopener noreferrer"
-              class="group rounded-btn border-brand-navy/20 bg-brand-cyan/10 text-brand-navy hover:bg-brand-navy focus-visible:outline-brand-navy mt-4 inline-flex min-h-[44px] items-center justify-between border px-3.5 py-2 text-sm font-semibold transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+              class="group rounded-btn border-brand-navy/20 bg-surface-muted text-brand-navy hover:bg-brand-navy focus-visible:outline-brand-navy mt-4 inline-flex min-h-[44px] items-center justify-between border px-3.5 py-2 text-sm font-semibold transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               <span class="inline-flex items-center gap-2">
                 <span
@@ -569,7 +569,7 @@ const officialSopDocuments: SopDocument[] = [
           href="https://ppid.balikpapan.go.id"
           target="_blank"
           rel="noopener noreferrer"
-          class="rounded-btn border-brand-navy/40 bg-brand-cyan/20 text-brand-navy hover:border-brand-navy hover:bg-brand-cyan/40 focus-visible:outline-brand-navy inline-flex min-h-[44px] items-center justify-center gap-2 border px-4 py-2.5 text-base font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+          class="rounded-btn border-brand-navy/40 bg-surface-muted text-brand-navy hover:border-brand-navy hover:bg-surface-hover focus-visible:outline-brand-navy inline-flex min-h-[44px] items-center justify-center gap-2 border px-4 py-2.5 text-base font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           Portal PPID Balikpapan
           <span class="sr-only">Tautan eksternal, terbuka di tab baru</span>

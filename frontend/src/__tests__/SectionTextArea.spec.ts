@@ -63,8 +63,8 @@ describe('SectionTextArea.vue', () => {
     const titleEl = wrapper.find('[data-test="section-title"]');
     const descEl = wrapper.find('[data-test="section-description"]');
 
-    expect(titleEl.classes()).toContain('text-slate-900');
-    expect(descEl.classes()).toContain('text-slate-600');
+    expect(titleEl.classes()).toContain('text-brand-navy');
+    expect(descEl.classes()).toContain('text-text-muted');
   });
 
   it('applies alignment classes for left, center, and right', () => {

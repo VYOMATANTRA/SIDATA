@@ -12,14 +12,14 @@ withDefaults(
 </script>
 
 <template>
-  <article class="rounded-[5px] border border-gray-300 bg-white p-5 text-center">
-    <div v-if="photo" class="mx-auto h-20 w-20 overflow-hidden rounded-full bg-brand-cyan">
+  <article class="rounded-[5px] border border-border bg-white p-5 text-center">
+    <div v-if="photo" class="mx-auto h-20 w-20 overflow-hidden rounded-full bg-surface-muted">
       <img :src="photo" :alt="`Foto ${title}`" class="h-20 w-20 object-cover" />
     </div>
 
     <div
       v-else-if="showPlaceholder"
-      class="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-brand-navy/10 bg-brand-cyan/40 text-brand-navy/60"
+      class="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-brand-navy/10 bg-surface-muted text-brand-navy/60"
       aria-hidden="true"
       data-test="team-photo-placeholder"
     >
@@ -36,7 +36,7 @@ withDefaults(
     </div>
 
     <h3 class="mt-3 text-base font-bold text-brand-navy">{{ title }}</h3>
-    <p v-if="meta" class="text-xs text-gray-700">{{ meta }}</p>
+    <p v-if="meta" class="text-xs text-text-muted">{{ meta }}</p>
     <p class="mt-1 text-base text-brand-navy">{{ role }}</p>
   </article>
 </template>

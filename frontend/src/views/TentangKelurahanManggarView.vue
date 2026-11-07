@@ -171,9 +171,9 @@ const wilayahStats = computed<StatItem[]>(() => [
       aria-label="Memuat data kependudukan"
     >
       <div class="mx-auto max-w-5xl animate-pulse">
-        <div class="h-4 w-32 rounded bg-gray-200"></div>
-        <div class="mt-4 h-8 w-48 rounded bg-gray-200"></div>
-        <div class="mt-3 h-4 w-64 rounded bg-gray-200"></div>
+        <div class="h-4 w-32 rounded bg-surface-hover"></div>
+        <div class="mt-4 h-8 w-48 rounded bg-surface-hover"></div>
+        <div class="mt-3 h-4 w-64 rounded bg-surface-hover"></div>
       </div>
     </section>
 
@@ -193,13 +193,13 @@ const wilayahStats = computed<StatItem[]>(() => [
         aria-label="Pemberitahuan pembaruan data"
       >
         <div
-          class="mx-auto flex max-w-5xl flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between"
+          class="mx-auto flex max-w-5xl flex-col gap-2 rounded-lg border border-status-warning-border bg-status-warning-surface p-4 text-sm text-status-warning sm:flex-row sm:items-center sm:justify-between"
           data-test="population-stale-notice"
           role="status"
         >
           <p>
             Gagal memperbarui data. Menampilkan angka terakhir yang berhasil dimuat.
-            <span class="block text-amber-800">{{ populationError }}</span>
+            <span class="block text-status-warning">{{ populationError }}</span>
           </p>
           <button
             type="button"
@@ -226,11 +226,11 @@ const wilayahStats = computed<StatItem[]>(() => [
           Sekilas Manggar
         </p>
         <div
-          class="mt-3 rounded-lg border border-red-200 bg-red-50 p-6 text-red-700"
+          class="mt-3 rounded-lg border border-status-error-border bg-status-error-surface p-6 text-status-error"
           data-test="population-error"
         >
-          <p class="font-medium text-red-900">Gagal Memuat Data</p>
-          <p class="mt-1 text-sm text-red-700">{{ populationError }}</p>
+          <p class="font-medium text-status-error">Gagal Memuat Data</p>
+          <p class="mt-1 text-sm text-status-error">{{ populationError }}</p>
           <button
             type="button"
             class="bg-brand-navy hover:bg-brand-navy/90 mt-3 inline-flex items-center rounded px-3 py-1.5 text-xs font-semibold text-white"
@@ -251,9 +251,9 @@ const wilayahStats = computed<StatItem[]>(() => [
         >
           Sekilas Manggar
         </p>
-        <div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-6 text-gray-600">
-          <p class="font-medium text-gray-800">Data Belum Tersedia</p>
-          <p class="mt-1 text-sm text-gray-500">
+        <div class="mt-3 rounded-lg border border-border bg-surface-muted p-6 text-text-muted">
+          <p class="font-medium text-brand-navy">Data Belum Tersedia</p>
+          <p class="mt-1 text-sm text-text-muted">
             Informasi agregat jumlah penduduk terkini belum dipublikasikan atau gagal dimuat.
           </p>
         </div>
@@ -323,23 +323,23 @@ const wilayahStats = computed<StatItem[]>(() => [
         <h2 id="lurah-section-title" class="text-brand-navy text-lg font-bold">
           Pimpinan Kelurahan
         </h2>
-        <p class="mt-2 max-w-3xl text-base text-gray-700">
+        <p class="mt-2 max-w-3xl text-base text-text-muted">
           Kepemimpinan yang berdedikasi melayani warga dan mengawal keterbukaan data terpadu di
           Kelurahan Manggar.
         </p>
 
         <div
-          class="rounded-btn mt-5 flex flex-col items-center gap-6 border border-gray-300 bg-white p-5 sm:flex-row sm:items-start sm:p-6"
+          class="rounded-btn mt-5 flex flex-col items-center gap-6 border border-border bg-white p-5 sm:flex-row sm:items-start sm:p-6"
         >
           <div class="flex shrink-0 flex-col items-center text-center sm:w-56">
             <div class="flex flex-col items-center text-center">
               <h3 class="text-brand-navy text-lg font-bold">
                 {{ lurahDisplayName }}
               </h3>
-              <p class="mt-0.5 text-sm font-medium text-gray-700">{{ lurahDisplayTitle }}</p>
-              <p class="text-xs text-gray-500">Pemerintah Kelurahan Manggar</p>
+              <p class="mt-0.5 text-sm font-medium text-text-muted">{{ lurahDisplayTitle }}</p>
+              <p class="text-xs text-text-muted">Pemerintah Kelurahan Manggar</p>
               <span
-                class="bg-brand-cyan text-brand-navy mt-2.5 inline-block rounded-[5px] px-3 py-1 text-xs font-semibold"
+                class="bg-surface-muted text-brand-navy mt-2.5 inline-block rounded-[5px] px-3 py-1 text-xs font-semibold"
               >
                 Kepala Kelurahan
               </span>
@@ -347,7 +347,7 @@ const wilayahStats = computed<StatItem[]>(() => [
           </div>
 
           <div class="flex-1 space-y-4 text-left">
-            <div class="space-y-3 text-base leading-relaxed text-gray-800">
+            <div class="space-y-3 text-base leading-relaxed text-brand-navy">
               <p>
                 Sebagai garda terdepan pelayanan pemerintah daerah bagi masyarakat di wilayah
                 {{ kecamatan }}, Kelurahan Manggar berupaya menyediakan pelayanan yang ramah,
@@ -372,7 +372,7 @@ const wilayahStats = computed<StatItem[]>(() => [
     </section>
 
     <!-- Gambaran Umum Wilayah -->
-    <section class="bg-brand-cyan px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="wilayah-title">
+    <section class="bg-surface-muted px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="wilayah-title">
       <div class="mx-auto max-w-5xl">
         <h2 id="wilayah-title" class="text-brand-navy text-lg font-bold">Gambaran Umum Wilayah</h2>
         <p class="text-brand-navy/90 mt-2 max-w-3xl text-base">
@@ -385,7 +385,7 @@ const wilayahStats = computed<StatItem[]>(() => [
 
         <div class="rounded-btn border-brand-navy/20 mt-6 border bg-white p-5">
           <h3 class="text-brand-navy text-base font-bold">Batas-Batas Wilayah Administratif:</h3>
-          <ul class="mt-3 flex flex-wrap gap-x-6 gap-y-3 text-base text-gray-800">
+          <ul class="mt-3 flex flex-wrap gap-x-6 gap-y-3 text-base text-brand-navy">
             <li
               v-for="(item, index) in batasWilayah"
               :key="`${item.arah}-${index}`"
@@ -395,7 +395,7 @@ const wilayahStats = computed<StatItem[]>(() => [
               <span>{{ item.wilayah }}</span>
             </li>
           </ul>
-          <p class="mt-3 text-sm text-gray-600">
+          <p class="mt-3 text-sm text-text-muted">
             {{ BOUNDARY_SOURCE_CITATION }}
           </p>
         </div>
@@ -408,13 +408,13 @@ const wilayahStats = computed<StatItem[]>(() => [
         <h2 id="sotk-title" class="text-brand-navy text-lg font-bold">
           Struktur Organisasi dan Tata Kerja (SOTK)
         </h2>
-        <p class="mt-2 max-w-3xl text-base text-gray-700">
+        <p class="mt-2 max-w-3xl text-base text-text-muted">
           Bagan tugas dan fungsi perangkat Kelurahan Manggar dalam menyelenggarakan urusan
           pemerintahan dan pelayanan warga.
         </p>
 
-        <div class="rounded-btn mt-5 overflow-x-auto border border-gray-300 bg-white">
-          <table class="min-w-full divide-y divide-gray-200 text-left text-sm text-gray-800">
+        <div class="rounded-btn mt-5 overflow-x-auto border border-border bg-white">
+          <table class="min-w-full divide-y divide-border text-left text-sm text-brand-navy">
             <caption class="sr-only">
               Daftar Struktur Organisasi dan Tata Kerja Kelurahan Manggar
             </caption>
@@ -425,7 +425,7 @@ const wilayahStats = computed<StatItem[]>(() => [
                 <th scope="col" class="px-4 py-3.5 sm:px-6">Tugas Pokok &amp; Tanggung Jawab</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-gray-200 bg-white">
+            <tbody class="divide-y divide-border bg-white">
               <tr
                 v-for="(member, index) in sotkMembers"
                 :key="`${member.role}-${index}`"
@@ -434,12 +434,12 @@ const wilayahStats = computed<StatItem[]>(() => [
                 <th scope="row" class="text-brand-navy px-4 py-4 align-top font-semibold sm:px-6">
                   {{ member.role }}
                 </th>
-                <td class="px-4 py-4 align-top text-gray-800 sm:px-6">
-                  <span class="text-sm text-gray-600 italic">
+                <td class="px-4 py-4 align-top text-brand-navy sm:px-6">
+                  <span class="text-sm text-text-muted italic">
                     {{ member.officialName ?? 'Nama pejabat belum tersedia' }}
                   </span>
                 </td>
-                <td class="px-4 py-4 align-top leading-relaxed text-gray-700 sm:px-6">
+                <td class="px-4 py-4 align-top leading-relaxed text-text-muted sm:px-6">
                   {{
                     member.duties ?? 'Rincian tugas resmi belum tersedia pada sumber yang dirujuk.'
                   }}
@@ -449,7 +449,7 @@ const wilayahStats = computed<StatItem[]>(() => [
           </table>
         </div>
 
-        <p class="mt-3 text-sm text-gray-600">
+        <p class="mt-3 text-sm text-text-muted">
           {{ SOTK_SOURCE_CITATION }}
         </p>
       </div>
