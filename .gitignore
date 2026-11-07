@@ -151,3 +151,10 @@ vite.config.ts.timestamp-*
 
 # Playwright MCP browser-session artifacts (console logs, snapshots)
 .playwright-mcp/
+
+# Playwright (frontend e2e) artifacts
+frontend/e2e/.output/
+frontend/playwright-report/
+frontend/test-results/
+frontend/blob-report/
+frontend/playwright/.cache/
