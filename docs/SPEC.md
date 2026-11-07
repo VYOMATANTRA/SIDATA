@@ -150,9 +150,11 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
   - Titles are 1–255 characters, trimmed, with no HTML tags and no control or bidi characters. Page rename
     (`PATCH /api/pages/:slug`) changes the title only; the slug is immutable so shared links keep working.
   - Chapter, section and prose-block slugs are generated from the title (kebab-case, diacritics stripped, at
-    most 100 characters, reserved words rejected with 400). A collision gets `-2`, `-3`, … within its scope:
-    the page for chapters, the chapter for sections, the whole table for prose blocks (`content_blocks.slug` is
-    globally unique; the five standalone slugs are reserved). A title that yields no slug is a 400. Clients
+    most 100 characters). The reserved-word list protects page slugs only (they are top-level routes such as
+    `/admin`); chapter, section and prose-block titles like "Public" or "Admin" are ordinary. A collision gets
+    `-2`, `-3`, … within its scope: the page for chapters, the chapter for sections, the whole table for prose
+    blocks (`content_blocks.slug` is globally unique; the five standalone slugs are never available to prose
+    blocks, so a clash resolves to the next free slug). A title that yields no slug is a 400. Clients
     never send a `slug`; unknown body fields are rejected.
   - New chapters, sections and prose blocks get `sort_order = max + 1` within their parent, taken under the
     parent's row lock. Deleting leaves gaps; reorder bodies are `{ expectedUpdatedAt, items: [{ id, sortOrder }] }`

@@ -83,11 +83,14 @@ describe('chapters.service', () => {
       assert.equal(penutup.chapter.slug, 'penutup');
     });
 
-    it('rejects reserved slugs, HTML titles, empty titles, non-slugifiable titles and client slugs', async () => {
-      await assert.rejects(
-        createChapter('kependudukan', { title: 'Reorder' }, actor, ctx),
-        expectError(400),
-      );
+    it('accepts a title that is a reserved page word (chapter titled "Public")', async () => {
+      const { chapter } = await createChapter('kependudukan', { title: 'Public' }, actor, ctx);
+      assert.equal(chapter.slug, 'public');
+      const again = await createChapter('kependudukan', { title: 'Public' }, actor, ctx);
+      assert.equal(again.chapter.slug, 'public-2');
+    });
+
+    it('rejects HTML titles, empty titles, non-slugifiable titles and client slugs', async () => {
       await assert.rejects(
         createChapter('kependudukan', { title: '<b>Tebal</b>' }, actor, ctx),
         expectError(400),

@@ -93,19 +93,23 @@ describe('contentBlocks authoring (section prose blocks)', () => {
       assert.equal(result.block.slug.length, 100);
     });
 
-    it('refuses to mint a slug that equals a standalone singleton slot', async () => {
+    it('never mints a slug that equals a standalone singleton slot (picks a free one instead)', async () => {
+      const standalone = new Set(DEFAULT_CONTENT_BLOCKS.map((b) => b.slug));
       for (const block of DEFAULT_CONTENT_BLOCKS) {
-        await assert.rejects(
-          createProseBlock(
-            'sec-1',
-            { title: block.slug.replace(/-/g, ' '), body: 'x' },
-            actor,
-            ctx,
-          ),
-          expectError(400),
+        const { block: created } = await createProseBlock(
+          'sec-1',
+          { title: block.slug.replace(/-/g, ' '), body: 'x' },
+          actor,
+          ctx,
         );
+        assert.equal(created.slug, `${block.slug}-2`);
+        assert.equal(standalone.has(created.slug), false);
       }
-      assert.equal(db.contentBlock.rows.length, 0);
+    });
+
+    it('accepts an ordinary title that is a reserved page word', async () => {
+      const { block } = await createProseBlock('sec-1', { title: 'Public', body: 'x' }, actor, ctx);
+      assert.equal(block.slug, 'public');
     });
 
     it('rejects HTML titles, empty bodies, unknown/standalone-shaped fields', async () => {

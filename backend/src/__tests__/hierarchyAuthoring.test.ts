@@ -24,12 +24,16 @@ describe('hierarchyAuthoring', () => {
   });
 
   describe('baseSlugFromTitle', () => {
-    it('rejects empty, reserved and extra-reserved slugs with 400', () => {
-      for (const title of ['!!!', 'Reorder', 'API', 'Landing Hero']) {
-        assert.throws(
-          () => baseSlugFromTitle(title, 'bab', new Set(['landing-hero'])),
-          (e) => e instanceof HierarchyServiceError && e.statusCode === 400,
-        );
+    it('rejects titles that yield no slug with 400', () => {
+      assert.throws(
+        () => baseSlugFromTitle('!!!', 'bab'),
+        (e) => e instanceof HierarchyServiceError && e.statusCode === 400,
+      );
+    });
+
+    it('does not treat reserved page words as an error', () => {
+      for (const title of ['Public', 'Admin', 'Reorder', 'API']) {
+        assert.equal(baseSlugFromTitle(title, 'bab'), title.toLowerCase());
       }
     });
 

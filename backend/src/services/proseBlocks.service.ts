@@ -95,7 +95,7 @@ export const createProseBlock = async (
   const sectionId = parseOrThrow(idParamSchema, rawSectionId);
   assertPlainObject(rawInput, 'Payload blok konten harus berupa objek JSON');
   const input = parseOrThrow(createProseBlockSchema, rawInput);
-  const baseSlug = baseSlugFromTitle(input.title, 'blok konten', STANDALONE_BLOCK_SLUGS);
+  const baseSlug = baseSlugFromTitle(input.title, 'blok konten');
   const actorId = actor?.id?.trim() ? actor.id.trim() : null;
 
   const attempt = () =>
@@ -118,7 +118,11 @@ export const createProseBlock = async (
           where: { slug: { startsWith: baseSlug.slice(0, MAX_SLUG_LENGTH - 8) } },
           select: { slug: true },
         });
-        const slug = resolveUniqueSlug(baseSlug, new Set(sameSlug.map((b) => b.slug)));
+        // The standalone slugs stay unavailable so a prose block can never shadow them.
+        const slug = resolveUniqueSlug(
+          baseSlug,
+          new Set([...sameSlug.map((b) => b.slug), ...STANDALONE_BLOCK_SLUGS]),
+        );
 
         const siblings = await tx.contentBlock.findMany({
           where: { sectionId },

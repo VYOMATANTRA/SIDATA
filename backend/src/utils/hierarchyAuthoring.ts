@@ -138,13 +138,11 @@ export function slugifyTitle(text: string): string {
 
 /**
  * Derives the base slug for a new chapter/section/prose block from its title. Rejects titles
- * that yield no slug or a reserved one — clients never supply slugs for these resources.
+ * that yield no slug — clients never supply slugs for these resources. Reserved words are NOT an
+ * error here (they protect page slugs, which are top-level routes); a clash is resolved by
+ * `resolveUniqueSlug` picking a free slug.
  */
-export function baseSlugFromTitle(
-  title: string,
-  label: string,
-  extraReserved: ReadonlySet<string> = new Set(),
-): string {
+export function baseSlugFromTitle(title: string, label: string): string {
   let slug = slugifyTitle(title);
   if (slug.length > MAX_SLUG_LENGTH) {
     slug = slug.slice(0, MAX_SLUG_LENGTH).replace(/-+$/g, '');
@@ -154,9 +152,6 @@ export function baseSlugFromTitle(
       `Gagal membuat slug dari judul ${label}. Gunakan judul yang memuat huruf atau angka.`,
       400,
     );
-  }
-  if (RESERVED_SLUGS.has(slug) || extraReserved.has(slug)) {
-    throw new HierarchyServiceError(`Slug '${slug}' menggunakan kata kunci terproteksi`, 400);
   }
   return slug;
 }

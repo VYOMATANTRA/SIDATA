@@ -68,10 +68,14 @@ describe('sections.service', () => {
       assert.equal(other.section.slug, 'ringkasan-2');
     });
 
-    it('rejects HTML, reserved, empty titles and client-supplied slugs', async () => {
+    it('accepts a title that is a reserved page word (section titled "Admin")', async () => {
+      const { section } = await createSection('ch-1', { title: 'Admin' }, actor, ctx);
+      assert.equal(section.slug, 'admin');
+    });
+
+    it('rejects HTML, empty titles and client-supplied slugs', async () => {
       for (const payload of [
         { title: '<script>x</script>' },
-        { title: 'Admin' },
         { title: '' },
         { title: 'Ok', slug: 'x' },
         { title: 'Ok', sortOrder: 5 },
