@@ -206,7 +206,7 @@ onUnmounted(() => {
     </p>
     <div
       ref="container"
-      class="h-64 w-full overflow-hidden rounded border border-slate-300"
+      class="relative isolate z-0 h-64 w-full overflow-hidden rounded border border-slate-300"
       data-test="rt-location-picker"
     />
     <div class="flex flex-wrap gap-2">
