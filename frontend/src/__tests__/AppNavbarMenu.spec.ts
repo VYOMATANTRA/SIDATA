@@ -109,6 +109,86 @@ describe('AppNavbar menu: mobile modal sheet', () => {
     wrapper.unmount();
   });
 
+  it('is a bounded right-anchored sheet, so the backdrop stays visible and clickable beside it', async () => {
+    const { wrapper } = await mountNavbar();
+    await toggle(wrapper).trigger('click');
+
+    const sheetClasses = panel(wrapper).classes();
+    expect(sheetClasses).not.toContain('w-full');
+    expect(sheetClasses.some((c) => c.startsWith('w-[min(88vw'))).toBe(true);
+    expect(sheetClasses).toContain('right-0');
+    expect(sheetClasses).toContain('inset-y-0');
+
+    const backdrop = wrapper.find('[data-test="nav-backdrop"]');
+    expect(backdrop.isVisible()).toBe(true);
+    expect(backdrop.classes()).toContain('fixed');
+    expect(backdrop.classes()).toContain('inset-0');
+    wrapper.unmount();
+  });
+
+  it('exposes the sheet as a named modal dialog and makes the logo and toggle inert while open', async () => {
+    const { wrapper } = await mountNavbar();
+    expect(panel(wrapper).attributes('role')).toBeUndefined();
+    expect(wrapper.find('[data-test="navbar-bar"]').attributes('inert')).toBeUndefined();
+
+    await toggle(wrapper).trigger('click');
+    expect(panel(wrapper).attributes('role')).toBe('dialog');
+    expect(panel(wrapper).attributes('aria-modal')).toBe('true');
+    expect(panel(wrapper).attributes('aria-label')).toBe('Menu navigasi');
+    expect(wrapper.find('[data-test="navbar-bar"]').attributes('inert')).toBeDefined();
+    // The close button's name differs from the toggle's, which reads "Tutup menu navigasi".
+    expect(wrapper.find('[data-test="menu-close-btn"]').attributes('aria-label')).toBe(
+      'Tutup menu',
+    );
+    expect(toggle(wrapper).attributes('aria-label')).toBe('Tutup menu navigasi');
+
+    await wrapper.find('[data-test="menu-close-btn"]').trigger('click');
+    expect(wrapper.find('[data-test="navbar-bar"]').attributes('inert')).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it('closes on Escape while its own dialog panel is the only dialog in the document', async () => {
+    const { wrapper } = await mountNavbar();
+    await toggle(wrapper).trigger('click');
+    expect(document.querySelectorAll('[role="dialog"][aria-modal="true"]')).toHaveLength(1);
+    wrapper.find<HTMLAnchorElement>('[data-test="first"]').element.focus();
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await wrapper.vm.$nextTick();
+    expect(toggle(wrapper).attributes('aria-expanded')).toBe('false');
+    wrapper.unmount();
+  });
+
+  it('ignores Escape while a DIFFERENT modal dialog is open anywhere in the document', async () => {
+    const { wrapper } = await mountNavbar();
+    await toggle(wrapper).trigger('click');
+
+    const other = document.createElement('div');
+    other.setAttribute('role', 'dialog');
+    other.setAttribute('aria-modal', 'true');
+    document.body.appendChild(other);
+
+    // Focus is still in the menu, but another modal owns Escape.
+    wrapper.find<HTMLAnchorElement>('[data-test="first"]').element.focus();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await wrapper.vm.$nextTick();
+    expect(toggle(wrapper).attributes('aria-expanded')).toBe('true');
+
+    // Escape from inside that dialog is ignored too.
+    const input = document.createElement('input');
+    other.appendChild(input);
+    input.focus();
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await wrapper.vm.$nextTick();
+    expect(toggle(wrapper).attributes('aria-expanded')).toBe('true');
+
+    other.remove();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await wrapper.vm.$nextTick();
+    expect(toggle(wrapper).attributes('aria-expanded')).toBe('false');
+    wrapper.unmount();
+  });
+
   it('locks body scroll while open and restores the original overflow on close', async () => {
     document.body.style.overflow = 'auto';
     const { wrapper } = await mountNavbar();

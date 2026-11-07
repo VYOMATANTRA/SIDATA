@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { useRouter, useRoute, RouterLink } from 'vue-router';
 import { XMarkIcon } from '@heroicons/vue/24/outline';
 import balikpapanLogo from '@/assets/img/logo_balikpapan.webp';
@@ -66,8 +66,10 @@ function closeMenu() {
   }
 }
 
-function closeAndRestoreFocus() {
+async function closeAndRestoreFocus() {
   closeMenu();
+  // The bar is `inert` while the sheet is modal; wait for that to lift before focusing the toggle.
+  await nextTick();
   toggleButtonRef.value?.focus();
 }
 
@@ -77,13 +79,14 @@ useDrawerFocusTrap({
   isOpen: isModal,
   containerRef: panelRef,
   initialFocusRef: closeButtonRef,
-  onEscape: closeAndRestoreFocus,
+  onEscape: () => void closeAndRestoreFocus(),
+  ignoreDialogRef: panelRef,
 });
 
 function handleDesktopKeydown(event: KeyboardEvent) {
   if (event.key !== 'Escape' || !isMenuOpen.value || isModal.value) return;
-  if (isEventFromOpenDialog(event)) return;
-  closeAndRestoreFocus();
+  if (isEventFromOpenDialog(event, panelRef.value)) return;
+  void closeAndRestoreFocus();
 }
 
 function handleOutsidePointerDown(event: PointerEvent) {
@@ -191,8 +194,11 @@ const panelFocusRingClasses = computed(() =>
 
     <nav aria-label="Navigasi Utama" class="relative w-full">
       <div class="relative mx-auto max-w-7xl">
+        <!-- The sheet is a modal dialog below `md`: the logo and toggle must not stay reachable behind it -->
         <div
           class="flex h-[var(--public-header-height)] items-center justify-between gap-4 px-6 sm:px-8"
+          :inert="isModal ? true : undefined"
+          data-test="navbar-bar"
         >
           <!-- Brand & Identity Lockup -->
           <RouterLink
@@ -289,7 +295,10 @@ const panelFocusRingClasses = computed(() =>
             v-show="isMenuOpen"
             id="primary-navigation-menu"
             ref="panelRef"
-            class="md:rounded-card fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col overflow-hidden border-l shadow-xl md:absolute md:inset-y-auto md:top-full md:right-6 md:mt-2 md:max-h-[calc(100dvh-var(--public-header-height)-1.5rem)] md:w-[46rem] md:max-w-[calc(100vw-3rem)] md:border lg:right-8"
+            :role="isModal ? 'dialog' : undefined"
+            :aria-modal="isModal ? 'true' : undefined"
+            :aria-label="isModal ? 'Menu navigasi' : undefined"
+            class="md:rounded-card fixed inset-y-0 right-0 z-50 flex w-[min(88vw,22rem)] flex-col overflow-hidden border-l shadow-xl md:absolute md:inset-y-auto md:top-full md:right-6 md:mt-2 md:max-h-[calc(100dvh-var(--public-header-height)-1.5rem)] md:w-[46rem] md:max-w-[calc(100vw-3rem)] md:border lg:right-8"
             :class="panelClasses"
             data-test="nav-menu-drawer"
           >
@@ -303,7 +312,7 @@ const panelFocusRingClasses = computed(() =>
                 type="button"
                 class="rounded-btn inline-flex h-11 w-11 items-center justify-center hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2"
                 :class="panelFocusRingClasses"
-                aria-label="Tutup menu navigasi"
+                aria-label="Tutup menu"
                 data-test="menu-close-btn"
                 @click="closeAndRestoreFocus"
               >
