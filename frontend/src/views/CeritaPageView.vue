@@ -165,6 +165,21 @@ async function loadPage() {
   isLoading.value = false;
   await nextTick();
   setupScrollSpy();
+  scrollToHashTarget();
+}
+
+// A `/cerita/x#bab` deep link resolves before the chapters exist (the page is still a skeleton
+// when the router scrolls), so the router finds no target. Once the chapters render, honour the
+// hash here. Uses native scrollIntoView so the element's own `scroll-margin-top` clears the header.
+function scrollToHashTarget() {
+  if (!route.hash) return;
+  let id = route.hash.slice(1);
+  try {
+    id = decodeURIComponent(id);
+  } catch {
+    // keep the raw id
+  }
+  document.getElementById(id)?.scrollIntoView({ behavior: 'instant', block: 'start' });
 }
 
 onMounted(loadPage);

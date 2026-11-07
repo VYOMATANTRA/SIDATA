@@ -94,6 +94,36 @@ describe('CeritaPageView', () => {
     expect(wrapper.find('footer').exists()).toBe(true);
   });
 
+  it('scrolls to the #hash chapter once the chapters have rendered', async () => {
+    const page = makePage('kependudukan', 'Kependudukan');
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith('/api/pages/')) {
+        return { ok: true, status: 200, json: async () => ({ page }) } as Response;
+      }
+      const key = url.startsWith('/api/indicator-tables')
+        ? 'tables'
+        : url.startsWith('/api/indicators')
+          ? 'indicators'
+          : 'blocks';
+      return { ok: true, json: async () => ({ [key]: [] }) } as Response;
+    });
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+
+    const { pinia, router } = await setupAndPush('kependudukan');
+    await router.push('/cerita/kependudukan#kependudukan-bab-1');
+    const wrapper = mount(CeritaPageView, {
+      global: { plugins: [pinia, router] },
+      attachTo: document.body,
+    });
+    await flushPromises();
+
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView.mock.contexts[0]).toBe(document.getElementById('kependudukan-bab-1'));
+    wrapper.unmount();
+  });
+
   it('shows a loading state before the page resolves', async () => {
     let resolveFetch!: (value: Response) => void;
     globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(
