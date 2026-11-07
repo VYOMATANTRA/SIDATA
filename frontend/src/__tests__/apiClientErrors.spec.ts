@@ -198,4 +198,62 @@ describe('apiClient error object', () => {
     expect(banner).toBe(`Gagal menyimpan indikator. ${USER_MESSAGES.conflict}`);
     expect(banner).not.toContain('Label sudah dipakai');
   });
+
+  describe('network failures', () => {
+    const offline = async (): Promise<never> => {
+      throw new TypeError('Failed to fetch');
+    };
+
+    it('turns a fetch() rejection into a status-0 ApiError with the offline wording', async () => {
+      stubFetch((url) => {
+        if (url === '/api/indicators') return offline();
+        return json({});
+      });
+
+      const error = await apiRequestJson('/api/indicators').catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).status).toBe(0);
+      expect((error as ApiError).code).toBe('NETWORK_ERROR');
+      expect((error as ApiError).message).toBe(USER_MESSAGES.network);
+      expect((error as ApiError).userMessage).toBe(USER_MESSAGES.network);
+      expect((error as ApiError).userMessage).not.toContain('Failed to fetch');
+    });
+
+    it('wraps a network failure on the replay after a refresh the same way', async () => {
+      useAuthStore().setAuth(EDITOR, 'expired-token');
+      let dataCalls = 0;
+      stubFetch((url) => {
+        if (url === '/api/auth/refresh') return json({ accessToken: 'fresh', user: EDITOR });
+        dataCalls++;
+        if (dataCalls === 1) return json({ error: 'Token tidak valid' }, 401);
+        return offline();
+      });
+
+      const error = await apiRequestJson('/api/indicators').catch((e: unknown) => e);
+
+      expect((error as ApiError).code).toBe('NETWORK_ERROR');
+      expect((error as ApiError).userMessage).toBe(USER_MESSAGES.network);
+      expect(dataCalls).toBe(2);
+    });
+
+    it('lets an aborted request reject with its own AbortError', async () => {
+      const abort = Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' });
+      stubFetch(async () => {
+        throw abort;
+      });
+
+      await expect(apiRequestJson('/api/indicators')).rejects.toBe(abort);
+    });
+
+    it('builds a contextual network banner without the browser text', async () => {
+      stubFetch(offline);
+
+      const error = await apiRequestJson('/api/indicators').catch((e: unknown) => e);
+      const banner = toUserMessage(error, 'memuat indikator').message;
+
+      expect(banner).toBe(`Gagal memuat indikator. ${USER_MESSAGES.network}`);
+      expect(banner).not.toContain('Failed to fetch');
+    });
+  });
 });

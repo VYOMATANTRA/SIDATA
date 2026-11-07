@@ -1,10 +1,12 @@
 import { useAuthStore } from '../stores/auth';
 import { getCsrfToken } from './csrf';
 import {
+  NETWORK_ERROR_CODE,
   REFRESH_UNAVAILABLE_MESSAGE,
   SESSION_EXPIRED_MESSAGE,
   sanitizeFieldErrors,
   toUserMessage,
+  USER_MESSAGES,
 } from './userMessages';
 
 export { REFRESH_UNAVAILABLE_MESSAGE, SESSION_EXPIRED_MESSAGE };
@@ -78,6 +80,30 @@ async function buildInit(init: RequestInit): Promise<RequestInit> {
   return { ...init, headers, credentials: 'include' };
 }
 
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { name?: unknown }).name === 'AbortError'
+  );
+}
+
+/**
+ * One fetch() attempt. A rejection means no HTTP response arrived (offline, DNS, dropped
+ * connection), so it becomes an ApiError with status 0 and the offline wording instead of the
+ * browser's raw "Failed to fetch". Aborts are the caller's own doing and pass through untouched.
+ */
+async function send(path: string, init: RequestInit): Promise<Response> {
+  const requestInit = await buildInit(init);
+  try {
+    return await fetch(path, requestInit);
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+    logDiagnostic('network failure', { path, error: String(error) });
+    throw new ApiError(USER_MESSAGES.network, 0, { code: NETWORK_ERROR_CODE });
+  }
+}
+
 /**
  * Sends an authenticated request, refreshing once and replaying it if the access token has
  * expired. Access tokens live 15 minutes (`backend/src/utils/jwt.ts`), which is shorter than an
@@ -93,7 +119,7 @@ async function buildInit(init: RequestInit): Promise<RequestInit> {
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const authStore = useAuthStore();
   const tokenUsed = authStore.accessToken;
-  const response = await fetch(path, await buildInit(init));
+  const response = await send(path, init);
 
   if (response.status !== 401 || !tokenUsed) {
     return response;
@@ -120,7 +146,7 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
 
   // Safe to replay because every body in this app is a JSON string. A streaming body would have
   // been consumed by the first attempt.
-  return fetch(path, await buildInit(init));
+  return send(path, init);
 }
 
 /**
