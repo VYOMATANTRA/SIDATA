@@ -23,7 +23,7 @@ const titleId = useId();
       <div class="mx-auto max-w-5xl">
         <p class="text-base font-medium tracking-[0.2em] text-text-inverse uppercase">{{ eyebrow }}</p>
         <h1 :id="titleId" class="mt-3 text-xl text-white">{{ title }}</h1>
-        <p class="mt-4 max-w-xl text-base leading-relaxed text-white/90">{{ subtitle }}</p>
+        <p class="mt-4 max-w-xl text-base leading-relaxed text-text-inverse">{{ subtitle }}</p>
       </div>
     </div>
 
