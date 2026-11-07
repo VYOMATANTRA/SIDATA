@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import ScalarIndicatorForm from '../components/data/ScalarIndicatorForm.vue';
 import type { Indicator, IndicatorPatch } from '../stores/indicators.store';
+import type { ComparisonTemplate } from '../stores/comparisonTemplates.store';
 
 function makeIndicator(overrides: Partial<Indicator> = {}): Indicator {
   return {
@@ -244,5 +245,184 @@ describe('ScalarIndicatorForm.vue', () => {
     );
 
     wrapper.unmount();
+  });
+
+  describe('comparison template selector (SPEC §5)', () => {
+    const templates: ComparisonTemplate[] = [
+      {
+        id: 'tpl-1',
+        slug: 'perbandingan-tahunan',
+        label: 'Perbandingan tahunan',
+        body: 'Data {period_current}, {label} {value_current}, {trend}.',
+        trendNaik: 'naik',
+        trendTurun: 'turun',
+        trendTetap: 'tetap',
+        usageCount: 0,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'tpl-2',
+        slug: 'ringkas',
+        label: 'Ringkas',
+        body: '{label}: {trend}.',
+        trendNaik: 'naik',
+        trendTurun: 'turun',
+        trendTetap: 'tetap',
+        usageCount: 0,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+    const selector = '#indicator-comparison-template';
+
+    it('is shown for a computed comparison with both previous value and previous period', () => {
+      const wrapper = mount(ScalarIndicatorForm, {
+        props: { indicator: makeIndicator(), templates },
+      });
+
+      expect(wrapper.find(selector).exists()).toBe(true);
+      expect(wrapper.find('label[for="indicator-comparison-template"]').text()).toBe(
+        'Templat kalimat perbandingan',
+      );
+      const options = wrapper.findAll(`${selector} option`).map((o) => o.text());
+      expect(options).toEqual(['Tanpa templat', 'Perbandingan tahunan', 'Ringkas']);
+      wrapper.unmount();
+    });
+
+    it('is hidden when the indicator is not flagged as a computed comparison (a pair alone does not qualify)', () => {
+      const wrapper = mount(ScalarIndicatorForm, {
+        props: { indicator: makeIndicator({ isComputedComparison: false }), templates },
+      });
+
+      expect(wrapper.find('#indicator-value-previous').exists()).toBe(true);
+      expect(wrapper.find(selector).exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('is hidden when there is no previous-year pair, and when the pair is switched off', async () => {
+      const none = mount(ScalarIndicatorForm, {
+        props: {
+          indicator: makeIndicator({ valuePrevious: null, periodPrevious: null }),
+          templates,
+        },
+      });
+      expect(none.find(selector).exists()).toBe(false);
+      none.unmount();
+
+      const wrapper = mount(ScalarIndicatorForm, {
+        props: { indicator: makeIndicator(), templates },
+      });
+      await wrapper.find('#indicator-comparison-enabled').setValue(false);
+      expect(wrapper.find(selector).exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('is hidden while either half of the pair is blank, and returns once both are filled', async () => {
+      const wrapper = mount(ScalarIndicatorForm, {
+        props: { indicator: makeIndicator(), templates },
+      });
+
+      await wrapper.find('#indicator-period-previous').setValue('');
+      expect(wrapper.find(selector).exists()).toBe(false);
+      await wrapper.find('#indicator-period-previous').setValue('2025');
+      await wrapper.find('#indicator-value-previous').setValue('  ');
+      expect(wrapper.find(selector).exists()).toBe(false);
+      await wrapper.find('#indicator-value-previous').setValue('52386');
+      expect(wrapper.find(selector).exists()).toBe(true);
+      wrapper.unmount();
+    });
+
+    it('attaches the chosen template in the patch', async () => {
+      const wrapper = mount(ScalarIndicatorForm, {
+        props: { indicator: makeIndicator(), templates },
+      });
+
+      await wrapper.find(selector).setValue('tpl-2');
+      await wrapper.find('form').trigger('submit');
+
+      const payload = wrapper.emitted('submit')?.[0]?.[0] as IndicatorPatch;
+      expect(payload.comparisonTemplateId).toBe('tpl-2');
+      expect(payload.valuePrevious).toBe('52386');
+      wrapper.unmount();
+    });
+
+    it('detaches with "Tanpa templat" and leaves the patch alone when nothing changed', async () => {
+      const attached = makeIndicator({ comparisonTemplateId: 'tpl-1' });
+      const wrapper = mount(ScalarIndicatorForm, { props: { indicator: attached, templates } });
+      expect((wrapper.find(selector).element as HTMLSelectElement).value).toBe('tpl-1');
+      expect(wrapper.find('[data-test="template-description"]').text()).toContain(
+        '[Keterangan perubahan]',
+      );
+
+      await wrapper.find('form').trigger('submit');
+      expect(wrapper.emitted('submit')?.[0]?.[0]).not.toHaveProperty('comparisonTemplateId');
+
+      await wrapper.find(selector).setValue('');
+      await wrapper.find('form').trigger('submit');
+      const second = wrapper.emitted('submit')?.[1]?.[0] as IndicatorPatch | undefined;
+      expect(second?.comparisonTemplateId).toBeNull();
+      wrapper.unmount();
+    });
+
+    it('still detaches in the same request when the pair is cleared, and never offers a template then', async () => {
+      const wrapper = mount(ScalarIndicatorForm, {
+        props: { indicator: makeIndicator({ comparisonTemplateId: 'tpl-1' }), templates },
+      });
+
+      await wrapper.find('#indicator-comparison-enabled').setValue(false);
+      expect(wrapper.find(selector).exists()).toBe(false);
+      await wrapper.find('form').trigger('submit');
+
+      const payload = wrapper.emitted('submit')?.[0]?.[0] as IndicatorPatch;
+      expect(payload.comparisonTemplateId).toBeNull();
+      expect(payload.isComputedComparison).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('never sends a template for an indicator that was not already a computed comparison', async () => {
+      const wrapper = mount(ScalarIndicatorForm, {
+        props: { indicator: makeIndicator({ isComputedComparison: false }), templates },
+      });
+
+      await wrapper.find('#indicator-source').setValue('Sensus');
+      await wrapper.find('form').trigger('submit');
+
+      const payload = wrapper.emitted('submit')?.[0]?.[0] as IndicatorPatch;
+      expect(payload).not.toHaveProperty('comparisonTemplateId');
+      expect(payload).not.toHaveProperty('isComputedComparison');
+      wrapper.unmount();
+    });
+
+    it('keeps the stored choice visible and untouched when the list could not be loaded', async () => {
+      const wrapper = mount(ScalarIndicatorForm, {
+        props: {
+          indicator: makeIndicator({ comparisonTemplateId: 'tpl-9' }),
+          templates: [],
+          templatesError: 'Gagal memuat daftar templat kalimat. Coba lagi.',
+        },
+      });
+
+      expect(wrapper.find('[data-test="template-error"]').text()).toContain('Gagal memuat');
+      const select = wrapper.find(selector).element as HTMLSelectElement;
+      expect(select.value).toBe('tpl-9');
+      expect(wrapper.find(`${selector} option[value="tpl-9"]`).text()).toBe(
+        'Templat yang terpasang saat ini',
+      );
+
+      await wrapper.find('form').trigger('submit');
+      expect(wrapper.emitted('submit')?.[0]?.[0]).not.toHaveProperty('comparisonTemplateId');
+      wrapper.unmount();
+    });
+
+    it('shows no slug, braces or slot names to the Editor', () => {
+      const wrapper = mount(ScalarIndicatorForm, {
+        props: { indicator: makeIndicator({ comparisonTemplateId: 'tpl-1' }), templates },
+      });
+
+      const text = wrapper.find('[data-test="template-selector"]').text();
+      expect(text).not.toMatch(/[{}]|perbandingan-tahunan|value_current|period_current/);
+      wrapper.unmount();
+    });
   });
 });

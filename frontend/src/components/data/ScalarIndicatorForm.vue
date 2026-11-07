@@ -4,6 +4,8 @@ import FormField from '../common/FormField.vue';
 import FormErrorSummary from '../common/FormErrorSummary.vue';
 import BaseButton from '../common/BaseButton.vue';
 import type { Indicator, IndicatorPatch } from '../../stores/indicators.store';
+import type { ComparisonTemplate } from '../../stores/comparisonTemplates.store';
+import { describeBody } from '../../utils/comparisonTemplateSegments';
 import { CHECKBOX_CLASSES, INPUT_CLASSES } from '../../utils/formStyles';
 
 /**
@@ -23,12 +25,18 @@ export interface ScalarIndicatorFormProps {
   serverError?: string;
   /** Prefix for control ids; override only when two forms can be mounted at once. */
   idPrefix?: string;
+  /** Approved comparison templates an Editor may pick from (SPEC §5). */
+  templates?: ReadonlyArray<ComparisonTemplate>;
+  /** Plain-language reason the template list could not be loaded, if it could not. */
+  templatesError?: string;
 }
 
 const props = withDefaults(defineProps<ScalarIndicatorFormProps>(), {
   busy: false,
   serverError: '',
   idPrefix: 'indicator',
+  templates: () => [],
+  templatesError: '',
 });
 
 const emit = defineEmits<{
@@ -51,6 +59,8 @@ interface DraftState {
   source: string;
   hedgeNote: string;
   isStale: boolean;
+  /** Selected comparison template id; empty string means "Tanpa templat". */
+  comparisonTemplateId: string;
 }
 
 const draft = ref<DraftState>(createDraft(props.indicator));
@@ -68,6 +78,7 @@ function createDraft(indicator: Indicator): DraftState {
     source: indicator.source ?? '',
     hedgeNote: indicator.hedgeNote ?? '',
     isStale: indicator.isStale,
+    comparisonTemplateId: indicator.comparisonTemplateId ?? '',
   };
 }
 
@@ -85,7 +96,35 @@ watch(
 
 const fieldId = (name: string): string => `${props.idPrefix}-${name}`;
 
-const hasAttachedTemplate = computed(() => props.indicator.comparisonTemplateId !== null);
+const hasAttachedTemplate = computed(() => Boolean(props.indicator.comparisonTemplateId));
+
+/**
+ * A template can only be chosen for an indicator that is already a computed comparison AND has
+ * both halves of the previous-year pair (SPEC §5; the API and a database CHECK enforce the same).
+ * A pair alone does not qualify, so enabling it never makes this selector appear by itself.
+ */
+const templateEligible = computed(
+  () =>
+    props.indicator.isComputedComparison &&
+    draft.value.comparisonEnabled &&
+    draft.value.valuePrevious.trim() !== '' &&
+    draft.value.periodPrevious.trim() !== '',
+);
+
+const templateOptions = computed(() => {
+  const options = props.templates.map((template) => ({ id: template.id, label: template.label }));
+  const current = props.indicator.comparisonTemplateId;
+  // Keep the stored choice visible even if the list could not be loaded or no longer has it, so
+  // saving never silently swaps or drops a template the Editor did not touch.
+  if (current && !options.some((option) => option.id === current)) {
+    options.unshift({ id: current, label: 'Templat yang terpasang saat ini' });
+  }
+  return options;
+});
+
+const selectedTemplate = computed(() =>
+  props.templates.find((template) => template.id === draft.value.comparisonTemplateId),
+);
 
 /** SPEC §5/§7: the pair only exists as a pair; a lone half is never a valid state. */
 function validateDecimal(value: string, required: boolean, label: string): string | undefined {
@@ -190,6 +229,11 @@ function buildPatch(): IndicatorPatch {
   }
   if (!comparisonOn && hasAttachedTemplate.value) {
     patch.comparisonTemplateId = null;
+  } else if (
+    templateEligible.value &&
+    draft.value.comparisonTemplateId !== (props.indicator.comparisonTemplateId ?? '')
+  ) {
+    patch.comparisonTemplateId = draft.value.comparisonTemplateId || null;
   }
   return patch;
 }
@@ -317,8 +361,8 @@ function handleSubmit(): void {
 
       <p class="mt-1.5 text-xs leading-snug text-slate-500">
         Aktifkan hanya bila ada angka tahun lalu yang benar-benar sebanding. Angka ini disimpan
-        sebagai pembanding; kalimat perbandingan otomatis hanya dirender pada indikator yang sudah
-        memakai template perbandingan.
+        sebagai pembanding; kalimat perbandingan otomatis hanya tampil pada indikator yang sudah
+        memakai templat kalimat perbandingan.
       </p>
 
       <p
@@ -335,8 +379,8 @@ function handleSubmit(): void {
         class="rounded-btn mt-2 border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"
         data-test="template-detach-warning"
       >
-        Indikator ini memakai template perbandingan. Menonaktifkan pembanding akan melepas template
-        tersebut, karena template tidak boleh dibiarkan tanpa angka pembanding.
+        Indikator ini memakai templat kalimat perbandingan. Menonaktifkan pembanding akan melepas
+        templat tersebut, karena templat tidak boleh dibiarkan tanpa angka pembanding.
       </p>
 
       <div v-if="draft.comparisonEnabled" class="mt-4 grid gap-4 sm:grid-cols-2">
@@ -376,6 +420,47 @@ function handleSubmit(): void {
             :aria-invalid="invalid ? 'true' : undefined"
           />
         </FormField>
+      </div>
+
+      <div v-if="templateEligible" class="mt-4" data-test="template-selector">
+        <FormField
+          :id="fieldId('comparison-template')"
+          label="Templat kalimat perbandingan"
+          hint="Pilih kalimat perbandingan yang tampil di halaman publik. Angka dan kata naik, turun, atau tetap terisi otomatis."
+          v-slot="{ describedBy }"
+        >
+          <select
+            :id="fieldId('comparison-template')"
+            v-model="draft.comparisonTemplateId"
+            :class="INPUT_CLASSES"
+            class="sm:max-w-md"
+            :aria-describedby="
+              [describedBy, templatesError ? fieldId('comparison-template-note') : '']
+                .filter(Boolean)
+                .join(' ') || undefined
+            "
+          >
+            <option value="">Tanpa templat</option>
+            <option v-for="option in templateOptions" :key="option.id" :value="option.id">
+              {{ option.label }}
+            </option>
+          </select>
+        </FormField>
+        <p
+          v-if="templatesError"
+          :id="fieldId('comparison-template-note')"
+          class="text-status-error mt-1.5 text-xs font-medium"
+          data-test="template-error"
+        >
+          {{ templatesError }}
+        </p>
+        <p
+          v-else-if="selectedTemplate"
+          class="text-text-muted mt-1.5 text-xs"
+          data-test="template-description"
+        >
+          Susunan kalimat: {{ describeBody(selectedTemplate.body) }}
+        </p>
       </div>
 
       <p
