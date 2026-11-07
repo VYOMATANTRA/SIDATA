@@ -1,0 +1,230 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
+import {
+  describeTemplateFailure,
+  inUseMessage,
+  useComparisonTemplatesStore,
+  type ComparisonTemplate,
+  type TemplateDraft,
+} from '../stores/comparisonTemplates.store';
+import { USER_MESSAGES } from '../utils/userMessages';
+
+function makeTemplate(overrides: Partial<ComparisonTemplate> = {}): ComparisonTemplate {
+  return {
+    id: 'tpl-1',
+    slug: 'perbandingan-tahunan',
+    label: 'Perbandingan tahunan',
+    body: 'Data {label}, {trend}.',
+    trendNaik: 'naik {delta}',
+    trendTurun: 'turun {delta}',
+    trendTetap: 'tidak berubah',
+    usageCount: 0,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-02T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+const DRAFT: TemplateDraft = {
+  label: 'Perbandingan tahunan',
+  body: 'Data {label}, {trend}.',
+  trendNaik: 'naik {delta}',
+  trendTurun: 'turun {delta}',
+  trendTetap: 'tidak berubah',
+};
+
+function json(body: unknown, status = 200): Response {
+  return { ok: status >= 200 && status < 300, status, json: async () => body } as Response;
+}
+
+type Handler = (init: RequestInit | undefined) => Response | Promise<Response>;
+
+function route(handlers: Record<string, Handler>): ReturnType<typeof vi.fn> {
+  const fetchMock = vi.fn<typeof fetch>(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
+    const key = `${(init?.method ?? 'GET').toUpperCase()} ${url}`;
+    const handler = handlers[key];
+    if (!handler) throw new Error(`unexpected fetch: ${key}`);
+    return handler(init);
+  });
+  globalThis.fetch = fetchMock as unknown as typeof fetch;
+  return fetchMock;
+}
+
+describe('comparison templates store', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+
+  it('loads templates with their usage counts', async () => {
+    route({
+      'GET /api/comparison-templates': () =>
+        json({ templates: [makeTemplate({ usageCount: 2 }), makeTemplate({ id: 'tpl-2' })] }),
+    });
+    const store = useComparisonTemplatesStore();
+
+    await store.fetchTemplates();
+
+    expect(store.templates.map((t) => t.usageCount)).toEqual([2, 0]);
+    expect(store.isLoaded).toBe(true);
+    expect(store.error).toBeNull();
+  });
+
+  it('reports a failed load in approved wording and keeps the rows already shown', async () => {
+    route({
+      'GET /api/comparison-templates': () => json({ error: 'ER_BAD_FIELD_ERROR stack' }, 500),
+    });
+    const store = useComparisonTemplatesStore();
+    store.templates = [makeTemplate()];
+
+    await store.fetchTemplates(true);
+
+    expect(store.error).toContain('Gagal memuat daftar templat kalimat.');
+    expect(store.error).not.toMatch(/ER_BAD|stack|500/);
+    expect(store.templates).toHaveLength(1);
+  });
+
+  describe('delete', () => {
+    it('explains an in-use template with the usage count and what to do first', async () => {
+      route({
+        'DELETE /api/comparison-templates/tpl-1': () =>
+          json({ error: 'Template masih dipakai 3 indikator. Lepaskan ...' }, 409),
+        'GET /api/comparison-templates': () =>
+          json({ templates: [makeTemplate({ usageCount: 3 })] }),
+      });
+      const store = useComparisonTemplatesStore();
+      store.templates = [makeTemplate({ usageCount: 1 })];
+
+      const outcome = await store.deleteTemplate(store.templates[0]!);
+
+      expect(outcome.ok).toBe(false);
+      if (outcome.ok) throw new Error('unreachable');
+      expect(outcome.kind).toBe('in_use');
+      // The count is refreshed from the server, not taken from the stale row.
+      expect(outcome.message).toContain('3 indikator');
+      expect(outcome.message).toContain('Perbandingan tahunan');
+      expect(outcome.message).toMatch(/Lepaskan atau ganti/);
+      expect(outcome.message).not.toMatch(/409|slug|[{}]/);
+      expect(store.templates).toHaveLength(1);
+    });
+
+    it('removes the row on success', async () => {
+      route({ 'DELETE /api/comparison-templates/tpl-1': () => json({ template: makeTemplate() }) });
+      const store = useComparisonTemplatesStore();
+      store.templates = [makeTemplate()];
+
+      const outcome = await store.deleteTemplate(store.templates[0]!);
+
+      expect(outcome).toEqual({ ok: true });
+      expect(store.templates).toEqual([]);
+    });
+
+    it('uses approved wording for any other failure', async () => {
+      route({ 'DELETE /api/comparison-templates/tpl-1': () => json({ error: 'sql boom' }, 500) });
+      const store = useComparisonTemplatesStore();
+      store.templates = [makeTemplate()];
+
+      const outcome = await store.deleteTemplate(store.templates[0]!);
+
+      expect(outcome.ok).toBe(false);
+      if (outcome.ok) throw new Error('unreachable');
+      expect(outcome.kind).toBe('error');
+      expect(JSON.stringify(outcome)).toContain(USER_MESSAGES.server);
+      expect(JSON.stringify(outcome)).not.toContain('sql boom');
+      expect(store.templates).toHaveLength(1);
+    });
+  });
+
+  describe('save', () => {
+    it('returns the flagged phrases as an ack outcome, keeping the keys out of any message', async () => {
+      route({
+        'POST /api/comparison-templates': () =>
+          json(
+            {
+              error: 'Body template memuat kata tren di luar slot {trend}.',
+              code: 'TREND_KEYWORD_ACK_REQUIRED',
+              warnings: [
+                { ackKey: 'abc', phrase: 'terus', excerpt: 'x terus y', acknowledged: false },
+                { nonsense: true },
+              ],
+            },
+            422,
+          ),
+      });
+      const store = useComparisonTemplatesStore();
+
+      const outcome = await store.createTemplate(DRAFT);
+
+      expect(outcome).toEqual({
+        ok: false,
+        kind: 'ack',
+        warnings: [{ ackKey: 'abc', phrase: 'terus', excerpt: 'x terus y' }],
+      });
+    });
+
+    it('echoes acknowledged keys only when there are some', async () => {
+      const bodies: Array<Record<string, unknown>> = [];
+      route({
+        'PATCH /api/comparison-templates/tpl-1': (init) => {
+          bodies.push(JSON.parse(String(init?.body)));
+          return json({ template: makeTemplate() });
+        },
+      });
+      const store = useComparisonTemplatesStore();
+
+      await store.updateTemplate('tpl-1', DRAFT);
+      await store.updateTemplate('tpl-1', DRAFT, ['k1', 'k2']);
+
+      expect(bodies[0]).not.toHaveProperty('acknowledgedWarnings');
+      expect(bodies[1]).toMatchObject({ acknowledgedWarnings: ['k1', 'k2'] });
+    });
+
+    it('treats a 422 without usable warnings as an ordinary failure, not an ack flow', async () => {
+      route({
+        'POST /api/comparison-templates': () =>
+          json({ error: 'x', code: 'TREND_KEYWORD_ACK_REQUIRED', warnings: [] }, 422),
+      });
+      const store = useComparisonTemplatesStore();
+
+      const outcome = await store.createTemplate(DRAFT);
+
+      expect(outcome).toMatchObject({ ok: false, kind: 'error' });
+    });
+
+    it('never surfaces the server sentence of a 400, which quotes placeholder syntax', async () => {
+      route({
+        'POST /api/comparison-templates': () =>
+          json({ error: 'Body harus memuat tepat satu {trend}; Slug tidak valid' }, 400),
+      });
+      const store = useComparisonTemplatesStore();
+
+      const outcome = await store.createTemplate(DRAFT);
+
+      expect(outcome.ok).toBe(false);
+      if (outcome.ok) throw new Error('unreachable');
+      expect(outcome).toMatchObject({ kind: 'error' });
+      const message = (outcome as { message: string }).message;
+      expect(message).toContain(USER_MESSAGES.validation);
+      expect(message).not.toMatch(/[{}]|Slug/);
+    });
+  });
+
+  it('describes failures with approved wording whatever the error carries', () => {
+    const hostile = {
+      status: 400,
+      code: 'TREND_SLOT_MISSING',
+      serverMessage: 'Body harus memuat {trend}',
+      fieldErrors: { body: 'pakai {trend}' },
+    };
+
+    const message = describeTemplateFailure(hostile, 'menyimpan templat kalimat');
+
+    expect(message).toBe(`Gagal menyimpan templat kalimat. ${USER_MESSAGES.validation}`);
+  });
+
+  it('words the in-use message from the count', () => {
+    expect(inUseMessage('Tahunan', 4)).toContain('masih dipakai 4 indikator');
+    expect(inUseMessage('Tahunan', 0)).toContain('indikator lain');
+  });
+});
