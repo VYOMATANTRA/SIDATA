@@ -37,7 +37,7 @@ const routeLayers = (router: Router) =>
 
 describe('pages.routes', () => {
   describe('router definition', () => {
-    it('default-exports a router with routes: GET /, PUT /reorder, GET /:slug, POST /, and DELETE /:slug', async () => {
+    it('default-exports a router with routes: GET /, PUT /reorder, GET /:slug, POST /, DELETE /:slug and the authoring routes', async () => {
       const router = await loadRouter();
       const routes = routeLayers(router).map((l) => ({
         path: l.route!.path,
@@ -52,6 +52,9 @@ describe('pages.routes', () => {
         { path: '/:slug', methods: ['get'] },
         { path: '/', methods: ['post'] },
         { path: '/:slug', methods: ['delete'] },
+        { path: '/:slug', methods: ['patch'] },
+        { path: '/:slug/chapters', methods: ['post'] },
+        { path: '/:slug/chapters/reorder', methods: ['put'] },
       ]);
     });
 

@@ -1,18 +1,38 @@
+import { z } from 'zod';
 import prisma from '../utils/prisma.js';
+import { Prisma } from '../../generated/prisma/client.js';
 import {
   buildAuditLog,
   AUDIT_ACTIONS,
   type AuditActor,
   type AuditRequestContext,
 } from './audit.service.js';
+import {
+  HierarchyServiceError,
+  RESERVED_SLUGS,
+  STALE_WRITE_CODE,
+  assertFresh,
+  expectedUpdatedAtSchema,
+  parseOrThrow,
+  titleSchema,
+  assertPlainObject,
+} from '../utils/hierarchyAuthoring.js';
+import { executeLockedTransaction, withChangeResult } from '../utils/lockTransactionCache.js';
+import {
+  countSectionDependents,
+  dependentsError,
+  hasDependents,
+} from './hierarchyDependencies.service.js';
 
-export class PageServiceError extends Error {
-  statusCode: number;
-
-  constructor(message: string, statusCode: number) {
-    super(message);
+export class PageServiceError extends HierarchyServiceError {
+  constructor(
+    message: string,
+    statusCode: number,
+    code?: string,
+    details?: Record<string, unknown>,
+  ) {
+    super(message, statusCode, code, details);
     this.name = 'PageServiceError';
-    this.statusCode = statusCode;
   }
 }
 
@@ -32,17 +52,7 @@ export function isValidPageSlug(raw: unknown): raw is string {
   );
 }
 
-export const RESERVED_PAGE_SLUGS = new Set([
-  'reorder',
-  'api',
-  'admin',
-  'auth',
-  'settings',
-  'public',
-  'health',
-  'null',
-  'undefined',
-]);
+export const RESERVED_PAGE_SLUGS = RESERVED_SLUGS;
 export const MAX_PAGE_SORT_ORDER = 2_147_483_647;
 
 const INVISIBLE_OR_BIDI_REGEX = /[\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/u;
@@ -104,6 +114,8 @@ export interface SectionDTO {
   slug: string;
   title: string | null;
   sortOrder: number;
+  /** Optimistic-concurrency token for section edits/deletes and block reorders (SPEC §3). */
+  updatedAt: string;
 }
 
 export interface ChapterDTO {
@@ -112,6 +124,8 @@ export interface ChapterDTO {
   number: string | null;
   title: string;
   sortOrder: number;
+  /** Optimistic-concurrency token for chapter edits/deletes and section reorders (SPEC §3). */
+  updatedAt: string;
   sections: SectionDTO[];
 }
 
@@ -164,7 +178,14 @@ interface PageRowWithChapters {
     number: string | null;
     title: string;
     sortOrder: number;
-    sections: SectionDTO[];
+    updatedAt: Date;
+    sections: Array<{
+      id: string;
+      slug: string;
+      title: string | null;
+      sortOrder: number;
+      updatedAt: Date;
+    }>;
   }>;
 }
 
@@ -179,11 +200,13 @@ const toPageDetail = (page: PageRowWithChapters): PageDetailDTO => ({
     number: chapter.number,
     title: chapter.title,
     sortOrder: chapter.sortOrder,
+    updatedAt: chapter.updatedAt.toISOString(),
     sections: chapter.sections.map((section) => ({
       id: section.id,
       slug: section.slug,
       title: section.title,
       sortOrder: section.sortOrder,
+      updatedAt: section.updatedAt.toISOString(),
     })),
   })),
   createdAt: page.createdAt.toISOString(),
@@ -380,6 +403,86 @@ export const createPage = async (
   }
 };
 
+export interface PageAuthoringDTO extends PageSummaryDTO {
+  /** Optimistic-concurrency token for the next page edit/delete or chapter reorder. */
+  updatedAt: string;
+}
+
+const toPageAuthoring = (page: PageWithChapterCount & { updatedAt: Date }): PageAuthoringDTO => ({
+  ...toPageSummary(page),
+  updatedAt: page.updatedAt.toISOString(),
+});
+
+export const updatePageSchema = z
+  .object({
+    title: titleSchema('Judul halaman'),
+    expectedUpdatedAt: expectedUpdatedAtSchema,
+  })
+  .strict();
+
+/**
+ * Renames a page. The slug is deliberately immutable so shared links keep working; the page
+ * has no description column, so `title` is the only editable field.
+ */
+export const updatePage = async (
+  rawSlug: string,
+  rawInput: unknown,
+  actor: AuditActor,
+  reqContext?: AuditRequestContext,
+  client = prisma,
+): Promise<PageAuthoringDTO> => {
+  if (!isValidPageSlug(rawSlug)) {
+    throw new PageServiceError(
+      'Slug halaman tidak valid. Gunakan format kebab-case (maksimal 100 karakter).',
+      400,
+    );
+  }
+  assertPlainObject(rawInput, 'Payload halaman harus berupa objek JSON');
+  const input = parseOrThrow(updatePageSchema, rawInput);
+  const slug = rawSlug.trim().toLowerCase();
+
+  return executeLockedTransaction({
+    client,
+    lockQuery: Prisma.sql`SELECT id FROM pages WHERE slug = ${slug} FOR UPDATE`,
+    execute: async (tx) => {
+      const existing = await tx.page.findUnique({
+        where: { slug },
+        include: { _count: { select: { chapters: true } } },
+      });
+      if (!existing) {
+        throw new PageServiceError('Halaman tidak ditemukan', 404);
+      }
+      assertFresh(existing.updatedAt, input.expectedUpdatedAt, 'Halaman');
+
+      if (existing.title === input.title) {
+        return withChangeResult(toPageAuthoring(existing), false);
+      }
+
+      const updated = await tx.page.update({
+        where: { id: existing.id },
+        data: { title: input.title },
+        include: { _count: { select: { chapters: true } } },
+      });
+
+      await buildAuditLog(
+        {
+          action: AUDIT_ACTIONS.PAGE_UPDATED,
+          actor,
+          target: { type: 'page', id: existing.id, label: input.title },
+          metadata: {
+            slug: existing.slug,
+            changes: { title: { before: existing.title, after: input.title } },
+          },
+          context: reqContext,
+        },
+        tx,
+      );
+
+      return toPageAuthoring(updated);
+    },
+  });
+};
+
 export interface DeletedPageDTO {
   id: string;
   slug: string;
@@ -392,6 +495,7 @@ export const deletePage = async (
   actor: AuditActor,
   reqContext?: AuditRequestContext,
   client = prisma,
+  options?: { expectedUpdatedAt?: string | undefined },
 ): Promise<DeletedPageDTO> => {
   if (!isValidPageSlug(rawSlug)) {
     throw new PageServiceError(
@@ -417,20 +521,14 @@ export const deletePage = async (
     throw new PageServiceError('Halaman tidak ditemukan', 404);
   }
 
-  const attachedBlocksCount = await client.contentBlock.count({
-    where: {
-      section: {
-        chapter: {
-          pageId: existingPage.id,
-        },
-      },
-    },
-  });
-  if (attachedBlocksCount > 0) {
-    throw new PageServiceError(
-      'Halaman tidak dapat dihapus karena masih memiliki data terkait (blok konten)',
-      409,
-    );
+  if (options?.expectedUpdatedAt !== undefined) {
+    assertFresh(existingPage.updatedAt, options.expectedUpdatedAt, 'Halaman');
+  }
+
+  const dependents = await countSectionDependents(client, { pageId: existingPage.id });
+  if (hasDependents(dependents)) {
+    const blocked = dependentsError('Halaman', dependents);
+    throw new PageServiceError(blocked.message, blocked.statusCode, blocked.code, blocked.details);
   }
 
   const chapters =
@@ -453,8 +551,12 @@ export const deletePage = async (
 
   try {
     return await client.$transaction(async (tx) => {
+      // With a precondition the delete is a compare-and-swap on updatedAt (P2025 = lost the race).
       const deleted = await tx.page.delete({
-        where: { id: existingPage.id },
+        where:
+          options?.expectedUpdatedAt !== undefined
+            ? { id: existingPage.id, updatedAt: existingPage.updatedAt }
+            : { id: existingPage.id },
       });
 
       await buildAuditLog(
@@ -495,6 +597,13 @@ export const deletePage = async (
         );
       }
       if (err.code === 'P2025') {
+        if (options?.expectedUpdatedAt !== undefined) {
+          throw new PageServiceError(
+            'Halaman telah diubah oleh pengguna lain. Muat ulang data lalu coba lagi.',
+            409,
+            STALE_WRITE_CODE,
+          );
+        }
         throw new PageServiceError('Halaman tidak ditemukan', 404);
       }
     }
