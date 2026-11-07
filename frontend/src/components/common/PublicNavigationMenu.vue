@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../../stores/auth';
 import { usePagesStore } from '../../stores/pages.store';
@@ -20,6 +20,7 @@ import {
  * an anchored panel on desktop), which owns open/close, focus and scroll behaviour. Plain links
  * and buttons only; this is site navigation, not an application menu (no `role="menu"`).
  */
+const props = withDefaults(defineProps<{ open?: boolean }>(), { open: true });
 const emit = defineEmits<{ (e: 'navigate'): void }>();
 
 const router = useRouter();
@@ -52,6 +53,20 @@ const roleLabel = computed(() => {
 
 const isLoggingOut = ref(false);
 const logoutError = ref('');
+
+// A stale logout error must not greet the user the next time the menu opens or after navigating.
+watch(
+  () => props.open,
+  (open) => {
+    if (!open) logoutError.value = '';
+  },
+);
+watch(
+  () => route?.fullPath,
+  () => {
+    logoutError.value = '';
+  },
+);
 
 async function handleLogout() {
   if (isLoggingOut.value) return;
@@ -161,9 +176,9 @@ const BUTTON_BASE =
               type="button"
               :class="[
                 BUTTON_BASE,
-                'text-brand-navy hover:bg-surface-hover disabled:bg-surface-hover disabled:text-text-muted bg-white disabled:cursor-not-allowed',
+                'text-brand-navy hover:bg-surface-hover aria-disabled:bg-surface-hover aria-disabled:text-text-muted bg-white aria-disabled:cursor-not-allowed',
               ]"
-              :disabled="isLoggingOut"
+              :aria-disabled="isLoggingOut ? 'true' : undefined"
               data-test="menu-logout-btn"
               @click="handleLogout"
             >

@@ -329,7 +329,9 @@ describe('PublicNavigationMenu', () => {
       await button.trigger('click');
       await button.trigger('click');
       expect(calls).toBe(1);
-      expect(button.attributes('disabled')).toBeDefined();
+      // Stays enabled (so focus is never dropped to <body>) but announces and ignores presses.
+      expect(button.attributes('disabled')).toBeUndefined();
+      expect(button.attributes('aria-disabled')).toBe('true');
       expect(button.text()).toContain('Memproses');
 
       resolve({ ok: true, json: async () => ({}) } as Response);
@@ -347,6 +349,27 @@ describe('PublicNavigationMenu', () => {
       expect(wrapper.text()).toContain('Gagal keluar dari sesi');
       expect(authStore.isAuthenticated).toBe(true);
       expect(wrapper.find('[data-test="menu-logout-btn"]').attributes('disabled')).toBeUndefined();
+      expect(
+        wrapper.find('[data-test="menu-logout-btn"]').attributes('aria-disabled'),
+      ).toBeUndefined();
+    });
+
+    it('clears a stale logout error when the menu closes and when the route changes', async () => {
+      mockLogoutFetch(() => ({ ok: false, status: 500, json: async () => ({}) }) as Response);
+      const { wrapper, router } = await setup({ role: 'user' });
+
+      await wrapper.find('[data-test="menu-logout-btn"]').trigger('click');
+      await vi.waitUntil(() => wrapper.find('[data-test="menu-logout-error"]').exists());
+
+      await wrapper.setProps({ open: false });
+      expect(wrapper.find('[data-test="menu-logout-error"]').exists()).toBe(false);
+
+      await wrapper.setProps({ open: true });
+      await wrapper.find('[data-test="menu-logout-btn"]').trigger('click');
+      await vi.waitUntil(() => wrapper.find('[data-test="menu-logout-error"]').exists());
+      await router.push('/peta');
+      await flushPromises();
+      expect(wrapper.find('[data-test="menu-logout-error"]').exists()).toBe(false);
     });
 
     it('shows an alert for an unexpected exception and keeps the session', async () => {

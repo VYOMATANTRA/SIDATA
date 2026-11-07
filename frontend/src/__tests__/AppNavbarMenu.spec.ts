@@ -236,6 +236,36 @@ describe('AppNavbar menu: mobile modal sheet', () => {
     wrapper.unmount();
   });
 
+  it('hands focus to the toggle when a non-link navigation closes the sheet with focus inside it', async () => {
+    const { wrapper, router } = await mountNavbar();
+    await toggle(wrapper).trigger('click');
+    wrapper.find<HTMLAnchorElement>('[data-test="first"]').element.focus();
+
+    await router.push('/peta'); // e.g. browser back/forward
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    expect(toggle(wrapper).attributes('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(toggle(wrapper).element);
+    wrapper.unmount();
+  });
+
+  it('does not steal focus on navigation when it was already elsewhere', async () => {
+    const { wrapper, router } = await mountNavbar();
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    await toggle(wrapper).trigger('click');
+    outside.focus();
+
+    await router.push('/peta');
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    expect(document.activeElement).toBe(outside);
+    outside.remove();
+    wrapper.unmount();
+  });
+
   it('emits toggleMenu for every open and close', async () => {
     const { wrapper } = await mountNavbar();
     await toggle(wrapper).trigger('click');

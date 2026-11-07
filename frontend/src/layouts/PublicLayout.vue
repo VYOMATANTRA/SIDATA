@@ -72,8 +72,8 @@ onMounted(() => {
       :subtitle="settingsStore.appName"
       @toggle-menu="handleToggleMenu"
     >
-      <template #menu="{ close }">
-        <PublicNavigationMenu @navigate="close" />
+      <template #menu="{ close, open }">
+        <PublicNavigationMenu :open="open" @navigate="close" />
       </template>
     </AppNavbar>
 
