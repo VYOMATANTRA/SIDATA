@@ -96,6 +96,8 @@ describe('LocationPicker', () => {
       await click(wrapper, 'location-picker-west');
       await click(wrapper, 'location-picker-west');
       expect(lastEmitted(wrapper)!.longitude).toBeLessThan(PIN.longitude);
+      // The second identical announcement re-fills the live region after a short gap.
+      await new Promise((resolve) => setTimeout(resolve, 100));
       expect(wrapper.get('[data-test="location-picker-announcement"]').text()).toBe(
         'Pin digeser ke barat.',
       );
@@ -434,6 +436,7 @@ describe('LocationPicker', () => {
     });
 
     it('re-announces an identical message by clearing the live region first', async () => {
+      vi.useFakeTimers();
       const wrapper = await mountPicker();
       const live = wrapper.get('[data-test="location-picker-announcement"]');
       const seen: string[] = [];
@@ -443,18 +446,61 @@ describe('LocationPicker', () => {
       observer.observe(live.element, { childList: true, characterData: true, subtree: true });
       try {
         clickMap(-1.2, 116.9);
-        await flushPromises();
+        await nextTick();
         expect(live.text()).toBe('Pin diletakkan.');
         seen.length = 0;
         clickMap(-1.21, 116.91);
-        await flushPromises();
-        await Promise.resolve();
+        await nextTick();
+        // Emptied first, and still empty until the gap has passed.
+        expect(live.text()).toBe('');
+        vi.advanceTimersByTime(100);
+        await nextTick();
         expect(live.text()).toBe('Pin diletakkan.');
         // Observed DOM mutations: emptied, then the same text again.
+        await Promise.resolve();
         expect(seen).toEqual(['', 'Pin diletakkan.']);
       } finally {
         observer.disconnect();
       }
+    });
+
+    describe('same-tick races', () => {
+      it('shows the newest message when another announcement follows a pending re-announce', async () => {
+        vi.useFakeTimers();
+        const wrapper = await mountPicker({ modelValue: PIN });
+        const live = wrapper.get('[data-test="location-picker-announcement"]');
+        void click(wrapper, 'location-picker-north');
+        void click(wrapper, 'location-picker-north');
+        void click(wrapper, 'location-picker-zoom-in');
+        vi.advanceTimersByTime(200);
+        await nextTick();
+        expect(live.text()).toBe('Peta diperbesar.');
+      });
+
+      it('shows the newest message in the opposite order too', async () => {
+        vi.useFakeTimers();
+        const wrapper = await mountPicker({ modelValue: PIN });
+        const live = wrapper.get('[data-test="location-picker-announcement"]');
+        void click(wrapper, 'location-picker-zoom-out');
+        void click(wrapper, 'location-picker-zoom-out');
+        void click(wrapper, 'location-picker-north');
+        vi.advanceTimersByTime(200);
+        await nextTick();
+        expect(live.text()).toBe('Pin digeser ke utara.');
+      });
+
+      it('does not resurrect a message after a same-tick clear', async () => {
+        vi.useFakeTimers();
+        const wrapper = await mountPicker({ modelValue: PIN });
+        const live = wrapper.get('[data-test="location-picker-announcement"]');
+        void click(wrapper, 'location-picker-north');
+        void click(wrapper, 'location-picker-north');
+        // An outside change clears the live region.
+        await wrapper.setProps({ modelValue: null });
+        vi.advanceTimersByTime(200);
+        await nextTick();
+        expect(live.text()).toBe('');
+      });
     });
 
     it('derives every data-test hook from the testId prop', async () => {

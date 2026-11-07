@@ -128,6 +128,9 @@ let isUnmounted = false;
 let syncing = false;
 let geoRequest = 0;
 let announceTimer: number | undefined;
+let reannounceTimer: number | undefined;
+/** Bumped by every announce/clear/unmount so a deferred re-announce can tell it is stale. */
+let announceSeq = 0;
 let nudgeAnnounceTimer: number | undefined;
 let resizeObserver: ResizeObserver | null = null;
 let resizeTimer: number | undefined;
@@ -173,17 +176,22 @@ const directions: ReadonlyArray<PickerDirection> = ['north', 'south', 'east', 'w
 
 const ANNOUNCEMENT_TTL_MS = 4000;
 const NUDGE_ANNOUNCE_DELAY_MS = 600;
+/** Gap between emptying and refilling the live region so the change survives coalescing. */
+const REANNOUNCE_GAP_MS = 60;
 
 /** Transient message for the hidden live region; cleared after a few seconds. */
 function announce(message: string): void {
   window.clearTimeout(nudgeAnnounceTimer);
   window.clearTimeout(announceTimer);
+  const token = ++announceSeq;
   if (announcement.value === message) {
     // Identical text would not mutate the live region, so assistive tech would stay silent.
+    // The gap is a real timeout (not a microtask) so the empty state is painted and noticed.
     announcement.value = '';
-    void nextTick(() => {
-      if (!isUnmounted) announcement.value = message;
-    });
+    reannounceTimer = window.setTimeout(() => {
+      if (isUnmounted || token !== announceSeq) return;
+      announcement.value = message;
+    }, REANNOUNCE_GAP_MS);
   } else {
     announcement.value = message;
   }
@@ -199,6 +207,7 @@ function announceNudge(message: string): void {
 }
 
 function clearAnnouncement(): void {
+  announceSeq += 1;
   window.clearTimeout(announceTimer);
   window.clearTimeout(nudgeAnnounceTimer);
   announcement.value = '';
@@ -450,6 +459,7 @@ onUnmounted(() => {
   geoRequest += 1;
   window.clearTimeout(resizeTimer);
   clearTogglePress();
+  window.clearTimeout(reannounceTimer);
   clearAnnouncement();
   resizeObserver?.disconnect();
   resizeObserver = null;
@@ -738,11 +748,7 @@ const buttonClasses =
       </svg>
     </div>
 
-    <p
-      :id="statusId"
-      class="text-brand-navy text-sm font-medium"
-      :data-test="`${testId}-status`"
-    >
+    <p :id="statusId" class="text-brand-navy text-sm font-medium" :data-test="`${testId}-status`">
       {{ statusText }}
     </p>
     <p role="status" aria-live="polite" class="sr-only" :data-test="`${testId}-announcement`">
