@@ -1,4 +1,3 @@
-import { nextTick } from 'vue';
 import {
   createRouter,
   createWebHistory,
@@ -52,38 +51,44 @@ export function rolesFor(path: string): AdminNavRole[] {
 }
 
 /**
- * Scroll policy for every route (public and admin):
- * - back/forward restores the saved position;
- * - a hash that resolves to an element scrolls to it, clearing the sticky header by the element's
- *   own computed `scroll-margin-top` (vue-router positions with getBoundingClientRect, which
- *   ignores that CSS). `.public-shell [id]` sets it from `--public-header-height`, so public pages
- *   clear the header with no hardcoded number, and admin pages (no such rule) get 0;
+ * Scroll policy for window-scrolling (public) routes. Admin routes scroll an inner container
+ * instead, which `AdminLayout` resets itself on a path change.
+ * - a hash on the same path (in-page anchor, TOC, skip link) scrolls to its target first. Native
+ *   anchor clicks fire `popstate` with no state, so vue-router passes a STALE `savedPosition`
+ *   that must not override the anchor;
+ * - otherwise back/forward restores the saved position;
+ * - a hash that resolves to an element (cross-path) scrolls to it, clearing the sticky header by
+ *   the element's own computed `scroll-margin-top` (vue-router positions with
+ *   getBoundingClientRect, which ignores that CSS). `.public-shell [id]` sets it from
+ *   `--public-header-height`, so public pages clear the header with no hardcoded number;
  * - a path change otherwise resets to the top;
  * - query-only changes keep the position (views use them to sync filters).
- * Always `behavior: 'auto'` (never smooth, so reduced-motion needs no special case). Waits one tick
- * so the new route component has rendered before measuring.
+ * Always `behavior: 'instant'` (ignores any CSS `scroll-behavior`, so reduced-motion needs no
+ * special case). vue-router already awaits a tick before calling this, so the new route component
+ * has rendered by the time the target is measured.
  */
-export const scrollBehavior: RouterScrollBehavior = async (
-  to: RouteLocationNormalized,
-  from: RouteLocationNormalized,
-  savedPosition,
-) => {
-  if (savedPosition) return savedPosition;
-  await nextTick();
-  if (to.hash) {
-    let id = to.hash.slice(1);
-    try {
-      id = decodeURIComponent(id);
-    } catch {
-      // keep the raw id
-    }
-    const el = document.getElementById(id);
-    if (el) {
-      const top = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
-      return { el, top, behavior: 'auto' };
-    }
+function hashTarget(hash: string): { el: Element; top: number; behavior: ScrollBehavior } | null {
+  if (!hash) return null;
+  let id = hash.slice(1);
+  try {
+    id = decodeURIComponent(id);
+  } catch {
+    // keep the raw id
   }
-  if (to.path !== from.path) return { top: 0, left: 0, behavior: 'auto' };
+  const el = document.getElementById(id);
+  if (!el) return null;
+  const top = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+  return { el, top, behavior: 'instant' };
+}
+
+export const scrollBehavior: RouterScrollBehavior = (to, from, savedPosition) => {
+  const samePath = to.path === from.path;
+  if (samePath) {
+    const target = hashTarget(to.hash);
+    if (target) return target;
+  }
+  if (savedPosition) return savedPosition;
+  if (!samePath) return hashTarget(to.hash) ?? { top: 0, left: 0, behavior: 'instant' };
   return false;
 };
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import router, { scrollBehavior } from '../router/index';
 import type { RouteLocationNormalized } from 'vue-router';
@@ -280,7 +280,10 @@ describe('router auth guard retry behavior', () => {
       setActivePinia(pinia);
       const authStore = useAuthStore(pinia);
 
-      authStore.setAuth({ id: '30', email: 'editor@manggar.go.id', role: 'editor' }, 'editor-token');
+      authStore.setAuth(
+        { id: '30', email: 'editor@manggar.go.id', role: 'editor' },
+        'editor-token',
+      );
       await router.push('/');
       await router.push('/dashboard');
 
@@ -341,17 +344,27 @@ describe('router auth guard retry behavior', () => {
 describe('router scrollBehavior', () => {
   const loc = (path: string, hash = '') =>
     ({ path, hash, fullPath: path + hash }) as unknown as RouteLocationNormalized;
+  const mkEl = (id: string, margin = '0px') => {
+    const el = document.createElement('section');
+    el.id = id;
+    el.style.scrollMarginTop = margin;
+    document.body.appendChild(el);
+    return el;
+  };
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
 
-  it('resets to the top when the path changes (public and admin)', async () => {
+  it('resets to the top when the path changes (window-scrolling routes)', async () => {
     expect(await scrollBehavior(loc('/peta'), loc('/'), null)).toEqual({
       top: 0,
       left: 0,
-      behavior: 'auto',
+      behavior: 'instant',
     });
     expect(await scrollBehavior(loc('/users'), loc('/data'), null)).toMatchObject({ top: 0 });
   });
 
-  it('restores the saved position on back/forward', async () => {
+  it('restores the saved position on cross-path back/forward without a hash', async () => {
     const saved = { left: 0, top: 1500 };
     expect(await scrollBehavior(loc('/peta'), loc('/'), saved)).toBe(saved);
   });
@@ -361,20 +374,39 @@ describe('router scrollBehavior', () => {
   });
 
   it('scrolls to the hash target using its scroll-margin-top, on path or hash-only changes', async () => {
-    const el = document.createElement('section');
-    el.id = 'bab-1';
-    el.style.scrollMarginTop = '88px';
-    document.body.appendChild(el);
-    const expected = { el, top: 88, behavior: 'auto' };
+    const el = mkEl('bab-1', '88px');
+    const expected = { el, top: 88, behavior: 'instant' };
     expect(await scrollBehavior(loc('/cerita/x', '#bab-1'), loc('/'), null)).toEqual(expected);
     expect(await scrollBehavior(loc('/cerita/x', '#bab-1'), loc('/cerita/x'), null)).toEqual(
       expected,
     );
-    el.remove();
+  });
+
+  it('prefers a same-path hash target over a stale savedPosition (native anchor click popstate)', async () => {
+    const el = mkEl('a', '10px');
+    const stale = { left: 0, top: 2500 };
+    expect(await scrollBehavior(loc('/cerita/x', '#a'), loc('/cerita/x', '#a'), stale)).toEqual({
+      el,
+      top: 10,
+      behavior: 'instant',
+    });
+  });
+
+  it('A to B to A on the same path with different hashes lands on the hash target', async () => {
+    const a = mkEl('a');
+    const b = mkEl('b');
+    const stale = { left: 0, top: 900 };
+    expect(await scrollBehavior(loc('/c', '#b'), loc('/c', '#a'), stale)).toMatchObject({ el: b });
+    expect(await scrollBehavior(loc('/c', '#a'), loc('/c', '#b'), stale)).toMatchObject({ el: a });
   });
 
   it('falls back to top (path change) or nothing (same path) for a missing hash target', async () => {
     expect(await scrollBehavior(loc('/a', '#none'), loc('/b'), null)).toMatchObject({ top: 0 });
     expect(await scrollBehavior(loc('/a', '#none'), loc('/a'), null)).toBe(false);
+  });
+
+  it('same-path missing hash target falls through to savedPosition when given', async () => {
+    const saved = { left: 0, top: 321 };
+    expect(await scrollBehavior(loc('/a', '#none'), loc('/a'), saved)).toBe(saved);
   });
 });
