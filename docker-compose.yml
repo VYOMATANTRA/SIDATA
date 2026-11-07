@@ -60,11 +60,16 @@ services:
     environment:
       <<: *backend-env
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-1}
+      # Uploaded media (docs/SPEC.md §7). Fixed inside the container; choose where it lives on the
+      # host with UPLOADS_HOST_DIR below. Must stay outside the ./backend mount.
+      UPLOAD_DIR: /var/lib/sidata/uploads
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
     volumes:
       - ./backend:/app
       - backend_node_modules:/app/node_modules
+      # Bind mount so uploads survive container rebuilds and can be backed up with the database.
+      - ${UPLOADS_HOST_DIR:-./uploads}:/var/lib/sidata/uploads
 
   # Scheduled audit_logs retention pruning (docs/SPEC.md §3). Opt-in: only starts with
   # `docker compose --profile ops up -d --build audit-pruner`, since it needs AUDIT_ADMIN_DATABASE_URL
