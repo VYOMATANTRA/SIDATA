@@ -429,7 +429,7 @@ caching live in `system_settings` as a separate operational concern.
 `meta.layout = 'public'` on the route): skip link, header with the navigation menu, the single
 `<main id="main-content">`, and the footer. Views supply page content only and never add their own
 `<main>`, skip link, navbar or footer; each settled view has exactly one `<h1>`. Login, register,
-setup-password, the OAuth callback and the admin shell are outside it.
+setup-password, the OAuth callback, `/dashboard` (its own `<main>`) and the admin shell are outside it.
 
 - **Branding.** The header's institution and app names come from the public settings on every
   route, never from per-view defaults.
@@ -443,11 +443,16 @@ setup-password, the OAuth callback and the admin shell are outside it.
   "Masuk" link. Signed in: email and role, the CMS entry the role may use (the first top-level
   `ADMIN_NAV` link the role is allowed, so Editor and Admin get the admin shell and a plain user gets
   none), and logout via the shared logout flow.
-- **Menu behavior.** Below `md` it is a bounded sheet: modal, focus moves in and is trapped, Escape /
-  backdrop / close button dismiss it, focus returns to the toggle, the page behind is inert and body
-  scroll is locked (ref-counted, so it never releases another overlay's lock). From `md` it is an
+- **Menu behavior.** Below `md` it is a bounded right-anchored sheet (`min(88vw, 22rem)`, so a dimmed
+  backdrop strip stays visible and tappable) exposed as a named modal dialog (`role="dialog"`,
+  `aria-modal`, label "Menu navigasi"): focus moves in and is trapped, Escape / backdrop / close
+  button dismiss it, focus returns to the toggle, the page behind and the header's logo and toggle
+  are inert and body scroll is locked (ref-counted, so it never releases another overlay's lock).
+  Escape is ignored while any other modal dialog is open in the document. From `md` it is an
   anchored navy panel with normal tab order; Escape and an outside click dismiss it. Following a link
-  or any route change closes it.
+  or any route change closes it (focus goes to the toggle if it was inside the panel). On a route
+  path change after the first load, focus moves to `main#main-content` unless the user is typing in
+  a field; query/hash-only changes do not move focus.
 - **Header states.** The header has one height in every state. Foreground is always white; only the
   background changes. On Home (`meta.headerOverlay`) it overlays the hero: transparent (over a
   localized navy scrim) at the top with the menu closed, navy once scrolled past 64px or while the
