@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, provide, ref } from 'vue';
+import { computed, nextTick, onMounted, provide, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import AppNavbar from '../components/common/AppNavbar.vue';
 import AppFooter from '../components/common/AppFooter.vue';
@@ -34,6 +34,30 @@ const { background } = usePublicHeaderState({ overlay: isOverlay, menuOpen: isMe
 const { isDesktop } = useIsDesktop();
 const inertWhenMenuModal = computed(() =>
   isMenuOpen.value && !isDesktop.value ? true : undefined,
+);
+
+// The shell persists between routes, so focus would stay on the menu toggle after following a link
+// and nothing would tell a keyboard or screen-reader user the page changed. Like AdminLayout, move
+// focus to <main> when the route PATH changes (not on first load, and not for query/hash-only
+// changes that views use to sync filters), unless the view already placed focus inside <main> or
+// the user is typing in a field.
+const mainRef = ref<HTMLElement | null>(null);
+
+function isEditable(el: Element | null): boolean {
+  if (!(el instanceof HTMLElement)) return false;
+  return el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
+}
+
+watch(
+  () => route?.path,
+  (newPath, oldPath) => {
+    if (oldPath === undefined || newPath === oldPath) return;
+    void nextTick(() => {
+      const active = document.activeElement;
+      if (isEditable(active) || (active && mainRef.value?.contains(active))) return;
+      mainRef.value?.focus();
+    });
+  },
 );
 
 function handleToggleMenu(open: boolean) {
@@ -79,6 +103,7 @@ onMounted(() => {
 
     <main
       id="main-content"
+      ref="mainRef"
       tabindex="-1"
       class="flex-grow focus:outline-none"
       :inert="inertWhenMenuModal"

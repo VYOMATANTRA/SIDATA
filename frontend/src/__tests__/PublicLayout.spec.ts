@@ -207,6 +207,74 @@ describe('PublicLayout (mounted by App for routes with meta.layout = public)', (
     });
   });
 
+  describe('route change focus', () => {
+    it('does not move focus on first load', async () => {
+      const { wrapper } = await mountApp('/peta');
+      expect(document.activeElement).not.toBe(wrapper.find('main').element);
+      wrapper.unmount();
+    });
+
+    it('moves focus to main after a path change', async () => {
+      const { wrapper, router } = await mountApp('/peta');
+      wrapper.find<HTMLElement>('[data-test="hamburger-btn"]').element.focus();
+
+      await router.push('/publikasi');
+      await flushPromises();
+      expect(document.activeElement).toBe(wrapper.find('main').element);
+      wrapper.unmount();
+    });
+
+    it('ignores hash-only and query-only changes', async () => {
+      const { wrapper, router } = await mountApp('/peta');
+      const toggle = wrapper.find<HTMLElement>('[data-test="hamburger-btn"]');
+      toggle.element.focus();
+
+      await router.push('/peta#bagian');
+      await flushPromises();
+      await router.push('/peta?q=1');
+      await flushPromises();
+      expect(document.activeElement).toBe(toggle.element);
+      wrapper.unmount();
+    });
+
+    it('leaves focus alone while the user is typing in a field', async () => {
+      const { wrapper, router } = await mountApp('/peta');
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      input.focus();
+
+      await router.push('/publikasi');
+      await flushPromises();
+      expect(document.activeElement).toBe(input);
+      input.remove();
+      wrapper.unmount();
+    });
+
+    it('keeps focus the new view already placed inside main', async () => {
+      const { wrapper, router } = await mountApp('/peta');
+      const inner = document.createElement('button');
+      wrapper.find('main').element.appendChild(inner);
+      inner.focus();
+
+      await router.push('/publikasi');
+      await flushPromises();
+      expect(document.activeElement).toBe(inner);
+      wrapper.unmount();
+    });
+
+    it('lands on main (not the toggle) after following a menu link on mobile', async () => {
+      stubViewport(false);
+      const { wrapper, router } = await mountApp('/peta');
+      await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
+      await router.push('/publikasi'); // what a menu link click does
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="hamburger-btn"]').attributes('aria-expanded')).toBe('false');
+      expect(document.activeElement).toBe(wrapper.find('main').element);
+      wrapper.unmount();
+    });
+  });
+
   describe('mobile menu modality', () => {
     it('makes the skip link, main and footer inert while the mobile sheet is open, and restores them', async () => {
       stubViewport(false);
