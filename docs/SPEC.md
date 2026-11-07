@@ -514,6 +514,8 @@ Accessibility implications, per `docs/ACCESSIBILITY.md`: the input needs a real 
 placeholder-only), the result count belongs in an `aria-live="polite"` region, and the table
 keeps proper `<caption>` / `<th scope>` semantics under filtering.
 
+Navigating to a new path scrolls to the top (or to the hash target, clearing the sticky header); back/forward restore the previous position; focus moves to `<main>` without scrolling.
+
 **Footer:**
 
 - **Sumber Daya** — Publikasi (Prodeskel publications, infographics, Eco Boba booklet, etc.), Peta
