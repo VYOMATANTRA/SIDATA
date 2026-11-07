@@ -518,8 +518,7 @@ export const deletePage = async (
 
   const dependents = await countSectionDependents(client, { pageId: existingPage.id });
   if (hasDependents(dependents)) {
-    const blocked = dependentsError('Halaman', dependents);
-    throw new PageServiceError(blocked.message, blocked.statusCode, blocked.code, blocked.details);
+    throw dependentsError('Halaman', dependents);
   }
 
   const chapters =

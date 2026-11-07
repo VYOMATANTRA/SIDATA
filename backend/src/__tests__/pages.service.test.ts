@@ -12,7 +12,7 @@ import {
   isValidPageSlug,
 } from '../services/pages.service.js';
 import type { AuditActor, AuditRequestContext } from '../services/audit.service.js';
-import { MAX_SORT_ORDER } from '../utils/hierarchyAuthoring.js';
+import { HierarchyServiceError, MAX_SORT_ORDER } from '../utils/hierarchyAuthoring.js';
 import prisma from '../utils/prisma.js';
 
 const EXPECTED_FIND_MANY_ARGS = {
@@ -1174,7 +1174,7 @@ describe('pages.service', () => {
       await assert.rejects(
         deletePage('kependudukan', actor, context),
         (err: unknown) =>
-          err instanceof PageServiceError &&
+          err instanceof HierarchyServiceError &&
           err.statusCode === 409 &&
           err.message.includes('tidak dapat dihapus') &&
           err.message.includes('blok konten'),
