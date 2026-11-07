@@ -55,6 +55,10 @@ Dev server runs on `http://localhost:5173` by default (Vite).
 
 Backend runs on port from `PORT` env var (default 3000). Prisma client is generated to `generated/prisma/`.
 
+`npm run dev:seed` retries a database that is not accepting connections yet, then reports the real
+reason (for example `connect ECONNREFUSED 127.0.0.1:3306`) instead of the driver adapter's generic
+pool timeout. A MySQL that has just been started needs a few seconds before it accepts connections.
+
 ## Git Conventions
 
 **Commit atomically** — each commit should represent one logical, self-contained change (a single fix, feature, or refactor) that leaves the repo in a working state. Avoid bundling unrelated changes into one commit; split them into separate commits instead.
