@@ -26,7 +26,7 @@ export const leafletState = {
   markerCreated: 0,
   /**
    * Simulates Leaflet adjusting the centre during `invalidateSize` (e.g. a half-pixel shift when
-   * the container size changes) and clamping the zoom: added to the centre before `moveend` fires.
+   * the container size changes): added to the centre before `moveend` fires.
    * Real `setView` returns the requested centre exactly; this mock also applies the drift there so
    * specs can exercise the picker's guards. The picker uses no `maxBounds`.
    */
