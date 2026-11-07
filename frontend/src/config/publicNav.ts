@@ -84,3 +84,64 @@ export function isNavItemActive(itemTo: string, currentPath: string): boolean {
   }
   return currentPath === itemTo || currentPath.startsWith(`${itemTo}/`);
 }
+
+/** Identifier of a public navigation group (SPEC §8). */
+export type NavGroupId = 'cerita' | 'sumber-daya' | 'tentang';
+
+export interface NavGroup {
+  id: NavGroupId;
+  label: string;
+  items: NavItem[];
+}
+
+/** Standalone link above the groups in the public menu. */
+export const NAV_HOME_ITEM: NavItem = { label: 'Beranda', to: '/' };
+
+/**
+ * A destination is active only for its own path (or a nested path below it). Unlike
+ * `isNavItemActive`, the three Tentang pages are distinct destinations here, so only the page the
+ * visitor is on is marked, not all of them.
+ */
+export function isDestinationActive(to: string, currentPath: string): boolean {
+  if (to === '/') return currentPath === '/';
+  return currentPath === to || currentPath.startsWith(`${to}/`);
+}
+
+export function isNavGroupActive(group: NavGroup, currentPath: string): boolean {
+  return group.items.some((item) => isDestinationActive(item.to, currentPath));
+}
+
+/**
+ * Cerita topics from the page hierarchy, in `sortOrder`. Returns the deterministic
+ * `FOOTER_STORY_LINKS` when the hierarchy has not loaded (or is empty), so the menu never renders
+ * an empty Cerita group.
+ */
+export function buildCeritaItems(
+  pages: ReadonlyArray<{ slug: string; title: string; sortOrder: number }> | null | undefined,
+): NavItem[] {
+  if (!pages || pages.length === 0) return [...FOOTER_STORY_LINKS];
+  return [...pages]
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.slug.localeCompare(b.slug))
+    .map((page) => ({ label: page.title, to: `/cerita/${encodeURIComponent(page.slug)}` }));
+}
+
+/**
+ * The public menu's groups: Cerita (from the hierarchy), Sumber Daya and Tentang (SPEC §8). Links
+ * whose route is not registered are dropped, and a group left empty is omitted.
+ */
+export function buildPublicNavGroups(
+  router: Router | undefined | null,
+  ceritaItems: readonly NavItem[],
+): NavGroup[] {
+  const groups: NavGroup[] = [
+    { id: 'cerita', label: 'Cerita', items: [...ceritaItems] },
+    { id: 'sumber-daya', label: 'Sumber Daya', items: [...FOOTER_RESOURCE_LINKS] },
+    { id: 'tentang', label: 'Tentang', items: [...FOOTER_ABOUT_LINKS] },
+  ];
+  return groups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => isRouteAvailable(router, item.to)),
+    }))
+    .filter((group) => group.items.length > 0);
+}

@@ -146,3 +146,21 @@ export function isAdminNavRoleAllowed(
   if (roles.includes('editor') && access.canEditData) return true;
   return false;
 }
+
+/**
+ * The CMS entry point a signed-in user may use from public pages: the first top-level ADMIN_NAV
+ * link their role allows (today the admin shell's Beranda), or `null` for plain users. Read from
+ * the same map as the sidebar and the route guards so the public menu cannot offer a destination
+ * the guards would turn away.
+ */
+export function getAdminEntryLink(access: {
+  isAdmin: boolean;
+  canEditData: boolean;
+}): AdminNavLink | null {
+  for (const entry of ADMIN_NAV) {
+    if (!isAdminNavGroup(entry) && isAdminNavRoleAllowed(entry.roles, access)) {
+      return entry;
+    }
+  }
+  return null;
+}
