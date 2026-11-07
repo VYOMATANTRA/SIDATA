@@ -1,18 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
-import { useAuthStore } from '../stores/auth';
-import { useSettingsStore } from '../stores/settings.store';
+import { onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { useContentBlocksStore } from '../stores/contentBlocks.store';
 import { useIndicatorsStore } from '../stores/indicators.store';
-import { useLogout } from '../composables/useLogout';
-import AppNavbar from '../components/common/AppNavbar.vue';
-import AppFooter from '../components/common/AppFooter.vue';
-import {
-  isRouteAvailable as checkRouteAvailable,
-  getAvailableNavItems,
-  isNavItemActive,
-} from '@/config/publicNav';
+import { isRouteAvailable as checkRouteAvailable } from '@/config/publicNav';
 import SectionHero from '../components/landing/SectionHero.vue';
 import SectionSambutanLurah from '../components/landing/SectionSambutanLurah.vue';
 import StatOverview from '../components/common/StatOverview.vue';
@@ -122,248 +113,64 @@ const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
 ];
 
 const router = useRouter();
-const route = useRoute();
-const currentPath = computed(() => route?.path ?? '/');
-const navItems = computed(() => getAvailableNavItems(router));
-const authStore = useAuthStore();
-const settingsStore = useSettingsStore();
 const contentBlocksStore = useContentBlocksStore();
 const indicatorsStore = useIndicatorsStore();
-const { logout } = useLogout();
-
-const isLoggingOut = ref(false);
-const logoutError = ref('');
 
 function isRouteAvailable(path: string): boolean {
   return checkRouteAvailable(router, path);
 }
 
 onMounted(async () => {
-  await Promise.allSettled([
-    settingsStore.fetchPublicSettings(),
-    contentBlocksStore.fetchBlocks(),
-    indicatorsStore.fetchIndicators(),
-  ]);
+  // The public settings load belongs to PublicLayout; this view only owns its own content.
+  await Promise.allSettled([contentBlocksStore.fetchBlocks(), indicatorsStore.fetchIndicators()]);
 });
-
-async function handleLogout() {
-  if (isLoggingOut.value) return;
-  isLoggingOut.value = true;
-  logoutError.value = '';
-
-  try {
-    const result = await logout();
-    if (!result.ok) {
-      logoutError.value = result.error;
-    }
-  } finally {
-    isLoggingOut.value = false;
-  }
-}
 </script>
 
 <template>
-  <div
-    class="selection:bg-brand-cyan selection:text-brand-navy flex min-h-screen flex-col bg-slate-50"
-  >
-    <!-- Skip to Content Link per docs/ACCESSIBILITY.md §3 (2.4.1) -->
-    <a
-      href="#main-content"
-      class="focus:rounded-btn focus:bg-brand-navy focus-visible:outline-brand-cyan sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2"
+  <!-- PublicLayout supplies the skip link, header, <main id="main-content"> and footer. -->
+  <div>
+    <!-- 1. Hero (Spec §8 top section) -->
+    <SectionHero />
+
+    <!-- 2. Sambutan Lurah (Spec §8 section 2) -->
+    <SectionSambutanLurah />
+
+    <!-- 3. Cerita preview (Spec §8 section 3: slot with accessible fallback) -->
+    <section
+      id="cerita-preview"
+      aria-labelledby="cerita-preview-title"
+      class="border-b border-white/10 bg-slate-950"
     >
-      Lewati ke konten utama
-    </a>
+      <h2 id="cerita-preview-title" class="sr-only">Cerita & Data Wilayah</h2>
 
-    <!-- Top Navigation Landmark using PR #56 AppNavbar -->
-    <AppNavbar
-      :sticky="true"
-      :title="settingsStore.institutionName"
-      :subtitle="settingsStore.appName"
-    >
-      <!-- Desktop Actions Slot -->
-      <template #actions>
-        <template v-if="authStore.isAuthenticated">
-          <div class="hidden flex-col text-right sm:flex">
-            <span class="text-xs font-semibold text-slate-100">{{ authStore.user?.email }}</span>
-            <span class="text-brand-cyan text-[11px] font-medium tracking-wider uppercase">
-              Peran: {{ authStore.user?.role }}
-            </span>
-          </div>
-
-          <router-link
-            v-if="authStore.isAdmin"
-            to="/users"
-            class="rounded-btn focus-visible:outline-brand-cyan bg-white/10 px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/20 focus-visible:outline-2 sm:text-sm"
+      <!-- Cerita Preview Slot (Figma StatOverview 8 category sections) -->
+      <slot name="cerita-preview">
+        <div class="flex w-full flex-col divide-y divide-white/10">
+          <StatOverview
+            v-for="category in CERITA_CATEGORIES"
+            :key="category.slug"
+            :title="category.title"
+            :description="category.description"
+            :stats="indicatorsStore.getStatsForPage(category.slug)"
+            :card-title="category.cardTitle"
+            card-variant="glass"
+            heading-tag="h3"
+            button-label="Lihat selengkapnya"
+            :to="category.to"
+            :show-button="isRouteAvailable(category.to)"
+            align="left"
+            :is-full-bleed="true"
+            :bg-image="category.bgImage"
+            :bg-overlay="category.bgOverlay"
           >
-            Manajemen Pengguna
-          </router-link>
-
-          <button
-            type="button"
-            @click="handleLogout"
-            :disabled="isLoggingOut"
-            data-test="logout-btn"
-            class="rounded-btn hover:text-brand-navy focus-visible:outline-brand-cyan cursor-pointer border border-white/20 bg-white/10 px-3.5 py-1.5 text-xs font-medium text-white shadow-xs transition-colors hover:bg-white focus-visible:outline-2 disabled:opacity-50 sm:text-sm"
-          >
-            <span v-if="isLoggingOut">Memproses...</span>
-            <span v-else>Keluar (Logout)</span>
-          </button>
-        </template>
-      </template>
-
-      <!-- Navigation & Auth Dropdown Menu Slot -->
-      <template #menu="{ close }">
-        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          <router-link
-            v-for="item in navItems"
-            :key="item.to"
-            :to="item.to"
-            class="block rounded-lg px-4 py-2.5 text-sm font-medium transition-colors"
-            :class="
-              isNavItemActive(item.to, currentPath)
-                ? 'bg-white/20 font-semibold text-white'
-                : 'text-white hover:bg-white/10'
-            "
-            :aria-current="isNavItemActive(item.to, currentPath) ? 'page' : undefined"
-            @click="close"
-          >
-            {{ item.label }}
-          </router-link>
+            <template #card-empty>
+              <div class="flex flex-col items-center justify-center py-6 text-center">
+                <p class="text-sm text-slate-300 italic">Data belum tersedia</p>
+              </div>
+            </template>
+          </StatOverview>
         </div>
-
-        <!-- Auth Actions inside Dropdown Drawer -->
-        <div class="mt-4 border-t border-white/10 pt-4">
-          <template v-if="authStore.isAuthenticated">
-            <div class="mb-3 space-y-0.5">
-              <p class="text-xs font-semibold text-slate-200">{{ authStore.user?.email }}</p>
-              <p class="text-brand-cyan text-[11px] font-medium tracking-wider uppercase">
-                Peran: {{ authStore.user?.role }}
-              </p>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <router-link
-                v-if="authStore.canEditData"
-                to="/data"
-                class="rounded-btn block bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20"
-                @click="close"
-              >
-                Kelola Data
-              </router-link>
-              <router-link
-                v-if="authStore.isAdmin"
-                to="/users"
-                data-test="mobile-admin-link"
-                class="rounded-btn block bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20"
-                @click="close"
-              >
-                Manajemen Pengguna
-              </router-link>
-              <router-link
-                v-if="authStore.isAdmin"
-                to="/audit-logs"
-                class="rounded-btn block bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20"
-                @click="close"
-              >
-                Log Sistem
-              </router-link>
-              <router-link
-                v-if="authStore.isAdmin"
-                to="/settings/audit-retention"
-                class="rounded-btn block bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20"
-                @click="close"
-              >
-                Retensi Audit
-              </router-link>
-              <button
-                type="button"
-                @click="
-                  () => {
-                    close();
-                    handleLogout();
-                  }
-                "
-                :disabled="isLoggingOut"
-                data-test="mobile-logout-btn"
-                class="rounded-btn hover:text-brand-navy border border-white/20 bg-white/10 px-4 py-2 text-left text-sm font-medium text-white transition-colors hover:bg-white disabled:opacity-50"
-              >
-                <span v-if="isLoggingOut">Memproses...</span>
-                <span v-else>Keluar (Logout)</span>
-              </button>
-            </div>
-          </template>
-          <template v-else>
-            <div class="pt-1">
-              <router-link
-                to="/login"
-                data-test="login-link mobile-login-link"
-                class="rounded-btn text-brand-navy border-brand-navy hover:bg-brand-navy active:bg-brand-navy-overlay focus-visible:outline-brand-cyan inline-flex w-full items-center justify-center border-2 bg-white px-5 py-2.5 text-center text-sm font-semibold shadow-sm transition-colors hover:border-white hover:text-white focus-visible:outline-2 active:text-white sm:w-auto"
-                @click="close"
-              >
-                Masuk (Login)
-              </router-link>
-            </div>
-          </template>
-        </div>
-      </template>
-    </AppNavbar>
-
-    <!-- Logout Error Notification Banner -->
-    <div
-      v-if="logoutError"
-      class="mx-auto mt-2 max-w-7xl rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-center text-xs font-medium text-rose-600 sm:text-sm"
-      role="alert"
-    >
-      {{ logoutError }}
-    </div>
-
-    <!-- Main Content Landmark per docs/ACCESSIBILITY.md -->
-    <main id="main-content" class="flex-grow">
-      <!-- 1. Hero (Spec §8 top section) -->
-      <SectionHero />
-
-      <!-- 2. Sambutan Lurah (Spec §8 section 2) -->
-      <SectionSambutanLurah />
-
-      <!-- 3. Cerita preview (Spec §8 section 3: slot with accessible fallback) -->
-      <section
-        id="cerita-preview"
-        aria-labelledby="cerita-preview-title"
-        class="border-b border-white/10 bg-slate-950"
-      >
-        <h2 id="cerita-preview-title" class="sr-only">Cerita & Data Wilayah</h2>
-
-        <!-- Cerita Preview Slot (Figma StatOverview 8 category sections) -->
-        <slot name="cerita-preview">
-          <div class="flex w-full flex-col divide-y divide-white/10">
-            <StatOverview
-              v-for="category in CERITA_CATEGORIES"
-              :key="category.slug"
-              :title="category.title"
-              :description="category.description"
-              :stats="indicatorsStore.getStatsForPage(category.slug)"
-              :card-title="category.cardTitle"
-              card-variant="glass"
-              heading-tag="h3"
-              button-label="Lihat selengkapnya"
-              :to="category.to"
-              :show-button="isRouteAvailable(category.to)"
-              align="left"
-              :is-full-bleed="true"
-              :bg-image="category.bgImage"
-              :bg-overlay="category.bgOverlay"
-            >
-              <template #card-empty>
-                <div class="flex flex-col items-center justify-center py-6 text-center">
-                  <p class="text-sm text-slate-300 italic">Data belum tersedia</p>
-                </div>
-              </template>
-            </StatOverview>
-          </div>
-        </slot>
-      </section>
-    </main>
-
-    <!-- Footer Landmark per SPEC.md §8 using PR #56 AppFooter -->
-    <AppFooter />
+      </slot>
+    </section>
   </div>
 </template>

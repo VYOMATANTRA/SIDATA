@@ -2,7 +2,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
+import { h } from 'vue';
+import type { Pinia } from 'pinia';
+import type { Router } from 'vue-router';
 import CeritaPageView from '../views/CeritaPageView.vue';
+import PublicLayout from '../layouts/PublicLayout.vue';
+
+/** CeritaPageView as App.vue mounts it: inside the shared PublicLayout, which owns <main>. */
+function mountInShell(pinia: Pinia, router: Router) {
+  return mount(PublicLayout, {
+    global: { plugins: [pinia, router] },
+    slots: { default: () => h(CeritaPageView) },
+  });
+}
 
 function makePage(slug: string, title: string) {
   return {
@@ -68,13 +80,18 @@ describe('CeritaPageView', () => {
     });
 
     const { pinia, router } = await setupAndPush(slug);
-    const wrapper = mount(CeritaPageView, { global: { plugins: [pinia, router] } });
+    const wrapper = mountInShell(pinia, router);
     await flushPromises();
 
+    expect(wrapper.findAll('h1')).toHaveLength(1);
     expect(wrapper.find('h1').text()).toBe(title);
     expect(wrapper.find('[data-test="chapter-section"]').exists()).toBe(true);
+    // The shell owns the skip link and the single <main>; the view must not add its own.
     expect(wrapper.find('a[href="#main-content"]').exists()).toBe(true);
-    expect(wrapper.find('main#main-content').exists()).toBe(true);
+    expect(wrapper.findAll('main')).toHaveLength(1);
+    expect(wrapper.find('main#main-content [data-test="cerita-hero"]').exists()).toBe(true);
+    expect(wrapper.find('nav[aria-label="Navigasi Utama"]').exists()).toBe(true);
+    expect(wrapper.find('footer').exists()).toBe(true);
   });
 
   it('shows a loading state before the page resolves', async () => {
@@ -99,7 +116,11 @@ describe('CeritaPageView', () => {
     globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
       const url = String(input);
       if (url.startsWith('/api/pages/')) {
-        return { ok: false, status: 404, json: async () => ({ error: 'Halaman tidak ditemukan' }) } as Response;
+        return {
+          ok: false,
+          status: 404,
+          json: async () => ({ error: 'Halaman tidak ditemukan' }),
+        } as Response;
       }
       return { ok: true, json: async () => ({ blocks: [] }) } as Response;
     });
@@ -109,7 +130,9 @@ describe('CeritaPageView', () => {
     await flushPromises();
 
     expect(wrapper.find('[data-test="cerita-not-found"]').exists()).toBe(true);
-    expect(wrapper.find('[data-test="cerita-not-found"]').text()).toContain('Halaman tidak ditemukan');
+    expect(wrapper.find('[data-test="cerita-not-found"]').text()).toContain(
+      'Halaman tidak ditemukan',
+    );
   });
 
   it('shows an error state with a retry button on a server error, instead of a blank main', async () => {
@@ -122,10 +145,10 @@ describe('CeritaPageView', () => {
     });
 
     const { pinia, router } = await setupAndPush('kependudukan');
-    const wrapper = mount(CeritaPageView, { global: { plugins: [pinia, router] } });
+    const wrapper = mountInShell(pinia, router);
     await flushPromises();
 
-    expect(wrapper.find('main#main-content h1').exists()).toBe(true);
+    expect(wrapper.findAll('main#main-content h1')).toHaveLength(1);
     expect(wrapper.find('[data-test="cerita-error"]').exists()).toBe(true);
     expect(wrapper.find('[data-test="cerita-retry"]').exists()).toBe(true);
     expect(wrapper.find('[data-test="cerita-not-found"]').exists()).toBe(false);
@@ -251,7 +274,8 @@ describe('CeritaPageView', () => {
     const wrapper = mount(CeritaPageView, { global: { plugins: [pinia, router] } });
     await flushPromises();
 
-    const firstPageChapterLink = () => wrapper.find('[data-test="chapter-toc-rail"] [aria-current="true"]');
+    const firstPageChapterLink = () =>
+      wrapper.find('[data-test="chapter-toc-rail"] [aria-current="true"]');
     expect(firstPageChapterLink().exists()).toBe(true);
     expect(firstPageChapterLink().attributes('href')).toBe('#kependudukan-bab-1');
 
@@ -260,7 +284,8 @@ describe('CeritaPageView', () => {
 
     // Must highlight pendidikan's own chapter, never stay stuck on kependudukan's id (which no
     // longer matches anything in the new page's chapter list, so nothing would be highlighted).
-    const secondPageChapterLink = () => wrapper.find('[data-test="chapter-toc-rail"] [aria-current="true"]');
+    const secondPageChapterLink = () =>
+      wrapper.find('[data-test="chapter-toc-rail"] [aria-current="true"]');
     expect(secondPageChapterLink().exists()).toBe(true);
     expect(secondPageChapterLink().attributes('href')).toBe('#pendidikan-bab-1');
   });

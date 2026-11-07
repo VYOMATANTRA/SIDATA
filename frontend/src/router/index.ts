@@ -4,6 +4,15 @@ import { useAuthStore } from '../stores/auth';
 import { useSettingsStore } from '../stores/settings.store';
 import { ADMIN_NAV, isAdminNavGroup, type AdminNavRole } from '../config/adminNav';
 
+declare module 'vue-router' {
+  interface RouteMeta {
+    /** `'public'` mounts the route inside `PublicLayout` (header, single `<main>`, footer). */
+    layout?: 'public';
+    /** The public header overlays this route's hero: transparent at the top, navy once scrolled. */
+    headerOverlay?: boolean;
+  }
+}
+
 export function metaForRoles(roles: AdminNavRole[]): {
   requiresAuth: true;
   requiresAdmin: boolean;
@@ -43,7 +52,7 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: () => import('../views/HomeView.vue'),
-      meta: { title: 'Beranda' },
+      meta: { layout: 'public', headerOverlay: true, title: 'Beranda' },
     },
     {
       path: '/login',
@@ -215,7 +224,7 @@ const router = createRouter({
       path: '/cerita/:slug',
       name: 'cerita-page',
       component: () => import('../views/CeritaPageView.vue'),
-      meta: { title: 'Cerita' },
+      meta: { layout: 'public', title: 'Cerita' },
     },
     {
       path: '/auth/callback',
@@ -231,43 +240,43 @@ const router = createRouter({
       path: '/tentang/kelurahan-manggar',
       name: 'tentang-kelurahan-manggar',
       component: () => import('../views/TentangKelurahanManggarView.vue'),
-      meta: { title: 'Tentang Kelurahan Manggar' },
+      meta: { layout: 'public', title: 'Tentang Kelurahan Manggar' },
     },
     {
       path: '/tentang/desa-cantik',
       name: 'tentang-desa-cantik',
       component: () => import('../views/TentangDesaCantikView.vue'),
-      meta: { title: 'Program Desa Cantik' },
+      meta: { layout: 'public', title: 'Program Desa Cantik' },
     },
     {
       path: '/tentang/vyomatantra',
       name: 'tentang-vyomatantra',
       component: () => import('../views/TentangVyomatantraView.vue'),
-      meta: { title: 'Inovasi Sosial VYOMATANTRA' },
+      meta: { layout: 'public', title: 'Inovasi Sosial VYOMATANTRA' },
     },
     {
       path: '/permintaan-data',
       name: 'permintaan-data',
       component: () => import('../views/PermintaanDataView.vue'),
-      meta: { title: 'Permintaan Data' },
+      meta: { layout: 'public', title: 'Permintaan Data' },
     },
     {
       path: '/ketua-rt',
       name: 'ketua-rt',
       component: () => import('../views/KetuaRtView.vue'),
-      meta: { title: 'Ketua RT' },
+      meta: { layout: 'public', title: 'Ketua RT' },
     },
     {
       path: '/peta',
       name: 'peta',
       component: () => import('../views/PetaView.vue'),
-      meta: { title: 'Peta' },
+      meta: { layout: 'public', title: 'Peta' },
     },
     {
       path: '/publikasi',
       name: 'publikasi',
       component: () => import('../views/PublikasiView.vue'),
-      meta: { title: 'Publikasi' },
+      meta: { layout: 'public', title: 'Publikasi' },
     },
   ],
 });
