@@ -460,6 +460,12 @@ setup-password, the OAuth callback, `/dashboard` (its own `<main>`) and the admi
   route change, so a refresh at a scrolled position starts navy. Reduced motion makes transitions
   instant. The hero reserves the header's height as top padding, and in-page anchors (hero, chapters,
   skip link target) clear it via `scroll-margin`.
+- **Scroll and focus.** Public routes scroll the window to the top on a new path; back/forward
+  restore the previous position; a hash link (in-page anchor, chapter TOC, skip link) scrolls to its
+  target below the sticky header, including repeat clicks on the same link and `/cerita/x#chapter`
+  deep links once the chapters have rendered. Query-only changes keep the position. Focus moves to
+  `main#main-content` on a path change without scrolling. Admin routes scroll an inner container,
+  which the admin shell resets to the top on a path change.
 - **Breadcrumb.** Tentang/Sumber Daya breadcrumbs are a navy strip continuing the header and the navy
   hero panel (no white band between them); long labels wrap.
 
@@ -513,8 +519,6 @@ an approved source provides them.
 Accessibility implications, per `docs/ACCESSIBILITY.md`: the input needs a real `<label>` (not
 placeholder-only), the result count belongs in an `aria-live="polite"` region, and the table
 keeps proper `<caption>` / `<th scope>` semantics under filtering.
-
-Navigating to a new path scrolls to the top (or to the hash target, clearing the sticky header); back/forward restore the previous position; focus moves to `<main>` without scrolling.
 
 **Footer:**
 
