@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import AppNavbar from '../components/common/AppNavbar.vue';
+import { stubViewport } from './helpers/viewport';
 import { acquireBodyScrollLock } from '../utils/bodyScrollLock';
 
 function createMockRouter() {
@@ -12,16 +13,6 @@ function createMockRouter() {
       { path: '/:pathMatch(.*)*', component: { template: '<div>Page</div>' } },
     ],
   });
-}
-
-/** `matches: true` simulates the `md` desktop breakpoint, `false` a phone. */
-function stubViewport(matches: boolean) {
-  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-    matches,
-    media: query,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-  })) as unknown as typeof window.matchMedia;
 }
 
 async function mountNavbar(path = '/') {
@@ -235,7 +226,9 @@ describe('AppNavbar menu: desktop disclosure', () => {
 
     wrapper.unmount();
 
-    expect(windowRemove.mock.calls.filter(([type]) => type === 'keydown').length).toBeGreaterThan(0);
+    expect(windowRemove.mock.calls.filter(([type]) => type === 'keydown').length).toBeGreaterThan(
+      0,
+    );
     expect(documentRemove).toHaveBeenCalledWith('pointerdown', expect.any(Function));
     windowRemove.mockRestore();
     documentRemove.mockRestore();

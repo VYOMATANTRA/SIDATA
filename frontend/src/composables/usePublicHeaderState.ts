@@ -37,11 +37,12 @@ export interface UsePublicHeaderStateOptions {
  */
 export function usePublicHeaderState({ overlay, menuOpen }: UsePublicHeaderStateOptions) {
   const route = useRoute();
-  const isScrolled = ref(false);
-
   function readScrolled(): boolean {
     return typeof window !== 'undefined' && window.scrollY > HEADER_SCROLL_THRESHOLD_PX;
   }
+
+  // Read synchronously so a page restored at a scrolled position never paints a transparent frame.
+  const isScrolled = ref(readScrolled());
 
   function sync() {
     const next = readScrolled();

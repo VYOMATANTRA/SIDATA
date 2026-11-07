@@ -160,7 +160,9 @@ describe('usePublicHeaderState', () => {
       const added = add.mock.calls.filter(([t]) => t === type);
       const removed = remove.mock.calls.filter(([t]) => t === type);
       expect(added.length).toBeGreaterThan(0);
-      expect(removed.map(([, fn]) => fn)).toEqual(expect.arrayContaining(added.map(([, fn]) => fn)));
+      expect(removed.map(([, fn]) => fn)).toEqual(
+        expect.arrayContaining(added.map(([, fn]) => fn)),
+      );
     }
   });
 

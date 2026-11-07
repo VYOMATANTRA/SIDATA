@@ -174,7 +174,13 @@ const panelFocusRingClasses = computed(() =>
 </script>
 
 <template>
-  <header ref="headerRef" class="w-full" :class="containerClasses" data-test="app-navbar">
+  <header
+    ref="headerRef"
+    class="w-full"
+    :class="containerClasses"
+    :data-variant="variant"
+    data-test="app-navbar"
+  >
     <!-- Localized scrim: keeps the white identity legible when the bar is transparent over a photo -->
     <div
       v-if="isTransparent"
