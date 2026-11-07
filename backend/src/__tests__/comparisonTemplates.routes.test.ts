@@ -10,10 +10,12 @@ import {
   createComparisonTemplateHandler,
   updateComparisonTemplateHandler,
   deleteComparisonTemplateHandler,
+  previewComparisonTemplateHandler,
 } from '../controllers/comparisonTemplates.controller.js';
 import {
   apiLimiter,
   comparisonTemplatesWriteLimiter,
+  comparisonTemplatesPreviewLimiter,
   contentBlocksWriteLimiter,
   indicatorsWriteLimiter,
   settingsWriteLimiter,
@@ -42,7 +44,7 @@ const handlesOf = (method: string, path: string): unknown[] => {
 };
 
 describe('comparisonTemplates.routes wiring', () => {
-  it('registers exactly the five expected routes', () => {
+  it('registers exactly the six expected routes', () => {
     const layers = (comparisonTemplatesRouter.stack as unknown as RouteStackLayer[]).filter(
       (l) => l.route,
     );
@@ -50,7 +52,14 @@ describe('comparisonTemplates.routes wiring', () => {
       .flatMap((l) => Object.keys(l.route!.methods ?? {}).map((m) => `${m} ${l.route!.path}`))
       .sort();
 
-    assert.deepEqual(registered, ['delete /:id', 'get /', 'get /:id', 'patch /:id', 'post /']);
+    assert.deepEqual(registered, [
+      'delete /:id',
+      'get /',
+      'get /:id',
+      'patch /:id',
+      'post /',
+      'post /preview',
+    ]);
   });
 
   describe('reads are for editors and admins only (templates are not public content)', () => {
@@ -117,6 +126,26 @@ describe('comparisonTemplates.routes wiring', () => {
     });
   });
 
+  describe('live preview is admin-only with its own roomier limiter', () => {
+    it('POST /preview runs apiLimiter → verifyToken → requireAdmin → preview limiter → handler', () => {
+      assert.deepEqual(handlesOf('post', '/preview'), [
+        apiLimiter,
+        verifyToken,
+        requireAdmin,
+        comparisonTemplatesPreviewLimiter,
+        previewComparisonTemplateHandler,
+      ]);
+    });
+
+    it('is not reachable by editors and does not drain the save bucket', () => {
+      const handles = handlesOf('post', '/preview');
+
+      assert.equal(handles.includes(requireEditorOrAdmin as never), false);
+      assert.equal(handles.includes(comparisonTemplatesWriteLimiter as never), false);
+      assert.notEqual(comparisonTemplatesPreviewLimiter, comparisonTemplatesWriteLimiter);
+    });
+  });
+
   describe('mounted at /api/comparison-templates in app', () => {
     let server: Server;
     let baseUrl: string;
@@ -154,6 +183,7 @@ describe('comparisonTemplates.routes wiring', () => {
 
     for (const [method, path] of [
       ['POST', '/api/comparison-templates'],
+      ['POST', '/api/comparison-templates/preview'],
       ['PATCH', '/api/comparison-templates/tpl-1'],
       ['DELETE', '/api/comparison-templates/tpl-1'],
     ] as const) {

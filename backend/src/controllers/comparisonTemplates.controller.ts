@@ -9,6 +9,7 @@ import {
   createComparisonTemplate,
   updateComparisonTemplate,
   deleteComparisonTemplate,
+  previewComparisonTemplate,
 } from '../services/comparisonTemplates.service.js';
 
 /**
@@ -139,5 +140,19 @@ export const deleteComparisonTemplateHandler = async (
     });
   } catch (error) {
     return respondWithFailure(res, error, 'menghapus template perbandingan');
+  }
+};
+
+/**
+ * Admin-only live preview of a draft template. Same renderer as the public read path; nothing is
+ * stored or audited. An unfinished draft is answered 200 with `valid: false` and plain-language
+ * `problems`, since that is the normal state while someone is typing.
+ */
+export const previewComparisonTemplateHandler = (req: Request, res: Response): Response | void => {
+  try {
+    const preview = previewComparisonTemplate(req.body);
+    return res.status(200).json(preview);
+  } catch (error) {
+    return respondWithFailure(res, error, 'membuat pratinjau template perbandingan');
   }
 };

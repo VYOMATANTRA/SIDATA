@@ -5,12 +5,14 @@ import {
   createComparisonTemplateHandler,
   updateComparisonTemplateHandler,
   deleteComparisonTemplateHandler,
+  previewComparisonTemplateHandler,
 } from '../controllers/comparisonTemplates.controller.js';
 import { verifyToken } from '../middlewares/auth.middleware.js';
 import { requireAdmin, requireEditorOrAdmin } from '../middlewares/role.middleware.js';
 import {
   apiLimiter,
   comparisonTemplatesWriteLimiter,
+  comparisonTemplatesPreviewLimiter,
 } from '../middlewares/rateLimit.middleware.js';
 
 const router = Router();
@@ -28,6 +30,17 @@ router.post(
   requireAdmin,
   comparisonTemplatesWriteLimiter,
   createComparisonTemplateHandler,
+);
+// Live preview: a POST only because it carries a draft body, so it is CSRF-protected like the
+// other mutating routes. It stores nothing and fires while an admin types, so it has its own
+// roomier per-user bucket instead of draining the save budget.
+router.post(
+  '/preview',
+  apiLimiter,
+  verifyToken,
+  requireAdmin,
+  comparisonTemplatesPreviewLimiter,
+  previewComparisonTemplateHandler,
 );
 router.patch(
   '/:id',

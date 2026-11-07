@@ -71,6 +71,10 @@ export const indicatorsWriteLimiter = createUserKeyedLimiter(100);
 // admin user ID, so authoring templates does not drain the indicator or prose edit budgets)
 export const comparisonTemplatesWriteLimiter = createUserKeyedLimiter(100);
 
+// Comparison template live preview (debounced calls while an admin types; stores nothing, so it
+// gets its own roomier bucket keyed by user ID rather than draining the 100/15min save budget)
+export const comparisonTemplatesPreviewLimiter = createUserKeyedLimiter(1000);
+
 // Indicator tables CMS write operations rate limiter (dedicated 100 req/15min bucket keyed by
 // user ID, separate from indicatorsWriteLimiter so matrix-table edits and scalar-figure edits
 // do not drain each other)
