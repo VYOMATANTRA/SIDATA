@@ -243,3 +243,18 @@ invalid border). See [`docs/ACCESSIBILITY.md`](ACCESSIBILITY.md) §4 for the res
 2. **Tailwind v4 Best Practices:** Rely on the natively defined `@theme` variables (e.g., `bg-brand-navy`, `text-text-muted`, `text-xl`) rather than heavy arbitrary brackets (like `text-[42px]`) to maintain the single source of truth.
 3. **Colors:** navy/white tokens plus the status exception only (§1); never reintroduce raw palette classes or the deprecated accents.
 4. **Component Modularity:** Break down complex screens. E.g., The Stat Overview should consist of `<StatSection>`, which loops through an array of objects to render multiple `<StatCard>` components.
+
+## 6. Follow-ups (not yet migrated to the navy/white tokens)
+
+These public and admin surfaces still use slate/indigo or other raw palette classes. They are
+owned by other PRs and are intentionally left untouched here.
+
+| Surface                                                                  | Expected PR                      |
+| ------------------------------------------------------------------------ | -------------------------------- |
+| `AppNavbar`                                                              | Public shell PR                  |
+| Landing sections (hero, highlights, Sambutan) and the weather widget     | Public visual refinements PR     |
+| Remaining `AppFooter` spots (slate/indigo leftovers)                     | Public visual refinements PR     |
+| VYOMATANTRA view (partially; check for remaining raw palette classes)    | Public visual refinements PR     |
+| Map components (`InteractiveMap`, map summary/filters)                   | Map experience PR                |
+| Auth views and components (Login, Register, SetupPassword, OTP modal)    | Public shell PR / auth follow-up |
+| Admin screens (`AdminLayout`, sidebar, users, audit, settings, RT admin) | Admin PRs                        |
