@@ -55,8 +55,8 @@ const computedEyebrowClass = computed(() => {
     return props.eyebrowClass;
   }
   return props.variant === 'light'
-    ? 'text-sm sm:text-base font-medium text-slate-600 normal-case tracking-normal'
-    : 'text-sm sm:text-base font-medium text-slate-200/90 normal-case tracking-normal';
+    ? 'text-sm sm:text-base font-medium text-text-muted normal-case tracking-normal'
+    : 'text-sm sm:text-base font-medium text-text-inverse-muted normal-case tracking-normal';
 });
 
 const backgroundStyle = computed(() => {
@@ -87,7 +87,7 @@ const backgroundStyle = computed(() => {
     class="relative flex w-full flex-col justify-center overflow-hidden px-6 py-14 transition-all sm:px-12 sm:py-20 md:py-24"
     :class="[
       minHeightClass,
-      variant === 'light' ? 'bg-slate-50 text-slate-900' : 'text-white',
+      variant === 'light' ? 'bg-surface-muted text-brand-navy' : 'text-white',
       variant === 'glass' ? 'bg-surface-glass border border-white/20 backdrop-blur-md' : '',
       variant === 'navy' ? 'bg-brand-navy' : '',
     ]"
@@ -135,7 +135,7 @@ const backgroundStyle = computed(() => {
             <span
               v-if="descriptionHighlight"
               class="font-bold"
-              :class="variant === 'light' ? 'text-slate-900' : 'text-white'"
+              :class="variant === 'light' ? 'text-brand-navy' : 'text-white'"
             >
               {{ descriptionHighlight }} —
             </span>

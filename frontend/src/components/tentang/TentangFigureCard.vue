@@ -15,7 +15,7 @@ withDefaults(
     <img :src="image" :alt="alt" class="h-48 w-full object-cover sm:h-64" />
     <figcaption class="mt-3">
       <p class="text-base text-brand-navy">{{ caption }}</p>
-      <p class="text-xs text-gray-700 italic">Sumber: {{ source }}</p>
+      <p class="text-xs text-text-muted italic">Sumber: {{ source }}</p>
     </figcaption>
   </figure>
 </template>

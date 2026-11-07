@@ -98,7 +98,7 @@ describe('HugeQuote.vue', () => {
 
     const container = wrapper.find('[data-test="huge-quote"]');
     expect(container.classes()).toContain('bg-white');
-    expect(container.classes()).toContain('text-slate-900');
+    expect(container.classes()).toContain('text-brand-navy');
   });
 
   it('supports custom slots for content and image', () => {

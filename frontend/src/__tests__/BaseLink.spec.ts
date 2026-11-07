@@ -58,14 +58,15 @@ describe('BaseLink.vue', () => {
   });
 
   it('renders color variants correctly', () => {
-    const navy = mount(BaseLink, { props: { variant: 'navy', label: 'Navy' } });
+    const navy = mount(BaseLink, { props: { variant: 'navy', label: 'Navy', href: '/x' } });
     expect(navy.classes()).toContain('text-brand-navy');
 
-    const indigo = mount(BaseLink, { props: { variant: 'indigo', label: 'Indigo' } });
-    expect(indigo.classes()).toContain('text-brand-indigo');
+    const indigo = mount(BaseLink, { props: { variant: 'indigo', label: 'Indigo', href: '/x' } });
+    // `indigo` is a deprecated alias of navy
+    expect(indigo.classes()).toContain('text-brand-navy');
 
-    const white = mount(BaseLink, { props: { variant: 'white', label: 'White' } });
-    expect(white.classes()).toContain('text-white');
+    const white = mount(BaseLink, { props: { variant: 'white', label: 'White', href: '/x' } });
+    expect(white.classes()).toContain('text-text-inverse');
   });
 
   it('renders as RouterLink when "to" prop is passed', async () => {
@@ -121,6 +122,14 @@ describe('BaseLink.vue', () => {
     expect(wrapper.attributes('aria-disabled')).toBe('true');
     expect(wrapper.attributes('tabindex')).toBe('-1');
     expect(wrapper.classes()).toContain('cursor-not-allowed');
+    // Readable via a precomputed token, never faded with opacity
+    expect(wrapper.classes()).toContain('text-text-muted');
+    expect(wrapper.classes()).not.toContain('opacity-50');
+  });
+
+  it('uses the inverse-muted text token for a disabled link on navy', () => {
+    const wrapper = mount(BaseLink, { props: { variant: 'white', disabled: true, label: 'Off' } });
+    expect(wrapper.classes()).toContain('text-text-inverse-muted');
   });
 
   it('renders a disabled button when neither to nor href is supplied per ACCESSIBILITY.md', () => {

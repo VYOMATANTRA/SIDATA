@@ -204,7 +204,7 @@ const supervisor = {
         </p>
 
         <div class="mt-6 grid gap-8 lg:grid-cols-[1.7fr_1fr] lg:items-start lg:gap-12">
-          <div class="text-brand-navy/90 space-y-4 text-base leading-relaxed">
+          <div class="text-brand-navy space-y-4 text-base leading-relaxed">
             <p>
               <strong class="text-brand-navy font-bold">{{ prokerIntro.lead }}</strong>
               {{ prokerIntro.body }}
@@ -232,7 +232,7 @@ const supervisor = {
             </div>
             <figcaption class="text-brand-navy mt-4 text-center text-sm leading-snug">
               Kantor Kelurahan Manggar, Balikpapan Timur
-              <span class="text-brand-navy/70 block text-xs">
+              <span class="text-text-muted block text-xs">
                 lokasi koordinasi kegiatan program Desa Cantik
               </span>
             </figcaption>
@@ -254,7 +254,7 @@ const supervisor = {
                 {{ act.kicker }}
               </p>
               <h3 class="text-brand-navy mt-2 text-lg leading-snug font-bold">{{ act.title }}</h3>
-              <p class="text-brand-navy/90 mt-3 text-base leading-relaxed">
+              <p class="text-brand-navy mt-3 text-base leading-relaxed">
                 <strong class="text-brand-navy font-bold">{{ act.lead }}</strong>
                 {{ act.body }}
               </p>
@@ -262,7 +262,7 @@ const supervisor = {
                 <li
                   v-for="activity in act.activities"
                   :key="activity"
-                  class="text-brand-navy/80 flex gap-2.5 text-sm leading-relaxed"
+                  class="text-brand-navy flex gap-2.5 text-sm leading-relaxed"
                 >
                   <span class="bg-brand-cyan mt-2 h-1.5 w-1.5 shrink-0" aria-hidden="true"></span>
                   {{ activity }}
@@ -282,7 +282,7 @@ const supervisor = {
                   class="rounded-btn relative aspect-[4/3] w-full object-cover"
                 />
               </div>
-              <figcaption class="text-brand-navy/70 mt-4 text-xs leading-relaxed">
+              <figcaption class="text-text-muted mt-4 text-xs leading-relaxed">
                 Foto kegiatan pada bab ini belum tersedia.
               </figcaption>
             </figure>
@@ -290,7 +290,7 @@ const supervisor = {
         </div>
 
         <p
-          class="border-brand-navy/10 text-brand-navy/70 mt-9 border-t pt-5 text-sm leading-relaxed"
+          class="border-brand-navy/10 text-text-muted mt-9 border-t pt-5 text-sm leading-relaxed"
         >
           Program kerja ini disusun dalam Proposal Inovasi Sosial Desa Cantik Kelurahan Manggar
           (Februari 2026). Pelaksanaan di lapangan terdokumentasi dalam Monografi Kelurahan Manggar
@@ -363,7 +363,7 @@ const supervisor = {
     <section class="bg-brand-cyan px-4 py-10 sm:px-6 sm:py-12" aria-labelledby="tim-title">
       <div class="mx-auto max-w-5xl">
         <h2 id="tim-title" class="text-brand-navy text-lg font-bold">Dosen Pembimbing</h2>
-        <p class="text-brand-navy/90 mt-2 max-w-3xl text-base">
+        <p class="text-brand-navy mt-2 max-w-3xl text-base">
           Proposal kegiatan mencantumkan dosen pembimbing tim pengusul berikut.
         </p>
 
