@@ -276,10 +276,10 @@ function formatPhone(value: string): string {
             name="rt-search"
             placeholder="Contoh: 007 atau Andi"
             autocomplete="off"
-            class="rounded-btn text-brand-navy focus-visible:border-brand-navy focus-visible:outline-brand-navy mt-2 w-full max-w-md border border-gray-400 bg-white px-4 py-2.5 text-base placeholder:text-gray-500 focus-visible:outline-2 focus-visible:outline-offset-2"
+            class="rounded-btn text-brand-navy focus-visible:border-brand-navy focus-visible:outline-brand-navy mt-2 w-full max-w-md border border-border-strong bg-white px-4 py-2.5 text-base placeholder:text-text-muted focus-visible:outline-2 focus-visible:outline-offset-2"
             data-test="rt-search"
           />
-          <p class="mt-3 text-base text-gray-700" aria-live="polite" data-test="rt-count">
+          <p class="mt-3 text-base text-text-muted" aria-live="polite" data-test="rt-count">
             {{
               rtLeadersStore.hasSettled && (hasRows || !rtLeadersStore.error) ? countSummary : ''
             }}
@@ -289,7 +289,7 @@ function formatPhone(value: string): string {
         <!-- Error: blocking empty state when nothing is loaded; banner when a refresh fails -->
         <div
           v-if="rtLeadersStore.error"
-          class="rounded-btn mt-5 border border-gray-400 bg-white p-5"
+          class="rounded-btn mt-5 border border-border bg-white p-5"
           role="alert"
           data-test="rt-error"
         >
@@ -302,11 +302,11 @@ function formatPhone(value: string): string {
         <!-- Table stays up when a forced refresh fails so the visitor keeps the last good roster -->
         <div
           v-if="!rtLeadersStore.error || hasRows"
-          class="rounded-btn mt-5 overflow-hidden border border-gray-300 bg-white shadow-xs"
+          class="rounded-btn mt-5 overflow-hidden border border-border bg-white shadow-xs"
         >
           <div class="relative overflow-x-auto">
             <table
-              class="w-full min-w-[600px] table-fixed divide-y divide-gray-200 text-left text-sm text-gray-800"
+              class="w-full min-w-[600px] table-fixed divide-y divide-border text-left text-sm text-brand-navy"
             >
               <caption class="sr-only">
                 <template v-if="hasAddressData">
@@ -352,32 +352,32 @@ function formatPhone(value: string): string {
               <!-- Loading skeleton keeps the table's shape -->
               <tbody
                 v-if="rtLeadersStore.isLoading && !hasRows"
-                class="divide-y divide-gray-200 bg-white"
+                class="divide-y divide-border bg-white"
               >
                 <tr v-for="row in 5" :key="`skeleton-${row}`" aria-hidden="true">
                   <td class="px-4 py-4 sm:px-6">
-                    <span class="block h-4 w-10 animate-pulse rounded bg-gray-200"></span>
+                    <span class="block h-4 w-10 animate-pulse rounded bg-surface-hover"></span>
                   </td>
                   <td class="px-4 py-4 sm:px-6">
-                    <span class="block h-4 w-40 animate-pulse rounded bg-gray-200"></span>
+                    <span class="block h-4 w-40 animate-pulse rounded bg-surface-hover"></span>
                   </td>
                   <td class="px-4 py-4 sm:px-6">
-                    <span class="block h-4 w-32 animate-pulse rounded bg-gray-200"></span>
+                    <span class="block h-4 w-32 animate-pulse rounded bg-surface-hover"></span>
                   </td>
                   <td v-if="hasAddressData" class="px-4 py-4 sm:px-6">
-                    <span class="block h-4 w-48 animate-pulse rounded bg-gray-200"></span>
+                    <span class="block h-4 w-48 animate-pulse rounded bg-surface-hover"></span>
                   </td>
                 </tr>
               </tbody>
 
               <tbody
                 v-else-if="paginatedLeaders.length > 0"
-                class="divide-y divide-gray-200 bg-white"
+                class="divide-y divide-border bg-white"
               >
                 <tr
                   v-for="leader in paginatedLeaders"
                   :key="leader.rtNumber"
-                  class="transition-colors hover:bg-gray-50/75"
+                  class="transition-colors hover:bg-surface-muted"
                 >
                   <th
                     scope="row"
@@ -385,10 +385,10 @@ function formatPhone(value: string): string {
                   >
                     {{ leader.rtNumber }}
                   </th>
-                  <td class="px-4 py-4 align-top break-words text-gray-800 sm:px-6">
+                  <td class="px-4 py-4 align-top break-words text-brand-navy sm:px-6">
                     {{ leader.name.trim() || 'Nama ketua belum tersedia' }}
                   </td>
-                  <td class="px-4 py-4 align-top break-words text-gray-800 sm:px-6">
+                  <td class="px-4 py-4 align-top break-words text-brand-navy sm:px-6">
                     <template v-if="phonesForLeader.get(leader.rtNumber)?.length">
                       <template
                         v-for="(phone, index) in phonesForLeader.get(leader.rtNumber)"
@@ -420,17 +420,17 @@ function formatPhone(value: string): string {
                           /
                         </span>
                       </template>
-                      <span v-if="undialablePhoneRemainder(leader.phone)" class="text-gray-700">
+                      <span v-if="undialablePhoneRemainder(leader.phone)" class="text-text-muted">
                         / {{ undialablePhoneRemainder(leader.phone) }}
                       </span>
                     </template>
-                    <span v-else class="text-gray-700" data-test="rt-phone-placeholder">
+                    <span v-else class="text-text-muted" data-test="rt-phone-placeholder">
                       {{ leader.phone.trim() || '—' }}
                     </span>
                   </td>
                   <td
                     v-if="hasAddressData"
-                    class="px-4 py-4 align-top break-words text-gray-700 sm:px-6"
+                    class="px-4 py-4 align-top break-words text-text-muted sm:px-6"
                   >
                     {{ leader.alamat ?? '—' }}
                   </td>
@@ -440,8 +440,8 @@ function formatPhone(value: string): string {
           </div>
 
           <!-- No match for the current filter -->
-          <div v-if="showEmptyResult" class="border-t border-gray-200 p-5" data-test="rt-empty">
-            <p class="text-base text-gray-800">
+          <div v-if="showEmptyResult" class="border-t border-border p-5" data-test="rt-empty">
+            <p class="text-base text-brand-navy">
               Tidak ada RT yang cocok dengan &ldquo;{{ query.trim() }}&rdquo;. Coba nomor RT atau
               nama lain.
             </p>
@@ -453,7 +453,7 @@ function formatPhone(value: string): string {
           <!-- Roster genuinely empty -->
           <div
             v-else-if="showNoData"
-            class="border-t border-gray-200 p-5 text-base text-gray-800"
+            class="border-t border-border p-5 text-base text-brand-navy"
             data-test="rt-nodata"
           >
             Data Ketua RT belum tersedia. Hubungi kantor kelurahan untuk informasi terbaru.
@@ -462,18 +462,18 @@ function formatPhone(value: string): string {
           <!-- Pagination: page size and page navigation, both client-side -->
           <div
             v-if="!showEmptyResult && !showNoData && filteredLeaders.length > 0"
-            class="flex flex-col gap-4 border-t border-gray-200 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+            class="flex flex-col gap-4 border-t border-border px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-6"
             data-test="rt-pagination"
           >
-            <div class="flex flex-wrap items-center gap-3 text-sm text-gray-700">
+            <div class="flex flex-wrap items-center gap-3 text-sm text-text-muted">
               <div class="flex items-center gap-2">
-                <label for="page-size-select" class="text-xs font-medium text-gray-600 sm:text-sm">
+                <label for="page-size-select" class="text-xs font-medium text-text-muted sm:text-sm">
                   Baris per halaman:
                 </label>
                 <select
                   id="page-size-select"
                   v-model.number="pageSize"
-                  class="rounded-btn text-brand-navy focus-visible:outline-brand-navy border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
+                  class="rounded-btn text-brand-navy focus-visible:outline-brand-navy border border-border-strong bg-white px-2.5 py-1.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
                   data-test="page-size-select"
                 >
                   <option :value="10">10</option>
@@ -483,7 +483,7 @@ function formatPhone(value: string): string {
                 </select>
               </div>
 
-              <p class="text-xs text-gray-600 sm:text-sm" data-test="pagination-summary">
+              <p class="text-xs text-text-muted sm:text-sm" data-test="pagination-summary">
                 Menampilkan
                 <span class="text-brand-navy font-semibold"
                   >{{ startRowIndex }}–{{ endRowIndex }}</span
@@ -503,7 +503,7 @@ function formatPhone(value: string): string {
                 type="button"
                 :disabled="currentPage === 1"
                 aria-label="Halaman sebelumnya"
-                class="rounded-btn text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 border border-gray-300 px-3 py-2 text-sm font-medium transition-colors duration-150 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:hover:bg-gray-50 disabled:active:scale-100 motion-reduce:transform-none"
+                class="rounded-btn text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 border border-border px-3 py-2 text-sm font-medium transition-colors duration-150 hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-border disabled:bg-surface-muted disabled:text-text-muted disabled:hover:bg-surface-muted disabled:active:scale-100 motion-reduce:transform-none"
                 data-test="pagination-prev"
                 @click="goToPage(currentPage - 1, $event)"
               >
@@ -524,7 +524,7 @@ function formatPhone(value: string): string {
                 <span class="hidden sm:inline">Sebelumnya</span>
               </button>
 
-              <span class="px-2 text-xs font-medium text-gray-700 sm:hidden">
+              <span class="px-2 text-xs font-medium text-text-muted sm:hidden">
                 {{ currentPage }} / {{ totalPages }}
               </span>
 
@@ -532,7 +532,7 @@ function formatPhone(value: string): string {
                 <li v-for="(item, idx) in paginationPages" :key="`page-${idx}`">
                   <span
                     v-if="item === 'ellipsis'"
-                    class="flex min-h-[44px] min-w-[36px] items-center justify-center text-sm font-medium text-gray-400"
+                    class="flex min-h-[44px] min-w-[36px] items-center justify-center text-sm font-medium text-text-muted"
                     aria-hidden="true"
                   >
                     …
@@ -546,7 +546,7 @@ function formatPhone(value: string): string {
                     :class="
                       currentPage === item
                         ? 'bg-brand-navy font-semibold text-white shadow-xs'
-                        : 'text-brand-navy border border-gray-300 hover:bg-gray-100'
+                        : 'text-brand-navy border border-border hover:bg-surface-muted'
                     "
                     :data-test="`pagination-page-${item}`"
                     @click="goToPage(item, $event)"
@@ -560,7 +560,7 @@ function formatPhone(value: string): string {
                 type="button"
                 :disabled="currentPage === totalPages"
                 aria-label="Halaman selanjutnya"
-                class="rounded-btn text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 border border-gray-300 px-3 py-2 text-sm font-medium transition-colors duration-150 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:hover:bg-gray-50 disabled:active:scale-100 motion-reduce:transform-none"
+                class="rounded-btn text-brand-navy focus-visible:outline-brand-navy inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 border border-border px-3 py-2 text-sm font-medium transition-colors duration-150 hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-border disabled:bg-surface-muted disabled:text-text-muted disabled:hover:bg-surface-muted disabled:active:scale-100 motion-reduce:transform-none"
                 data-test="pagination-next"
                 @click="goToPage(currentPage + 1, $event)"
               >
@@ -587,14 +587,14 @@ function formatPhone(value: string): string {
         <!-- Rows the API returned that could not be rendered -->
         <p
           v-if="rtLeadersStore.rejectedCount > 0"
-          class="mt-4 text-sm text-gray-700"
+          class="mt-4 text-sm text-text-muted"
           data-test="rt-rejected"
         >
           {{ rtLeadersStore.rejectedCount }} baris data tidak lengkap dan tidak ditampilkan. Hubungi
           kantor kelurahan untuk pemutakhiran data.
         </p>
 
-        <p class="mt-3 text-sm text-gray-600">
+        <p class="mt-3 text-sm text-text-muted">
           <template v-if="isFiltered">
             Pencarian hanya menyaring tabel; hapus filter untuk melihat seluruh
             {{ rtLeadersStore.rtLeaders.length }} RT.

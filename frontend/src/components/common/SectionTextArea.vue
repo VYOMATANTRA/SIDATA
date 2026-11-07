@@ -52,7 +52,7 @@ withDefaults(defineProps<SectionTextAreaProps>(), {
           ? eyebrowClass
           : [
               'text-xs font-semibold tracking-wider uppercase',
-              theme === 'light' ? 'text-brand-indigo' : 'text-brand-cyan',
+              theme === 'light' ? 'text-brand-navy' : 'text-text-inverse',
             ],
       ]"
       data-test="section-eyebrow"
@@ -67,7 +67,7 @@ withDefaults(defineProps<SectionTextAreaProps>(), {
       :id="titleId"
       class="min-w-0 leading-tight font-bold tracking-tight"
       :class="[
-        theme === 'light' ? 'text-slate-900' : 'text-white',
+        theme === 'light' ? 'text-brand-navy' : 'text-white',
         headingTag === 'h1' ? 'text-xl' : 'text-lg sm:text-xl',
       ]"
       data-test="section-title"
@@ -79,7 +79,7 @@ withDefaults(defineProps<SectionTextAreaProps>(), {
     <p
       v-if="description || $slots.default"
       class="text-base leading-relaxed"
-      :class="[theme === 'light' ? 'text-slate-600' : 'text-slate-200/95', maxWidthClass]"
+      :class="[theme === 'light' ? 'text-text-muted' : 'text-text-inverse-muted', maxWidthClass]"
       data-test="section-description"
     >
       <slot>{{ description }}</slot>

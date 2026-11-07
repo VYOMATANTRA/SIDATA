@@ -15,7 +15,7 @@ describe('BaseButton.vue', () => {
     expect(wrapper.attributes('type')).toBe('button');
     expect(wrapper.text()).toContain('Klik Saya');
     expect(wrapper.classes()).toContain('bg-brand-navy');
-    expect(wrapper.classes()).toContain('text-white');
+    expect(wrapper.classes()).toContain('text-text-inverse');
     expect(wrapper.classes()).toContain('border-brand-navy');
     expect(wrapper.classes()).toContain('px-5');
     expect(wrapper.classes()).toContain('text-base');
@@ -40,12 +40,12 @@ describe('BaseButton.vue', () => {
       },
     });
 
-    expect(wrapper.classes()).toContain('bg-white');
+    expect(wrapper.classes()).toContain('bg-surface');
     expect(wrapper.classes()).toContain('text-brand-navy');
     expect(wrapper.classes()).toContain('border-brand-navy');
   });
 
-  it('renders active states with brand-navy-overlay for secondary and brand-navy/10 for primary', () => {
+  it('renders active states with brand-navy-overlay for secondary and surface-hover for primary', () => {
     const secActive = mount(BaseButton, {
       props: {
         variant: 'secondary',
@@ -54,7 +54,7 @@ describe('BaseButton.vue', () => {
       },
     });
     expect(secActive.classes()).toContain('bg-brand-navy-overlay');
-    expect(secActive.classes()).toContain('text-white');
+    expect(secActive.classes()).toContain('text-text-inverse');
 
     const priActive = mount(BaseButton, {
       props: {
@@ -63,7 +63,7 @@ describe('BaseButton.vue', () => {
         label: 'Primary Active',
       },
     });
-    expect(priActive.classes()).toContain('bg-brand-navy/10');
+    expect(priActive.classes()).toContain('bg-surface-hover');
     expect(priActive.classes()).toContain('text-brand-navy');
   });
 
@@ -99,7 +99,7 @@ describe('BaseButton.vue', () => {
     });
 
     expect(wrapper.attributes('disabled')).toBeDefined();
-    expect(wrapper.classes()).toContain('bg-gray-300');
+    expect(wrapper.classes()).toContain('bg-surface-hover');
     expect(wrapper.classes()).toContain('cursor-not-allowed');
 
     await wrapper.trigger('click');
@@ -116,9 +116,9 @@ describe('BaseButton.vue', () => {
     });
 
     expect(wrapper.attributes('disabled')).toBeDefined();
-    expect(wrapper.classes()).toContain('bg-white');
-    expect(wrapper.classes()).toContain('border-gray-300');
-    expect(wrapper.classes()).toContain('text-gray-400');
+    expect(wrapper.classes()).toContain('bg-surface');
+    expect(wrapper.classes()).toContain('border-border');
+    expect(wrapper.classes()).toContain('text-text-muted');
     expect(wrapper.classes()).toContain('cursor-not-allowed');
   });
 

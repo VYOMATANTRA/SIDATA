@@ -23,6 +23,8 @@ const UPDATED = new Date('2026-10-09T08:15:00.000Z');
 
 const reqWithSlug = (slug: unknown) => ({ params: { slug } }) as unknown as Request;
 
+const TOKEN = UPDATED.toISOString();
+
 const pageRow = (slug = 'kependudukan') => ({
   id: 'page-1',
   slug,
@@ -67,7 +69,16 @@ const expectedPageDto = (slug = 'kependudukan') => ({
       number: null,
       title: 'Jumlah Penduduk',
       sortOrder: 0,
-      sections: [{ id: 'sec-1', slug: 'ringkasan', title: null, sortOrder: 0 }],
+      updatedAt: UPDATED.toISOString(),
+      sections: [
+        {
+          id: 'sec-1',
+          slug: 'ringkasan',
+          title: null,
+          sortOrder: 0,
+          updatedAt: UPDATED.toISOString(),
+        },
+      ],
     },
   ],
   createdAt: CREATED.toISOString(),
@@ -80,6 +91,8 @@ describe('pages.controller', () => {
   let originalTransaction: typeof prisma.$transaction;
   let originalContentBlockCount: typeof prisma.contentBlock.count;
   let originalPageCount: typeof prisma.page.count;
+  let originalIndicatorCount: typeof prisma.indicator.count;
+  let originalIndicatorTableCount: typeof prisma.indicatorTable.count;
   let originalConsoleError: typeof console.error;
   let findManyCalls: unknown[][];
   let findUniqueCalls: unknown[][];
@@ -113,6 +126,11 @@ describe('pages.controller', () => {
     originalTransaction = prisma.$transaction;
     originalContentBlockCount = prisma.contentBlock.count;
     originalPageCount = prisma.page.count;
+    originalIndicatorCount = prisma.indicator.count;
+    originalIndicatorTableCount = prisma.indicatorTable.count;
+    // deletePage counts every dependent type; default them to "none attached".
+    prisma.indicator.count = (async () => 0) as unknown as typeof prisma.indicator.count;
+    prisma.indicatorTable.count = (async () => 0) as unknown as typeof prisma.indicatorTable.count;
     originalConsoleError = console.error;
     findManyCalls = [];
     findUniqueCalls = [];
@@ -139,6 +157,8 @@ describe('pages.controller', () => {
     prisma.$transaction = originalTransaction;
     prisma.contentBlock.count = originalContentBlockCount;
     prisma.page.count = originalPageCount;
+    prisma.indicator.count = originalIndicatorCount;
+    prisma.indicatorTable.count = originalIndicatorTableCount;
     console.error = originalConsoleError;
   });
 
@@ -298,7 +318,10 @@ describe('pages.controller', () => {
               number: null,
               title: 'Jumlah Penduduk',
               sortOrder: 0,
-              sections: [{ id: 's1', slug: 'ringkasan', title: null, sortOrder: 0 }],
+              updatedAt: UPDATED,
+              sections: [
+                { id: 's1', slug: 'ringkasan', title: null, sortOrder: 0, updatedAt: UPDATED },
+              ],
             },
           ],
         },
@@ -322,7 +345,16 @@ describe('pages.controller', () => {
                 number: null,
                 title: 'Jumlah Penduduk',
                 sortOrder: 0,
-                sections: [{ id: 's1', slug: 'ringkasan', title: null, sortOrder: 0 }],
+                updatedAt: UPDATED.toISOString(),
+                sections: [
+                  {
+                    id: 's1',
+                    slug: 'ringkasan',
+                    title: null,
+                    sortOrder: 0,
+                    updatedAt: UPDATED.toISOString(),
+                  },
+                ],
               },
             ],
             createdAt: CREATED.toISOString(),
@@ -683,18 +715,52 @@ describe('pages.controller', () => {
       for (const badSlug of ['', 'Kependudukan', 'a_b', 'bad\\slug']) {
         const res = fakeRes();
         await deletePageHandler(
-          { params: { slug: badSlug }, user: { id: 'u1', role: 'editor' } } as never,
+          {
+            params: { slug: badSlug },
+            query: { expectedUpdatedAt: TOKEN },
+            user: { id: 'u1', role: 'editor' },
+          } as never,
           res,
         );
         assert.equal(res.status, 400);
       }
     });
 
+    it('returns 400 when expectedUpdatedAt is missing or invalid', async () => {
+      for (const query of [{}, { expectedUpdatedAt: 'yesterday' }]) {
+        const res = fakeRes();
+        await deletePageHandler(
+          { params: { slug: 'kependudukan' }, query, user: { id: 'u1', role: 'editor' } } as never,
+          res,
+        );
+        assert.equal(res.status, 400);
+      }
+    });
+
+    it('returns 409 STALE_WRITE when expectedUpdatedAt is stale', async () => {
+      stubFindUnique(async () => pageRow('kependudukan'));
+      const res = fakeRes();
+      await deletePageHandler(
+        {
+          params: { slug: 'kependudukan' },
+          query: { expectedUpdatedAt: '2020-01-01T00:00:00.000Z' },
+          user: { id: 'u1', role: 'editor' },
+        } as never,
+        res,
+      );
+      assert.equal(res.status, 409);
+      assert.equal((res.body as { code?: string }).code, 'STALE_WRITE');
+    });
+
     it('returns 404 when service throws 404 Not Found', async () => {
       stubFindUnique(async () => null);
       const res = fakeRes();
       await deletePageHandler(
-        { params: { slug: 'tidak-ada' }, user: { id: 'u1', role: 'editor' } } as never,
+        {
+          params: { slug: 'tidak-ada' },
+          query: { expectedUpdatedAt: TOKEN },
+          user: { id: 'u1', role: 'editor' },
+        } as never,
         res,
       );
       assert.equal(res.status, 404);
@@ -706,7 +772,11 @@ describe('pages.controller', () => {
       prisma.contentBlock.count = (async () => 1) as unknown as typeof prisma.contentBlock.count;
       const res = fakeRes();
       await deletePageHandler(
-        { params: { slug: 'kependudukan' }, user: { id: 'u1', role: 'editor' } } as never,
+        {
+          params: { slug: 'kependudukan' },
+          query: { expectedUpdatedAt: TOKEN },
+          user: { id: 'u1', role: 'editor' },
+        } as never,
         res,
       );
       assert.equal(res.status, 409);
@@ -718,7 +788,11 @@ describe('pages.controller', () => {
       });
       const res = fakeRes();
       await deletePageHandler(
-        { params: { slug: 'kependudukan' }, user: { id: 'u1', role: 'editor' } } as never,
+        {
+          params: { slug: 'kependudukan' },
+          query: { expectedUpdatedAt: TOKEN },
+          user: { id: 'u1', role: 'editor' },
+        } as never,
         res,
       );
       assert.equal(res.status, 500);
@@ -744,6 +818,7 @@ describe('pages.controller', () => {
       await deletePageHandler(
         {
           params: { slug: 'kependudukan' },
+          query: { expectedUpdatedAt: TOKEN },
           user: { id: 'u1', email: 'editor@manggar.go.id', role: 'editor' },
           ip: '127.0.0.1',
           get: () => 'test-agent',

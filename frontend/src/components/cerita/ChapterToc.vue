@@ -41,15 +41,15 @@ function toggleSheet() {
     aria-label="Daftar Bab"
     data-test="chapter-toc-rail"
   >
-    <ol class="space-y-1 border-l border-slate-200">
+    <ol class="space-y-1 border-l border-border">
       <li v-for="chapter in chapters" :key="chapter.id">
         <a
           :href="`#${chapter.slug}`"
           class="-ml-px flex items-start gap-2.5 border-l-2 py-1.5 pl-4 text-sm transition-colors"
           :class="
             chapter.id === activeChapterId
-              ? 'border-brand-cyan text-brand-navy font-semibold'
-              : 'border-transparent text-slate-500 hover:text-brand-navy'
+              ? 'border-brand-navy text-brand-navy font-semibold'
+              : 'border-transparent text-text-muted hover:text-brand-navy'
           "
           :aria-current="chapter.id === activeChapterId ? 'true' : undefined"
           data-test="chapter-toc-link"
@@ -66,15 +66,15 @@ function toggleSheet() {
     <div
       v-show="isSheetOpen"
       id="chapter-toc-sheet-panel"
-      class="max-h-[60vh] overflow-y-auto border-t border-slate-200 bg-white shadow-lg"
+      class="max-h-[60vh] overflow-y-auto border-t border-border bg-white shadow-lg"
       data-test="chapter-toc-sheet-panel"
     >
-      <ol class="divide-y divide-slate-100">
+      <ol class="divide-y divide-border">
         <li v-for="chapter in chapters" :key="chapter.id">
           <a
             :href="`#${chapter.slug}`"
             class="flex items-center gap-3 px-4 py-3 text-sm"
-            :class="chapter.id === activeChapterId ? 'text-brand-navy font-semibold' : 'text-slate-600'"
+            :class="chapter.id === activeChapterId ? 'text-brand-navy font-semibold' : 'text-text-muted'"
             :aria-current="chapter.id === activeChapterId ? 'true' : undefined"
             data-test="chapter-toc-link"
             @click="handleSelect(chapter.id)"

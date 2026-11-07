@@ -713,11 +713,14 @@ export async function getMapSummary(): Promise<MapSummaryDTO> {
 
 export class MapsServiceError extends Error {
   statusCode: number;
+  /** Machine-readable code sent beside `error` (e.g. `STALE_WRITE`); absent for most failures. */
+  code: string | undefined;
 
-  constructor(message: string, statusCode: number) {
+  constructor(message: string, statusCode: number, code?: string) {
     super(message);
     this.name = 'MapsServiceError';
     this.statusCode = statusCode;
+    this.code = code;
   }
 }
 
@@ -1221,6 +1224,7 @@ function assertExpectedPointOwner(point: SpatialPointWriteRow, expectedRtNumber?
     throw new MapsServiceError(
       'Lokasi RT telah berubah. Muat ulang data RT sebelum menyimpan.',
       409,
+      'STALE_WRITE',
     );
   }
 }

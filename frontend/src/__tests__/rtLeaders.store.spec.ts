@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { RT_LEADERS_CACHE_TTL_MS, useRtLeadersStore } from '../stores/rtLeaders.store';
+import { READ_USER_MESSAGES } from '../utils/userMessages';
 
 const roster = (isSampleRoster: boolean) => ({
   leaders: [
@@ -51,7 +52,7 @@ describe('rtLeaders store freshness', () => {
     await store.fetchRtLeaders();
     expect(store.isSampleRoster).toBe(true);
     expect(store.rtLeaders[0]?.name).toBe('Ketua RT 01');
-    expect(store.error).toContain('503');
+    expect(store.error).toBe(`Gagal memuat data Ketua RT. ${READ_USER_MESSAGES.server}`);
   });
 
   it('caches successful empty responses', async () => {

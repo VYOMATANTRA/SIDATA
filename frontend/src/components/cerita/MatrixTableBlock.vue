@@ -31,7 +31,7 @@ const chartItems = computed<BarDiagramItem[]>(() => {
           id: `${row.id}-female`,
           label: `${row.label} — Perempuan`,
           value: row.female,
-          color: 'bg-brand-cyan',
+          color: 'bg-border-strong',
         });
       }
       return items;
@@ -50,7 +50,7 @@ const chartItems = computed<BarDiagramItem[]>(() => {
 
 <template>
   <div data-test="matrix-table-block">
-    <p class="mb-2 text-sm text-slate-600" data-test="matrix-table-period">
+    <p class="mb-2 text-sm text-text-muted" data-test="matrix-table-period">
       Berdasarkan data periode {{ table.period }}.
     </p>
 
@@ -69,7 +69,7 @@ const chartItems = computed<BarDiagramItem[]>(() => {
             }}, periode {{ table.period }}
           </caption>
           <thead>
-            <tr class="border-b border-slate-200 text-left text-slate-500">
+            <tr class="border-b border-border text-left text-text-muted">
               <th scope="col" class="py-2 pr-4 font-medium">Label</th>
               <template v-if="sexSplit">
                 <th scope="col" class="py-2 pr-4 text-right font-medium">Laki-laki</th>
@@ -79,8 +79,8 @@ const chartItems = computed<BarDiagramItem[]>(() => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in table.rows" :key="row.id" class="border-b border-slate-100">
-              <th scope="row" class="py-2 pr-4 text-left font-normal text-slate-700">
+            <tr v-for="row in table.rows" :key="row.id" class="border-b border-border">
+              <th scope="row" class="py-2 pr-4 text-left font-normal text-text-muted">
                 {{ row.label }}
               </th>
               <template v-if="sexSplit">
@@ -91,7 +91,7 @@ const chartItems = computed<BarDiagramItem[]>(() => {
             </tr>
           </tbody>
           <tfoot>
-            <tr class="border-t-2 border-slate-200 font-semibold">
+            <tr class="border-t-2 border-border font-semibold">
               <th scope="row" class="py-2 pr-4 text-left">Total</th>
               <template v-if="sexSplit">
                 <td class="py-2 pr-4 text-right tabular-nums">{{ table.totals.male ?? '—' }}</td>
@@ -104,7 +104,7 @@ const chartItems = computed<BarDiagramItem[]>(() => {
       </div>
     </details>
 
-    <p v-if="table.source" class="mt-2 text-xs text-slate-400" data-test="matrix-table-source">
+    <p v-if="table.source" class="mt-2 text-xs text-text-muted" data-test="matrix-table-source">
       Sumber: {{ table.source }}
     </p>
   </div>

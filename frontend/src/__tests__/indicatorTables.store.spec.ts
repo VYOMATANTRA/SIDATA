@@ -6,6 +6,7 @@ import {
   type IndicatorTable,
   type IndicatorTableDetail,
 } from '../stores/indicatorTables.store';
+import { READ_USER_MESSAGES } from '../utils/userMessages';
 
 const CREATED = '2026-01-01T00:00:00.000Z';
 
@@ -326,7 +327,9 @@ describe('indicator tables store (public per-section reads)', () => {
     const result = await store.fetchBySectionId('sec-1');
 
     expect(result).toEqual([]);
-    expect(store.errorsBySectionId['sec-1']).toContain('500');
+    expect(store.errorsBySectionId['sec-1']).toBe(
+      `Gagal memuat tabel indikator. ${READ_USER_MESSAGES.server}`,
+    );
     // A failed fetch must never be written into bySectionId as [] — that would be
     // indistinguishable from a section that genuinely has no matrix tables.
     expect(store.bySectionId['sec-1']).toBeUndefined();
@@ -351,7 +354,9 @@ describe('indicator tables store (public per-section reads)', () => {
       store.fetchBySectionId('sec-ok'),
     ]);
 
-    expect(store.errorsBySectionId['sec-fail']).toContain('500');
+    expect(store.errorsBySectionId['sec-fail']).toBe(
+      `Gagal memuat tabel indikator. ${READ_USER_MESSAGES.server}`,
+    );
     expect(store.errorsBySectionId['sec-ok']).toBeNull();
     expect(store.bySectionId['sec-ok']).toEqual([tableDetail]);
     expect(store.loadingBySectionId['sec-fail']).toBe(false);

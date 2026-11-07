@@ -139,6 +139,7 @@ const leafletMocks = vi.hoisted(() => {
     zoomToShowLayer,
     zoomToBounds,
     spiderfy,
+    invalidateSize,
     state,
     L,
     mapInstance,
@@ -233,6 +234,23 @@ describe('InteractiveMap.vue', () => {
       expect.any(String),
       expect.objectContaining({ maxZoom: 20, maxNativeZoom: 19 }),
     );
+  });
+
+  it('wraps Leaflet in a local stacking boundary (isolate, z-0)', async () => {
+    const wrapper = await mountMap();
+    expect(wrapper.find('[data-test="interactive-map"]').classes()).toEqual(
+      expect.arrayContaining(['relative', 'isolate', 'z-0']),
+    );
+    // jsdom has no layout or paint order; the real layering is verified in a browser.
+    wrapper.unmount();
+  });
+
+  it('exposes invalidateSize so a parent can re-measure after layout shifts', async () => {
+    const wrapper = await mountMap();
+    leafletMocks.invalidateSize.mockClear();
+    (wrapper.vm as unknown as { invalidateSize: () => void }).invalidateSize();
+    expect(leafletMocks.invalidateSize).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
   });
 
   it('uses CMS default centre and zoom when supplied', async () => {

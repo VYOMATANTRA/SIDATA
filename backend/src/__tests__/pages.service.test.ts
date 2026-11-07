@@ -8,11 +8,11 @@ import {
   deletePage,
   reorderPages,
   PageServiceError,
-  MAX_PAGE_SORT_ORDER,
   toPageSummary,
   isValidPageSlug,
 } from '../services/pages.service.js';
 import type { AuditActor, AuditRequestContext } from '../services/audit.service.js';
+import { HierarchyServiceError, MAX_SORT_ORDER } from '../utils/hierarchyAuthoring.js';
 import prisma from '../utils/prisma.js';
 
 const EXPECTED_FIND_MANY_ARGS = {
@@ -37,6 +37,7 @@ const expectedFindUniqueArgs = (slug: string) => ({
 const FIXED_CREATED = new Date('2026-10-01T00:00:00.000Z');
 // Non-zero time and milliseconds so a lossy date conversion would show up.
 const FIXED_UPDATED = new Date(Date.UTC(2026, 9, 9, 7, 45, 30, 123));
+const TOKEN = FIXED_UPDATED.toISOString();
 
 const summaryRow = (overrides: Record<string, unknown> = {}) => ({
   id: 'page-1',
@@ -92,6 +93,8 @@ describe('pages.service', () => {
   let originalPageCount: typeof prisma.page.count;
   let originalPageDelete: typeof prisma.page.delete;
   let originalPageUpdate: typeof prisma.page.update;
+  let originalIndicatorCount: typeof prisma.indicator.count;
+  let originalIndicatorTableCount: typeof prisma.indicatorTable.count;
   let findManyCalls: unknown[][];
   let findUniqueCalls: unknown[][];
   let pageCountCalls: unknown[][];
@@ -125,6 +128,11 @@ describe('pages.service', () => {
     originalPageCount = prisma.page.count;
     originalPageDelete = prisma.page.delete;
     originalPageUpdate = prisma.page.update;
+    originalIndicatorCount = prisma.indicator.count;
+    originalIndicatorTableCount = prisma.indicatorTable.count;
+    // deletePage counts every dependent type; default them to "none attached".
+    prisma.indicator.count = (async () => 0) as unknown as typeof prisma.indicator.count;
+    prisma.indicatorTable.count = (async () => 0) as unknown as typeof prisma.indicatorTable.count;
     findManyCalls = [];
     findUniqueCalls = [];
     pageCountCalls = [];
@@ -148,6 +156,8 @@ describe('pages.service', () => {
     prisma.page.count = originalPageCount;
     prisma.page.delete = originalPageDelete;
     prisma.page.update = originalPageUpdate;
+    prisma.indicator.count = originalIndicatorCount;
+    prisma.indicatorTable.count = originalIndicatorTableCount;
   });
 
   describe('getPages', () => {
@@ -309,7 +319,16 @@ describe('pages.service', () => {
           number: null,
           title: 'Jumlah Penduduk',
           sortOrder: 0,
-          sections: [{ id: 'section-1', slug: 'ringkasan', title: null, sortOrder: 0 }],
+          updatedAt: FIXED_UPDATED,
+          sections: [
+            {
+              id: 'section-1',
+              slug: 'ringkasan',
+              title: null,
+              sortOrder: 0,
+              updatedAt: FIXED_UPDATED,
+            },
+          ],
         },
       ],
       ...overrides,
@@ -354,7 +373,16 @@ describe('pages.service', () => {
             number: null,
             title: 'Jumlah Penduduk',
             sortOrder: 0,
-            sections: [{ id: 'section-1', slug: 'ringkasan', title: null, sortOrder: 0 }],
+            updatedAt: FIXED_UPDATED.toISOString(),
+            sections: [
+              {
+                id: 'section-1',
+                slug: 'ringkasan',
+                title: null,
+                sortOrder: 0,
+                updatedAt: FIXED_UPDATED.toISOString(),
+              },
+            ],
           },
         ],
         createdAt: FIXED_CREATED.toISOString(),
@@ -457,9 +485,22 @@ describe('pages.service', () => {
             number: '2.1',
             title: 'Wilayah Administrasi',
             sortOrder: 0,
+            updatedAt: FIXED_UPDATED.toISOString(),
             sections: [
-              { id: 's-1', slug: 'luas', title: 'Luas', sortOrder: 0 },
-              { id: 's-2', slug: 'batas', title: null, sortOrder: 1 },
+              {
+                id: 's-1',
+                slug: 'luas',
+                title: 'Luas',
+                sortOrder: 0,
+                updatedAt: FIXED_UPDATED.toISOString(),
+              },
+              {
+                id: 's-2',
+                slug: 'batas',
+                title: null,
+                sortOrder: 1,
+                updatedAt: FIXED_UPDATED.toISOString(),
+              },
             ],
           },
         ],
@@ -502,16 +543,23 @@ describe('pages.service', () => {
         'slug',
         'sortOrder',
         'title',
+        'updatedAt',
       ]);
       const [section] = chapter.sections;
       assert.ok(section);
-      assert.deepStrictEqual(Object.keys(section).sort(), ['id', 'slug', 'sortOrder', 'title']);
+      assert.deepStrictEqual(Object.keys(section).sort(), [
+        'id',
+        'slug',
+        'sortOrder',
+        'title',
+        'updatedAt',
+      ]);
 
-      // Explicitly: no pageId/chapterId/timestamps on children.
-      for (const key of ['pageId', 'createdAt', 'updatedAt', 'leaked']) {
+      // Children expose only updatedAt (the SPEC §3 concurrency token): no pageId/chapterId/createdAt.
+      for (const key of ['pageId', 'createdAt', 'leaked']) {
         assert.equal(key in chapter, false, `chapter must not expose ${key}`);
       }
-      for (const key of ['chapterId', 'createdAt', 'updatedAt', 'leaked']) {
+      for (const key of ['chapterId', 'createdAt', 'leaked']) {
         assert.equal(key in section, false, `section must not expose ${key}`);
       }
     });
@@ -1059,21 +1107,21 @@ describe('pages.service', () => {
       assert.equal(assignedSortOrder, 8);
     });
 
-    it('throws 400 PageServiceError when auto-assigned sortOrder exceeds MAX_PAGE_SORT_ORDER (INT overflow defense)', async () => {
+    it('throws 400 PageServiceError when auto-assigned sortOrder exceeds MAX_SORT_ORDER (INT overflow defense)', async () => {
       stubFindUnique(async () => null);
 
       prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
         const fakeTx = {
           page: {
             create: async (args: { data: { sortOrder: number } }) => {
-              if (args.data.sortOrder > MAX_PAGE_SORT_ORDER) {
+              if (args.data.sortOrder > MAX_SORT_ORDER) {
                 const dbOverflowErr = new Error('Value out of range for column sort_order');
                 (dbOverflowErr as unknown as { code: string }).code = 'ER_WARN_DATA_OUT_OF_RANGE';
                 throw dbOverflowErr;
               }
               return summaryRow({ id: 'p-new', ...args.data });
             },
-            aggregate: async () => ({ _max: { sortOrder: MAX_PAGE_SORT_ORDER } }),
+            aggregate: async () => ({ _max: { sortOrder: MAX_SORT_ORDER } }),
           },
           auditLog: {
             create: async () => ({ id: 'audit-1' }),
@@ -1099,7 +1147,7 @@ describe('pages.service', () => {
     it('rejects invalid slug format (uppercase, special chars, whitespace, empty, backslash) (400)', async () => {
       for (const badSlug of ['', '   ', 'Kependudukan', 'a_b', 'a/b', 'a\\b', '-a', 'a-']) {
         await assert.rejects(
-          deletePage(badSlug, actor, context),
+          deletePage(badSlug, actor, context, undefined, { expectedUpdatedAt: TOKEN }),
           (err: unknown) =>
             err instanceof PageServiceError &&
             err.statusCode === 400 &&
@@ -1108,11 +1156,25 @@ describe('pages.service', () => {
       }
     });
 
+    it('throws 409 STALE_WRITE when expectedUpdatedAt does not match the page', async () => {
+      stubFindUnique(async () => summaryRow({ id: 'p-1', slug: 'kependudukan' }));
+
+      await assert.rejects(
+        deletePage('kependudukan', actor, context, undefined, {
+          expectedUpdatedAt: '2026-01-01T00:00:00.000Z',
+        }),
+        (err: unknown) =>
+          err instanceof HierarchyServiceError &&
+          err.statusCode === 409 &&
+          err.code === 'STALE_WRITE',
+      );
+    });
+
     it('throws 404 Not Found when page does not exist', async () => {
       stubFindUnique(async () => null);
 
       await assert.rejects(
-        deletePage('halaman-tiada', actor, context),
+        deletePage('halaman-tiada', actor, context, undefined, { expectedUpdatedAt: TOKEN }),
         (err: unknown) =>
           err instanceof PageServiceError &&
           err.statusCode === 404 &&
@@ -1125,9 +1187,9 @@ describe('pages.service', () => {
       prisma.contentBlock.count = (async () => 3) as unknown as typeof prisma.contentBlock.count;
 
       await assert.rejects(
-        deletePage('kependudukan', actor, context),
+        deletePage('kependudukan', actor, context, undefined, { expectedUpdatedAt: TOKEN }),
         (err: unknown) =>
-          err instanceof PageServiceError &&
+          err instanceof HierarchyServiceError &&
           err.statusCode === 409 &&
           err.message.includes('tidak dapat dihapus') &&
           err.message.includes('blok konten'),
@@ -1146,7 +1208,7 @@ describe('pages.service', () => {
       }) as unknown as typeof prisma.$transaction;
 
       await assert.rejects(
-        deletePage('kependudukan', actor, context),
+        deletePage('kependudukan', actor, context, undefined, { expectedUpdatedAt: TOKEN }),
         (err: unknown) =>
           err instanceof PageServiceError &&
           err.statusCode === 409 &&
@@ -1155,7 +1217,7 @@ describe('pages.service', () => {
       );
     });
 
-    it('catches Prisma P2025 record not found race condition and converts to 404 Not Found', async () => {
+    it('catches Prisma P2025 record not found race condition and converts to 409 STALE_WRITE', async () => {
       stubFindUnique(async () => summaryRow({ id: 'p-1', slug: 'kependudukan' }));
       prisma.contentBlock.count = (async () => 0) as unknown as typeof prisma.contentBlock.count;
 
@@ -1167,11 +1229,9 @@ describe('pages.service', () => {
       }) as unknown as typeof prisma.$transaction;
 
       await assert.rejects(
-        deletePage('kependudukan', actor, context),
+        deletePage('kependudukan', actor, context, undefined, { expectedUpdatedAt: TOKEN }),
         (err: unknown) =>
-          err instanceof PageServiceError &&
-          err.statusCode === 404 &&
-          err.message.includes('tidak ditemukan'),
+          err instanceof PageServiceError && err.statusCode === 409 && err.code === 'STALE_WRITE',
       );
     });
 
@@ -1196,7 +1256,7 @@ describe('pages.service', () => {
       }) as unknown as typeof prisma.$transaction;
 
       await assert.rejects(
-        deletePage('kependudukan', actor, context),
+        deletePage('kependudukan', actor, context, undefined, { expectedUpdatedAt: TOKEN }),
         (err: unknown) => err === auditBoom,
       );
     });
@@ -1233,7 +1293,9 @@ describe('pages.service', () => {
         return fn(fakeTx as unknown as typeof prisma);
       }) as unknown as typeof prisma.$transaction;
 
-      const result = await deletePage('kependudukan', actor, context);
+      const result = await deletePage('kependudukan', actor, context, undefined, {
+        expectedUpdatedAt: TOKEN,
+      });
 
       assert.deepStrictEqual(result, {
         id: 'p-1',
@@ -1241,7 +1303,7 @@ describe('pages.service', () => {
         title: 'Kependudukan',
         sortOrder: 0,
       });
-      assert.deepStrictEqual(deletedWhere, { id: 'p-1' });
+      assert.deepStrictEqual(deletedWhere, { id: 'p-1', updatedAt: FIXED_UPDATED });
       assert.deepStrictEqual(auditLogData, {
         action: 'page.deleted',
         severity: 'warning',
@@ -1298,7 +1360,7 @@ describe('pages.service', () => {
         return fn(fakeTx as unknown as typeof prisma);
       }) as unknown as typeof prisma.$transaction;
 
-      await deletePage('kependudukan', actor);
+      await deletePage('kependudukan', actor, undefined, undefined, { expectedUpdatedAt: TOKEN });
 
       assert.deepStrictEqual(auditLogData, {
         action: 'page.deleted',
@@ -1329,6 +1391,7 @@ describe('pages.service', () => {
         slug: 'kependudukan',
         title: 'Kependudukan',
         sortOrder: 0,
+        updatedAt: FIXED_UPDATED,
         chapters: [
           { slug: 'demografi', _count: { sections: 2 } },
           { slug: 'ketenagakerjaan', _count: { sections: 1 } },
@@ -1352,7 +1415,7 @@ describe('pages.service', () => {
         return fn(fakeTx as unknown as typeof prisma);
       }) as unknown as typeof prisma.$transaction;
 
-      await deletePage('kependudukan', actor, context);
+      await deletePage('kependudukan', actor, context, undefined, { expectedUpdatedAt: TOKEN });
 
       assert.ok(auditLogData);
       assert.deepStrictEqual((auditLogData as unknown as { metadata: unknown }).metadata, {

@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useAuthStore } from './auth'
 import { getCsrfToken } from '../utils/csrf'
+import { apiErrorFromBody } from '../utils/apiClient'
+import { toUserMessage } from '../utils/userMessages'
 
 export interface UserRole {
   id: string
@@ -50,11 +52,11 @@ export const useUsersStore = defineStore('users', () => {
       })
       const data = await res.json()
       if (!res.ok) {
-        throw new Error(data.error || 'Gagal mengambil daftar pengguna.')
+        throw apiErrorFromBody(res.status, data, 'GET')
       }
       users.value = data.users || []
     } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : 'Terjadi kesalahan saat memuat pengguna.'
+      error.value = toUserMessage(err, 'memuat daftar pengguna', 'GET').message
     } finally {
       loading.value = false
     }
@@ -69,12 +71,11 @@ export const useUsersStore = defineStore('users', () => {
       })
       const data = await res.json()
       if (!res.ok) {
-        throw new Error(data.error || 'Gagal memuat daftar role.')
+        throw apiErrorFromBody(res.status, data, 'GET')
       }
       roles.value = data.roles || []
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Gagal memuat daftar role.'
-      error.value = msg
+      error.value = toUserMessage(err, 'memuat daftar role', 'GET').message
       console.error('Error fetching roles:', err)
     }
   }
@@ -92,16 +93,15 @@ export const useUsersStore = defineStore('users', () => {
       })
       const data = await res.json()
       if (!res.ok) {
-        throw new Error(data.error || 'Gagal membuat pengguna.')
+        throw apiErrorFromBody(res.status, data, 'POST')
       }
       if (data.user) {
         users.value.unshift(data.user)
       }
       return data
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Gagal membuat pengguna.'
-      error.value = msg
-      throw new Error(msg)
+      error.value = toUserMessage(err, 'membuat pengguna').message
+      throw err
     } finally {
       loading.value = false
     }
@@ -119,7 +119,7 @@ export const useUsersStore = defineStore('users', () => {
       })
       const data = await res.json()
       if (!res.ok) {
-        throw new Error(data.error || 'Gagal mengaktifkan kembali pengguna.')
+        throw apiErrorFromBody(res.status, data, 'PATCH')
       }
       const target = users.value.find((u) => u.id === userId)
       if (target) {
@@ -130,9 +130,8 @@ export const useUsersStore = defineStore('users', () => {
       }
       return data
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Gagal mengaktifkan kembali pengguna.'
-      error.value = msg
-      throw new Error(msg)
+      error.value = toUserMessage(err, 'mengaktifkan kembali pengguna').message
+      throw err
     } finally {
       loading.value = false
     }
@@ -151,7 +150,7 @@ export const useUsersStore = defineStore('users', () => {
       })
       const data = await res.json()
       if (!res.ok) {
-        throw new Error(data.error || 'Gagal mengubah password pengguna.')
+        throw apiErrorFromBody(res.status, data, 'PATCH')
       }
       const target = users.value.find((u) => u.id === userId)
       if (target) {
@@ -160,9 +159,8 @@ export const useUsersStore = defineStore('users', () => {
       }
       return data
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Gagal mengubah password pengguna.'
-      error.value = msg
-      throw new Error(msg)
+      error.value = toUserMessage(err, 'mengubah password pengguna').message
+      throw err
     } finally {
       loading.value = false
     }
@@ -181,7 +179,7 @@ export const useUsersStore = defineStore('users', () => {
       })
       const data = await res.json()
       if (!res.ok) {
-        throw new Error(data.error || 'Gagal mengubah role pengguna.')
+        throw apiErrorFromBody(res.status, data, 'PATCH')
       }
       const target = users.value.find((u) => u.id === userId)
       if (target) {
@@ -198,9 +196,8 @@ export const useUsersStore = defineStore('users', () => {
       }
       return data
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Gagal mengubah role pengguna.'
-      error.value = msg
-      throw new Error(msg)
+      error.value = toUserMessage(err, 'mengubah role pengguna').message
+      throw err
     } finally {
       loading.value = false
     }
@@ -218,7 +215,7 @@ export const useUsersStore = defineStore('users', () => {
       })
       const data = await res.json()
       if (!res.ok) {
-        throw new Error(data.error || 'Gagal menonaktifkan pengguna.')
+        throw apiErrorFromBody(res.status, data, 'DELETE')
       }
       const target = users.value.find((u) => u.id === userId)
       if (target) {
@@ -226,9 +223,8 @@ export const useUsersStore = defineStore('users', () => {
       }
       return data
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Gagal menonaktifkan pengguna.'
-      error.value = msg
-      throw new Error(msg)
+      error.value = toUserMessage(err, 'menonaktifkan pengguna').message
+      throw err
     } finally {
       loading.value = false
     }

@@ -8,7 +8,7 @@ const headingId = useId();
 
 <template>
   <section
-    class="bg-brand-cyan px-4 py-8 sm:px-6 sm:py-10"
+    class="bg-surface-muted px-4 py-8 sm:px-6 sm:py-10"
     :aria-labelledby="heading ? headingId : undefined"
   >
     <div class="mx-auto max-w-5xl">

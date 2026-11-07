@@ -41,7 +41,7 @@ const isDisabled = computed(() => props.disabled || props.state === 'disabled');
 const computedRel = computed(() => computeLinkRel(props.href, props.target, props.rel));
 
 const baseClasses =
-  'inline-flex items-center justify-center font-sans font-medium transition-colors duration-150 select-none text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy focus-visible:ring-offset-2';
+  'inline-flex items-center justify-center font-sans font-medium transition-colors duration-150 select-none text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
 
 const sizeClasses = computed(() => {
   if (props.variant === 'micro') {
@@ -70,41 +70,43 @@ const roundedClasses = computed(() => {
   }
 });
 
+// Navy + white only. Disabled stays readable (text-muted on surface-hover is 5.13:1) and is
+// distinguished by its flat fill, soft border, no shadow and the not-allowed cursor.
 const variantClasses = computed(() => {
   if (isDisabled.value) {
-    if (props.variant === 'secondary') {
-      return 'bg-white text-gray-400 border-2 border-gray-300 cursor-not-allowed hover:bg-white hover:text-gray-400 hover:border-gray-300 active:bg-white';
+    if (props.variant === 'secondary' || props.variant === 'micro') {
+      return 'bg-surface text-text-muted border-2 border-border cursor-not-allowed hover:bg-surface hover:text-text-muted hover:border-border active:bg-surface';
     }
     // primary default
-    return 'bg-gray-300 text-white border-2 border-gray-300 cursor-not-allowed hover:bg-gray-300 hover:text-white hover:border-gray-300 active:bg-gray-300';
+    return 'bg-surface-hover text-text-muted border-2 border-border cursor-not-allowed hover:bg-surface-hover hover:text-text-muted hover:border-border active:bg-surface-hover';
   }
 
   // Explicit static state preview (e.g. for design mockups / showcases)
   if (props.state === 'hover') {
     if (props.variant === 'secondary') {
-      return 'bg-brand-navy text-white border-2 border-brand-navy cursor-pointer';
+      return 'bg-brand-navy text-text-inverse border-2 border-brand-navy cursor-pointer';
     }
-    return 'bg-white text-brand-navy border-2 border-brand-navy cursor-pointer';
+    return 'bg-surface text-brand-navy border-2 border-brand-navy cursor-pointer';
   }
 
   if (props.state === 'active') {
     if (props.variant === 'secondary') {
-      return 'bg-brand-navy-overlay text-white border-2 border-brand-navy-overlay cursor-pointer';
+      return 'bg-brand-navy-overlay text-text-inverse border-2 border-brand-navy-overlay cursor-pointer';
     }
-    return 'bg-brand-navy/10 text-brand-navy border-2 border-brand-navy cursor-pointer';
+    return 'bg-surface-hover text-brand-navy border-2 border-brand-navy cursor-pointer';
   }
 
   // Interactive dynamic states
   if (props.variant === 'secondary') {
-    return 'bg-white text-brand-navy border-2 border-brand-navy hover:bg-brand-navy hover:text-white hover:border-brand-navy active:bg-brand-navy-overlay active:text-white active:border-brand-navy-overlay cursor-pointer';
+    return 'bg-surface text-brand-navy border-2 border-brand-navy hover:bg-brand-navy hover:text-text-inverse hover:border-brand-navy active:bg-brand-navy-overlay active:text-text-inverse active:border-brand-navy-overlay cursor-pointer';
   }
 
   if (props.variant === 'micro') {
-    return 'bg-white text-brand-navy border border-brand-navy hover:bg-brand-navy hover:text-white hover:border-brand-navy active:bg-brand-navy/10 active:text-brand-navy cursor-pointer';
+    return 'bg-surface text-brand-navy border border-brand-navy hover:bg-brand-navy hover:text-text-inverse hover:border-brand-navy active:bg-surface-hover active:text-brand-navy cursor-pointer';
   }
 
   // primary default
-  return 'bg-brand-navy text-white border-2 border-brand-navy hover:bg-white hover:text-brand-navy hover:border-brand-navy active:bg-brand-navy/10 active:text-brand-navy active:border-brand-navy shadow-sm cursor-pointer';
+  return 'bg-brand-navy text-text-inverse border-2 border-brand-navy hover:bg-surface hover:text-brand-navy hover:border-brand-navy active:bg-surface-hover active:text-brand-navy active:border-brand-navy shadow-sm cursor-pointer';
 });
 
 const iconSizeClasses = computed(() => {

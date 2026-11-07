@@ -178,8 +178,8 @@ onBeforeUnmount(() => observer?.disconnect());
 
     <main id="main-content" class="grow pb-24 lg:pb-12">
       <div v-if="isLoading" class="mx-auto max-w-3xl px-4 py-16 sm:px-6" data-test="cerita-loading">
-        <div class="h-8 w-2/3 animate-pulse rounded-md bg-slate-200" />
-        <div class="mt-4 h-4 w-full animate-pulse rounded-md bg-slate-100" />
+        <div class="h-8 w-2/3 animate-pulse rounded-md bg-surface-hover" />
+        <div class="mt-4 h-4 w-full animate-pulse rounded-md bg-surface-muted" />
       </div>
 
       <div
@@ -187,8 +187,8 @@ onBeforeUnmount(() => observer?.disconnect());
         class="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6"
         data-test="cerita-not-found"
       >
-        <h1 class="text-lg font-semibold text-slate-900">Halaman tidak ditemukan</h1>
-        <p class="mt-2 text-sm text-slate-600">
+        <h1 class="text-lg font-semibold text-brand-navy">Halaman tidak ditemukan</h1>
+        <p class="mt-2 text-sm text-text-muted">
           Halaman yang Anda cari tidak tersedia. Periksa kembali tautan yang Anda gunakan.
         </p>
       </div>
@@ -198,8 +198,8 @@ onBeforeUnmount(() => observer?.disconnect());
         class="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6"
         data-test="cerita-error"
       >
-        <h1 class="text-lg font-semibold text-slate-900">Gagal memuat halaman</h1>
-        <p class="mt-2 text-sm text-slate-600">
+        <h1 class="text-lg font-semibold text-brand-navy">Gagal memuat halaman</h1>
+        <p class="mt-2 text-sm text-text-muted">
           Terjadi kesalahan saat memuat data. Periksa koneksi Anda dan coba lagi.
         </p>
         <button
@@ -227,7 +227,7 @@ onBeforeUnmount(() => observer?.disconnect());
             @navigate="handleNavigate"
           />
 
-          <div class="min-w-0 flex-1 divide-y divide-slate-100">
+          <div class="min-w-0 flex-1 divide-y divide-border">
             <ChapterSection
               v-for="chapter in page.chapters"
               :key="chapter.id"

@@ -301,15 +301,19 @@ describe('users store', () => {
       }
       return {
         ok: false,
+        status: 400,
         json: async () => ({ error: 'Password terlalu lemah atau umum digunakan.' }),
       } as Response
     })
     globalThis.fetch = fetchMock
 
     const store = useUsersStore()
-    await expect(store.changeUserPassword('user-123', 'password123')).rejects.toThrow(
-      'Password terlalu lemah atau umum digunakan.',
+    await expect(store.changeUserPassword('user-123', 'password123')).rejects.toMatchObject({
+      status: 400,
+      serverMessage: 'Password terlalu lemah atau umum digunakan.',
+    })
+    expect(store.error).toBe(
+      'Gagal mengubah password pengguna. Password terlalu lemah atau umum digunakan.',
     )
-    expect(store.error).toBe('Password terlalu lemah atau umum digunakan.')
   })
 })

@@ -5,6 +5,7 @@ import { createRouter, createMemoryHistory } from 'vue-router';
 import UserManagement from '../views/UserManagement.vue';
 import AdminLayout from '../layouts/AdminLayout.vue';
 import { useAuthStore } from '../stores/auth';
+import { USER_MESSAGES } from '../utils/userMessages';
 
 function createTestRouter() {
   return createRouter({
@@ -270,7 +271,9 @@ describe('UserManagement.vue — create user flow', () => {
     await wrapper.find('form').trigger('submit.prevent');
     await flushPromises();
 
-    expect(wrapper.find('[role="alert"]').text()).toContain('Email sudah terdaftar.');
+    expect(wrapper.find('[role="alert"]').text()).toContain(
+      `Gagal membuat pengguna. ${USER_MESSAGES.conflict}`,
+    );
   });
 });
 

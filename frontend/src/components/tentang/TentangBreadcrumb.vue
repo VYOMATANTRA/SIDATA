@@ -14,7 +14,7 @@ withDefaults(
 </script>
 
 <template>
-  <nav aria-label="Breadcrumb" class="border-b border-gray-200 bg-white px-4 py-3 sm:px-6">
+  <nav aria-label="Breadcrumb" class="border-b border-border bg-white px-4 py-3 sm:px-6">
     <ol class="mx-auto flex max-w-5xl items-center gap-2 text-base">
       <li>
         <RouterLink
@@ -24,13 +24,13 @@ withDefaults(
         >
           {{ parentLabel }}
         </RouterLink>
-        <span v-else class="text-gray-500 font-medium">
+        <span v-else class="text-text-muted font-medium">
           {{ parentLabel }}
         </span>
       </li>
-      <li aria-hidden="true" class="text-gray-400">&gt;</li>
+      <li aria-hidden="true" class="text-text-muted">&gt;</li>
       <li>
-        <span class="text-gray-700" aria-current="page">{{ label }}</span>
+        <span class="text-text-muted" aria-current="page">{{ label }}</span>
       </li>
     </ol>
   </nav>

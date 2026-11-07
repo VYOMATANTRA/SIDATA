@@ -5,6 +5,7 @@ import DataManagementView from '../views/DataManagementView.vue';
 import type { Indicator } from '../stores/indicators.store';
 import type { IndicatorTable } from '../stores/indicatorTables.store';
 import { useAuthStore } from '../stores/auth';
+import { USER_MESSAGES } from '../utils/userMessages';
 
 const CREATED = '2026-01-01T00:00:00.000Z';
 
@@ -311,7 +312,7 @@ describe('DataManagementView.vue', () => {
 
     const dialog = wrapper.find('[role="dialog"]');
     expect(dialog.exists()).toBe(true);
-    expect(dialog.text()).toContain('Baris 12 bentrok dengan data lain.');
+    expect(dialog.text()).toContain(`Gagal menyimpan perubahan tabel. ${USER_MESSAGES.conflict}`);
 
     // The save is one atomic PATCH, so a failure wrote nothing and there is nothing to reconcile.
     // A refetch here is what used to wipe the drafts: it replaces `table`, and the form resets

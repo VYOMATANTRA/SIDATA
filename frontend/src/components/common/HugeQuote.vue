@@ -94,7 +94,7 @@ const containerVariantClasses = computed(() => {
     case 'navy':
       return 'bg-brand-navy border border-white/10 text-white shadow-md';
     case 'light':
-      return 'bg-white border border-slate-200 text-slate-900 shadow-xs';
+      return 'bg-white border border-border text-brand-navy shadow-xs';
     case 'transparent':
       return 'bg-transparent text-white';
     case 'dark':
@@ -180,7 +180,7 @@ const containerVariantClasses = computed(() => {
             </slot>
           </template>
           <template v-else #default>
-            <span class="text-base leading-relaxed text-slate-200/95">
+            <span class="text-base leading-relaxed text-text-inverse-muted">
               {{ effectiveAuthorPosition }}
             </span>
           </template>
@@ -209,8 +209,8 @@ const containerVariantClasses = computed(() => {
             class="mb-6 mr-4 flex h-56 w-44 flex-col items-center justify-center rounded-2xl border-2 border-dashed p-4 text-center transition-colors sm:mb-8 sm:mr-0 sm:h-72 sm:w-60 md:mb-10"
             :class="[
               variant === 'light'
-                ? 'border-slate-300 bg-slate-100/80 text-slate-600'
-                : 'border-white/20 bg-white/5 text-slate-300 backdrop-blur-xs',
+                ? 'border-border bg-surface-muted text-text-muted'
+                : 'border-white/20 bg-white/5 text-text-inverse-muted backdrop-blur-xs',
             ]"
             data-test="portrait-placeholder"
             role="img"
@@ -220,7 +220,7 @@ const containerVariantClasses = computed(() => {
             <div
               class="mb-3 flex h-16 w-16 items-center justify-center rounded-full"
               :class="
-                variant === 'light' ? 'bg-slate-200 text-slate-500' : 'bg-white/10 text-slate-300'
+                variant === 'light' ? 'bg-surface-hover text-text-muted' : 'bg-white/10 text-text-inverse-muted'
               "
               aria-hidden="true"
             >
@@ -245,7 +245,7 @@ const containerVariantClasses = computed(() => {
             <span class="text-xs font-semibold">Foto Pimpinan</span>
             <span
               class="mt-1 text-[10px] leading-tight"
-              :class="variant === 'light' ? 'text-slate-500' : 'text-slate-400'"
+              :class="variant === 'light' ? 'text-text-muted' : 'text-text-inverse-muted'"
             >
               Prop dinamis: <code class="font-mono">imageSrc</code>
             </span>

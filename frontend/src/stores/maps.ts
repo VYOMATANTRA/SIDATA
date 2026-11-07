@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import type { SpatialPointDTO, SpatialPointType, MapSummaryDTO, RtLeaderDTO } from '../types/maps';
 import { fetchSpatialPoints, fetchMapSummary } from '../services/maps.service';
+import { toUserMessage } from '../utils/userMessages';
 
 export const useMapsStore = defineStore('maps', () => {
   const points = ref<SpatialPointDTO[]>([]);
@@ -72,7 +73,7 @@ export const useMapsStore = defineStore('maps', () => {
       }
     } catch (err) {
       if (requestId !== loadPointsRequest) return;
-      error.value = err instanceof Error ? err.message : 'Gagal memuat titik peta';
+      error.value = toUserMessage(err, 'memuat titik peta', 'GET').message;
     } finally {
       if (requestId === loadPointsRequest) {
         isLoading.value = false;
@@ -89,7 +90,7 @@ export const useMapsStore = defineStore('maps', () => {
       if (requestId === loadSummaryRequest) summary.value = fetched;
     } catch (err) {
       if (requestId === loadSummaryRequest) {
-        summaryError.value = err instanceof Error ? err.message : 'Gagal memuat ringkasan peta';
+        summaryError.value = toUserMessage(err, 'memuat ringkasan peta', 'GET').message;
       }
     } finally {
       if (requestId === loadSummaryRequest) isSummaryLoading.value = false;
