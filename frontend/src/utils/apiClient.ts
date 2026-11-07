@@ -1,5 +1,8 @@
 import { useAuthStore } from '../stores/auth';
 import { getCsrfToken } from './csrf';
+import { REFRESH_UNAVAILABLE_MESSAGE, SESSION_EXPIRED_MESSAGE } from './userMessages';
+
+export { REFRESH_UNAVAILABLE_MESSAGE, SESSION_EXPIRED_MESSAGE };
 
 /**
  * Shared fetch wrapper for the CMS/editor endpoints. The backend mounts
@@ -10,23 +13,6 @@ import { getCsrfToken } from './csrf';
  * instead of adding a third and fourth copy.
  */
 const MUTATING_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
-
-/**
- * Shown when a request is rejected with 401 and the silent refresh cannot restore the session.
- * The API's own message ("Token tidak valid") is accurate but unhelpful to someone who just
- * spent ten minutes filling a form.
- */
-export const SESSION_EXPIRED_MESSAGE =
-  'Sesi Anda berakhir. Silakan masuk kembali — isi formulir ini belum dikirim.';
-
-/**
- * Shown when the 401 refresh could not even be attempted (network error) or the server failed
- * (5xx). The client cannot tell whether the session is still valid — the access token already
- * got a 401 and the refresh never finished — so the wording promises nothing and asks for a
- * retry instead of pushing the user to discard a draft.
- */
-export const REFRESH_UNAVAILABLE_MESSAGE =
-  'Koneksi ke server bermasalah; coba simpan lagi sebentar lagi.';
 
 /** Error carrying the HTTP status, so callers can branch on 409/422 without string matching. */
 export class ApiError extends Error {
