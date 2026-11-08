@@ -222,7 +222,12 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
         replaceTemplate(data.template);
         return { ok: true, template: data.template };
       } catch (err) {
-        if (err instanceof ApiError && err.status === 409 && attempt < MAX_SLUG_RETRIES) {
+        if (
+          err instanceof ApiError &&
+          err.status === 409 &&
+          err.code === 'SLUG_TAKEN' &&
+          attempt < MAX_SLUG_RETRIES
+        ) {
           await fetchTemplates(true);
           continue;
         }

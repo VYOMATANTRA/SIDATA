@@ -451,7 +451,8 @@ RESTRICT` (MySQL forbids CASCADE/SET NULL on a column used in a `CHECK`), so a t
   `/:id` (Editor or Admin — templates are not public content, only the rendered sentence is);
   mutated via Admin-only `POST` / `PATCH /:id` / `DELETE /:id` (CSRF-protected, logged as
   `comparison_template.created` / `.updated` / `.deleted`, plus the override action in §3;
-  `PATCH /:id` carries required `expectedUpdatedAt` and answers 409 `STALE_WRITE` on concurrent modification),
+  `PATCH /:id` carries required `expectedUpdatedAt` and answers 409 `STALE_WRITE` on concurrent modification;
+  unique-slug conflicts on `POST` and `PATCH` answer 409 `SLUG_TAKEN`),
   and the Admin-only, stateless `POST /preview` of §5 (no table access, no audit row).
   Seeded with a default `perbandingan-tahunan` template.
 

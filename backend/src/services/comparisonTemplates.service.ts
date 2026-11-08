@@ -357,6 +357,7 @@ export const createComparisonTemplate = async (
       throw new ComparisonTemplateServiceError(
         `Slug '${input.slug}' sudah digunakan template lain.`,
         409,
+        { code: 'SLUG_TAKEN' },
       );
     }
     throw error;
@@ -463,7 +464,9 @@ export const updateComparisonTemplate = async (
   } catch (error) {
     if (error instanceof ComparisonTemplateServiceError) throw error;
     if (isPrismaKnownError(error, 'P2002')) {
-      throw new ComparisonTemplateServiceError('Slug sudah digunakan template lain.', 409);
+      throw new ComparisonTemplateServiceError('Slug sudah digunakan template lain.', 409, {
+        code: 'SLUG_TAKEN',
+      });
     }
     if (isPrismaKnownError(error, 'P2025')) {
       throw new ComparisonTemplateServiceError('Template tidak ditemukan.', 404);

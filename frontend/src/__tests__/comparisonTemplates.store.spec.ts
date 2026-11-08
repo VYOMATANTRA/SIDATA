@@ -254,6 +254,52 @@ describe('comparison templates store', () => {
       const message = (outcome as { message: string }).message;
       expect(message).toContain('Kalimat perbandingan tidak memenuhi kaidah bahasa.');
     });
+
+    it('retries create on 409 SLUG_TAKEN up to MAX_SLUG_RETRIES times', async () => {
+      let postCount = 0;
+      let getCount = 0;
+      route({
+        'POST /api/comparison-templates': () => {
+          postCount += 1;
+          if (postCount < 3) {
+            return json({ error: 'Slug sudah dipakai', code: 'SLUG_TAKEN' }, 409);
+          }
+          return json({ template: makeTemplate({ slug: 'perbandingan-3' }) });
+        },
+        'GET /api/comparison-templates': () => {
+          getCount += 1;
+          return json({ templates: [makeTemplate({ slug: `perbandingan-${getCount}` })] });
+        },
+      });
+      const store = useComparisonTemplatesStore();
+      const outcome = await store.createTemplate(DRAFT);
+
+      expect(outcome.ok).toBe(true);
+      expect(postCount).toBe(3);
+      expect(getCount).toBe(2);
+    });
+
+    it('does not retry create on 409 without SLUG_TAKEN code (issues exactly 1 request)', async () => {
+      let postCount = 0;
+      let getCount = 0;
+      route({
+        'POST /api/comparison-templates': () => {
+          postCount += 1;
+          return json({ error: 'Konflik lain tanpa kode' }, 409);
+        },
+        'GET /api/comparison-templates': () => {
+          getCount += 1;
+          return json({ templates: [] });
+        },
+      });
+      const store = useComparisonTemplatesStore();
+      const outcome = await store.createTemplate(DRAFT);
+
+      expect(outcome.ok).toBe(false);
+      expect(outcome).toMatchObject({ kind: 'error' });
+      expect(postCount).toBe(1);
+      expect(getCount).toBe(0);
+    });
   });
 
   describe('describeTemplateFailure', () => {

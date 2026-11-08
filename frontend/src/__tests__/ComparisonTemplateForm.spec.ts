@@ -496,7 +496,7 @@ describe('ComparisonTemplateForm', () => {
         await builder.find('textarea').setValue('x');
       }
       saveResponses.push(
-        () => json({ error: 'Slug sudah digunakan' }, 409),
+        () => json({ error: 'Slug sudah digunakan', code: 'SLUG_TAKEN' }, 409),
         // refetch of the list shows the key is now taken
         () => json({ templates: [makeTemplate({ slug: 'perbandingan-tahunan' })] }),
         () => json({ template: makeTemplate({ id: 'tpl-9', slug: 'perbandingan-tahunan-2' }) }),
@@ -510,6 +510,26 @@ describe('ComparisonTemplateForm', () => {
         'perbandingan-tahunan-2',
       ]);
       expect(wrapper.emitted('saved')).toHaveLength(1);
+      wrapper.unmount();
+    });
+
+    it('does not retry create when 409 does not carry SLUG_TAKEN', async () => {
+      const wrapper = mountForm(null);
+      await wrapper.find('#templat-nama').setValue('Perbandingan tahunan');
+      const body = wrapper.find('[data-test="builder-body"]');
+      await body.find('[data-chip="trend"]').trigger('click');
+      for (const field of ['trendNaik', 'trendTurun', 'trendTetap']) {
+        const builder = wrapper.find(`[data-test="builder-${field}"]`);
+        await builder.find('[data-action="add-text"]').trigger('click');
+        await builder.find('textarea').setValue('x');
+      }
+      saveResponses.push(() => json({ error: 'Konflik lain' }, 409));
+
+      await submit(wrapper);
+
+      const posts = saves().filter((c) => c.method === 'POST');
+      expect(posts).toHaveLength(1);
+      expect(wrapper.emitted('saved')).toBeUndefined();
       wrapper.unmount();
     });
   });

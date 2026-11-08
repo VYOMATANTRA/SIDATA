@@ -308,7 +308,7 @@ describe('comparisonTemplates.controller createComparisonTemplateHandler', () =>
     );
 
     assert.equal(res.status, 409);
-    assert.deepEqual(Object.keys(res.body as AnyRecord), ['error']);
+    assert.equal((res.body as AnyRecord)['code'], 'SLUG_TAKEN');
   });
 
   it('returns 422 with { error, code, warnings } when a trend word sits outside {trend}', async () => {
@@ -474,6 +474,7 @@ describe('comparisonTemplates.controller updateComparisonTemplateHandler', () =>
     );
 
     assert.equal(res.status, 409);
+    assert.equal((res.body as AnyRecord)['code'], 'SLUG_TAKEN');
   });
 
   it('returns 422 with { error, code, warnings } for a flagged body edit', async () => {

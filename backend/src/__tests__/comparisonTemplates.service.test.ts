@@ -748,11 +748,12 @@ describe('comparisonTemplates.service createComparisonTemplate', () => {
         throw prismaError('P2002');
       };
 
-      await assertServiceError(
+      const err = await assertServiceError(
         createComparisonTemplate(validPayload(), ACTOR, CONTEXT),
         409,
         /perbandingan-tahunan/,
       );
+      assert.equal(err.code, 'SLUG_TAKEN');
     });
 
     it('lets an audit-write failure fail the request instead of swallowing it', async () => {
@@ -880,7 +881,8 @@ describe('comparisonTemplates.service updateComparisonTemplate', () => {
         throw prismaError('P2002');
       };
 
-      await assertServiceError(update({ slug: 'dipakai' }), 409);
+      const err = await assertServiceError(update({ slug: 'dipakai' }), 409);
+      assert.equal(err.code, 'SLUG_TAKEN');
     });
   });
 
