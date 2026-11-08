@@ -113,6 +113,12 @@ watch(isModal, (modal) => {
     releaseScrollLock ??= acquireBodyScrollLock();
   } else {
     releaseLock();
+    const hadFocusInDrawer = Boolean(panelRef.value?.contains(document.activeElement));
+    if (isMenuOpen.value && hadFocusInDrawer) {
+      void nextTick(() => {
+        toggleButtonRef.value?.focus();
+      });
+    }
   }
 });
 

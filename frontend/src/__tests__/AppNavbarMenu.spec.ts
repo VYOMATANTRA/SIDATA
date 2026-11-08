@@ -217,6 +217,26 @@ describe('AppNavbar menu: mobile modal sheet', () => {
     wrapper.unmount();
   });
 
+  it('ignores hidden modal dialogs when handling Escape', async () => {
+    const { wrapper } = await mountNavbar();
+    await toggle(wrapper).trigger('click');
+
+    const hidden = document.createElement('div');
+    hidden.setAttribute('role', 'dialog');
+    hidden.setAttribute('aria-modal', 'true');
+    hidden.style.display = 'none';
+    document.body.appendChild(hidden);
+
+    wrapper.find<HTMLAnchorElement>('[data-test="first"]').element.focus();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await wrapper.vm.$nextTick();
+
+    expect(toggle(wrapper).attributes('aria-expanded')).toBe('false');
+
+    hidden.remove();
+    wrapper.unmount();
+  });
+
   it('locks body scroll while open and restores the original overflow on close', async () => {
     document.body.style.overflow = 'auto';
     const { wrapper } = await mountNavbar();
@@ -420,6 +440,23 @@ describe('AppNavbar menu: resizing across the md breakpoint while open', () => {
     document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     await wrapper.vm.$nextTick();
     expect(toggle(wrapper).attributes('aria-expanded')).toBe('false');
+    wrapper.unmount();
+  });
+
+  it('phone to desktop: restores focus to toggle when focus was inside drawer', async () => {
+    const viewport = stubResizableViewport(false);
+    const { wrapper } = await mountNavbar();
+    await toggle(wrapper).trigger('click');
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    expect(panel(wrapper).element.contains(document.activeElement)).toBe(true);
+
+    viewport.setMatches(true);
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    expect(document.activeElement).toBe(toggle(wrapper).element);
     wrapper.unmount();
   });
 

@@ -50,7 +50,9 @@ export function isEventFromOpenDialog(event: KeyboardEvent, ignore?: HTMLElement
   if (enclosing && !isOwn(enclosing)) {
     return true;
   }
-  return Array.from(document.querySelectorAll(OPEN_MODAL_SELECTOR)).some((el) => !isOwn(el));
+  return Array.from(document.querySelectorAll<HTMLElement>(OPEN_MODAL_SELECTOR))
+    .filter(isElementVisible)
+    .some((el) => !isOwn(el));
 }
 
 /**
