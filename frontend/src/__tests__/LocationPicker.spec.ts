@@ -1410,6 +1410,99 @@ describe('LocationPicker', () => {
       expect(onClose).toHaveBeenCalledTimes(1);
     });
 
+    it('prevents Escape from closing a surrounding BaseModal when focus is on the toggle button', async () => {
+      const onClose = vi.fn<() => void>();
+      const modal = mount(BaseModal, {
+        props: { open: true, title: 'Uji modal' },
+        slots: {
+          default: () => h(LocationPicker, { label: 'Uji lokasi', modelValue: PIN, clearable: true }),
+        },
+        attrs: { onClose },
+        attachTo: document.body,
+      });
+      mounted.push(modal);
+      await flushPromises();
+      const toggle = document.querySelector<HTMLButtonElement>(
+        '[data-test="location-picker-keyboard"]',
+      )!;
+      toggle.click();
+      await nextTick();
+      expect(toggle.getAttribute('aria-pressed')).toBe('true');
+
+      toggle.focus();
+      const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      toggle.dispatchEvent(event);
+      await nextTick();
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(onClose).not.toHaveBeenCalled();
+      expect(toggle.getAttribute('aria-pressed')).toBe('false');
+      expect(document.activeElement).toBe(toggle);
+    });
+
+    it('prevents Escape from closing a surrounding BaseModal when focus is on a zoom button', async () => {
+      const onClose = vi.fn<() => void>();
+      const modal = mount(BaseModal, {
+        props: { open: true, title: 'Uji modal' },
+        slots: {
+          default: () => h(LocationPicker, { label: 'Uji lokasi', modelValue: PIN, clearable: true }),
+        },
+        attrs: { onClose },
+        attachTo: document.body,
+      });
+      mounted.push(modal);
+      await flushPromises();
+      const toggle = document.querySelector<HTMLButtonElement>(
+        '[data-test="location-picker-keyboard"]',
+      )!;
+      toggle.click();
+      await nextTick();
+      expect(toggle.getAttribute('aria-pressed')).toBe('true');
+
+      const zoomIn = document.querySelector<HTMLButtonElement>(
+        '[data-test="location-picker-zoom-in"]',
+      )!;
+      const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      zoomIn.dispatchEvent(event);
+      await nextTick();
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(onClose).not.toHaveBeenCalled();
+      expect(toggle.getAttribute('aria-pressed')).toBe('false');
+      expect(document.activeElement).toBe(toggle);
+    });
+
+    it('does not swallow Escape when focus is outside the picker', async () => {
+      const onClose = vi.fn<() => void>();
+      const modal = mount(BaseModal, {
+        props: { open: true, title: 'Uji modal' },
+        slots: {
+          default: () => [
+            h('button', { id: 'outside-btn' }, 'Outside'),
+            h(LocationPicker, { label: 'Uji lokasi', modelValue: PIN, clearable: true }),
+          ],
+        },
+        attrs: { onClose },
+        attachTo: document.body,
+      });
+      mounted.push(modal);
+      await flushPromises();
+      const toggle = document.querySelector<HTMLButtonElement>(
+        '[data-test="location-picker-keyboard"]',
+      )!;
+      toggle.click();
+      await nextTick();
+      expect(toggle.getAttribute('aria-pressed')).toBe('true');
+
+      const outsideBtn = document.querySelector<HTMLButtonElement>('#outside-btn')!;
+      outsideBtn.focus();
+      const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      outsideBtn.dispatchEvent(event);
+      await nextTick();
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
     it('removes the window Escape listener on unmount', async () => {
       const add = vi.spyOn(window, 'addEventListener');
       const remove = vi.spyOn(window, 'removeEventListener');

@@ -105,6 +105,7 @@ const keysId = computed(() => `${baseId.value}-keys`);
 const detectErrorId = computed(() => `${baseId.value}-detect-error`);
 const mapDataTest = computed(() => props.mapTestId ?? `${props.testId}-map`);
 
+const root = ref<HTMLElement | null>(null);
 const container = ref<HTMLElement | null>(null);
 const region = ref<HTMLElement | null>(null);
 const keyboardToggle = ref<HTMLButtonElement | null>(null);
@@ -720,7 +721,7 @@ function onKeydown(event: KeyboardEvent): void {
  */
 function escapeGuard(event: KeyboardEvent): void {
   if (event.key !== 'Escape' || !keyboardMode.value) return;
-  if (!(event.target instanceof Node) || !region.value?.contains(event.target)) return;
+  if (!(event.target instanceof Node) || !root.value?.contains(event.target)) return;
   event.preventDefault();
   event.stopPropagation();
   keyboardMode.value = false;
@@ -770,6 +771,7 @@ const toggleOffClasses = 'bg-surface text-brand-navy hover:bg-surface-hover';
 
 <template>
   <fieldset
+    ref="root"
     class="min-w-0 space-y-3 border-0 p-0"
     :aria-describedby="groupDescribedBy"
     :data-test="testId"

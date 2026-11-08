@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, h } from 'vue';
+import { defineComponent, h, nextTick } from 'vue';
 import { mount, flushPromises } from '@vue/test-utils';
 import RtLocationPicker from '../components/maps/RtLocationPicker.vue';
+import BaseModal from '../components/common/BaseModal.vue';
 import { leafletState, resetLeafletMock } from './leafletMock';
 
 vi.mock('leaflet', async () => (await import('./leafletMock')).createLeafletMock());
@@ -72,6 +73,50 @@ describe('RT location picker', () => {
     const ids = Array.from(document.querySelectorAll('[id]')).map((element) => element.id);
     expect(ids.length).toBeGreaterThan(0);
     expect(new Set(ids).size).toBe(ids.length);
+    wrapper.unmount();
+  });
+
+  it('survives Escape when focus is on the keyboard toggle and keeps the draft', async () => {
+    const onClose = vi.fn<() => void>();
+    const ModalWrapper = defineComponent({
+      props: ['modelValue'],
+      emits: ['update:modelValue'],
+      render() {
+        return h(
+          BaseModal,
+          { open: true, title: 'Edit RT', onClose },
+          {
+            default: () =>
+              h(RtLocationPicker, {
+                modelValue: this.modelValue,
+                'onUpdate:modelValue': (val: unknown) => this.$emit('update:modelValue', val),
+              }),
+          },
+        );
+      },
+    });
+
+    const wrapper = mount(ModalWrapper, {
+      props: { modelValue: { latitude: -1.25, longitude: 116.95 } },
+      attachTo: document.body,
+    });
+    await flushPromises();
+
+    const toggle = document.querySelector<HTMLButtonElement>(
+      '[data-test="rt-location-keyboard"]',
+    )!;
+    toggle.click();
+    await nextTick();
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+
+    toggle.focus();
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    toggle.dispatchEvent(event);
+    await nextTick();
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    expect(wrapper.props('modelValue')).toEqual({ latitude: -1.25, longitude: 116.95 });
     wrapper.unmount();
   });
 });
