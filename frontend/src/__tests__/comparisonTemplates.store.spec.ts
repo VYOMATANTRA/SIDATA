@@ -83,6 +83,34 @@ describe('comparison templates store', () => {
     expect(store.error).toContain('Gagal memuat daftar templat kalimat.');
     expect(store.error).not.toMatch(/ER_BAD|stack|500/);
     expect(store.templates).toHaveLength(1);
+    expect(store.selectorError).toBeNull();
+  });
+
+  it('records failure in selectorError (and leaves error null) when called with forSelector: true', async () => {
+    route({
+      'GET /api/comparison-templates': () => json({ error: 'network down' }, 500),
+    });
+    const store = useComparisonTemplatesStore();
+
+    await store.fetchTemplates({ force: true, forSelector: true });
+
+    expect(store.selectorError).toContain('Gagal memuat daftar templat kalimat.');
+    expect(store.error).toBeNull();
+
+    store.clearSelectorError();
+    expect(store.selectorError).toBeNull();
+  });
+
+  it('records failure in error (and leaves selectorError null) when called without forSelector', async () => {
+    route({
+      'GET /api/comparison-templates': () => json({ error: 'network down' }, 500),
+    });
+    const store = useComparisonTemplatesStore();
+
+    await store.fetchTemplates(true);
+
+    expect(store.error).toContain('Gagal memuat daftar templat kalimat.');
+    expect(store.selectorError).toBeNull();
   });
 
   describe('delete', () => {

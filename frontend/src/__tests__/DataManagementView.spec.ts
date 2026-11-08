@@ -5,6 +5,7 @@ import DataManagementView from '../views/DataManagementView.vue';
 import type { Indicator } from '../stores/indicators.store';
 import type { IndicatorTable } from '../stores/indicatorTables.store';
 import { useAuthStore } from '../stores/auth';
+import { useComparisonTemplatesStore } from '../stores/comparisonTemplates.store';
 import { USER_MESSAGES } from '../utils/userMessages';
 
 const CREATED = '2026-01-01T00:00:00.000Z';
@@ -50,6 +51,8 @@ const table: IndicatorTable = {
 interface FetchOverrides {
   /** Answers `PATCH /api/indicator-tables/tbl-1`; the default succeeds with the stored detail. */
   tablePatch?: (body: Record<string, unknown>) => Response;
+  /** Answers `GET /api/comparison-templates`; defaults to empty templates array. */
+  templatesResponse?: () => Response;
 }
 
 function installFetchMock(overrides: FetchOverrides = {}) {
@@ -142,6 +145,13 @@ function installFetchMock(overrides: FetchOverrides = {}) {
 
     if (url === '/api/indicator-tables/tbl-1') {
       return json({ table: tableDetail() });
+    }
+
+    if (url === '/api/comparison-templates') {
+      if (overrides.templatesResponse) {
+        return overrides.templatesResponse();
+      }
+      return json({ templates: [] });
     }
 
     throw new Error(`unexpected fetch: ${url}`);
@@ -414,6 +424,50 @@ describe('DataManagementView.vue', () => {
     expect(wrapper.text()).toContain('Pengaturan Publik Portal');
     expect(wrapper.text()).toContain('Kelurahan Manggar');
 
+    wrapper.unmount();
+  });
+
+  it('does not render template-error note in scalar form when an earlier admin page fetch failed', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const templatesStore = useComparisonTemplatesStore();
+    templatesStore.error = 'Gagal memuat daftar templat kalimat dari admin page';
+
+    const wrapper = mount(DataManagementView, {
+      global: {
+        plugins: [pinia],
+        stubs: { RouterLink: true, teleport: true },
+      },
+    });
+    await flushPromises();
+
+    const editButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Total Penduduk'));
+    await editButton?.trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="template-error"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("renders template-error note in scalar form when the form's own template fetch fails", async () => {
+    installFetchMock({
+      templatesResponse: () => json({ error: 'Server error' }, false, 500),
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+
+    const editButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Total Penduduk'));
+    await editButton?.trigger('click');
+    await flushPromises();
+
+    const errorNote = wrapper.find('[data-test="template-error"]');
+    expect(errorNote.exists()).toBe(true);
+    expect(errorNote.text()).toContain('Gagal memuat daftar templat kalimat.');
     wrapper.unmount();
   });
 });

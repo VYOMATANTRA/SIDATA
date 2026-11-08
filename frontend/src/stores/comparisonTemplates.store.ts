@@ -144,13 +144,21 @@ function parseWarnings(body: unknown): TrendWarning[] {
 
 const MAX_SLUG_RETRIES = 3;
 
+export interface FetchTemplatesOptions {
+  force?: boolean;
+  forSelector?: boolean;
+}
+
 export const useComparisonTemplatesStore = defineStore('comparisonTemplates', () => {
   const templates = ref<ComparisonTemplate[]>([]);
   const isLoading = ref(false);
   const isLoaded = ref(false);
   const error = ref<string | null>(null);
+  const selectorError = ref<string | null>(null);
 
   let inFlight: Promise<void> | null = null;
+  let inFlightForSelector = false;
+  let inFlightForAdmin = false;
 
   function replaceTemplate(updated: ComparisonTemplate): void {
     const index = templates.value.findIndex((item) => item.id === updated.id);
@@ -165,12 +173,29 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
     templates.value = next;
   }
 
-  async function fetchTemplates(force = false): Promise<void> {
+  function clearSelectorError(): void {
+    selectorError.value = null;
+  }
+
+  async function fetchTemplates(
+    options: boolean | FetchTemplatesOptions = false,
+  ): Promise<void> {
+    const force = typeof options === 'boolean' ? options : Boolean(options.force);
+    const forSelector = typeof options === 'object' && Boolean(options.forSelector);
+
     if (isLoaded.value && !force) return;
+
+    if (forSelector) {
+      selectorError.value = null;
+      inFlightForSelector = true;
+    } else {
+      error.value = null;
+      inFlightForAdmin = true;
+    }
+
     if (inFlight) return inFlight;
 
     isLoading.value = true;
-    error.value = null;
 
     inFlight = (async () => {
       try {
@@ -179,12 +204,26 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
         );
         templates.value = Array.isArray(data.templates) ? data.templates : [];
         isLoaded.value = true;
+        error.value = null;
+        selectorError.value = null;
       } catch (err) {
         // A failed refetch keeps the rows already on screen rather than blanking the list.
-        error.value = describeTemplateFailure(err, 'memuat daftar templat kalimat', 'GET');
+        const failureMessage = describeTemplateFailure(
+          err,
+          'memuat daftar templat kalimat',
+          'GET',
+        );
+        if (inFlightForSelector) {
+          selectorError.value = failureMessage;
+        }
+        if (inFlightForAdmin) {
+          error.value = failureMessage;
+        }
       } finally {
         isLoading.value = false;
         inFlight = null;
+        inFlightForSelector = false;
+        inFlightForAdmin = false;
       }
     })();
 
@@ -321,10 +360,12 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
     isLoading,
     isLoaded,
     error,
+    selectorError,
     fetchTemplates,
     createTemplate,
     updateTemplate,
     deleteTemplate,
     previewTemplate,
+    clearSelectorError,
   };
 });

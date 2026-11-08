@@ -283,9 +283,12 @@ function openScalar(indicator: Indicator): void {
   activeContentBlock.value = null;
   isEditingSettings.value = false;
   activeScalar.value = indicator;
+  templatesStore.clearSelectorError();
   // Only a computed-comparison indicator can be given a template, so only then is the list
   // worth fetching. Editors may read it; a failure shows beside the selector, not as a blocker.
-  if (indicator.isComputedComparison) void templatesStore.fetchTemplates(true);
+  if (indicator.isComputedComparison) {
+    void templatesStore.fetchTemplates({ force: true, forSelector: true });
+  }
 }
 
 /**
@@ -358,6 +361,7 @@ function resetEditor(): void {
   isEditingSettings.value = false;
   isTableDetailLoading.value = false;
   serverError.value = '';
+  templatesStore.clearSelectorError();
 }
 
 async function handleContentBlockSubmit(payload: {
@@ -617,7 +621,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
         :busy="saving"
         :server-error="serverError"
         :templates="templatesStore.templates"
-        :templates-error="templatesStore.error ?? ''"
+        :templates-error="templatesStore.selectorError ?? ''"
         @submit="handleScalarSubmit"
         @cancel="resetEditor"
       />
