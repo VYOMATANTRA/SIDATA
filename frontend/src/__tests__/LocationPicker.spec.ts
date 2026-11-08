@@ -1228,6 +1228,22 @@ describe('LocationPicker', () => {
       expect(lastEmitted(wrapper)).toEqual({ latitude: -1.3, longitude: 116.9 });
     });
 
+    it('cancels in-flight geolocation and ignores late result when parent replaces modelValue', async () => {
+      const wrapper = await mountPicker({ detectable: true });
+      await click(wrapper, 'location-picker-detect');
+      expect(wrapper.get('[data-test="location-picker-detect"]').text()).toContain('Mencari lokasi');
+      await wrapper.setProps({ modelValue: { latitude: -1.3, longitude: 116.9 } });
+      await flushPromises();
+      expect(wrapper.find('[data-test="location-picker-accuracy"]').exists()).toBe(false);
+      success({ coords: { latitude: -1.25, longitude: 116.95, accuracy: 5 } });
+      await flushPromises();
+      expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+      expect(wrapper.find('[data-test="location-picker-accuracy"]').exists()).toBe(false);
+      expect(wrapper.get('[data-test="location-picker-status"]').text()).toContain(
+        'Posisi pin sudah diatur',
+      );
+    });
+
     it('clears accuracy text after a manual map click', async () => {
       const wrapper = await mountPicker({ detectable: true });
       await click(wrapper, 'location-picker-detect');

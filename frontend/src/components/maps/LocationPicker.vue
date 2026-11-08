@@ -483,6 +483,7 @@ watch(
     // A value that is not the one this picker just emitted came from the parent (reset, reload):
     // drop messages and the device accuracy that described the previous value.
     if (!(pending && sameValue(pending.value, props.modelValue))) {
+      cancelDetect();
       clearAnnouncement();
       accuracy.value = null;
     }
