@@ -385,10 +385,14 @@ async function handleContentBlockSubmit(payload: {
 
 /**
  * Batal, Escape, the close button and the backdrop all land here for the settings dialog. A dirty
- * draft asks first; while the prompt is up, Escape and the backdrop mean "stay".
+ * draft asks first; while the prompt is up, Escape, the backdrop and the close button mean "stay".
  */
 function requestCloseSettings(): void {
-  if (saving.value || settingsDiscardPromptOpen.value) return;
+  if (saving.value) return;
+  if (settingsDiscardPromptOpen.value) {
+    keepEditingSettings();
+    return;
+  }
   if (!settingsForm.value?.isDirty) {
     resetEditor();
     return;

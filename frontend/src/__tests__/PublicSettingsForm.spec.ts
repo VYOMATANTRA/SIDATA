@@ -396,25 +396,49 @@ describe('PublicSettingsForm in the CMS dialog', () => {
       wrapper.unmount();
     });
 
-    it('prompts on Escape and on the backdrop, and both mean "stay" while the prompt is shown', async () => {
-      installFetch([]);
-      const { wrapper } = await openSettingsDialog();
-      await makeDirty();
+    describe('while the prompt is shown, Escape, the backdrop and the X all mean "stay"', () => {
+      const dismissals: Array<[string, () => Promise<void>]> = [
+        ['Escape', async () => pressEscape()],
+        [
+          'the backdrop',
+          async () => {
+            await dialogRoot().find('[role="presentation"]').trigger('click');
+          },
+        ],
+        [
+          'the X button',
+          async () => {
+            await dialogRoot().find('[aria-label="Tutup dialog"]').trigger('click');
+          },
+        ],
+      ];
 
-      pressEscape();
-      await flushPromises();
-      expect(prompt().exists()).toBe(true);
+      it.each(dismissals)('%s dismisses the prompt and keeps the draft', async (_name, dismiss) => {
+        const patches = installFetch([]);
+        const { wrapper } = await openSettingsDialog();
+        await dialogRoot().find('input#settings-appName').setValue('Nama baru');
+        await makeDirty();
+        const centerBefore = { ...leafletState.center };
+        const zoomBefore = leafletState.zoom;
 
-      pressEscape();
-      await flushPromises();
-      expect(prompt().exists()).toBe(true);
-      expect(dialogRoot().find('[role="dialog"]').exists()).toBe(true);
+        pressEscape();
+        await flushPromises();
+        expect(prompt().exists()).toBe(true);
 
-      await dialogRoot().find('[role="presentation"]').trigger('click');
-      await flushPromises();
-      expect(prompt().exists()).toBe(true);
-      expect(dialogRoot().find('[role="dialog"]').exists()).toBe(true);
-      wrapper.unmount();
+        await dismiss();
+        await flushPromises();
+        expect(prompt().exists()).toBe(false);
+        expect(dialogRoot().find('[role="dialog"]').exists()).toBe(true);
+        expect(dialogRoot().find('[role="dialog"] form').isVisible()).toBe(true);
+        expect(
+          (dialogRoot().find('input#settings-appName').element as HTMLInputElement).value,
+        ).toBe('Nama baru');
+        expect(leafletState.center).toEqual(centerBefore);
+        expect(leafletState.zoom).toBe(zoomBefore);
+        expect(patches).toHaveLength(0);
+        expect(document.activeElement).not.toBe(document.body);
+        wrapper.unmount();
+      });
     });
 
     it('prompts when the close button is used with a dirty draft', async () => {
