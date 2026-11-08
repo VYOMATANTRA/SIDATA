@@ -37,28 +37,75 @@ function fieldId(name: string): string {
   return `${props.idPrefix}-${name}`;
 }
 
-// Initial drafts and initialView are intentionally seeded once from props.settings on mount
-// with no watcher so background store refreshes don't wipe in-progress edits.
-const appName = ref(props.settings.appName ?? '');
-const institutionName = ref(props.settings.institutionName ?? '');
-const tagline = ref(props.settings.tagline ?? '');
-const administrativeArea = ref(props.settings.administrativeArea ?? '');
-const contactPhone = ref(props.settings.contactPhone ?? '');
-const contactWhatsapp = ref(props.settings.contactWhatsapp ?? '');
-const contactEmail = ref(props.settings.contactEmail ?? '');
-const contactAddress = ref(props.settings.contactAddress ?? '');
+type FormFieldKey =
+  | 'appName'
+  | 'institutionName'
+  | 'tagline'
+  | 'administrativeArea'
+  | 'contactPhone'
+  | 'contactWhatsapp'
+  | 'contactEmail'
+  | 'contactAddress';
 
-/**
- * The default map view is edited visually: the picker owns latitude, longitude and zoom, so the
- * form only ever holds one `{ latitude, longitude, zoom }` draft. It is mapped to the API's
- * `{ lat, lon, zoom }` on submit.
- */
-const initialView: PickerLocation = {
+interface FormDraft {
+  appName: string;
+  institutionName: string;
+  tagline: string;
+  administrativeArea: string;
+  contactPhone: string;
+  contactWhatsapp: string;
+  contactEmail: string;
+  contactAddress: string;
+}
+
+const draft = ref<Partial<FormDraft>>({});
+const mapViewOverride = ref<PickerLocation | null>(null);
+
+const baseline = computed<FormDraft>(() => ({
+  appName: props.settings.appName ?? '',
+  institutionName: props.settings.institutionName ?? '',
+  tagline: props.settings.tagline ?? '',
+  administrativeArea: props.settings.administrativeArea ?? '',
+  contactPhone: props.settings.contactPhone ?? '',
+  contactWhatsapp: props.settings.contactWhatsapp ?? '',
+  contactEmail: props.settings.contactEmail ?? '',
+  contactAddress: props.settings.contactAddress ?? '',
+}));
+
+const baselineView = computed<PickerLocation>(() => ({
   latitude: props.settings.defaultCoordinates?.lat ?? MANGGAR_MAP_ORIGIN.latitude,
   longitude: props.settings.defaultCoordinates?.lon ?? MANGGAR_MAP_ORIGIN.longitude,
   zoom: props.settings.defaultCoordinates?.zoom ?? MANGGAR_MAP_DEFAULT_ZOOM,
-};
-const mapView = ref<PickerLocation | null>({ ...initialView });
+}));
+
+function createFieldModel(key: FormFieldKey) {
+  return computed({
+    get: () => draft.value[key] ?? baseline.value[key],
+    set: (val: string) => {
+      draft.value[key] = val;
+    },
+  });
+}
+
+const appName = createFieldModel('appName');
+const institutionName = createFieldModel('institutionName');
+const tagline = createFieldModel('tagline');
+const administrativeArea = createFieldModel('administrativeArea');
+const contactPhone = createFieldModel('contactPhone');
+const contactWhatsapp = createFieldModel('contactWhatsapp');
+const contactEmail = createFieldModel('contactEmail');
+const contactAddress = createFieldModel('contactAddress');
+
+/**
+ * The default map view is edited visually: the picker owns latitude, longitude and zoom.
+ * In the form, mapView derives from baselineView until the user interacts with the picker.
+ */
+const mapViewModel = computed<PickerLocation | null>({
+  get: () => mapViewOverride.value ?? baselineView.value,
+  set: (val: PickerLocation | null) => {
+    mapViewOverride.value = val;
+  },
+});
 
 const submitted = ref(false);
 
@@ -77,7 +124,7 @@ const fieldErrors = computed<Record<string, string | undefined>>(() => {
     errors.contactEmail = 'Format email tidak valid.';
   }
 
-  const view = mapView.value;
+  const view = mapViewModel.value;
   // Defensive: the picker only emits normalised, clamped views, so this branch is a safety net
   // for a malformed value from a future caller rather than a state an editor can reach.
   if (
@@ -122,28 +169,37 @@ const errorEntries = computed(() =>
 
 const summaryErrors = computed(() => (submitted.value ? errorEntries.value : []));
 
-const dirty = computed(() => {
-  const saved = props.settings;
-  const view = mapView.value;
-  const savedView = saved.defaultCoordinates;
-  // `!savedView` is defensive: the backend always supplies default coordinates.
-  const viewChanged =
-    view === null ||
-    !savedView ||
-    Math.abs(view.latitude - savedView.lat) > COORDINATE_EPSILON ||
-    Math.abs(view.longitude - savedView.lon) > COORDINATE_EPSILON ||
-    view.zoom !== savedView.zoom;
+function sameMapView(a: PickerLocation | null, b: PickerLocation | null): boolean {
+  if (a === null && b === null) return true;
+  if (a === null || b === null) return false;
   return (
-    viewChanged ||
-    appName.value !== (saved.appName ?? '') ||
-    institutionName.value !== (saved.institutionName ?? '') ||
-    tagline.value !== (saved.tagline ?? '') ||
-    administrativeArea.value !== (saved.administrativeArea ?? '') ||
-    contactPhone.value !== (saved.contactPhone ?? '') ||
-    contactWhatsapp.value !== (saved.contactWhatsapp ?? '') ||
-    contactEmail.value !== (saved.contactEmail ?? '') ||
-    contactAddress.value !== (saved.contactAddress ?? '')
+    Math.abs(a.latitude - b.latitude) <= COORDINATE_EPSILON &&
+    Math.abs(a.longitude - b.longitude) <= COORDINATE_EPSILON &&
+    a.zoom === b.zoom
   );
+}
+
+const dirty = computed(() => {
+  const fields: FormFieldKey[] = [
+    'appName',
+    'institutionName',
+    'tagline',
+    'administrativeArea',
+    'contactPhone',
+    'contactWhatsapp',
+    'contactEmail',
+    'contactAddress',
+  ];
+
+  const anyFieldDirty = fields.some((key) => {
+    const override = draft.value[key];
+    return override !== undefined && override !== baseline.value[key];
+  });
+
+  const viewDirty =
+    mapViewOverride.value !== null && !sameMapView(mapViewOverride.value, baselineView.value);
+
+  return anyFieldDirty || viewDirty;
 });
 
 /** Lets the dialog ask "is there unsaved work?" before it closes. */
@@ -171,7 +227,7 @@ watch(
 function handleSubmit(): void {
   submitted.value = true;
   if (props.busy || submitGuard) return;
-  const view = mapView.value;
+  const view = mapViewModel.value;
   if (errorEntries.value.length > 0 || view === null) return;
 
   submitGuard = true;
@@ -335,7 +391,7 @@ function handleSubmit(): void {
 
     <div class="rounded-card border-border bg-surface-muted border p-4">
       <LocationPicker
-        v-model="mapView"
+        v-model="mapViewModel"
         :id-prefix="fieldId('mapView')"
         test-id="settings-map-view"
         label="Atur tampilan peta"

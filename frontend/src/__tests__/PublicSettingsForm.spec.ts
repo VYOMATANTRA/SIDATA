@@ -269,6 +269,71 @@ describe('PublicSettingsForm.vue', () => {
     });
     wrapper.unmount();
   });
+
+  it('updates untouched fields and map view when props.settings changes and keeps isDirty false', async () => {
+    const wrapper = mountForm({ settings: DEFAULT_PUBLIC_SETTINGS });
+    await flushPromises();
+
+    const refreshedSettings = {
+      ...DEFAULT_PUBLIC_SETTINGS,
+      tagline: 'Slogan Baru Dari Server',
+      defaultCoordinates: { lat: -1.3, lon: 117.0, zoom: 15 },
+    };
+    await wrapper.setProps({ settings: refreshedSettings });
+    await flushPromises();
+
+    expect((wrapper.find('input#settings-tagline').element as HTMLInputElement).value).toBe(
+      'Slogan Baru Dari Server',
+    );
+    expect(leafletState.center).toEqual({ lat: -1.3, lng: 117.0 });
+    expect(leafletState.zoom).toBe(15);
+    expect(wrapper.vm.isDirty).toBe(false);
+
+    await wrapper.find('form').trigger('submit.prevent');
+    const emitted = wrapper.emitted('submit');
+    expect(emitted).toHaveLength(1);
+    expect(emitted?.[0]?.[0]).toMatchObject({
+      tagline: 'Slogan Baru Dari Server',
+      defaultCoordinates: { lat: -1.3, lon: 117.0, zoom: 15 },
+    });
+    wrapper.unmount();
+  });
+
+  it('keeps edited fields when props.settings changes and submits payload with new baseline for untouched fields', async () => {
+    const wrapper = mountForm({ settings: DEFAULT_PUBLIC_SETTINGS });
+    await flushPromises();
+
+    await wrapper.find('input#settings-appName').setValue('Aplikasi Kustom');
+    await flushPromises();
+
+    const refreshedSettings = {
+      ...DEFAULT_PUBLIC_SETTINGS,
+      tagline: 'Slogan Baru Dari Server',
+      defaultCoordinates: { lat: -1.3, lon: 117.0, zoom: 15 },
+    };
+    await wrapper.setProps({ settings: refreshedSettings });
+    await flushPromises();
+
+    expect((wrapper.find('input#settings-appName').element as HTMLInputElement).value).toBe(
+      'Aplikasi Kustom',
+    );
+    expect((wrapper.find('input#settings-tagline').element as HTMLInputElement).value).toBe(
+      'Slogan Baru Dari Server',
+    );
+    expect(leafletState.center).toEqual({ lat: -1.3, lng: 117.0 });
+    expect(leafletState.zoom).toBe(15);
+    expect(wrapper.vm.isDirty).toBe(true);
+
+    await wrapper.find('form').trigger('submit.prevent');
+    const emitted = wrapper.emitted('submit');
+    expect(emitted).toHaveLength(1);
+    expect(emitted?.[0]?.[0]).toMatchObject({
+      appName: 'Aplikasi Kustom',
+      tagline: 'Slogan Baru Dari Server',
+      defaultCoordinates: { lat: -1.3, lon: 117.0, zoom: 15 },
+    });
+    wrapper.unmount();
+  });
 });
 
 describe('PublicSettingsForm in the CMS dialog', () => {

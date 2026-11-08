@@ -680,7 +680,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
         v-show="!settingsDiscardPromptOpen"
         ref="settingsForm"
         :settings="settingsStore.settings"
-        :busy="saving"
+        :busy="saving || settingsStore.isLoading"
         :server-error="serverError"
         @submit="handleSettingsSubmit"
         @cancel="requestCloseSettings"
