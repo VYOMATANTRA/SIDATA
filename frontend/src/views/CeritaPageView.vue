@@ -168,23 +168,44 @@ async function loadPage() {
   scrollToHashTarget();
 }
 
+// Remembers the last slug+hash scrolled to so retry/reload of the same anchor does not snap the
+// user back to the anchor once they have scrolled elsewhere.
+let lastScrolledSlugHash: string | null = null;
+
 // A `/cerita/x#bab` deep link resolves before the chapters exist (the page is still a skeleton
 // when the router scrolls), so the router finds no target. Once the chapters render, honour the
 // hash here. Uses native scrollIntoView so the element's own `scroll-margin-top` clears the header.
 function scrollToHashTarget() {
   if (!route.hash) return;
+  const currentPair = `${slug.value}${route.hash}`;
+  if (lastScrolledSlugHash === currentPair) return;
   let id = route.hash.slice(1);
   try {
     id = decodeURIComponent(id);
   } catch {
     // keep the raw id
   }
-  document.getElementById(id)?.scrollIntoView({ behavior: 'instant', block: 'start' });
+  const el = document.getElementById(id);
+  if (el) {
+    el.scrollIntoView({ behavior: 'instant', block: 'start' });
+    lastScrolledSlugHash = currentPair;
+  }
 }
 
 onMounted(loadPage);
-watch(slug, loadPage);
+watch(slug, () => {
+  lastScrolledSlugHash = null;
+  loadPage();
+});
+watch(
+  () => route.hash,
+  () => {
+    scrollToHashTarget();
+  },
+);
 onBeforeUnmount(() => observer?.disconnect());
+
+defineExpose({ retryLoad, loadPage });
 </script>
 
 <template>

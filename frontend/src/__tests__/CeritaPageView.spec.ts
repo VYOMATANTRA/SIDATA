@@ -434,4 +434,198 @@ describe('CeritaPageView', () => {
     expect(wrapper.find('[data-test="cerita-loading"]').exists()).toBe(false);
     expect(wrapper.find('h1').text()).toBe('Kesehatan');
   });
+
+  describe('anchor scroll behavior (127-2)', () => {
+    let scrollSpy: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      scrollSpy = vi.fn<() => void>();
+      Element.prototype.scrollIntoView = scrollSpy as unknown as typeof Element.prototype.scrollIntoView;
+    });
+
+    afterEach(() => {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+      document.body.innerHTML = '';
+    });
+
+    function makeMultiChapterPage(slug: string) {
+      return {
+        id: `page-${slug}`,
+        slug,
+        title: 'Kependudukan',
+        sortOrder: 1,
+        chapters: [
+          {
+            id: `chap-${slug}-1`,
+            slug: `${slug}-bab-1`,
+            number: '01',
+            title: 'Bab Pertama',
+            sortOrder: 1,
+            sections: [{ id: `sec-${slug}-1`, slug: 'seksi-1', title: null, sortOrder: 1 }],
+          },
+          {
+            id: `chap-${slug}-2`,
+            slug: `${slug}-bab-2`,
+            number: '02',
+            title: 'Bab Kedua',
+            sortOrder: 2,
+            sections: [{ id: `sec-${slug}-2`, slug: 'seksi-2', title: null, sortOrder: 2 }],
+          },
+        ],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      };
+    }
+
+    function mockSuccess(page: ReturnType<typeof makeMultiChapterPage>) {
+      globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input);
+        if (url.startsWith('/api/pages/')) {
+          return { ok: true, status: 200, json: async () => ({ page }) } as Response;
+        }
+        if (url.startsWith('/api/content-blocks')) {
+          return { ok: true, json: async () => ({ blocks: [] }) } as Response;
+        }
+        if (url.startsWith('/api/indicators')) {
+          return { ok: true, json: async () => ({ indicators: [] }) } as Response;
+        }
+        if (url.startsWith('/api/indicator-tables')) {
+          return { ok: true, json: async () => ({ tables: [] }) } as Response;
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
+    }
+
+    it('scrolls to chapter anchor once on first successful load with hash', async () => {
+      const page = makeMultiChapterPage('kependudukan');
+      mockSuccess(page);
+
+      const pinia = createPinia();
+      setActivePinia(pinia);
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [{ path: '/cerita/:slug', component: CeritaPageView }],
+      });
+      await router.push('/cerita/kependudukan#kependudukan-bab-1');
+      await router.isReady();
+
+      const wrapper = mount(CeritaPageView, {
+        global: { plugins: [pinia, router] },
+        attachTo: document.body,
+      });
+      await flushPromises();
+
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+      expect(scrollSpy).toHaveBeenCalledWith({ behavior: 'instant', block: 'start' });
+      wrapper.unmount();
+    });
+
+    it('does not re-scroll on retry or reload of the same slug and hash', async () => {
+      const page = makeMultiChapterPage('kependudukan');
+      mockSuccess(page);
+
+      const pinia = createPinia();
+      setActivePinia(pinia);
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [{ path: '/cerita/:slug', component: CeritaPageView }],
+      });
+      await router.push('/cerita/kependudukan#kependudukan-bab-1');
+      await router.isReady();
+
+      const wrapper = mount(CeritaPageView, {
+        global: { plugins: [pinia, router] },
+        attachTo: document.body,
+      });
+      await flushPromises();
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+
+      // Trigger a reload / retry for the same slug and hash
+      wrapper.vm.retryLoad();
+      await flushPromises();
+
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+      wrapper.unmount();
+    });
+
+    it('scrolls to new anchor when hash changes on the same page', async () => {
+      const page = makeMultiChapterPage('kependudukan');
+      mockSuccess(page);
+
+      const pinia = createPinia();
+      setActivePinia(pinia);
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [{ path: '/cerita/:slug', component: CeritaPageView }],
+      });
+      await router.push('/cerita/kependudukan#kependudukan-bab-1');
+      await router.isReady();
+
+      const wrapper = mount(CeritaPageView, {
+        global: { plugins: [pinia, router] },
+        attachTo: document.body,
+      });
+      await flushPromises();
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+
+      await router.push('/cerita/kependudukan#kependudukan-bab-2');
+      await flushPromises();
+
+      expect(scrollSpy).toHaveBeenCalledTimes(2);
+      wrapper.unmount();
+    });
+
+    it('scrolls to chapter anchor on first successful load after a failed attempt', async () => {
+      const page = makeMultiChapterPage('kependudukan');
+      let shouldFail = true;
+      globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input);
+        if (shouldFail && url.startsWith('/api/pages/')) {
+          return { ok: false, status: 500, json: async () => ({}) } as Response;
+        }
+        if (url.startsWith('/api/pages/')) {
+          return { ok: true, status: 200, json: async () => ({ page }) } as Response;
+        }
+        if (url.startsWith('/api/content-blocks')) {
+          return { ok: true, json: async () => ({ blocks: [] }) } as Response;
+        }
+        if (url.startsWith('/api/indicators')) {
+          return { ok: true, json: async () => ({ indicators: [] }) } as Response;
+        }
+        if (url.startsWith('/api/indicator-tables')) {
+          return { ok: true, json: async () => ({ tables: [] }) } as Response;
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
+
+      const pinia = createPinia();
+      setActivePinia(pinia);
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [{ path: '/cerita/:slug', component: CeritaPageView }],
+      });
+      await router.push('/cerita/kependudukan#kependudukan-bab-1');
+      await router.isReady();
+
+      const wrapper = mount(CeritaPageView, {
+        global: { plugins: [pinia, router] },
+        attachTo: document.body,
+      });
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="cerita-error"]').exists()).toBe(true);
+      expect(scrollSpy).not.toHaveBeenCalled();
+
+      // Now fix fetch and retry via "Coba lagi" button
+      shouldFail = false;
+      await wrapper.find('[data-test="cerita-error"] button').trigger('click');
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="cerita-error"]').exists()).toBe(false);
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+      expect(scrollSpy).toHaveBeenCalledWith({ behavior: 'instant', block: 'start' });
+      wrapper.unmount();
+    });
+  });
 });
+
