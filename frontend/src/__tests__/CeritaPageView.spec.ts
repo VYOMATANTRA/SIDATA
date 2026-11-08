@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
@@ -7,6 +7,8 @@ import type { Pinia } from 'pinia';
 import type { Router } from 'vue-router';
 import CeritaPageView from '../views/CeritaPageView.vue';
 import PublicLayout from '../layouts/PublicLayout.vue';
+
+const originalScrollIntoView = Element.prototype.scrollIntoView;
 
 /** CeritaPageView as App.vue mounts it: inside the shared PublicLayout, which owns <main>. */
 function mountInShell(pinia: Pinia, router: Router) {
@@ -54,6 +56,10 @@ async function setupAndPush(slug: string) {
 describe('CeritaPageView', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    Element.prototype.scrollIntoView = originalScrollIntoView;
   });
 
   it.each([

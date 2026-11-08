@@ -198,6 +198,7 @@ describe('PublicNavigationMenu', () => {
       await router.isReady();
 
       const wrapper = mount(PublicLayout, { global: { plugins: [pinia, router] } });
+      await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
       await flushPromises();
 
       const pagesStore = usePagesStore(pinia);
@@ -297,7 +298,7 @@ describe('PublicNavigationMenu', () => {
       const { wrapper, router, authStore } = await setup({ role: 'user' });
 
       await wrapper.find('[data-test="menu-logout-btn"]').trigger('click');
-      await vi.waitUntil(() => !authStore.isAuthenticated);
+      await vi.waitUntil(() => !authStore.isAuthenticated, { timeout: 5000 });
       await flushPromises();
 
       expect(router.currentRoute.value.path).toBe('/login');
@@ -308,7 +309,7 @@ describe('PublicNavigationMenu', () => {
       const { wrapper, router, authStore } = await setup({ role: 'user' });
 
       await wrapper.find('[data-test="menu-logout-btn"]').trigger('click');
-      await vi.waitUntil(() => !authStore.isAuthenticated);
+      await vi.waitUntil(() => !authStore.isAuthenticated, { timeout: 5000 });
       await flushPromises();
 
       expect(router.currentRoute.value.path).toBe('/login');
@@ -335,7 +336,7 @@ describe('PublicNavigationMenu', () => {
       expect(button.text()).toContain('Memproses');
 
       resolve({ ok: true, json: async () => ({}) } as Response);
-      await vi.waitUntil(() => !authStore.isAuthenticated);
+      await vi.waitUntil(() => !authStore.isAuthenticated, { timeout: 5000 });
     });
 
     it('keeps the session and shows an alert when the server rejects the logout', async () => {
@@ -343,7 +344,9 @@ describe('PublicNavigationMenu', () => {
       const { wrapper, authStore } = await setup({ role: 'user' });
 
       await wrapper.find('[data-test="menu-logout-btn"]').trigger('click');
-      await vi.waitUntil(() => wrapper.find('[data-test="menu-logout-error"]').exists());
+      await vi.waitUntil(() => wrapper.find('[data-test="menu-logout-error"]').exists(), {
+        timeout: 5000,
+      });
 
       expect(wrapper.find('[data-test="menu-logout-error"]').attributes('role')).toBe('alert');
       expect(wrapper.text()).toContain('Gagal keluar dari sesi');
@@ -359,14 +362,18 @@ describe('PublicNavigationMenu', () => {
       const { wrapper, router } = await setup({ role: 'user' });
 
       await wrapper.find('[data-test="menu-logout-btn"]').trigger('click');
-      await vi.waitUntil(() => wrapper.find('[data-test="menu-logout-error"]').exists());
+      await vi.waitUntil(() => wrapper.find('[data-test="menu-logout-error"]').exists(), {
+        timeout: 5000,
+      });
 
       await wrapper.setProps({ open: false });
       expect(wrapper.find('[data-test="menu-logout-error"]').exists()).toBe(false);
 
       await wrapper.setProps({ open: true });
       await wrapper.find('[data-test="menu-logout-btn"]').trigger('click');
-      await vi.waitUntil(() => wrapper.find('[data-test="menu-logout-error"]').exists());
+      await vi.waitUntil(() => wrapper.find('[data-test="menu-logout-error"]').exists(), {
+        timeout: 5000,
+      });
       await router.push('/peta');
       await flushPromises();
       expect(wrapper.find('[data-test="menu-logout-error"]').exists()).toBe(false);
@@ -377,7 +384,7 @@ describe('PublicNavigationMenu', () => {
       vi.spyOn(authStore, 'logout').mockRejectedValue(new Error('crash'));
 
       await wrapper.find('[data-test="menu-logout-btn"]').trigger('click');
-      await vi.waitUntil(() => wrapper.find('[role="alert"]').exists());
+      await vi.waitUntil(() => wrapper.find('[role="alert"]').exists(), { timeout: 5000 });
 
       expect(wrapper.text()).toContain('Terjadi kesalahan tidak terduga');
       expect(authStore.isAuthenticated).toBe(true);

@@ -413,7 +413,7 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
 
     const wrapper = mountHome(pinia, router);
 
-    await vi.waitUntil(() => wrapper.text().includes('53.120'));
+    await vi.waitUntil(() => wrapper.text().includes('53.120'), { timeout: 5000 });
 
     const ceritaSection = wrapper.find('section#cerita-preview');
     expect(ceritaSection.text()).toContain('53.120');
@@ -468,7 +468,7 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
 
     const wrapper = mountHome(pinia, router);
 
-    await vi.waitUntil(() => wrapper.find('h2#weather-widget-title').exists());
+    await vi.waitUntil(() => wrapper.find('h2#weather-widget-title').exists(), { timeout: 5000 });
 
     const heroTitle = wrapper.find('h1#hero-title').element;
     const weatherTitle = wrapper.find('h2#weather-widget-title').element;

@@ -1,8 +1,30 @@
-import { describe, it, expect } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { describe, it, expect, afterEach } from 'vitest';
+import { mount as baseMount, type VueWrapper } from '@vue/test-utils';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import AppNavbar from '../components/common/AppNavbar.vue';
 import { isNavItemActive } from '@/config/publicNav';
+import { resetBodyScrollLockForTests } from '../utils/bodyScrollLock';
+
+const mounted: VueWrapper[] = [];
+
+function mount(...args: Parameters<typeof baseMount>) {
+  const wrapper = baseMount(...args);
+  mounted.push(wrapper);
+  return wrapper;
+}
+
+function cleanupMounted() {
+  for (const w of mounted.splice(0)) {
+    try {
+      w.unmount();
+    } catch {
+      // Already unmounted by the test itself.
+    }
+  }
+  resetBodyScrollLockForTests();
+}
+
+afterEach(cleanupMounted);
 
 function createMockRouter() {
   return createRouter({

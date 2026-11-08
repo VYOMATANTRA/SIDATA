@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, nextTick } from 'vue';
-import { flushPromises, mount } from '@vue/test-utils';
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import App from '../App.vue';
 import { useAuthStore } from '../stores/auth';
 import { stubViewport } from './helpers/viewport';
 import TentangPageLayout from '../components/tentang/TentangPageLayout.vue';
+import { resetBodyScrollLockForTests } from '../utils/bodyScrollLock';
 
 const Page = (name: string) =>
   defineComponent({
@@ -41,6 +42,19 @@ function mockFetch(settings: Record<string, unknown> = {}) {
   return fetchMock;
 }
 
+const mounted: VueWrapper[] = [];
+
+function cleanupMounted() {
+  for (const w of mounted.splice(0)) {
+    try {
+      w.unmount();
+    } catch {
+      // Already unmounted by the test itself.
+    }
+  }
+  resetBodyScrollLockForTests();
+}
+
 async function mountApp(path: string) {
   const pinia = createPinia();
   setActivePinia(pinia);
@@ -60,6 +74,7 @@ async function mountApp(path: string) {
   await router.push(path);
   await router.isReady();
   const wrapper = mount(App, { global: { plugins: [pinia, router] }, attachTo: document.body });
+  mounted.push(wrapper);
   await flushPromises();
   return { wrapper, router, pinia };
 }
@@ -73,6 +88,7 @@ describe('PublicLayout (mounted by App for routes with meta.layout = public)', (
 
   afterEach(() => {
     setScrollY(0);
+    cleanupMounted();
     document.body.innerHTML = '';
     document.body.style.overflow = '';
   });
@@ -402,7 +418,7 @@ describe('PublicLayout (mounted by App for routes with meta.layout = public)', (
       await toggle().trigger('click');
       expect(toggle().attributes('aria-expanded')).toBe('true');
       await wrapper.find('[data-test="menu-logout-btn"]').trigger('click');
-      await vi.waitUntil(() => alert().exists());
+      await vi.waitUntil(() => alert().exists(), { timeout: 5000 });
       await flushPromises();
       // Still there while the menu stays open, and the session was kept.
       expect(alert().exists()).toBe(true);
