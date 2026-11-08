@@ -21,8 +21,7 @@ import {
  * and buttons only; this is site navigation, not an application menu (no `role="menu"`).
  *
  * Colours are fixed white-on-navy: the public shell always renders AppNavbar with a navy panel
- * (`navy` / `transparent` variants). Do not mount this inside `variant="white"`, whose panel is
- * `bg-surface` and would make this content white-on-white.
+ * (`navy` / `transparent` variants).
  */
 const props = withDefaults(defineProps<{ open?: boolean }>(), { open: true });
 const emit = defineEmits<{ (e: 'navigate'): void }>();

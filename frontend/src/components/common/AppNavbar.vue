@@ -1,17 +1,16 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
-import { useRouter, useRoute, RouterLink } from 'vue-router';
+import { useRoute, RouterLink } from 'vue-router';
 import { XMarkIcon } from '@heroicons/vue/24/outline';
 import balikpapanLogo from '@/assets/img/logo_balikpapan.webp';
-import { getAvailableNavItems, isNavItemActive } from '@/config/publicNav';
 import { isEventFromOpenDialog, useDrawerFocusTrap } from '@/composables/useDrawerFocusTrap';
 import { useIsDesktop } from '@/composables/useIsDesktop';
 import { acquireBodyScrollLock } from '@/utils/bodyScrollLock';
 
 export interface NavbarProps {
   /** Background mode of the bar. Independent of `foreground`. */
-  variant?: 'navy' | 'white' | 'transparent';
-  /** Colour of the identity and controls; defaults to light on navy/transparent, dark on white. */
+  variant?: 'navy' | 'transparent';
+  /** Colour of the identity and controls; defaults to light. */
   foreground?: 'light' | 'dark';
   title?: string;
   subtitle?: string;
@@ -38,10 +37,7 @@ const emit = defineEmits<{
   (e: 'logoClick'): void;
 }>();
 
-const router = useRouter();
 const route = useRoute();
-const currentPath = computed(() => route?.path ?? '/');
-const navItems = computed(() => getAvailableNavItems(router));
 
 const isMenuOpen = ref(false);
 const headerRef = ref<HTMLElement | null>(null);
@@ -153,21 +149,12 @@ onUnmounted(() => {
   releaseLock();
 });
 
-const isLight = computed(
-  () => (props.foreground ?? (props.variant === 'white' ? 'dark' : 'light')) === 'light',
-);
+const isLight = computed(() => (props.foreground ?? 'light') === 'light');
 const isTransparent = computed(() => props.variant === 'transparent');
-// The default menu slot adapts to the panel colour; the `menu` slot content (PublicNavigationMenu)
-// is white-on-navy and must only be used with the navy panel (not `variant="white"`).
-const hasNavyPanel = computed(() => props.variant !== 'white');
 
 const containerClasses = computed(() => [
   'transition-colors duration-200 motion-reduce:transition-none',
-  props.variant === 'navy'
-    ? 'bg-brand-navy'
-    : props.variant === 'white'
-      ? 'bg-surface shadow-xs'
-      : 'bg-transparent',
+  props.variant === 'navy' ? 'bg-brand-navy' : 'bg-transparent',
   isLight.value ? 'text-white' : 'text-brand-navy',
   props.sticky ? 'sticky top-0 z-[55]' : 'relative', // layer order: see main.css
   props.overlay ? '-mb-[var(--public-header-height)]' : '',
@@ -182,18 +169,6 @@ const subtitleClasses = computed(() =>
 );
 const titleClasses = computed(() => (isLight.value ? 'text-white' : 'text-brand-navy'));
 const hamburgerBarClasses = computed(() => (isLight.value ? 'bg-white' : 'bg-brand-navy'));
-
-const panelClasses = computed(() =>
-  hasNavyPanel.value
-    ? 'bg-brand-navy text-white border-white/15'
-    : 'bg-surface text-brand-navy border-border',
-);
-
-const panelFocusRingClasses = computed(() =>
-  hasNavyPanel.value
-    ? 'focus-visible:outline-focus-ring-inverse'
-    : 'focus-visible:outline-focus-ring',
-);
 </script>
 
 <template>
@@ -318,20 +293,17 @@ const panelFocusRingClasses = computed(() =>
             :role="isModal ? 'dialog' : undefined"
             :aria-modal="isModal ? 'true' : undefined"
             :aria-label="isModal ? 'Menu navigasi' : undefined"
-            class="md:rounded-card fixed inset-y-0 right-0 z-50 flex w-[min(88vw,22rem)] flex-col overflow-hidden border-l shadow-xl md:absolute md:inset-y-auto md:top-full md:right-6 md:mt-2 md:max-h-[calc(100dvh-var(--public-header-height)-1rem)] md:w-[46rem] md:max-w-[calc(100vw-3rem)] md:border lg:right-8"
-            :class="panelClasses"
+            class="md:rounded-card bg-brand-navy border-white/15 text-white fixed inset-y-0 right-0 z-50 flex w-[min(88vw,22rem)] flex-col overflow-hidden border-l shadow-xl md:absolute md:inset-y-auto md:top-full md:right-6 md:mt-2 md:max-h-[calc(100dvh-var(--public-header-height)-1rem)] md:w-[46rem] md:max-w-[calc(100vw-3rem)] md:border lg:right-8"
             data-test="nav-menu-drawer"
           >
             <div
               class="flex shrink-0 items-center justify-between border-b border-white/15 px-5 py-3 md:hidden"
-              :class="hasNavyPanel ? '' : 'border-border'"
             >
               <span class="text-base font-semibold">Menu</span>
               <button
                 ref="closeButtonRef"
                 type="button"
-                class="rounded-btn inline-flex h-11 w-11 items-center justify-center hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2"
-                :class="panelFocusRingClasses"
+                class="rounded-btn hover:bg-white/10 focus-visible:outline-focus-ring-inverse inline-flex h-11 w-11 items-center justify-center focus-visible:outline-2 focus-visible:outline-offset-2"
                 aria-label="Tutup menu"
                 data-test="menu-close-btn"
                 @click="closeAndRestoreFocus"
@@ -341,30 +313,7 @@ const panelFocusRingClasses = computed(() =>
             </div>
 
             <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 md:py-4">
-              <slot name="menu" :close="closeMenu" :open="isMenuOpen">
-                <ul class="grid grid-cols-1 gap-1 sm:grid-cols-2">
-                  <li v-for="item in navItems" :key="item.to">
-                    <RouterLink
-                      :to="item.to"
-                      class="rounded-btn block px-4 py-3 text-base font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
-                      :class="[
-                        panelFocusRingClasses,
-                        hasNavyPanel
-                          ? isNavItemActive(item.to, currentPath)
-                            ? 'bg-white/20 font-semibold text-white'
-                            : 'text-white hover:bg-white/10'
-                          : isNavItemActive(item.to, currentPath)
-                            ? 'bg-surface-hover text-brand-navy font-semibold'
-                            : 'text-brand-navy hover:bg-surface-muted',
-                      ]"
-                      :aria-current="isNavItemActive(item.to, currentPath) ? 'page' : undefined"
-                      @click="closeMenu"
-                    >
-                      {{ item.label }}
-                    </RouterLink>
-                  </li>
-                </ul>
-              </slot>
+              <slot name="menu" :close="closeMenu" :open="isMenuOpen" />
             </div>
           </div>
         </transition>
