@@ -534,21 +534,17 @@ function placePinAtCenter(): void {
   announce('Pin diletakkan di tengah peta.');
 }
 
-/** True once a zoom-limit message was announced and no real zoom has happened since. */
-let limitAnnounced = false;
-
 function zoomBy(delta: 1 | -1): void {
   if (!map || !canZoom.value) return;
   const next = clampZoom(viewZoom.value + delta, props.minZoom, props.maxZoom);
   if (next === viewZoom.value) {
-    // At a limit nothing changes: say so once per burst instead of claiming a zoom happened.
-    if (!limitAnnounced) {
-      limitAnnounced = true;
-      announceNudge(delta > 0 ? 'Zoom maksimum tercapai.' : 'Zoom minimum tercapai.');
-    }
+    // At a limit nothing changes: say so instead of claiming a zoom happened. Every press
+    // re-arms the trailing debounce, so a burst announces once, shortly after its last press. No
+    // "already announced" flag: it outlived a message that a newer announcement, an outside value
+    // change or the TTL had removed, which silenced every later burst at that limit.
+    announceNudge(delta > 0 ? 'Zoom maksimum tercapai.' : 'Zoom minimum tercapai.');
     return;
   }
-  limitAnnounced = false;
   // Only a button press leaves focus on a zoom button; a `+`/`-` key press keeps it in the region.
   const pressed = delta > 0 ? zoomInButton.value : zoomOutButton.value;
   const fromButton = pressed !== null && document.activeElement === pressed;

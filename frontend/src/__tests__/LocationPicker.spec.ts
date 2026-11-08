@@ -504,6 +504,118 @@ describe('LocationPicker', () => {
       expect(leafletMap.setZoom).toHaveBeenCalledTimes(1);
     });
 
+    describe('zoom limit announcements', () => {
+      async function atMax() {
+        vi.useFakeTimers();
+        const wrapper = await mountPicker({ modelValue: PIN, minZoom: 17, maxZoom: 18 });
+        const live = wrapper.get('[data-test="location-picker-announcement"]');
+        const region = wrapper.get('[data-test="location-picker-region"]');
+        await wrapper.get('[data-test="location-picker-keyboard"]').trigger('click');
+        await region.trigger('keydown', { key: '+' });
+        vi.advanceTimersByTime(1000);
+        await nextTick();
+        expect(live.text()).toBe('Peta diperbesar.');
+        const press = async (key: '+' | '-', count = 1, gap = 0) => {
+          for (let i = 0; i < count; i += 1) {
+            await region.trigger('keydown', { key });
+            if (gap) vi.advanceTimersByTime(gap);
+          }
+        };
+        const settle = async (ms: number) => {
+          vi.advanceTimersByTime(ms);
+          await nextTick();
+        };
+        return { wrapper, live, press, settle };
+      }
+      const MAX = 'Zoom maksimum tercapai.';
+
+      it('announces again for a later burst at the same limit, after the message cleared', async () => {
+        const { live, press, settle } = await atMax();
+        await press('+', 3);
+        await settle(1000);
+        expect(live.text()).toBe(MAX);
+        await settle(5000);
+        expect(live.text()).toBe('');
+        await press('+');
+        await settle(1000);
+        expect(live.text()).toBe(MAX);
+      });
+
+      it('announces every separate burst once, then stays quiet until the next burst', async () => {
+        const { live, press, settle } = await atMax();
+        for (let burst = 0; burst < 3; burst += 1) {
+          await press('+', 4);
+          await settle(1000);
+          expect(live.text()).toBe(MAX);
+          await settle(5000);
+          expect(live.text()).toBe('');
+        }
+      });
+
+      it('announces 600 ms after the last press of the burst, not after the first', async () => {
+        const { live, press, settle } = await atMax();
+        await settle(5000);
+        await press('+', 4, 400);
+        // 1600 ms since the first press, 400 since the last: still waiting.
+        expect(live.text()).toBe('');
+        await settle(199);
+        expect(live.text()).toBe('');
+        await settle(1);
+        expect(live.text()).toBe(MAX);
+      });
+
+      it('announces the limit again after a real zoom out and back in to it', async () => {
+        const { live, press, settle } = await atMax();
+        await press('+');
+        await settle(1000);
+        expect(live.text()).toBe(MAX);
+        await press('-');
+        await settle(1000);
+        expect(live.text()).toBe('Peta diperkecil.');
+        await press('+');
+        await settle(1000);
+        expect(live.text()).toBe('Peta diperbesar.');
+        await press('+', 2);
+        await settle(1000);
+        expect(live.text()).toBe(MAX);
+      });
+
+      it('is not lost when another announcement replaces the pending one', async () => {
+        const { live, press, settle } = await atMax();
+        await press('+');
+        clickMap(-1.2251, 116.9438);
+        await settle(1000);
+        expect(live.text()).toBe('Pin diletakkan.');
+        await settle(5000);
+        await press('+');
+        await settle(1000);
+        expect(live.text()).toBe(MAX);
+      });
+
+      it('is not lost when an outside value change wipes the pending announcement', async () => {
+        const { wrapper, live, press, settle } = await atMax();
+        await press('+');
+        await wrapper.setProps({ modelValue: { latitude: -1.3, longitude: 116.9 } });
+        await settle(1000);
+        expect(live.text()).toBe('');
+        await press('+');
+        await settle(1000);
+        expect(live.text()).toBe(MAX);
+      });
+
+      it('says the minimum was reached for every burst too', async () => {
+        const { live, press, settle } = await atMax();
+        await press('-');
+        await settle(1000);
+        for (let burst = 0; burst < 2; burst += 1) {
+          await press('-', 3);
+          await settle(1000);
+          expect(live.text()).toBe('Zoom minimum tercapai.');
+          await settle(5000);
+        }
+      });
+    });
+
     it('keeps focus in the region when + or - keys reach the zoom limits in keyboard mode', async () => {
       const wrapper = await mountPicker({ modelValue: PIN, minZoom: 15, maxZoom: 19 });
       const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
