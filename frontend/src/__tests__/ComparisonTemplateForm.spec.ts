@@ -77,12 +77,15 @@ function installFetch(): void {
     calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : null });
     if (url === '/api/comparison-templates/preview') return previewResponse();
     const next = saveResponses.shift();
-    if (!next) throw new Error(`unexpected fetch: ${method} ${url}`);
-    return next();
+    if (next) return next();
+    if (url === '/api/comparison-templates' && method === 'GET') {
+      return json({ templates: [] });
+    }
+    throw new Error(`unexpected fetch: ${method} ${url}`);
   }) as typeof fetch;
 }
 
-const saves = () => calls.filter((c) => c.url !== '/api/comparison-templates/preview');
+const saves = () => calls.filter((c) => c.method === 'POST' || c.method === 'PATCH');
 const previews = () => calls.filter((c) => c.url === '/api/comparison-templates/preview');
 
 function mountForm(template: ComparisonTemplate | null = makeTemplate()): VueWrapper {
@@ -650,6 +653,129 @@ describe('ComparisonTemplateForm', () => {
 
       (wrapper.vm as unknown as { focusNameInput: () => void }).focusNameInput();
       expect(focusSpy).toHaveBeenCalled();
+      wrapper.unmount();
+    });
+  });
+
+  describe('optimistic concurrency', () => {
+    it('sends expectedUpdatedAt on save and handles 409 STALE_WRITE with reload button', async () => {
+      const template = makeTemplate({ updatedAt: '2026-01-02T00:00:00.000Z' });
+      const wrapper = mountForm(template);
+      const store = useComparisonTemplatesStore();
+      store.templates = [template];
+
+      // Edit name so form is dirty
+      await wrapper.find('#templat-nama').setValue('Perbandingan Diedit');
+
+      // First save returns 409 STALE_WRITE
+      saveResponses.push(() =>
+        json(
+          {
+            error: 'Templat telah diubah oleh pengguna lain. Muat ulang data lalu coba lagi.',
+            code: 'STALE_WRITE',
+          },
+          409,
+        ),
+      );
+
+      await submit(wrapper);
+
+      expect(saves()).toHaveLength(1);
+      expect(saves()[0]!.body).toMatchObject({
+        label: 'Perbandingan Diedit',
+        expectedUpdatedAt: '2026-01-02T00:00:00.000Z',
+      });
+
+      // Draft stays as typed
+      expect(wrapper.find<HTMLInputElement>('#templat-nama').element.value).toBe(
+        'Perbandingan Diedit',
+      );
+
+      // Stale banner is displayed
+      const staleBanner = wrapper.find('[data-test="stale-banner"]');
+      expect(staleBanner.exists()).toBe(true);
+      expect(staleBanner.text()).toContain('Data ini baru saja diubah oleh orang lain');
+
+      // Attempting to save again without reloading keeps failing with same stale expectedUpdatedAt
+      saveResponses.push(() =>
+        json(
+          {
+            error: 'Templat telah diubah oleh pengguna lain. Muat ulang data lalu coba lagi.',
+            code: 'STALE_WRITE',
+          },
+          409,
+        ),
+      );
+      await submit(wrapper);
+      expect(saves()).toHaveLength(2);
+      expect(saves()[1]!.body).toMatchObject({
+        expectedUpdatedAt: '2026-01-02T00:00:00.000Z',
+      });
+
+      // Now simulated background fetch or updated store has fresh template
+      const freshTemplate = makeTemplate({
+        updatedAt: '2026-01-03T00:00:00.000Z',
+        label: 'Perbandingan Baru dari Rekan',
+      });
+      store.templates = [freshTemplate];
+
+      // Confirm dialog when clicking reload latest on dirty form
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+      const reloadBtn = wrapper.find('[data-test="reload-latest"]');
+      expect(reloadBtn.exists()).toBe(true);
+      await reloadBtn.trigger('click');
+
+      expect(confirmSpy).toHaveBeenCalled();
+      // Draft has been swapped to the fresh template
+      expect(wrapper.find<HTMLInputElement>('#templat-nama').element.value).toBe(
+        'Perbandingan Baru dari Rekan',
+      );
+      expect(wrapper.find('[data-test="stale-banner"]').exists()).toBe(false);
+
+      // Next save now sends the fresh expectedUpdatedAt and succeeds
+      saveResponses.push(() => json({ template: freshTemplate }));
+      await submit(wrapper);
+
+      expect(saves()).toHaveLength(3);
+      expect(saves()[2]!.body).toMatchObject({
+        label: 'Perbandingan Baru dari Rekan',
+        expectedUpdatedAt: '2026-01-03T00:00:00.000Z',
+      });
+      expect(wrapper.emitted('saved')).toHaveLength(1);
+
+      confirmSpy.mockRestore();
+      wrapper.unmount();
+    });
+
+    it('cancels reload when user declines confirmation on dirty form', async () => {
+      const template = makeTemplate({ updatedAt: '2026-01-02T00:00:00.000Z' });
+      const wrapper = mountForm(template);
+      const store = useComparisonTemplatesStore();
+      store.templates = [template];
+
+      await wrapper.find('#templat-nama').setValue('Diedit Lokal');
+      saveResponses.push(() =>
+        json({ error: 'Stale', code: 'STALE_WRITE' }, 409),
+      );
+      await submit(wrapper);
+
+      const freshTemplate = makeTemplate({
+        updatedAt: '2026-01-03T00:00:00.000Z',
+        label: 'Versi Server',
+      });
+      store.templates = [freshTemplate];
+
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+      await wrapper.find('[data-test="reload-latest"]').trigger('click');
+
+      expect(confirmSpy).toHaveBeenCalled();
+      // Draft still has local value because user declined
+      expect(wrapper.find<HTMLInputElement>('#templat-nama').element.value).toBe('Diedit Lokal');
+      expect(wrapper.find('[data-test="stale-banner"]').exists()).toBe(true);
+
+      confirmSpy.mockRestore();
       wrapper.unmount();
     });
   });

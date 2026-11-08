@@ -69,6 +69,7 @@ export const TREND_KEYWORD_ACK_REQUIRED = 'TREND_KEYWORD_ACK_REQUIRED';
 export type SaveOutcome =
   | { ok: true; template: ComparisonTemplate }
   | { ok: false; kind: 'ack'; warnings: TrendWarning[] }
+  | { ok: false; kind: 'stale'; message: string }
   | { ok: false; kind: 'error'; message: string };
 
 export type DeleteOutcome =
@@ -235,6 +236,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
     id: string,
     draft: TemplateDraft,
     acknowledgedWarnings: readonly string[] = [],
+    expectedUpdatedAt?: string,
   ): Promise<SaveOutcome> {
     try {
       const data = await apiRequestJson<{ template: ComparisonTemplate }>(
@@ -243,6 +245,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
           method: 'PATCH',
           body: JSON.stringify({
             ...draft,
+            ...(expectedUpdatedAt !== undefined ? { expectedUpdatedAt } : {}),
             ...(acknowledgedWarnings.length > 0
               ? { acknowledgedWarnings: [...acknowledgedWarnings] }
               : {}),
@@ -260,6 +263,9 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
     if (err instanceof ApiError && err.status === 422 && err.code === TREND_KEYWORD_ACK_REQUIRED) {
       const warnings = parseWarnings(err.body);
       if (warnings.length > 0) return { ok: false, kind: 'ack', warnings };
+    }
+    if (err instanceof ApiError && err.status === 409 && err.code === 'STALE_WRITE') {
+      return { ok: false, kind: 'stale', message: USER_MESSAGES.stale };
     }
     return { ok: false, kind: 'error', message: describeTemplateFailure(err, context) };
   }

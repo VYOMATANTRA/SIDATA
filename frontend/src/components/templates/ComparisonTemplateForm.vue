@@ -54,6 +54,13 @@ const store = useComparisonTemplatesStore();
 const SENTENCE_FIELDS: readonly SentenceField[] = ['body', 'trendNaik', 'trendTurun', 'trendTetap'];
 
 const nameInput = ref<HTMLInputElement | null>(null);
+const baseUpdatedAt = ref(props.template?.updatedAt ?? '');
+watch(
+  () => props.template?.updatedAt,
+  (val) => {
+    if (val) baseUpdatedAt.value = val;
+  },
+);
 const label = ref(props.template?.label ?? '');
 const segments = ref<Record<SentenceField, TemplateSegment[]>>({
   body: parseBody(props.template?.body ?? ''),
@@ -66,6 +73,8 @@ const submitted = ref(false);
 const saving = ref(false);
 watch(saving, (value) => emit('busy', value));
 const serverError = ref('');
+const isStale = ref(false);
+const staleMessage = ref('');
 const touched = ref<Set<string>>(new Set());
 
 const fieldId = (name: string): string => `${props.idPrefix}-${name}`;
@@ -78,13 +87,15 @@ const serialized = computed<Record<SentenceField, string>>(() => ({
 }));
 
 // What the form held when it opened, so the host can tell whether closing would lose edits.
-const baseline = JSON.stringify([
-  label.value.trim(),
-  ...SENTENCE_FIELDS.map((field) => serialized.value[field]),
-]);
+const baseline = ref(
+  JSON.stringify([
+    label.value.trim(),
+    ...SENTENCE_FIELDS.map((field) => serialized.value[field]),
+  ]),
+);
 const isDirty = (): boolean =>
   JSON.stringify([label.value.trim(), ...SENTENCE_FIELDS.map((f) => serialized.value[f])]) !==
-  baseline;
+  baseline.value;
 
 function focusNameInput(): void {
   nameInput.value?.focus();
@@ -98,7 +109,7 @@ const labelError = computed(() => {
   if (value.length > 255) return 'Nama templat terlalu panjang. Persingkat namanya.';
   const lower = value.toLowerCase();
   const duplicate = store.templates.some(
-    (t) => t.id !== props.template?.id && t.label.trim().toLowerCase() === lower,
+    (t) => Boolean(t) && t.id !== props.template?.id && t.label.trim().toLowerCase() === lower,
   );
   if (duplicate) return 'Nama templat sudah dipakai. Gunakan nama lain.';
   return undefined;
@@ -197,6 +208,8 @@ async function handleSubmit(): Promise<void> {
   submitted.value = true;
   serverError.value = '';
   warningNotice.value = '';
+  isStale.value = false;
+  staleMessage.value = '';
   if (hasLocalErrors.value || awaitingConfirmation.value) return;
 
   saving.value = true;
@@ -204,7 +217,12 @@ async function handleSubmit(): Promise<void> {
   try {
     const draft = buildDraft();
     const outcome = props.template
-      ? await store.updateTemplate(props.template.id, draft, acknowledged)
+      ? await store.updateTemplate(
+          props.template.id,
+          draft,
+          acknowledged,
+          baseUpdatedAt.value,
+        )
       : await store.createTemplate(draft, acknowledged);
 
     if (outcome.ok) {
@@ -221,10 +239,51 @@ async function handleSubmit(): Promise<void> {
       requestAnimationFrame(() => warningPanel.value?.focus());
       return;
     }
+    if (outcome.kind === 'stale') {
+      isStale.value = true;
+      staleMessage.value = outcome.message;
+      void store.fetchTemplates(true);
+      return;
+    }
     // The draft stays exactly as typed; only the banner changes.
     serverError.value = outcome.message;
   } finally {
     saving.value = false;
+  }
+}
+
+async function handleReloadLatest(): Promise<void> {
+  if (isDirty() && typeof window !== 'undefined' && typeof window.confirm === 'function') {
+    const ok = window.confirm(
+      'Perubahan yang belum disimpan akan digantikan dengan versi terbaru. Lanjutkan?',
+    );
+    if (!ok) return;
+  }
+  if (!props.template) return;
+  let fresh = store.templates.find((t) => t.id === props.template?.id);
+  if (!fresh) {
+    await store.fetchTemplates(true);
+    fresh = store.templates.find((t) => t.id === props.template?.id);
+  }
+  if (fresh) {
+    baseUpdatedAt.value = fresh.updatedAt;
+    label.value = fresh.label;
+    segments.value = {
+      body: parseBody(fresh.body),
+      trendNaik: parseBody(fresh.trendNaik),
+      trendTurun: parseBody(fresh.trendTurun),
+      trendTetap: parseBody(fresh.trendTetap),
+    };
+    baseline.value = JSON.stringify([
+      label.value.trim(),
+      ...SENTENCE_FIELDS.map((field) => serializeSegments(segments.value[field]).trim()),
+    ]);
+    isStale.value = false;
+    staleMessage.value = '';
+    serverError.value = '';
+    pendingWarnings.value = [];
+    confirmed.value = {};
+    warningNotice.value = '';
   }
 }
 
@@ -329,6 +388,35 @@ const usageNote = computed(() => {
       :errors="summaryErrors"
       :form-error="serverError"
     />
+
+    <div
+      v-if="isStale"
+      class="rounded-card border-status-warning-border bg-status-warning-surface border p-4 text-sm"
+      data-test="stale-banner"
+      role="alert"
+    >
+      <div class="flex items-start gap-3">
+        <ExclamationTriangleIcon class="text-status-warning h-5 w-5 shrink-0" aria-hidden="true" />
+        <div class="space-y-2">
+          <p class="text-brand-navy font-semibold">
+            {{ staleMessage || 'Data ini baru saja diubah oleh pengguna lain.' }}
+          </p>
+          <p class="text-text-muted">
+            Muat ulang untuk melihat versi terbaru; isian Anda tetap tersimpan di formulir sebelum dimuat.
+          </p>
+          <BaseButton
+            type="button"
+            variant="secondary"
+            size="sm"
+            class="min-h-11"
+            data-test="reload-latest"
+            @click="handleReloadLatest"
+          >
+            Muat versi terbaru
+          </BaseButton>
+        </div>
+      </div>
+    </div>
 
     <p
       v-if="usageNote"

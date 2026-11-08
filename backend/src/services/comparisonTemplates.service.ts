@@ -8,6 +8,7 @@ import {
   type AuditRequestContext,
 } from './audit.service.js';
 import { SLUG_REGEX, indicatorCachesInvalidator } from './indicators.service.js';
+import { STALE_WRITE_CODE, expectedUpdatedAtSchema } from '../utils/hierarchyAuthoring.js';
 import { executeLockedTransaction, withChangeResult } from '../utils/lockTransactionCache.js';
 import {
   TEMPLATE_SLOTS,
@@ -153,12 +154,19 @@ export const updateComparisonTemplateSchema = z
     trendNaik: templateFields.trendNaik.optional(),
     trendTurun: templateFields.trendTurun.optional(),
     trendTetap: templateFields.trendTetap.optional(),
+    expectedUpdatedAt: expectedUpdatedAtSchema,
     acknowledgedWarnings,
   })
   .strict()
-  .refine((data) => Object.keys(data).some((key) => key !== 'acknowledgedWarnings'), {
-    message: 'Setidaknya satu bidang harus disediakan untuk diperbarui',
-  });
+  .refine(
+    (data) =>
+      Object.keys(data).some(
+        (key) => key !== 'acknowledgedWarnings' && key !== 'expectedUpdatedAt',
+      ),
+    {
+      message: 'Setidaknya satu bidang harus disediakan untuk diperbarui',
+    },
+  );
 
 const FIELD_NAMES: Record<TemplateField, string> = {
   body: 'body',
@@ -385,6 +393,15 @@ export const updateComparisonTemplate = async (
         });
         if (!existing) {
           throw new ComparisonTemplateServiceError('Template tidak ditemukan.', 404);
+        }
+
+        const expectedMs = Date.parse(input.expectedUpdatedAt);
+        if (Number.isNaN(expectedMs) || existing.updatedAt.getTime() !== expectedMs) {
+          throw new ComparisonTemplateServiceError(
+            'Templat telah diubah oleh pengguna lain. Muat ulang data lalu coba lagi.',
+            409,
+            { code: STALE_WRITE_CODE },
+          );
         }
 
         // The merged template is what indicators will render, so that is what must be valid.

@@ -180,6 +180,36 @@ describe('comparison templates store', () => {
       expect(bodies[1]).toMatchObject({ acknowledgedWarnings: ['k1', 'k2'] });
     });
 
+    it('sends expectedUpdatedAt in PATCH body when provided', async () => {
+      let body: Record<string, unknown> | null = null;
+      route({
+        'PATCH /api/comparison-templates/tpl-1': (init) => {
+          body = JSON.parse(String(init?.body));
+          return json({ template: makeTemplate() });
+        },
+      });
+      const store = useComparisonTemplatesStore();
+      await store.updateTemplate('tpl-1', DRAFT, [], '2026-01-02T00:00:00.000Z');
+
+      expect(body).toMatchObject({
+        expectedUpdatedAt: '2026-01-02T00:00:00.000Z',
+      });
+    });
+
+    it('returns a stale outcome for 409 STALE_WRITE', async () => {
+      route({
+        'PATCH /api/comparison-templates/tpl-1': () =>
+          json({ error: 'Data telah diubah', code: 'STALE_WRITE' }, 409),
+      });
+      const store = useComparisonTemplatesStore();
+      const outcome = await store.updateTemplate('tpl-1', DRAFT, [], '2026-01-01T00:00:00.000Z');
+
+      expect(outcome).toMatchObject({
+        ok: false,
+        kind: 'stale',
+      });
+    });
+
     it('treats a 422 without usable warnings as an ordinary failure, not an ack flow', async () => {
       route({
         'POST /api/comparison-templates': () =>

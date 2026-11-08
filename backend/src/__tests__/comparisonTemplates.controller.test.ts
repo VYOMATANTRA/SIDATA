@@ -403,7 +403,10 @@ describe('comparisonTemplates.controller updateComparisonTemplateHandler', () =>
   it('returns 200 with { message, template }', async () => {
     const res = fakeRes();
     await updateComparisonTemplateHandler(
-      makeReq({ params: { id: 'tpl-1' }, body: { label: 'Label baru' } }),
+      makeReq({
+        params: { id: 'tpl-1' },
+        body: { label: 'Label baru', expectedUpdatedAt: '2026-01-02T00:00:00.000Z' },
+      }),
       res as unknown as Response,
     );
 
@@ -430,11 +433,30 @@ describe('comparisonTemplates.controller updateComparisonTemplateHandler', () =>
 
     const res = fakeRes();
     await updateComparisonTemplateHandler(
-      makeReq({ params: { id: 'missing' }, body: { label: 'Baru' } }),
+      makeReq({
+        params: { id: 'missing' },
+        body: { label: 'Baru', expectedUpdatedAt: '2026-01-02T00:00:00.000Z' },
+      }),
       res as unknown as Response,
     );
 
     assert.equal(res.status, 404);
+  });
+
+  it('returns 409 with code STALE_WRITE when expectedUpdatedAt is stale', async () => {
+    const res = fakeRes();
+    await updateComparisonTemplateHandler(
+      makeReq({
+        params: { id: 'tpl-1' },
+        body: { label: 'Baru', expectedUpdatedAt: '2026-01-01T00:00:00.000Z' },
+      }),
+      res as unknown as Response,
+    );
+
+    assert.equal(res.status, 409);
+    const body = res.body as AnyRecord;
+    assert.equal(body['code'], 'STALE_WRITE');
+    assert.equal(auditRows.length, 0);
   });
 
   it('returns 409 when the new slug is taken', async () => {
@@ -444,7 +466,10 @@ describe('comparisonTemplates.controller updateComparisonTemplateHandler', () =>
 
     const res = fakeRes();
     await updateComparisonTemplateHandler(
-      makeReq({ params: { id: 'tpl-1' }, body: { slug: 'dipakai' } }),
+      makeReq({
+        params: { id: 'tpl-1' },
+        body: { slug: 'dipakai', expectedUpdatedAt: '2026-01-02T00:00:00.000Z' },
+      }),
       res as unknown as Response,
     );
 
@@ -454,7 +479,10 @@ describe('comparisonTemplates.controller updateComparisonTemplateHandler', () =>
   it('returns 422 with { error, code, warnings } for a flagged body edit', async () => {
     const res = fakeRes();
     await updateComparisonTemplateHandler(
-      makeReq({ params: { id: 'tpl-1' }, body: { body: FLAGGED_BODY } }),
+      makeReq({
+        params: { id: 'tpl-1' },
+        body: { body: FLAGGED_BODY, expectedUpdatedAt: '2026-01-02T00:00:00.000Z' },
+      }),
       res as unknown as Response,
     );
 
@@ -472,7 +500,10 @@ describe('comparisonTemplates.controller updateComparisonTemplateHandler', () =>
 
     const res = fakeRes();
     await updateComparisonTemplateHandler(
-      makeReq({ params: { id: 'tpl-1' }, body: { label: 'Baru' } }),
+      makeReq({
+        params: { id: 'tpl-1' },
+        body: { label: 'Baru', expectedUpdatedAt: '2026-01-02T00:00:00.000Z' },
+      }),
       res as unknown as Response,
     );
 
