@@ -9,6 +9,11 @@
  * The map keeps a centre and zoom so code that reads them back behaves like the real thing, and
  * `setView` / `invalidateSize` / `panTo` fire `moveend` the way Leaflet does, so a component's
  * feedback-loop guard is actually exercised.
+ *
+ * Mock limitations:
+ * - `panBy` does not perform pixel snapping against real browser display scaling.
+ * - `panTo` ignores the `animate` option and immediately updates center.
+ * - Pin mode touch and pointer interactions (such as pointer-cancel) require real-browser verification.
  */
 import { vi } from 'vitest';
 
@@ -94,6 +99,7 @@ function wire(): void {
   });
   leafletMap.setZoom.mockImplementation((zoom) => {
     leafletState.zoom = zoom;
+    leafletState.handlers.zoomend?.();
     return leafletMap;
   });
   leafletMap.panBy.mockImplementation((offset) => {

@@ -24,6 +24,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MANGGAR_MAP_CENTER, MANGGAR_MAP_DEFAULT_ZOOM } from '../../constants/mapOrigin';
 import {
+  COORDINATE_EPSILON,
   DIRECTION_LABELS,
   clampZoom,
   directionOffset,
@@ -134,7 +135,6 @@ let reannounceTimer: number | undefined;
 let announceSeq = 0;
 let nudgeAnnounceTimer: number | undefined;
 let resizeObserver: ResizeObserver | null = null;
-let resizeTimer: number | undefined;
 /** Last value emitted but not yet echoed back by the parent; keeps rapid key presses accurate. */
 let pending: { value: PickerLocation | null } | null = null;
 let lastEmitted: PickerLocation | null = null;
@@ -272,17 +272,6 @@ function emitValue(location: GeoPoint, zoom?: number, fromDetect = false): void 
   });
 }
 
-/** Visitors who ask for less motion get no pan inertia, animated pans or zoom/fade animation. */
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
-
-let reducedMotion = false;
-
 function markerIcon(): L.DivIcon {
   return L.divIcon({
     className: 'location-picker-pin',
@@ -315,7 +304,10 @@ function placeMarker(location: GeoPoint): void {
 }
 
 function near(a: GeoPoint, b: GeoPoint): boolean {
-  return Math.abs(a.latitude - b.latitude) < 2e-6 && Math.abs(a.longitude - b.longitude) < 2e-6;
+  return (
+    Math.abs(a.latitude - b.latitude) < COORDINATE_EPSILON &&
+    Math.abs(a.longitude - b.longitude) < COORDINATE_EPSILON
+  );
 }
 
 /** Brings the map and marker in line with `modelValue` without emitting anything. */
@@ -345,7 +337,7 @@ function syncFromValue(initial = false): void {
   placeMarker(value);
   if (initial) return;
   if (!map.getBounds().contains([value.latitude, value.longitude])) {
-    runSilently(() => map?.panTo([value.latitude, value.longitude], { animate: !reducedMotion }));
+    runSilently(() => map?.panTo([value.latitude, value.longitude], { animate: false }));
   }
 }
 
@@ -437,12 +429,10 @@ onMounted(() => {
         ? props.focusZoom
         : props.initialZoom;
     viewZoom.value = startZoom;
-    reducedMotion = prefersReducedMotion();
     map = L.map(container.value, {
       doubleClickZoom: !viewport.value,
       // A position picker needs precision: a fast drag must not coast hundreds of pixels away.
       inertia: false,
-      ...(reducedMotion ? { zoomAnimation: false, fadeAnimation: false } : {}),
       zoomControl: false,
       keyboard: false,
       scrollWheelZoom: false,
@@ -464,7 +454,6 @@ onMounted(() => {
       resizeObserver = new ResizeObserver(() => refreshSize());
       resizeObserver.observe(container.value);
     }
-    resizeTimer = window.setTimeout(refreshSize, 100);
   });
 });
 
@@ -472,7 +461,6 @@ onUnmounted(() => {
   isUnmounted = true;
   window.removeEventListener('keydown', escapeGuard, true);
   geoRequest += 1;
-  window.clearTimeout(resizeTimer);
   clearTogglePress();
   window.clearTimeout(reannounceTimer);
   clearAnnouncement();
@@ -542,7 +530,7 @@ function nudge(direction: PickerDirection, large = false, viaKeyboard = false): 
   placeMarker(moved);
   emitValue(moved);
   if (!map.getBounds().contains([moved.latitude, moved.longitude])) {
-    runSilently(() => map?.panTo([moved.latitude, moved.longitude], { animate: !reducedMotion }));
+    runSilently(() => map?.panTo([moved.latitude, moved.longitude], { animate: false }));
   }
   const message = `Pin digeser ke ${DIRECTION_LABELS[direction]}.`;
   if (viaKeyboard) announceNudge(message);

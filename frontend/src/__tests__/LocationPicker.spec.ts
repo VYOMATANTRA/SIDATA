@@ -1061,10 +1061,10 @@ describe('LocationPicker', () => {
       expect(lastEmitted(wrapper)).toMatchObject({ zoom: 14 });
     });
 
-    it('ignores a stray moveend drifting about 1.2e-6 but emits once the drift passes the tolerance', async () => {
+    it('ignores a stray moveend drifting within tolerance but emits once the drift passes it', async () => {
       const wrapper = await mountPicker({ modelValue: VIEW, includeZoom: true });
-      // Beyond the de-dupe tolerance (5e-7) yet inside the stored-view guard tolerance (2e-6).
-      leafletState.center = { lat: -1.2251 + 1.2e-6, lng: 116.9438 };
+      // Inside the guard tolerance (COORDINATE_EPSILON = 1e-6).
+      leafletState.center = { lat: -1.2251 + 0.4e-6, lng: 116.9438 };
       leafletState.handlers.moveend?.();
       expect(wrapper.emitted('update:modelValue')).toBeUndefined();
       leafletState.center = { lat: -1.2251 + 3e-6, lng: 116.9438 };
@@ -1073,46 +1073,20 @@ describe('LocationPicker', () => {
     });
   });
 
-  describe('reduced motion', () => {
-    afterEach(() => {
-      vi.unstubAllGlobals();
-    });
-
-    function stubMotion(reduce: boolean) {
-      vi.stubGlobal('matchMedia', (query: string) => ({
-        matches: reduce && query.includes('prefers-reduced-motion'),
-        media: query,
-        addEventListener: () => undefined,
-        removeEventListener: () => undefined,
-      }));
-    }
-
-    it('turns off inertia, zoom and fade animation and animated pans when reduced motion is requested', async () => {
-      stubMotion(true);
+  describe('motion and animation', () => {
+    it('turns off inertia and animated pans', async () => {
       leafletState.inBounds = false;
       const wrapper = await mountPicker({ modelValue: PIN });
-      expect(leafletState.mapOptions).toMatchObject({
-        inertia: false,
-        zoomAnimation: false,
-        fadeAnimation: false,
-      });
+      expect(leafletState.mapOptions).toMatchObject({ inertia: false });
+      expect(leafletState.mapOptions).not.toHaveProperty('zoomAnimation');
+      expect(leafletState.mapOptions).not.toHaveProperty('fadeAnimation');
       await wrapper.setProps({ modelValue: { latitude: -1.5, longitude: 117 } });
       expect(leafletMap.panTo).toHaveBeenLastCalledWith([-1.5, 117], { animate: false });
     });
 
-    it('never lets a drag coast: inertia is off whatever the motion preference', async () => {
-      stubMotion(false);
+    it('never lets a drag coast: inertia is off', async () => {
       await mountPicker({ modelValue: PIN });
       expect(leafletState.mapOptions).toMatchObject({ inertia: false });
-    });
-
-    it('keeps Leaflet animations and animated pans otherwise', async () => {
-      stubMotion(false);
-      leafletState.inBounds = false;
-      const wrapper = await mountPicker({ modelValue: PIN });
-      expect(leafletState.mapOptions).not.toHaveProperty('zoomAnimation');
-      await wrapper.setProps({ modelValue: { latitude: -1.5, longitude: 117 } });
-      expect(leafletMap.panTo).toHaveBeenLastCalledWith([-1.5, 117], { animate: true });
     });
   });
 

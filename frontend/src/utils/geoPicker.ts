@@ -42,10 +42,16 @@ export function clampZoom(zoom: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(zoom)));
 }
 
+/** Tolerance for coordinate comparisons (about 0.1 m). */
+export const COORDINATE_EPSILON = 1e-6;
+
 /** True when two locations are within rounding distance of each other. */
 export function sameLocation(a: GeoPoint | null, b: GeoPoint | null): boolean {
   if (a === null || b === null) return a === b;
-  return Math.abs(a.latitude - b.latitude) < 5e-7 && Math.abs(a.longitude - b.longitude) < 5e-7;
+  return (
+    Math.abs(a.latitude - b.latitude) < COORDINATE_EPSILON &&
+    Math.abs(a.longitude - b.longitude) < COORDINATE_EPSILON
+  );
 }
 
 /**

@@ -7,6 +7,7 @@ import LocationPicker, { type PickerLocation } from '../maps/LocationPicker.vue'
 import type { PublicSettings } from '../../stores/settings.store';
 import { MANGGAR_MAP_ORIGIN, MANGGAR_MAP_DEFAULT_ZOOM } from '../../constants/mapOrigin';
 import { INPUT_CLASSES } from '../../utils/formStyles';
+import { COORDINATE_EPSILON } from '../../utils/geoPicker';
 
 /** Same bounds the API enforces for `defaultCoordinates` (backend `coordinatesSchema`). */
 const MIN_ZOOM = 1;
@@ -129,8 +130,8 @@ const dirty = computed(() => {
   const viewChanged =
     view === null ||
     !savedView ||
-    Math.abs(view.latitude - savedView.lat) > 1e-6 ||
-    Math.abs(view.longitude - savedView.lon) > 1e-6 ||
+    Math.abs(view.latitude - savedView.lat) > COORDINATE_EPSILON ||
+    Math.abs(view.longitude - savedView.lon) > COORDINATE_EPSILON ||
     view.zoom !== savedView.zoom;
   return (
     viewChanged ||
