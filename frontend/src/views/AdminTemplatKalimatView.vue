@@ -28,6 +28,7 @@ const keepEditingButton = ref<HTMLButtonElement | null>(null);
 const editing = ref<ComparisonTemplate | null>(null);
 const deleting = ref<ComparisonTemplate | null>(null);
 const deleteBusy = ref(false);
+const isDeleting = ref(false);
 const deleteError = ref('');
 const statusMessage = ref('');
 const addButton = ref<InstanceType<typeof BaseButton> | null>(null);
@@ -159,9 +160,20 @@ function handleSaved(template: ComparisonTemplate): void {
   announce(`Templat “${template.label}” ${wasNew ? 'ditambahkan' : 'disimpan'}.`);
 }
 
-function openDelete(template: ComparisonTemplate): void {
+async function openDelete(template: ComparisonTemplate): Promise<void> {
   deleteError.value = '';
   deleting.value = template;
+  deleteBusy.value = true;
+  try {
+    await store.fetchTemplates(true);
+    if (!deleting.value) return;
+    const refreshed = store.templates.find((item) => item.id === template.id);
+    if (refreshed) {
+      deleting.value = refreshed;
+    }
+  } finally {
+    deleteBusy.value = false;
+  }
 }
 
 function closeDelete(): void {
@@ -180,6 +192,7 @@ async function confirmDelete(): Promise<void> {
   const target = deleting.value;
   if (!target || deleteBusy.value) return;
   deleteBusy.value = true;
+  isDeleting.value = true;
   deleteError.value = '';
   try {
     const outcome = await store.deleteTemplate(target);
@@ -193,6 +206,7 @@ async function confirmDelete(): Promise<void> {
     deleteError.value = outcome.message;
   } finally {
     deleteBusy.value = false;
+    isDeleting.value = false;
   }
 }
 
@@ -382,7 +396,15 @@ function retry(): void {
       @close="closeDelete"
     >
       <div v-if="deleting" class="space-y-4" data-test="delete-dialog">
-        <template v-if="deleteBlockedMessage">
+        <p
+          v-if="deleteBusy && !isDeleting"
+          class="text-text-muted text-sm"
+          data-test="delete-loading"
+        >
+          Memeriksa penggunaan templat…
+        </p>
+
+        <template v-else-if="deleteBlockedMessage">
           <p class="text-brand-navy text-sm" data-test="delete-in-use">
             {{ deleteBlockedMessage }}
           </p>
@@ -413,14 +435,14 @@ function retry(): void {
             {{ deleteBlockedMessage ? 'Mengerti' : 'Batal' }}
           </BaseButton>
           <BaseButton
-            v-if="!deleteBlockedMessage"
+            v-if="!deleteBlockedMessage && (!deleteBusy || isDeleting)"
             size="md"
             class="min-h-11"
             :disabled="deleteBusy"
             data-test="confirm-delete"
             @click="confirmDelete"
           >
-            {{ deleteBusy ? 'Menghapus…' : `Hapus “${deleting.label}”` }}
+            {{ isDeleting ? 'Menghapus…' : `Hapus “${deleting.label}”` }}
           </BaseButton>
         </div>
       </div>

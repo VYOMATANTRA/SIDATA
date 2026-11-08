@@ -176,14 +176,16 @@ describe('AdminTemplatKalimatView', () => {
 
     it('shows the same explanation when the server answers in-use for a stale count', async () => {
       const wrapper = await mountView();
-      // The screen says unused, but another admin attached it since the list was loaded.
       deleteStatus = 409;
+      await wrapper.findAll('[data-test="delete"]')[1]!.trigger('click');
+      await flushPromises();
+
+      // Another admin attached it on the backend right after dialog was opened
       templates = [
         makeTemplate({ id: 'tpl-1', label: 'Perbandingan tahunan', usageCount: 2 }),
         makeTemplate({ id: 'tpl-2', label: 'Perbandingan ringkas', usageCount: 5 }),
       ];
-      await wrapper.findAll('[data-test="delete"]')[1]!.trigger('click');
-      await flushPromises();
+
       document.body.querySelector<HTMLButtonElement>('[data-test="confirm-delete"]')!.click();
       await flushPromises();
 
@@ -193,6 +195,30 @@ describe('AdminTemplatKalimatView', () => {
       // The list now shows the refreshed count and the template is still there.
       expect(wrapper.findAll('[data-test="template-card"]')).toHaveLength(2);
       expect(wrapper.findAll('[data-test="usage"]')[1]!.text()).toBe('Dipakai 5 indikator');
+      wrapper.unmount();
+    });
+
+    it('refreshes template usage count and shows busy state when opening delete dialog', async () => {
+      const wrapper = await mountView();
+      // Server usage count changed to 3 before clicking delete
+      templates = [
+        makeTemplate({ id: 'tpl-1', label: 'Perbandingan tahunan', usageCount: 2 }),
+        makeTemplate({ id: 'tpl-2', label: 'Perbandingan ringkas', usageCount: 3 }),
+      ];
+
+      await wrapper.findAll('[data-test="delete"]')[1]!.trigger('click');
+
+      // Dialog is busy/loading while fetching refreshed usage
+      expect(document.body.querySelector('[data-test="delete-loading"]')).not.toBeNull();
+
+      await flushPromises();
+
+      // Refreshed usage is applied, showing in-use and blocking confirm
+      expect(methods).toContain('GET /api/comparison-templates');
+      expect(document.body.querySelector('[data-test="delete-loading"]')).toBeNull();
+      const inUse = document.body.querySelector('[data-test="delete-in-use"]');
+      expect(inUse?.textContent).toContain('masih dipakai 3 indikator');
+      expect(document.body.querySelector('[data-test="confirm-delete"]')).toBeNull();
       wrapper.unmount();
     });
 
