@@ -199,6 +199,50 @@ describe('LocationPicker', () => {
       expect(leafletMap.panBy).toHaveBeenLastCalledWith([0, -80], { animate: false });
     });
 
+    const PAN_EXPECTED: Array<[string, string, [number, number]]> = [
+      ['north', 'ArrowUp', [0, -16]],
+      ['south', 'ArrowDown', [0, 16]],
+      ['east', 'ArrowRight', [16, 0]],
+      ['west', 'ArrowLeft', [-16, 0]],
+    ];
+
+    it.each(PAN_EXPECTED)(
+      'pans %s for the %s key, and %s with Shift by 80px',
+      async (direction, key, offset) => {
+        const wrapper = await mountPicker({
+          modelValue: { latitude: -1.2251, longitude: 116.9438, zoom: 13 },
+          includeZoom: true,
+        });
+        await click(wrapper, 'location-picker-keyboard');
+        const region = wrapper.get('[data-test="location-picker-region"]');
+        leafletMap.panBy.mockClear();
+        await region.trigger('keydown', { key });
+        expect(leafletMap.panBy).toHaveBeenLastCalledWith(offset, { animate: false });
+        await region.trigger('keydown', { key, shiftKey: true });
+        expect(leafletMap.panBy).toHaveBeenLastCalledWith(
+          offset.map((n) => n * 5),
+          {
+            animate: false,
+          },
+        );
+        expect(direction).toBeTruthy();
+      },
+    );
+
+    it.each(PAN_EXPECTED)(
+      'pans %s with the "Geser" button (%s)',
+      async (direction, _key, offset) => {
+        const wrapper = await mountPicker({
+          modelValue: { latitude: -1.2251, longitude: 116.9438, zoom: 13 },
+          includeZoom: true,
+        });
+        leafletMap.panBy.mockClear();
+        await click(wrapper, `location-picker-${direction}`);
+        expect(leafletMap.panBy).toHaveBeenCalledTimes(1);
+        expect(leafletMap.panBy).toHaveBeenLastCalledWith(offset, { animate: false });
+      },
+    );
+
     it('lets a pointer click on the toggle turn keyboard mode off and back on', async () => {
       const wrapper = await mountPicker({ modelValue: PIN });
       const toggle = wrapper.get('[data-test="location-picker-keyboard"]');

@@ -3,6 +3,7 @@ import {
   LARGE_STEP_PIXELS,
   STEP_PIXELS,
   clampZoom,
+  directionOffset,
   moveLocation,
   normalizeLocation,
   sameLocation,
@@ -81,5 +82,33 @@ describe('geoPicker helpers', () => {
     const wrapped = moveLocation({ latitude: 0, longitude: 180 }, 'east', 1, true).longitude;
     expect(wrapped).toBeGreaterThanOrEqual(-180);
     expect(wrapped).toBeLessThan(0);
+  });
+
+  describe('directionOffset', () => {
+    it.each([
+      ['north', [0, -STEP_PIXELS]],
+      ['south', [0, STEP_PIXELS]],
+      ['east', [STEP_PIXELS, 0]],
+      ['west', [-STEP_PIXELS, 0]],
+    ] as const)('steps %s by the normal step', (direction, expected) => {
+      expect(directionOffset(direction)).toEqual(expected);
+      expect(directionOffset(direction, false)).toEqual(expected);
+    });
+
+    it.each([
+      ['north', [0, -80]],
+      ['south', [0, 80]],
+      ['east', [80, 0]],
+      ['west', [-80, 0]],
+    ] as const)('steps %s by the large (Shift) step', (direction, expected) => {
+      expect(directionOffset(direction, true)).toEqual(expected);
+    });
+
+    it('uses 16px normal and 80px large steps', () => {
+      expect(STEP_PIXELS).toBe(16);
+      expect(LARGE_STEP_PIXELS).toBe(80);
+      expect(directionOffset('south')).toEqual([0, 16]);
+      expect(directionOffset('west', true)).toEqual([-80, 0]);
+    });
   });
 });
