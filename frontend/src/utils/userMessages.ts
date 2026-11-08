@@ -292,11 +292,14 @@ const VALIDATION_PREFIX = /^Validasi [^:]{1,60} gagal:/i;
 /** Zod's default English wording, which must never reach an operator. */
 const ZOD_PATTERNS: readonly RegExp[] = [
   /(?:^|[\s:,;])(?:Invalid (?:input|option|type|value|enum)|Too (?:big|small)|Unrecognized keys?|Required|Expected|Unexpected)\b/,
+  /^Invalid\b/,
+  /^(?:String|Number|Array) must\b/,
   /\breceived (?:undefined|null|number|string|object|array|boolean|nan)\b/i,
   /\bexpected (?:one of|string|number|boolean|object|array|record)\b/i,
 ];
 
-const QUOTED_ID = /"c[a-z0-9]{20,}"/g;
+const QUOTED_ID =
+  /"(?:c[a-z0-9]{20,}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"/gi;
 
 function readableServerMessage(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;

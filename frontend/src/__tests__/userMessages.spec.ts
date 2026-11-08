@@ -244,6 +244,52 @@ describe('toUserMessage mappings', () => {
     expect(toUserMessage(joined).message).toBe(INPUT_MISMATCH_MESSAGE);
   });
 
+  it('filters Zod v4 English messages with table-driven cases', () => {
+    const fallback = USER_MESSAGES.validation;
+    const zodV4Cases = [
+      'Invalid email address',
+      'Invalid uuid',
+      'Invalid date',
+      'Invalid nanoid',
+      'Invalid literal value',
+      'String must contain at least 1 character(s)',
+      'String must contain at most 191 character(s)',
+      'Number must be greater than 0',
+      'Number must be less than or equal to 100',
+      'Array must contain at least 1 element(s)',
+      'Array must contain at most 10 element(s)',
+    ];
+    for (const serverMessage of zodV4Cases) {
+      const error = Object.assign(httpFailure(400), { serverMessage });
+      expect([serverMessage, toUserMessage(error).message]).toEqual([serverMessage, fallback]);
+    }
+  });
+
+  it('strips quoted UUIDs and cuids from readable server messages', () => {
+    const cases = [
+      {
+        input: 'Titik "123e4567-e89b-12d3-a456-426614174000" tidak ditemukan.',
+        expected: 'Titik tidak ditemukan.',
+      },
+      {
+        input: 'Titik "123E4567-E89B-12D3-A456-426614174000" tidak ditemukan.',
+        expected: 'Titik tidak ditemukan.',
+      },
+      {
+        input: 'Data "ckl12345678901234567890" berhasil dihapus.',
+        expected: 'Data berhasil dihapus.',
+      },
+      {
+        input: 'RT "01" pada titik "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d" telah diperbarui.',
+        expected: 'RT "01" pada titik telah diperbarui.',
+      },
+    ];
+    for (const { input, expected } of cases) {
+      const error = Object.assign(httpFailure(400), { serverMessage: input });
+      expect([input, toUserMessage(error).message]).toEqual([input, expected]);
+    }
+  });
+
   it('shows ordinary Indonesian validation sentences untouched', () => {
     for (const text of [
       'Wajib diisi.',
