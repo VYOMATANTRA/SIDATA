@@ -5,7 +5,9 @@ import {
   buildCeritaItems,
   buildPublicNavGroups,
   isDestinationActive,
+  isNavItemActive,
   isNavGroupActive,
+  matchesPath,
 } from '../config/publicNav';
 import { getAdminEntryLink } from '../config/adminNav';
 
@@ -28,7 +30,7 @@ const ALL_PUBLIC_ROUTES = [
   '/tentang/vyomatantra',
 ];
 
-describe('isDestinationActive', () => {
+describe('matchesPath, isDestinationActive, and isNavItemActive (127-5)', () => {
   it('marks only the exact destination, so sibling Tentang pages are distinct', () => {
     expect(isDestinationActive('/tentang/desa-cantik', '/tentang/desa-cantik')).toBe(true);
     expect(isDestinationActive('/tentang/kelurahan-manggar', '/tentang/desa-cantik')).toBe(false);
@@ -42,6 +44,38 @@ describe('isDestinationActive', () => {
   it('matches home exactly', () => {
     expect(isDestinationActive('/', '/')).toBe(true);
     expect(isDestinationActive('/', '/peta')).toBe(false);
+    expect(matchesPath('/', '/')).toBe(true);
+    expect(matchesPath('/', '/peta')).toBe(false);
+  });
+
+  it('handles trailing slashes identically across matchesPath, isDestinationActive, and isNavItemActive', () => {
+    // Trailing slash on to or currentPath
+    expect(matchesPath('/peta/', '/peta')).toBe(true);
+    expect(matchesPath('/peta', '/peta/')).toBe(true);
+    expect(matchesPath('/peta/', '/peta/')).toBe(true);
+
+    expect(isDestinationActive('/peta/', '/peta')).toBe(true);
+    expect(isDestinationActive('/peta', '/peta/')).toBe(true);
+    expect(isDestinationActive('/peta/', '/peta/')).toBe(true);
+
+    expect(isNavItemActive('/peta/', '/peta')).toBe(true);
+    expect(isNavItemActive('/peta', '/peta/')).toBe(true);
+    expect(isNavItemActive('/tentang/kelurahan-manggar/', '/tentang/desa-cantik/')).toBe(true);
+  });
+
+  it('handles URI-encoded slugs identically across matchesPath, isDestinationActive, and isNavItemActive', () => {
+    const encoded = '/cerita/tata%20ruang';
+    const decoded = '/cerita/tata ruang';
+
+    expect(matchesPath(encoded, decoded)).toBe(true);
+    expect(matchesPath(decoded, encoded)).toBe(true);
+    expect(matchesPath(`${encoded}/sub`, `${decoded}/sub`)).toBe(true);
+
+    expect(isDestinationActive(encoded, decoded)).toBe(true);
+    expect(isDestinationActive(decoded, encoded)).toBe(true);
+
+    expect(isNavItemActive(encoded, decoded)).toBe(true);
+    expect(isNavItemActive(decoded, encoded)).toBe(true);
   });
 });
 

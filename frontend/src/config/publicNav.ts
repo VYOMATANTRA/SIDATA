@@ -69,6 +69,38 @@ export function getAvailableNavItems(router: Router | undefined | null): NavItem
 }
 
 /**
+ * Normalizes a URL path for comparison: decodes URI components and strips trailing slashes
+ * (except root `/`).
+ */
+function normalizePath(p: string): string {
+  let decoded = p;
+  try {
+    decoded = decodeURI(p);
+  } catch {
+    // keep raw
+  }
+  if (decoded.length > 1 && decoded.endsWith('/')) {
+    decoded = decoded.replace(/\/+$/, '');
+  }
+  return decoded;
+}
+
+/**
+ * Base path matching shared by public navigation active checks:
+ * - Exact match for home ('/')
+ * - Equal or nested (`startsWith(to + '/')`) for other routes
+ * Handles trailing slashes and URI-encoded slugs consistently.
+ */
+export function matchesPath(to: string, currentPath: string): boolean {
+  const normTo = normalizePath(to);
+  const normCurrent = normalizePath(currentPath);
+  if (normTo === '/') {
+    return normCurrent === '/';
+  }
+  return normCurrent === normTo || normCurrent.startsWith(`${normTo}/`);
+}
+
+/**
  * Determines whether a navigation item is considered active for the current path.
  * - Exact match for home ('/')
  * - Prefix match for '/tentang' so /tentang/desa-cantik and /tentang/vyomatantra
@@ -76,13 +108,12 @@ export function getAvailableNavItems(router: Router | undefined | null): NavItem
  * - Exact or prefix match for other section routes
  */
 export function isNavItemActive(itemTo: string, currentPath: string): boolean {
-  if (itemTo === '/') {
-    return currentPath === '/';
+  const normItemTo = normalizePath(itemTo);
+  if (normItemTo.startsWith('/tentang')) {
+    const normCurrent = normalizePath(currentPath);
+    return normCurrent === '/tentang' || normCurrent.startsWith('/tentang/');
   }
-  if (itemTo.startsWith('/tentang')) {
-    return currentPath.startsWith('/tentang');
-  }
-  return currentPath === itemTo || currentPath.startsWith(`${itemTo}/`);
+  return matchesPath(itemTo, currentPath);
 }
 
 /** Identifier of a public navigation group (SPEC §8). */
@@ -103,8 +134,7 @@ export const NAV_HOME_ITEM: NavItem = { label: 'Beranda', to: '/' };
  * visitor is on is marked, not all of them.
  */
 export function isDestinationActive(to: string, currentPath: string): boolean {
-  if (to === '/') return currentPath === '/';
-  return currentPath === to || currentPath.startsWith(`${to}/`);
+  return matchesPath(to, currentPath);
 }
 
 export function isNavGroupActive(group: NavGroup, currentPath: string): boolean {
