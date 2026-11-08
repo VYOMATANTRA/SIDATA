@@ -36,6 +36,8 @@ function fieldId(name: string): string {
   return `${props.idPrefix}-${name}`;
 }
 
+// Initial drafts and initialView are intentionally seeded once from props.settings on mount
+// with no watcher so background store refreshes don't wipe in-progress edits.
 const appName = ref(props.settings.appName ?? '');
 const institutionName = ref(props.settings.institutionName ?? '');
 const tagline = ref(props.settings.tagline ?? '');
@@ -106,7 +108,7 @@ const fieldOrder = [
   'mapView',
 ];
 
-/** The picker's first focusable control carries this id so the error summary can focus it. */
+/** The picker's map region carries this id so the error summary can focus it. */
 function errorTargetId(name: string): string {
   return name === 'mapView' ? `${fieldId('mapView')}-focus` : fieldId(name);
 }

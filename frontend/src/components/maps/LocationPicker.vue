@@ -137,6 +137,7 @@ let resizeObserver: ResizeObserver | null = null;
 let resizeTimer: number | undefined;
 /** Last value emitted but not yet echoed back by the parent; keeps rapid key presses accurate. */
 let pending: { value: PickerLocation | null } | null = null;
+let lastEmitted: PickerLocation | null = null;
 
 const hasValue = computed(() => props.modelValue !== null);
 const atMinZoom = computed(() => viewZoom.value <= props.minZoom);
@@ -262,8 +263,13 @@ function emitValue(location: GeoPoint, zoom?: number, fromDetect = false): void 
     : normalized;
   const current = latest();
   if (current && sameValue(current, next)) return;
-  pending = { value: next };
+  lastEmitted = next;
+  const emitted = { value: next };
+  pending = emitted;
   emit('update:modelValue', next);
+  void nextTick(() => {
+    if (pending === emitted) pending = null;
+  });
 }
 
 /** Visitors who ask for less motion get no pan inertia, animated pans or zoom/fade animation. */
@@ -482,11 +488,15 @@ watch(
   () => {
     // A value that is not the one this picker just emitted came from the parent (reset, reload):
     // drop messages and the device accuracy that described the previous value.
-    if (!(pending && sameValue(pending.value, props.modelValue))) {
+    const isEcho =
+      (pending !== null && sameValue(pending.value, props.modelValue)) ||
+      (lastEmitted !== null && sameValue(lastEmitted, props.modelValue));
+    if (!isEcho) {
       cancelDetect();
       clearAnnouncement();
       accuracy.value = null;
     }
+    lastEmitted = null;
     pending = null;
     syncFromValue();
   },
@@ -501,10 +511,16 @@ watch([() => props.disabled, () => props.readonly], () => {
   setInteractivity();
 });
 
+function pinCenter(): GeoPoint | null {
+  if (!marker) return null;
+  const latlng = marker.getLatLng();
+  return normalizeLocation({ latitude: latlng.lat, longitude: latlng.lng });
+}
+
 function nudge(direction: PickerDirection, large = false, viaKeyboard = false): void {
   if (!editable.value || !map) return;
   cancelDetect();
-  const base = viewport.value ? viewCenter() : latest();
+  const base = viewport.value ? viewCenter() : (pinCenter() ?? latest());
   if (!base) {
     // Pin mode without a pin: the first action drops one at the map centre.
     placePinAtCenter();
@@ -523,6 +539,7 @@ function nudge(direction: PickerDirection, large = false, viaKeyboard = false): 
     return;
   }
   const moved = moveLocation(base, direction, viewZoom.value, large);
+  placeMarker(moved);
   emitValue(moved);
   if (!map.getBounds().contains([moved.latitude, moved.longitude])) {
     runSilently(() => map?.panTo([moved.latitude, moved.longitude], { animate: !reducedMotion }));
@@ -537,6 +554,7 @@ function placePinAtCenter(): void {
   const center = viewCenter();
   if (!center) return;
   cancelDetect();
+  placeMarker(center);
   emitValue(center);
   announce('Pin diletakkan di tengah peta.');
 }
@@ -577,10 +595,15 @@ function clearLocation(): void {
   if (!editable.value || viewport.value || !props.clearable) return;
   cancelDetect();
   accuracy.value = null;
-  pending = { value: null };
+  lastEmitted = null;
+  const emitted = { value: null };
+  pending = emitted;
   emit('update:modelValue', null);
   announce('Pin dihapus.');
-  void nextTick(() => centerPinButton.value?.focus());
+  void nextTick(() => {
+    if (pending === emitted) pending = null;
+    centerPinButton.value?.focus();
+  });
 }
 
 function detectLocation(): void {
@@ -770,11 +793,12 @@ const toggleOffClasses = 'bg-surface text-brand-navy hover:bg-surface-hover';
     <slot />
 
     <div
+      :id="`${baseId}-focus`"
       ref="region"
       :data-test="`${testId}-region`"
       class="rounded-card focus-visible:outline-focus-ring relative isolate z-0 focus-visible:outline-2 focus-visible:outline-offset-2"
       :role="keyboardMode ? 'group' : undefined"
-      :tabindex="keyboardMode ? 0 : undefined"
+      :tabindex="keyboardMode ? 0 : -1"
       :aria-label="keyboardMode ? `Peta ${label}, mode keyboard aktif` : undefined"
       :aria-describedby="keyboardMode ? keysId : undefined"
       @keydown="onKeydown"
@@ -885,7 +909,6 @@ const toggleOffClasses = 'bg-surface text-brand-navy hover:bg-surface-hover';
           Hapus pin
         </button>
         <button
-          :id="`${baseId}-focus`"
           ref="keyboardToggle"
           type="button"
           :class="[toggleBaseClasses, keyboardMode ? toggleOnClasses : toggleOffClasses, 'gap-2']"

@@ -236,7 +236,37 @@ describe('PublicSettingsForm.vue', () => {
     await wrapper.find('form').trigger('submit.prevent');
     const target = document.getElementById('settings-mapView-focus');
     expect(target).not.toBeNull();
-    expect(target?.tagName).toBe('BUTTON');
+    expect(target?.tagName).toBe('DIV');
+    wrapper.unmount();
+  });
+
+  it('preserves an in-progress draft when props.settings changes after mount', async () => {
+    const wrapper = mountForm({ settings: DEFAULT_PUBLIC_SETTINGS });
+    await flushPromises();
+
+    await wrapper.find('input#settings-appName').setValue('Draft App Name');
+    panTo(-1.24, 116.95, 16);
+    await flushPromises();
+
+    await wrapper.setProps({
+      settings: {
+        ...DEFAULT_PUBLIC_SETTINGS,
+        appName: 'Refreshed From Store',
+        defaultCoordinates: { lat: -1.22, lon: 116.92, zoom: 14 },
+      },
+    });
+    await flushPromises();
+
+    expect((wrapper.find('input#settings-appName').element as HTMLInputElement).value).toBe(
+      'Draft App Name',
+    );
+    await wrapper.find('form').trigger('submit.prevent');
+    const emitted = wrapper.emitted('submit');
+    expect(emitted).toHaveLength(1);
+    expect(emitted?.[0]?.[0]).toMatchObject({
+      appName: 'Draft App Name',
+      defaultCoordinates: { lat: -1.24, lon: 116.95, zoom: 16 },
+    });
     wrapper.unmount();
   });
 });

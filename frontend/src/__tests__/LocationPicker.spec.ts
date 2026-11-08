@@ -131,7 +131,7 @@ describe('LocationPicker', () => {
     it('moves the pin with arrow keys only in keyboard mode, with a larger step for Shift', async () => {
       const wrapper = await mountPicker({ modelValue: PIN });
       const region = wrapper.get('[data-test="location-picker-region"]');
-      expect(region.attributes('tabindex')).toBeUndefined();
+      expect(region.attributes('tabindex')).toBe('-1');
       await region.trigger('keydown', { key: 'ArrowUp' });
       expect(wrapper.emitted('update:modelValue')).toBeUndefined();
 
@@ -414,7 +414,7 @@ describe('LocationPicker', () => {
         region.element.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
         await nextTick();
         expect(toggle.attributes('aria-pressed')).toBe('false');
-        expect(region.attributes('tabindex')).toBeUndefined();
+        expect(region.attributes('tabindex')).toBe('-1');
       } finally {
         hasFocus.mockRestore();
       }
