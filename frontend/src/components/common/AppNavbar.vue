@@ -86,7 +86,11 @@ useDrawerFocusTrap({
 function handleDesktopKeydown(event: KeyboardEvent) {
   if (event.key !== 'Escape' || !isMenuOpen.value || isModal.value) return;
   if (isEventFromOpenDialog(event, panelRef.value)) return;
-  void closeAndRestoreFocus();
+  if (headerRef.value?.contains(document.activeElement)) {
+    void closeAndRestoreFocus();
+  } else {
+    closeMenu();
+  }
 }
 
 function handleOutsidePointerDown(event: PointerEvent) {

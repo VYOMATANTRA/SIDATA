@@ -340,6 +340,25 @@ describe('AppNavbar menu: desktop disclosure', () => {
     wrapper.unmount();
   });
 
+  it('closes on Escape and preserves outside input focus', async () => {
+    const { wrapper } = await mountNavbar();
+    await toggle(wrapper).trigger('click');
+
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    expect(document.activeElement).toBe(input);
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await wrapper.vm.$nextTick();
+
+    expect(toggle(wrapper).attributes('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(input);
+
+    input.remove();
+    wrapper.unmount();
+  });
+
   it('closes on an outside pointer press but not on a press inside the header', async () => {
     const { wrapper } = await mountNavbar();
     await toggle(wrapper).trigger('click');
