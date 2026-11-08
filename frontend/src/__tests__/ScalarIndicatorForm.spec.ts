@@ -344,6 +344,16 @@ describe('ScalarIndicatorForm.vue', () => {
       wrapper.unmount();
     });
 
+    it('disables the template select while the form is busy', () => {
+      const wrapper = mount(ScalarIndicatorForm, {
+        props: { indicator: makeIndicator(), templates, busy: true },
+      });
+
+      const select = wrapper.find(selector);
+      expect(select.attributes('disabled')).toBeDefined();
+      wrapper.unmount();
+    });
+
     it('is hidden when the indicator is not flagged as a computed comparison (a pair alone does not qualify)', () => {
       const wrapper = mount(ScalarIndicatorForm, {
         props: { indicator: makeIndicator({ isComputedComparison: false }), templates },

@@ -148,9 +148,7 @@ function keepEditing(): void {
     pendingRouteLeaveResolve = null;
   }
   void nextTick(() => {
-    document
-      .querySelector<HTMLElement>('[data-test="template-form"] input[type="text"]')
-      ?.focus();
+    editorForm.value?.focusNameInput();
   });
 }
 

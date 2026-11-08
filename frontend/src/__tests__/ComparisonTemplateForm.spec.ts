@@ -49,8 +49,17 @@ const PREVIEW_OK = {
   ],
 };
 
-function json(body: unknown, status = 200): Response {
-  return { ok: status >= 200 && status < 300, status, json: async () => body } as Response;
+function json(
+  body: unknown,
+  status = 200,
+  headers: Record<string, string> = {},
+): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: new Headers(headers),
+    json: async () => body,
+  } as Response;
 }
 
 let calls: Call[];
@@ -290,7 +299,8 @@ describe('ComparisonTemplateForm', () => {
 
       const panel = wrapper.find('[data-test="trend-warnings"]');
       expect(panel.exists()).toBe(true);
-      expect(panel.attributes('role')).toBe('alert');
+      expect(panel.attributes('role')).toBeUndefined();
+      expect(panel.attributes('tabindex')).toBe('-1');
       expect(panel.text()).toContain('di luar bagian yang mengikuti angka');
       expect(panel.text()).toContain('Periksa kembali sebelum menyimpan');
       expect(panel.text()).toContain('terus');
@@ -534,7 +544,7 @@ describe('ComparisonTemplateForm', () => {
     it('debounces: several edits inside the window cause a single preview request', async () => {
       vi.useFakeTimers();
       const wrapper = mountForm();
-      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(800);
       expect(previews()).toHaveLength(1);
 
       const text = wrapper.find('[data-test="builder-trendTetap"] textarea');
@@ -545,7 +555,7 @@ describe('ComparisonTemplateForm', () => {
       await text.setValue('tidak berubah lagi');
       expect(previews()).toHaveLength(1);
 
-      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(800);
       expect(previews()).toHaveLength(2);
       expect(previews()[1]!.body).toMatchObject({ trendTetap: 'tidak berubah lagi' });
       expect(previews()[1]!.body).not.toHaveProperty('label');
@@ -555,7 +565,7 @@ describe('ComparisonTemplateForm', () => {
     it('shows each rendered sentence and the zero-previous note, in a polite live region', async () => {
       vi.useFakeTimers();
       const wrapper = mountForm();
-      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(800);
       await flushPromises();
 
       const items = wrapper.findAll('[data-test="preview-item"]');
@@ -586,7 +596,7 @@ describe('ComparisonTemplateForm', () => {
       vi.useFakeTimers();
       previewResponse = () => json({ error: 'boom' }, 500);
       const wrapper = mountForm();
-      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(800);
       await flushPromises();
 
       expect(wrapper.find('[data-test="preview-error"]').text()).toContain(
@@ -594,6 +604,52 @@ describe('ComparisonTemplateForm', () => {
       );
       expect(wrapper.find('[data-test="preview-error"]').text()).not.toMatch(/500|boom/);
       expect(wrapper.find('[data-test="save"]').attributes('disabled')).toBeUndefined();
+      wrapper.unmount();
+    });
+
+    it('clears stale previews and shows 429 message with Retry-After when rate-limited', async () => {
+      vi.useFakeTimers();
+      // First preview succeeds.
+      const wrapper = mountForm();
+      await vi.advanceTimersByTimeAsync(800);
+      await flushPromises();
+      expect(wrapper.findAll('[data-test="preview-item"]')).toHaveLength(2);
+
+      // Second preview fails with 429 and Retry-After: 30.
+      previewResponse = () => json({ error: 'Too many requests' }, 429, { 'retry-after': '30' });
+      const text = wrapper.find('[data-test="builder-trendTetap"] textarea');
+      await text.setValue('tetap sama');
+      await vi.advanceTimersByTimeAsync(800);
+      await flushPromises();
+
+      expect(wrapper.findAll('[data-test="preview-item"]')).toHaveLength(0);
+      expect(wrapper.find('[data-test="preview-error"]').text()).toBe(
+        'Terlalu banyak permintaan. Coba lagi dalam 30 detik.',
+      );
+      wrapper.unmount();
+    });
+
+    it('shows generic rate limited message when 429 has no Retry-After', async () => {
+      vi.useFakeTimers();
+      previewResponse = () => json({ error: 'Too many requests' }, 429);
+      const wrapper = mountForm();
+      await vi.advanceTimersByTimeAsync(800);
+      await flushPromises();
+
+      expect(wrapper.findAll('[data-test="preview-item"]')).toHaveLength(0);
+      expect(wrapper.find('[data-test="preview-error"]').text()).toBe(
+        'Terlalu banyak permintaan. Tunggu sebentar lalu coba lagi.',
+      );
+      wrapper.unmount();
+    });
+
+    it('exposes focusNameInput to programmatically focus the name input', async () => {
+      const wrapper = mountForm();
+      const input = wrapper.find<HTMLInputElement>('#templat-nama');
+      const focusSpy = vi.spyOn(input.element, 'focus');
+
+      (wrapper.vm as unknown as { focusNameInput: () => void }).focusNameInput();
+      expect(focusSpy).toHaveBeenCalled();
       wrapper.unmount();
     });
   });

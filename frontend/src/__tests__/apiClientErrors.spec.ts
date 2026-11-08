@@ -200,6 +200,36 @@ describe('apiClient error object', () => {
     });
   });
 
+  it('parses numeric Retry-After response header into retryAfterSeconds', async () => {
+    const response = {
+      ok: false,
+      status: 429,
+      headers: new Headers({ 'retry-after': '120' }),
+      json: async () => ({ error: 'Too many requests' }),
+    } as unknown as Response;
+
+    const error = await failureOf(response);
+
+    expect(error.status).toBe(429);
+    expect(error.retryAfterSeconds).toBe(120);
+    expect(error.userMessage).toBe(USER_MESSAGES.rate_limited);
+  });
+
+  it('leaves retryAfterSeconds undefined when Retry-After is absent or non-numeric', async () => {
+    const errorWithoutHeader = await failureOf(json({ error: 'Too many requests' }, 429));
+    expect(errorWithoutHeader.retryAfterSeconds).toBeUndefined();
+
+    const responseWithInvalid = {
+      ok: false,
+      status: 429,
+      headers: new Headers({ 'retry-after': 'invalid' }),
+      json: async () => ({ error: 'Too many requests' }),
+    } as unknown as Response;
+
+    const errorWithInvalid = await failureOf(responseWithInvalid);
+    expect(errorWithInvalid.retryAfterSeconds).toBeUndefined();
+  });
+
   it('gives a non-JSON error page the server wording and a fallback message', async () => {
     const error = await failureOf(htmlError(502));
 

@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { describe, it, before, after } from 'node:test';
+import express from 'express';
 import app from '../app.js';
+import prisma from '../utils/prisma.js';
+import { generateAccessToken } from '../utils/jwt.js';
 import comparisonTemplatesRouter from '../routes/comparisonTemplates.routes.js';
 import {
   listComparisonTemplatesHandler,
@@ -211,5 +214,99 @@ describe('comparisonTemplates.routes wiring', () => {
         assert.deepEqual(await response.json(), { error: 'CSRF token tidak valid' });
       });
     }
+
+    describe('editor role is forbidden from mutating routes', () => {
+      let originalUserFindUnique: typeof prisma.user.findUnique;
+
+      before(() => {
+        originalUserFindUnique = prisma.user.findUnique;
+        prisma.user.findUnique = (async (args: { where: { id?: string } }) => {
+          if (args?.where?.id === 'editor-user-id') {
+            return {
+              id: 'editor-user-id',
+              email: 'editor@manggar.go.id',
+              role: { name: 'editor' },
+              deletedAt: null,
+            };
+          }
+          return null;
+        }) as unknown as typeof prisma.user.findUnique;
+      });
+
+      after(() => {
+        prisma.user.findUnique = originalUserFindUnique;
+      });
+
+      const getCsrf = async (): Promise<{ token: string; cookie: string }> => {
+        const res = await fetch(`${baseUrl}/api/auth/csrf-token`);
+        const cookie = res.headers.get('set-cookie') ?? '';
+        const data = (await res.json()) as { csrfToken: string };
+        return { token: data.csrfToken, cookie };
+      };
+
+      for (const [method, path] of [
+        ['POST', '/api/comparison-templates'],
+        ['POST', '/api/comparison-templates/preview'],
+        ['PATCH', '/api/comparison-templates/tpl-1'],
+        ['DELETE', '/api/comparison-templates/tpl-1'],
+      ] as const) {
+        it(`${method} ${path} with Editor token is rejected with 403`, async () => {
+          const csrf = await getCsrf();
+          const editorToken = generateAccessToken({
+            id: 'editor-user-id',
+            email: 'editor@manggar.go.id',
+            role: 'editor',
+          });
+          const response = await fetch(`${baseUrl}${path}`, {
+            method,
+            headers: {
+              'content-type': 'application/json',
+              'x-csrf-token': csrf.token,
+              cookie: csrf.cookie,
+              authorization: `Bearer ${editorToken}`,
+            },
+            ...(method === 'DELETE' ? {} : { body: JSON.stringify({}) }),
+          });
+
+          assert.equal(response.status, 403);
+          assert.deepEqual(await response.json(), {
+            error: 'Akses ditolak. Membutuhkan hak akses Admin.',
+          });
+        });
+      }
+    });
+
+    it('rate limiter responds with 429 and Retry-After header when write limit is exceeded', async () => {
+      const testApp = express();
+      testApp.use((req, _res, next) => {
+        (req as unknown as { user: { id: string } }).user = { id: 'rate-limit-exceeded-user' };
+        next();
+      });
+      testApp.use(comparisonTemplatesWriteLimiter);
+      testApp.post('/test', (_req, res) => res.json({ ok: true }));
+
+      const testServer = testApp.listen(0, '127.0.0.1');
+      await new Promise<void>((resolve) => testServer.once('listening', () => resolve()));
+      const { port } = testServer.address() as AddressInfo;
+      const testUrl = `http://127.0.0.1:${port}/test`;
+
+      try {
+        let lastRes: Response | null = null;
+        for (let i = 0; i < 101; i++) {
+          lastRes = await fetch(testUrl, { method: 'POST' });
+          if (lastRes.status === 429) break;
+        }
+        assert.ok(lastRes);
+        assert.equal(lastRes.status, 429);
+        const retryAfterHeader = lastRes.headers.get('retry-after');
+        assert.ok(retryAfterHeader);
+        const retryAfter = Number(retryAfterHeader);
+        assert.ok(!Number.isNaN(retryAfter) && retryAfter > 0);
+      } finally {
+        await new Promise<void>((resolve, reject) =>
+          testServer.close((err) => (err ? reject(err) : resolve())),
+        );
+      }
+    });
   });
 });

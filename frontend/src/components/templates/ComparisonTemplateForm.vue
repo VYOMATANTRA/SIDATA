@@ -22,6 +22,7 @@ import {
   type TemplateSegment,
 } from '../../utils/comparisonTemplateSegments';
 import { INPUT_CLASSES } from '../../utils/formStyles';
+import { ApiError } from '../../utils/apiClient';
 
 /**
  * Admin form for one comparison template (SPEC §5, §8): name, main sentence, and the three
@@ -52,6 +53,7 @@ const store = useComparisonTemplatesStore();
 
 const SENTENCE_FIELDS: readonly SentenceField[] = ['body', 'trendNaik', 'trendTurun', 'trendTetap'];
 
+const nameInput = ref<HTMLInputElement | null>(null);
 const label = ref(props.template?.label ?? '');
 const segments = ref<Record<SentenceField, TemplateSegment[]>>({
   body: parseBody(props.template?.body ?? ''),
@@ -83,7 +85,12 @@ const baseline = JSON.stringify([
 const isDirty = (): boolean =>
   JSON.stringify([label.value.trim(), ...SENTENCE_FIELDS.map((f) => serialized.value[f])]) !==
   baseline;
-defineExpose({ isDirty });
+
+function focusNameInput(): void {
+  nameInput.value?.focus();
+}
+
+defineExpose({ isDirty, focusNameInput });
 
 const labelError = computed(() => {
   const value = label.value.trim();
@@ -223,11 +230,12 @@ async function handleSubmit(): Promise<void> {
 
 // --- Live preview -------------------------------------------------------------------------
 
-const PREVIEW_DEBOUNCE_MS = 400;
+const PREVIEW_DEBOUNCE_MS = 700;
 
 const previewStatus = ref<'incomplete' | 'loading' | 'ready' | 'error'>('incomplete');
 const previews = ref<PreviewSentence[]>([]);
 const previewProblems = ref<string[]>([]);
+const previewError = ref('');
 let previewTimer: ReturnType<typeof setTimeout> | null = null;
 let previewAbort: AbortController | null = null;
 let previewSeq = 0;
@@ -262,14 +270,26 @@ async function runPreview(): Promise<void> {
   } catch (error) {
     if (seq !== previewSeq) return;
     if (error instanceof DOMException && error.name === 'AbortError') return;
-    // Keep the last good preview on screen; the preview is a convenience, not a gate.
+    previews.value = [];
+    previewProblems.value = [];
     previewStatus.value = 'error';
+    if (error instanceof ApiError && error.status === 429) {
+      if (typeof error.retryAfterSeconds === 'number' && error.retryAfterSeconds > 0) {
+        previewError.value = `Terlalu banyak permintaan. Coba lagi dalam ${error.retryAfterSeconds} detik.`;
+      } else {
+        previewError.value = 'Terlalu banyak permintaan. Tunggu sebentar lalu coba lagi.';
+      }
+    } else {
+      previewError.value =
+        'Pratinjau belum bisa dimuat. Anda tetap bisa menyimpan; coba ubah kalimat lagi untuk memuat ulang pratinjau.';
+    }
   }
 }
 
 function schedulePreview(): void {
   cancelPreview();
   previewSeq += 1;
+  previewError.value = '';
   if (!sentencesComplete.value) {
     previews.value = [];
     previewProblems.value = [];
@@ -328,6 +348,7 @@ const usageNote = computed(() => {
     >
       <input
         :id="fieldId('nama')"
+        ref="nameInput"
         v-model="label"
         type="text"
         maxlength="255"
@@ -389,10 +410,10 @@ const usageNote = computed(() => {
 
     <section
       class="rounded-card border-border bg-surface-muted border p-4"
-      aria-labelledby="templat-pratinjau-judul"
+      :aria-labelledby="fieldId('pratinjau-judul')"
       data-test="preview"
     >
-      <h3 id="templat-pratinjau-judul" class="text-brand-navy text-sm font-semibold">
+      <h3 :id="fieldId('pratinjau-judul')" class="text-brand-navy text-sm font-semibold">
         Pratinjau kalimat
       </h3>
       <p class="text-text-muted mt-1 text-xs">
@@ -425,8 +446,7 @@ const usageNote = computed(() => {
           class="text-status-error text-sm"
           data-test="preview-error"
         >
-          Pratinjau belum bisa dimuat. Anda tetap bisa menyimpan; coba ubah kalimat lagi untuk
-          memuat ulang pratinjau.
+          {{ previewError }}
         </p>
 
         <ul v-if="previews.length > 0" class="space-y-3">
@@ -450,7 +470,6 @@ const usageNote = computed(() => {
       v-if="pendingWarnings.length > 0 || warningNotice"
       ref="warningPanel"
       tabindex="-1"
-      role="alert"
       class="rounded-card border-status-warning-border bg-status-warning-surface border p-4"
       data-test="trend-warnings"
     >
@@ -498,7 +517,7 @@ const usageNote = computed(() => {
     >
       <p
         v-if="awaitingConfirmation"
-        id="templat-simpan-bantuan"
+        :id="fieldId('simpan-bantuan')"
         class="text-text-muted text-xs sm:mr-auto"
         data-test="confirm-help"
       >
@@ -518,7 +537,7 @@ const usageNote = computed(() => {
         size="md"
         class="min-h-11"
         :disabled="saving || awaitingConfirmation"
-        :aria-describedby="awaitingConfirmation ? 'templat-simpan-bantuan' : undefined"
+        :aria-describedby="awaitingConfirmation ? fieldId('simpan-bantuan') : undefined"
         data-test="save"
       >
         {{ saving ? 'Menyimpan…' : 'Simpan templat' }}

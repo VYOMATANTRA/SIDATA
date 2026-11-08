@@ -37,6 +37,8 @@ export interface ApiErrorInit {
   serverMessage?: string;
   /** HTTP method of the failed request; reads get wording that does not mention saving. */
   method?: string;
+  /** Seconds to wait before retrying, parsed from the Retry-After response header. */
+  retryAfterSeconds?: number;
 }
 
 /**
@@ -53,6 +55,7 @@ export class ApiError extends Error {
   fieldErrors: Record<string, string>;
   serverMessage: string | undefined;
   method: string | undefined;
+  retryAfterSeconds: number | undefined;
   /** Approved plain-Indonesian text for a banner or dialog. Never the raw server message. */
   userMessage: string;
 
@@ -65,6 +68,7 @@ export class ApiError extends Error {
     this.fieldErrors = init.fieldErrors ?? {};
     this.serverMessage = init.serverMessage;
     this.method = init.method;
+    this.retryAfterSeconds = init.retryAfterSeconds;
     this.userMessage = toUserMessage(this).message;
   }
 }
@@ -212,6 +216,7 @@ export function apiErrorFromBody(
   body: unknown,
   method: string,
   path = '',
+  init: Partial<ApiErrorInit> = {},
 ): ApiError {
   const serverMessage = serverMessageOf(body);
   const code = textField(fieldOf(body, 'code'));
@@ -228,6 +233,7 @@ export function apiErrorFromBody(
     fieldErrors: sanitizeFieldErrors(fieldOf(body, 'fieldErrors')),
     serverMessage,
     method: method.toUpperCase(),
+    retryAfterSeconds: init.retryAfterSeconds,
   });
 }
 
@@ -236,7 +242,13 @@ export async function apiErrorFromResponse(
   path: string,
   method: string,
 ): Promise<ApiError> {
-  return apiErrorFromBody(response.status, await readErrorBody(response), method, path);
+  const retryHeader =
+    typeof response.headers?.get === 'function' ? response.headers.get('retry-after') : null;
+  const parsed = retryHeader !== null ? parseInt(retryHeader, 10) : NaN;
+  const retryAfterSeconds = Number.isNaN(parsed) ? undefined : parsed;
+  return apiErrorFromBody(response.status, await readErrorBody(response), method, path, {
+    retryAfterSeconds,
+  });
 }
 
 export async function apiRequestJson<T>(path: string, init: RequestInit = {}): Promise<T> {

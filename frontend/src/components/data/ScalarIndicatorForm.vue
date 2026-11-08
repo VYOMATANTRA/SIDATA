@@ -443,6 +443,7 @@ function handleSubmit(): void {
           <select
             :id="fieldId('comparison-template')"
             v-model="draft.comparisonTemplateId"
+            :disabled="busy"
             :class="INPUT_CLASSES"
             class="sm:max-w-md"
             :aria-describedby="
