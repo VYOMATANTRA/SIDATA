@@ -1,6 +1,6 @@
 import { copyFile, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
-import type { MediaAsset, Prisma } from '../../generated/prisma/client.js';
+import { Prisma, type MediaAsset } from '../../generated/prisma/client.js';
 import prisma from '../utils/prisma.js';
 import { processPhoto, type PhotoProcessingOptions } from '../utils/mediaImage.js';
 import {
@@ -202,7 +202,7 @@ export async function ingestStagedUpload(input: IngestInput): Promise<MediaAsset
 // Attach / detach: called by content services INSIDE their own transactions.
 // ---------------------------------------------------------------------------------------------
 
-export type MediaTransactionClient = Pick<Prisma.TransactionClient, 'mediaAsset'>;
+export type MediaTransactionClient = Pick<Prisma.TransactionClient, 'mediaAsset' | '$queryRaw'>;
 
 export interface MediaAttachContext {
   /** The purpose the referencing content slot accepts. Assets of any other purpose are refused. */
@@ -219,8 +219,15 @@ async function loadAndCheck(
   if (!ids.every(isValidAssetId)) {
     throw new MediaServiceError('MEDIA_NOT_FOUND', 'Media tidak ditemukan.', 400);
   }
-  const assets = await tx.mediaAsset.findMany({ where: { id: { in: ids } } });
-  if (assets.length !== ids.length) {
+  const sorted = [...ids].sort();
+  const locked = await tx.$queryRaw<Array<{ id: string }>>(
+    Prisma.sql`SELECT id FROM media_assets WHERE id IN (${Prisma.join(sorted)}) FOR UPDATE`,
+  );
+  if (locked.length !== sorted.length) {
+    throw new MediaServiceError('MEDIA_NOT_FOUND', 'Media tidak ditemukan.', 400);
+  }
+  const assets = await tx.mediaAsset.findMany({ where: { id: { in: sorted } } });
+  if (assets.length !== sorted.length) {
     throw new MediaServiceError('MEDIA_NOT_FOUND', 'Media tidak ditemukan.', 400);
   }
   if (!isMediaPurpose(context.purpose) || assets.some((a) => a.purpose !== context.purpose)) {
@@ -230,7 +237,7 @@ async function loadAndCheck(
       400,
     );
   }
-  return ids;
+  return sorted;
 }
 
 /**
@@ -239,8 +246,13 @@ async function loadAndCheck(
  * assets (their original attachedAt is kept). Throws MediaServiceError (400) otherwise, which
  * rolls back the caller's transaction.
  *
- * The cleanup script deletes unattached rows with `WHERE attached_at IS NULL`; the post-update
- * count below turns a delete that wins that race into a rollback instead of a dangling reference.
+ * `loadAndCheck` acquires an exclusive row lock (`SELECT id ... FOR UPDATE`) in ascending id order
+ * across all targets. Under InnoDB REPEATABLE READ, this row lock serializes concurrent attachments,
+ * detachments, and cleanup's `deleteMany` operations, avoiding concurrency races and deadlock.
+ *
+ * The recount below is retained as defense-in-depth: if an unattached row was deleted by cleanup
+ * before this transaction acquired the row lock, the recount detects the missing row and triggers
+ * a rollback instead of leaving a dangling reference.
  */
 export async function attachMedia(
   tx: MediaTransactionClient,
@@ -257,6 +269,7 @@ export async function attachMedia(
     data: { attachedAt: now, detachedAt: null },
   });
 
+  // Defense-in-depth recount: ensure no row was concurrently removed before the lock.
   const stillThere = await tx.mediaAsset.count({ where: { id: { in: ids } } });
   if (stillThere !== ids.length) {
     throw new MediaServiceError('MEDIA_NOT_FOUND', 'Media tidak ditemukan.', 400);

@@ -379,6 +379,12 @@ describe('attachMedia / detachMedia', () => {
     const rows = new Map(assets.map((a) => [a.id, { ...a }]));
     const calls: Array<{ method: string; args: unknown }> = [];
     const tx = {
+      $queryRaw: async (query: unknown) => {
+        calls.push({ method: '$queryRaw', args: query });
+        const values = (query as { values?: unknown[] })?.values ?? [];
+        const requestedIds = values.filter((v): v is string => typeof v === 'string');
+        return requestedIds.filter((id) => rows.has(id)).map((id) => ({ id }));
+      },
       mediaAsset: {
         findMany: async (args: { where: { id: { in: string[] } } }) => {
           calls.push({ method: 'findMany', args });
@@ -413,6 +419,18 @@ describe('attachMedia / detachMedia', () => {
     };
     return { tx: tx as unknown as MediaTransactionClient, rows, calls };
   }
+
+  it('executes $queryRaw first with sorted ids to acquire row locks FOR UPDATE', async () => {
+    const { tx, calls } = fakeTx([
+      makeAsset({ id: ID_A, purpose: 'cerita' }),
+      makeAsset({ id: ID_B, purpose: 'cerita' }),
+    ]);
+    await attachMedia(tx, [ID_B, ID_A], { purpose: 'cerita' });
+    assert.equal(calls[0]?.method, '$queryRaw');
+    const query = calls[0].args as { values?: unknown[] };
+    assert.deepEqual(query.values, [ID_A, ID_B]);
+    assert.equal(calls[1]?.method, 'findMany');
+  });
 
   it('sets attachedAt for assets whose purpose matches the context', async () => {
     const { tx, rows } = fakeTx([

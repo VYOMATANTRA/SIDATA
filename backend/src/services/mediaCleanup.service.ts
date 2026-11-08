@@ -110,14 +110,17 @@ async function cleanStaging(root: string, cutoffMs: number, dryRun: boolean): Pr
  * delete into a permanent orphan (nothing references the file any more, so no later run finds
  * it). With files first, a failed delete keeps the row and the next run simply retries.
  *
- * Race safety: the row is re-verified as still collectable (`attached_at IS NULL`, age condition)
- * immediately before any file is touched, and the final row delete repeats that condition, so an
- * asset that content attached earlier is never deleted, and `attachMedia`'s recount still
- * rolls back an attach that loses to the row delete. The residual window is an attach committing
- * in the few milliseconds between the re-verification and the row delete: the asset is then
- * attached but its files are gone. The row delete matches nothing, the asset is counted in
- * `assetsRaced` and logged, and it serves a plain 404 (MEDIA_FILE_MISSING) until re-uploaded.
- * That is the price of removing files first without holding a lock across file I/O.
+ * Race safety: `attachMedia` and `detachMedia` take an exclusive `SELECT ... FOR UPDATE` row lock
+ * in ascending id order, serializing concurrent attachments against database mutations. The cleanup
+ * job deletes files before deleting the database row so that failed file deletions do not produce
+ * uncollectable orphans. Because cleanup intentionally does not hold database row locks across
+ * disk I/O, the row is re-verified as still collectable (`attached_at IS NULL`, age condition)
+ * immediately before any file is touched, and the final row delete repeats that condition. If an
+ * `attachMedia` transaction acquires its `FOR UPDATE` lock after cleanup re-verification but commits
+ * before the row delete, the row delete matches nothing, the asset is counted in `assetsRaced` and
+ * logged, and `attachMedia`'s recount ensures safety. The asset serves a plain 404
+ * (MEDIA_FILE_MISSING) until re-uploaded. That is the deliberate trade-off of removing files before
+ * the DB row without holding database locks across slow file I/O.
  */
 export async function runMediaCleanup(options: MediaCleanupOptions): Promise<MediaCleanupResult> {
   const now = options.now ?? new Date();

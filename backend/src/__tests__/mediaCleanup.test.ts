@@ -420,6 +420,11 @@ describe('runMediaCleanup: files before row', () => {
 describe('runMediaCleanup: grace period after detach', () => {
   function txOver(rows: Map<string, MediaAsset>): MediaTransactionClient {
     return {
+      $queryRaw: async (query: unknown) => {
+        const values = (query as { values?: unknown[] })?.values ?? [];
+        const requestedIds = values.filter((v): v is string => typeof v === 'string');
+        return requestedIds.filter((id) => rows.has(id)).map((id) => ({ id }));
+      },
       mediaAsset: {
         findMany: async (args: { where: { id: { in: string[] } } }) =>
           args.where.id.in.flatMap((id) => (rows.has(id) ? [rows.get(id)!] : [])),
