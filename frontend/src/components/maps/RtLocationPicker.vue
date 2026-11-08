@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
  * Ketua RT home location: a thin wrapper over the shared `LocationPicker` in pin mode. Public
- * props and events are unchanged (`modelValue`, `disabled`, `update:modelValue`,
- * `validity-change`) so `AdminRukunTetanggaView` needs no edits. There are no coordinate fields:
- * the pin is placed and refined on the map or with the keyboard buttons.
+ * props and events (`modelValue`, `disabled`, `update:modelValue`) let `AdminRukunTetanggaView`
+ * bind a picked position. There are no coordinate fields: the pin is placed and refined on the map
+ * or with the keyboard buttons.
  */
 import { computed } from 'vue';
 import LocationPicker, { type PickerLocation } from './LocationPicker.vue';
@@ -20,7 +20,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'update:modelValue', value: PickedLocation | null): void;
-  (event: 'validity-change', value: boolean): void;
 }>();
 
 const value = computed<PickerLocation | null>(() =>
@@ -30,8 +29,6 @@ const value = computed<PickerLocation | null>(() =>
 );
 
 function update(next: PickerLocation | null): void {
-  // Pin positions come from the map, so they are always valid; the event stays for the view.
-  emit('validity-change', true);
   emit('update:modelValue', next ? { latitude: next.latitude, longitude: next.longitude } : null);
 }
 </script>

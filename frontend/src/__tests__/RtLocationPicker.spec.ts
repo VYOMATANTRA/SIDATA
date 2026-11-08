@@ -22,7 +22,6 @@ describe('RT location picker', () => {
     expect(wrapper.emitted('update:modelValue')?.slice(-1)[0]).toEqual([
       { latitude: -1.25, longitude: 116.95 },
     ]);
-    expect(wrapper.emitted('validity-change')?.slice(-1)[0]).toEqual([true]);
 
     await wrapper.setProps({ modelValue: { latitude: -1.25, longitude: 116.95 } });
     await wrapper.find('[data-test="rt-location-clear"]').trigger('click');
