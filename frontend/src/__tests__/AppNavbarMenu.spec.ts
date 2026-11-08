@@ -284,7 +284,7 @@ describe('AppNavbar menu: mobile modal sheet', () => {
     wrapper.unmount();
   });
 
-  it('hands focus to the toggle when a non-link navigation closes the sheet with focus inside it', async () => {
+  it('closes the sheet on navigation without moving focus (layout owns post-navigation focus)', async () => {
     const { wrapper, router } = await mountNavbar();
     await toggle(wrapper).trigger('click');
     wrapper.find<HTMLAnchorElement>('[data-test="first"]').element.focus();
@@ -294,7 +294,7 @@ describe('AppNavbar menu: mobile modal sheet', () => {
     await wrapper.vm.$nextTick();
 
     expect(toggle(wrapper).attributes('aria-expanded')).toBe('false');
-    expect(document.activeElement).toBe(toggle(wrapper).element);
+    expect(document.activeElement).not.toBe(toggle(wrapper).element);
     wrapper.unmount();
   });
 

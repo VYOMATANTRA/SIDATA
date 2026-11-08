@@ -132,21 +132,14 @@ watch(listensForOutsideClicks, (listen) => {
   }
 });
 
-// Navigating (link, back/forward, programmatic) always dismisses the menu. When focus was inside
-// the panel it would fall to <body> as the panel hides, so hand it to the toggle, unless something
-// else (the layout moving focus to <main> on a page change) has already claimed it by then.
+// Navigating (link, back/forward, programmatic) always dismisses the menu. The layout owns
+// post-navigation focus (focusing <main>), so the navbar only closes the menu and does nothing
+// with focus. Focus restoration to the toggle is reserved for closes that did NOT navigate
+// (Escape, mobile close button, outside click).
 watch(
   () => route?.fullPath,
   () => {
-    const hadFocusInPanel = Boolean(panelRef.value?.contains(document.activeElement));
     closeMenu();
-    if (!hadFocusInPanel) return;
-    void nextTick(() => {
-      const active = document.activeElement;
-      if (!active || active === document.body || panelRef.value?.contains(active)) {
-        toggleButtonRef.value?.focus();
-      }
-    });
   },
 );
 
@@ -348,7 +341,7 @@ const panelFocusRingClasses = computed(() =>
             </div>
 
             <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 md:py-4">
-              <slot name="menu" :close="closeAndRestoreFocus" :open="isMenuOpen">
+              <slot name="menu" :close="closeMenu" :open="isMenuOpen">
                 <ul class="grid grid-cols-1 gap-1 sm:grid-cols-2">
                   <li v-for="item in navItems" :key="item.to">
                     <RouterLink

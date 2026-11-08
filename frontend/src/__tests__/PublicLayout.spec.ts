@@ -391,6 +391,70 @@ describe('PublicLayout (mounted by App for routes with meta.layout = public)', (
       expect(document.activeElement).toBe(wrapper.find('main').element);
       wrapper.unmount();
     });
+
+    it('lands on main (not the toggle) after clicking a menu link on mobile', async () => {
+      stubViewport(false);
+      const { wrapper } = await mountApp('/peta');
+      await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
+      await flushPromises();
+
+      const link = wrapper.find('a[href="/publikasi"]');
+      expect(link.exists()).toBe(true);
+      await link.trigger('click');
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="hamburger-btn"]').attributes('aria-expanded')).toBe('false');
+      expect(document.activeElement).toBe(wrapper.find('main').element);
+      wrapper.unmount();
+    });
+
+    it('lands on main (not the toggle) after clicking a menu link on desktop', async () => {
+      stubViewport(true);
+      const { wrapper } = await mountApp('/peta');
+      await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
+      await flushPromises();
+
+      const link = wrapper.find('a[href="/publikasi"]');
+      expect(link.exists()).toBe(true);
+      await link.trigger('click');
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="hamburger-btn"]').attributes('aria-expanded')).toBe('false');
+      expect(document.activeElement).toBe(wrapper.find('main').element);
+      wrapper.unmount();
+    });
+
+    it('returns focus to the toggle on Escape without navigation (mobile and desktop)', async () => {
+      // Mobile sheet
+      stubViewport(false);
+      const { wrapper } = await mountApp('/peta');
+      const toggle = wrapper.find('[data-test="hamburger-btn"]');
+      await toggle.trigger('click');
+      await flushPromises();
+      expect(toggle.attributes('aria-expanded')).toBe('true');
+
+      const mobileEsc = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      window.dispatchEvent(mobileEsc);
+      await flushPromises();
+
+      expect(toggle.attributes('aria-expanded')).toBe('false');
+      expect(document.activeElement).toBe(toggle.element);
+
+      // Desktop disclosure
+      stubViewport(true);
+      await toggle.trigger('click');
+      await flushPromises();
+      expect(toggle.attributes('aria-expanded')).toBe('true');
+
+      wrapper.find<HTMLAnchorElement>('a[href="/publikasi"]').element.focus();
+      const desktopEsc = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      window.dispatchEvent(desktopEsc);
+      await flushPromises();
+
+      expect(toggle.attributes('aria-expanded')).toBe('false');
+      expect(document.activeElement).toBe(toggle.element);
+      wrapper.unmount();
+    });
   });
 
   describe('menu slot wiring', () => {
