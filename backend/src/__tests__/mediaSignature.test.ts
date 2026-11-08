@@ -278,6 +278,12 @@ describe('CSV formula-injection scan', () => {
     ['minus then text', 'a\n-5abc\n'],
     ['plain "-" alone', 'a\n-\n'],
     ['formula in the last cell without newline', 'a,b\n1,=1+1'],
+    ['semicolon =HYPERLINK', 'a;=HYPERLINK("x")'],
+    ['tab =1+1', 'a\t=1+1'],
+    ['comma then tab =1+1', 'a,\t=1+1'],
+    ['semicolon quoted formula', 'a;"=1+1"'],
+    ['semicolon +cmd', 'a;+cmd|x'],
+    ['semicolon @SUM', 'a;@SUM(1)'],
   ];
   const accepted: Array<[string, string]> = [
     ['negative integer', 'a,b\n-5,2\n'],
@@ -295,6 +301,8 @@ describe('CSV formula-injection scan', () => {
       'a,b\n"say ""=hi""\n=not a formula, it is inside quotes",x\n',
     ],
     ['CRLF number', 'a\r\n-5\r\n'],
+    ['semicolon negative and decimal', 'a;-5;+3,5'],
+    ['semicolon plain text with newline', 'nama;rt\nBudi;12'],
   ];
 
   for (const [name, text] of rejected) {

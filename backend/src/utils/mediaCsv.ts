@@ -30,10 +30,11 @@ const PLAIN_NUMBER = /^[+-]?(?:\d+(?:[.,]\d+)?|[.,]\d+)(?:[eE][+-]?\d+)?$/;
 type State = 'fieldStart' | 'unquoted' | 'quoted' | 'quoteInQuoted';
 
 /**
- * RFC 4180 tokenizer (quoted fields with commas, newlines and doubled quotes) that inspects the
- * first character of every cell. Feed it decoded text in any chunking; it keeps its state, so a
- * quote, escaped quote or cell split across two chunks is handled exactly like an unsplit one.
- * For a quoted cell the content after the opening quote is what counts.
+ * RFC 4180-style tokenizer (quoted fields with comma, semicolon, and tab delimiters, newlines,
+ * and doubled quotes) that inspects the first character of every cell. Feed it decoded text in any
+ * chunking; it keeps its state, so a quote, delimiter, escaped quote, or cell split across two
+ * chunks is handled exactly like an unsplit one. For a quoted cell the content after the opening
+ * quote is what counts.
  */
 export class CsvFormulaScanner {
   private state: State = 'fieldStart';
@@ -49,7 +50,7 @@ export class CsvFormulaScanner {
           if (ch === '"') {
             this.state = 'quoted';
             this.cellChars = 0;
-          } else if (ch === ',' || ch === '\n' || ch === '\r') {
+          } else if (ch === ',' || ch === ';' || ch === '\t' || ch === '\n' || ch === '\r') {
             // empty cell / empty line / row terminator (CR, LF or CRLF); stay at fieldStart
           } else {
             this.state = 'unquoted';
@@ -58,7 +59,7 @@ export class CsvFormulaScanner {
           }
           break;
         case 'unquoted':
-          if (ch === ',' || ch === '\n' || ch === '\r') {
+          if (ch === ',' || ch === ';' || ch === '\t' || ch === '\n' || ch === '\r') {
             if (!this.endCell()) return false;
             this.state = 'fieldStart';
           } else if (!this.consume(ch)) {
@@ -74,7 +75,7 @@ export class CsvFormulaScanner {
             // Escaped quote inside the quoted cell.
             this.state = 'quoted';
             if (!this.consume(ch)) return false;
-          } else if (ch === ',' || ch === '\n' || ch === '\r') {
+          } else if (ch === ',' || ch === ';' || ch === '\t' || ch === '\n' || ch === '\r') {
             if (!this.endCell()) return false;
             this.state = 'fieldStart';
           } else {

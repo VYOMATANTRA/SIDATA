@@ -174,6 +174,9 @@ Checklist for a new environment (Docker on a VPS). Background: [`AGENTS.md`](AGE
      bodies of at least 21 MiB there (nginx: `client_max_body_size 21m;` on that location; the default
      1 MiB would reject every real upload), and must not serve the uploads directory itself: the API
      is the only reader, because it enforces the attached/private rule.
+   - Uploaded CSV files are scanned across comma, semicolon, and tab delimiters for spreadsheet
+     formula injection (rejecting cells starting with `=`, `+`, `-`, `@`, tab, or CR unless the cell
+     is a plain number).
    - Schedule `npm run media:cleanup` (daily is plenty). It removes `_staging/` directories and
      unattached uploads whose grace period (24 h, `MEDIA_CLEANUP_GRACE_HOURS` or
      `--grace-hours=N`) has passed, counted from the moment content detached them (`detached_at`), or from
