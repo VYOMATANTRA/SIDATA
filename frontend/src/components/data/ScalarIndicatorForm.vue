@@ -112,7 +112,18 @@ const templateEligible = computed(
 );
 
 const templateOptions = computed(() => {
-  const options = props.templates.map((template) => ({ id: template.id, label: template.label }));
+  const labelCounts = new Map<string, number>();
+  for (const template of props.templates) {
+    labelCounts.set(template.label, (labelCounts.get(template.label) ?? 0) + 1);
+  }
+
+  const options = props.templates.map((template) => ({
+    id: template.id,
+    label:
+      (labelCounts.get(template.label) ?? 0) > 1
+        ? `${template.label} (${template.slug})`
+        : template.label,
+  }));
   const current = props.indicator.comparisonTemplateId;
   // Keep the stored choice visible even if the list could not be loaded or no longer has it, so
   // saving never silently swaps or drops a template the Editor did not touch.

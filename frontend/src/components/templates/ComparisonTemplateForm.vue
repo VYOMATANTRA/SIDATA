@@ -89,6 +89,11 @@ const labelError = computed(() => {
   const value = label.value.trim();
   if (value === '') return 'Nama templat wajib diisi.';
   if (value.length > 255) return 'Nama templat terlalu panjang. Persingkat namanya.';
+  const lower = value.toLowerCase();
+  const duplicate = store.templates.some(
+    (t) => t.id !== props.template?.id && t.label.trim().toLowerCase() === lower,
+  );
+  if (duplicate) return 'Nama templat sudah dipakai. Gunakan nama lain.';
   return undefined;
 });
 

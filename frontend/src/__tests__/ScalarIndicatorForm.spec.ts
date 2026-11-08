@@ -290,6 +290,60 @@ describe('ScalarIndicatorForm.vue', () => {
       wrapper.unmount();
     });
 
+    it('disambiguates duplicate template labels using their slugs', () => {
+      const dupTemplates: ComparisonTemplate[] = [
+        {
+          id: 'tpl-1',
+          slug: 'tahunan-lengkap',
+          label: 'Perbandingan tahunan',
+          body: 'Data {period_current}, {label} {value_current}, {trend}.',
+          trendNaik: 'naik {delta}',
+          trendTurun: 'turun {delta}',
+          trendTetap: 'tidak berubah',
+          usageCount: 0,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          id: 'tpl-2',
+          slug: 'tahunan-ringkas',
+          label: 'Perbandingan tahunan',
+          body: '{label} {value_current}, {trend}.',
+          trendNaik: 'naik {delta}',
+          trendTurun: 'turun {delta}',
+          trendTetap: 'tetap',
+          usageCount: 0,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          id: 'tpl-3',
+          slug: 'ringkas',
+          label: 'Ringkas',
+          body: '{label} {trend}.',
+          trendNaik: 'naik {delta}',
+          trendTurun: 'turun {delta}',
+          trendTetap: 'tetap',
+          usageCount: 0,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ];
+
+      const wrapper = mount(ScalarIndicatorForm, {
+        props: { indicator: makeIndicator(), templates: dupTemplates },
+      });
+
+      const options = wrapper.findAll(`${selector} option`).map((o) => o.text());
+      expect(options).toEqual([
+        'Tanpa templat',
+        'Perbandingan tahunan (tahunan-lengkap)',
+        'Perbandingan tahunan (tahunan-ringkas)',
+        'Ringkas',
+      ]);
+      wrapper.unmount();
+    });
+
     it('is hidden when the indicator is not flagged as a computed comparison (a pair alone does not qualify)', () => {
       const wrapper = mount(ScalarIndicatorForm, {
         props: { indicator: makeIndicator({ isComputedComparison: false }), templates },

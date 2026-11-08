@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import ComparisonTemplateForm from '../components/templates/ComparisonTemplateForm.vue';
-import type { ComparisonTemplate } from '../stores/comparisonTemplates.store';
+import {
+  useComparisonTemplatesStore,
+  type ComparisonTemplate,
+} from '../stores/comparisonTemplates.store';
 import { USER_MESSAGES } from '../utils/userMessages';
 
 const BODY =
@@ -229,6 +232,52 @@ describe('ComparisonTemplateForm', () => {
         wrapper.find('[data-test="builder-body"] [data-test="builder-error"]').text(),
       ).toContain('Keterangan perubahan');
       wrapper.unmount();
+    });
+
+    it('blocks a template name that duplicates an existing template (case-insensitive)', async () => {
+      const pinia = createPinia();
+      setActivePinia(pinia);
+      const store = useComparisonTemplatesStore(pinia);
+      store.templates = [
+        makeTemplate({ id: 'tpl-1', label: 'Perbandingan tahunan' }),
+        makeTemplate({ id: 'tpl-2', label: 'Ringkas' }),
+      ];
+
+      // New template with duplicate name (case-insensitive and trimmed)
+      const wrapper = mount(ComparisonTemplateForm, {
+        props: { template: null },
+        global: { plugins: [pinia] },
+        attachTo: document.body,
+      });
+
+      await wrapper.find('#templat-nama').setValue('  perbandingan TAHUNAN  ');
+      await submit(wrapper);
+
+      expect(saves()).toHaveLength(0);
+      expect(wrapper.find('#templat-nama-error').text()).toBe(
+        'Nama templat sudah dipakai. Gunakan nama lain.',
+      );
+
+      // Editing tpl-1 and keeping its own name does NOT trigger duplicate error
+      const editWrapper = mount(ComparisonTemplateForm, {
+        props: { template: store.templates[0] },
+        global: { plugins: [pinia] },
+        attachTo: document.body,
+      });
+
+      expect(editWrapper.find('#templat-nama-error').exists()).toBe(false);
+
+      // Changing tpl-1's name to tpl-2's name DOES trigger duplicate error
+      await editWrapper.find('#templat-nama').setValue('Ringkas');
+      await submit(editWrapper);
+
+      expect(saves()).toHaveLength(0);
+      expect(editWrapper.find('#templat-nama-error').text()).toBe(
+        'Nama templat sudah dipakai. Gunakan nama lain.',
+      );
+
+      wrapper.unmount();
+      editWrapper.unmount();
     });
   });
 
