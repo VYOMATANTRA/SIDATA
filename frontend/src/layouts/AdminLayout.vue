@@ -48,9 +48,12 @@ watch(
     if (oldPath !== undefined && newPath !== oldPath) {
       if (contentShellRef.value) contentShellRef.value.scrollTop = 0;
       void nextTick(() => {
+        // Reset again once the new view has rendered, then focus without letting the browser
+        // scroll the inner scroller to reveal <main> (a plain focus() scrolled it past the h1).
+        if (contentShellRef.value) contentShellRef.value.scrollTop = 0;
         const active = document.activeElement as HTMLElement | null;
         if (!active || !mainRef.value?.contains(active)) {
-          mainRef.value?.focus();
+          mainRef.value?.focus({ preventScroll: true });
         }
       });
     }

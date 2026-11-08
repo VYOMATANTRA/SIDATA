@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { setActivePinia, createPinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
@@ -221,6 +221,24 @@ describe('AdminLayout.vue', () => {
     await wrapper.vm.$nextTick();
 
     expect(document.activeElement).toBe(mainEl);
+    wrapper.unmount();
+  });
+
+  it('focuses <main> with preventScroll so the inner scroller stays at the top', async () => {
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+    const wrapper = mount(AdminLayout, { global: { plugins: [router] }, attachTo: document.body });
+    const mainEl = wrapper.find('main#admin-main-content').element;
+    const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus');
+
+    await router.push('/admin/cerita');
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    const mainArgs = focusSpy.mock.calls.filter((_, i) => focusSpy.mock.contexts[i] === mainEl);
+    expect(mainArgs).toEqual([[{ preventScroll: true }]]);
+    focusSpy.mockRestore();
     wrapper.unmount();
   });
 
