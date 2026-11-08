@@ -401,6 +401,44 @@ describe('LocationPicker', () => {
       );
       await nextTick();
       expect(toggle.attributes('aria-pressed')).toBe('false');
+      elsewhere.remove();
+    });
+
+    it('keeps keyboard mode on when clicking zoom or direction buttons, and arrow keys still work', async () => {
+      const wrapper = await mountPicker({ modelValue: PIN });
+      const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
+      const zoomIn = wrapper.get('[data-test="location-picker-zoom-in"]');
+      const region = wrapper.get('[data-test="location-picker-region"]');
+      await toggle.trigger('click');
+      expect(toggle.attributes('aria-pressed')).toBe('true');
+
+      region.element.dispatchEvent(
+        new FocusEvent('focusout', { bubbles: true, relatedTarget: zoomIn.element }),
+      );
+      await nextTick();
+      expect(toggle.attributes('aria-pressed')).toBe('true');
+
+      await zoomIn.trigger('keydown', { key: 'ArrowUp' });
+      expect(wrapper.emitted('update:modelValue')).toBeDefined();
+    });
+
+    it('announces when keyboard mode ends because focus left the picker', async () => {
+      const wrapper = await mountPicker({ modelValue: PIN });
+      const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
+      const region = wrapper.get('[data-test="location-picker-region"]');
+      await toggle.trigger('click');
+      expect(toggle.attributes('aria-pressed')).toBe('true');
+
+      const elsewhere = document.createElement('button');
+      document.body.append(elsewhere);
+      region.element.dispatchEvent(
+        new FocusEvent('focusout', { bubbles: true, relatedTarget: elsewhere }),
+      );
+      await nextTick();
+      expect(toggle.attributes('aria-pressed')).toBe('false');
+      const live = wrapper.get('[data-test="location-picker-announcement"]');
+      expect(live.text()).toContain('Mode keyboard nonaktif.');
+      elsewhere.remove();
     });
 
     it('leaves keyboard mode when a click lands on non-focusable content', async () => {
@@ -979,6 +1017,17 @@ describe('LocationPicker', () => {
       } finally {
         vi.unstubAllGlobals();
       }
+    });
+
+    it('ignores moveend caused by resize when there is no saved value and no user interaction', async () => {
+      const wrapper = await mountPicker({ modelValue: null, includeZoom: true });
+      leafletState.handlers.moveend?.();
+      expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+
+      leafletState.handlers.dragstart?.();
+      leafletState.center = { lat: -1.3, lng: 117.0 };
+      leafletState.handlers.moveend?.();
+      expect(wrapper.emitted('update:modelValue')).toBeDefined();
     });
 
     it('moves the view with the direction buttons and zoom buttons', async () => {

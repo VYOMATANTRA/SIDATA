@@ -136,6 +136,9 @@ let reannounceTimer: number | undefined;
 let announceSeq = 0;
 let nudgeAnnounceTimer: number | undefined;
 let resizeObserver: ResizeObserver | null = null;
+let isResizing = false;
+let resizeEndTimer: number | undefined;
+let userInteracted = false;
 /** Last value emitted but not yet echoed back by the parent; keeps rapid key presses accurate. */
 let pending: { value: PickerLocation | null } | null = null;
 let lastEmitted: PickerLocation | null = null;
@@ -292,6 +295,9 @@ function placeMarker(location: GeoPoint): void {
       keyboard: false,
       icon: markerIcon(),
     }).addTo(map);
+    marker.on('dragstart', () => {
+      userInteracted = true;
+    });
     marker.on('dragend', () => {
       const next = marker?.getLatLng();
       if (!next) return;
@@ -372,6 +378,7 @@ function setInteractivity(): void {
 
 function handleMapClick(event: L.LeafletMouseEvent): void {
   if (!editable.value) return;
+  userInteracted = true;
   cancelDetect();
   const location = { latitude: event.latlng.lat, longitude: event.latlng.lng };
   if (viewport.value) {
@@ -384,13 +391,14 @@ function handleMapClick(event: L.LeafletMouseEvent): void {
 }
 
 function handleMoveEnd(): void {
-  if (syncing || !viewport.value || !editable.value || !map) return;
+  if (syncing || isResizing || !viewport.value || !editable.value || !map) return;
+  const stored = props.modelValue;
+  if (!userInteracted && !stored) return;
   const center = viewCenter();
   if (!center) return;
   // Leaflet's own debounced window-resize handler fires `moveend` outside `runSilently`; a view
   // that is still the stored one (same centre within tolerance, same clamped zoom) is not an edit
   // and must not mark the form dirty. A genuine pan moves the centre past the tolerance.
-  const stored = props.modelValue;
   if (
     stored &&
     near(center, stored) &&
@@ -411,8 +419,13 @@ function refreshSize(): void {
   if (!map || !container.value) return;
   // A hidden tab or closed dialog reports 0x0; resizing then would shift the centre.
   if (container.value.clientWidth === 0 || container.value.clientHeight === 0) return;
+  isResizing = true;
+  window.clearTimeout(resizeEndTimer);
   runSilently(() => map?.invalidateSize());
   syncFromValue(true);
+  resizeEndTimer = window.setTimeout(() => {
+    isResizing = false;
+  }, 100);
 }
 
 onMounted(() => {
@@ -448,6 +461,19 @@ onMounted(() => {
     map.on('click', handleMapClick);
     map.on('moveend', handleMoveEnd);
     map.on('zoomend', handleZoomEnd);
+    map.on('dragstart', () => {
+      userInteracted = true;
+    });
+    map.on('boxzoomend', () => {
+      userInteracted = true;
+    });
+    map.on('resize', () => {
+      isResizing = true;
+      window.clearTimeout(resizeEndTimer);
+      resizeEndTimer = window.setTimeout(() => {
+        isResizing = false;
+      }, 100);
+    });
     if (!viewport.value && value) placeMarker(value);
     if (!viewInteractive.value || !editable.value) setInteractivity();
 
@@ -464,6 +490,7 @@ onUnmounted(() => {
   geoRequest += 1;
   clearTogglePress();
   window.clearTimeout(reannounceTimer);
+  window.clearTimeout(resizeEndTimer);
   clearAnnouncement();
   resizeObserver?.disconnect();
   resizeObserver = null;
@@ -481,6 +508,7 @@ watch(
       (pending !== null && sameValue(pending.value, props.modelValue)) ||
       (lastEmitted !== null && sameValue(lastEmitted, props.modelValue));
     if (!isEcho) {
+      userInteracted = false;
       cancelDetect();
       clearAnnouncement();
       accuracy.value = null;
@@ -508,6 +536,7 @@ function pinCenter(): GeoPoint | null {
 
 function nudge(direction: PickerDirection, large = false, viaKeyboard = false): void {
   if (!editable.value || !map) return;
+  userInteracted = true;
   cancelDetect();
   const base = viewport.value ? viewCenter() : (pinCenter() ?? latest());
   if (!base) {
@@ -540,6 +569,7 @@ function nudge(direction: PickerDirection, large = false, viaKeyboard = false): 
 
 function placePinAtCenter(): void {
   if (!editable.value || viewport.value) return;
+  userInteracted = true;
   const center = viewCenter();
   if (!center) return;
   cancelDetect();
@@ -550,6 +580,7 @@ function placePinAtCenter(): void {
 
 function zoomBy(delta: 1 | -1): void {
   if (!map || !canZoom.value) return;
+  userInteracted = true;
   const next = clampZoom(viewZoom.value + delta, props.minZoom, props.maxZoom);
   if (next === viewZoom.value) {
     // At a limit nothing changes: say so instead of claiming a zoom happened. Every press
@@ -582,6 +613,7 @@ function zoomBy(delta: 1 | -1): void {
 
 function clearLocation(): void {
   if (!editable.value || viewport.value || !props.clearable) return;
+  userInteracted = true;
   cancelDetect();
   accuracy.value = null;
   lastEmitted = null;
@@ -598,6 +630,7 @@ function clearLocation(): void {
 function detectLocation(): void {
   // The button stays enabled (aria-disabled) while searching so it never loses keyboard focus.
   if (!editable.value || detecting.value) return;
+  userInteracted = true;
   locationError.value = '';
   accuracy.value = null;
   if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -742,14 +775,15 @@ function onFocusOut(event: FocusEvent): void {
     // No related target: either the window lost focus (alt-tab; keep the mode for when it
     // returns) or a click landed on non-focusable page content (the document still has focus).
     if (togglePressing) return;
-    if (typeof document !== 'undefined' && document.hasFocus()) keyboardMode.value = false;
+    if (typeof document !== 'undefined' && document.hasFocus()) {
+      keyboardMode.value = false;
+      announce('Mode keyboard nonaktif.');
+    }
     return;
   }
-  if (region.value?.contains(next)) return;
-  // A pointer click on the toggle blurs the region first; the toggle's own click handler owns
-  // the on/off decision, otherwise this would switch off and the click would switch it back on.
-  if (next === keyboardToggle.value) return;
+  if (root.value?.contains(next)) return;
   keyboardMode.value = false;
+  announce('Mode keyboard nonaktif.');
 }
 
 // Only colour, background and border transition: `transition-colors` also animates
@@ -775,6 +809,8 @@ const toggleOffClasses = 'bg-surface text-brand-navy hover:bg-surface-hover';
     class="min-w-0 space-y-3 border-0 p-0"
     :aria-describedby="groupDescribedBy"
     :data-test="testId"
+    @keydown="onKeydown"
+    @focusout="onFocusOut"
   >
     <legend class="text-brand-navy text-sm font-medium">{{ label }}</legend>
 
@@ -791,8 +827,6 @@ const toggleOffClasses = 'bg-surface text-brand-navy hover:bg-surface-hover';
       :tabindex="keyboardMode ? 0 : -1"
       :aria-label="keyboardMode ? `Peta ${label}, mode keyboard aktif` : undefined"
       :aria-describedby="keyboardMode ? keysId : undefined"
-      @keydown="onKeydown"
-      @focusout="onFocusOut"
     >
       <div
         ref="container"
