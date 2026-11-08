@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
+import { onBeforeRouteLeave } from 'vue-router';
 import BaseButton from '../components/common/BaseButton.vue';
 import BaseModal from '../components/common/BaseModal.vue';
 import ComparisonTemplateForm from '../components/templates/ComparisonTemplateForm.vue';
@@ -31,6 +32,52 @@ const deleteError = ref('');
 const statusMessage = ref('');
 const addButton = ref<InstanceType<typeof BaseButton> | null>(null);
 
+let beforeUnloadAttached = false;
+
+function handleBeforeUnload(event: BeforeUnloadEvent): void {
+  if (editorOpen.value && editorForm.value?.isDirty()) {
+    event.preventDefault();
+    event.returnValue = '';
+  }
+}
+
+function addBeforeUnload(): void {
+  if (beforeUnloadAttached || typeof window === 'undefined') return;
+  window.addEventListener('beforeunload', handleBeforeUnload);
+  beforeUnloadAttached = true;
+}
+
+function removeBeforeUnload(): void {
+  if (!beforeUnloadAttached || typeof window === 'undefined') return;
+  window.removeEventListener('beforeunload', handleBeforeUnload);
+  beforeUnloadAttached = false;
+}
+
+let pendingRouteLeaveResolve: ((allow: boolean) => void) | null = null;
+
+onBeforeRouteLeave(() => {
+  if (editorBusy.value) return false;
+  if (!editorOpen.value || !editorForm.value?.isDirty()) {
+    return true;
+  }
+  discardPromptOpen.value = true;
+  void nextTick(() => keepEditingButton.value?.focus());
+  return new Promise<boolean>((resolve) => {
+    if (pendingRouteLeaveResolve) {
+      pendingRouteLeaveResolve(false);
+    }
+    pendingRouteLeaveResolve = resolve;
+  });
+});
+
+onUnmounted(() => {
+  removeBeforeUnload();
+  if (pendingRouteLeaveResolve) {
+    pendingRouteLeaveResolve(false);
+    pendingRouteLeaveResolve = null;
+  }
+});
+
 const dateFormat = new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' });
 
 function formatDate(iso: string): string {
@@ -55,11 +102,13 @@ function announce(message: string): void {
 function openCreate(): void {
   editing.value = null;
   editorOpen.value = true;
+  addBeforeUnload();
 }
 
 function openEdit(template: ComparisonTemplate): void {
   editing.value = template;
   editorOpen.value = true;
+  addBeforeUnload();
 }
 
 function closeEditor(): void {
@@ -67,6 +116,11 @@ function closeEditor(): void {
   editorBusy.value = false;
   discardPromptOpen.value = false;
   editing.value = null;
+  removeBeforeUnload();
+  if (pendingRouteLeaveResolve) {
+    pendingRouteLeaveResolve(true);
+    pendingRouteLeaveResolve = null;
+  }
 }
 
 // Cancel button, Escape and backdrop all land here. A save in flight is never interrupted
@@ -88,6 +142,10 @@ function requestCloseEditor(): void {
 
 function keepEditing(): void {
   discardPromptOpen.value = false;
+  if (pendingRouteLeaveResolve) {
+    pendingRouteLeaveResolve(false);
+    pendingRouteLeaveResolve = null;
+  }
   void nextTick(() => {
     document
       .querySelector<HTMLElement>('[data-test="template-form"] input[type="text"]')

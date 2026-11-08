@@ -359,6 +359,117 @@ describe('AdminTemplatKalimatView', () => {
       expect(q<HTMLInputElement>('#templat-nama')!.value).toBe('Nama baru');
       wrapper.unmount();
     });
+
+    it('sets returnValue and calls preventDefault on beforeunload when dirty, but not when clean or closed', async () => {
+      const wrapper = await openEditor();
+      try {
+        // clean editor
+        const cleanEvent = new Event('beforeunload', { cancelable: true });
+        window.dispatchEvent(cleanEvent);
+        expect(cleanEvent.defaultPrevented).toBe(false);
+
+        // make dirty
+        const name = q<HTMLInputElement>('#templat-nama')!;
+        name.value = 'Nama baru';
+        name.dispatchEvent(new Event('input', { bubbles: true }));
+        await flushPromises();
+
+        let assignedReturnValue: unknown = undefined;
+        const dirtyEvent = new Event('beforeunload', { cancelable: true });
+        Object.defineProperty(dirtyEvent, 'returnValue', {
+          get: () => assignedReturnValue,
+          set: (v) => {
+            assignedReturnValue = v;
+          },
+        });
+        window.dispatchEvent(dirtyEvent);
+        expect(dirtyEvent.defaultPrevented).toBe(true);
+        expect(assignedReturnValue).toBe('');
+
+        // after closing editor via discard
+        press('Escape');
+        await flushPromises();
+        q<HTMLButtonElement>('[data-test="discard-confirm"]')!.click();
+        await flushPromises();
+
+        const closedEvent = new Event('beforeunload', { cancelable: true });
+        window.dispatchEvent(closedEvent);
+        expect(closedEvent.defaultPrevented).toBe(false);
+      } finally {
+        wrapper.unmount();
+      }
+    });
+
+    it('removes beforeunload listener on unmount', async () => {
+      const wrapper = await openEditor();
+      const name = q<HTMLInputElement>('#templat-nama')!;
+      name.value = 'Nama baru';
+      name.dispatchEvent(new Event('input', { bubbles: true }));
+      await flushPromises();
+
+      wrapper.unmount();
+
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    it('guards router navigation via onBeforeRouteLeave when dirty', async () => {
+      const pinia = createPinia();
+      setActivePinia(pinia);
+      const authStore = useAuthStore(pinia);
+      authStore.setAuth({ id: 'ad-1', email: 'admin@manggar.go.id', role: 'admin' }, 'token');
+      await router.push(PATH);
+      await router.isReady();
+
+      const App = {
+        template: '<router-view />',
+      };
+      const wrapper = mount(App, {
+        global: { plugins: [pinia, router] },
+        attachTo: document.body,
+      });
+      await flushPromises();
+
+      const editButtons = document.body.querySelectorAll<HTMLButtonElement>('[data-test="edit"]');
+      editButtons[0]!.click();
+      await flushPromises();
+
+      const name = q<HTMLInputElement>('#templat-nama')!;
+      name.value = 'Nama baru';
+      name.dispatchEvent(new Event('input', { bubbles: true }));
+      await flushPromises();
+
+      // Attempt navigation
+      const navPromise1 = router.push('/admin');
+      await flushPromises();
+
+      // Prompt is visible and route stays on PATH
+      expect(q('[data-test="discard-dialog"]')).not.toBeNull();
+      expect(router.currentRoute.value.path).toBe(PATH);
+
+      // "Tetap di sini" keeps draft and aborts navigation
+      q<HTMLButtonElement>('[data-test="discard-keep"]')!.click();
+      await flushPromises();
+      await navPromise1;
+
+      expect(q('[data-test="discard-dialog"]')).toBeNull();
+      expect(router.currentRoute.value.path).toBe(PATH);
+      expect(q<HTMLInputElement>('#templat-nama')!.value).toBe('Nama baru');
+
+      // Attempt navigation again
+      const navPromise2 = router.push('/admin');
+      await flushPromises();
+      expect(q('[data-test="discard-dialog"]')).not.toBeNull();
+
+      // "Tutup tanpa menyimpan" navigates away
+      q<HTMLButtonElement>('[data-test="discard-confirm"]')!.click();
+      await flushPromises();
+      await navPromise2;
+
+      expect(router.currentRoute.value.path).toBe('/admin');
+      wrapper.unmount();
+    });
   });
 
   describe('access', () => {
