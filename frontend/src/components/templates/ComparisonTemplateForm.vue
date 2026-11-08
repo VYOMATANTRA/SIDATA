@@ -334,9 +334,9 @@ async function runPreview(): Promise<void> {
     previewStatus.value = 'error';
     if (error instanceof ApiError && error.status === 429) {
       if (typeof error.retryAfterSeconds === 'number' && error.retryAfterSeconds > 0) {
-        previewError.value = `Terlalu banyak permintaan. Coba lagi dalam ${error.retryAfterSeconds} detik.`;
+        previewError.value = `Terlalu banyak pratinjau. Coba lagi dalam ${error.retryAfterSeconds} detik.`;
       } else {
-        previewError.value = 'Terlalu banyak permintaan. Tunggu sebentar lalu coba lagi.';
+        previewError.value = 'Terlalu banyak pratinjau. Tunggu sebentar lalu coba lagi.';
       }
     } else {
       previewError.value =

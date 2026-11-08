@@ -71,9 +71,10 @@ export const indicatorsWriteLimiter = createUserKeyedLimiter(100);
 // admin user ID, so authoring templates does not drain the indicator or prose edit budgets)
 export const comparisonTemplatesWriteLimiter = createUserKeyedLimiter(100);
 
-// Comparison template live preview (debounced calls while an admin types; stores nothing, so it
-// gets its own roomier bucket keyed by user ID rather than draining the 100/15min save budget)
-export const comparisonTemplatesPreviewLimiter = createUserKeyedLimiter(1000);
+// Comparison template live preview (debounced calls while an admin types; continuous typing
+// at 700 ms debounce is ~1,290 / 15 min, 3000 leaves headroom; it stores nothing, so it gets
+// its own roomier bucket keyed by user ID rather than draining the 100/15min save budget)
+export const comparisonTemplatesPreviewLimiter = createUserKeyedLimiter(3000);
 
 // Pre-auth flood guard for the preview route only. A separate instance from the shared
 // apiLimiter (so preview traffic never drains the 300/15min public-site budget), with a cap high

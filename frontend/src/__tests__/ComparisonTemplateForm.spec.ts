@@ -627,7 +627,10 @@ describe('ComparisonTemplateForm', () => {
 
       expect(wrapper.findAll('[data-test="preview-item"]')).toHaveLength(0);
       expect(wrapper.find('[data-test="preview-error"]').text()).toBe(
-        'Terlalu banyak permintaan. Coba lagi dalam 30 detik.',
+        'Terlalu banyak pratinjau. Coba lagi dalam 30 detik.',
+      );
+      expect(wrapper.find('[data-test="preview-error"]').text()).not.toContain(
+        'Pratinjau belum bisa dimuat',
       );
       wrapper.unmount();
     });
@@ -641,7 +644,10 @@ describe('ComparisonTemplateForm', () => {
 
       expect(wrapper.findAll('[data-test="preview-item"]')).toHaveLength(0);
       expect(wrapper.find('[data-test="preview-error"]').text()).toBe(
-        'Terlalu banyak permintaan. Tunggu sebentar lalu coba lagi.',
+        'Terlalu banyak pratinjau. Tunggu sebentar lalu coba lagi.',
+      );
+      expect(wrapper.find('[data-test="preview-error"]').text()).not.toContain(
+        'Pratinjau belum bisa dimuat',
       );
       wrapper.unmount();
     });
