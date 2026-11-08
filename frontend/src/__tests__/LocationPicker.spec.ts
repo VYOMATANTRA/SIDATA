@@ -243,6 +243,26 @@ describe('LocationPicker', () => {
       },
     );
 
+    it('shows the keyboard-mode state visibly: filled style and a check mark only when on', async () => {
+      const wrapper = await mountPicker({ modelValue: PIN });
+      const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
+      const check = '[data-test="location-picker-keyboard-check"]';
+      expect(toggle.classes()).toEqual(expect.arrayContaining(['bg-surface', 'text-brand-navy']));
+      expect(toggle.classes()).not.toContain('bg-brand-navy');
+      expect(wrapper.find(check).exists()).toBe(false);
+      await toggle.trigger('click');
+      expect(toggle.classes()).toEqual(
+        expect.arrayContaining(['bg-brand-navy', 'text-text-inverse', 'min-h-11']),
+      );
+      expect(toggle.classes()).not.toContain('bg-surface');
+      expect(toggle.classes()).not.toContain('text-brand-navy');
+      expect(wrapper.find(check).attributes('aria-hidden')).toBe('true');
+      expect(toggle.text()).toBe('Mode keyboard');
+      await toggle.trigger('click');
+      expect(wrapper.find(check).exists()).toBe(false);
+      expect(toggle.classes()).toContain('bg-surface');
+    });
+
     it('lets a pointer click on the toggle turn keyboard mode off and back on', async () => {
       const wrapper = await mountPicker({ modelValue: PIN });
       const toggle = wrapper.get('[data-test="location-picker-keyboard"]');

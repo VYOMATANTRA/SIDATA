@@ -728,6 +728,13 @@ function onFocusOut(event: FocusEvent): void {
 
 const buttonClasses =
   'inline-flex min-h-11 min-w-11 items-center justify-center rounded-btn border-2 border-brand-navy bg-surface px-3 py-2 text-sm font-medium text-brand-navy transition-colors hover:bg-brand-navy hover:text-text-inverse focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-surface disabled:text-text-muted disabled:hover:bg-surface disabled:hover:text-text-muted';
+
+// The toggle's fill and text colour come from its state, so they are not in the shared classes.
+const toggleBaseClasses = buttonClasses
+  .replace(' bg-surface ', ' ')
+  .replace(' text-brand-navy ', ' ');
+const toggleOnClasses = 'bg-brand-navy text-text-inverse';
+const toggleOffClasses = 'bg-surface text-brand-navy';
 </script>
 
 <template>
@@ -861,7 +868,7 @@ const buttonClasses =
           :id="`${baseId}-focus`"
           ref="keyboardToggle"
           type="button"
-          :class="buttonClasses"
+          :class="[toggleBaseClasses, keyboardMode ? toggleOnClasses : toggleOffClasses, 'gap-2']"
           :disabled="!editable"
           :aria-pressed="keyboardMode"
           :aria-describedby="keysId"
@@ -871,6 +878,22 @@ const buttonClasses =
           @touchstart.passive="markTogglePress"
           @click="toggleKeyboardMode"
         >
+          <svg
+            v-if="keyboardMode"
+            class="size-4 shrink-0"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+            :data-test="`${testId}-keyboard-check`"
+          >
+            <path d="M3 8.5l3.5 3.5L13 4.5" />
+          </svg>
+          <span v-else class="size-4 shrink-0" aria-hidden="true"></span>
           Mode keyboard
         </button>
       </div>
