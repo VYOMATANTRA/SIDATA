@@ -181,6 +181,51 @@ describe('LocationPicker', () => {
         expect(document.activeElement).toBe(region);
         expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
       });
+
+      it('does the same when the toggle is activated with Space', async () => {
+        const wrapper = await mountPicker({ modelValue: PIN });
+        const region = wrapper.get('[data-test="location-picker-region"]').element as HTMLElement;
+        const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
+        (toggle.element as HTMLElement).focus();
+        await toggle.trigger('keydown', { key: ' ' });
+        await toggle.trigger('keyup', { key: ' ' });
+        await toggle.trigger('click');
+        await flushPromises();
+        expect(document.activeElement).toBe(region);
+        expect(toggle.attributes('aria-pressed')).toBe('true');
+      });
+
+      it('takes focus back when something inside the map (the attribution link) grabs it right after', async () => {
+        vi.useFakeTimers();
+        const wrapper = await mountPicker({ modelValue: PIN });
+        const region = wrapper.get('[data-test="location-picker-region"]').element as HTMLElement;
+        const attribution = document.createElement('a');
+        attribution.href = 'https://www.openstreetmap.org/copyright';
+        region.appendChild(attribution);
+        await click(wrapper, 'location-picker-keyboard');
+        await nextTick();
+        expect(document.activeElement).toBe(region);
+        attribution.focus();
+        expect(document.activeElement).toBe(attribution);
+        vi.advanceTimersByTime(100);
+        await nextTick();
+        expect(document.activeElement).toBe(region);
+        expect(
+          wrapper.get('[data-test="location-picker-keyboard"]').attributes('aria-pressed'),
+        ).toBe('true');
+      });
+
+      it('does not steal focus back once the user has moved to another control', async () => {
+        vi.useFakeTimers();
+        const wrapper = await mountPicker({ modelValue: PIN });
+        await click(wrapper, 'location-picker-keyboard');
+        await nextTick();
+        const other = wrapper.get('[data-test="location-picker-north"]').element as HTMLElement;
+        other.focus();
+        vi.advanceTimersByTime(100);
+        await nextTick();
+        expect(document.activeElement).toBe(other);
+      });
     });
 
     it('moves the viewport by exactly whole pixels per arrow press, six presses covering 96px', async () => {
