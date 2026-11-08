@@ -194,38 +194,6 @@ describe('LocationPicker', () => {
         expect(document.activeElement).toBe(region);
         expect(toggle.attributes('aria-pressed')).toBe('true');
       });
-
-      it('takes focus back when something inside the map (the attribution link) grabs it right after', async () => {
-        vi.useFakeTimers();
-        const wrapper = await mountPicker({ modelValue: PIN });
-        const region = wrapper.get('[data-test="location-picker-region"]').element as HTMLElement;
-        const attribution = document.createElement('a');
-        attribution.href = 'https://www.openstreetmap.org/copyright';
-        region.appendChild(attribution);
-        await click(wrapper, 'location-picker-keyboard');
-        await nextTick();
-        expect(document.activeElement).toBe(region);
-        attribution.focus();
-        expect(document.activeElement).toBe(attribution);
-        vi.advanceTimersByTime(100);
-        await nextTick();
-        expect(document.activeElement).toBe(region);
-        expect(
-          wrapper.get('[data-test="location-picker-keyboard"]').attributes('aria-pressed'),
-        ).toBe('true');
-      });
-
-      it('does not steal focus back once the user has moved to another control', async () => {
-        vi.useFakeTimers();
-        const wrapper = await mountPicker({ modelValue: PIN });
-        await click(wrapper, 'location-picker-keyboard');
-        await nextTick();
-        const other = wrapper.get('[data-test="location-picker-north"]').element as HTMLElement;
-        other.focus();
-        vi.advanceTimersByTime(100);
-        await nextTick();
-        expect(document.activeElement).toBe(other);
-      });
     });
 
     it('moves the viewport by exactly whole pixels per arrow press, six presses covering 96px', async () => {
@@ -536,7 +504,7 @@ describe('LocationPicker', () => {
       await region.trigger('keydown', { key: '+' });
       vi.advanceTimersByTime(1000);
       await nextTick();
-      expect(live.text()).toBe('Zoom maksimum tercapai.');
+      expect(live.text()).toBe('Pembesaran peta sudah maksimum.');
       expect(leafletMap.setZoom).not.toHaveBeenCalled();
       await region.trigger('keydown', { key: '-' });
       vi.advanceTimersByTime(1000);
@@ -545,7 +513,7 @@ describe('LocationPicker', () => {
       await region.trigger('keydown', { key: '-' });
       vi.advanceTimersByTime(1000);
       await nextTick();
-      expect(live.text()).toBe('Zoom minimum tercapai.');
+      expect(live.text()).toBe('Pembesaran peta sudah minimum.');
       expect(leafletMap.setZoom).toHaveBeenCalledTimes(1);
     });
 
@@ -572,7 +540,7 @@ describe('LocationPicker', () => {
         };
         return { wrapper, live, press, settle };
       }
-      const MAX = 'Zoom maksimum tercapai.';
+      const MAX = 'Pembesaran peta sudah maksimum.';
 
       it('announces again for a later burst at the same limit, after the message cleared', async () => {
         const { live, press, settle } = await atMax();
@@ -655,7 +623,7 @@ describe('LocationPicker', () => {
         for (let burst = 0; burst < 2; burst += 1) {
           await press('-', 3);
           await settle(1000);
-          expect(live.text()).toBe('Zoom minimum tercapai.');
+          expect(live.text()).toBe('Pembesaran peta sudah minimum.');
           await settle(5000);
         }
       });

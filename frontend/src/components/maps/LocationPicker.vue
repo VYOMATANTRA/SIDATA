@@ -462,7 +462,6 @@ onUnmounted(() => {
   geoRequest += 1;
   window.clearTimeout(resizeTimer);
   clearTogglePress();
-  window.clearTimeout(focusGuardTimer);
   window.clearTimeout(reannounceTimer);
   clearAnnouncement();
   resizeObserver?.disconnect();
@@ -543,7 +542,7 @@ function zoomBy(delta: 1 | -1): void {
     // re-arms the trailing debounce, so a burst announces once, shortly after its last press. No
     // "already announced" flag: it outlived a message that a newer announcement, an outside value
     // change or the TTL had removed, which silenced every later burst at that limit.
-    announceNudge(delta > 0 ? 'Zoom maksimum tercapai.' : 'Zoom minimum tercapai.');
+    announceNudge(delta > 0 ? 'Pembesaran peta sudah maksimum.' : 'Pembesaran peta sudah minimum.');
     return;
   }
   // Only a button press leaves focus on a zoom button; a `+`/`-` key press keeps it in the region.
@@ -630,8 +629,6 @@ function detectLocation(): void {
  */
 let togglePressing = false;
 let togglePressTimer: number | undefined;
-let focusGuardTimer: number | undefined;
-const FOCUS_GUARD_DELAY_MS = 50;
 const TOGGLE_PRESS_TIMEOUT_MS = 300;
 
 function clearTogglePress(): void {
@@ -671,16 +668,6 @@ async function focusRegionWhenReady(): Promise<void> {
   await nextTick();
   if (isUnmounted || !keyboardMode.value) return;
   region.value?.focus({ preventScroll: true });
-  // Defensive: if something inside the map (Leaflet's attribution link is its only tab stop)
-  // takes focus right after the toggle press, bring it back. Focus on any element outside the
-  // region means the user moved on deliberately and is left alone.
-  window.clearTimeout(focusGuardTimer);
-  focusGuardTimer = window.setTimeout(() => {
-    const target = region.value;
-    const active = document.activeElement;
-    if (isUnmounted || !keyboardMode.value || !target || active === target) return;
-    if (active instanceof Node && target.contains(active)) target.focus({ preventScroll: true });
-  }, FOCUS_GUARD_DELAY_MS);
 }
 
 function onKeydown(event: KeyboardEvent): void {
