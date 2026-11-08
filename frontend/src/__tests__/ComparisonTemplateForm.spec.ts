@@ -423,7 +423,7 @@ describe('ComparisonTemplateForm', () => {
 
       const error = wrapper.find('[data-test="form-error"]').text();
       expect(error).toContain('Gagal menyimpan templat kalimat.');
-      expect(error).toContain(USER_MESSAGES.validation);
+      expect(error).toContain('Templat belum bisa disimpan. Periksa nama dan kalimatnya.');
       expect(error).not.toMatch(/[{}]|slug|X_FAIL|\b400\b/);
       expect((wrapper.find('#templat-nama').element as HTMLInputElement).value).toBe(
         'Nama yang diedit',

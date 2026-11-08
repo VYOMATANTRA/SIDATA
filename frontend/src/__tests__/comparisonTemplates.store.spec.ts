@@ -205,22 +205,68 @@ describe('comparison templates store', () => {
       if (outcome.ok) throw new Error('unreachable');
       expect(outcome).toMatchObject({ kind: 'error' });
       const message = (outcome as { message: string }).message;
-      expect(message).toContain(USER_MESSAGES.validation);
+      expect(message).toContain('Templat belum bisa disimpan. Periksa nama dan kalimatnya.');
       expect(message).not.toMatch(/[{}]|Slug/);
+    });
+
+    it('keeps plain Indonesian server sentences when free of placeholder syntax and hidden tokens', async () => {
+      route({
+        'POST /api/comparison-templates': () =>
+          json({ error: 'Kalimat perbandingan tidak memenuhi kaidah bahasa.' }, 400),
+      });
+      const store = useComparisonTemplatesStore();
+
+      const outcome = await store.createTemplate(DRAFT);
+
+      expect(outcome.ok).toBe(false);
+      if (outcome.ok) throw new Error('unreachable');
+      expect(outcome).toMatchObject({ kind: 'error' });
+      const message = (outcome as { message: string }).message;
+      expect(message).toContain('Kalimat perbandingan tidak memenuhi kaidah bahasa.');
     });
   });
 
-  it('describes failures with approved wording whatever the error carries', () => {
-    const hostile = {
-      status: 400,
-      code: 'TREND_SLOT_MISSING',
-      serverMessage: 'Body harus memuat {trend}',
-      fieldErrors: { body: 'pakai {trend}' },
-    };
+  describe('describeTemplateFailure', () => {
+    it('uses template-specific validation fallback when without fieldErrors', () => {
+      const errNoFields = { status: 400, serverMessage: 'Body {trend} tidak valid' };
+      const msg = describeTemplateFailure(errNoFields, 'menyimpan templat kalimat');
+      expect(msg).toContain('Templat belum bisa disimpan. Periksa nama dan kalimatnya.');
 
-    const message = describeTemplateFailure(hostile, 'menyimpan templat kalimat');
+      const plainFallback = describeTemplateFailure({ status: 400 }, '');
+      expect(plainFallback).toBe('Templat belum bisa disimpan. Periksa nama dan kalimatnya.');
+    });
 
-    expect(message).toBe(`Gagal menyimpan templat kalimat. ${USER_MESSAGES.validation}`);
+    it('filters server messages containing hidden tokens or placeholder syntax', () => {
+      const tokenErr = { status: 400, serverMessage: 'Kolom comparisonTemplateId salah' };
+      expect(describeTemplateFailure(tokenErr, 'menyimpan templat kalimat')).toContain(
+        'Templat belum bisa disimpan. Periksa nama dan kalimatnya.',
+      );
+
+      const placeholderErr = { status: 400, serverMessage: 'Gunakan {period_current} di awal' };
+      expect(describeTemplateFailure(placeholderErr, 'menyimpan templat kalimat')).toContain(
+        'Templat belum bisa disimpan. Periksa nama dan kalimatnya.',
+      );
+    });
+
+    it('keeps plain Indonesian server messages in describeTemplateFailure', () => {
+      const cleanErr = { status: 400, serverMessage: 'Kalimat perbandingan tidak boleh kosong.' };
+      expect(describeTemplateFailure(cleanErr, 'menyimpan templat kalimat')).toContain(
+        'Kalimat perbandingan tidak boleh kosong.',
+      );
+    });
+
+    it('describes failures with approved wording whatever the error carries when fieldErrors exist', () => {
+      const hostile = {
+        status: 400,
+        code: 'TREND_SLOT_MISSING',
+        serverMessage: 'Body harus memuat {trend}',
+        fieldErrors: { body: 'pakai {trend}' },
+      };
+
+      const message = describeTemplateFailure(hostile, 'menyimpan templat kalimat');
+
+      expect(message).toBe(`Gagal menyimpan templat kalimat. ${USER_MESSAGES.validation}`);
+    });
   });
 
   it('words the in-use message from the count', () => {

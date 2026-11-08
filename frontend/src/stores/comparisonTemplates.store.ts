@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { ApiError, apiRequestJson } from '../utils/apiClient';
-import { toUserMessage } from '../utils/userMessages';
+import { toUserMessage, USER_MESSAGES } from '../utils/userMessages';
 import { uniqueSlug } from '../utils/comparisonTemplateSegments';
 
 /**
@@ -76,18 +76,49 @@ export type DeleteOutcome =
   | { ok: false; kind: 'in_use'; message: string }
   | { ok: false; kind: 'error'; message: string };
 
+export const TEMPLATE_VALIDATION_FALLBACK =
+  'Templat belum bisa disimpan. Periksa nama dan kalimatnya.';
+
 /**
- * Approved wording for a failed template request. The server's own sentence is dropped on
- * purpose (see the module note); `toUserMessage` then falls back to approved text per status.
+ * Approved wording for a failed template request. Plain Indonesian server sentences are kept
+ * when free of placeholder syntax ("{...}") and hidden API tokens; validation failures without
+ * field-level errors fall back to template-specific guidance.
  */
 export function describeTemplateFailure(error: unknown, context: string, method?: string): string {
   const source =
     typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : {};
-  return toUserMessage(
-    { status: source['status'], code: source['code'], method: source['method'] },
+  const serverMsg =
+    typeof source['serverMessage'] === 'string'
+      ? source['serverMessage']
+      : typeof source['error'] === 'string'
+        ? source['error']
+        : undefined;
+
+  // Placeholder syntax like "{trend}" or "{delta}" must never be surfaced to the user.
+  const hasPlaceholder = typeof serverMsg === 'string' && /\{[^}]*\}/.test(serverMsg);
+  const safeServerMsg = serverMsg && !hasPlaceholder ? serverMsg : undefined;
+
+  const userMsg = toUserMessage(
+    {
+      status: source['status'],
+      code: source['code'],
+      method: source['method'],
+      serverMessage: safeServerMsg,
+      fieldErrors: source['fieldErrors'],
+    },
     context,
     method,
-  ).message;
+  );
+
+  const hasFieldErrors =
+    userMsg.fieldErrors && Object.keys(userMsg.fieldErrors).length > 0;
+  if (userMsg.kind === 'validation' && !hasFieldErrors) {
+    if (userMsg.message.endsWith(USER_MESSAGES.validation)) {
+      return userMsg.message.replace(USER_MESSAGES.validation, TEMPLATE_VALIDATION_FALLBACK);
+    }
+  }
+
+  return userMsg.message;
 }
 
 export function inUseMessage(label: string, usageCount: number): string {
