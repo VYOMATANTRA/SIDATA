@@ -461,9 +461,13 @@ setup-password, the OAuth callback, `/dashboard` (its own `<main>`) and the admi
   instant. The hero reserves the header's height as top padding, and in-page anchors (hero, chapters,
   skip link target) clear it via `scroll-margin`.
 - **Scroll and focus.** Public routes scroll the window to the top on a new path; back/forward
-  restore the previous position; a hash link (in-page anchor, chapter TOC, skip link) scrolls to its
-  target below the sticky header, including repeat clicks on the same link and `/cerita/x#chapter`
-  deep links once the chapters have rendered. Query-only changes keep the position. Focus moves to
+  restore the previous position, except between two entries of the same path that differ only by
+  hash, which return to that hash target; a hash link (in-page anchor, chapter TOC, skip link)
+  scrolls to its target below the sticky header, including repeat clicks on the same link and
+  `/cerita/x#chapter` deep links once the chapters have rendered. Going back to a Cerita URL lands on
+  its hash target (or the top) rather than the earlier reading offset, because the content loads
+  asynchronously and the saved offset would be clamped to the short page. Query-only changes keep the
+  position. Focus moves to
   `main#main-content` on a path change without scrolling. Admin routes scroll an inner container,
   which the admin shell resets to the top on a path change.
 - **Breadcrumb.** Tentang/Sumber Daya breadcrumbs are a navy strip continuing the header and the navy
