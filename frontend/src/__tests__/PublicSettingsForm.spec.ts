@@ -398,7 +398,7 @@ describe('PublicSettingsForm in the CMS dialog', () => {
 
     describe('while the prompt is shown, Escape, the backdrop and the X all mean "stay"', () => {
       const dismissals: Array<[string, () => Promise<void>]> = [
-        ['Escape', async () => pressEscape()],
+        ['Escape', async () => void pressEscape()],
         [
           'the backdrop',
           async () => {
