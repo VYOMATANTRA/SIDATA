@@ -437,6 +437,34 @@ describe('LocationPicker', () => {
       );
     });
 
+    it('announces the limit, not a zoom, when + or - is pressed at a zoom bound', async () => {
+      vi.useFakeTimers();
+      const wrapper = await mountPicker({ modelValue: PIN, minZoom: 17, maxZoom: 18 });
+      const live = wrapper.get('[data-test="location-picker-announcement"]');
+      const region = wrapper.get('[data-test="location-picker-region"]');
+      await wrapper.get('[data-test="location-picker-keyboard"]').trigger('click');
+      await region.trigger('keydown', { key: '+' });
+      vi.advanceTimersByTime(1000);
+      await nextTick();
+      expect(live.text()).toBe('Peta diperbesar.');
+      leafletMap.setZoom.mockClear();
+      await region.trigger('keydown', { key: '+' });
+      await region.trigger('keydown', { key: '+' });
+      vi.advanceTimersByTime(1000);
+      await nextTick();
+      expect(live.text()).toBe('Zoom maksimum tercapai.');
+      expect(leafletMap.setZoom).not.toHaveBeenCalled();
+      await region.trigger('keydown', { key: '-' });
+      vi.advanceTimersByTime(1000);
+      await nextTick();
+      expect(live.text()).toBe('Peta diperkecil.');
+      await region.trigger('keydown', { key: '-' });
+      vi.advanceTimersByTime(1000);
+      await nextTick();
+      expect(live.text()).toBe('Zoom minimum tercapai.');
+      expect(leafletMap.setZoom).toHaveBeenCalledTimes(1);
+    });
+
     it('keeps focus in the region when + or - keys reach the zoom limits in keyboard mode', async () => {
       const wrapper = await mountPicker({ modelValue: PIN, minZoom: 15, maxZoom: 19 });
       const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
