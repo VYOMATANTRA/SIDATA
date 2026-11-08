@@ -3,7 +3,10 @@ import { mount, type VueWrapper } from '@vue/test-utils';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import AppNavbar from '../components/common/AppNavbar.vue';
 import { stubViewport, stubResizableViewport } from './helpers/viewport';
-import { acquireBodyScrollLock, resetBodyScrollLockForTests } from '../utils/bodyScrollLock';
+import { acquireBodyScrollLock } from '../utils/bodyScrollLock';
+import { installScrollLockTracker, cleanupBodyScrollLocks } from './helpers/bodyScrollLock';
+
+installScrollLockTracker();
 
 function createMockRouter() {
   return createRouter({
@@ -27,7 +30,7 @@ function cleanupMounted() {
       // Already unmounted by the test itself.
     }
   }
-  resetBodyScrollLockForTests();
+  cleanupBodyScrollLocks();
 }
 
 afterEach(cleanupMounted);

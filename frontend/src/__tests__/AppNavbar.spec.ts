@@ -3,7 +3,9 @@ import { mount as baseMount, type VueWrapper } from '@vue/test-utils';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import AppNavbar from '../components/common/AppNavbar.vue';
 import { isNavItemActive } from '@/config/publicNav';
-import { resetBodyScrollLockForTests } from '../utils/bodyScrollLock';
+import { installScrollLockTracker, cleanupBodyScrollLocks } from './helpers/bodyScrollLock';
+
+installScrollLockTracker();
 
 const mounted: VueWrapper[] = [];
 
@@ -21,7 +23,7 @@ function cleanupMounted() {
       // Already unmounted by the test itself.
     }
   }
-  resetBodyScrollLockForTests();
+  cleanupBodyScrollLocks();
 }
 
 afterEach(cleanupMounted);

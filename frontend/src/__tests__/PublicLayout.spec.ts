@@ -7,7 +7,9 @@ import App from '../App.vue';
 import { useAuthStore } from '../stores/auth';
 import { stubViewport } from './helpers/viewport';
 import TentangPageLayout from '../components/tentang/TentangPageLayout.vue';
-import { resetBodyScrollLockForTests } from '../utils/bodyScrollLock';
+import { installScrollLockTracker, cleanupBodyScrollLocks } from './helpers/bodyScrollLock';
+
+installScrollLockTracker();
 
 const Page = (name: string) =>
   defineComponent({
@@ -52,7 +54,7 @@ function cleanupMounted() {
       // Already unmounted by the test itself.
     }
   }
-  resetBodyScrollLockForTests();
+  cleanupBodyScrollLocks();
 }
 
 async function mountApp(path: string) {
