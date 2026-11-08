@@ -86,7 +86,9 @@ function formatDate(iso: string): string {
   return Number.isNaN(date.getTime()) ? '-' : dateFormat.format(date);
 }
 
-const sorted = computed(() => store.templates);
+const sorted = computed(() =>
+  [...store.templates].sort((a, b) => a.label.localeCompare(b.label, 'id')),
+);
 
 onMounted(() => {
   void store.fetchTemplates(true);

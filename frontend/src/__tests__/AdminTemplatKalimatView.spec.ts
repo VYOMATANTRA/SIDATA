@@ -74,7 +74,7 @@ describe('AdminTemplatKalimatView', () => {
     document.body.innerHTML = '';
     templates = [
       makeTemplate({ id: 'tpl-1', label: 'Perbandingan tahunan', usageCount: 2 }),
-      makeTemplate({ id: 'tpl-2', label: 'Perbandingan ringkas', usageCount: 0 }),
+      makeTemplate({ id: 'tpl-2', label: 'Perbandingan umum', usageCount: 0 }),
     ];
     installFetch();
   });
@@ -117,6 +117,44 @@ describe('AdminTemplatKalimatView', () => {
     wrapper.unmount();
   });
 
+  it('updates the grid order immediately when a template is renamed to a different alphabetical position', async () => {
+    const wrapper = await mountView();
+
+    let cards = wrapper.findAll('[data-test="template-card"]');
+    expect(cards[0]!.text()).toContain('Perbandingan tahunan');
+    expect(cards[1]!.text()).toContain('Perbandingan umum');
+
+    // Click edit on the second template ('Perbandingan umum')
+    await cards[1]!.find('[data-test="edit"]').trigger('click');
+    await flushPromises();
+
+    // Rename 'Perbandingan umum' to 'A-Perbandingan awal' which sorts before 'Perbandingan tahunan'
+    const name = document.body.querySelector<HTMLInputElement>('#templat-nama')!;
+    name.value = 'A-Perbandingan awal';
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+    await flushPromises();
+
+    patchHandler = () =>
+      json({
+        template: {
+          ...templates[1]!,
+          label: 'A-Perbandingan awal',
+          updatedAt: '2026-03-06T00:00:00.000Z',
+        },
+      });
+
+    const form = document.body.querySelector<HTMLFormElement>('form')!;
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await flushPromises();
+
+    // After save, the grid is sorted by label: 'A-Perbandingan awal' is now first, 'Perbandingan tahunan' is second
+    cards = wrapper.findAll('[data-test="template-card"]');
+    expect(cards[0]!.text()).toContain('A-Perbandingan awal');
+    expect(cards[1]!.text()).toContain('Perbandingan tahunan');
+
+    wrapper.unmount();
+  });
+
   it('shows an empty state when there are no templates', async () => {
     templates = [];
     const wrapper = await mountView();
@@ -146,12 +184,12 @@ describe('AdminTemplatKalimatView', () => {
       await wrapper.findAll('[data-test="delete"]')[1]!.trigger('click');
       await flushPromises();
 
-      expect(bodyText()).toContain('Hapus templat “Perbandingan ringkas”?');
+      expect(bodyText()).toContain('Hapus templat “Perbandingan umum”?');
       expect(bodyText()).toContain('tidak bisa dibatalkan');
       const confirm = document.body.querySelector<HTMLButtonElement>(
         '[data-test="confirm-delete"]',
       );
-      expect(confirm?.textContent).toContain('Hapus “Perbandingan ringkas”');
+      expect(confirm?.textContent).toContain('Hapus “Perbandingan umum”');
 
       confirm!.click();
       await flushPromises();
@@ -183,7 +221,7 @@ describe('AdminTemplatKalimatView', () => {
       // Another admin attached it on the backend right after dialog was opened
       templates = [
         makeTemplate({ id: 'tpl-1', label: 'Perbandingan tahunan', usageCount: 2 }),
-        makeTemplate({ id: 'tpl-2', label: 'Perbandingan ringkas', usageCount: 5 }),
+        makeTemplate({ id: 'tpl-2', label: 'Perbandingan umum', usageCount: 5 }),
       ];
 
       document.body.querySelector<HTMLButtonElement>('[data-test="confirm-delete"]')!.click();
@@ -203,7 +241,7 @@ describe('AdminTemplatKalimatView', () => {
       // Server usage count changed to 3 before clicking delete
       templates = [
         makeTemplate({ id: 'tpl-1', label: 'Perbandingan tahunan', usageCount: 2 }),
-        makeTemplate({ id: 'tpl-2', label: 'Perbandingan ringkas', usageCount: 3 }),
+        makeTemplate({ id: 'tpl-2', label: 'Perbandingan umum', usageCount: 3 }),
       ];
 
       await wrapper.findAll('[data-test="delete"]')[1]!.trigger('click');

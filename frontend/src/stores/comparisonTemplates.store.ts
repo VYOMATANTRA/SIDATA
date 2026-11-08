@@ -160,12 +160,15 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
   let inFlightForSelector = false;
   let inFlightForAdmin = false;
 
+  /**
+   * Replaces an existing template in place or appends a new one. The store keeps raw
+   * state; views (such as AdminTemplatKalimatView) derive presentation order via
+   * their own label-sorted computed property.
+   */
   function replaceTemplate(updated: ComparisonTemplate): void {
     const index = templates.value.findIndex((item) => item.id === updated.id);
     if (index === -1) {
-      templates.value = [...templates.value, updated].sort((a, b) =>
-        a.label.localeCompare(b.label, 'id'),
-      );
+      templates.value = [...templates.value, updated];
       return;
     }
     const next = [...templates.value];
