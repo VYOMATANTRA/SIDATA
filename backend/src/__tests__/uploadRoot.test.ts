@@ -18,9 +18,39 @@ describe('resolveUploadDirPath', () => {
 
   it('defaults to <repo-root>/uploads when unset, empty or blank', () => {
     const expected = path.join(fakeRoot, 'uploads');
-    assert.equal(resolveUploadDirPath(undefined, fakeRoot), expected);
-    assert.equal(resolveUploadDirPath('', fakeRoot), expected);
-    assert.equal(resolveUploadDirPath('   ', fakeRoot), expected);
+    assert.equal(resolveUploadDirPath(undefined, fakeRoot, 'development'), expected);
+    assert.equal(resolveUploadDirPath('', fakeRoot, 'development'), expected);
+    assert.equal(resolveUploadDirPath('   ', fakeRoot, 'development'), expected);
+  });
+
+  it('throws UploadRootError when NODE_ENV=production and UPLOAD_DIR is unset or empty', () => {
+    assert.throws(
+      () => resolveUploadDirPath(undefined, fakeRoot, 'production'),
+      (error: unknown) =>
+        error instanceof UploadRootError && /UPLOAD_DIR.*production/i.test(error.message),
+    );
+    assert.throws(
+      () => resolveUploadDirPath('', fakeRoot, 'production'),
+      (error: unknown) =>
+        error instanceof UploadRootError && /UPLOAD_DIR.*production/i.test(error.message),
+    );
+    assert.throws(
+      () => resolveUploadDirPath('   ', fakeRoot, 'production'),
+      (error: unknown) =>
+        error instanceof UploadRootError && /UPLOAD_DIR.*production/i.test(error.message),
+    );
+
+    const prevEnv = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = 'production';
+      assert.throws(
+        () => resolveUploadDirPath(undefined, fakeRoot),
+        (error: unknown) =>
+          error instanceof UploadRootError && /UPLOAD_DIR.*production/i.test(error.message),
+      );
+    } finally {
+      process.env.NODE_ENV = prevEnv;
+    }
   });
 
   it('resolves a relative path against the repository root', () => {

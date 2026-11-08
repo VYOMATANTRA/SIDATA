@@ -24,15 +24,24 @@ export class UploadRootError extends Error {
 
 /**
  * Turns the optional `UPLOAD_DIR` setting into an absolute, normalized path. Pure: no
- * filesystem access. Unset/blank -> `<repo-root>/uploads`; relative -> resolved against the
+ * filesystem access. Unset/blank -> `<repo-root>/uploads` in development/test; in production
+ * (`NODE_ENV=production`), an explicit `UPLOAD_DIR` is required; relative -> resolved against the
  * repository root (never the working directory); absolute -> used as given.
  */
 export function resolveUploadDirPath(
   raw: string | undefined,
   repoRoot: string = REPO_ROOT,
+  nodeEnv: string | undefined = process.env.NODE_ENV,
 ): string {
   const trimmed = raw?.trim();
-  if (!trimmed) return path.join(repoRoot, 'uploads');
+  if (!trimmed) {
+    if (nodeEnv === 'production') {
+      throw new UploadRootError(
+        'UPLOAD_DIR is required when NODE_ENV=production. Please configure an explicit UPLOAD_DIR in your environment.',
+      );
+    }
+    return path.join(repoRoot, 'uploads');
+  }
   if (trimmed.includes('\0')) {
     throw new UploadRootError('UPLOAD_DIR contains a NUL byte.');
   }
