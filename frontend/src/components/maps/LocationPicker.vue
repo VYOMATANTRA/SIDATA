@@ -22,7 +22,12 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'vue';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MANGGAR_MAP_CENTER, MANGGAR_MAP_DEFAULT_ZOOM } from '../../constants/mapOrigin';
+import {
+  MANGGAR_MAP_CENTER,
+  MANGGAR_MAP_DEFAULT_ZOOM,
+  MIN_MAP_ZOOM,
+  MAX_MAP_ZOOM,
+} from '../../constants/map';
 import {
   COORDINATE_EPSILON,
   DIRECTION_LABELS,
@@ -81,8 +86,8 @@ const props = withDefaults(defineProps<LocationPickerProps>(), {
   initialCenter: () => [MANGGAR_MAP_CENTER[0], MANGGAR_MAP_CENTER[1]],
   initialZoom: MANGGAR_MAP_DEFAULT_ZOOM,
   focusZoom: 17,
-  minZoom: 1,
-  maxZoom: 20,
+  minZoom: MIN_MAP_ZOOM,
+  maxZoom: MAX_MAP_ZOOM,
   disabled: false,
   readonly: false,
   clearable: false,

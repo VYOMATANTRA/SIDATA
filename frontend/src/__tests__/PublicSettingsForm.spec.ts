@@ -98,35 +98,35 @@ describe('PublicSettingsForm.vue', () => {
     wrapper.unmount();
   });
 
-  it('keeps the world-coordinate and zoom validation', async () => {
-    const wrapper = mountForm({
-      settings: { ...DEFAULT_PUBLIC_SETTINGS, defaultCoordinates: { lat: 95, lon: 10, zoom: 13 } },
-    });
-    await flushPromises();
-
-    await wrapper.find('form').trigger('submit.prevent');
-    expect(wrapper.emitted('submit')).toBeFalsy();
-    expect(wrapper.text()).toContain('Tampilan peta belum valid');
-
-    // Choosing a point on the map repairs the draft (the picker normalises into range).
-    leafletState.handlers.click?.({ latlng: { lat: -1.2, lng: 116.9 } });
-    await flushPromises();
-    await wrapper.find('form').trigger('submit.prevent');
-    expect(wrapper.emitted('submit')).toHaveLength(1);
-    wrapper.unmount();
-  });
-
-  it('rejects a zoom outside 1 to 20', async () => {
-    const wrapper = mountForm({
-      settings: {
-        ...DEFAULT_PUBLIC_SETTINGS,
-        defaultCoordinates: { lat: -1.2, lon: 116.9, zoom: 25 },
+  it('clamps odd stored values (zoom 13.5, 0, 99 and lat 120) and submits without edits sending valid values', async () => {
+    for (const { input, expected } of [
+      {
+        input: { lat: 120, lon: 116.9, zoom: 13.5 },
+        expected: { lat: 90, lon: 116.9, zoom: 14 },
       },
-    });
-    await flushPromises();
-    await wrapper.find('form').trigger('submit.prevent');
-    expect(wrapper.emitted('submit')).toBeFalsy();
-    wrapper.unmount();
+      {
+        input: { lat: -1.2, lon: 116.9, zoom: 0 },
+        expected: { lat: -1.2, lon: 116.9, zoom: 1 },
+      },
+      {
+        input: { lat: -1.2, lon: 116.9, zoom: 99 },
+        expected: { lat: -1.2, lon: 116.9, zoom: 20 },
+      },
+    ]) {
+      const wrapper = mountForm({
+        settings: {
+          ...DEFAULT_PUBLIC_SETTINGS,
+          defaultCoordinates: input,
+        },
+      });
+      await flushPromises();
+      await wrapper.find('form').trigger('submit.prevent');
+      const emitted = wrapper.emitted('submit');
+      expect(emitted).toBeTruthy();
+      const payload = emitted?.[emitted.length - 1]?.[0] as Record<string, unknown>;
+      expect(payload.defaultCoordinates).toEqual(expected);
+      wrapper.unmount();
+    }
   });
 
   it('validates invalid email format and prevents submission', async () => {

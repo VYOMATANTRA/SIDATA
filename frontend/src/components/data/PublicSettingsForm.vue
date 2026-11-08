@@ -5,13 +5,32 @@ import FormErrorSummary from '../common/FormErrorSummary.vue';
 import BaseButton from '../common/BaseButton.vue';
 import LocationPicker, { type PickerLocation } from '../maps/LocationPicker.vue';
 import type { PublicSettings } from '../../stores/settings.store';
-import { MANGGAR_MAP_ORIGIN, MANGGAR_MAP_DEFAULT_ZOOM } from '../../constants/mapOrigin';
+import {
+  MANGGAR_MAP_ORIGIN,
+  MANGGAR_MAP_DEFAULT_ZOOM,
+  MIN_MAP_ZOOM,
+  MAX_MAP_ZOOM,
+} from '../../constants/map';
 import { INPUT_CLASSES } from '../../utils/formStyles';
-import { COORDINATE_EPSILON } from '../../utils/geoPicker';
+import { COORDINATE_EPSILON, clampZoom, normalizeLocation } from '../../utils/geoPicker';
 
-/** Same bounds the API enforces for `defaultCoordinates` (backend `coordinatesSchema`). */
-const MIN_ZOOM = 1;
-const MAX_ZOOM = 20;
+/**
+ * Normalises arbitrary stored map views into valid bounds: latitude clamped to -90..90,
+ * longitude wrapped to -180..180, zoom clamped to MIN_MAP_ZOOM..MAX_MAP_ZOOM, and missing
+ * pieces falling back to the Manggar defaults. Prevents legacy or odd values from breaking
+ * the form's validity checks.
+ */
+function normalizeView(settings: PublicSettings): PickerLocation {
+  const coords = settings.defaultCoordinates;
+  const normalizedLoc =
+    coords && Number.isFinite(coords.lat) && Number.isFinite(coords.lon)
+      ? normalizeLocation({ latitude: coords.lat, longitude: coords.lon })
+      : null;
+  const latitude = normalizedLoc ? normalizedLoc.latitude : MANGGAR_MAP_ORIGIN.latitude;
+  const longitude = normalizedLoc ? normalizedLoc.longitude : MANGGAR_MAP_ORIGIN.longitude;
+  const zoom = clampZoom(coords?.zoom ?? MANGGAR_MAP_DEFAULT_ZOOM, MIN_MAP_ZOOM, MAX_MAP_ZOOM);
+  return { latitude, longitude, zoom };
+}
 
 export interface PublicSettingsFormProps {
   settings: PublicSettings;
@@ -72,11 +91,7 @@ const baseline = computed<FormDraft>(() => ({
   contactAddress: props.settings.contactAddress ?? '',
 }));
 
-const baselineView = computed<PickerLocation>(() => ({
-  latitude: props.settings.defaultCoordinates?.lat ?? MANGGAR_MAP_ORIGIN.latitude,
-  longitude: props.settings.defaultCoordinates?.lon ?? MANGGAR_MAP_ORIGIN.longitude,
-  zoom: props.settings.defaultCoordinates?.zoom ?? MANGGAR_MAP_DEFAULT_ZOOM,
-}));
+const baselineView = computed<PickerLocation>(() => normalizeView(props.settings));
 
 function createFieldModel(key: FormFieldKey) {
   return computed({
@@ -131,12 +146,8 @@ const fieldErrors = computed<Record<string, string | undefined>>(() => {
     view === null ||
     !Number.isFinite(view.latitude) ||
     !Number.isFinite(view.longitude) ||
-    Math.abs(view.latitude) > 90 ||
-    Math.abs(view.longitude) > 180 ||
     typeof view.zoom !== 'number' ||
-    !Number.isInteger(view.zoom) ||
-    view.zoom < MIN_ZOOM ||
-    view.zoom > MAX_ZOOM
+    !Number.isFinite(view.zoom)
   ) {
     errors.mapView = 'Tampilan peta belum valid. Geser atau perbesar peta untuk memilihnya lagi.';
   }
@@ -399,8 +410,8 @@ function handleSubmit(): void {
         :error="submitted ? fieldErrors.mapView : undefined"
         :initial-center="[MANGGAR_MAP_ORIGIN.latitude, MANGGAR_MAP_ORIGIN.longitude]"
         :initial-zoom="MANGGAR_MAP_DEFAULT_ZOOM"
-        :min-zoom="MIN_ZOOM"
-        :max-zoom="MAX_ZOOM"
+        :min-zoom="MIN_MAP_ZOOM"
+        :max-zoom="MAX_MAP_ZOOM"
         :disabled="busy"
         include-zoom
       />
