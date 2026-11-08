@@ -134,12 +134,18 @@ describe('PublicLayout (mounted by App for routes with meta.layout = public)', (
     wrapper.unmount();
   });
 
-  it('loads public settings and the page hierarchy once, from the layout', async () => {
+  it('loads public settings on mount and lazily fetches the page hierarchy on menu open', async () => {
     const fetchMock = mockFetch();
     const { wrapper } = await mountApp('/peta');
 
-    const urls = fetchMock.mock.calls.map(([input]) => String(input));
+    let urls = fetchMock.mock.calls.map(([input]) => String(input));
     expect(urls.filter((u) => u.startsWith('/api/settings/public')).length).toBe(1);
+    expect(urls).not.toContain('/api/pages?include=sections');
+
+    await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
+    await flushPromises();
+
+    urls = fetchMock.mock.calls.map(([input]) => String(input));
     expect(urls).toContain('/api/pages?include=sections');
     wrapper.unmount();
   });

@@ -74,7 +74,6 @@ function handleToggleMenu(open: boolean) {
 onMounted(() => {
   // Branding and footer contact details come from the same public settings on every route.
   void settingsStore.fetchPublicSettings().catch(() => {});
-  void pagesStore.fetchHierarchy();
 });
 </script>
 

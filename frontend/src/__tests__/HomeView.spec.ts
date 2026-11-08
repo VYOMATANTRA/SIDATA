@@ -485,4 +485,28 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
       sambutanTitle.compareDocumentPosition(ceritaTitle) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
+
+  it('does not fetch page hierarchy on mount, only on menu open', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    } as Response);
+    globalThis.fetch = fetchMock;
+
+    const { pinia, router } = setupHomeView();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mountHome(pinia, router);
+
+    let urls = fetchMock.mock.calls.map(([input]) => String(input));
+    expect(urls).not.toContain('/api/pages?include=sections');
+
+    await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
+    await nextTick();
+
+    urls = fetchMock.mock.calls.map(([input]) => String(input));
+    expect(urls).toContain('/api/pages?include=sections');
+    wrapper.unmount();
+  });
 });
