@@ -342,8 +342,8 @@ describe('router auth guard retry behavior', () => {
 });
 
 describe('router scrollBehavior', () => {
-  const loc = (path: string, hash = '') =>
-    ({ path, hash, fullPath: path + hash }) as unknown as RouteLocationNormalized;
+  const loc = (path: string, hash = '', fullPath = path + hash, name?: string) =>
+    ({ path, hash, fullPath, name }) as unknown as RouteLocationNormalized;
   const mkEl = (id: string, margin = '0px') => {
     const el = document.createElement('section');
     el.id = id;
@@ -371,6 +371,36 @@ describe('router scrollBehavior', () => {
 
   it('keeps the position on a query-only change', async () => {
     expect(await scrollBehavior(loc('/peta'), loc('/peta'), null)).toBe(false);
+  });
+
+  it('preserves scroll position (returns false) on same-path query-only changes even if the URL has a hash', async () => {
+    mkEl('target', '50px');
+    const from = loc('/peta', '#target', '/peta#target');
+    const to = loc('/peta', '#target', '/peta?filter=rt#target');
+    expect(await scrollBehavior(to, from, null)).toBe(false);
+  });
+
+  it('ignores savedPosition on Cerita routes and resets to top without a hash', async () => {
+    const saved = { left: 0, top: 1500 };
+    const to = loc('/cerita/penduduk', '', '/cerita/penduduk', 'cerita-page');
+    const from = loc('/', '', '/');
+    expect(await scrollBehavior(to, from, saved)).toEqual({
+      top: 0,
+      left: 0,
+      behavior: 'instant',
+    });
+  });
+
+  it('ignores savedPosition on Cerita routes and scrolls to the hash target', async () => {
+    const el = mkEl('bab-2', '72px');
+    const saved = { left: 0, top: 1500 };
+    const to = loc('/cerita/penduduk', '#bab-2', '/cerita/penduduk#bab-2', 'cerita-page');
+    const from = loc('/', '', '/');
+    expect(await scrollBehavior(to, from, saved)).toEqual({
+      el,
+      top: 72,
+      behavior: 'instant',
+    });
   });
 
   it('scrolls to the hash target using its scroll-margin-top, on path or hash-only changes', async () => {

@@ -52,16 +52,20 @@ export function rolesFor(path: string): AdminNavRole[] {
 /**
  * Scroll policy for window-scrolling (public) routes. Admin routes scroll an inner container
  * instead, which `AdminLayout` resets itself on a path change.
+ * - query-only changes on the same path keep the position, even if the URL has a hash (views use
+ *   them to sync filters);
  * - a hash on the same path (in-page anchor, TOC, skip link) scrolls to its target first. Native
  *   anchor clicks fire `popstate` with no state, so vue-router passes a STALE `savedPosition`
  *   that must not override the anchor;
+ * - Cerita routes (`to.name === 'cerita-page'`) ignore `savedPosition` and always land on their
+ *   hash target (or reset to the top), because content loads asynchronously and the saved offset
+ *   would be clamped to the short page (SPEC §6);
  * - otherwise back/forward restores the saved position;
  * - a hash that resolves to an element (cross-path) scrolls to it, clearing the sticky header by
  *   the element's own computed `scroll-margin-top` (vue-router positions with
  *   getBoundingClientRect, which ignores that CSS). `.public-shell [id]` sets it from
  *   `--public-header-height`, so public pages clear the header with no hardcoded number;
- * - a path change otherwise resets to the top;
- * - query-only changes keep the position (views use them to sync filters).
+ * - a path change otherwise resets to the top.
  * Always `behavior: 'instant'` (ignores any CSS `scroll-behavior`, so reduced-motion needs no
  * special case). vue-router already awaits a tick before calling this, so the new route component
  * has rendered by the time the target is measured.
@@ -81,10 +85,16 @@ function hashTarget(hash: string): { el: Element; top: number; behavior: ScrollB
 }
 
 export const scrollBehavior: RouterScrollBehavior = (to, from, savedPosition) => {
+  if (to.path === from.path && to.hash === from.hash && to.fullPath !== from.fullPath) {
+    return false;
+  }
   const samePath = to.path === from.path;
   if (samePath) {
     const target = hashTarget(to.hash);
     if (target) return target;
+  }
+  if (to.name === 'cerita-page') {
+    return hashTarget(to.hash) ?? { top: 0, left: 0, behavior: 'instant' };
   }
   if (savedPosition) return savedPosition;
   if (!samePath) return hashTarget(to.hash) ?? { top: 0, left: 0, behavior: 'instant' };
