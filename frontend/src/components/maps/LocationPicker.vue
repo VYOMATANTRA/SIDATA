@@ -747,9 +747,11 @@ const buttonClasses = `${sharedButtonClasses} bg-surface text-brand-navy hover:b
 // The toggle's fill, text colour and hover come from its state, so they are not in the shared
 // classes. The focus ring is the shared navy one in both states: it is drawn outside the button,
 // so it must contrast with the surrounding surface, not with the button fill.
-const toggleBaseClasses = `${sharedButtonClasses} hover:bg-brand-navy hover:text-text-inverse`;
+const toggleBaseClasses = sharedButtonClasses;
 const toggleOnClasses = 'bg-brand-navy text-text-inverse';
-const toggleOffClasses = 'bg-surface text-brand-navy';
+// OFF hovers to a light tint (not the ON fill), so hover never looks like the ON state; ON keeps
+// its fill on hover.
+const toggleOffClasses = 'bg-surface text-brand-navy hover:bg-surface-hover';
 </script>
 
 <template>

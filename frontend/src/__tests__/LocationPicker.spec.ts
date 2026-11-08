@@ -263,6 +263,22 @@ describe('LocationPicker', () => {
       expect(toggle.classes()).toContain('bg-surface');
     });
 
+    it('hovers the OFF toggle to a light tint, never to the ON fill, and leaves other buttons alone', async () => {
+      const wrapper = await mountPicker({ modelValue: PIN });
+      const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
+      expect(toggle.classes()).toContain('hover:bg-surface-hover');
+      expect(toggle.classes()).not.toContain('hover:bg-brand-navy');
+      expect(toggle.classes()).not.toContain('hover:text-text-inverse');
+      await toggle.trigger('click');
+      expect(toggle.classes()).toContain('bg-brand-navy');
+      expect(toggle.classes()).not.toContain('hover:bg-surface-hover');
+      expect(toggle.classes()).not.toContain('hover:bg-brand-navy');
+      const other = wrapper.get('[data-test="location-picker-zoom-in"]');
+      expect(other.classes()).toEqual(
+        expect.arrayContaining(['hover:bg-brand-navy', 'hover:text-text-inverse']),
+      );
+    });
+
     it('draws the same navy focus ring on the toggle in both states, never an inverse one', async () => {
       const wrapper = await mountPicker({ modelValue: PIN });
       const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
