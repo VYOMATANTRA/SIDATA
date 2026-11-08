@@ -649,9 +649,10 @@ function toggleKeyboardMode(): void {
 }
 
 /**
- * The region only carries `tabindex="0"` once the mode has re-rendered, so it is made focusable
- * first, then focused after the render. `preventScroll` keeps the browser from scrolling the
- * surrounding dialog to the focused element, which shifted the controls under the pointer.
+ * `preventScroll` is the load-bearing part: without it, focusing the region scrolls the
+ * surrounding dialog, which shifted the controls under the pointer. Making the region focusable
+ * first and focusing after `nextTick` (when the template's `tabindex="0"` has rendered) is
+ * defensive ordering, harmless but not required.
  */
 async function focusRegionWhenReady(): Promise<void> {
   const element = region.value;
