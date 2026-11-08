@@ -14,6 +14,7 @@ import {
   type MediaTransactionClient,
 } from '../services/media.service.js';
 import { MediaValidationError } from '../utils/mediaSignature.js';
+import { photoProcessingSemaphore } from '../utils/mediaImage.js';
 import { UPLOAD_SUBDIRS } from '../utils/uploadRoot.js';
 import { installMediaDbStub, makeAsset, type MediaDbStub } from './helpers/mediaDbStub.js';
 import { PDF_BYTES, buildDocx, buildXlsx, makeImage } from './helpers/mediaFixtures.js';
@@ -34,6 +35,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  photoProcessingSemaphore.configure();
   db.restore();
   await rm(sandbox, { recursive: true, force: true });
 });
@@ -182,6 +184,60 @@ describe('ingestStagedUpload: photos', () => {
     assert.deepEqual(await walk(path.join(root, 'photos')), []);
     assert.deepEqual(await walk(path.join(root, 'derivatives')), []);
     assert.equal(db.auditRows.length, 0);
+  });
+
+  it('bounds concurrent photo processing and rejects past the queue with 503 and retryAfter 5', async () => {
+    // Configure semaphore to concurrency=1 and maxQueue=1 for deterministic testing
+    photoProcessingSemaphore.configure(1, 1);
+
+    const img1 = await stage(await makeImage('jpeg', 100, 100));
+    const img2 = await stage(await makeImage('jpeg', 100, 100));
+
+    // Manually hold the active slot so p1 is queued
+    const releaseSlot = await photoProcessingSemaphore.acquire();
+
+    try {
+      // p1 enters the queue (queue length = 1)
+      const p1 = ingestStagedUpload({
+        root,
+        stagedPath: img1,
+        originalName: 'img1.jpg',
+        purpose: 'cerita',
+        actor,
+        context,
+      });
+
+      // Wait for p1 to advance past validation and enter the semaphore queue
+      while (photoProcessingSemaphore.queueLength === 0) {
+        await new Promise((r) => setImmediate(r));
+      }
+
+      // img2 exceeds the queue (active=1, queue=1, maxQueue=1) -> rejected immediately with 503
+      await assert.rejects(
+        async () =>
+          ingestStagedUpload({
+            root,
+            stagedPath: img2,
+            originalName: 'img2.jpg',
+            purpose: 'cerita',
+            actor,
+            context,
+          }),
+        (error: unknown) =>
+          error instanceof MediaValidationError &&
+          error.code === 'MEDIA_PROCESSING_BUSY' &&
+          error.statusCode === 503 &&
+          error.retryAfter === 5 &&
+          /Server sedang sibuk memproses gambar lain/i.test(error.message),
+      );
+
+      // Now release the slot, allowing p1 to acquire and complete
+      releaseSlot();
+      const res1 = await p1;
+      assert.equal(res1.kind, 'photo');
+    } finally {
+      photoProcessingSemaphore.configure();
+    }
   });
 });
 

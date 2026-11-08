@@ -35,6 +35,7 @@ import { DOCUMENT_MAX_BYTES } from '../utils/mediaPolicy.js';
 import { createUploadRootProvider, setUploadRootForTesting } from '../utils/mediaStorage.js';
 import { UploadRootError } from '../utils/uploadRoot.js';
 import { UPLOAD_SUBDIRS } from '../utils/uploadRoot.js';
+import { photoProcessingSemaphore } from '../utils/mediaImage.js';
 import { installMediaDbStub, makeAsset, type MediaDbStub } from './helpers/mediaDbStub.js';
 import {
   PDF_BYTES,
@@ -62,6 +63,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  photoProcessingSemaphore.configure();
   db.restore();
   setUploadRootForTesting(null);
   await rm(sandbox, { recursive: true, force: true });
@@ -231,6 +233,24 @@ describe('POST /api/media transport + handler', () => {
     assert.equal(stored.originalName, 'pwn.pdf');
     assert.equal(existsSync(path.join(sandbox, 'pwn.pdf')), false);
     assert.equal(existsSync(path.join(os.tmpdir(), 'pwn.pdf')), false);
+  });
+
+  it('sets Retry-After header and returns 503 when photo processing queue is full', async () => {
+    photoProcessingSemaphore.configure(1, 0);
+    const release = await photoProcessingSemaphore.acquire();
+    try {
+      const res = await postUpload([
+        purposePart('cerita'),
+        filePart('a.jpg', await makeImage('jpeg'), 'image/jpeg'),
+      ]);
+      assert.equal(res.statusCode, 503);
+      assert.equal((res.body as { code: string }).code, 'MEDIA_PROCESSING_BUSY');
+      assert.equal(res.headers['retry-after'], '5');
+      assert.deepEqual(await stagingEntries(), []);
+    } finally {
+      release();
+      photoProcessingSemaphore.configure();
+    }
   });
 });
 

@@ -110,3 +110,23 @@ export const AUDIT_ADMIN_DATABASE_URL = process.env.AUDIT_ADMIN_DATABASE_URL;
 // creates it, proves it is writable, and refuses roots inside backend/ or frontend/. Never expose
 // it in an API response or public setting.
 export const UPLOAD_DIR = resolveUploadDirPath(process.env.UPLOAD_DIR);
+
+// Max concurrent photo re-encoding operations (sharp). Optional integer 1-8, defaults to 2.
+function parseOptionalIntInRange(
+  name: string,
+  min: number,
+  max: number,
+  defaultValue: number,
+): number {
+  const raw = process.env[name];
+  if (!raw || raw.trim() === '') return defaultValue;
+  const parsed = Number(raw.trim());
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
+    throw new Error(
+      `Invalid environment variable ${name}: expected an integer between ${min} and ${max}, received "${raw}".`,
+    );
+  }
+  return parsed;
+}
+
+export const MEDIA_IMAGE_CONCURRENCY = parseOptionalIntInRange('MEDIA_IMAGE_CONCURRENCY', 1, 8, 2);

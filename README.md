@@ -177,6 +177,9 @@ Checklist for a new environment (Docker on a VPS). Background: [`AGENTS.md`](AGE
    - Uploaded CSV files are scanned across comma, semicolon, and tab delimiters for spreadsheet
      formula injection (rejecting cells starting with `=`, `+`, `-`, `@`, tab, or CR unless the cell
      is a plain number).
+   - Photo processing (re-encoding to WebP and thumbnail creation) is bound by a concurrency
+     semaphore (`MEDIA_IMAGE_CONCURRENCY`, default 2, range 1–8) with a bounded queue of 20.
+     When the queue is full, uploads answer 503 `MEDIA_PROCESSING_BUSY` with a `Retry-After: 5` header.
    - Schedule `npm run media:cleanup` (daily is plenty). It removes `_staging/` directories and
      unattached uploads whose grace period (24 h, `MEDIA_CLEANUP_GRACE_HOURS` or
      `--grace-hours=N`) has passed, counted from the moment content detached them (`detached_at`), or from

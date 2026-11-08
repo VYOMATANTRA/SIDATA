@@ -113,6 +113,9 @@ export const uploadMediaHandler = async (
     return res.status(201).json({ message: 'Berkas berhasil diunggah', media: dto });
   } catch (error) {
     if (error instanceof MediaValidationError || error instanceof MediaServiceError) {
+      if ('retryAfter' in error && typeof error.retryAfter === 'number') {
+        res.setHeader('Retry-After', String(error.retryAfter));
+      }
       return res.status(error.statusCode).json({ error: error.message, code: error.code });
     }
     logError('Error saat mengunggah media:', error);

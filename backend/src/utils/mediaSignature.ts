@@ -21,18 +21,23 @@ export type MediaValidationCode =
   | 'INVALID_ARCHIVE'
   | 'INVALID_CSV'
   | 'CSV_FORMULA'
-  | 'INVALID_IMAGE';
+  | 'INVALID_IMAGE'
+  | 'MEDIA_PROCESSING_BUSY';
 
 /** A file the policy refuses. Messages are safe to show the uploader (no paths, no bytes). */
 export class MediaValidationError extends Error {
   readonly code: MediaValidationCode;
   readonly statusCode: number;
+  readonly retryAfter?: number;
 
-  constructor(code: MediaValidationCode, message: string, statusCode = 400) {
+  constructor(code: MediaValidationCode, message: string, statusCode = 400, retryAfter?: number) {
     super(message);
     this.name = 'MediaValidationError';
     this.code = code;
     this.statusCode = statusCode;
+    if (retryAfter !== undefined) {
+      this.retryAfter = retryAfter;
+    }
   }
 }
 
