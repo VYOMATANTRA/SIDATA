@@ -184,9 +184,10 @@ Checklist for a new environment (Docker on a VPS). Background: [`AGENTS.md`](AGE
      unattached uploads whose grace period (24 h, `MEDIA_CLEANUP_GRACE_HOURS` or
      `--grace-hours=N`) has passed, counted from the moment content detached them (`detached_at`), or from
      the upload for assets that were never attached and writes a count-only `media.cleanup` audit row (including files that failed to delete: those rows are kept and retried on the next run, and the script exits 1 so cron notices). It uses the app's normal DB
-     user (no privileged connection needed). Host cron, from `backend/`:
-     `30 3 * * * cd /path/to/SIDATA/backend && npm run media:cleanup >> /var/log/sidata-media-cleanup.log 2>&1`;
-     under Compose: `docker compose exec backend npm run media:cleanup` from the host's cron. Add
+     user (no privileged connection needed). Under Compose (primary), from the host's cron:
+     `30 3 * * * cd /path/to/SIDATA && docker compose exec -T backend npm run media:cleanup >> /var/log/sidata-media-cleanup.log 2>&1`;
+     or without Docker, from `backend/`:
+     `30 3 * * * cd /path/to/SIDATA/backend && npm run media:cleanup >> /var/log/sidata-media-cleanup.log 2>&1`. Add
      `-- --dry-run` first to see what it would remove.
    - **Moving `UPLOAD_DIR` to a new location:** (1) pause writes (stop the backend, or block `POST
      /api/media` at the proxy); (2) copy the whole tree preserving structure, e.g.
