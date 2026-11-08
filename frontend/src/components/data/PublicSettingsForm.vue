@@ -143,10 +143,10 @@ const dirty = computed(() => {
   );
 });
 
-/** Always says what is true: saved, unsaved, saving, or a failed save with the draft kept. */
 /** Lets the dialog ask "is there unsaved work?" before it closes. */
 defineExpose({ isDirty: dirty });
 
+/** Always says what is true: saved, unsaved, saving, or a failed save with the draft kept. */
 const saveStateText = computed(() => {
   if (props.busy) return 'Menyimpan perubahan…';
   if (props.serverError) return 'Perubahan belum tersimpan. Isian Anda masih ada di formulir.';
