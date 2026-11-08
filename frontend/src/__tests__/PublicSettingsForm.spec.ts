@@ -546,6 +546,16 @@ describe('PublicSettingsForm in the CMS dialog', () => {
       wrapper.unmount();
     });
 
+    it('prompts to discard when settingsForm ref is null or unknown', async () => {
+      installFetch([]);
+      const { wrapper } = await openSettingsDialog();
+      (wrapper.vm as unknown as { settingsForm: null }).settingsForm = null;
+      await dialogRoot().find('[aria-label="Tutup dialog"]').trigger('click');
+      await flushPromises();
+      expect(prompt().exists()).toBe(true);
+      wrapper.unmount();
+    });
+
     it('cannot be dismissed while a save is in flight', async () => {
       let release: (response: Response) => void = () => undefined;
       globalThis.fetch = vi.fn<typeof fetch>(

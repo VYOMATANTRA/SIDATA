@@ -393,7 +393,7 @@ function requestCloseSettings(): void {
     keepEditingSettings();
     return;
   }
-  if (!settingsForm.value?.isDirty) {
+  if (settingsForm.value?.isDirty === false) {
     resetEditor();
     return;
   }
