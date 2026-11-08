@@ -199,6 +199,82 @@ describe('PublicLayout (mounted by App for routes with meta.layout = public)', (
       wrapper.unmount();
     });
 
+    async function scrollAndReadVariants(wrapper: Awaited<ReturnType<typeof mountApp>>['wrapper']) {
+      const variant = () => wrapper.find('header').attributes('data-variant');
+      const seen = [variant()];
+      setScrollY(1500);
+      window.dispatchEvent(new Event('scroll'));
+      await nextTick();
+      seen.push(variant());
+      setScrollY(0);
+      window.dispatchEvent(new Event('scroll'));
+      await nextTick();
+      seen.push(variant());
+      return seen;
+    }
+
+    it('turns navy on scroll after client-side navigation to Home from an interior page', async () => {
+      const { wrapper, router } = await mountApp('/peta');
+      await router.push('/');
+      await flushPromises();
+      expect(await scrollAndReadVariants(wrapper)).toEqual(['transparent', 'navy', 'transparent']);
+      wrapper.unmount();
+    });
+
+    it('turns navy on scroll after leaving Home and coming back', async () => {
+      const { wrapper, router } = await mountApp('/');
+      await router.push('/peta');
+      await flushPromises();
+      await router.push('/');
+      await flushPromises();
+      expect(await scrollAndReadVariants(wrapper)).toEqual(['transparent', 'navy', 'transparent']);
+      wrapper.unmount();
+    });
+
+    it('turns navy on scroll after arriving from a route outside the public layout', async () => {
+      const { wrapper, router } = await mountApp('/login');
+      await router.push('/');
+      await flushPromises();
+      expect(await scrollAndReadVariants(wrapper)).toEqual(['transparent', 'navy', 'transparent']);
+      wrapper.unmount();
+    });
+
+    for (const desktop of [true, false]) {
+      it(`turns navy on scroll after following Beranda in the open menu (${desktop ? 'desktop' : 'phone'})`, async () => {
+        stubViewport(desktop);
+        const { wrapper, router } = await mountApp('/peta');
+        await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
+        const home = wrapper.findAll('a').find((a) => a.attributes('href') === '/' && a.text().includes('Beranda'));
+        expect(home).toBeTruthy();
+        await home!.trigger('click');
+        await flushPromises();
+        expect(router.currentRoute.value.path).toBe('/');
+        expect(await scrollAndReadVariants(wrapper)).toEqual(['transparent', 'navy', 'transparent']);
+        wrapper.unmount();
+      });
+    }
+
+    it('recomputes from the real scroll position when the route changes to Home', async () => {
+      const { wrapper, router } = await mountApp('/peta');
+      setScrollY(1500);
+      await router.push('/');
+      await flushPromises();
+      expect(wrapper.find('header').attributes('data-variant')).toBe('navy');
+      wrapper.unmount();
+    });
+
+    it('attaches exactly one scroll listener for the shell lifetime', async () => {
+      const add = vi.spyOn(window, 'addEventListener');
+      const { wrapper, router } = await mountApp('/peta');
+      await router.push('/');
+      await flushPromises();
+      await router.push('/peta');
+      await flushPromises();
+      expect(add.mock.calls.filter(([type]) => type === 'scroll')).toHaveLength(1);
+      wrapper.unmount();
+      add.mockRestore();
+    });
+
     it('removes its scroll listener when the shell unmounts', async () => {
       const remove = vi.spyOn(window, 'removeEventListener');
       const { wrapper } = await mountApp('/');
