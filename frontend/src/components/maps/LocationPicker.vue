@@ -244,8 +244,14 @@ function cancelDetect(): void {
 }
 
 /** Emits a draft value. Out-of-world values are normalised; duplicates are dropped. */
-function emitValue(location: GeoPoint, zoom?: number): void {
+function emitValue(location: GeoPoint, zoom?: number, fromDetect = false): void {
   if (!editable.value) return;
+  if (!fromDetect) {
+    if (accuracy.value !== null) {
+      clearAnnouncement();
+    }
+    accuracy.value = null;
+  }
   const normalized = normalizeLocation(location);
   if (!normalized) return;
   const next: PickerLocation = viewport.value
@@ -338,7 +344,7 @@ function syncFromValue(initial = false): void {
 }
 
 /** Viewport mode: move the map view and report it as the new draft. */
-function applyView(location: GeoPoint, zoom: number): void {
+function applyView(location: GeoPoint, zoom: number, fromDetect = false): void {
   const normalized = normalizeLocation(location);
   if (!normalized || !map) return;
   const nextZoom = clampZoom(zoom, props.minZoom, props.maxZoom);
@@ -346,7 +352,7 @@ function applyView(location: GeoPoint, zoom: number): void {
   runSilently(() =>
     map?.setView([normalized.latitude, normalized.longitude], nextZoom, { animate: false }),
   );
-  emitValue(normalized, nextZoom);
+  emitValue(normalized, nextZoom, fromDetect);
 }
 
 function setInteractivity(): void {
@@ -596,9 +602,9 @@ function detectLocation(): void {
       const location = { latitude: position.coords.latitude, longitude: position.coords.longitude };
       accuracy.value = position.coords.accuracy;
       if (viewport.value) {
-        applyView(location, props.focusZoom);
+        applyView(location, props.focusZoom, true);
       } else {
-        emitValue(location);
+        emitValue(location, undefined, true);
         viewZoom.value = props.focusZoom;
         runSilently(() =>
           map?.setView([location.latitude, location.longitude], props.focusZoom, {

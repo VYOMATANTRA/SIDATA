@@ -1228,6 +1228,59 @@ describe('LocationPicker', () => {
       expect(lastEmitted(wrapper)).toEqual({ latitude: -1.3, longitude: 116.9 });
     });
 
+    it('clears accuracy text after a manual map click', async () => {
+      const wrapper = await mountPicker({ detectable: true });
+      await click(wrapper, 'location-picker-detect');
+      success({ coords: { latitude: -1.25, longitude: 116.95, accuracy: 12.4 } });
+      await flushPromises();
+      await wrapper.setProps({ modelValue: lastEmitted(wrapper) });
+      expect(wrapper.find('[data-test="location-picker-accuracy"]').exists()).toBe(true);
+      clickMap(-1.26, 116.96);
+      await flushPromises();
+      expect(wrapper.find('[data-test="location-picker-accuracy"]').exists()).toBe(false);
+    });
+
+    it('clears accuracy text after dragging the marker', async () => {
+      const wrapper = await mountPicker({ detectable: true });
+      await click(wrapper, 'location-picker-detect');
+      success({ coords: { latitude: -1.25, longitude: 116.95, accuracy: 12.4 } });
+      await flushPromises();
+      await wrapper.setProps({ modelValue: lastEmitted(wrapper) });
+      expect(wrapper.find('[data-test="location-picker-accuracy"]').exists()).toBe(true);
+      leafletState.markerLatLng = { lat: -1.26, lng: 116.96 };
+      leafletState.markerHandlers.dragend?.();
+      await flushPromises();
+      expect(wrapper.find('[data-test="location-picker-accuracy"]').exists()).toBe(false);
+    });
+
+    it('clears accuracy text after a nudge', async () => {
+      const wrapper = await mountPicker({ detectable: true });
+      await click(wrapper, 'location-picker-detect');
+      success({ coords: { latitude: -1.25, longitude: 116.95, accuracy: 12.4 } });
+      await flushPromises();
+      await wrapper.setProps({ modelValue: lastEmitted(wrapper) });
+      expect(wrapper.find('[data-test="location-picker-accuracy"]').exists()).toBe(true);
+      await click(wrapper, 'location-picker-north');
+      expect(wrapper.find('[data-test="location-picker-accuracy"]').exists()).toBe(false);
+    });
+
+    it('clears accuracy text when clicking center pin, even at the same coordinates', async () => {
+      const wrapper = await mountPicker({ detectable: true });
+      await click(wrapper, 'location-picker-detect');
+      success({
+        coords: {
+          latitude: leafletState.center.lat,
+          longitude: leafletState.center.lng,
+          accuracy: 12.4,
+        },
+      });
+      await flushPromises();
+      await wrapper.setProps({ modelValue: lastEmitted(wrapper) });
+      expect(wrapper.find('[data-test="location-picker-accuracy"]').exists()).toBe(true);
+      await click(wrapper, 'location-picker-center');
+      expect(wrapper.find('[data-test="location-picker-accuracy"]').exists()).toBe(false);
+    });
+
     it('reports an unsupported device', async () => {
       Reflect.deleteProperty(navigator, 'geolocation');
       const wrapper = await mountPicker({ detectable: true });
