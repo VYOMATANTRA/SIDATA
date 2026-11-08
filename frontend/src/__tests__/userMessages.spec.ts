@@ -305,12 +305,22 @@ describe('toUserMessage mappings', () => {
   it('maps echoed-key sentences to one approved wording', () => {
     for (const serverMessage of [
       'Unrecognized key: "badge"',
-      'Terdapat bidang pengaturan yang tidak dikenali: "secret_flag"',
       'Unrecognized keys: "a", "b"',
+      'Terdapat bidang pengaturan yang tidak dikenali: "secret_flag"',
+      'Terdapat bidang koordinat yang tidak dikenali: "lat_x"',
+      'Terdapat bidang pengaturan retensi yang tidak dikenali: "purge_all"',
+      'Terdapat bidang pengaturan cuaca yang tidak dikenali: "radar"',
+      'Terdapat bidang yang tidak dikenali: "extra"',
     ]) {
       const error = Object.assign(httpFailure(400), { serverMessage });
       expect([serverMessage, toUserMessage(error).message]).toEqual([serverMessage, UNKNOWN_FIELD_MESSAGE]);
     }
+  });
+
+  it('does not swallow unrecognized value messages such as unknown role', () => {
+    const serverMessage = 'Peran tidak dikenali. Gunakan "admin" atau "editor".';
+    const error = Object.assign(httpFailure(400), { serverMessage });
+    expect(toUserMessage(error).message).toBe(serverMessage);
   });
 
   it('maps the computed-comparison and CSV header sentences to approved wording', () => {

@@ -286,7 +286,7 @@ const PREVIOUS_REQUIRED_SOURCE =
   /^Indikator perbandingan terkomputasi membutuhkan (?:value_previous|period_previous)/;
 const CSV_HEADER_SOURCE = /^Header CSV harus\b/;
 const RT_INVARIANT_SOURCE = /^Invariant (?:Ketua RT|ketua_rt)\/RT dilanggar/i;
-const UNRECOGNIZED_SOURCE = /tidak dikenali\b[^"]*"|Unrecognized keys?\b/i;
+const UNRECOGNIZED_SOURCE = /^Terdapat bidang .{0,60}\byang tidak dikenali\b|Unrecognized keys?\b/i;
 const VALIDATION_PREFIX = /^Validasi [^:]{1,60} gagal:/i;
 
 /** Zod's default English wording, which must never reach an operator. */
