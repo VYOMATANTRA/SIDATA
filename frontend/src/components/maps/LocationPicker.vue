@@ -737,13 +737,17 @@ function onFocusOut(event: FocusEvent): void {
   keyboardMode.value = false;
 }
 
-const buttonClasses =
-  'inline-flex min-h-11 min-w-11 items-center justify-center rounded-btn border-2 border-brand-navy bg-surface px-3 py-2 text-sm font-medium text-brand-navy transition-colors hover:bg-brand-navy hover:text-text-inverse focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-surface disabled:text-text-muted disabled:hover:bg-surface disabled:hover:text-text-muted';
+// Only colour, background and border transition: `transition-colors` also animates
+// `outline-color`, which starts from currentColor, so a focus ring on the white-text ON toggle
+// would fade in from white (invisible on the light panel) instead of showing navy at once.
+const sharedButtonClasses =
+  'inline-flex min-h-11 min-w-11 items-center justify-center rounded-btn border-2 border-brand-navy px-3 py-2 text-sm font-medium transition-[color,background-color,border-color] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-surface disabled:text-text-muted disabled:hover:bg-surface disabled:hover:text-text-muted';
+const buttonClasses = `${sharedButtonClasses} bg-surface text-brand-navy hover:bg-brand-navy hover:text-text-inverse`;
 
-// The toggle's fill and text colour come from its state, so they are not in the shared classes.
-const toggleBaseClasses = buttonClasses
-  .replace(' bg-surface ', ' ')
-  .replace(' text-brand-navy ', ' ');
+// The toggle's fill, text colour and hover come from its state, so they are not in the shared
+// classes. The focus ring is the shared navy one in both states: it is drawn outside the button,
+// so it must contrast with the surrounding surface, not with the button fill.
+const toggleBaseClasses = `${sharedButtonClasses} hover:bg-brand-navy hover:text-text-inverse`;
 const toggleOnClasses = 'bg-brand-navy text-text-inverse';
 const toggleOffClasses = 'bg-surface text-brand-navy';
 </script>

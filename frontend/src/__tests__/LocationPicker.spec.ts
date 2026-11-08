@@ -263,6 +263,29 @@ describe('LocationPicker', () => {
       expect(toggle.classes()).toContain('bg-surface');
     });
 
+    it('draws the same navy focus ring on the toggle in both states, never an inverse one', async () => {
+      const wrapper = await mountPicker({ modelValue: PIN });
+      const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
+      const ring = [
+        'focus-visible:outline-2',
+        'focus-visible:outline-offset-2',
+        'focus-visible:outline-focus-ring',
+      ];
+      for (const on of [false, true]) {
+        if (on) await toggle.trigger('click');
+        expect(toggle.classes()).toEqual(expect.arrayContaining(ring));
+        expect(toggle.classes().filter((name) => /outline.*(inverse|white)/.test(name))).toEqual(
+          [],
+        );
+        // `transition-colors` also animates outline-color, which starts from currentColor: the
+        // white text of the ON state flashes a white ring while the outline fades in.
+        expect(toggle.classes()).not.toContain('transition-colors');
+        expect(toggle.classes().join(' ')).toContain(
+          'transition-[color,background-color,border-color]',
+        );
+      }
+    });
+
     it('lets a pointer click on the toggle turn keyboard mode off and back on', async () => {
       const wrapper = await mountPicker({ modelValue: PIN });
       const toggle = wrapper.get('[data-test="location-picker-keyboard"]');
