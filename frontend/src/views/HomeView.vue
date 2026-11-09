@@ -307,10 +307,10 @@ async function handleLogout() {
       </template>
     </AppNavbar>
 
-    <!-- Logout Error Notification Banner -->
+    <!-- Logout Error Notification Banner (floating overlay so it does not shift the initial viewport fold) -->
     <div
       v-if="logoutError"
-      class="mx-auto mt-2 max-w-7xl rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-center text-xs font-medium text-rose-600 sm:text-sm"
+      class="fixed top-20 left-1/2 z-50 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-center text-xs font-medium text-rose-600 shadow-lg sm:text-sm"
       role="alert"
     >
       {{ logoutError }}

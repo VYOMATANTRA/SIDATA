@@ -102,13 +102,13 @@ const backgroundStyle = computed(() => {
 <template>
   <section
     id="hero"
-    class="relative flex min-h-[calc(100dvh-4.75rem)] w-full flex-col justify-center overflow-hidden px-5 py-16 text-white transition-all sm:min-h-[calc(100dvh-5.5rem)] sm:px-12 sm:py-20 md:py-24"
+    class="relative flex min-h-[calc(100dvh-4.75rem)] min-h-[calc(100vh-4.75rem)] w-full flex-col justify-center overflow-hidden px-5 py-6 text-white transition-all sm:min-h-[calc(100dvh-6rem)] sm:min-h-[calc(100vh-6rem)] sm:px-12 sm:py-8 md:py-10"
     :style="backgroundStyle"
     aria-labelledby="hero-title"
     data-test="section-hero"
   >
-    <div class="relative z-10 mx-auto flex w-full max-w-5xl flex-col space-y-6 sm:space-y-8">
-      <div class="space-y-4">
+    <div class="relative z-10 mx-auto flex w-full max-w-5xl flex-col space-y-4 sm:space-y-6">
+      <div class="space-y-3 sm:space-y-4">
         <h1
           id="hero-title"
           class="min-w-0 text-3xl leading-tight font-extrabold tracking-tight text-white sm:text-4xl md:text-5xl"
@@ -123,14 +123,14 @@ const backgroundStyle = computed(() => {
       <!-- Hero Actions slot (renders only when slot content is provided) -->
       <div
         v-if="$slots.actions"
-        class="flex flex-wrap items-center gap-3 pt-2 sm:gap-4"
+        class="flex flex-wrap items-center gap-3 pt-1 sm:gap-4"
         data-test="hero-actions"
       >
         <slot name="actions" />
       </div>
 
       <!-- Weather Widget slot (Spec §8) -->
-      <div class="w-full pt-2 sm:pt-4" data-test="hero-weather">
+      <div class="w-full pt-1 sm:pt-2" data-test="hero-weather">
         <slot name="weather">
           <WeatherWidget />
         </slot>

@@ -201,7 +201,7 @@ describe('Landing SectionHero.vue', () => {
     expect(weatherContainer.text()).toContain('Cuaca Kustom');
   });
 
-  it('uses dynamic viewport height (dvh) minus navbar height to achieve full viewport coverage without clipping', () => {
+  it('uses viewport height minus navbar offset (including vh fallback and dvh) and trimmed padding to achieve full viewport coverage without overflowing', () => {
     const pinia = createPinia();
     setActivePinia(pinia);
 
@@ -210,10 +210,28 @@ describe('Landing SectionHero.vue', () => {
     });
 
     const heroSection = wrapper.find('section#hero');
-    expect(heroSection.classes()).toContain('min-h-[calc(100dvh-4.75rem)]');
-    expect(heroSection.classes()).toContain('sm:min-h-[calc(100dvh-5.5rem)]');
-    expect(heroSection.classes()).not.toContain('min-h-[520px]');
-    expect(heroSection.classes()).not.toContain('sm:min-h-[580px]');
+    const classes = heroSection.classes();
+
+    // Sizing: dynamic dvh with vh fallback, factoring 4.75rem mobile / 6rem desktop navbar
+    expect(classes).toContain('min-h-[calc(100vh-4.75rem)]');
+    expect(classes).toContain('min-h-[calc(100dvh-4.75rem)]');
+    expect(classes).toContain('sm:min-h-[calc(100vh-6rem)]');
+    expect(classes).toContain('sm:min-h-[calc(100dvh-6rem)]');
+
+    // Padding: trimmed padding to fit short windows (replaces old py-16 / sm:py-20 / md:py-24)
+    expect(classes).toContain('py-6');
+    expect(classes).toContain('sm:py-8');
+    expect(classes).toContain('md:py-10');
+    expect(classes).not.toContain('py-16');
+    expect(classes).not.toContain('sm:py-20');
+    expect(classes).not.toContain('md:py-24');
+
+    // Inner spacing: tightened gap
+    const innerContainer = wrapper.find('section#hero > div');
+    expect(innerContainer.classes()).toContain('space-y-4');
+    expect(innerContainer.classes()).toContain('sm:space-y-6');
+    expect(innerContainer.classes()).not.toContain('space-y-6');
+    expect(innerContainer.classes()).not.toContain('sm:space-y-8');
   });
 });
 
