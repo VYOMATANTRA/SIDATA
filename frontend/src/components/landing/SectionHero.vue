@@ -102,7 +102,7 @@ const backgroundStyle = computed(() => {
 <template>
   <section
     id="hero"
-    class="relative flex min-h-[calc(100dvh-4.75rem)] w-full flex-col justify-center overflow-hidden px-5 py-6 text-white transition-all sm:min-h-[calc(100dvh-6rem)] sm:px-12 sm:py-8 md:py-10"
+    class="hero-section relative flex w-full flex-col justify-center overflow-hidden px-5 py-6 text-white transition-all sm:px-12 sm:py-8 md:py-10"
     :style="backgroundStyle"
     aria-labelledby="hero-title"
     data-test="section-hero"
@@ -138,3 +138,17 @@ const backgroundStyle = computed(() => {
     </div>
   </section>
 </template>
+
+<style scoped>
+.hero-section {
+  min-height: calc(100vh - var(--navbar-height, 4.75rem));
+  min-height: calc(100dvh - var(--navbar-height, 4.75rem));
+}
+
+@media (min-width: 640px) {
+  .hero-section {
+    min-height: calc(100vh - var(--navbar-height, 6rem));
+    min-height: calc(100dvh - var(--navbar-height, 6rem));
+  }
+}
+</style>
