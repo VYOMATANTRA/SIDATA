@@ -201,7 +201,7 @@ describe('Landing SectionHero.vue', () => {
     expect(weatherContainer.text()).toContain('Cuaca Kustom');
   });
 
-  it('uses viewport height minus navbar offset (including vh fallback and dvh) and trimmed padding to achieve full viewport coverage without overflowing', () => {
+  it('uses dynamic viewport height minus navbar offset and trimmed padding to achieve full viewport coverage without overflowing', () => {
     const pinia = createPinia();
     setActivePinia(pinia);
 
@@ -212,10 +212,8 @@ describe('Landing SectionHero.vue', () => {
     const heroSection = wrapper.find('section#hero');
     const classes = heroSection.classes();
 
-    // Sizing: dynamic dvh with vh fallback, factoring 4.75rem mobile / 6rem desktop navbar
-    expect(classes).toContain('min-h-[calc(100vh-4.75rem)]');
+    // Sizing: dynamic dvh factoring 4.75rem mobile / 6rem desktop navbar
     expect(classes).toContain('min-h-[calc(100dvh-4.75rem)]');
-    expect(classes).toContain('sm:min-h-[calc(100vh-6rem)]');
     expect(classes).toContain('sm:min-h-[calc(100dvh-6rem)]');
 
     // Padding: trimmed padding to fit short windows (replaces old py-16 / sm:py-20 / md:py-24)

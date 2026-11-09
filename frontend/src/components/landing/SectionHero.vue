@@ -102,7 +102,7 @@ const backgroundStyle = computed(() => {
 <template>
   <section
     id="hero"
-    class="relative flex min-h-[calc(100dvh-4.75rem)] min-h-[calc(100vh-4.75rem)] w-full flex-col justify-center overflow-hidden px-5 py-6 text-white transition-all sm:min-h-[calc(100dvh-6rem)] sm:min-h-[calc(100vh-6rem)] sm:px-12 sm:py-8 md:py-10"
+    class="relative flex min-h-[calc(100dvh-4.75rem)] w-full flex-col justify-center overflow-hidden px-5 py-6 text-white transition-all sm:min-h-[calc(100dvh-6rem)] sm:px-12 sm:py-8 md:py-10"
     :style="backgroundStyle"
     aria-labelledby="hero-title"
     data-test="section-hero"
