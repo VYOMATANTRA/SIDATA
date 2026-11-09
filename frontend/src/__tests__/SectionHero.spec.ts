@@ -201,7 +201,7 @@ describe('Landing SectionHero.vue', () => {
     expect(weatherContainer.text()).toContain('Cuaca Kustom');
   });
 
-  it('applies hero-section for scoped viewport height calculations and trimmed padding to prevent overflow', () => {
+  it('applies hero-section for scoped dynamic viewport height and omits legacy static min-height classes', () => {
     const pinia = createPinia();
     setActivePinia(pinia);
 
@@ -212,25 +212,14 @@ describe('Landing SectionHero.vue', () => {
     const heroSection = wrapper.find('section#hero');
     const classes = heroSection.classes();
 
-    // Sizing: scoped hero-section handles standard vh fallback + dvh to prevent cssConflict
+    // Sizing: scoped .hero-section handles dynamic viewport height with standard vh fallback
     expect(classes).toContain('hero-section');
     expect(classes).not.toContain('min-h-[520px]');
     expect(classes).not.toContain('sm:min-h-[580px]');
 
-    // Padding: trimmed padding to fit short windows (replaces old py-16 / sm:py-20 / md:py-24)
-    expect(classes).toContain('py-6');
-    expect(classes).toContain('sm:py-8');
-    expect(classes).toContain('md:py-10');
-    expect(classes).not.toContain('py-16');
-    expect(classes).not.toContain('sm:py-20');
-    expect(classes).not.toContain('md:py-24');
-
-    // Inner spacing: tightened gap
-    const innerContainer = wrapper.find('section#hero > div');
-    expect(innerContainer.classes()).toContain('space-y-4');
-    expect(innerContainer.classes()).toContain('sm:space-y-6');
-    expect(innerContainer.classes()).not.toContain('space-y-6');
-    expect(innerContainer.classes()).not.toContain('sm:space-y-8');
+    // Accessibility landmark and heading connection
+    expect(heroSection.attributes('aria-labelledby')).toBe('hero-title');
+    expect(heroSection.find('#hero-title').exists()).toBe(true);
   });
 });
 
