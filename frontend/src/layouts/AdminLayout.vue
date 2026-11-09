@@ -11,6 +11,7 @@ const route = useRoute();
 
 const isMobileSidebarOpen = ref(false);
 const mainRef = ref<HTMLElement | null>(null);
+const contentShellRef = ref<HTMLElement | null>(null);
 
 function openMobileSidebar() {
   isMobileSidebarOpen.value = true;
@@ -43,6 +44,9 @@ watch(
     setAdminHeader(title, subtitle);
     closeMobileSidebar();
     if (oldPath !== undefined && newPath !== oldPath) {
+      if (contentShellRef.value) {
+        contentShellRef.value.scrollTop = 0;
+      }
       void nextTick(() => {
         const active = document.activeElement as HTMLElement | null;
         if (!active || !mainRef.value?.contains(active)) {
@@ -75,6 +79,7 @@ watch(
     <AdminSidebar :mobile-open="isMobileSidebarOpen" @close="closeMobileSidebar" />
 
     <div
+      ref="contentShellRef"
       class="flex min-w-0 flex-1 flex-col overflow-y-auto"
       :inert="isMobileSidebarOpen ? true : undefined"
       data-test="admin-content-shell"

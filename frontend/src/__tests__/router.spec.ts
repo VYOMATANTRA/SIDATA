@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import router, { scrollBehavior } from '../router/index';
 import { useAuthStore } from '../stores/auth';
 
+let globalScrollToSpy: ReturnType<typeof vi.spyOn>;
 beforeAll(() => {
-  vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+  globalScrollToSpy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
 });
 afterAll(() => {
-  vi.restoreAllMocks();
+  globalScrollToSpy.mockRestore();
 });
 
 describe('router auth guard retry behavior', () => {
@@ -431,6 +433,44 @@ describe('router scrollBehavior', () => {
     expect(result).toEqual({ top: 0, left: 0 });
   });
 
+  it('returns false (does not scroll) when navigating on the same path with query parameter changes', () => {
+    const to = {
+      path: '/publikasi',
+      fullPath: '/publikasi?q=kemiskinan',
+      hash: '',
+      query: { q: 'kemiskinan' },
+    } as unknown as Parameters<typeof scrollBehavior>[0];
+    const from = {
+      path: '/publikasi',
+      fullPath: '/publikasi',
+      hash: '',
+      query: {},
+    } as unknown as Parameters<typeof scrollBehavior>[1];
+
+    const result = scrollBehavior(to, from, null);
+
+    expect(result).toBe(false);
+  });
+
+  it('scrolls to top when hash is bare "#" even on the same path', () => {
+    const to = {
+      path: '/publikasi',
+      fullPath: '/publikasi#',
+      hash: '#',
+      query: {},
+    } as unknown as Parameters<typeof scrollBehavior>[0];
+    const from = {
+      path: '/publikasi',
+      fullPath: '/publikasi',
+      hash: '',
+      query: {},
+    } as unknown as Parameters<typeof scrollBehavior>[1];
+
+    const result = scrollBehavior(to, from, null);
+
+    expect(result).toEqual({ top: 0, left: 0 });
+  });
+
   it('is wired into the router instance configuration', () => {
     expect(typeof scrollBehavior).toBe('function');
     expect(router.options.scrollBehavior).toBe(scrollBehavior);
@@ -438,8 +478,9 @@ describe('router scrollBehavior', () => {
 
   it('triggers window.scrollTo on actual router.push navigation', async () => {
     const scrollToSpy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
-    await router.push('/publikasi');
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await router.push('/permintaan-data');
+    await nextTick();
     expect(scrollToSpy).toHaveBeenCalledWith({ left: 0, top: 0 });
+    scrollToSpy.mockRestore();
   });
 });

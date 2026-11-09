@@ -36,12 +36,18 @@ export function rolesFor(path: string): AdminNavRole[] {
   return rolesByPath.get(path) ?? ['admin'];
 }
 
-export const scrollBehavior: RouterScrollBehavior = (to, _from, savedPosition) => {
+export const scrollBehavior: RouterScrollBehavior = (to, from, savedPosition) => {
   if (savedPosition) {
     return savedPosition;
   }
   if (to.hash && to.hash !== '#') {
     return { el: to.hash };
+  }
+  if (to.hash === '#') {
+    return { top: 0, left: 0 };
+  }
+  if (to.path === from.path) {
+    return false;
   }
   return { top: 0, left: 0 };
 };
