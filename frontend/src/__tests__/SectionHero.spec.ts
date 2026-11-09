@@ -200,6 +200,21 @@ describe('Landing SectionHero.vue', () => {
     expect(weatherContainer.find('#custom-weather-card').exists()).toBe(true);
     expect(weatherContainer.text()).toContain('Cuaca Kustom');
   });
+
+  it('uses dynamic viewport height (dvh) minus navbar height to achieve full viewport coverage without clipping', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+
+    const wrapper = mount(LandingSectionHero, {
+      global: { plugins: [pinia] },
+    });
+
+    const heroSection = wrapper.find('section#hero');
+    expect(heroSection.classes()).toContain('min-h-[calc(100dvh-4.75rem)]');
+    expect(heroSection.classes()).toContain('sm:min-h-[calc(100dvh-5.5rem)]');
+    expect(heroSection.classes()).not.toContain('min-h-[520px]');
+    expect(heroSection.classes()).not.toContain('sm:min-h-[580px]');
+  });
 });
 
 describe('Common SectionHero.vue', () => {
