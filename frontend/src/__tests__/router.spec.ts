@@ -1,7 +1,14 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import router, { scrollBehavior } from '../router/index';
 import { useAuthStore } from '../stores/auth';
+
+beforeAll(() => {
+  vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+});
+afterAll(() => {
+  vi.restoreAllMocks();
+});
 
 describe('router auth guard retry behavior', () => {
   it(
@@ -412,8 +419,27 @@ describe('router scrollBehavior', () => {
     expect(result).toEqual({ top: 0, left: 0 });
   });
 
+  it('scrolls to top when hash is bare "#"', () => {
+    const to = {
+      path: '/ketua-rt',
+      fullPath: '/ketua-rt#',
+      hash: '#',
+    } as unknown as Parameters<typeof scrollBehavior>[0];
+
+    const result = scrollBehavior(to, dummyFrom, null);
+
+    expect(result).toEqual({ top: 0, left: 0 });
+  });
+
   it('is wired into the router instance configuration', () => {
     expect(typeof scrollBehavior).toBe('function');
     expect(router.options.scrollBehavior).toBe(scrollBehavior);
+  });
+
+  it('triggers window.scrollTo on actual router.push navigation', async () => {
+    const scrollToSpy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    await router.push('/publikasi');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(scrollToSpy).toHaveBeenCalledWith({ left: 0, top: 0 });
   });
 });
