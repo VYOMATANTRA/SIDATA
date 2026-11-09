@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
-import router from '../router/index';
+import router, { scrollBehavior } from '../router/index';
 import { useAuthStore } from '../stores/auth';
 
 describe('router auth guard retry behavior', () => {
@@ -334,5 +334,86 @@ describe('router auth guard retry behavior', () => {
     await router.push('/settings/audit-retention');
     expect(router.currentRoute.value.name).toBe('audit-retention-settings');
     expect(router.currentRoute.value.meta.title).toBe('Pengaturan Retensi Audit');
+  });
+});
+
+describe('router scrollBehavior', () => {
+  const dummyFrom = {
+    path: '/previous',
+    fullPath: '/previous',
+    name: 'previous',
+    hash: '',
+    query: {},
+    params: {},
+    matched: [],
+    meta: {},
+    redirectedFrom: undefined,
+  } as unknown as Parameters<typeof scrollBehavior>[1];
+
+  it('restores savedPosition when provided (e.g. browser back/forward navigation)', () => {
+    const to = {
+      path: '/target',
+      fullPath: '/target',
+      hash: '',
+    } as unknown as Parameters<typeof scrollBehavior>[0];
+    const savedPosition = { left: 0, top: 450 };
+
+    const result = scrollBehavior(to, dummyFrom, savedPosition);
+
+    expect(result).toEqual({ left: 0, top: 450 });
+  });
+
+  it('scrolls to element selector when to.hash is present and no savedPosition', () => {
+    const to = {
+      path: '/target',
+      fullPath: '/target#section-anchor',
+      hash: '#section-anchor',
+    } as unknown as Parameters<typeof scrollBehavior>[0];
+
+    const result = scrollBehavior(to, dummyFrom, null);
+
+    expect(result).toEqual({ el: '#section-anchor' });
+  });
+
+  it('prioritizes savedPosition over to.hash when both are present', () => {
+    const to = {
+      path: '/target',
+      fullPath: '/target#section-anchor',
+      hash: '#section-anchor',
+    } as unknown as Parameters<typeof scrollBehavior>[0];
+    const savedPosition = { left: 0, top: 200 };
+
+    const result = scrollBehavior(to, dummyFrom, savedPosition);
+
+    expect(result).toEqual({ left: 0, top: 200 });
+  });
+
+  it('scrolls to top ({ top: 0, left: 0 }) for standard page navigation without hash or savedPosition', () => {
+    const to = {
+      path: '/publikasi',
+      fullPath: '/publikasi',
+      hash: '',
+    } as unknown as Parameters<typeof scrollBehavior>[0];
+
+    const result = scrollBehavior(to, dummyFrom, null);
+
+    expect(result).toEqual({ top: 0, left: 0 });
+  });
+
+  it('scrolls to top when hash is empty string', () => {
+    const to = {
+      path: '/ketua-rt',
+      fullPath: '/ketua-rt',
+      hash: '',
+    } as unknown as Parameters<typeof scrollBehavior>[0];
+
+    const result = scrollBehavior(to, dummyFrom, null);
+
+    expect(result).toEqual({ top: 0, left: 0 });
+  });
+
+  it('is wired into the router instance configuration', () => {
+    expect(typeof scrollBehavior).toBe('function');
+    expect(router.options.scrollBehavior).toBe(scrollBehavior);
   });
 });
