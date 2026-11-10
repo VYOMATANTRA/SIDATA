@@ -52,5 +52,6 @@ services:
       TURNSTILE_SECRET: 1x0000000000000000000000000000000AA
       RESEND_API_KEY: re_integration_key
       EMAIL_FROM: SIDATA Integration <integration@example.com>
+      UPLOAD_DIR: /tmp/sidata-test-uploads
     command: >-
       sh -c "npx prisma generate && npx prisma migrate deploy && npm run test:integration"
