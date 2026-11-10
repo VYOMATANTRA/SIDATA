@@ -19,6 +19,10 @@ import { publicShellKey } from './publicShell';
  * transparent at the top of the page and navy once scrolled or while the menu is open (see
  * `usePublicHeaderState`). Every other route gets the navy header.
  */
+const props = defineProps<{
+  focusOnMount?: boolean;
+}>();
+
 provide(publicShellKey, true);
 
 const route = useRoute();
@@ -48,17 +52,21 @@ function isEditable(el: Element | null): boolean {
   return el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
 }
 
+function focusMain(): void {
+  const active = document.activeElement;
+  if (isEditable(active) || (active && mainRef.value?.contains(active))) return;
+  // A freshly opened modal dialog owns focus; moving it to <main> would pull it out.
+  if (active?.closest('[aria-modal="true"]')) return;
+  // The router owns scrolling; focus is for keyboard/AT users only.
+  mainRef.value?.focus({ preventScroll: true });
+}
+
 watch(
   () => route?.path,
   (newPath, oldPath) => {
     if (oldPath === undefined || newPath === oldPath) return;
     void nextTick(() => {
-      const active = document.activeElement;
-      if (isEditable(active) || (active && mainRef.value?.contains(active))) return;
-      // A freshly opened modal dialog owns focus; moving it to <main> would pull it out.
-      if (active?.closest('[aria-modal="true"]')) return;
-      // The router owns scrolling; focus is for keyboard/AT users only.
-      mainRef.value?.focus({ preventScroll: true });
+      focusMain();
     });
   },
 );
@@ -74,6 +82,11 @@ function handleToggleMenu(open: boolean) {
 onMounted(() => {
   // Branding and footer contact details come from the same public settings on every route.
   void settingsStore.fetchPublicSettings().catch(() => {});
+  if (props.focusOnMount) {
+    void nextTick(() => {
+      focusMain();
+    });
+  }
 });
 </script>
 

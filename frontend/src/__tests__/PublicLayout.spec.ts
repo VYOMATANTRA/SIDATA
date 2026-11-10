@@ -315,6 +315,18 @@ describe('PublicLayout (mounted by App for routes with meta.layout = public)', (
       wrapper.unmount();
     });
 
+    it('moves focus to main when PublicLayout mounts fresh after in-app navigation (e.g. /login -> /)', async () => {
+      const { wrapper, router } = await mountApp('/login');
+      expect(wrapper.find('main').exists()).toBe(false);
+
+      await router.push('/');
+      await flushPromises();
+
+      expect(wrapper.find('main').exists()).toBe(true);
+      expect(document.activeElement).toBe(wrapper.find('main').element);
+      wrapper.unmount();
+    });
+
     it('moves focus to main after a path change', async () => {
       const { wrapper, router } = await mountApp('/peta');
       wrapper.find<HTMLElement>('[data-test="hamburger-btn"]').element.focus();
