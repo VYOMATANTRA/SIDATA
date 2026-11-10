@@ -470,4 +470,30 @@ describe('DataManagementView.vue', () => {
     expect(errorNote.text()).toContain('Gagal memuat daftar templat kalimat.');
     wrapper.unmount();
   });
+
+  it('reuses cached templates without forcing a refetch when opening scalar forms', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const templatesStore = useComparisonTemplatesStore();
+    const fetchSpy = vi.spyOn(templatesStore, 'fetchTemplates');
+
+    const wrapper = mount(DataManagementView, {
+      global: {
+        plugins: [pinia],
+        stubs: { RouterLink: true, teleport: true },
+      },
+    });
+    await flushPromises();
+
+    const editButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Total Penduduk'));
+    await editButton?.trigger('click');
+    await flushPromises();
+
+    expect(fetchSpy).toHaveBeenCalledWith({ forSelector: true });
+    expect(fetchSpy).not.toHaveBeenCalledWith(expect.objectContaining({ force: true }));
+
+    wrapper.unmount();
+  });
 });

@@ -287,7 +287,7 @@ function openScalar(indicator: Indicator): void {
   // Only a computed-comparison indicator can be given a template, so only then is the list
   // worth fetching. Editors may read it; a failure shows beside the selector, not as a blocker.
   if (indicator.isComputedComparison) {
-    void templatesStore.fetchTemplates({ force: true, forSelector: true });
+    void templatesStore.fetchTemplates({ forSelector: true });
   }
 }
 
