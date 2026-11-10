@@ -33,9 +33,11 @@
 --                    specific host/CIDR in a VPS deployment with a locked-down MySQL bind.
 --   <DB_NAME>      — the value of MYSQL_DATABASE (e.g. sidata)
 
--- 1. Remove the blanket database-level grant. This is the step that requires replacing it with
---    the explicit per-table grants below in the SAME script run — until step 2 runs, the app
---    has no access to the database at all.
+-- 1. Remove the blanket database-level grant. MySQL 8 returns ERROR 1141 (42000) on REVOKE if
+--    the database-level grant row in mysql.db was already removed on a previous run of this
+--    script. Granting SELECT on `<DB_NAME>`.* first guarantees a db-level grant exists for
+--    REVOKE ALL PRIVILEGES to strip, making repeated executions truly idempotent.
+GRANT SELECT ON `<DB_NAME>`.* TO '<APP_DB_USER>'@'<APP_DB_HOST>';
 REVOKE ALL PRIVILEGES ON `<DB_NAME>`.* FROM '<APP_DB_USER>'@'<APP_DB_HOST>';
 
 -- 2. Full access to every table EXCEPT audit_logs. Keep this list in sync with
