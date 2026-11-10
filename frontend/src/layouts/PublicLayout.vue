@@ -19,9 +19,16 @@ import { publicShellKey } from './publicShell';
  * transparent at the top of the page and navy once scrolled or while the menu is open (see
  * `usePublicHeaderState`). Every other route gets the navy header.
  */
-const props = defineProps<{
-  focusOnMount?: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    focusOnMount?: boolean;
+    navigationSeq?: number;
+  }>(),
+  {
+    focusOnMount: false,
+    navigationSeq: 0,
+  },
+);
 
 provide(publicShellKey, true);
 
@@ -62,12 +69,12 @@ function focusMain(): void {
 }
 
 watch(
-  () => route?.path,
-  (newPath, oldPath) => {
-    if (oldPath === undefined || newPath === oldPath) return;
-    void nextTick(() => {
-      focusMain();
-    });
+  () => props.navigationSeq,
+  async (newSeq, oldSeq) => {
+    if (newSeq === undefined || newSeq === 0 || newSeq === oldSeq) return;
+    await nextTick();
+    await nextTick();
+    focusMain();
   },
 );
 
@@ -79,13 +86,13 @@ function handleToggleMenu(open: boolean) {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   // Branding and footer contact details come from the same public settings on every route.
   void settingsStore.fetchPublicSettings().catch(() => {});
-  if (props.focusOnMount) {
-    void nextTick(() => {
-      focusMain();
-    });
+  if (props.focusOnMount || (props.navigationSeq ?? 0) > 0) {
+    await nextTick();
+    await nextTick();
+    focusMain();
   }
 });
 </script>
