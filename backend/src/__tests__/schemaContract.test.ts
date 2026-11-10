@@ -68,16 +68,33 @@ describe('schema contract', () => {
       }
     });
 
-    it('conditionally revokes the blanket db-level grant via SCHEMA_PRIVILEGES so re-runs are idempotent', () => {
+    it('unconditionally revokes the blanket db-level grant using a temporary procedure and 1141 handler', () => {
       assert.doesNotMatch(grantsSql, /^GRANT\s+.*\s+ON\s+`<DB_NAME>`\.\*/m);
+      assert.match(grantsSql, /CREATE PROCEDURE _sidata_revoke_blanket_db_grant\(\)/);
+      assert.match(grantsSql, /DECLARE CONTINUE HANDLER FOR 1141 BEGIN END;/);
+      assert.match(
+        grantsSql,
+        /REVOKE ALL PRIVILEGES ON `<DB_NAME>`\.\* FROM '<APP_DB_USER>'@'<APP_DB_HOST>';/,
+      );
+      assert.match(grantsSql, /CALL _sidata_revoke_blanket_db_grant\(\);/);
+      assert.match(grantsSql, /DROP PROCEDURE IF EXISTS _sidata_revoke_blanket_db_grant;/);
+    });
+
+    it('verifies post-condition that no blanket db-level grant remains matching <DB_NAME>', () => {
+      assert.match(grantsSql, /CREATE PROCEDURE _sidata_verify_no_blanket_db_grant\(\)/);
       assert.match(grantsSql, /FROM information_schema\.SCHEMA_PRIVILEGES/);
       assert.match(
         grantsSql,
-        /REVOKE ALL PRIVILEGES ON `<DB_NAME>`\.\* FROM ''<APP_DB_USER>''@''<APP_DB_HOST>''/,
+        /WHERE GRANTEE = CONCAT\('''', '<APP_DB_USER>', '''@''', '<APP_DB_HOST>', ''''\)/,
       );
-      assert.match(grantsSql, /PREPARE revoke_db_grant_stmt FROM @revoke_db_grant_sql;/);
-      assert.match(grantsSql, /EXECUTE revoke_db_grant_stmt;/);
-      assert.match(grantsSql, /DEALLOCATE PREPARE revoke_db_grant_stmt;/);
+      assert.match(grantsSql, /\('<DB_NAME>' LIKE TABLE_SCHEMA OR TABLE_SCHEMA = '<DB_NAME>'\)/);
+      assert.match(grantsSql, /SIGNAL SQLSTATE '45000'/);
+      assert.match(
+        grantsSql,
+        /SET MESSAGE_TEXT = 'Security assertion failed: blanket database-level grant was not revoked\.';/,
+      );
+      assert.match(grantsSql, /CALL _sidata_verify_no_blanket_db_grant\(\);/);
+      assert.match(grantsSql, /DROP PROCEDURE IF EXISTS _sidata_verify_no_blanket_db_grant;/);
     });
   });
 

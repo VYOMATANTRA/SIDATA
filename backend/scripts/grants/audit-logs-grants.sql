@@ -33,24 +33,17 @@
 --                    specific host/CIDR in a VPS deployment with a locked-down MySQL bind.
 --   <DB_NAME>      — the value of MYSQL_DATABASE (e.g. sidata)
 
--- 1. Remove the blanket database-level grant when present. MySQL 8.4 returns ERROR 1141 (42000)
---    on REVOKE if the database-level grant row in mysql.db was already removed on a previous run
---    of this script. Checking information_schema.SCHEMA_PRIVILEGES first makes repeated executions
---    idempotent without temporarily granting any database-level privilege or using mysql --force.
-SET @has_db_grant := (
-  SELECT COUNT(*)
-  FROM information_schema.SCHEMA_PRIVILEGES
-  WHERE GRANTEE = CONCAT('''', '<APP_DB_USER>', '''@''', '<APP_DB_HOST>', '''')
-    AND (TABLE_SCHEMA = '<DB_NAME>' OR TABLE_SCHEMA = REPLACE('<DB_NAME>', '_', '\\_'))
-);
-SET @revoke_db_grant_sql := IF(
-  @has_db_grant > 0,
-  'REVOKE ALL PRIVILEGES ON `<DB_NAME>`.* FROM ''<APP_DB_USER>''@''<APP_DB_HOST>''',
-  'DO 0'
-);
-PREPARE revoke_db_grant_stmt FROM @revoke_db_grant_sql;
-EXECUTE revoke_db_grant_stmt;
-DEALLOCATE PREPARE revoke_db_grant_stmt;
+-- 1. Remove the blanket database-level grant.
+DROP PROCEDURE IF EXISTS _sidata_revoke_blanket_db_grant;
+DELIMITER $$
+CREATE PROCEDURE _sidata_revoke_blanket_db_grant()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR 1141 BEGIN END;
+  REVOKE ALL PRIVILEGES ON `<DB_NAME>`.* FROM '<APP_DB_USER>'@'<APP_DB_HOST>';
+END$$
+DELIMITER ;
+CALL _sidata_revoke_blanket_db_grant();
+DROP PROCEDURE IF EXISTS _sidata_revoke_blanket_db_grant;
 
 -- 2. Full access to every table EXCEPT audit_logs. Keep this list in sync with
 --    backend/prisma/schema.prisma's `@@map(...)` table names.
@@ -79,6 +72,25 @@ GRANT UPDATE (`acknowledgedAt`, `acknowledgedById`) ON `<DB_NAME>`.`audit_logs`
   TO '<APP_DB_USER>'@'<APP_DB_HOST>';
 
 FLUSH PRIVILEGES;
+
+-- Post-condition check: fail loudly if any database-level grant still exists for the app user on <DB_NAME>
+DROP PROCEDURE IF EXISTS _sidata_verify_no_blanket_db_grant;
+DELIMITER $$
+CREATE PROCEDURE _sidata_verify_no_blanket_db_grant()
+BEGIN
+  DECLARE remaining_db_grants INT DEFAULT 0;
+  SELECT COUNT(*) INTO remaining_db_grants
+  FROM information_schema.SCHEMA_PRIVILEGES
+  WHERE GRANTEE = CONCAT('''', '<APP_DB_USER>', '''@''', '<APP_DB_HOST>', '''')
+    AND ('<DB_NAME>' LIKE TABLE_SCHEMA OR TABLE_SCHEMA = '<DB_NAME>');
+  IF remaining_db_grants > 0 THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Security assertion failed: blanket database-level grant was not revoked.';
+  END IF;
+END$$
+DELIMITER ;
+CALL _sidata_verify_no_blanket_db_grant();
+DROP PROCEDURE IF EXISTS _sidata_verify_no_blanket_db_grant;
 
 -- Verification (run as the app user, or via `SHOW GRANTS FOR '<APP_DB_USER>'@'<APP_DB_HOST>'`):
 --   DELETE FROM audit_logs LIMIT 1;                     -- must fail: command denied
