@@ -1,6 +1,7 @@
 import { useAuthStore } from '../stores/auth';
 import { getCsrfToken } from './csrf';
 import {
+  CSRF_INVALID_MESSAGE,
   NETWORK_ERROR_CODE,
   REFRESH_UNAVAILABLE_MESSAGE,
   SESSION_EXPIRED_MESSAGE,
@@ -9,7 +10,7 @@ import {
   toUserMessage,
 } from './userMessages';
 
-export { REFRESH_UNAVAILABLE_MESSAGE, SESSION_EXPIRED_MESSAGE };
+export { CSRF_INVALID_MESSAGE, REFRESH_UNAVAILABLE_MESSAGE, SESSION_EXPIRED_MESSAGE };
 
 /**
  * Shared fetch wrapper for the CMS/editor endpoints. The backend mounts

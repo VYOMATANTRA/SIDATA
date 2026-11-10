@@ -19,6 +19,12 @@ export const SESSION_EXPIRED_MESSAGE =
   'Sesi Anda berakhir. Silakan masuk kembali — isi formulir ini belum dikirim.';
 
 /**
+ * Shown when a request is rejected with 403 because the CSRF token was missing, invalid, or expired.
+ */
+export const CSRF_INVALID_MESSAGE =
+  'Token keamanan kedaluwarsa atau tidak valid. Muat ulang halaman lalu coba lagi.';
+
+/**
  * Shown when the 401 refresh could not even be attempted (network error) or the server failed
  * (5xx). The client cannot tell whether the session is still valid — the access token already
  * got a 401 and the refresh never finished — so the wording promises nothing and asks for a
@@ -337,11 +343,26 @@ export function toUserMessage(error: unknown, context?: string, method?: string)
   const record =
     typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : {};
   const fieldErrors = kind === 'validation' ? sanitizeFieldErrors(record['fieldErrors']) : {};
+  const body =
+    typeof record['body'] === 'object' && record['body'] !== null
+      ? (record['body'] as Record<string, unknown>)
+      : undefined;
+  const code = record['code'] ?? body?.code;
+  const serverMsg =
+    (typeof record['serverMessage'] === 'string' ? record['serverMessage'] : undefined) ??
+    (typeof record['message'] === 'string' ? record['message'] : undefined) ??
+    (typeof body?.error === 'string' ? body.error : undefined) ??
+    (typeof body?.message === 'string' ? body.message : undefined) ??
+    '';
+  const isCsrf =
+    status === 403 && (code === 'EBADCSRFTOKEN' || /\bcsrf\b/i.test(serverMsg));
+
   // Validation failures are the one place the server's own sentence is shown: the backend
   // answers 400/422 with a short, user-oriented Indonesian reason ("Judul tidak boleh memuat
   // HTML"). Every other status keeps approved wording so 5xx/SQL/stack text never leaks.
-  const base =
-    kind === 'validation' && Object.keys(fieldErrors).length === 0
+  const base = isCsrf
+    ? CSRF_INVALID_MESSAGE
+    : kind === 'validation' && Object.keys(fieldErrors).length === 0
       ? (readableServerMessage(record['serverMessage']) ?? USER_MESSAGES.validation)
       : approvedMessage(kind, record['method'] ?? method);
   const message = phrase ? `Gagal ${phrase}. ${base}` : base;

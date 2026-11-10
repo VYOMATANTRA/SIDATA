@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  CSRF_INVALID_MESSAGE,
   classifyFailure,
   CSV_FORMAT_MESSAGE,
   HIDDEN_API_TOKENS,
@@ -62,6 +63,23 @@ describe('toUserMessage mappings', () => {
     expect(toUserMessage(httpFailure(403)).message).toBe(
       'Anda tidak memiliki izin untuk tindakan ini.',
     );
+  });
+
+  it('maps 403 with EBADCSRFTOKEN code to CSRF_INVALID_MESSAGE', () => {
+    const error = Object.assign(httpFailure(403), { code: 'EBADCSRFTOKEN' });
+    expect(toUserMessage(error).message).toBe(CSRF_INVALID_MESSAGE);
+  });
+
+  it('maps 403 with CSRF in serverMessage to CSRF_INVALID_MESSAGE', () => {
+    const error = Object.assign(httpFailure(403), {
+      serverMessage: 'CSRF token tidak valid',
+    });
+    expect(toUserMessage(error).message).toBe(CSRF_INVALID_MESSAGE);
+  });
+
+  it('maps 403 with CSRF in error message to CSRF_INVALID_MESSAGE', () => {
+    const error = httpFailure(403, 'CSRF token tidak valid');
+    expect(toUserMessage(error).message).toBe(CSRF_INVALID_MESSAGE);
   });
 
   it('maps 404 to the not-found wording', () => {

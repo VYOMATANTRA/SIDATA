@@ -7,7 +7,12 @@ import {
   REFRESH_UNAVAILABLE_MESSAGE,
   SESSION_EXPIRED_MESSAGE,
 } from '../utils/apiClient';
-import { READ_USER_MESSAGES, toUserMessage, USER_MESSAGES } from '../utils/userMessages';
+import {
+  CSRF_INVALID_MESSAGE,
+  READ_USER_MESSAGES,
+  toUserMessage,
+  USER_MESSAGES,
+} from '../utils/userMessages';
 
 const EDITOR = { id: 'u-1', email: 'editor@example.com', role: 'editor' };
 
@@ -128,6 +133,14 @@ describe('apiClient error object', () => {
       expect(error.status).toBe(status);
     },
   );
+
+  it('maps 403 with CSRF failure to CSRF_INVALID_MESSAGE', async () => {
+    const error1 = await failureOf(json({ error: 'CSRF token tidak valid' }, 403));
+    expect(error1.userMessage).toBe(CSRF_INVALID_MESSAGE);
+
+    const error2 = await failureOf(json({ error: 'Forbidden', code: 'EBADCSRFTOKEN' }, 403));
+    expect(error2.userMessage).toBe(CSRF_INVALID_MESSAGE);
+  });
 
   it('shows the server sentence for a 400 without a field map', async () => {
     const error = await failureOf(json({ error: 'Judul halaman tidak boleh memuat HTML.' }, 400));
