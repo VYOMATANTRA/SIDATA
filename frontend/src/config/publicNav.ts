@@ -6,20 +6,6 @@ export interface NavItem {
 }
 
 /**
- * Canonical navigation items for public site chrome (navbar drawers, etc.).
- * Guarantees that public navigation across views (HomeView, Tentang layouts, etc.)
- * remains synchronized per docs/SPEC.md §8.
- */
-export const DEFAULT_NAV_ITEMS: readonly NavItem[] = [
-  { label: 'Beranda', to: '/' },
-  { label: 'Publikasi', to: '/publikasi' },
-  { label: 'Peta', to: '/peta' },
-  { label: 'Ketua RT', to: '/ketua-rt' },
-  { label: 'Permintaan Data', to: '/permintaan-data' },
-  { label: 'Tentang', to: '/tentang/kelurahan-manggar' },
-];
-
-/**
  * Canonical navigation items for footer Sumber Daya section per SPEC §8.
  */
 export const FOOTER_RESOURCE_LINKS: readonly NavItem[] = [
@@ -62,13 +48,6 @@ export function isRouteAvailable(router: Router | undefined | null, to: string):
 }
 
 /**
- * Filters the canonical navigation items to only those whose routes exist in the router.
- */
-export function getAvailableNavItems(router: Router | undefined | null): NavItem[] {
-  return DEFAULT_NAV_ITEMS.filter((item) => isRouteAvailable(router, item.to));
-}
-
-/**
  * Normalizes a URL path for comparison: decodes URI components and strips trailing slashes
  * (except root `/`).
  */
@@ -100,22 +79,6 @@ export function matchesPath(to: string, currentPath: string): boolean {
   return normCurrent === normTo || normCurrent.startsWith(`${normTo}/`);
 }
 
-/**
- * Determines whether a navigation item is considered active for the current path.
- * - Exact match for home ('/')
- * - Prefix match for '/tentang' so /tentang/desa-cantik and /tentang/vyomatantra
- *   also highlight the 'Tentang' nav item
- * - Exact or prefix match for other section routes
- */
-export function isNavItemActive(itemTo: string, currentPath: string): boolean {
-  const normItemTo = normalizePath(itemTo);
-  if (normItemTo.startsWith('/tentang')) {
-    const normCurrent = normalizePath(currentPath);
-    return normCurrent === '/tentang' || normCurrent.startsWith('/tentang/');
-  }
-  return matchesPath(itemTo, currentPath);
-}
-
 /** Identifier of a public navigation group (SPEC §8). */
 export type NavGroupId = 'cerita' | 'sumber-daya' | 'tentang';
 
@@ -129,9 +92,8 @@ export interface NavGroup {
 export const NAV_HOME_ITEM: NavItem = { label: 'Beranda', to: '/' };
 
 /**
- * A destination is active only for its own path (or a nested path below it). Unlike
- * `isNavItemActive`, the three Tentang pages are distinct destinations here, so only the page the
- * visitor is on is marked, not all of them.
+ * A destination is active only for its own path (or a nested path below it). The three Tentang
+ * pages are distinct destinations here, so only the page the visitor is on is marked, not all of them.
  */
 export function isDestinationActive(to: string, currentPath: string): boolean {
   return matchesPath(to, currentPath);

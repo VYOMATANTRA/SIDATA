@@ -5,7 +5,6 @@ import {
   buildCeritaItems,
   buildPublicNavGroups,
   isDestinationActive,
-  isNavItemActive,
   isNavGroupActive,
   matchesPath,
 } from '../config/publicNav';
@@ -30,7 +29,7 @@ const ALL_PUBLIC_ROUTES = [
   '/tentang/vyomatantra',
 ];
 
-describe('matchesPath, isDestinationActive, and isNavItemActive (127-5)', () => {
+describe('matchesPath and isDestinationActive', () => {
   it('marks only the exact destination, so sibling Tentang pages are distinct', () => {
     expect(isDestinationActive('/tentang/desa-cantik', '/tentang/desa-cantik')).toBe(true);
     expect(isDestinationActive('/tentang/kelurahan-manggar', '/tentang/desa-cantik')).toBe(false);
@@ -48,7 +47,7 @@ describe('matchesPath, isDestinationActive, and isNavItemActive (127-5)', () => 
     expect(matchesPath('/', '/peta')).toBe(false);
   });
 
-  it('handles trailing slashes identically across matchesPath, isDestinationActive, and isNavItemActive', () => {
+  it('handles trailing slashes identically across matchesPath and isDestinationActive', () => {
     // Trailing slash on to or currentPath
     expect(matchesPath('/peta/', '/peta')).toBe(true);
     expect(matchesPath('/peta', '/peta/')).toBe(true);
@@ -57,13 +56,9 @@ describe('matchesPath, isDestinationActive, and isNavItemActive (127-5)', () => 
     expect(isDestinationActive('/peta/', '/peta')).toBe(true);
     expect(isDestinationActive('/peta', '/peta/')).toBe(true);
     expect(isDestinationActive('/peta/', '/peta/')).toBe(true);
-
-    expect(isNavItemActive('/peta/', '/peta')).toBe(true);
-    expect(isNavItemActive('/peta', '/peta/')).toBe(true);
-    expect(isNavItemActive('/tentang/kelurahan-manggar/', '/tentang/desa-cantik/')).toBe(true);
   });
 
-  it('handles URI-encoded slugs identically across matchesPath, isDestinationActive, and isNavItemActive', () => {
+  it('handles URI-encoded slugs identically across matchesPath and isDestinationActive', () => {
     const encoded = '/cerita/tata%20ruang';
     const decoded = '/cerita/tata ruang';
 
@@ -73,9 +68,6 @@ describe('matchesPath, isDestinationActive, and isNavItemActive (127-5)', () => 
 
     expect(isDestinationActive(encoded, decoded)).toBe(true);
     expect(isDestinationActive(decoded, encoded)).toBe(true);
-
-    expect(isNavItemActive(encoded, decoded)).toBe(true);
-    expect(isNavItemActive(decoded, encoded)).toBe(true);
   });
 });
 

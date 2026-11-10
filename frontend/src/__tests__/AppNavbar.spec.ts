@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { mount as baseMount, type VueWrapper } from '@vue/test-utils';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import AppNavbar from '../components/common/AppNavbar.vue';
-import { isNavItemActive } from '@/config/publicNav';
+import { isDestinationActive, matchesPath } from '@/config/publicNav';
 import { installScrollLockTracker, cleanupBodyScrollLocks } from './helpers/bodyScrollLock';
 
 installScrollLockTracker();
@@ -321,19 +321,25 @@ describe('AppNavbar.vue', () => {
     wrapper.unmount();
   });
 
-  describe('publicNav utilities', () => {
-    it('exact matches home route for isNavItemActive', () => {
-      expect(isNavItemActive('/', '/')).toBe(true);
-      expect(isNavItemActive('/', '/publikasi')).toBe(false);
+  describe('publicNav active matching utilities', () => {
+    it('exact matches home route for isDestinationActive and matchesPath', () => {
+      expect(isDestinationActive('/', '/')).toBe(true);
+      expect(isDestinationActive('/', '/publikasi')).toBe(false);
+      expect(matchesPath('/', '/')).toBe(true);
+      expect(matchesPath('/', '/publikasi')).toBe(false);
     });
 
-    it('matches /tentang subpaths for isNavItemActive', () => {
-      expect(isNavItemActive('/tentang/kelurahan-manggar', '/tentang/kelurahan-manggar')).toBe(
+    it('matches path exactly or for subpaths with isDestinationActive and matchesPath', () => {
+      expect(isDestinationActive('/tentang/kelurahan-manggar', '/tentang/kelurahan-manggar')).toBe(
         true,
       );
-      expect(isNavItemActive('/tentang/kelurahan-manggar', '/tentang/desa-cantik')).toBe(true);
-      expect(isNavItemActive('/tentang/kelurahan-manggar', '/tentang/vyomatantra')).toBe(true);
-      expect(isNavItemActive('/tentang/kelurahan-manggar', '/peta')).toBe(false);
+      expect(
+        isDestinationActive('/tentang/kelurahan-manggar', '/tentang/kelurahan-manggar/visi'),
+      ).toBe(true);
+      expect(isDestinationActive('/tentang/kelurahan-manggar', '/tentang/desa-cantik')).toBe(false);
+      expect(isDestinationActive('/tentang/kelurahan-manggar', '/peta')).toBe(false);
+      expect(matchesPath('/tentang/kelurahan-manggar', '/tentang/kelurahan-manggar')).toBe(true);
+      expect(matchesPath('/tentang/kelurahan-manggar', '/tentang/desa-cantik')).toBe(false);
     });
   });
 });
