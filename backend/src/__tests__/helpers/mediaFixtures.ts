@@ -175,6 +175,7 @@ export function makeMediaRes(): MediaFakeRes {
       return res;
     },
     json(data) {
+      res.headers['content-type'] ??= 'application/json; charset=utf-8';
       res.body = data;
       res.headersSent = true;
       return res;

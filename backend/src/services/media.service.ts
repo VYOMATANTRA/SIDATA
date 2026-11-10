@@ -217,7 +217,7 @@ export interface MediaAttachContext {
   /** The purpose the referencing content slot accepts. Assets of any other purpose are refused. */
   purpose: MediaPurpose;
   /** Stable server-owned identity of the content item and slot referencing the asset. */
-  reference?: MediaReferenceIdentity;
+  reference: MediaReferenceIdentity;
 }
 
 export interface LockedMediaAssetRow {
@@ -236,10 +236,17 @@ interface NormalizedMediaReference {
 }
 
 function normalizeReference(reference?: MediaReferenceIdentity): NormalizedMediaReference {
-  const raw = reference ?? { type: 'default', id: 'default', slot: 'default' };
-  const referenceType = typeof raw.type === 'string' ? raw.type.trim() : '';
-  const referenceId = typeof raw.id === 'string' ? raw.id.trim() : '';
-  const slot = typeof (raw.slot ?? 'default') === 'string' ? (raw.slot ?? 'default').trim() : '';
+  if (!reference || typeof reference !== 'object') {
+    throw new MediaServiceError('INVALID_MEDIA_REFERENCE', 'Referensi media tidak valid.', 400);
+  }
+  const referenceType = typeof reference.type === 'string' ? reference.type.trim() : '';
+  const referenceId = typeof reference.id === 'string' ? reference.id.trim() : '';
+  const slot =
+    reference.slot === undefined
+      ? 'default'
+      : typeof reference.slot === 'string'
+        ? reference.slot.trim()
+        : '';
   if (
     !referenceType ||
     referenceType.length > 64 ||

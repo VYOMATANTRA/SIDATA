@@ -68,11 +68,15 @@ describe('schema contract', () => {
       }
     });
 
-    it('conditionally revokes the blanket db grant via information_schema.SCHEMA_PRIVILEGES without restoring blanket SELECT', () => {
+    it('unconditionally revokes the blanket db grant with a 1141 handler and asserts no db-level grant remains', () => {
       assert.doesNotMatch(grantsSql, /GRANT\s+SELECT\s+ON\s+`<DB_NAME>`\.\*/i);
+      assert.match(grantsSql, /DECLARE CONTINUE HANDLER FOR 1141/);
+      assert.match(
+        grantsSql,
+        /REVOKE ALL PRIVILEGES ON `<DB_NAME>`\.\* FROM '<APP_DB_USER>'@'<APP_DB_HOST>';/,
+      );
       assert.match(grantsSql, /information_schema\.SCHEMA_PRIVILEGES/);
-      assert.match(grantsSql, /PREPARE\s+revoke_db_grant\s+FROM\s+@revoke_stmt/);
-      assert.match(grantsSql, /EXECUTE\s+revoke_db_grant/);
+      assert.match(grantsSql, /SIGNAL SQLSTATE '45000'/);
     });
   });
 

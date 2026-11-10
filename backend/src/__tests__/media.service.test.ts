@@ -239,6 +239,36 @@ describe('ingestStagedUpload: photos', () => {
       photoProcessingSemaphore.configure();
     }
   });
+
+  it('photoProcessingSemaphore.configure does not reset active count and drains queued acquisitions when concurrency increases', async () => {
+    photoProcessingSemaphore.configure(1, 1);
+    const release1 = await photoProcessingSemaphore.acquire();
+    assert.equal(photoProcessingSemaphore.activeCount, 1);
+    assert.equal(photoProcessingSemaphore.queueLength, 0);
+
+    let queuedResolved = false;
+    let release2: (() => void) | undefined;
+    const queuedAcquisition = photoProcessingSemaphore.acquire().then((release) => {
+      queuedResolved = true;
+      release2 = release;
+    });
+
+    assert.equal(photoProcessingSemaphore.activeCount, 1);
+    assert.equal(photoProcessingSemaphore.queueLength, 1);
+    assert.equal(queuedResolved, false);
+
+    // Reconfiguring with higher concurrency must not reset active count and must drain queued acquisition
+    photoProcessingSemaphore.configure(2, 2);
+    await queuedAcquisition;
+    assert.equal(queuedResolved, true);
+    assert.equal(photoProcessingSemaphore.activeCount, 2);
+    assert.equal(photoProcessingSemaphore.queueLength, 0);
+
+    release1();
+    assert.equal(photoProcessingSemaphore.activeCount, 1);
+    release2?.();
+    assert.equal(photoProcessingSemaphore.activeCount, 0);
+  });
 });
 
 describe('ingestStagedUpload: documents and data', () => {
@@ -561,11 +591,12 @@ describe('attachMedia / detachMedia', () => {
   }
 
   it('executes $queryRaw first with sorted ids to acquire row locks FOR UPDATE and reads current columns', async () => {
+    const defaultRef = { type: 'cerita', id: 'c1' };
     const { tx, calls } = fakeTx([
       makeAsset({ id: ID_A, purpose: 'cerita' }),
       makeAsset({ id: ID_B, purpose: 'cerita' }),
     ]);
-    await attachMedia(tx, [ID_B, ID_A], { purpose: 'cerita' });
+    await attachMedia(tx, [ID_B, ID_A], { purpose: 'cerita', reference: defaultRef });
     assert.equal(calls[0]?.method, '$queryRaw');
     const query = calls[0].args as { values?: unknown[] };
     assert.deepEqual(query.values, [ID_A, ID_B]);
@@ -577,20 +608,27 @@ describe('attachMedia / detachMedia', () => {
   });
 
   it('sets attachedAt for assets whose purpose matches the context', async () => {
+    const defaultRef = { type: 'cerita', id: 'c1' };
     const { tx, rows } = fakeTx([
       makeAsset({ id: ID_A, purpose: 'cerita' }),
       makeAsset({ id: ID_B, purpose: 'cerita' }),
     ]);
     const now = new Date('2026-05-05T00:00:00Z');
-    await attachMedia(tx, [ID_A, ID_B, ID_A], { purpose: 'cerita' }, now);
+    await attachMedia(tx, [ID_A, ID_B, ID_A], { purpose: 'cerita', reference: defaultRef }, now);
     assert.equal(rows.get(ID_A)!.attachedAt?.toISOString(), now.toISOString());
     assert.equal(rows.get(ID_B)!.attachedAt?.toISOString(), now.toISOString());
   });
 
   it('keeps the original attachedAt of an already attached asset (idempotent)', async () => {
+    const defaultRef = { type: 'cerita', id: 'c1' };
     const earlier = new Date('2026-01-01T00:00:00Z');
     const { tx, rows } = fakeTx([makeAsset({ id: ID_A, attachedAt: earlier })]);
-    await attachMedia(tx, [ID_A], { purpose: 'cerita' }, new Date('2026-06-06T00:00:00Z'));
+    await attachMedia(
+      tx,
+      [ID_A],
+      { purpose: 'cerita', reference: defaultRef },
+      new Date('2026-06-06T00:00:00Z'),
+    );
     assert.equal(rows.get(ID_A)!.attachedAt?.toISOString(), earlier.toISOString());
   });
 
@@ -600,7 +638,11 @@ describe('attachMedia / detachMedia', () => {
       makeAsset({ id: ID_B, purpose: 'portal-hero' }),
     ]);
     await assert.rejects(
-      () => attachMedia(tx, [ID_A, ID_B], { purpose: 'cerita' }),
+      () =>
+        attachMedia(tx, [ID_A, ID_B], {
+          purpose: 'cerita',
+          reference: { type: 'cerita', id: 'c1' },
+        }),
       (error: unknown) =>
         error instanceof MediaServiceError &&
         error.code === 'MEDIA_PURPOSE_MISMATCH' &&
@@ -615,17 +657,39 @@ describe('attachMedia / detachMedia', () => {
 
   it('refuses unknown ids, malformed ids, invalid references, and unknown purposes', async () => {
     const { tx } = fakeTx([makeAsset({ id: ID_A })]);
+    const validRef = { type: 'cerita', id: 'c1' };
+
     await assert.rejects(
-      () => attachMedia(tx, [ID_B], { purpose: 'cerita' }),
+      () => attachMedia(tx, [ID_B], { purpose: 'cerita', reference: validRef }),
       (e: unknown) => e instanceof MediaServiceError && e.code === 'MEDIA_NOT_FOUND',
     );
     await assert.rejects(
-      () => attachMedia(tx, ['../../x'], { purpose: 'cerita' }),
+      () => attachMedia(tx, ['../../x'], { purpose: 'cerita', reference: validRef }),
       (e: unknown) => e instanceof MediaServiceError && e.code === 'MEDIA_NOT_FOUND',
     );
     await assert.rejects(
-      () => attachMedia(tx, [ID_A], { purpose: 'nope' as never }),
+      () => attachMedia(tx, [ID_A], { purpose: 'nope' as never, reference: validRef }),
       (e: unknown) => e instanceof MediaServiceError && e.code === 'MEDIA_PURPOSE_MISMATCH',
+    );
+    await assert.rejects(
+      () =>
+        attachMedia(tx, [ID_A], {
+          purpose: 'cerita',
+        } as never),
+      (e: unknown) =>
+        e instanceof MediaServiceError &&
+        e.code === 'INVALID_MEDIA_REFERENCE' &&
+        e.statusCode === 400,
+    );
+    await assert.rejects(
+      () =>
+        detachMedia(tx, [ID_A], {
+          purpose: 'cerita',
+        } as never),
+      (e: unknown) =>
+        e instanceof MediaServiceError &&
+        e.code === 'INVALID_MEDIA_REFERENCE' &&
+        e.statusCode === 400,
     );
     await assert.rejects(
       () =>
@@ -633,13 +697,38 @@ describe('attachMedia / detachMedia', () => {
           purpose: 'cerita',
           reference: { type: '   ', id: 'item-1' },
         }),
-      (e: unknown) => e instanceof MediaServiceError && e.code === 'INVALID_MEDIA_REFERENCE',
+      (e: unknown) =>
+        e instanceof MediaServiceError &&
+        e.code === 'INVALID_MEDIA_REFERENCE' &&
+        e.statusCode === 400,
+    );
+    await assert.rejects(
+      () =>
+        attachMedia(tx, [ID_A], {
+          purpose: 'cerita',
+          reference: { type: 'cerita', id: '   ' },
+        }),
+      (e: unknown) =>
+        e instanceof MediaServiceError &&
+        e.code === 'INVALID_MEDIA_REFERENCE' &&
+        e.statusCode === 400,
+    );
+    await assert.rejects(
+      () =>
+        detachMedia(tx, [ID_A], {
+          purpose: 'cerita',
+          reference: { type: 'cerita', id: '   ' },
+        }),
+      (e: unknown) =>
+        e instanceof MediaServiceError &&
+        e.code === 'INVALID_MEDIA_REFERENCE' &&
+        e.statusCode === 400,
     );
   });
 
   it('is a no-op for an empty id list', async () => {
     const { tx, calls } = fakeTx([]);
-    await attachMedia(tx, [], { purpose: 'cerita' });
+    await attachMedia(tx, [], { purpose: 'cerita', reference: { type: 'cerita', id: 'c1' } });
     assert.equal(calls.length, 0);
   });
 
@@ -651,23 +740,28 @@ describe('attachMedia / detachMedia', () => {
       return original(args);
     };
     await assert.rejects(
-      () => attachMedia(tx, [ID_A], { purpose: 'cerita' }),
+      () =>
+        attachMedia(tx, [ID_A], {
+          purpose: 'cerita',
+          reference: { type: 'cerita', id: 'c1' },
+        }),
       (e: unknown) => e instanceof MediaServiceError && e.code === 'MEDIA_NOT_FOUND',
     );
   });
 
   it('detachMedia clears attachedAt when the last reference is removed and enforces purpose', async () => {
+    const ref = { type: 'cerita', id: 'c1' };
     const { tx, rows } = fakeTx(
       [makeAsset({ id: ID_A, attachedAt: new Date() })],
-      [{ assetId: ID_A, referenceType: 'default', referenceId: 'default', slot: 'default' }],
+      [{ assetId: ID_A, referenceType: 'cerita', referenceId: 'c1', slot: 'default' }],
     );
     await assert.rejects(
-      () => detachMedia(tx, [ID_A], { purpose: 'portal-hero' }),
+      () => detachMedia(tx, [ID_A], { purpose: 'portal-hero', reference: ref }),
       (e: unknown) => e instanceof MediaServiceError && e.code === 'MEDIA_PURPOSE_MISMATCH',
     );
     assert.notEqual(rows.get(ID_A)!.attachedAt, null);
     const when = new Date('2026-07-01T00:00:00Z');
-    await detachMedia(tx, [ID_A], { purpose: 'cerita' }, when);
+    await detachMedia(tx, [ID_A], { purpose: 'cerita', reference: ref }, when);
     assert.equal(rows.get(ID_A)!.attachedAt, null);
     assert.equal(rows.get(ID_A)!.detachedAt?.toISOString(), when.toISOString());
   });
@@ -675,7 +769,12 @@ describe('attachMedia / detachMedia', () => {
   it('detachMedia does not move detachedAt of an asset that is already unattached', async () => {
     const first = new Date('2026-07-01T00:00:00Z');
     const { tx, rows } = fakeTx([makeAsset({ id: ID_A, detachedAt: first })]);
-    await detachMedia(tx, [ID_A], { purpose: 'cerita' }, new Date('2026-08-01T00:00:00Z'));
+    await detachMedia(
+      tx,
+      [ID_A],
+      { purpose: 'cerita', reference: { type: 'cerita', id: 'c1' } },
+      new Date('2026-08-01T00:00:00Z'),
+    );
     assert.equal(rows.get(ID_A)!.detachedAt?.toISOString(), first.toISOString());
   });
 
@@ -683,7 +782,12 @@ describe('attachMedia / detachMedia', () => {
     const { tx, rows } = fakeTx([
       makeAsset({ id: ID_A, detachedAt: new Date('2026-07-01T00:00:00Z') }),
     ]);
-    await attachMedia(tx, [ID_A], { purpose: 'cerita' }, new Date('2026-07-02T00:00:00Z'));
+    await attachMedia(
+      tx,
+      [ID_A],
+      { purpose: 'cerita', reference: { type: 'cerita', id: 'c1' } },
+      new Date('2026-07-02T00:00:00Z'),
+    );
     assert.notEqual(rows.get(ID_A)!.attachedAt, null);
     assert.equal(rows.get(ID_A)!.detachedAt, null);
   });
@@ -750,16 +854,20 @@ describe('attachMedia / detachMedia', () => {
   it('detachMedia succeeds as a no-op when an asset ID was already deleted by cleanup', async () => {
     const { tx } = fakeTx([]);
     // ID_A does not exist in rows
-    await detachMedia(tx, [ID_A], { purpose: 'cerita' });
+    await detachMedia(tx, [ID_A], {
+      purpose: 'cerita',
+      reference: { type: 'cerita', id: 'c1' },
+    });
     // Succeeded without throwing MEDIA_NOT_FOUND
   });
 
   it('attachMedia rejects an asset that is claimed for deletion or quarantined', async () => {
+    const ref = { type: 'cerita', id: 'c1' };
     const { tx: txDel } = fakeTx([
       makeAsset({ id: ID_A, cleanupClaimedAt: new Date('2026-08-01T00:00:00Z') }),
     ]);
     await assert.rejects(
-      () => attachMedia(txDel, [ID_A], { purpose: 'cerita' }),
+      () => attachMedia(txDel, [ID_A], { purpose: 'cerita', reference: ref }),
       (e: unknown) => e instanceof MediaServiceError && e.code === 'MEDIA_NOT_FOUND',
     );
 
@@ -767,7 +875,7 @@ describe('attachMedia / detachMedia', () => {
       makeAsset({ id: ID_A, cleanupQuarantineReason: 'invalid-path' }),
     ]);
     await assert.rejects(
-      () => attachMedia(txQuar, [ID_A], { purpose: 'cerita' }),
+      () => attachMedia(txQuar, [ID_A], { purpose: 'cerita', reference: ref }),
       (e: unknown) => e instanceof MediaServiceError && e.code === 'MEDIA_NOT_FOUND',
     );
   });

@@ -8,7 +8,6 @@ import {
   ingestStagedUpload,
   isValidAssetId,
 } from '../services/media.service.js';
-import { MEDIA_TYPE_POLICY } from '../utils/mediaPolicy.js';
 import { MediaValidationError } from '../utils/mediaSignature.js';
 import {
   STAGING_DIR,
@@ -39,9 +38,12 @@ const CACHE_PRIVATE = 'private, no-store';
 
 type ServeKind = 'public-image' | 'public-download' | 'preview';
 
-const MIME_BY_EXTENSION: Record<string, string> = Object.fromEntries(
-  Object.values(MEDIA_TYPE_POLICY).map((policy) => [policy.storedExtension, policy.mimeType]),
-);
+const MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
+  webp: 'image/webp',
+  pdf: 'application/pdf',
+  csv: 'text/csv; charset=utf-8',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
 
 function logError(context: string, error: unknown): void {
   console.error(
@@ -68,6 +70,7 @@ function respondToSendFileError(res: Response, error: Error): void {
 
   // Entity headers chosen for a successful body must not ride along on an error response.
   res.removeHeader('Content-Disposition');
+  res.removeHeader('Content-Type');
   res.setHeader('Cache-Control', CACHE_PRIVATE);
   if (headers && effective !== 500) {
     for (const [name, value] of Object.entries(headers)) res.setHeader(name, value);

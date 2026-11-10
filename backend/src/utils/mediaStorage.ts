@@ -1,9 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, realpath, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { UPLOAD_DIR } from '../configs/index.js';
 import { MEDIA_ORIGINAL_NAME_MAX_LENGTH, type MediaKindName } from './mediaPolicy.js';
-import { initUploadRoot, isInsideOrEqual } from './uploadRoot.js';
+import { initUploadRoot, isInsideOrEqual, resolveUploadDirPath } from './uploadRoot.js';
 
 // ---------------------------------------------------------------------------------------------
 // Upload root (canonical realpath), initialized lazily; only a successful init is cached.
@@ -46,7 +45,9 @@ export function createUploadRootProvider(init: () => Promise<string>): UploadRoo
   };
 }
 
-const defaultProvider = createUploadRootProvider(() => initUploadRoot(UPLOAD_DIR));
+const defaultProvider = createUploadRootProvider(async () =>
+  initUploadRoot(resolveUploadDirPath(process.env.UPLOAD_DIR)),
+);
 
 /**
  * The canonical upload root. Boot (src/index.ts) probes it once and only WARNS on failure: the

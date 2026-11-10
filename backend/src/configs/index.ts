@@ -103,13 +103,25 @@ export const TRUST_PROXY = process.env.TRUST_PROXY;
 // backend/scripts/grants/audit-logs-grants.sql.
 export const AUDIT_ADMIN_DATABASE_URL = process.env.AUDIT_ADMIN_DATABASE_URL;
 
-// Where uploaded media (photos, documents, data files) lives on disk. Optional — unset/blank
-// means <repo-root>/uploads; a relative value resolves against the repository root (located from
-// this module's path, like the .env above, never process.cwd()); an absolute value is used as-is.
-// This is only the *resolved, unverified* path: src/index.ts runs initUploadRoot() at boot, which
-// creates it, proves it is writable, and refuses roots inside backend/ or frontend/. Never expose
-// it in an API response or public setting.
-export const UPLOAD_DIR = resolveUploadDirPath(process.env.UPLOAD_DIR);
+// Raw environment setting for upload root directory.
+export const RAW_UPLOAD_DIR = process.env.UPLOAD_DIR;
+
+// Lazy getter for resolved upload directory. Resolves against REPO_ROOT and enforces that UPLOAD_DIR
+// is explicitly provided when NODE_ENV=production.
+export function getConfiguredUploadDir(): string {
+  return resolveUploadDirPath(process.env.UPLOAD_DIR);
+}
+
+// Where uploaded media (photos, documents, data files) lives on disk. Optional in development/test
+// (defaults to <repo-root>/uploads). In production (NODE_ENV=production), an explicit UPLOAD_DIR is
+// required, but this export resolves with a safe non-throwing fallback so merely importing
+// configs/index.ts does not crash processes at boot before media storage initializes. Media code
+// lazily validates through getConfiguredUploadDir() / initUploadRoot().
+export const UPLOAD_DIR = resolveUploadDirPath(
+  process.env.UPLOAD_DIR,
+  path.resolve(import.meta.dirname, '../../..'),
+  'development',
+);
 
 // Max concurrent photo re-encoding operations (sharp). Optional integer 1-8, defaults to 2.
 function parseOptionalIntInRange(

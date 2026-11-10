@@ -33,26 +33,22 @@
 --                    specific host/CIDR in a VPS deployment with a locked-down MySQL bind.
 --   <DB_NAME>      — the value of MYSQL_DATABASE (e.g. sidata)
 
--- 1. Remove the blanket database-level grant if one still exists. MySQL 8 returns ERROR 1141
---    (42000) on REVOKE when the database-level grant row in mysql.db was already removed on a
---    previous run of this script, and MySQL 8.4 does not support `REVOKE IF EXISTS` for
---    privilege revocations (only for roles/proxies). Checking `information_schema.SCHEMA_PRIVILEGES`
---    first and executing `DO 0` when no db-level privilege remains keeps re-runs idempotent
---    without ever restoring blanket access.
-SET @has_db_grant := (
-  SELECT COUNT(*)
-  FROM information_schema.SCHEMA_PRIVILEGES
-  WHERE GRANTEE = CONCAT('''', '<APP_DB_USER>', '''@''', '<APP_DB_HOST>', '''')
-    AND TABLE_SCHEMA = '<DB_NAME>'
-);
-SET @revoke_stmt := IF(
-  @has_db_grant > 0,
-  'REVOKE ALL PRIVILEGES ON `<DB_NAME>`.* FROM ''<APP_DB_USER>''@''<APP_DB_HOST>''',
-  'DO 0'
-);
-PREPARE revoke_db_grant FROM @revoke_stmt;
-EXECUTE revoke_db_grant;
-DEALLOCATE PREPARE revoke_db_grant;
+-- 1. Remove the blanket database-level grant unconditionally. MySQL 8.4 returns ERROR 1141
+--    (42000) on REVOKE if the database-level grant row in mysql.db was already removed on a
+--    previous run of this script. Running the REVOKE inside a temporary helper procedure with a
+--    CONTINUE HANDLER for error 1141 ignores ONLY the "no such grant" error, avoiding fragile
+--    pre-checks that can miss wildcard database grants (e.g. `sidata%`.*) and making repeated
+--    executions idempotent without mysql --force.
+DROP PROCEDURE IF EXISTS `<DB_NAME>`.`_revoke_app_db_grants`;
+DELIMITER $$
+CREATE PROCEDURE `<DB_NAME>`.`_revoke_app_db_grants`()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR 1141 BEGIN END;
+  REVOKE ALL PRIVILEGES ON `<DB_NAME>`.* FROM '<APP_DB_USER>'@'<APP_DB_HOST>';
+END$$
+DELIMITER ;
+CALL `<DB_NAME>`.`_revoke_app_db_grants`();
+DROP PROCEDURE `<DB_NAME>`.`_revoke_app_db_grants`;
 
 -- 2. Full access to every table EXCEPT audit_logs. Keep this list in sync with
 --    backend/prisma/schema.prisma's `@@map(...)` table names.
@@ -83,6 +79,28 @@ GRANT UPDATE (`acknowledgedAt`, `acknowledgedById`) ON `<DB_NAME>`.`audit_logs`
   TO '<APP_DB_USER>'@'<APP_DB_HOST>';
 
 FLUSH PRIVILEGES;
+
+-- 4. Post-condition verification: inspect SCHEMA_PRIVILEGES for any remaining database-level
+--    grant matching <DB_NAME> (including wildcards like '%' or '_' via '<DB_NAME>' LIKE TABLE_SCHEMA)
+--    for '<APP_DB_USER>'@'<APP_DB_HOST>'. If any database-level grant remains, raise an error.
+DROP PROCEDURE IF EXISTS `<DB_NAME>`.`_assert_no_db_grants`;
+DELIMITER $$
+CREATE PROCEDURE `<DB_NAME>`.`_assert_no_db_grants`()
+BEGIN
+  DECLARE remaining_grants INT DEFAULT 0;
+  SELECT COUNT(*) INTO remaining_grants
+  FROM information_schema.SCHEMA_PRIVILEGES
+  WHERE GRANTEE = CONCAT('''', '<APP_DB_USER>', '''@''', '<APP_DB_HOST>', '''')
+    AND ('<DB_NAME>' LIKE TABLE_SCHEMA OR TABLE_SCHEMA = '<DB_NAME>');
+
+  IF remaining_grants > 0 THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Failed to revoke database-level grants: database-level privileges remain for the application user.';
+  END IF;
+END$$
+DELIMITER ;
+CALL `<DB_NAME>`.`_assert_no_db_grants`();
+DROP PROCEDURE `<DB_NAME>`.`_assert_no_db_grants`;
 
 -- Verification (run as the app user, or via `SHOW GRANTS FOR '<APP_DB_USER>'@'<APP_DB_HOST>'`):
 --   DELETE FROM audit_logs LIMIT 1;                     -- must fail: command denied

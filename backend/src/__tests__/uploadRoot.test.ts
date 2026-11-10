@@ -53,6 +53,26 @@ describe('resolveUploadDirPath', () => {
     }
   });
 
+  it('allows importing configs without throwing when NODE_ENV=production and UPLOAD_DIR is unset', async () => {
+    const prevEnv = process.env.NODE_ENV;
+    const prevUploadDir = process.env.UPLOAD_DIR;
+    try {
+      process.env.NODE_ENV = 'production';
+      delete process.env.UPLOAD_DIR;
+      const { getConfiguredUploadDir, UPLOAD_DIR: safeUploadDir } =
+        await import('../configs/index.js');
+      assert.ok(typeof safeUploadDir === 'string');
+      assert.throws(
+        () => getConfiguredUploadDir(),
+        (error: unknown) =>
+          error instanceof UploadRootError && /UPLOAD_DIR.*production/i.test(error.message),
+      );
+    } finally {
+      process.env.NODE_ENV = prevEnv;
+      if (prevUploadDir !== undefined) process.env.UPLOAD_DIR = prevUploadDir;
+    }
+  });
+
   it('resolves a relative path against the repository root', () => {
     assert.equal(
       resolveUploadDirPath('data/media', fakeRoot),

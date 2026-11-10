@@ -66,11 +66,17 @@ describe('media attach/detach concurrency against real MySQL', () => {
     // txB requests [ID_2, ID_1]
     // Sorting by ascending ID in loadAndCheck ensures both acquire locks in ID_1, then ID_2 order.
     const promiseA = clientA.$transaction(async (tx) => {
-      await attachMedia(tx, [ID_1, ID_2], { purpose: 'cerita' });
+      await attachMedia(tx, [ID_1, ID_2], {
+        purpose: 'cerita',
+        reference: { type: 'race_test', id: 'txA' },
+      });
     });
 
     const promiseB = clientB.$transaction(async (tx) => {
-      await attachMedia(tx, [ID_2, ID_1], { purpose: 'cerita' });
+      await attachMedia(tx, [ID_2, ID_1], {
+        purpose: 'cerita',
+        reference: { type: 'race_test', id: 'txB' },
+      });
     });
 
     await Promise.all([promiseA, promiseB]);
@@ -91,14 +97,15 @@ describe('media attach/detach concurrency against real MySQL', () => {
     const deadlocksBefore = await innodbDeadlockCount(prisma);
 
     const now = new Date();
+    const ref = { type: 'race_test', id: 'txA' };
 
     // Concurrent attach and detach
     await Promise.all([
       clientA.$transaction(async (tx) => {
-        await attachMedia(tx, [ID_1], { purpose: 'cerita' }, now);
+        await attachMedia(tx, [ID_1], { purpose: 'cerita', reference: ref }, now);
       }),
       clientB.$transaction(async (tx) => {
-        await detachMedia(tx, [ID_1], { purpose: 'cerita' }, now);
+        await detachMedia(tx, [ID_1], { purpose: 'cerita', reference: ref }, now);
       }),
     ]);
 

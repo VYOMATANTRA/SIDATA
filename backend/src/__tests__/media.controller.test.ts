@@ -540,6 +540,7 @@ describe('media delivery: sendFile failures map to honest statuses', () => {
     }
     assert.equal(res.statusCode, 416);
     assert.equal(res.headers['content-range'], 'bytes */11');
+    assert.equal(res.headers['content-type'], 'application/json; charset=utf-8');
     assert.deepEqual(res.body, { error: 'Permintaan berkas tidak dapat dipenuhi.' });
     assert.deepEqual(logged, []);
   });
@@ -552,6 +553,7 @@ describe('media delivery: sendFile failures map to honest statuses', () => {
     });
     await publicMediaImageHandler(req(ID), asRes(gone));
     assert.equal(gone.statusCode, 404);
+    assert.equal(gone.headers['content-type'], 'application/json; charset=utf-8');
     assert.deepEqual(gone.body, {
       error: 'Berkas media tidak tersedia saat ini.',
       code: 'MEDIA_FILE_MISSING',
@@ -568,6 +570,7 @@ describe('media delivery: sendFile failures map to honest statuses', () => {
       console.error = original;
     }
     assert.equal(broken.statusCode, 500);
+    assert.equal(broken.headers['content-type'], 'application/json; charset=utf-8');
     assert.deepEqual(broken.body, { error: 'Terjadi kesalahan internal server' });
     assert.equal(logged.length, 1);
   });
@@ -608,6 +611,8 @@ describe('media delivery: sendFile failures map to honest statuses', () => {
       const bad = await fetch(`${base}/${ID}`, { headers: { Range: 'bytes=999-9999' } });
       assert.equal(bad.status, 416);
       assert.equal(bad.headers.get('content-range'), 'bytes */10');
+      assert.match(bad.headers.get('content-type') ?? '', /application\/json/);
+      assert.doesNotMatch(bad.headers.get('content-type') ?? '', /image\/webp/);
       assert.deepEqual(await bad.json(), { error: 'Permintaan berkas tidak dapat dipenuhi.' });
     });
   });
@@ -619,6 +624,8 @@ describe('media delivery: sendFile failures map to honest statuses', () => {
       async (base) => {
         const res = await fetch(`${base}/${ID}`);
         assert.equal(res.status, 404);
+        assert.match(res.headers.get('content-type') ?? '', /application\/json/);
+        assert.doesNotMatch(res.headers.get('content-type') ?? '', /image\/webp/);
         const body = (await res.json()) as { code: string };
         assert.equal(body.code, 'MEDIA_FILE_MISSING');
         assert.equal(JSON.stringify(body).includes(root), false);

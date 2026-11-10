@@ -79,8 +79,10 @@ export class PhotoProcessingSemaphore {
   configure(concurrency = MEDIA_IMAGE_CONCURRENCY, maxQueue = PHOTO_PROCESSING_MAX_QUEUE): void {
     this.concurrency = concurrency;
     this.maxQueue = maxQueue;
-    this.active = 0;
-    this.queue = [];
+    while (this.queue.length > 0 && this.active < this.concurrency) {
+      const next = this.queue.shift();
+      if (next) next();
+    }
   }
 }
 

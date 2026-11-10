@@ -616,7 +616,13 @@ describe('runMediaCleanup: files before row and irreversible cleanup claim', () 
     // Attempting to attach the claimed asset after partial unlink failure must fail
     const tx = txOver(rows, references);
     await assert.rejects(
-      () => attachMedia(tx, [ID_OLD], { purpose: 'cerita' }, NOW),
+      () =>
+        attachMedia(
+          tx,
+          [ID_OLD],
+          { purpose: 'cerita', reference: { type: 'cerita', id: 'c1' } },
+          NOW,
+        ),
       (err: unknown) => (err as { code?: string })?.code === 'MEDIA_NOT_FOUND',
     );
 
@@ -673,14 +679,19 @@ describe('runMediaCleanup: files before row and irreversible cleanup claim', () 
     const old = asset(ID_OLD, { attachedAt: new Date(NOW.getTime() - 40 * HOUR) });
     const files = await putAssetFiles(old);
     const { client, rows, references, deletes } = fakeClient([old]);
-    references.set('default:default:default:' + ID_OLD, {
+    references.set('cerita:c1:default:' + ID_OLD, {
       assetId: ID_OLD,
-      referenceType: 'default',
-      referenceId: 'default',
+      referenceType: 'cerita',
+      referenceId: 'c1',
       slot: 'default',
     });
     const tx = txOver(rows, references);
-    await detachMedia(tx, [ID_OLD], { purpose: 'cerita' }, new Date(NOW.getTime() - 1 * HOUR));
+    await detachMedia(
+      tx,
+      [ID_OLD],
+      { purpose: 'cerita', reference: { type: 'cerita', id: 'c1' } },
+      new Date(NOW.getTime() - 1 * HOUR),
+    );
     const run = (at: Date) =>
       runMediaCleanup({
         root,
@@ -707,15 +718,25 @@ describe('runMediaCleanup: files before row and irreversible cleanup claim', () 
     const old = asset(ID_OLD, { attachedAt: new Date(NOW.getTime() - 40 * HOUR) });
     const files = await putAssetFiles(old);
     const { client, rows, references } = fakeClient([old]);
-    references.set('default:default:default:' + ID_OLD, {
+    references.set('cerita:c1:default:' + ID_OLD, {
       assetId: ID_OLD,
-      referenceType: 'default',
-      referenceId: 'default',
+      referenceType: 'cerita',
+      referenceId: 'c1',
       slot: 'default',
     });
     const tx = txOver(rows, references);
-    await detachMedia(tx, [ID_OLD], { purpose: 'cerita' }, new Date(NOW.getTime() - 30 * HOUR));
-    await attachMedia(tx, [ID_OLD], { purpose: 'cerita' }, new Date(NOW.getTime() - 2 * HOUR));
+    await detachMedia(
+      tx,
+      [ID_OLD],
+      { purpose: 'cerita', reference: { type: 'cerita', id: 'c1' } },
+      new Date(NOW.getTime() - 30 * HOUR),
+    );
+    await attachMedia(
+      tx,
+      [ID_OLD],
+      { purpose: 'cerita', reference: { type: 'cerita', id: 'c1' } },
+      new Date(NOW.getTime() - 2 * HOUR),
+    );
     assert.equal(rows.get(ID_OLD)!.detachedAt, null);
     const result = await runMediaCleanup({
       root,
