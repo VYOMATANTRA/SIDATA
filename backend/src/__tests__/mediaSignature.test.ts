@@ -18,6 +18,7 @@ import {
   type MediaValidationCode,
 } from '../utils/mediaSignature.js';
 import { scanCsvFile } from '../utils/mediaCsv.js';
+import { processPhoto } from '../utils/mediaImage.js';
 import { PDF_BYTES, buildDocx, buildXlsx, buildZip, makeImage } from './helpers/mediaFixtures.js';
 
 let dir: string;
@@ -355,5 +356,33 @@ describe('CSV formula-injection scan', () => {
     const body = Buffer.from(row + '1,Budi,-5\n'.repeat(200_000));
     const file = await stage(body);
     assert.deepEqual(await scanCsvFile(file), { ok: true });
+  });
+
+  it('propagates stream read errors instead of masking them as binary', async () => {
+    await assert.rejects(
+      async () => scanCsvFile(dir),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.equal(error instanceof MediaValidationError, false);
+        return true;
+      },
+    );
+  });
+});
+
+describe('processPhoto filesystem write errors', () => {
+  it('rethrows raw filesystem error when output path is unwritable instead of INVALID_IMAGE', async () => {
+    const valid = await stage(await makeImage('jpeg', 200, 200));
+    const unwritableOutput = path.join(dir, 'non-existent-dir', 'out.webp');
+    const thumb = path.join(dir, 'thumb.webp');
+    await assert.rejects(
+      async () => processPhoto(valid, unwritableOutput, thumb),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.equal(error instanceof MediaValidationError, false);
+        assert.equal((error as { code?: string }).code, 'ENOENT');
+        return true;
+      },
+    );
   });
 });

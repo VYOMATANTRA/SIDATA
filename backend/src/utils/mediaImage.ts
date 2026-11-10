@@ -1,3 +1,4 @@
+import { writeFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { MEDIA_IMAGE_CONCURRENCY } from '../configs/index.js';
 import {
@@ -131,6 +132,10 @@ async function executeProcessPhoto(
   const maxEdge = options.maxLongEdgePx ?? PHOTO_MAX_LONG_EDGE_PX;
   const thumbEdge = options.thumbnailLongEdgePx ?? PHOTO_THUMBNAIL_LONG_EDGE_PX;
 
+  let mainBuffer: Buffer;
+  let thumbBuffer: Buffer;
+  let info: { width: number; height: number };
+
   try {
     const source = sharp(inputPath, {
       limitInputPixels,
@@ -146,20 +151,46 @@ async function executeProcessPhoto(
       throw invalidImage('Dimensi gambar terlalu besar.');
     }
 
-    const info = await source
+    const mainResult = await source
       .rotate()
       .resize({ width: maxEdge, height: maxEdge, fit: 'inside', withoutEnlargement: true })
       .webp({ quality: PHOTO_WEBP_QUALITY })
-      .toFile(outputPath);
+      .toBuffer({ resolveWithObject: true });
 
-    await sharp(outputPath)
+    mainBuffer = mainResult.data;
+    info = { width: mainResult.info.width, height: mainResult.info.height };
+
+    const thumbResult = await sharp(mainBuffer)
       .resize({ width: thumbEdge, height: thumbEdge, fit: 'inside', withoutEnlargement: true })
       .webp({ quality: PHOTO_THUMBNAIL_WEBP_QUALITY })
-      .toFile(thumbnailPath);
+      .toBuffer({ resolveWithObject: true });
 
-    return { width: info.width, height: info.height };
+    thumbBuffer = thumbResult.data;
   } catch (error) {
     if (error instanceof MediaValidationError) throw error;
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      typeof (error as { code?: unknown }).code === 'string'
+    ) {
+      const code = (error as { code: string }).code;
+      if (
+        [
+          'ENOSPC',
+          'EACCES',
+          'EPERM',
+          'EROFS',
+          'EIO',
+          'ENOTDIR',
+          'ENOENT',
+          'EMFILE',
+          'ENFILE',
+        ].includes(code)
+      ) {
+        throw error;
+      }
+    }
     const message = error instanceof Error ? error.message : '';
     throw invalidImage(
       /pixel limit|exceeds/i.test(message)
@@ -167,4 +198,11 @@ async function executeProcessPhoto(
         : 'Gambar rusak atau tidak dapat diproses.',
     );
   }
+
+  // Filesystem writes occur outside the decode/transform try/catch so disk write errors
+  // (e.g. ENOSPC, EACCES) propagate as 500 rather than 415 INVALID_IMAGE.
+  await writeFile(outputPath, mainBuffer);
+  await writeFile(thumbnailPath, thumbBuffer);
+
+  return { width: info.width, height: info.height };
 }
