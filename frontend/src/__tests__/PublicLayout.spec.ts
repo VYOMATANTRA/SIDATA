@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, nextTick } from 'vue';
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { createRouter, createMemoryHistory } from 'vue-router';
+import { createRouter, createMemoryHistory, type RouteLocationNormalized } from 'vue-router';
 import App from '../App.vue';
+import { scrollBehavior } from '../router/index';
 import { useAuthStore } from '../stores/auth';
 import { stubViewport } from './helpers/viewport';
 import TentangPageLayout from '../components/tentang/TentangPageLayout.vue';
@@ -69,6 +70,7 @@ async function mountApp(path: string) {
         meta: { layout: 'public', headerOverlay: true },
       },
       { path: '/peta', component: Page('peta'), meta: { layout: 'public' } },
+      { path: '/ketua-rt', component: Page('ketua-rt'), meta: { layout: 'public' } },
       { path: '/publikasi', component: CompatPage, meta: { layout: 'public' } },
       { path: '/login', component: Page('login') },
     ],
@@ -468,6 +470,54 @@ describe('PublicLayout (mounted by App for routes with meta.layout = public)', (
       expect(toggle.attributes('aria-expanded')).toBe('false');
       expect(document.activeElement).toBe(toggle.element);
       wrapper.unmount();
+    });
+
+    it('moves focus to main when navigating from /peta to /ketua-rt', async () => {
+      const { wrapper, router } = await mountApp('/peta');
+      expect(document.activeElement).not.toBe(wrapper.find('main').element);
+
+      await router.push('/ketua-rt');
+      await flushPromises();
+
+      expect(document.activeElement).toBe(wrapper.find('main').element);
+      wrapper.unmount();
+    });
+
+    it('restores focus to mobile toggle button when clicking the already-active route in mobile menu', async () => {
+      stubViewport(false);
+      const { wrapper } = await mountApp('/peta');
+
+      const toggle = wrapper.find('[data-testid="public-nav-mobile-toggle"]');
+      expect(toggle.exists()).toBe(true);
+
+      // Open mobile menu
+      await toggle.trigger('click');
+      await flushPromises();
+      expect(toggle.attributes('aria-expanded')).toBe('true');
+      expect(wrapper.find('main').attributes('inert')).toBeDefined();
+
+      // Click the active /peta item
+      const activePetaLink = wrapper.find('a[href="/peta"]');
+      expect(activePetaLink.exists()).toBe(true);
+      await activePetaLink.trigger('click');
+      await flushPromises();
+
+      // Menu closes, inert is cleared, and focus returns to the hamburger toggle
+      expect(toggle.attributes('aria-expanded')).toBe('false');
+      expect(wrapper.find('main').attributes('inert')).toBeUndefined();
+      expect(document.activeElement).toBe(toggle.element);
+      wrapper.unmount();
+    });
+
+    it('scrollBehavior restores savedPosition on popstate query change and returns false on push', async () => {
+      const loc = (path: string, hash = '', fullPath = path + hash) =>
+        ({ path, hash, fullPath }) as unknown as RouteLocationNormalized;
+      const fromQuery1 = loc('/peta', '', '/peta?tab=1');
+      const toQuery2 = loc('/peta', '', '/peta?tab=2');
+
+      const savedPosition = { left: 0, top: 240 };
+      expect(await scrollBehavior(toQuery2, fromQuery1, savedPosition)).toEqual(savedPosition);
+      expect(await scrollBehavior(toQuery2, fromQuery1, null)).toBe(false);
     });
   });
 
