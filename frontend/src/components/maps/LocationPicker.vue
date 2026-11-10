@@ -29,7 +29,6 @@ import {
   MAX_MAP_ZOOM,
 } from '../../constants/map';
 import {
-  COORDINATE_EPSILON,
   DIRECTION_LABELS,
   clampZoom,
   directionOffset,
@@ -315,13 +314,6 @@ function placeMarker(location: GeoPoint): void {
   }
 }
 
-function near(a: GeoPoint, b: GeoPoint): boolean {
-  return (
-    Math.abs(a.latitude - b.latitude) < COORDINATE_EPSILON &&
-    Math.abs(a.longitude - b.longitude) < COORDINATE_EPSILON
-  );
-}
-
 /** Brings the map and marker in line with `modelValue` without emitting anything. */
 function syncFromValue(initial = false): void {
   if (!map) return;
@@ -333,7 +325,7 @@ function syncFromValue(initial = false): void {
     };
     const zoom = clampZoom(value?.zoom ?? props.initialZoom, props.minZoom, props.maxZoom);
     const center = viewCenter();
-    if (!center || !near(center, target) || map.getZoom() !== zoom) {
+    if (!center || !sameLocation(center, target) || map.getZoom() !== zoom) {
       runSilently(() =>
         map?.setView([target.latitude, target.longitude], zoom, { animate: false }),
       );
@@ -406,7 +398,7 @@ function handleMoveEnd(): void {
   // and must not mark the form dirty. A genuine pan moves the centre past the tolerance.
   if (
     stored &&
-    near(center, stored) &&
+    sameLocation(center, stored) &&
     map.getZoom() === clampZoom(stored.zoom ?? NaN, props.minZoom, props.maxZoom)
   ) {
     return;

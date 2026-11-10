@@ -12,7 +12,7 @@ import {
   MAX_MAP_ZOOM,
 } from '../../constants/map';
 import { INPUT_CLASSES } from '../../utils/formStyles';
-import { COORDINATE_EPSILON, clampZoom, normalizeLocation } from '../../utils/geoPicker';
+import { clampZoom, normalizeLocation, sameLocation } from '../../utils/geoPicker';
 
 /**
  * Normalises arbitrary stored map views into valid bounds: latitude clamped to -90..90,
@@ -182,13 +182,8 @@ const errorEntries = computed(() =>
 const summaryErrors = computed(() => (submitted.value ? errorEntries.value : []));
 
 function sameMapView(a: PickerLocation | null, b: PickerLocation | null): boolean {
-  if (a === null && b === null) return true;
-  if (a === null || b === null) return false;
-  return (
-    Math.abs(a.latitude - b.latitude) <= COORDINATE_EPSILON &&
-    Math.abs(a.longitude - b.longitude) <= COORDINATE_EPSILON &&
-    a.zoom === b.zoom
-  );
+  if (a === null || b === null) return a === b;
+  return sameLocation(a, b) && a.zoom === b.zoom;
 }
 
 const isTextDirty = computed(() => {

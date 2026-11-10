@@ -688,7 +688,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
       </p>
 
       <PublicSettingsForm
-        v-else-if="isEditingSettings"
+        v-else-if="isEditingSettings && settingsStore.isLoaded"
         v-show="!settingsDiscardPromptOpen"
         ref="settingsForm"
         :settings="settingsStore.settings"
@@ -698,6 +698,14 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
         @cancel="requestCloseSettings"
         @dirty-change="settingsFormDirty = $event"
       />
+
+      <p v-else-if="isEditingSettings" role="alert" class="text-sm text-rose-700">
+        {{
+          serverError ||
+          settingsStore.error ||
+          'Pengaturan publik belum siap. Muat ulang halaman lalu coba lagi.'
+        }}
+      </p>
 
       <p v-else-if="serverError" role="alert" class="text-sm text-rose-700">
         {{ serverError }}
@@ -730,7 +738,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
           <button
             ref="settingsKeepButton"
             type="button"
-            class="bg-brand-navy hover:bg-brand-navy/90 focus-visible:outline-focus-ring min-h-11 rounded-btn px-5 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+            class="bg-brand-navy hover:bg-brand-navy/90 focus-visible:outline-focus-ring rounded-btn min-h-11 px-5 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2"
             data-test="settings-discard-keep"
             @click="keepEditingSettings"
           >

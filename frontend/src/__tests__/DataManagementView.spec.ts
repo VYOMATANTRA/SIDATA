@@ -54,6 +54,8 @@ const table: IndicatorTable = {
 interface FetchOverrides {
   /** Answers `PATCH /api/indicator-tables/tbl-1`; the default succeeds with the stored detail. */
   tablePatch?: (body: Record<string, unknown>) => Response;
+  /** Answers `GET /api/settings/public`. */
+  settingsGet?: () => Promise<Response> | Response;
 }
 
 function installFetchMock(overrides: FetchOverrides = {}) {
@@ -65,6 +67,7 @@ function installFetchMock(overrides: FetchOverrides = {}) {
     }
 
     if (url === '/api/settings/public') {
+      if (overrides.settingsGet) return overrides.settingsGet();
       return json({ settings: DEFAULT_PUBLIC_SETTINGS });
     }
 
@@ -472,5 +475,49 @@ describe('DataManagementView.vue', () => {
 
     wrapper.unmount();
   });
-});
 
+  it('does not render PublicSettingsForm and shows error alert if settings fail to load while modal is open', async () => {
+    let rejectSettings!: (err: Error) => void;
+    const settingsPromise = new Promise<Response>((_resolve, reject) => {
+      rejectSettings = reject;
+    });
+
+    installFetchMock({
+      settingsGet: () => settingsPromise,
+    });
+
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore();
+    authStore.setAuth({ id: '1', email: 'admin@example.com', role: 'admin' }, 'token');
+
+    const wrapper = mount(DataManagementView, {
+      global: {
+        plugins: [pinia],
+        stubs: { RouterLink: true, teleport: true },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.find('[data-test="tab-pengaturan"]').trigger('click');
+    await flushPromises();
+
+    const editBtn = wrapper.findAll('button').find((b) => b.text().includes('Edit'));
+    await editBtn?.trigger('click');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Memuat pengaturan…');
+    expect(wrapper.findComponent({ name: 'PublicSettingsForm' }).exists()).toBe(false);
+
+    // Simulate fetch failure
+    rejectSettings(new Error('Network failure'));
+    await flushPromises();
+
+    expect(wrapper.findComponent({ name: 'PublicSettingsForm' }).exists()).toBe(false);
+    const alert = wrapper.find('[role="alert"]');
+    expect(alert.exists()).toBe(true);
+    expect(alert.text()).toContain('Gagal memuat pengaturan publik');
+
+    wrapper.unmount();
+  });
+});
