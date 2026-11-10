@@ -242,6 +242,27 @@ describe('AdminLayout.vue', () => {
     wrapper.unmount();
   });
 
+  it('resets admin content shell scroll position to top (scrollTop = 0) when navigating to a new admin path', async () => {
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, {
+      global: { plugins: [router] },
+      attachTo: document.body,
+    });
+
+    const shell = wrapper.find<HTMLElement>('[data-test="admin-content-shell"]');
+    shell.element.scrollTop = 500;
+    expect(shell.element.scrollTop).toBe(500);
+
+    await router.push('/admin/cerita');
+    await wrapper.vm.$nextTick();
+
+    expect(shell.element.scrollTop).toBe(0);
+    wrapper.unmount();
+  });
+
   it('does not steal focus onto <main> when a view has already focused an interactive element inside <main>', async () => {
     const router = createRouter({
       history: createMemoryHistory(),

@@ -54,6 +54,7 @@ export function rolesFor(path: string): AdminNavRole[] {
  * instead, which `AdminLayout` resets itself on a path change.
  * - query-only changes on the same path keep the position, even if the URL has a hash (views use
  *   them to sync filters);
+ * - a bare `#` hash scrolls to the top (on same-path and cross-path);
  * - a hash on the same path (in-page anchor, TOC, skip link) scrolls to its target first. Native
  *   anchor clicks fire `popstate` with no state, so vue-router passes a STALE `savedPosition`
  *   that must not override the anchor;
@@ -87,6 +88,9 @@ function hashTarget(hash: string): { el: Element; top: number; behavior: ScrollB
 export const scrollBehavior: RouterScrollBehavior = (to, from, savedPosition) => {
   if (to.path === from.path && to.hash === from.hash && to.fullPath !== from.fullPath) {
     return false;
+  }
+  if (to.hash === '#' && !savedPosition) {
+    return { top: 0, left: 0, behavior: 'instant' };
   }
   const samePath = to.path === from.path;
   if (samePath) {

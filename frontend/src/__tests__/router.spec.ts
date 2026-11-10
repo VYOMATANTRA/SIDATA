@@ -1,8 +1,17 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest';
+import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import router, { scrollBehavior } from '../router/index';
 import type { RouteLocationNormalized } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+
+let globalScrollToSpy: ReturnType<typeof vi.spyOn>;
+beforeAll(() => {
+  globalScrollToSpy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+});
+afterAll(() => {
+  globalScrollToSpy.mockRestore();
+});
 
 describe('router auth guard retry behavior', () => {
   it(
@@ -438,5 +447,34 @@ describe('router scrollBehavior', () => {
   it('same-path missing hash target falls through to savedPosition when given', async () => {
     const saved = { left: 0, top: 321 };
     expect(await scrollBehavior(loc('/a', '#none'), loc('/a'), saved)).toBe(saved);
+  });
+
+  it('scrolls to top when hash is bare "#"', async () => {
+    expect(await scrollBehavior(loc('/ketua-rt', '#'), loc('/previous'), null)).toEqual({
+      top: 0,
+      left: 0,
+      behavior: 'instant',
+    });
+  });
+
+  it('scrolls to top when hash is bare "#" even on the same path', async () => {
+    expect(await scrollBehavior(loc('/publikasi', '#'), loc('/publikasi'), null)).toEqual({
+      top: 0,
+      left: 0,
+      behavior: 'instant',
+    });
+  });
+
+  it('is wired into the router instance configuration', () => {
+    expect(typeof scrollBehavior).toBe('function');
+    expect(router.options.scrollBehavior).toBe(scrollBehavior);
+  });
+
+  it('triggers window.scrollTo on actual router.push navigation', async () => {
+    const scrollToSpy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    await router.push('/permintaan-data');
+    await nextTick();
+    expect(scrollToSpy).toHaveBeenCalledWith({ left: 0, top: 0, behavior: 'instant' });
+    scrollToSpy.mockRestore();
   });
 });

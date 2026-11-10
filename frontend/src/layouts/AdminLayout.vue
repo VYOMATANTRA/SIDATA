@@ -82,9 +82,9 @@ watch(
     <AdminSidebar :mobile-open="isMobileSidebarOpen" @close="closeMobileSidebar" />
 
     <div
+      ref="contentShellRef"
       class="flex min-w-0 flex-1 flex-col overflow-y-auto"
       :inert="isMobileSidebarOpen ? true : undefined"
-      ref="contentShellRef"
       data-test="admin-content-shell"
     >
       <AdminHeader :mobile-open="isMobileSidebarOpen" @open-menu="openMobileSidebar" />
