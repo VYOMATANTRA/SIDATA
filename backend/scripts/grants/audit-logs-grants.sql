@@ -33,12 +33,26 @@
 --                    specific host/CIDR in a VPS deployment with a locked-down MySQL bind.
 --   <DB_NAME>      — the value of MYSQL_DATABASE (e.g. sidata)
 
--- 1. Remove the blanket database-level grant. MySQL 8 returns ERROR 1141 (42000) on REVOKE if
---    the database-level grant row in mysql.db was already removed on a previous run of this
---    script. Granting SELECT on `<DB_NAME>`.* first guarantees a db-level grant exists for
---    REVOKE ALL PRIVILEGES to strip, making repeated executions truly idempotent.
-GRANT SELECT ON `<DB_NAME>`.* TO '<APP_DB_USER>'@'<APP_DB_HOST>';
-REVOKE ALL PRIVILEGES ON `<DB_NAME>`.* FROM '<APP_DB_USER>'@'<APP_DB_HOST>';
+-- 1. Remove the blanket database-level grant if one still exists. MySQL 8 returns ERROR 1141
+--    (42000) on REVOKE when the database-level grant row in mysql.db was already removed on a
+--    previous run of this script, and MySQL 8.4 does not support `REVOKE IF EXISTS` for
+--    privilege revocations (only for roles/proxies). Checking `information_schema.SCHEMA_PRIVILEGES`
+--    first and executing `DO 0` when no db-level privilege remains keeps re-runs idempotent
+--    without ever restoring blanket access.
+SET @has_db_grant := (
+  SELECT COUNT(*)
+  FROM information_schema.SCHEMA_PRIVILEGES
+  WHERE GRANTEE = CONCAT('''', '<APP_DB_USER>', '''@''', '<APP_DB_HOST>', '''')
+    AND TABLE_SCHEMA = '<DB_NAME>'
+);
+SET @revoke_stmt := IF(
+  @has_db_grant > 0,
+  'REVOKE ALL PRIVILEGES ON `<DB_NAME>`.* FROM ''<APP_DB_USER>''@''<APP_DB_HOST>''',
+  'DO 0'
+);
+PREPARE revoke_db_grant FROM @revoke_stmt;
+EXECUTE revoke_db_grant;
+DEALLOCATE PREPARE revoke_db_grant;
 
 -- 2. Full access to every table EXCEPT audit_logs. Keep this list in sync with
 --    backend/prisma/schema.prisma's `@@map(...)` table names.
@@ -59,6 +73,7 @@ GRANT ALL PRIVILEGES ON `<DB_NAME>`.`sections` TO '<APP_DB_USER>'@'<APP_DB_HOST>
 GRANT ALL PRIVILEGES ON `<DB_NAME>`.`indicator_tables` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
 GRANT ALL PRIVILEGES ON `<DB_NAME>`.`indicator_table_rows` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
 GRANT ALL PRIVILEGES ON `<DB_NAME>`.`media_assets` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
+GRANT ALL PRIVILEGES ON `<DB_NAME>`.`media_asset_references` TO '<APP_DB_USER>'@'<APP_DB_HOST>';
 
 -- 3. Restricted access to audit_logs: read everything, insert new rows, and update only the two
 --    acknowledge columns (MySQL supports column-scoped UPDATE grants). No DELETE, no

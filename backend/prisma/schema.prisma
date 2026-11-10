@@ -368,28 +368,48 @@ enum MediaKind {
 /// by the relative `storage_key`; this row is the only thing the public API resolves. An asset is
 /// private until `attached_at` is set by attachMedia() inside a content transaction.
 model MediaAsset {
-  id          String    @id @default(uuid())
-  provider    String    @default("local") @db.VarChar(20)
-  storageKey  String    @unique @map("storage_key") @db.VarChar(512)
-  kind        MediaKind
-  purpose     String    @db.VarChar(64)
-  ownerKey    String    @map("owner_key") @db.VarChar(64)
-  mimeType    String    @map("mime_type") @db.VarChar(100)
-  byteSize    Int       @map("byte_size")
-  width       Int?
-  height      Int?
-  originalName String   @map("original_name") @db.VarChar(255)
-  createdById String?   @map("created_by_id")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  attachedAt  DateTime? @map("attached_at")
+  id                      String                @id @default(uuid())
+  provider                String                @default("local") @db.VarChar(20)
+  storageKey              String                @unique @map("storage_key") @db.VarChar(512)
+  kind                    MediaKind
+  purpose                 String                @db.VarChar(64)
+  ownerKey                String                @map("owner_key") @db.VarChar(64)
+  mimeType                String                @map("mime_type") @db.VarChar(100)
+  byteSize                Int                   @map("byte_size")
+  width                   Int?
+  height                  Int?
+  originalName            String                @map("original_name") @db.VarChar(255)
+  createdById             String?               @map("created_by_id")
+  createdAt               DateTime              @default(now()) @map("created_at")
+  attachedAt              DateTime?             @map("attached_at")
   /// Set by detachMedia, cleared by attachMedia. Cleanup measures an unattached asset's age from
   /// COALESCE(detachedAt, createdAt), so a swapped-out old asset still gets a full grace period.
-  detachedAt  DateTime? @map("detached_at")
+  detachedAt              DateTime?             @map("detached_at")
+  cleanupClaimedAt        DateTime?             @map("cleanup_claimed_at")
+  cleanupQuarantineReason String?               @map("cleanup_quarantine_reason") @db.VarChar(64)
 
-  createdBy User? @relation("MediaAssetCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy  User?                 @relation("MediaAssetCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  references MediaAssetReference[]
 
   @@index([attachedAt, createdAt])
+  @@index([attachedAt, cleanupClaimedAt, createdAt])
+  @@index([attachedAt, cleanupClaimedAt, detachedAt])
   @@index([purpose, ownerKey])
   @@index([createdById])
   @@map("media_assets")
 }
+
+model MediaAssetReference {
+  id            String     @id @default(cuid())
+  assetId       String     @map("asset_id")
+  referenceType String     @map("reference_type") @db.VarChar(64)
+  referenceId   String     @map("reference_id") @db.VarChar(191)
+  slot          String     @default("default") @db.VarChar(64)
+  createdAt     DateTime   @default(now()) @map("created_at")
+  asset         MediaAsset @relation(fields: [assetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([referenceType, referenceId, slot, assetId], map: "media_asset_references_tuple_key")
+  @@index([assetId])
+  @@map("media_asset_references")
+}
+

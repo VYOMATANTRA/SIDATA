@@ -56,48 +56,166 @@ async function putAssetFiles(asset: MediaAsset): Promise<{ file: string; derivat
   return { file, derivative };
 }
 
-interface CollectWhere {
-  attachedAt: null;
-  OR: Array<{ detachedAt: { lt: Date } } | { detachedAt: null; createdAt: { lt: Date } }>;
+interface CollectableClause {
+  cleanupClaimedAt?: null | { not: null };
+  attachedAt?: null | Date;
+  detachedAt?: null | { lt: Date };
+  createdAt?: { lt: Date };
+  OR?: CollectableClause[];
 }
 
-/** Evaluates the cleanup's where-clause the way MySQL would: COALESCE(detachedAt, createdAt). */
-function collectable(row: MediaAsset, where: CollectWhere): boolean {
-  if (row.attachedAt !== null) return false;
-  return where.OR.some((clause) =>
-    'createdAt' in clause
-      ? row.detachedAt === null && row.createdAt < clause.createdAt.lt
-      : row.detachedAt !== null && row.detachedAt < clause.detachedAt.lt,
+interface CollectableWhere {
+  attachedAt?: null | Date;
+  cleanupClaimedAt?: null | { not: null };
+  cleanupQuarantineReason?: string | null;
+  OR?: CollectableClause[];
+  id?: string | { gt?: string; in?: string[] };
+}
+
+function matchAgeOr(row: MediaAsset, clauses: CollectableClause[]): boolean {
+  return clauses.some((c) =>
+    c.createdAt
+      ? row.detachedAt === null && row.createdAt < c.createdAt.lt
+      : c.detachedAt && 'lt' in c.detachedAt
+        ? row.detachedAt !== null && row.detachedAt < c.detachedAt.lt
+        : false,
   );
+}
+
+/** Evaluates the cleanup's where-clause the way MySQL would. */
+function collectable(row: MediaAsset, where: CollectableWhere): boolean {
+  if (where.attachedAt === null && row.attachedAt !== null) return false;
+  if (where.cleanupClaimedAt === null && row.cleanupClaimedAt !== null) return false;
+  if (
+    where.cleanupClaimedAt &&
+    typeof where.cleanupClaimedAt === 'object' &&
+    'not' in where.cleanupClaimedAt &&
+    row.cleanupClaimedAt === null
+  ) {
+    return false;
+  }
+  if (where.cleanupQuarantineReason === null && row.cleanupQuarantineReason !== null) return false;
+
+  if (Array.isArray(where.OR)) {
+    return where.OR.some((clause) => {
+      if (
+        clause.cleanupClaimedAt &&
+        typeof clause.cleanupClaimedAt === 'object' &&
+        'not' in clause.cleanupClaimedAt
+      ) {
+        return row.cleanupClaimedAt !== null;
+      }
+      if (clause.cleanupClaimedAt === null || clause.attachedAt === null) {
+        if (clause.attachedAt === null && row.attachedAt !== null) return false;
+        if (clause.cleanupClaimedAt === null && row.cleanupClaimedAt !== null) return false;
+        if (Array.isArray(clause.OR)) {
+          return matchAgeOr(row, clause.OR);
+        }
+        return true;
+      }
+      if (clause.createdAt) {
+        return row.detachedAt === null && row.createdAt < clause.createdAt.lt;
+      }
+      if (clause.detachedAt && 'lt' in clause.detachedAt) {
+        return row.detachedAt !== null && row.detachedAt < clause.detachedAt.lt;
+      }
+      return false;
+    });
+  }
+
+  return true;
+}
+
+interface StoredRef {
+  assetId: string;
+  referenceType: string;
+  referenceId: string;
+  slot: string;
 }
 
 function fakeClient(assets: MediaAsset[], opts: { raceLoses?: Set<string> } = {}) {
   const rows = new Map(assets.map((a) => [a.id, a]));
+  const references = new Map<string, StoredRef>();
   const deletes: string[] = [];
   const client: MediaCleanupClient = {
+    $transaction: async (fn) => fn(client),
+    $queryRaw: (async (query: unknown) => {
+      const values = (query as { values?: unknown[] })?.values ?? [];
+      const requestedIds = values.filter((v): v is string => typeof v === 'string');
+      return requestedIds.flatMap((id) => {
+        const row = rows.get(id);
+        if (!row) return [];
+        return [
+          {
+            id: row.id,
+            attachedAt: row.attachedAt,
+            detachedAt: row.detachedAt,
+            createdAt: row.createdAt,
+            cleanupClaimedAt: row.cleanupClaimedAt,
+            cleanupQuarantineReason: row.cleanupQuarantineReason,
+          },
+        ];
+      });
+    }) as never,
+    mediaAssetReference: {
+      count: (async (args: { where: { assetId: string } }) =>
+        [...references.values()].filter((r) => r.assetId === args.where.assetId).length) as never,
+    },
     mediaAsset: {
-      findMany: (async (args: { where: CollectWhere & { id: { gt: string } }; take: number }) =>
+      findMany: (async (args: {
+        where: CollectableWhere & { id?: { gt: string } };
+        take: number;
+      }) =>
         [...rows.values()]
-          .filter((a) => collectable(a, args.where) && a.id > args.where.id.gt)
+          .filter(
+            (a) => collectable(a, args.where) && (!args.where.id?.gt || a.id > args.where.id.gt),
+          )
           .sort((x, y) => x.id.localeCompare(y.id))
           .slice(0, args.take)) as never,
-      count: (async (args: { where: CollectWhere & { id: string } }) => {
+      count: (async (args: { where: CollectableWhere & { id: string } }) => {
         const row = rows.get(args.where.id);
         return row && collectable(row, args.where) ? 1 : 0;
       }) as never,
-      deleteMany: (async (args: { where: CollectWhere & { id: string } }) => {
+      updateMany: (async (args: { where: CollectableWhere; data: Partial<MediaAsset> }) => {
+        const idVal = args.where.id;
+        const targetIds =
+          typeof idVal === 'string'
+            ? [idVal]
+            : idVal && typeof idVal === 'object' && Array.isArray(idVal.in)
+              ? idVal.in
+              : [];
+        let count = 0;
+        for (const targetId of targetIds) {
+          const row = rows.get(targetId);
+          if (!row) continue;
+          if (!collectable(row, args.where)) continue;
+          if (args.data.cleanupClaimedAt !== undefined)
+            row.cleanupClaimedAt = args.data.cleanupClaimedAt;
+          if (args.data.cleanupQuarantineReason !== undefined)
+            row.cleanupQuarantineReason = args.data.cleanupQuarantineReason;
+          count += 1;
+        }
+        return { count };
+      }) as never,
+      deleteMany: (async (args: {
+        where: CollectableWhere & { id: string; cleanupClaimedAt?: { not: null } };
+      }) => {
         const row = rows.get(args.where.id);
         if (opts.raceLoses?.has(args.where.id)) {
           if (row) row.attachedAt = NOW; // attached between the read and the delete
         }
-        if (!row || !collectable(row, args.where)) return { count: 0 };
+        if (!row) return { count: 0 };
+        if (args.where.attachedAt !== undefined && row.attachedAt !== args.where.attachedAt)
+          return { count: 0 };
+        if (args.where.cleanupClaimedAt?.not !== undefined && row.cleanupClaimedAt === null)
+          return { count: 0 };
         rows.delete(args.where.id);
         deletes.push(args.where.id);
         return { count: 1 };
       }) as never,
     },
   };
-  return { client, rows, deletes };
+  return { client, rows, references, deletes };
 }
 
 const noAudit = () => {
@@ -203,15 +321,15 @@ describe('runMediaCleanup: unattached assets', () => {
     assert.equal(existsSync(attachedFiles.derivative), true);
   });
 
-  it('never deletes an asset attached before its files are touched (re-verified first)', async () => {
+  it('never deletes an asset attached before its files are touched (re-verified under FOR UPDATE lock)', async () => {
     const attachedMeanwhile = asset(ID_OLD);
     const files = await putAssetFiles(attachedMeanwhile);
     const { client, rows } = fakeClient([attachedMeanwhile]);
-    // Attached after the scan but before the re-verification.
-    const count = client.mediaAsset.count;
-    (client.mediaAsset as { count: unknown }).count = (async (args: never) => {
+    // Attached after the scan but before the locking claim transaction reads the row.
+    const originalQueryRaw = client.$queryRaw!;
+    client.$queryRaw = (async (...args: unknown[]) => {
       rows.get(ID_OLD)!.attachedAt = NOW;
-      return (count as (a: never) => Promise<number>)(args);
+      return (originalQueryRaw as (...a: unknown[]) => Promise<unknown>)(...args);
     }) as never;
     const result = await runMediaCleanup({
       root,
@@ -222,6 +340,7 @@ describe('runMediaCleanup: unattached assets', () => {
     });
     assert.equal(result.assetsRemoved, 0);
     assert.equal(result.assetsRaced, 0);
+    assert.equal(rows.get(ID_OLD)!.cleanupClaimedAt, null, 'claim was rejected');
     assert.equal(existsSync(files.file), true, 'files untouched');
     assert.equal(existsSync(files.derivative), true);
     assert.equal(rows.has(ID_OLD), true);
@@ -269,11 +388,11 @@ describe('runMediaCleanup: unattached assets', () => {
     assert.equal(result.filesFailed, 0);
   });
 
-  it('refuses to delete outside the root when a row carries a hostile storage key', async () => {
+  it('refuses to delete outside the root when a row carries a hostile storage key and quarantines it without claiming deletion', async () => {
     const victim = path.join(sandbox, 'victim.webp');
     await writeFile(victim, 'keep');
     const hostile = asset(ID_OLD, { storageKey: '../victim.webp' });
-    const { client } = fakeClient([hostile]);
+    const { client, rows } = fakeClient([hostile]);
     const result = await runMediaCleanup({
       root,
       graceMs: GRACE,
@@ -282,15 +401,35 @@ describe('runMediaCleanup: unattached assets', () => {
       recordAudit: noAudit().record,
     });
     assert.equal(existsSync(victim), true);
-    assert.equal(result.filesFailed, 1);
+    assert.equal(result.filesFailed, 0);
+    assert.equal(result.assetsQuarantined, 1);
+    assert.equal(rows.get(ID_OLD)?.cleanupQuarantineReason, 'invalid-path');
+    assert.equal(
+      rows.get(ID_OLD)?.cleanupClaimedAt,
+      null,
+      'invalid path is quarantined without setting cleanupClaimedAt',
+    );
+
+    // Subsequent run skips the quarantined asset
+    const second = await runMediaCleanup({
+      root,
+      graceMs: GRACE,
+      now: NOW,
+      client,
+      recordAudit: noAudit().record,
+    });
+    assert.equal(second.assetsQuarantined, 0);
+    assert.equal(second.assetsRemoved, 0);
   });
 
-  it('does not follow a symlinked parent directory out of the root', async () => {
+  it('does not follow a symlinked parent directory out of the root and quarantines the row', async () => {
     const victimDir = path.join(sandbox, 'victim-dir');
     await mkdir(victimDir);
     await writeFile(path.join(victimDir, `${ID_OLD}.webp`), 'keep');
     await symlink(victimDir, path.join(root, 'photos', 'cerita'));
-    const { client } = fakeClient([asset(ID_OLD, { storageKey: `photos/cerita/${ID_OLD}.webp` })]);
+    const { client, rows } = fakeClient([
+      asset(ID_OLD, { storageKey: `photos/cerita/${ID_OLD}.webp` }),
+    ]);
     const result = await runMediaCleanup({
       root,
       graceMs: GRACE,
@@ -299,7 +438,10 @@ describe('runMediaCleanup: unattached assets', () => {
       recordAudit: noAudit().record,
     });
     assert.equal(existsSync(path.join(victimDir, `${ID_OLD}.webp`)), true);
-    assert.equal(result.filesFailed, 1);
+    assert.equal(result.filesFailed, 0);
+    assert.equal(result.assetsQuarantined, 1);
+    assert.equal(rows.get(ID_OLD)?.cleanupQuarantineReason, 'invalid-path');
+    assert.equal(rows.get(ID_OLD)?.cleanupClaimedAt, null);
   });
 
   it('dry run reports counts and changes nothing', async () => {
@@ -340,11 +482,109 @@ describe('runMediaCleanup: unattached assets', () => {
   });
 });
 
-describe('runMediaCleanup: files before row', () => {
-  it('keeps the row when a file cannot be removed, counts it, and a rerun retries', async () => {
+describe('runMediaCleanup: files before row and irreversible cleanup claim', () => {
+  function txOver(
+    rows: Map<string, MediaAsset>,
+    references: Map<string, StoredRef> = new Map(),
+  ): MediaTransactionClient {
+    const keyOf = (r: StoredRef) => `${r.referenceType}:${r.referenceId}:${r.slot}:${r.assetId}`;
+    return {
+      $queryRaw: async (query: unknown) => {
+        const values = (query as { values?: unknown[] })?.values ?? [];
+        const requestedIds = values.filter((v): v is string => typeof v === 'string');
+        return requestedIds.flatMap((id) => {
+          const row = rows.get(id);
+          if (!row) return [];
+          return [
+            {
+              id: row.id,
+              purpose: row.purpose,
+              attachedAt: row.attachedAt,
+              detachedAt: row.detachedAt,
+              cleanupClaimedAt: row.cleanupClaimedAt,
+              cleanupQuarantineReason: row.cleanupQuarantineReason,
+            },
+          ];
+        });
+      },
+      mediaAsset: {
+        findMany: async (args: { where: { id: { in: string[] } } }) =>
+          args.where.id.in.flatMap((id) => (rows.has(id) ? [rows.get(id)!] : [])),
+        updateMany: async (args: {
+          where: {
+            id: string | { in: string[] };
+            attachedAt?: null | { not: null };
+            cleanupClaimedAt?: null;
+          };
+          data: { attachedAt?: Date | null; detachedAt?: Date | null };
+        }) => {
+          let count = 0;
+          const ids =
+            typeof args.where.id === 'string' ? [args.where.id] : (args.where.id?.in ?? []);
+          for (const id of ids) {
+            const row = rows.get(id);
+            if (!row) continue;
+            if (args.where.cleanupClaimedAt === null && row.cleanupClaimedAt !== null) continue;
+            if (args.where.attachedAt === null && row.attachedAt !== null) continue;
+            if (args.where.attachedAt && row.attachedAt === null) continue;
+            if (args.data.attachedAt !== undefined) row.attachedAt = args.data.attachedAt;
+            if (args.data.detachedAt !== undefined) row.detachedAt = args.data.detachedAt;
+            count += 1;
+          }
+          return { count };
+        },
+        count: async (args: { where: { id: { in: string[] }; cleanupClaimedAt?: null } }) =>
+          args.where.id.in.filter((id) => {
+            const row = rows.get(id);
+            if (!row) return false;
+            if (args.where.cleanupClaimedAt === null && row.cleanupClaimedAt !== null) return false;
+            return true;
+          }).length,
+      },
+      mediaAssetReference: {
+        createMany: async (args: { data: StoredRef[]; skipDuplicates?: boolean }) => {
+          let count = 0;
+          for (const item of args.data) {
+            const k = keyOf(item);
+            if (references.has(k)) {
+              if (args.skipDuplicates) continue;
+              throw new Error(`Duplicate ${k}`);
+            }
+            references.set(k, { ...item });
+            count += 1;
+          }
+          return { count };
+        },
+        deleteMany: async (args: {
+          where: {
+            assetId: { in: string[] };
+            referenceType: string;
+            referenceId: string;
+            slot: string;
+          };
+        }) => {
+          let count = 0;
+          for (const assetId of args.where.assetId.in) {
+            const k = keyOf({
+              assetId,
+              referenceType: args.where.referenceType,
+              referenceId: args.where.referenceId,
+              slot: args.where.slot,
+            });
+            if (references.delete(k)) count += 1;
+          }
+          return { count };
+        },
+        count: async (args: { where: { assetId: string } }) =>
+          [...references.values()].filter((r) => r.assetId === args.where.assetId).length,
+      },
+    } as unknown as MediaTransactionClient;
+  }
+
+  it('keeps cleanupClaimedAt set when a file cannot be removed, blocks attach, and a rerun finishes deletion', async () => {
     const oldAsset = asset(ID_OLD);
     const files = await putAssetFiles(oldAsset);
-    const { client, rows, deletes } = fakeClient([oldAsset]);
+    const { client, rows, references, deletes } = fakeClient([oldAsset]);
     const audit = noAudit();
     const options = { root, graceMs: GRACE, now: NOW, client, recordAudit: audit.record };
 
@@ -364,11 +604,23 @@ describe('runMediaCleanup: files before row', () => {
     assert.equal(first.assetsRetained, 1);
     assert.deepEqual(deletes, [], 'row kept so nothing is orphaned');
     assert.equal(rows.has(ID_OLD), true);
+    assert.equal(
+      rows.get(ID_OLD)?.cleanupClaimedAt?.toISOString(),
+      NOW.toISOString(),
+      'cleanupClaimedAt remains irreversibly set after unlink failure',
+    );
     assert.equal(audit.entries.length, 1, 'failures are audited with counts');
     assert.equal(audit.entries[0]!.metadata?.['filesFailed'], 1);
     assert.equal(audit.entries[0]!.metadata?.['assetsRetained'], 1);
 
-    // Storage becomes healthy again: the rerun picks the same row up and finishes the job.
+    // Attempting to attach the claimed asset after partial unlink failure must fail
+    const tx = txOver(rows, references);
+    await assert.rejects(
+      () => attachMedia(tx, [ID_OLD], { purpose: 'cerita' }, NOW),
+      (err: unknown) => (err as { code?: string })?.code === 'MEDIA_NOT_FOUND',
+    );
+
+    // Storage becomes healthy again: the rerun picks the previously claimed row up and finishes the job.
     await rm(files.file, { recursive: true, force: true });
     const second = await runMediaCleanup(options);
     assert.equal(second.assetsRemoved, 1);
@@ -415,47 +667,19 @@ describe('runMediaCleanup: files before row', () => {
     assert.equal(existsSync(files.file), true);
     assert.equal(existsSync(files.derivative), true);
   });
-});
-
-describe('runMediaCleanup: grace period after detach', () => {
-  function txOver(rows: Map<string, MediaAsset>): MediaTransactionClient {
-    return {
-      $queryRaw: async (query: unknown) => {
-        const values = (query as { values?: unknown[] })?.values ?? [];
-        const requestedIds = values.filter((v): v is string => typeof v === 'string');
-        return requestedIds.filter((id) => rows.has(id)).map((id) => ({ id }));
-      },
-      mediaAsset: {
-        findMany: async (args: { where: { id: { in: string[] } } }) =>
-          args.where.id.in.flatMap((id) => (rows.has(id) ? [rows.get(id)!] : [])),
-        updateMany: async (args: {
-          where: { id: { in: string[] }; attachedAt?: null | { not: null } };
-          data: { attachedAt: Date | null; detachedAt?: Date | null };
-        }) => {
-          let count = 0;
-          for (const id of args.where.id.in) {
-            const row = rows.get(id);
-            if (!row) continue;
-            if (args.where.attachedAt === null && row.attachedAt !== null) continue;
-            if (args.where.attachedAt && row.attachedAt === null) continue;
-            row.attachedAt = args.data.attachedAt;
-            if (args.data.detachedAt !== undefined) row.detachedAt = args.data.detachedAt;
-            count += 1;
-          }
-          return { count };
-        },
-        count: async (args: { where: { id: { in: string[] } } }) =>
-          args.where.id.in.filter((id) => rows.has(id)).length,
-      },
-    } as unknown as MediaTransactionClient;
-  }
 
   it('an old asset detached just now survives cleanup; it goes only after the grace from detachedAt', async () => {
     // Uploaded 48h ago (older than the grace), attached, then swapped out 1h before NOW.
     const old = asset(ID_OLD, { attachedAt: new Date(NOW.getTime() - 40 * HOUR) });
     const files = await putAssetFiles(old);
-    const { client, rows, deletes } = fakeClient([old]);
-    const tx = txOver(rows);
+    const { client, rows, references, deletes } = fakeClient([old]);
+    references.set('default:default:default:' + ID_OLD, {
+      assetId: ID_OLD,
+      referenceType: 'default',
+      referenceId: 'default',
+      slot: 'default',
+    });
+    const tx = txOver(rows, references);
     await detachMedia(tx, [ID_OLD], { purpose: 'cerita' }, new Date(NOW.getTime() - 1 * HOUR));
     const run = (at: Date) =>
       runMediaCleanup({
@@ -479,11 +703,17 @@ describe('runMediaCleanup: grace period after detach', () => {
     assert.equal(existsSync(files.file), false);
   });
 
-  it('an asset re-attached after being detached is never collected', async () => {
+  it('an asset re-attached after being detached (before cleanup claims it) is never collected', async () => {
     const old = asset(ID_OLD, { attachedAt: new Date(NOW.getTime() - 40 * HOUR) });
     const files = await putAssetFiles(old);
-    const { client, rows } = fakeClient([old]);
-    const tx = txOver(rows);
+    const { client, rows, references } = fakeClient([old]);
+    references.set('default:default:default:' + ID_OLD, {
+      assetId: ID_OLD,
+      referenceType: 'default',
+      referenceId: 'default',
+      slot: 'default',
+    });
+    const tx = txOver(rows, references);
     await detachMedia(tx, [ID_OLD], { purpose: 'cerita' }, new Date(NOW.getTime() - 30 * HOUR));
     await attachMedia(tx, [ID_OLD], { purpose: 'cerita' }, new Date(NOW.getTime() - 2 * HOUR));
     assert.equal(rows.get(ID_OLD)!.detachedAt, null);
@@ -528,6 +758,7 @@ describe('runMediaCleanup: audit', () => {
       assetsRemoved: 1,
       filesFailed: 0,
       assetsRetained: 0,
+      assetsQuarantined: 0,
       assetsRaced: 0,
       graceHours: 24,
     });

@@ -421,6 +421,39 @@ describe('media delivery routes', () => {
     assert.equal(res.headers['cache-control'], 'private, no-store');
   });
 
+  it('refuses to serve assets that are claimed for deletion or quarantined', async () => {
+    const deletingPhoto = makeAsset({
+      id: ID,
+      attachedAt: new Date(),
+      cleanupClaimedAt: new Date(),
+    });
+    db.assets.set(deletingPhoto.id, deletingPhoto);
+    await putFile(deletingPhoto.storageKey, 'x');
+
+    const prevRes1 = makeMediaRes();
+    await previewMediaHandler(req(ID), asRes(prevRes1));
+    assert.equal(prevRes1.statusCode, 404);
+
+    const pubRes1 = makeMediaRes();
+    await publicMediaImageHandler(req(ID), asRes(pubRes1));
+    assert.equal(pubRes1.statusCode, 404);
+
+    const quarantinedPhoto = makeAsset({
+      id: ID,
+      attachedAt: new Date(),
+      cleanupQuarantineReason: 'invalid-path',
+    });
+    db.assets.set(quarantinedPhoto.id, quarantinedPhoto);
+
+    const prevRes2 = makeMediaRes();
+    await previewMediaHandler(req(ID), asRes(prevRes2));
+    assert.equal(prevRes2.statusCode, 404);
+
+    const pubRes2 = makeMediaRes();
+    await publicMediaImageHandler(req(ID), asRes(pubRes2));
+    assert.equal(pubRes2.statusCode, 404);
+  });
+
   it('answers a friendly 404 with no path when the file is missing on disk', async () => {
     const asset = makeAsset({ id: ID, attachedAt: new Date() });
     db.assets.set(asset.id, asset);

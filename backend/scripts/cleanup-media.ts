@@ -55,12 +55,15 @@ async function main() {
       (result.filesFailed > 0
         ? ` (${result.filesFailed} file removal(s) failed; ${result.assetsRetained} asset row(s) kept for the next run)`
         : '') +
+      (result.assetsQuarantined > 0
+        ? ` (${result.assetsQuarantined} asset(s) quarantined due to invalid storage paths)`
+        : '') +
       (result.assetsRaced > 0
         ? ` (${result.assetsRaced} asset(s) were attached mid-run and lost their files; see log)`
         : '') +
       '.',
   );
-  if (result.filesFailed > 0 || result.assetsRaced > 0) process.exitCode = 1;
+  if (result.filesFailed > 0) process.exitCode = 1;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

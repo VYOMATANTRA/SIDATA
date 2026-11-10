@@ -202,57 +202,101 @@ export async function ingestStagedUpload(input: IngestInput): Promise<MediaAsset
 // Attach / detach: called by content services INSIDE their own transactions.
 // ---------------------------------------------------------------------------------------------
 
-export type MediaTransactionClient = Pick<Prisma.TransactionClient, 'mediaAsset' | '$queryRaw'>;
+export type MediaTransactionClient = Pick<
+  Prisma.TransactionClient,
+  'mediaAsset' | 'mediaAssetReference' | '$queryRaw'
+>;
+
+export interface MediaReferenceIdentity {
+  type: string;
+  id: string;
+  slot?: string;
+}
 
 export interface MediaAttachContext {
   /** The purpose the referencing content slot accepts. Assets of any other purpose are refused. */
   purpose: MediaPurpose;
+  /** Stable server-owned identity of the content item and slot referencing the asset. */
+  reference?: MediaReferenceIdentity;
 }
 
-async function loadAndCheck(
-  tx: MediaTransactionClient,
-  assetIds: readonly string[],
-  context: MediaAttachContext,
-): Promise<string[]> {
-  const ids = [...new Set(assetIds)];
-  if (ids.length === 0) return ids;
-  if (!ids.every(isValidAssetId)) {
-    throw new MediaServiceError('MEDIA_NOT_FOUND', 'Media tidak ditemukan.', 400);
+export interface LockedMediaAssetRow {
+  id: string;
+  purpose: string;
+  attachedAt: Date | null;
+  detachedAt: Date | null;
+  cleanupClaimedAt: Date | null;
+  cleanupQuarantineReason: string | null;
+}
+
+interface NormalizedMediaReference {
+  referenceType: string;
+  referenceId: string;
+  slot: string;
+}
+
+function normalizeReference(reference?: MediaReferenceIdentity): NormalizedMediaReference {
+  const raw = reference ?? { type: 'default', id: 'default', slot: 'default' };
+  const referenceType = typeof raw.type === 'string' ? raw.type.trim() : '';
+  const referenceId = typeof raw.id === 'string' ? raw.id.trim() : '';
+  const slot = typeof (raw.slot ?? 'default') === 'string' ? (raw.slot ?? 'default').trim() : '';
+  if (
+    !referenceType ||
+    referenceType.length > 64 ||
+    !referenceId ||
+    referenceId.length > 191 ||
+    !slot ||
+    slot.length > 64
+  ) {
+    throw new MediaServiceError('INVALID_MEDIA_REFERENCE', 'Referensi media tidak valid.', 400);
   }
-  const sorted = [...ids].sort();
-  const locked = await tx.$queryRaw<Array<{ id: string }>>(
-    Prisma.sql`SELECT id FROM media_assets WHERE id IN (${Prisma.join(sorted)}) FOR UPDATE`,
-  );
-  if (locked.length !== sorted.length) {
-    throw new MediaServiceError('MEDIA_NOT_FOUND', 'Media tidak ditemukan.', 400);
-  }
-  const assets = await tx.mediaAsset.findMany({ where: { id: { in: sorted } } });
-  if (assets.length !== sorted.length) {
-    throw new MediaServiceError('MEDIA_NOT_FOUND', 'Media tidak ditemukan.', 400);
-  }
-  if (!isMediaPurpose(context.purpose) || assets.some((a) => a.purpose !== context.purpose)) {
-    throw new MediaServiceError(
-      'MEDIA_PURPOSE_MISMATCH',
-      'Media tidak sesuai dengan tujuan penggunaannya.',
-      400,
-    );
-  }
-  return sorted;
+  return { referenceType, referenceId, slot };
 }
 
 /**
- * Publishes assets: sets attachedAt so the public delivery routes start serving them. Validates
- * that every id exists and was uploaded for `context.purpose`. Idempotent for already-attached
- * assets (their original attachedAt is kept). Throws MediaServiceError (400) otherwise, which
- * rolls back the caller's transaction.
+ * Acquires exclusive `FOR UPDATE` row locks in ascending ID order and reads current column values
+ * directly from the locking query so InnoDB REPEATABLE READ never returns a stale snapshot.
+ */
+async function lockAssetsForUpdate(
+  tx: MediaTransactionClient,
+  sortedIds: readonly string[],
+): Promise<LockedMediaAssetRow[]> {
+  const locked = await tx.$queryRaw<Array<Partial<LockedMediaAssetRow> & { id: string }>>(
+    Prisma.sql`SELECT id, purpose, attached_at AS attachedAt, detached_at AS detachedAt, cleanup_claimed_at AS cleanupClaimedAt, cleanup_quarantine_reason AS cleanupQuarantineReason FROM media_assets WHERE id IN (${Prisma.join(sortedIds)}) FOR UPDATE`,
+  );
+  if (locked.length === 0) return [];
+  if (locked.every((row) => 'attachedAt' in row && 'purpose' in row)) {
+    return locked.map((row) => ({
+      id: row.id,
+      purpose: row.purpose ?? '',
+      attachedAt: row.attachedAt ?? null,
+      detachedAt: row.detachedAt ?? null,
+      cleanupClaimedAt: row.cleanupClaimedAt ?? null,
+      cleanupQuarantineReason: row.cleanupQuarantineReason ?? null,
+    }));
+  }
+  const existingIds = locked.map((r) => r.id);
+  const assets = await tx.mediaAsset.findMany({ where: { id: { in: existingIds } } });
+  return assets.map((a) => ({
+    id: a.id,
+    purpose: a.purpose,
+    attachedAt: a.attachedAt,
+    detachedAt: a.detachedAt,
+    cleanupClaimedAt: a.cleanupClaimedAt ?? null,
+    cleanupQuarantineReason: a.cleanupQuarantineReason ?? null,
+  }));
+}
+
+/**
+ * Publishes assets: records the reference tuple in `media_asset_references` and sets `attachedAt`
+ * so the public delivery routes start serving them. Validates that every id exists, has not been
+ * claimed for deletion or quarantined, and was uploaded for `context.purpose`.
  *
- * `loadAndCheck` acquires an exclusive row lock (`SELECT id ... FOR UPDATE`) in ascending id order
- * across all targets. Under InnoDB REPEATABLE READ, this row lock serializes concurrent attachments,
- * detachments, and cleanup's `deleteMany` operations, avoiding concurrency races and deadlock.
- *
- * The recount below is retained as defense-in-depth: if an unattached row was deleted by cleanup
- * before this transaction acquired the row lock, the recount detects the missing row and triggers
- * a rollback instead of leaving a dangling reference.
+ * Reference ownership (SPEC.md §7): repeated attachment of the same
+ * `(referenceType, referenceId, slot, assetId)` tuple is an idempotent no-op. Attaching an
+ * unattached asset sets `attachedAt = now` and clears `detachedAt`; attaching an already-attached
+ * asset preserves its original `attachedAt`. Throws MediaServiceError (400) otherwise, which rolls
+ * back the caller's transaction.
  */
 export async function attachMedia(
   tx: MediaTransactionClient,
@@ -260,28 +304,83 @@ export async function attachMedia(
   context: MediaAttachContext,
   now: Date = new Date(),
 ): Promise<void> {
-  const ids = await loadAndCheck(tx, assetIds, context);
+  const ids = [...new Set(assetIds)];
   if (ids.length === 0) return;
+  if (!ids.every(isValidAssetId)) {
+    throw new MediaServiceError('MEDIA_NOT_FOUND', 'Media tidak ditemukan.', 400);
+  }
+  if (!isMediaPurpose(context.purpose)) {
+    throw new MediaServiceError(
+      'MEDIA_PURPOSE_MISMATCH',
+      'Media tidak sesuai dengan tujuan penggunaannya.',
+      400,
+    );
+  }
+  const ref = normalizeReference(context.reference);
 
-  await tx.mediaAsset.updateMany({
-    where: { id: { in: ids }, attachedAt: null },
-    // detachedAt is cleared too: a re-attached asset is no longer in its cleanup grace period.
-    data: { attachedAt: now, detachedAt: null },
+  const sorted = [...ids].sort();
+  const assets = await lockAssetsForUpdate(tx, sorted);
+  if (
+    assets.length !== sorted.length ||
+    assets.some((a) => a.cleanupClaimedAt !== null || a.cleanupQuarantineReason !== null)
+  ) {
+    throw new MediaServiceError('MEDIA_NOT_FOUND', 'Media tidak ditemukan.', 400);
+  }
+
+  if (assets.some((a) => a.purpose !== context.purpose)) {
+    throw new MediaServiceError(
+      'MEDIA_PURPOSE_MISMATCH',
+      'Media tidak sesuai dengan tujuan penggunaannya.',
+      400,
+    );
+  }
+
+  await tx.mediaAssetReference.createMany({
+    data: sorted.map((assetId) => ({
+      assetId,
+      referenceType: ref.referenceType,
+      referenceId: ref.referenceId,
+      slot: ref.slot,
+    })),
+    skipDuplicates: true,
   });
 
-  // Defense-in-depth recount: ensure no row was concurrently removed before the lock.
-  const stillThere = await tx.mediaAsset.count({ where: { id: { in: ids } } });
-  if (stillThere !== ids.length) {
+  const unattachedIds = assets.filter((a) => a.attachedAt === null).map((a) => a.id);
+  if (unattachedIds.length > 0) {
+    await tx.mediaAsset.updateMany({
+      where: { id: { in: unattachedIds }, cleanupClaimedAt: null },
+      data: { attachedAt: now, detachedAt: null },
+    });
+  }
+
+  const attachedWithDetachedIds = assets
+    .filter((a) => a.attachedAt !== null && a.detachedAt !== null)
+    .map((a) => a.id);
+  if (attachedWithDetachedIds.length > 0) {
+    await tx.mediaAsset.updateMany({
+      where: { id: { in: attachedWithDetachedIds }, cleanupClaimedAt: null },
+      data: { detachedAt: null },
+    });
+  }
+
+  // Defense-in-depth recount: ensure no row was concurrently claimed or removed.
+  const stillThere = await tx.mediaAsset.count({
+    where: { id: { in: sorted }, cleanupClaimedAt: null },
+  });
+  if (stillThere !== sorted.length) {
     throw new MediaServiceError('MEDIA_NOT_FOUND', 'Media tidak ditemukan.', 400);
   }
 }
 
 /**
- * Takes assets back out of public delivery (attachedAt = null) and stamps detachedAt. The next
- * `media:cleanup` run removes them once COALESCE(detachedAt, createdAt) is older than its grace
- * period — measured from the detach, not the upload, so an old asset that content just swapped
- * out keeps its full grace period (e.g. to undo the change). Already-unattached assets keep
- * their existing detachedAt, so repeating a detach never extends the clock.
+ * Removes the matching `(referenceType, referenceId, slot, assetId)` tuple from
+ * `media_asset_references`. When an attached asset's remaining reference count reaches 0, takes
+ * the asset out of public delivery (`attachedAt = null`) and stamps `detachedAt = now`. While at
+ * least one other reference remains, `attachedAt` stays non-null.
+ *
+ * If an asset ID was already deleted by cleanup, detachMedia treats it as a no-op instead of throwing
+ * MEDIA_NOT_FOUND, allowing content referencing deleted assets to clean up references gracefully.
+ * Already-unattached assets keep their existing detachedAt, so repeating a detach never extends the clock.
  */
 export async function detachMedia(
   tx: MediaTransactionClient,
@@ -289,10 +388,55 @@ export async function detachMedia(
   context: MediaAttachContext,
   now: Date = new Date(),
 ): Promise<void> {
-  const ids = await loadAndCheck(tx, assetIds, context);
+  const ids = [...new Set(assetIds)];
   if (ids.length === 0) return;
-  await tx.mediaAsset.updateMany({
-    where: { id: { in: ids }, attachedAt: { not: null } },
-    data: { attachedAt: null, detachedAt: now },
+  if (!ids.every(isValidAssetId)) {
+    throw new MediaServiceError('MEDIA_NOT_FOUND', 'Media tidak ditemukan.', 400);
+  }
+  if (!isMediaPurpose(context.purpose)) {
+    throw new MediaServiceError(
+      'MEDIA_PURPOSE_MISMATCH',
+      'Media tidak sesuai dengan tujuan penggunaannya.',
+      400,
+    );
+  }
+  const ref = normalizeReference(context.reference);
+
+  const sorted = [...ids].sort();
+  const assets = await lockAssetsForUpdate(tx, sorted);
+  if (assets.length === 0) return;
+
+  if (assets.some((a) => a.purpose !== context.purpose)) {
+    throw new MediaServiceError(
+      'MEDIA_PURPOSE_MISMATCH',
+      'Media tidak sesuai dengan tujuan penggunaannya.',
+      400,
+    );
+  }
+
+  const existingIds = assets.map((a) => a.id);
+  await tx.mediaAssetReference.deleteMany({
+    where: {
+      assetId: { in: existingIds },
+      referenceType: ref.referenceType,
+      referenceId: ref.referenceId,
+      slot: ref.slot,
+    },
   });
+
+  for (const asset of assets) {
+    if (asset.attachedAt === null) {
+      // Already unattached: leave detachedAt untouched so cleanup clock does not move.
+      continue;
+    }
+    const remainingReferences = await tx.mediaAssetReference.count({
+      where: { assetId: asset.id },
+    });
+    if (remainingReferences === 0) {
+      await tx.mediaAsset.updateMany({
+        where: { id: asset.id },
+        data: { attachedAt: null, detachedAt: now },
+      });
+    }
+  }
 }

@@ -126,6 +126,7 @@ export const uploadMediaHandler = async (
 };
 
 function isServable(asset: MediaAsset, kind: ServeKind): boolean {
+  if (asset.cleanupClaimedAt !== null || asset.cleanupQuarantineReason !== null) return false;
   switch (kind) {
     case 'preview':
       return true;

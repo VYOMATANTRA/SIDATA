@@ -32,6 +32,8 @@ export function makeAsset(overrides: Partial<MediaAsset> = {}): MediaAsset {
     createdAt: new Date('2026-01-01T00:00:00Z'),
     attachedAt: null,
     detachedAt: null,
+    cleanupClaimedAt: null,
+    cleanupQuarantineReason: null,
     ...overrides,
   };
 }

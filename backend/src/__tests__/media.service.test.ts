@@ -431,15 +431,43 @@ describe('attachMedia / detachMedia', () => {
   const ID_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const ID_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
-  function fakeTx(assets: ReturnType<typeof makeAsset>[]) {
+  interface StoredReference {
+    assetId: string;
+    referenceType: string;
+    referenceId: string;
+    slot: string;
+  }
+
+  function refKey(r: StoredReference): string {
+    return `${r.referenceType}:${r.referenceId}:${r.slot}:${r.assetId}`;
+  }
+
+  function fakeTx(assets: ReturnType<typeof makeAsset>[], initialRefs: StoredReference[] = []) {
     const rows = new Map(assets.map((a) => [a.id, { ...a }]));
+    const references = new Map<string, StoredReference>();
+    for (const r of initialRefs) {
+      references.set(refKey(r), { ...r });
+    }
     const calls: Array<{ method: string; args: unknown }> = [];
     const tx = {
       $queryRaw: async (query: unknown) => {
         calls.push({ method: '$queryRaw', args: query });
         const values = (query as { values?: unknown[] })?.values ?? [];
         const requestedIds = values.filter((v): v is string => typeof v === 'string');
-        return requestedIds.filter((id) => rows.has(id)).map((id) => ({ id }));
+        return requestedIds.flatMap((id) => {
+          const row = rows.get(id);
+          if (!row) return [];
+          return [
+            {
+              id: row.id,
+              purpose: row.purpose,
+              attachedAt: row.attachedAt,
+              detachedAt: row.detachedAt,
+              cleanupClaimedAt: row.cleanupClaimedAt,
+              cleanupQuarantineReason: row.cleanupQuarantineReason,
+            },
+          ];
+        });
       },
       mediaAsset: {
         findMany: async (args: { where: { id: { in: string[] } } }) => {
@@ -447,14 +475,21 @@ describe('attachMedia / detachMedia', () => {
           return args.where.id.in.flatMap((id) => (rows.has(id) ? [rows.get(id)!] : []));
         },
         updateMany: async (args: {
-          where: { id: { in: string[] }; attachedAt?: null | { not: null } };
-          data: { attachedAt: Date | null; detachedAt?: Date | null };
+          where: {
+            id: string | { in: string[] };
+            attachedAt?: null | { not: null };
+            cleanupClaimedAt?: null;
+          };
+          data: { attachedAt?: Date | null; detachedAt?: Date | null };
         }) => {
           calls.push({ method: 'updateMany', args });
           let count = 0;
-          for (const id of args.where.id.in) {
+          const ids =
+            typeof args.where.id === 'string' ? [args.where.id] : (args.where.id?.in ?? []);
+          for (const id of ids) {
             const row = rows.get(id);
             if (!row) continue;
+            if (args.where.cleanupClaimedAt === null && row.cleanupClaimedAt !== null) continue;
             if (args.where.attachedAt === null && row.attachedAt !== null) continue;
             if (
               args.where.attachedAt !== undefined &&
@@ -463,20 +498,69 @@ describe('attachMedia / detachMedia', () => {
             ) {
               continue;
             }
-            row.attachedAt = args.data.attachedAt;
+            if (args.data.attachedAt !== undefined) row.attachedAt = args.data.attachedAt;
             if (args.data.detachedAt !== undefined) row.detachedAt = args.data.detachedAt;
             count += 1;
           }
           return { count };
         },
-        count: async (args: { where: { id: { in: string[] } } }) =>
-          args.where.id.in.filter((id) => rows.has(id)).length,
+        count: async (args: { where: { id: { in: string[] }; cleanupClaimedAt?: null } }) =>
+          args.where.id.in.filter((id) => {
+            const row = rows.get(id);
+            if (!row) return false;
+            if (args.where.cleanupClaimedAt === null && row.cleanupClaimedAt !== null) return false;
+            return true;
+          }).length,
+      },
+      mediaAssetReference: {
+        createMany: async (args: { data: StoredReference[]; skipDuplicates?: boolean }) => {
+          calls.push({ method: 'reference.createMany', args });
+          let count = 0;
+          for (const item of args.data) {
+            const key = refKey(item);
+            if (references.has(key)) {
+              if (args.skipDuplicates) continue;
+              throw new Error(`Duplicate reference tuple ${key}`);
+            }
+            references.set(key, { ...item });
+            count += 1;
+          }
+          return { count };
+        },
+        deleteMany: async (args: {
+          where: {
+            assetId: { in: string[] };
+            referenceType: string;
+            referenceId: string;
+            slot: string;
+          };
+        }) => {
+          calls.push({ method: 'reference.deleteMany', args });
+          let count = 0;
+          for (const assetId of args.where.assetId.in) {
+            const key = refKey({
+              assetId,
+              referenceType: args.where.referenceType,
+              referenceId: args.where.referenceId,
+              slot: args.where.slot,
+            });
+            if (references.delete(key)) count += 1;
+          }
+          return { count };
+        },
+        count: async (args: { where: { assetId: string } }) => {
+          let count = 0;
+          for (const ref of references.values()) {
+            if (ref.assetId === args.where.assetId) count += 1;
+          }
+          return count;
+        },
       },
     };
-    return { tx: tx as unknown as MediaTransactionClient, rows, calls };
+    return { tx: tx as unknown as MediaTransactionClient, rows, references, calls };
   }
 
-  it('executes $queryRaw first with sorted ids to acquire row locks FOR UPDATE', async () => {
+  it('executes $queryRaw first with sorted ids to acquire row locks FOR UPDATE and reads current columns', async () => {
     const { tx, calls } = fakeTx([
       makeAsset({ id: ID_A, purpose: 'cerita' }),
       makeAsset({ id: ID_B, purpose: 'cerita' }),
@@ -485,7 +569,11 @@ describe('attachMedia / detachMedia', () => {
     assert.equal(calls[0]?.method, '$queryRaw');
     const query = calls[0].args as { values?: unknown[] };
     assert.deepEqual(query.values, [ID_A, ID_B]);
-    assert.equal(calls[1]?.method, 'findMany');
+    assert.equal(
+      calls.some((c) => c.method === 'findMany'),
+      false,
+      'must use current locking read from FOR UPDATE rather than snapshot findMany',
+    );
   });
 
   it('sets attachedAt for assets whose purpose matches the context', async () => {
@@ -525,7 +613,7 @@ describe('attachMedia / detachMedia', () => {
     );
   });
 
-  it('refuses unknown ids, malformed ids and unknown purposes', async () => {
+  it('refuses unknown ids, malformed ids, invalid references, and unknown purposes', async () => {
     const { tx } = fakeTx([makeAsset({ id: ID_A })]);
     await assert.rejects(
       () => attachMedia(tx, [ID_B], { purpose: 'cerita' }),
@@ -539,6 +627,14 @@ describe('attachMedia / detachMedia', () => {
       () => attachMedia(tx, [ID_A], { purpose: 'nope' as never }),
       (e: unknown) => e instanceof MediaServiceError && e.code === 'MEDIA_PURPOSE_MISMATCH',
     );
+    await assert.rejects(
+      () =>
+        attachMedia(tx, [ID_A], {
+          purpose: 'cerita',
+          reference: { type: '   ', id: 'item-1' },
+        }),
+      (e: unknown) => e instanceof MediaServiceError && e.code === 'INVALID_MEDIA_REFERENCE',
+    );
   });
 
   it('is a no-op for an empty id list', async () => {
@@ -547,7 +643,7 @@ describe('attachMedia / detachMedia', () => {
     assert.equal(calls.length, 0);
   });
 
-  it('fails (rolling the caller back) when cleanup deleted a row mid-attach', async () => {
+  it('fails (rolling the caller back) when cleanup claimed or deleted a row mid-attach', async () => {
     const { tx, rows } = fakeTx([makeAsset({ id: ID_A })]);
     const original = tx.mediaAsset.updateMany;
     (tx.mediaAsset as { updateMany: unknown }).updateMany = async (args: never) => {
@@ -560,8 +656,11 @@ describe('attachMedia / detachMedia', () => {
     );
   });
 
-  it('detachMedia clears attachedAt and also enforces the purpose', async () => {
-    const { tx, rows } = fakeTx([makeAsset({ id: ID_A, attachedAt: new Date() })]);
+  it('detachMedia clears attachedAt when the last reference is removed and enforces purpose', async () => {
+    const { tx, rows } = fakeTx(
+      [makeAsset({ id: ID_A, attachedAt: new Date() })],
+      [{ assetId: ID_A, referenceType: 'default', referenceId: 'default', slot: 'default' }],
+    );
     await assert.rejects(
       () => detachMedia(tx, [ID_A], { purpose: 'portal-hero' }),
       (e: unknown) => e instanceof MediaServiceError && e.code === 'MEDIA_PURPOSE_MISMATCH',
@@ -587,5 +686,89 @@ describe('attachMedia / detachMedia', () => {
     await attachMedia(tx, [ID_A], { purpose: 'cerita' }, new Date('2026-07-02T00:00:00Z'));
     assert.notEqual(rows.get(ID_A)!.attachedAt, null);
     assert.equal(rows.get(ID_A)!.detachedAt, null);
+  });
+
+  it('repeated attachment of the same (referenceType, referenceId, slot, assetId) is a no-op', async () => {
+    const { tx, rows, references } = fakeTx([makeAsset({ id: ID_A, purpose: 'cerita' })]);
+    const ref = { type: 'content_block', id: 'item-1', slot: 'hero' };
+    const t1 = new Date('2026-08-01T00:00:00Z');
+    const t2 = new Date('2026-08-02T00:00:00Z');
+
+    await attachMedia(tx, [ID_A], { purpose: 'cerita', reference: ref }, t1);
+    assert.equal(references.size, 1);
+    assert.equal(rows.get(ID_A)!.attachedAt?.toISOString(), t1.toISOString());
+
+    // Repeated attach of the exact same reference tuple is a complete no-op
+    await attachMedia(tx, [ID_A], { purpose: 'cerita', reference: ref }, t2);
+    assert.equal(references.size, 1, 'reference count stays 1 on duplicate attach');
+    assert.equal(
+      rows.get(ID_A)!.attachedAt?.toISOString(),
+      t1.toISOString(),
+      'original attachedAt preserved',
+    );
+
+    // A single detach transitions the asset to detached
+    const t3 = new Date('2026-08-03T00:00:00Z');
+    await detachMedia(tx, [ID_A], { purpose: 'cerita', reference: ref }, t3);
+    assert.equal(references.size, 0);
+    assert.equal(rows.get(ID_A)!.attachedAt, null);
+    assert.equal(rows.get(ID_A)!.detachedAt?.toISOString(), t3.toISOString());
+  });
+
+  it('shared asset referenced by two distinct content items stays published until last reference detaches', async () => {
+    const { tx, rows, references } = fakeTx([makeAsset({ id: ID_A, purpose: 'cerita' })]);
+    const ref1 = { type: 'content_block', id: 'item-1', slot: 'photo' };
+    const ref2 = { type: 'content_block', id: 'item-2', slot: 'photo' };
+    const t1 = new Date('2026-08-01T00:00:00Z');
+    const t2 = new Date('2026-08-02T00:00:00Z');
+
+    await attachMedia(tx, [ID_A], { purpose: 'cerita', reference: ref1 }, t1);
+    await attachMedia(tx, [ID_A], { purpose: 'cerita', reference: ref2 }, t2);
+    assert.equal(references.size, 2);
+    assert.equal(rows.get(ID_A)!.attachedAt?.toISOString(), t1.toISOString());
+
+    // Detaching item-1 leaves item-2 active and the asset published
+    const t3 = new Date('2026-08-03T00:00:00Z');
+    await detachMedia(tx, [ID_A], { purpose: 'cerita', reference: ref1 }, t3);
+    assert.equal(references.size, 1);
+    assert.equal(rows.get(ID_A)!.attachedAt?.toISOString(), t1.toISOString());
+    assert.equal(rows.get(ID_A)!.detachedAt, null);
+
+    // Repeating detach for item-1 is idempotent and does not remove item-2's reference
+    await detachMedia(tx, [ID_A], { purpose: 'cerita', reference: ref1 }, t3);
+    assert.equal(references.size, 1);
+    assert.equal(rows.get(ID_A)!.attachedAt?.toISOString(), t1.toISOString());
+
+    // Detaching item-2 removes the last reference, unpublishes the asset, and stamps detachedAt
+    const t4 = new Date('2026-08-04T00:00:00Z');
+    await detachMedia(tx, [ID_A], { purpose: 'cerita', reference: ref2 }, t4);
+    assert.equal(references.size, 0);
+    assert.equal(rows.get(ID_A)!.attachedAt, null);
+    assert.equal(rows.get(ID_A)!.detachedAt?.toISOString(), t4.toISOString());
+  });
+
+  it('detachMedia succeeds as a no-op when an asset ID was already deleted by cleanup', async () => {
+    const { tx } = fakeTx([]);
+    // ID_A does not exist in rows
+    await detachMedia(tx, [ID_A], { purpose: 'cerita' });
+    // Succeeded without throwing MEDIA_NOT_FOUND
+  });
+
+  it('attachMedia rejects an asset that is claimed for deletion or quarantined', async () => {
+    const { tx: txDel } = fakeTx([
+      makeAsset({ id: ID_A, cleanupClaimedAt: new Date('2026-08-01T00:00:00Z') }),
+    ]);
+    await assert.rejects(
+      () => attachMedia(txDel, [ID_A], { purpose: 'cerita' }),
+      (e: unknown) => e instanceof MediaServiceError && e.code === 'MEDIA_NOT_FOUND',
+    );
+
+    const { tx: txQuar } = fakeTx([
+      makeAsset({ id: ID_A, cleanupQuarantineReason: 'invalid-path' }),
+    ]);
+    await assert.rejects(
+      () => attachMedia(txQuar, [ID_A], { purpose: 'cerita' }),
+      (e: unknown) => e instanceof MediaServiceError && e.code === 'MEDIA_NOT_FOUND',
+    );
   });
 });
