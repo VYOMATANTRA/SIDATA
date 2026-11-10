@@ -69,6 +69,17 @@ async function closeAndRestoreFocus() {
   toggleButtonRef.value?.focus();
 }
 
+async function handleNavigateClose() {
+  const pathBefore = route?.path;
+  closeMenu();
+  await nextTick();
+  // When a link for the current active route is clicked, no cross-route transition occurred.
+  // Restore focus to the toggle button so focus is never lost to body.
+  if (route?.path === pathBefore) {
+    toggleButtonRef.value?.focus();
+  }
+}
+
 // Focus in on open, Tab/Shift+Tab trapped inside the sheet and Escape to close. Only active while
 // the menu is a modal sheet, so the desktop disclosure never traps focus (WCAG 2.1.2).
 useDrawerFocusTrap({
@@ -240,6 +251,7 @@ const hamburgerBarClasses = computed(() => (isLight.value ? 'bg-white' : 'bg-bra
             aria-controls="primary-navigation-menu"
             :aria-label="isMenuOpen ? 'Tutup menu navigasi' : 'Buka menu navigasi'"
             data-test="hamburger-btn"
+            data-testid="public-nav-mobile-toggle"
             @click="toggleMenu"
           >
             <div class="flex w-6 flex-col justify-center gap-[5px]" aria-hidden="true">
@@ -313,7 +325,7 @@ const hamburgerBarClasses = computed(() => (isLight.value ? 'bg-white' : 'bg-bra
             </div>
 
             <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 md:py-4">
-              <slot name="menu" :close="closeMenu" :open="isMenuOpen" />
+              <slot name="menu" :close="handleNavigateClose" :open="isMenuOpen" />
             </div>
           </div>
         </transition>
