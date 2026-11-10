@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, provide, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import AppNavbar from '../components/common/AppNavbar.vue';
 import AppFooter from '../components/common/AppFooter.vue';
@@ -53,6 +53,11 @@ const inertWhenMenuModal = computed(() =>
 // changes that views use to sync filters), unless the view already placed focus inside <main> or
 // the user is typing in a field or focus sits inside a modal dialog.
 const mainRef = ref<HTMLElement | null>(null);
+let isUnmounted = false;
+
+onBeforeUnmount(() => {
+  isUnmounted = true;
+});
 
 function isEditable(el: Element | null): boolean {
   if (!(el instanceof HTMLElement)) return false;
@@ -74,6 +79,7 @@ watch(
     if (newSeq === undefined || newSeq === 0 || newSeq === oldSeq) return;
     await nextTick();
     await nextTick();
+    if (isUnmounted || props.navigationSeq !== newSeq) return;
     focusMain();
   },
 );
@@ -90,8 +96,10 @@ onMounted(async () => {
   // Branding and footer contact details come from the same public settings on every route.
   void settingsStore.fetchPublicSettings().catch(() => {});
   if (props.focusOnMount || (props.navigationSeq ?? 0) > 0) {
+    const seqAtMount = props.navigationSeq;
     await nextTick();
     await nextTick();
+    if (isUnmounted || props.navigationSeq !== seqAtMount) return;
     focusMain();
   }
 });

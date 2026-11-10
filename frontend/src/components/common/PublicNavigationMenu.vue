@@ -96,6 +96,19 @@ function linkClasses(to: string): string[] {
 
 const BUTTON_BASE =
   'rounded-btn inline-flex min-h-11 items-center justify-center px-5 py-2 text-base font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring-inverse';
+
+function handleLinkClick(event: MouseEvent) {
+  if (
+    (event.button !== undefined && event.button !== 0) ||
+    event.metaKey ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.shiftKey
+  ) {
+    return;
+  }
+  emit('navigate');
+}
 </script>
 
 <template>
@@ -107,7 +120,7 @@ const BUTTON_BASE =
           :class="linkClasses(NAV_HOME_ITEM.to)"
           :aria-current="isDestinationActive(NAV_HOME_ITEM.to, currentPath) ? 'page' : undefined"
           data-test="menu-link-home"
-          @click="emit('navigate')"
+          @click="handleLinkClick"
         >
           {{ NAV_HOME_ITEM.label }}
         </RouterLink>
@@ -139,7 +152,7 @@ const BUTTON_BASE =
               :to="item.to"
               :class="linkClasses(item.to)"
               :aria-current="isDestinationActive(item.to, currentPath) ? 'page' : undefined"
-              @click="emit('navigate')"
+              @click="handleLinkClick"
             >
               {{ item.label }}
             </RouterLink>
@@ -171,7 +184,7 @@ const BUTTON_BASE =
               :to="adminEntry.to"
               :class="[BUTTON_BASE, 'border border-white/40 text-white hover:bg-white/10']"
               data-test="menu-admin-link"
-              @click="emit('navigate')"
+              @click="handleLinkClick"
             >
               Kelola Konten
             </RouterLink>
@@ -203,7 +216,7 @@ const BUTTON_BASE =
         to="/login"
         :class="[BUTTON_BASE, 'text-brand-navy hover:bg-surface-hover w-full bg-white md:w-auto']"
         data-test="menu-login-link"
-        @click="emit('navigate')"
+        @click="handleLinkClick"
       >
         Masuk
       </RouterLink>
