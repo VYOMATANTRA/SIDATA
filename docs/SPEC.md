@@ -166,7 +166,9 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
     returns the fresh target and parent tokens. `DELETE /api/pages/:slug`
     requires it too (400 when missing or invalid), so a stale tab cannot delete a page that gained new
     chapters. The one exception kept for existing clients: `PATCH /api/content-blocks/:slug` accepts
-    `expectedUpdatedAt` optionally and enforces it when present. The existing page-list reorder has no parent
+    `expectedUpdatedAt` optionally and enforces it when present; whereas `PATCH /api/comparison-templates/:id`
+    requires `expectedUpdatedAt` (ISO 8601 timestamp from `GET /api/comparison-templates` `updatedAt`) and
+    returns `409` with code `STALE_WRITE` on mismatch. The existing page-list reorder has no parent
     and takes none.
   - **Locking.** Locks are taken parent-first (page → chapter → section → block) and children in ascending id
     order, so concurrent authoring cannot deadlock. A no-op reorder, and a retitle to the same title, write
