@@ -186,7 +186,7 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw apiErrorFromBody(res.status, body, 'PUT');
+        throw apiErrorFromBody(res.status, body, 'PATCH');
       }
 
       const data = await res.json().catch(() => null);
