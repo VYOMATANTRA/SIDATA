@@ -780,6 +780,7 @@ describe('comparisonTemplates.service createComparisonTemplate', () => {
 
 describe('comparisonTemplates.service updateComparisonTemplate', () => {
   const update = (payload: unknown, id: unknown = 'tpl-1') => {
+    const storedRow = stored as { updatedAt?: Date } | null;
     const fullPayload =
       payload &&
       typeof payload === 'object' &&
@@ -787,7 +788,7 @@ describe('comparisonTemplates.service updateComparisonTemplate', () => {
       !('expectedUpdatedAt' in payload)
         ? {
             expectedUpdatedAt: (
-              stored?.updatedAt ?? new Date('2026-01-02T00:00:00.000Z')
+              storedRow?.updatedAt ?? new Date('2026-01-02T00:00:00.000Z')
             ).toISOString(),
             ...payload,
           }
