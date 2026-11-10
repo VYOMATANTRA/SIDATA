@@ -67,6 +67,18 @@ describe('schema contract', () => {
         assert.ok(schemaTables.includes(table), `grants script lists unknown table ${table}`);
       }
     });
+
+    it('conditionally revokes the blanket db-level grant via SCHEMA_PRIVILEGES so re-runs are idempotent', () => {
+      assert.doesNotMatch(grantsSql, /^GRANT\s+.*\s+ON\s+`<DB_NAME>`\.\*/m);
+      assert.match(grantsSql, /FROM information_schema\.SCHEMA_PRIVILEGES/);
+      assert.match(
+        grantsSql,
+        /REVOKE ALL PRIVILEGES ON `<DB_NAME>`\.\* FROM ''<APP_DB_USER>''@''<APP_DB_HOST>''/,
+      );
+      assert.match(grantsSql, /PREPARE revoke_db_grant_stmt FROM @revoke_db_grant_sql;/);
+      assert.match(grantsSql, /EXECUTE revoke_db_grant_stmt;/);
+      assert.match(grantsSql, /DEALLOCATE PREPARE revoke_db_grant_stmt;/);
+    });
   });
 
   describe('add_comparison_templates migration', () => {

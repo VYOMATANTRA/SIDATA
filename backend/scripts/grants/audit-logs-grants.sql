@@ -33,10 +33,24 @@
 --                    specific host/CIDR in a VPS deployment with a locked-down MySQL bind.
 --   <DB_NAME>      — the value of MYSQL_DATABASE (e.g. sidata)
 
--- 1. Remove the blanket database-level grant. This is the step that requires replacing it with
---    the explicit per-table grants below in the SAME script run — until step 2 runs, the app
---    has no access to the database at all.
-REVOKE ALL PRIVILEGES ON `<DB_NAME>`.* FROM '<APP_DB_USER>'@'<APP_DB_HOST>';
+-- 1. Remove the blanket database-level grant when present. MySQL 8.4 returns ERROR 1141 (42000)
+--    on REVOKE if the database-level grant row in mysql.db was already removed on a previous run
+--    of this script. Checking information_schema.SCHEMA_PRIVILEGES first makes repeated executions
+--    idempotent without temporarily granting any database-level privilege or using mysql --force.
+SET @has_db_grant := (
+  SELECT COUNT(*)
+  FROM information_schema.SCHEMA_PRIVILEGES
+  WHERE GRANTEE = CONCAT('''', '<APP_DB_USER>', '''@''', '<APP_DB_HOST>', '''')
+    AND (TABLE_SCHEMA = '<DB_NAME>' OR TABLE_SCHEMA = REPLACE('<DB_NAME>', '_', '\\_'))
+);
+SET @revoke_db_grant_sql := IF(
+  @has_db_grant > 0,
+  'REVOKE ALL PRIVILEGES ON `<DB_NAME>`.* FROM ''<APP_DB_USER>''@''<APP_DB_HOST>''',
+  'DO 0'
+);
+PREPARE revoke_db_grant_stmt FROM @revoke_db_grant_sql;
+EXECUTE revoke_db_grant_stmt;
+DEALLOCATE PREPARE revoke_db_grant_stmt;
 
 -- 2. Full access to every table EXCEPT audit_logs. Keep this list in sync with
 --    backend/prisma/schema.prisma's `@@map(...)` table names.
