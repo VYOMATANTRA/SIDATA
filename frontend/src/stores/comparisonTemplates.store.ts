@@ -335,11 +335,13 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
         // The count on screen may be stale; refresh it so the message and badge stay honest.
         await fetchTemplates(true);
         const fresh = templates.value.find((item) => item.id === template.id);
-        return {
-          ok: false,
-          kind: 'in_use',
-          message: inUseMessage(template.label, fresh?.usageCount ?? template.usageCount),
-        };
+        if (err.code === 'TEMPLATE_IN_USE' || (fresh?.usageCount ?? 0) > 0) {
+          return {
+            ok: false,
+            kind: 'in_use',
+            message: inUseMessage(template.label, fresh?.usageCount ?? template.usageCount),
+          };
+        }
       }
       return {
         ok: false,

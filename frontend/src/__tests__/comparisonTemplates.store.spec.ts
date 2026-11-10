@@ -192,6 +192,40 @@ describe('comparison templates store', () => {
       expect(JSON.stringify(outcome)).not.toContain('sql boom');
       expect(store.templates).toHaveLength(1);
     });
+
+    it('returns kind: in_use when error code is TEMPLATE_IN_USE even if fresh count is 0', async () => {
+      route({
+        'DELETE /api/comparison-templates/tpl-1': () =>
+          json({ error: 'Template masih dipakai', code: 'TEMPLATE_IN_USE' }, 409),
+        'GET /api/comparison-templates': () =>
+          json({ templates: [makeTemplate({ usageCount: 0 })] }),
+      });
+      const store = useComparisonTemplatesStore();
+      store.templates = [makeTemplate({ usageCount: 0 })];
+
+      const outcome = await store.deleteTemplate(store.templates[0]!);
+
+      expect(outcome.ok).toBe(false);
+      if (outcome.ok) throw new Error('unreachable');
+      expect(outcome.kind).toBe('in_use');
+    });
+
+    it('returns kind: error on 409 when not TEMPLATE_IN_USE and fresh usageCount is 0', async () => {
+      route({
+        'DELETE /api/comparison-templates/tpl-1': () =>
+          json({ error: 'Konflik lain tanpa status in-use' }, 409),
+        'GET /api/comparison-templates': () =>
+          json({ templates: [makeTemplate({ usageCount: 0 })] }),
+      });
+      const store = useComparisonTemplatesStore();
+      store.templates = [makeTemplate({ usageCount: 0 })];
+
+      const outcome = await store.deleteTemplate(store.templates[0]!);
+
+      expect(outcome.ok).toBe(false);
+      if (outcome.ok) throw new Error('unreachable');
+      expect(outcome.kind).toBe('error');
+    });
   });
 
   describe('save', () => {

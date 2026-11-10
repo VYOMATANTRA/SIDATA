@@ -508,6 +508,7 @@ export const deleteComparisonTemplate = async (
           throw new ComparisonTemplateServiceError(
             `Template masih dipakai ${existing._count.indicators} indikator. Lepaskan dari indikator tersebut sebelum menghapusnya.`,
             409,
+            { code: 'TEMPLATE_IN_USE' },
           );
         }
 

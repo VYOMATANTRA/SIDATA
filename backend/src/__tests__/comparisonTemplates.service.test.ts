@@ -1173,7 +1173,8 @@ describe('comparisonTemplates.service deleteComparisonTemplate', () => {
   it('refuses with 409 while indicators still use the template, deleting and logging nothing', async () => {
     usage = 2;
 
-    await assertServiceError(remove(), 409, /indikator/i);
+    const err = await assertServiceError(remove(), 409, /indikator/i);
+    assert.equal(err.code, 'TEMPLATE_IN_USE');
 
     assert.equal(templateCalls['delete'], undefined);
     assert.equal(auditRows.length, 0);
