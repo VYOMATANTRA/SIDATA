@@ -190,7 +190,7 @@ function sameMapView(a: PickerLocation | null, b: PickerLocation | null): boolea
   );
 }
 
-const dirty = computed(() => {
+const isTextDirty = computed(() => {
   const fields: FormFieldKey[] = [
     'appName',
     'institutionName',
@@ -202,25 +202,27 @@ const dirty = computed(() => {
     'contactAddress',
   ];
 
-  const anyFieldDirty = fields.some((key) => {
+  return fields.some((key) => {
     const override = draft.value[key];
     return override !== undefined && override !== baseline.value[key];
   });
-
-  const viewDirty =
-    mapViewOverride.value !== null && !sameMapView(mapViewOverride.value, baselineView.value);
-
-  return anyFieldDirty || viewDirty;
 });
 
+const mapDirty = computed(() => {
+  if (mapViewOverride.value === null) return false;
+  return !sameMapView(mapViewOverride.value, baselineView.value);
+});
+
+const isDirty = computed(() => isTextDirty.value || mapDirty.value);
+
 /** Lets the dialog ask "is there unsaved work?" before it closes. */
-defineExpose({ isDirty: dirty });
+defineExpose({ isDirty, mapDirty, isTextDirty });
 
 /** Always says what is true: saved, unsaved, saving, or a failed save with the draft kept. */
 const saveStateText = computed(() => {
   if (props.busy) return 'Menyimpan perubahan…';
   if (props.serverError) return 'Perubahan belum tersimpan. Isian Anda masih ada di formulir.';
-  if (dirty.value) return 'Ada perubahan yang belum disimpan.';
+  if (isDirty.value) return 'Ada perubahan yang belum disimpan.';
   return 'Belum ada perubahan.';
 });
 
@@ -230,9 +232,41 @@ let submitGuard = false;
 
 watch(
   () => props.busy,
-  (isBusy) => {
-    if (!isBusy) submitGuard = false;
+  (isBusy, wasBusy) => {
+    if (wasBusy && !isBusy) submitGuard = false;
   },
+);
+
+function resetTextEdits(): void {
+  const fields: FormFieldKey[] = [
+    'appName',
+    'institutionName',
+    'tagline',
+    'administrativeArea',
+    'contactPhone',
+    'contactWhatsapp',
+    'contactEmail',
+    'contactAddress',
+  ];
+  for (const key of fields) {
+    if (draft.value[key] !== undefined && draft.value[key] === baseline.value[key]) {
+      delete draft.value[key];
+    }
+  }
+  if (mapViewOverride.value !== null && sameMapView(mapViewOverride.value, baselineView.value)) {
+    mapViewOverride.value = null;
+  }
+  if (!isDirty.value) {
+    submitGuard = false;
+  }
+}
+
+watch(
+  () => props.settings,
+  () => {
+    resetTextEdits();
+  },
+  { deep: true },
 );
 
 function handleSubmit(): void {
@@ -246,7 +280,7 @@ function handleSubmit(): void {
     // A parent that never reports busy must not lock the form for good.
     if (!props.busy) submitGuard = false;
   });
-  emit('submit', {
+  const payload: Partial<PublicSettings> = {
     appName: appName.value.trim(),
     institutionName: institutionName.value.trim(),
     tagline: tagline.value.trim(),
@@ -255,12 +289,17 @@ function handleSubmit(): void {
     contactWhatsapp: contactWhatsapp.value.trim(),
     contactEmail: contactEmail.value.trim(),
     contactAddress: contactAddress.value.trim(),
-    defaultCoordinates: {
-      lat: view.latitude,
-      lon: view.longitude,
-      zoom: view.zoom ?? MANGGAR_MAP_DEFAULT_ZOOM,
-    },
-  });
+    ...(mapDirty.value
+      ? {
+          defaultCoordinates: {
+            lat: view.latitude,
+            lon: view.longitude,
+            zoom: view.zoom ?? MANGGAR_MAP_DEFAULT_ZOOM,
+          },
+        }
+      : {}),
+  };
+  emit('submit', payload);
 }
 </script>
 

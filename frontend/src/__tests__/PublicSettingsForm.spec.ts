@@ -49,7 +49,8 @@ describe('PublicSettingsForm.vue', () => {
 
     const emitted = wrapper.emitted('submit');
     expect(emitted).toHaveLength(1);
-    expect(emitted?.[0]?.[0]).toEqual({
+    const payload = emitted?.[0]?.[0] as Record<string, unknown> | undefined;
+    expect(payload).toEqual({
       appName: 'SIDATA 2026',
       institutionName: DEFAULT_PUBLIC_SETTINGS.institutionName,
       tagline: DEFAULT_PUBLIC_SETTINGS.tagline,
@@ -58,8 +59,8 @@ describe('PublicSettingsForm.vue', () => {
       contactWhatsapp: DEFAULT_PUBLIC_SETTINGS.contactWhatsapp,
       contactEmail: DEFAULT_PUBLIC_SETTINGS.contactEmail,
       contactAddress: DEFAULT_PUBLIC_SETTINGS.contactAddress,
-      defaultCoordinates: { lat: -1.2251, lon: 116.9438, zoom: 13 },
     });
+    expect(payload?.defaultCoordinates).toBeUndefined();
     wrapper.unmount();
   });
 
@@ -98,7 +99,7 @@ describe('PublicSettingsForm.vue', () => {
     wrapper.unmount();
   });
 
-  it('clamps odd stored values (zoom 13.5, 0, 99 and lat 120) and submits without edits sending valid values', async () => {
+  it('clamps odd stored values (zoom 13.5, 0, 99 and lat 120) for map display and omits untouched coordinates on submit', async () => {
     for (const { input, expected } of [
       {
         input: { lat: 120, lon: 116.9, zoom: 13.5 },
@@ -120,11 +121,17 @@ describe('PublicSettingsForm.vue', () => {
         },
       });
       await flushPromises();
+
+      expect(leafletState.center.lat).toBe(expected.lat);
+      expect(leafletState.center.lng).toBe(expected.lon);
+      expect(leafletState.zoom).toBe(expected.zoom);
+
       await wrapper.find('form').trigger('submit.prevent');
       const emitted = wrapper.emitted('submit');
       expect(emitted).toBeTruthy();
       const payload = emitted?.[emitted.length - 1]?.[0] as Record<string, unknown>;
-      expect(payload.defaultCoordinates).toEqual(expected);
+      expect(payload.defaultCoordinates).toBeUndefined();
+
       wrapper.unmount();
     }
   });
@@ -292,10 +299,11 @@ describe('PublicSettingsForm.vue', () => {
     await wrapper.find('form').trigger('submit.prevent');
     const emitted = wrapper.emitted('submit');
     expect(emitted).toHaveLength(1);
-    expect(emitted?.[0]?.[0]).toMatchObject({
+    const payload = emitted?.[0]?.[0] as Record<string, unknown> | undefined;
+    expect(payload).toMatchObject({
       tagline: 'Slogan Baru Dari Server',
-      defaultCoordinates: { lat: -1.3, lon: 117.0, zoom: 15 },
     });
+    expect(payload?.defaultCoordinates).toBeUndefined();
     wrapper.unmount();
   });
 
@@ -327,11 +335,87 @@ describe('PublicSettingsForm.vue', () => {
     await wrapper.find('form').trigger('submit.prevent');
     const emitted = wrapper.emitted('submit');
     expect(emitted).toHaveLength(1);
-    expect(emitted?.[0]?.[0]).toMatchObject({
+    const refreshedPayload = emitted?.[0]?.[0] as Record<string, unknown> | undefined;
+    expect(refreshedPayload).toMatchObject({
       appName: 'Aplikasi Kustom',
       tagline: 'Slogan Baru Dari Server',
-      defaultCoordinates: { lat: -1.3, lon: 117.0, zoom: 15 },
     });
+    expect(refreshedPayload?.defaultCoordinates).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it('omits defaultCoordinates when only text is edited with high-precision coordinates', async () => {
+    const highPrecisionSettings = {
+      ...DEFAULT_PUBLIC_SETTINGS,
+      defaultCoordinates: { lat: -1.23456789, lon: 116.98765432, zoom: 14 },
+    };
+    const wrapper = mountForm({ settings: highPrecisionSettings });
+    await flushPromises();
+
+    await wrapper.find('input#settings-appName').setValue('Nama Baru');
+    await wrapper.find('form').trigger('submit.prevent');
+
+    const emitted = wrapper.emitted('submit');
+    expect(emitted).toHaveLength(1);
+    const payload = emitted?.[0]?.[0] as Record<string, unknown>;
+    expect(payload.appName).toBe('Nama Baru');
+    expect(payload.defaultCoordinates).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it('omits defaultCoordinates when only text is edited with null defaultCoordinates', async () => {
+    const nullCoordsSettings = {
+      ...DEFAULT_PUBLIC_SETTINGS,
+      defaultCoordinates: null as unknown as typeof DEFAULT_PUBLIC_SETTINGS.defaultCoordinates,
+    };
+    const wrapper = mountForm({ settings: nullCoordsSettings });
+    await flushPromises();
+
+    await wrapper.find('input#settings-appName').setValue('Nama Baru');
+    await wrapper.find('form').trigger('submit.prevent');
+
+    const emitted = wrapper.emitted('submit');
+    expect(emitted).toHaveLength(1);
+    const payload = emitted?.[0]?.[0] as Record<string, unknown>;
+    expect(payload.appName).toBe('Nama Baru');
+    expect(payload.defaultCoordinates).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it('emits defaultCoordinates when map view is changed and submitted', async () => {
+    const wrapper = mountForm();
+    await flushPromises();
+
+    panTo(-1.25, 116.96, 15);
+    await wrapper.find('form').trigger('submit.prevent');
+
+    const emitted = wrapper.emitted('submit');
+    expect(emitted).toHaveLength(1);
+    const payload = emitted?.[0]?.[0] as Record<string, unknown>;
+    expect(payload.defaultCoordinates).toEqual({ lat: -1.25, lon: 116.96, zoom: 15 });
+    wrapper.unmount();
+  });
+
+  it('clears mapDirty and omits defaultCoordinates after reverting map back to baseline', async () => {
+    const wrapper = mountForm({ settings: SETTINGS });
+    await flushPromises();
+
+    panTo(-1.5, 117.5, 10);
+    await flushPromises();
+    expect((wrapper.vm as unknown as { mapDirty: boolean }).mapDirty).toBe(true);
+
+    panTo(-1.3, 117.0, 15);
+    await flushPromises();
+    expect((wrapper.vm as unknown as { mapDirty: boolean }).mapDirty).toBe(false);
+
+    await wrapper.find('input#settings-appName').setValue('Nama Saja');
+    await wrapper.find('form').trigger('submit.prevent');
+
+    const emitted = wrapper.emitted('submit');
+    expect(emitted).toHaveLength(1);
+    const payload = emitted?.[0]?.[0] as Record<string, unknown>;
+    expect(payload.appName).toBe('Nama Saja');
+    expect(payload.defaultCoordinates).toBeUndefined();
     wrapper.unmount();
   });
 });
