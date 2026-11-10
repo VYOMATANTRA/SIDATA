@@ -91,6 +91,7 @@ const activeTable = ref<IndicatorTableDetail | null>(null);
 const activeContentBlock = ref<ContentBlock | null>(null);
 const isEditingSettings = ref(false);
 const settingsForm = ref<InstanceType<typeof PublicSettingsForm> | null>(null);
+const settingsFormDirty = ref(false);
 const settingsDiscardPromptOpen = ref(false);
 const settingsKeepButton = ref<HTMLButtonElement | null>(null);
 /** Control that had focus when the discard prompt opened, so "Tetap di sini" can give it back. */
@@ -323,11 +324,12 @@ function handleEdit(card: IndicatorCardModel): void {
 
   if (card.type === 'pengaturan') {
     if (!authStore.isAdmin) return;
-    if (settingsStore.error || !settingsStore.isLoaded) {
+    if (settingsStore.error || (!settingsStore.isLoaded && !settingsStore.isLoading)) {
       serverError.value =
         settingsStore.error || 'Pengaturan publik belum siap. Muat ulang halaman lalu coba lagi.';
       return;
     }
+    settingsFormDirty.value = false;
     isEditingSettings.value = true;
     return;
   }
@@ -358,6 +360,7 @@ function resetEditor(): void {
   activeTable.value = null;
   activeContentBlock.value = null;
   isEditingSettings.value = false;
+  settingsFormDirty.value = false;
   isTableDetailLoading.value = false;
   serverError.value = '';
 }
@@ -393,7 +396,8 @@ function requestCloseSettings(): void {
     keepEditingSettings();
     return;
   }
-  if (settingsForm.value?.isDirty === false) {
+  const isDirty = settingsForm.value?.isDirty ?? settingsFormDirty.value;
+  if (!isDirty) {
     resetEditor();
     return;
   }
@@ -675,15 +679,24 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
         @cancel="resetEditor"
       />
 
+      <p
+        v-else-if="isEditingSettings && !settingsStore.isLoaded && settingsStore.isLoading"
+        class="text-sm text-slate-600"
+        aria-live="polite"
+      >
+        Memuat pengaturan…
+      </p>
+
       <PublicSettingsForm
         v-else-if="isEditingSettings"
         v-show="!settingsDiscardPromptOpen"
         ref="settingsForm"
         :settings="settingsStore.settings"
-        :busy="saving || settingsStore.isLoading"
+        :busy="saving"
         :server-error="serverError"
         @submit="handleSettingsSubmit"
         @cancel="requestCloseSettings"
+        @dirty-change="settingsFormDirty = $event"
       />
 
       <p v-else-if="serverError" role="alert" class="text-sm text-rose-700">

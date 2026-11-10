@@ -5,7 +5,11 @@ import DataManagementView from '../views/DataManagementView.vue';
 import type { Indicator } from '../stores/indicators.store';
 import type { IndicatorTable } from '../stores/indicatorTables.store';
 import { useAuthStore } from '../stores/auth';
+import { DEFAULT_PUBLIC_SETTINGS, useSettingsStore } from '../stores/settings.store';
 import { USER_MESSAGES } from '../utils/userMessages';
+import { resetLeafletMock } from './leafletMock';
+
+vi.mock('leaflet', async () => (await import('./leafletMock')).createLeafletMock());
 
 const CREATED = '2026-01-01T00:00:00.000Z';
 
@@ -58,6 +62,10 @@ function installFetchMock(overrides: FetchOverrides = {}) {
 
     if (url === '/api/auth/csrf-token') {
       return json({ csrfToken: 'csrf-token' });
+    }
+
+    if (url === '/api/settings/public') {
+      return json({ settings: DEFAULT_PUBLIC_SETTINGS });
     }
 
     if (url === '/api/pages?include=sections') {
@@ -182,6 +190,7 @@ describe('DataManagementView.vue', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.restoreAllMocks();
+    resetLeafletMock();
     installFetchMock();
   });
 
@@ -416,4 +425,52 @@ describe('DataManagementView.vue', () => {
 
     wrapper.unmount();
   });
+
+  it('keeps public settings form mounted and interactive during background loading, closing without discard prompt', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore();
+    authStore.setAuth({ id: '1', email: 'admin@example.com', role: 'admin' }, 'token');
+
+    const settingsStore = useSettingsStore();
+    settingsStore.settings = { ...DEFAULT_PUBLIC_SETTINGS };
+    settingsStore.isLoaded = true;
+
+    const wrapper = mount(DataManagementView, {
+      global: {
+        plugins: [pinia],
+        stubs: { RouterLink: true, teleport: true },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.find('[data-test="tab-pengaturan"]').trigger('click');
+    await flushPromises();
+
+    const editBtn = wrapper.findAll('button').find((b) => b.text().includes('Edit'));
+    await editBtn?.trigger('click');
+    await flushPromises();
+
+    const form = wrapper.findComponent({ name: 'PublicSettingsForm' });
+    expect(form.exists()).toBe(true);
+
+    // Simulate background refresh starting
+    settingsStore.isLoading = true;
+    await flushPromises();
+
+    // The form should stay mounted and NOT be marked busy
+    expect(wrapper.findComponent({ name: 'PublicSettingsForm' }).exists()).toBe(true);
+    expect(form.props('busy')).toBe(false);
+
+    // Closing an untouched form while loading should close cleanly without prompt
+    const cancelBtn = form.findAll('button').find((b) => b.text() === 'Batal');
+    await cancelBtn?.trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="settings-discard-prompt"]').exists()).toBe(false);
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+
+    wrapper.unmount();
+  });
 });
+

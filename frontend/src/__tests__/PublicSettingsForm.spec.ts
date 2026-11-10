@@ -418,6 +418,22 @@ describe('PublicSettingsForm.vue', () => {
     expect(payload.defaultCoordinates).toBeUndefined();
     wrapper.unmount();
   });
+
+  it('emits dirty-change when dirty state changes', async () => {
+    const wrapper = mountForm();
+    await flushPromises();
+
+    const emitted = () => wrapper.emitted('dirty-change');
+    expect(emitted()).toBeTruthy();
+    expect(emitted()?.[emitted()!.length - 1]).toEqual([false]);
+
+    await wrapper.find('input#settings-appName').setValue('Nama Diubah');
+    expect(emitted()?.[emitted()!.length - 1]).toEqual([true]);
+
+    await wrapper.find('input#settings-appName').setValue(DEFAULT_PUBLIC_SETTINGS.appName);
+    expect(emitted()?.[emitted()!.length - 1]).toEqual([false]);
+    wrapper.unmount();
+  });
 });
 
 describe('PublicSettingsForm in the CMS dialog', () => {
@@ -630,13 +646,25 @@ describe('PublicSettingsForm in the CMS dialog', () => {
       wrapper.unmount();
     });
 
-    it('prompts to discard when settingsForm ref is null or unknown', async () => {
+    it('prompts to discard when dirty even if settingsForm ref is unexpectedly lost', async () => {
+      installFetch([]);
+      const { wrapper } = await openSettingsDialog();
+      await makeDirty();
+      (wrapper.vm as unknown as { settingsForm: null }).settingsForm = null;
+      await dialogRoot().find('[aria-label="Tutup dialog"]').trigger('click');
+      await flushPromises();
+      expect(prompt().exists()).toBe(true);
+      wrapper.unmount();
+    });
+
+    it('does not prompt to discard when untouched even if settingsForm ref is not ready', async () => {
       installFetch([]);
       const { wrapper } = await openSettingsDialog();
       (wrapper.vm as unknown as { settingsForm: null }).settingsForm = null;
       await dialogRoot().find('[aria-label="Tutup dialog"]').trigger('click');
       await flushPromises();
-      expect(prompt().exists()).toBe(true);
+      expect(prompt().exists()).toBe(false);
+      expect(dialogRoot().find('[role="dialog"]').exists()).toBe(false);
       wrapper.unmount();
     });
 

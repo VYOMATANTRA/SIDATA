@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, watch } from 'vue';
+import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue';
 import FormField from '../common/FormField.vue';
 import FormErrorSummary from '../common/FormErrorSummary.vue';
 import BaseButton from '../common/BaseButton.vue';
@@ -50,6 +50,7 @@ const props = withDefaults(defineProps<PublicSettingsFormProps>(), {
 const emit = defineEmits<{
   (e: 'submit', patch: Partial<PublicSettings>): void;
   (e: 'cancel'): void;
+  (e: 'dirty-change', dirty: boolean): void;
 }>();
 
 function fieldId(name: string): string {
@@ -215,6 +216,18 @@ const mapDirty = computed(() => {
 
 const isDirty = computed(() => isTextDirty.value || mapDirty.value);
 
+watch(
+  isDirty,
+  (val) => {
+    emit('dirty-change', val);
+  },
+  { immediate: true },
+);
+
+onBeforeUnmount(() => {
+  emit('dirty-change', false);
+});
+
 /** Lets the dialog ask "is there unsaved work?" before it closes. */
 defineExpose({ isDirty, mapDirty, isTextDirty });
 
@@ -232,8 +245,8 @@ let submitGuard = false;
 
 watch(
   () => props.busy,
-  (isBusy, wasBusy) => {
-    if (wasBusy && !isBusy) submitGuard = false;
+  (isBusy) => {
+    if (!isBusy) submitGuard = false;
   },
 );
 
@@ -255,9 +268,6 @@ function resetTextEdits(): void {
   }
   if (mapViewOverride.value !== null && sameMapView(mapViewOverride.value, baselineView.value)) {
     mapViewOverride.value = null;
-  }
-  if (!isDirty.value) {
-    submitGuard = false;
   }
 }
 
