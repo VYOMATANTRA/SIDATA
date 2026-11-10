@@ -11,11 +11,11 @@ import {
   deleteComparisonTemplate,
   previewComparisonTemplate,
 } from '../services/comparisonTemplates.service.js';
+import { sendHierarchyError } from '../utils/hierarchyAuthoring.js';
 
 /**
  * Service errors carry their own status. Only the 422 acknowledgment flow adds `code` and
- * `warnings`, which the admin UI needs to render and echo back the exact flagged wording;
- * every other error stays a plain `{ error }`.
+ * `warnings`, and 409 STALE_WRITE adds `code` and `details`; every other error stays a plain `{ error }`.
  */
 function respondWithFailure(res: Response, error: unknown, logContext: string): Response {
   if (error instanceof ComparisonTemplateServiceError) {
@@ -23,7 +23,11 @@ function respondWithFailure(res: Response, error: unknown, logContext: string): 
       error: error.message,
       ...(error.code !== undefined ? { code: error.code } : {}),
       ...(error.warnings !== undefined ? { warnings: error.warnings } : {}),
+      ...(error.details !== undefined ? { details: error.details } : {}),
     });
+  }
+  if (sendHierarchyError(res, error)) {
+    return res;
   }
   console.error(
     `Error saat ${logContext}:`,

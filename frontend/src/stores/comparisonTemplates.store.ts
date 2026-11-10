@@ -232,10 +232,11 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
         const data = await apiRequestJson<{ templates?: ComparisonTemplate[] }>(
           '/api/comparison-templates',
         );
-        if (requestEpoch === mutationEpoch) {
-          templates.value = Array.isArray(data.templates) ? data.templates : [];
-          isLoaded.value = true;
+        if (requestEpoch !== mutationEpoch) {
+          return false;
         }
+        templates.value = Array.isArray(data.templates) ? data.templates : [];
+        isLoaded.value = true;
         if (request.forSelector) {
           selectorError.value = null;
         }

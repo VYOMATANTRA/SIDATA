@@ -201,6 +201,7 @@ function buildDraft(): TemplateDraft {
 
 async function handleSubmit(): Promise<void> {
   if (formBusy.value) return;
+  isPreviewPaused.value = false;
   submitted.value = true;
   serverError.value = '';
   warningNotice.value = '';
@@ -251,6 +252,7 @@ const lastSyncedUpdatedAt = ref<string | null>(props.template?.updatedAt ?? null
 let isUnmounted = false;
 
 function syncFromTemplate(fresh: ComparisonTemplate | null): void {
+  isPreviewPaused.value = false;
   lastSyncedUpdatedAt.value = fresh?.updatedAt ?? null;
   baseUpdatedAt.value = fresh?.updatedAt ?? '';
   label.value = fresh?.label ?? '';
@@ -286,6 +288,7 @@ watch(
 async function handleReloadLatest(): Promise<void> {
   if (reloadingLatest.value || saving.value || !props.template) return;
   const targetId = props.template.id;
+  isPreviewPaused.value = false;
   reloadingLatest.value = true;
   serverError.value = '';
   let fetched = false;
@@ -326,6 +329,7 @@ const previewStatus = ref<'incomplete' | 'loading' | 'ready' | 'error'>('incompl
 const previews = ref<PreviewSentence[]>([]);
 const previewProblems = ref<string[]>([]);
 const previewError = ref('');
+const isPreviewPaused = ref(false);
 let previewTimer: ReturnType<typeof setTimeout> | null = null;
 let previewAbort: AbortController | null = null;
 let previewSeq = 0;
@@ -363,7 +367,11 @@ async function runPreview(): Promise<void> {
     previews.value = [];
     previewProblems.value = [];
     previewStatus.value = 'error';
-    if (error instanceof ApiError && error.status === 429) {
+    if (error instanceof ApiError && error.status === 401) {
+      isPreviewPaused.value = true;
+      previewError.value =
+        'Sesi Anda telah berakhir. Masuk kembali untuk memuat pratinjau.';
+    } else if (error instanceof ApiError && error.status === 429) {
       if (typeof error.retryAfterSeconds === 'number' && error.retryAfterSeconds > 0) {
         previewError.value = `Terlalu banyak pratinjau. Coba lagi dalam ${error.retryAfterSeconds} detik.`;
       } else {
@@ -378,6 +386,7 @@ async function runPreview(): Promise<void> {
 
 function schedulePreview(): void {
   cancelPreview();
+  if (isPreviewPaused.value) return;
   previewSeq += 1;
   previewError.value = '';
   if (!sentencesComplete.value) {

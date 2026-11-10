@@ -456,6 +456,9 @@ describe('comparisonTemplates.controller updateComparisonTemplateHandler', () =>
     assert.equal(res.status, 409);
     const body = res.body as AnyRecord;
     assert.equal(body['code'], 'STALE_WRITE');
+    assert.deepEqual(body['details'], {
+      currentUpdatedAt: '2026-01-02T00:00:00.000Z',
+    });
     assert.equal(auditRows.length, 0);
   });
 

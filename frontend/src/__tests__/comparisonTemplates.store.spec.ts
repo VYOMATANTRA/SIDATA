@@ -192,7 +192,10 @@ describe('comparison templates store', () => {
 
     // Now the slow fetch resolves with an older snapshot
     resolveGet(json({ templates: [makeTemplate({ id: 'tpl-stale-from-server' })] }));
-    await slowFetch;
+    const slowResult = await slowFetch;
+
+    expect(slowResult).toBe(false);
+    expect(store.isLoaded).toBe(false);
 
     // Mutated list must not be clobbered by the stale GET response
     expect(store.templates.map((t) => t.id)).toEqual(['tpl-created']);

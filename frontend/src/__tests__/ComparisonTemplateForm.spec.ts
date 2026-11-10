@@ -732,6 +732,56 @@ describe('ComparisonTemplateForm', () => {
       wrapper.unmount();
     });
 
+    it('pauses automatic keystroke previews when preview returns 401 until save or reload', async () => {
+      vi.useFakeTimers();
+      let previewCallCount = 0;
+      previewResponse = () => {
+        previewCallCount += 1;
+        return json({ error: 'Unauthorized' }, 401);
+      };
+
+      const wrapper = mountForm();
+      // First preview fires and gets 401
+      await vi.advanceTimersByTimeAsync(800);
+      await flushPromises();
+
+      expect(previewCallCount).toBe(1);
+      expect(wrapper.find('[data-test="preview-error"]').text()).toContain(
+        'Sesi Anda telah berakhir. Masuk kembali untuk memuat pratinjau.',
+      );
+
+      // Typing more keystrokes does not trigger further preview requests while paused
+      const text = wrapper.find('[data-test="builder-trendTetap"] textarea');
+      await text.setValue('nilai berubah 1');
+      await vi.advanceTimersByTimeAsync(800);
+      await flushPromises();
+
+      await text.setValue('nilai berubah 2');
+      await vi.advanceTimersByTimeAsync(800);
+      await flushPromises();
+
+      expect(previewCallCount).toBe(1);
+
+      // Attempting to submit save unpauses preview for subsequent edits
+      previewResponse = () => {
+        previewCallCount += 1;
+        return json(PREVIEW_OK);
+      };
+      saveResponses.push(() => json({ error: 'Validation failed' }, 400));
+      await wrapper.find('form').trigger('submit');
+      await flushPromises();
+
+      // Now typing resumes previews
+      await text.setValue('nilai berubah 3');
+      await vi.advanceTimersByTimeAsync(800);
+      await flushPromises();
+
+      expect(previewCallCount).toBe(2);
+      expect(wrapper.findAll('[data-test="preview-item"]')).toHaveLength(2);
+
+      wrapper.unmount();
+    });
+
     it('exposes focusNameInput to programmatically focus the name input', async () => {
       const wrapper = mountForm();
       const input = wrapper.find<HTMLInputElement>('#templat-nama');

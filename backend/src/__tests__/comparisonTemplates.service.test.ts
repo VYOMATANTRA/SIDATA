@@ -910,6 +910,9 @@ describe('comparisonTemplates.service updateComparisonTemplate', () => {
         409,
       );
       assert.equal(err.code, 'STALE_WRITE');
+      assert.deepEqual(err.details, {
+        currentUpdatedAt: (stored!.updatedAt as Date).toISOString(),
+      });
       assert.equal(templateCalls['update'], undefined);
       assert.equal(auditRows.length, 0);
     });
@@ -920,6 +923,9 @@ describe('comparisonTemplates.service updateComparisonTemplate', () => {
         409,
       );
       assert.equal(err.code, 'STALE_WRITE');
+      assert.deepEqual(err.details, {
+        currentUpdatedAt: (stored!.updatedAt as Date).toISOString(),
+      });
       assert.equal(templateCalls['update'], undefined);
       assert.equal(auditRows.length, 0);
     });

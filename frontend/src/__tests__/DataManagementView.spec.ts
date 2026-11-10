@@ -471,7 +471,7 @@ describe('DataManagementView.vue', () => {
     wrapper.unmount();
   });
 
-  it('reuses cached templates without forcing a refetch when opening scalar forms', async () => {
+  it('forces a fresh template fetch when opening scalar forms', async () => {
     const pinia = createPinia();
     setActivePinia(pinia);
     const templatesStore = useComparisonTemplatesStore();
@@ -491,8 +491,7 @@ describe('DataManagementView.vue', () => {
     await editButton?.trigger('click');
     await flushPromises();
 
-    expect(fetchSpy).toHaveBeenCalledWith({ forSelector: true });
-    expect(fetchSpy).not.toHaveBeenCalledWith(expect.objectContaining({ force: true }));
+    expect(fetchSpy).toHaveBeenCalledWith({ force: true, forSelector: true });
 
     wrapper.unmount();
   });

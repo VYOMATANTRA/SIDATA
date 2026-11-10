@@ -276,6 +276,83 @@ describe('comparisonTemplates.routes wiring', () => {
       }
     });
 
+    it('PATCH /api/comparison-templates/:id returns 409 with code STALE_WRITE and details on stale update', async () => {
+      const originalUserFindUnique = prisma.user.findUnique;
+      const originalTransaction = prisma.$transaction;
+      const updatedAt = new Date('2026-02-01T10:00:00.000Z');
+
+      prisma.user.findUnique = (async (args: { where: { id?: string } }) => {
+        if (args?.where?.id === 'admin-user-id') {
+          return {
+            id: 'admin-user-id',
+            email: 'admin@manggar.go.id',
+            role: { name: 'admin' },
+            deletedAt: null,
+          };
+        }
+        return null;
+      }) as unknown as typeof prisma.user.findUnique;
+
+      prisma.$transaction = (async (callback: (tx: unknown) => Promise<unknown>) => {
+        const fakeTx = {
+          $queryRaw: async () => [],
+          comparisonTemplate: {
+            findUnique: async () => ({
+              id: 'tpl-1',
+              slug: 'perbandingan-tahunan',
+              label: 'Perbandingan tahunan',
+              body: 'Berdasarkan data {period_current}, {label} tercatat {value_current} {unit}, {trend} dibandingkan {period_previous}.',
+              trendNaik: 'naik {delta} {unit} ({delta_percent}%)',
+              trendTurun: 'turun {delta} {unit} ({delta_percent}%)',
+              trendTetap: 'tidak berubah',
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt,
+              _count: { indicators: 0 },
+            }),
+          },
+        };
+        return callback(fakeTx);
+      }) as unknown as typeof prisma.$transaction;
+
+      try {
+        const res = await fetch(`${baseUrl}/api/auth/csrf-token`);
+        const cookie = res.headers.get('set-cookie') ?? '';
+        const data = (await res.json()) as { csrfToken: string };
+        const adminToken = generateAccessToken({
+          id: 'admin-user-id',
+          email: 'admin@manggar.go.id',
+          role: 'admin',
+        });
+
+        const response = await fetch(`${baseUrl}/api/comparison-templates/tpl-1`, {
+          method: 'PATCH',
+          headers: {
+            'content-type': 'application/json',
+            'x-csrf-token': data.csrfToken,
+            cookie,
+            authorization: `Bearer ${adminToken}`,
+          },
+          body: JSON.stringify({
+            label: 'Judul Baru',
+            expectedUpdatedAt: '2026-01-01T00:00:00.000Z',
+          }),
+        });
+
+        assert.equal(response.status, 409);
+        const resBody = (await response.json()) as {
+          code: string;
+          details: { currentUpdatedAt: string };
+        };
+        assert.equal(resBody.code, 'STALE_WRITE');
+        assert.deepEqual(resBody.details, {
+          currentUpdatedAt: updatedAt.toISOString(),
+        });
+      } finally {
+        prisma.user.findUnique = originalUserFindUnique;
+        prisma.$transaction = originalTransaction;
+      }
+    });
+
     it('rate limiter responds with 429 and Retry-After header when write limit is exceeded', async () => {
       const testApp = express();
       testApp.use((req, _res, next) => {

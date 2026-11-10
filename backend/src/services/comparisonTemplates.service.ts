@@ -8,7 +8,11 @@ import {
   type AuditRequestContext,
 } from './audit.service.js';
 import { SLUG_REGEX, indicatorCachesInvalidator } from './indicators.service.js';
-import { STALE_WRITE_CODE, expectedUpdatedAtSchema } from '../utils/hierarchyAuthoring.js';
+import {
+  expectedUpdatedAtSchema,
+  assertFresh,
+  HierarchyServiceError,
+} from '../utils/hierarchyAuthoring.js';
 import { executeLockedTransaction, withChangeResult } from '../utils/lockTransactionCache.js';
 import {
   TEMPLATE_SLOTS,
@@ -38,19 +42,25 @@ export interface TrendWarning extends TrendKeywordMatch {
 
 export class ComparisonTemplateServiceError extends Error {
   statusCode: number;
-  code?: string;
-  warnings?: TrendWarning[];
+  code?: string | undefined;
+  warnings?: TrendWarning[] | undefined;
+  details?: Record<string, unknown> | undefined;
 
   constructor(
     message: string,
     statusCode: number,
-    options: { code?: string; warnings?: TrendWarning[] } = {},
+    options: {
+      code?: string | undefined;
+      warnings?: TrendWarning[] | undefined;
+      details?: Record<string, unknown> | undefined;
+    } = {},
   ) {
     super(message);
     this.name = 'ComparisonTemplateServiceError';
     this.statusCode = statusCode;
     if (options.code !== undefined) this.code = options.code;
     if (options.warnings !== undefined) this.warnings = options.warnings;
+    if (options.details !== undefined) this.details = options.details;
   }
 }
 
@@ -396,14 +406,7 @@ export const updateComparisonTemplate = async (
           throw new ComparisonTemplateServiceError('Template tidak ditemukan.', 404);
         }
 
-        const expectedMs = Date.parse(input.expectedUpdatedAt);
-        if (Number.isNaN(expectedMs) || existing.updatedAt.getTime() !== expectedMs) {
-          throw new ComparisonTemplateServiceError(
-            'Templat telah diubah oleh pengguna lain. Muat ulang data lalu coba lagi.',
-            409,
-            { code: STALE_WRITE_CODE },
-          );
-        }
+        assertFresh(existing.updatedAt, input.expectedUpdatedAt, 'Templat');
 
         // The merged template is what indicators will render, so that is what must be valid.
         if (
@@ -462,6 +465,12 @@ export const updateComparisonTemplate = async (
       },
     });
   } catch (error) {
+    if (error instanceof HierarchyServiceError) {
+      throw new ComparisonTemplateServiceError(error.message, error.statusCode, {
+        code: error.code,
+        details: error.details,
+      });
+    }
     if (error instanceof ComparisonTemplateServiceError) throw error;
     if (isPrismaKnownError(error, 'P2002')) {
       throw new ComparisonTemplateServiceError('Slug sudah digunakan template lain.', 409, {

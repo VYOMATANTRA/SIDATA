@@ -79,8 +79,8 @@ export const comparisonTemplatesPreviewLimiter = createUserKeyedLimiter(3000);
 // Pre-auth flood guard for the preview route only. A separate instance from the shared
 // apiLimiter (so preview traffic never drains the 300/15min public-site budget).
 // With skipSuccessfulRequests: true, requestWasSuccessful: statusCode !== 401 && statusCode !== 403,
-// and limit: 120, unauthenticated/unauthorized callers (which receive 401/403) are capped at
-// 120 requests per 15 min per IP. Requests that pass authentication (200 OK, 400 validation, or
+// and limit: 600, unauthenticated/unauthorized callers (which receive 401/403) are capped at
+// 600 requests per 15 min per IP. Requests that pass authentication (200 OK, 400 validation, or
 // 422 trend-keyword warnings from authenticated admins) are skipped here and instead governed by
 // comparisonTemplatesPreviewLimiter (3000 req/15min per admin user ID), ensuring that multiple
 // admins behind a shared NAT/office IP do not exhaust the shared IP quota while typing.
@@ -88,7 +88,7 @@ export const comparisonTemplatesPreviewLimiter = createUserKeyedLimiter(3000);
 // the real client IP rather than the proxy address.
 export const comparisonTemplatesPreviewPreAuthLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 120,
+  limit: 600,
   skipSuccessfulRequests: true,
   requestWasSuccessful: (_req, res) => res.statusCode !== 401 && res.statusCode !== 403,
   standardHeaders: 'draft-7',
