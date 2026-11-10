@@ -77,9 +77,27 @@ export const comparisonTemplatesWriteLimiter = createUserKeyedLimiter(100);
 export const comparisonTemplatesPreviewLimiter = createUserKeyedLimiter(3000);
 
 // Pre-auth flood guard for the preview route only. A separate instance from the shared
-// apiLimiter (so preview traffic never drains the 300/15min public-site budget), with a cap high
-// enough that admins behind one NAT are bound by the per-user limiter above, not by this one.
-export const comparisonTemplatesPreviewPreAuthLimiter = createLimiter(5000);
+// apiLimiter (so preview traffic never drains the 300/15min public-site budget).
+// With skipSuccessfulRequests: true and limit: 120, unauthenticated/failed callers (which receive
+// 401/403) are capped at 120 requests per 15 min per IP. Successful requests (200 OK from authenticated
+// admins) are skipped here and instead governed by comparisonTemplatesPreviewLimiter (3000 req/15min
+// per admin user ID), ensuring that multiple admins behind a shared NAT/office IP do not exhaust the
+// shared IP quota.
+// Note: In deployments behind a reverse proxy, TRUST_PROXY must be configured so req.ip resolves to
+// the real client IP rather than the proxy address.
+export const comparisonTemplatesPreviewPreAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 120,
+  skipSuccessfulRequests: true,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    if (!req.ip) {
+      throw new Error('Identitas koneksi tidak valid');
+    }
+    return ipKeyGenerator(req.ip);
+  },
+});
 
 // Indicator tables CMS write operations rate limiter (dedicated 100 req/15min bucket keyed by
 // user ID, separate from indicatorsWriteLimiter so matrix-table edits and scalar-figure edits
