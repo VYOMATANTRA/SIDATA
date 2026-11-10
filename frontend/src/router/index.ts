@@ -1,8 +1,4 @@
-import {
-  createRouter,
-  createWebHistory,
-  type RouterScrollBehavior,
-} from 'vue-router';
+import { createRouter, createWebHistory, type RouterScrollBehavior } from 'vue-router';
 import { getActivePinia } from 'pinia';
 import { useAuthStore } from '../stores/auth';
 import { useSettingsStore } from '../stores/settings.store';
@@ -85,14 +81,29 @@ function hashTarget(hash: string): { el: Element; top: number; behavior: ScrollB
   return { el, top, behavior: 'instant' };
 }
 
+let latestSavedPosition: { left: number; top: number } | null = null;
+
+export function consumeSavedPosition(): { left: number; top: number } | null {
+  const pos = latestSavedPosition;
+  latestSavedPosition = null;
+  return pos;
+}
+
 export const scrollBehavior: RouterScrollBehavior = (to, from, savedPosition) => {
-  if (savedPosition && to.path === from.path && to.hash === from.hash && to.fullPath !== from.fullPath) {
+  if (
+    savedPosition &&
+    to.path === from.path &&
+    to.hash === from.hash &&
+    to.fullPath !== from.fullPath
+  ) {
+    latestSavedPosition = savedPosition;
     return savedPosition;
   }
   if (to.path === from.path && to.hash === from.hash && to.fullPath !== from.fullPath) {
     return false;
   }
   if (to.hash === '#' && !savedPosition) {
+    latestSavedPosition = null;
     return { top: 0, left: 0, behavior: 'instant' };
   }
   const samePath = to.path === from.path;
@@ -100,10 +111,14 @@ export const scrollBehavior: RouterScrollBehavior = (to, from, savedPosition) =>
     const target = hashTarget(to.hash);
     if (target) return target;
   }
+  if (savedPosition) {
+    latestSavedPosition = savedPosition;
+    return savedPosition;
+  }
+  latestSavedPosition = null;
   if (to.name === 'cerita-page') {
     return hashTarget(to.hash) ?? { top: 0, left: 0, behavior: 'instant' };
   }
-  if (savedPosition) return savedPosition;
   if (!samePath) return hashTarget(to.hash) ?? { top: 0, left: 0, behavior: 'instant' };
   return false;
 };

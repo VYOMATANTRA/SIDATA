@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useContentBlocksStore } from '../stores/contentBlocks.store';
 import { useIndicatorsStore } from '../stores/indicators.store';
@@ -116,12 +116,6 @@ const router = useRouter();
 const contentBlocksStore = useContentBlocksStore();
 const indicatorsStore = useIndicatorsStore();
 
-const logoutError = ref('');
-
-function clearLogoutError() {
-  logoutError.value = '';
-}
-
 function isRouteAvailable(path: string): boolean {
   return checkRouteAvailable(router, path);
 }
@@ -135,25 +129,6 @@ onMounted(async () => {
 <template>
   <!-- PublicLayout supplies the skip link, header, <main id="main-content"> and footer. -->
   <div>
-    <!-- Logout Error Notification Banner (floating overlay positioned safely below header) -->
-    <div
-      v-if="logoutError"
-      data-test="logout-error-banner"
-      class="fixed top-[calc(var(--public-header-height,4rem)+0.75rem)] left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-center text-xs font-medium text-rose-600 shadow-lg sm:text-sm"
-      role="alert"
-    >
-      <span>{{ logoutError }}</span>
-      <button
-        type="button"
-        @click="clearLogoutError"
-        aria-label="Tutup pemberitahuan"
-        data-test="logout-error-dismiss"
-        class="shrink-0 rounded p-1 text-rose-500 hover:bg-rose-100 hover:text-rose-700 focus-visible:outline-2 focus-visible:outline-rose-500"
-      >
-        <span aria-hidden="true" class="text-base leading-none font-bold">&times;</span>
-      </button>
-    </div>
-
     <!-- 1. Hero (Spec §8 top section) -->
     <SectionHero />
 

@@ -154,19 +154,25 @@ describe('PublicLayout (mounted by App for routes with meta.layout = public)', (
     wrapper.unmount();
   });
 
-  it('loads public settings on mount and lazily fetches the page hierarchy on menu open', async () => {
+  it('loads public settings and fetches the page hierarchy on mount', async () => {
     const fetchMock = mockFetch();
     const { wrapper } = await mountApp('/peta');
 
-    let urls = fetchMock.mock.calls.map(([input]) => String(input));
+    const urls = fetchMock.mock.calls.map(([input]) => String(input));
     expect(urls.filter((u) => u.startsWith('/api/settings/public')).length).toBe(1);
-    expect(urls).not.toContain('/api/pages?include=sections');
+    expect(urls).toContain('/api/pages?include=sections');
+
+    const hierarchyCallsBefore = fetchMock.mock.calls.filter(([input]) =>
+      String(input).includes('/api/pages?include=sections'),
+    ).length;
 
     await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
     await flushPromises();
 
-    urls = fetchMock.mock.calls.map(([input]) => String(input));
-    expect(urls).toContain('/api/pages?include=sections');
+    const hierarchyCallsAfter = fetchMock.mock.calls.filter(([input]) =>
+      String(input).includes('/api/pages?include=sections'),
+    ).length;
+    expect(hierarchyCallsAfter).toBe(hierarchyCallsBefore);
     wrapper.unmount();
   });
 
@@ -270,12 +276,18 @@ describe('PublicLayout (mounted by App for routes with meta.layout = public)', (
         stubViewport(desktop);
         const { wrapper, router } = await mountApp('/peta');
         await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
-        const home = wrapper.findAll('a').find((a) => a.attributes('href') === '/' && a.text().includes('Beranda'));
+        const home = wrapper
+          .findAll('a')
+          .find((a) => a.attributes('href') === '/' && a.text().includes('Beranda'));
         expect(home).toBeTruthy();
         await home!.trigger('click');
         await flushPromises();
         expect(router.currentRoute.value.path).toBe('/');
-        expect(await scrollAndReadVariants(wrapper)).toEqual(['transparent', 'navy', 'transparent']);
+        expect(await scrollAndReadVariants(wrapper)).toEqual([
+          'transparent',
+          'navy',
+          'transparent',
+        ]);
         wrapper.unmount();
       });
     }
@@ -449,7 +461,11 @@ describe('PublicLayout (mounted by App for routes with meta.layout = public)', (
       await flushPromises();
       expect(toggle.attributes('aria-expanded')).toBe('true');
 
-      const mobileEsc = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      const mobileEsc = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      });
       window.dispatchEvent(mobileEsc);
       await flushPromises();
 
@@ -463,7 +479,11 @@ describe('PublicLayout (mounted by App for routes with meta.layout = public)', (
       expect(toggle.attributes('aria-expanded')).toBe('true');
 
       wrapper.find<HTMLAnchorElement>('a[href="/publikasi"]').element.focus();
-      const desktopEsc = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      const desktopEsc = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      });
       window.dispatchEvent(desktopEsc);
       await flushPromises();
 

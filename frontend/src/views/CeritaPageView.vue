@@ -10,6 +10,7 @@ import {
 import { useContentBlocksStore, type ContentBlock } from '../stores/contentBlocks.store';
 import ChapterToc, { type TocChapter } from '../components/cerita/ChapterToc.vue';
 import ChapterSection from '../components/cerita/ChapterSection.vue';
+import { consumeSavedPosition } from '@/router';
 
 const route = useRoute();
 const pagesStore = usePagesStore();
@@ -165,7 +166,13 @@ async function loadPage() {
   isLoading.value = false;
   await nextTick();
   setupScrollSpy();
-  scrollToHashTarget();
+  const scrolledToHash = scrollToHashTarget();
+  if (!scrolledToHash) {
+    const saved = consumeSavedPosition();
+    if (saved) {
+      window.scrollTo({ top: saved.top, left: saved.left, behavior: 'instant' });
+    }
+  }
 }
 
 // Remembers the last slug+hash scrolled to so retry/reload of the same anchor does not snap the
@@ -175,10 +182,10 @@ let lastScrolledSlugHash: string | null = null;
 // A `/cerita/x#bab` deep link resolves before the chapters exist (the page is still a skeleton
 // when the router scrolls), so the router finds no target. Once the chapters render, honour the
 // hash here. Uses native scrollIntoView so the element's own `scroll-margin-top` clears the header.
-function scrollToHashTarget() {
-  if (!route.hash) return;
+function scrollToHashTarget(): boolean {
+  if (!route.hash) return false;
   const currentPair = `${slug.value}${route.hash}`;
-  if (lastScrolledSlugHash === currentPair) return;
+  if (lastScrolledSlugHash === currentPair) return false;
   let id = route.hash.slice(1);
   try {
     id = decodeURIComponent(id);
@@ -189,7 +196,9 @@ function scrollToHashTarget() {
   if (el) {
     el.scrollIntoView({ behavior: 'instant', block: 'start' });
     lastScrolledSlugHash = currentPair;
+    return true;
   }
+  return false;
 }
 
 onMounted(loadPage);

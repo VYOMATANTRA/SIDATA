@@ -95,6 +95,9 @@ function handleToggleMenu(open: boolean) {
 onMounted(async () => {
   // Branding and footer contact details come from the same public settings on every route.
   void settingsStore.fetchPublicSettings().catch(() => {});
+  if (!pagesStore.isLoaded && !pagesStore.isHierarchyLoading) {
+    void pagesStore.fetchHierarchy();
+  }
   if (props.focusOnMount || (props.navigationSeq ?? 0) > 0) {
     const seqAtMount = props.navigationSeq;
     await nextTick();

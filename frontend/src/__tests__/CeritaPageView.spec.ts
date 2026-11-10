@@ -4,7 +4,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import { h } from 'vue';
 import type { Pinia } from 'pinia';
-import type { Router } from 'vue-router';
+import type { Router, RouteLocationNormalized } from 'vue-router';
 import CeritaPageView from '../views/CeritaPageView.vue';
 import PublicLayout from '../layouts/PublicLayout.vue';
 
@@ -127,6 +127,45 @@ describe('CeritaPageView', () => {
 
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
     expect(scrollIntoView.mock.contexts[0]).toBe(document.getElementById('kependudukan-bab-1'));
+    wrapper.unmount();
+  });
+
+  it('restores savedPosition when chapters render and no hash target exists', async () => {
+    const page = makePage('kependudukan', 'Kependudukan');
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith('/api/pages/')) {
+        return { ok: true, status: 200, json: async () => ({ page }) } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => ({ blocks: [], indicators: [], tables: [] }),
+      } as Response;
+    });
+
+    const scrollToSpy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+
+    // Simulate popstate navigation with savedPosition
+    const { scrollBehavior } = await import('@/router');
+    const to = {
+      path: '/cerita/kependudukan',
+      hash: '',
+      fullPath: '/cerita/kependudukan',
+      name: 'cerita-page',
+    } as unknown as RouteLocationNormalized;
+    const from = { path: '/', hash: '', fullPath: '/' } as unknown as RouteLocationNormalized;
+    const saved = { left: 0, top: 850 };
+    scrollBehavior(to, from, saved);
+
+    const { pinia, router } = await setupAndPush('kependudukan');
+    const wrapper = mount(CeritaPageView, {
+      global: { plugins: [pinia, router] },
+      attachTo: document.body,
+    });
+    await flushPromises();
+
+    expect(scrollToSpy).toHaveBeenCalledWith({ top: 850, left: 0, behavior: 'instant' });
+    scrollToSpy.mockRestore();
     wrapper.unmount();
   });
 
@@ -440,7 +479,8 @@ describe('CeritaPageView', () => {
 
     beforeEach(() => {
       scrollSpy = vi.fn<() => void>();
-      Element.prototype.scrollIntoView = scrollSpy as unknown as typeof Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView =
+        scrollSpy as unknown as typeof Element.prototype.scrollIntoView;
     });
 
     afterEach(() => {
@@ -628,4 +668,3 @@ describe('CeritaPageView', () => {
     });
   });
 });
-

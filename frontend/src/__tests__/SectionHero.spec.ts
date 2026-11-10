@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import LandingSectionHero from '../components/landing/SectionHero.vue';
 import CommonSectionHero from '@/components/common/SectionHero.vue';
 import { useContentBlocksStore, DEFAULT_HERO_BLOCK } from '../stores/contentBlocks.store';
@@ -216,6 +218,15 @@ describe('Landing SectionHero.vue', () => {
     expect(classes).toContain('hero-section');
     expect(classes).not.toContain('min-h-[520px]');
     expect(classes).not.toContain('sm:min-h-[580px]');
+
+    const sfcSource = readFileSync(
+      resolve(process.cwd(), 'src/components/landing/SectionHero.vue'),
+      'utf8',
+    );
+    expect(sfcSource).toMatch(/min-height:\s*100vh;/);
+    expect(sfcSource).toMatch(/min-height:\s*100dvh;/);
+    expect(sfcSource).not.toContain('calc(100vh - var(--public-header-height');
+    expect(sfcSource).not.toContain('calc(100dvh - var(--public-header-height');
 
     // Accessibility landmark and heading connection
     expect(heroSection.attributes('aria-labelledby')).toBe('hero-title');

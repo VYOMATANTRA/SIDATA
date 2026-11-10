@@ -141,14 +141,7 @@ const backgroundStyle = computed(() => {
 
 <style scoped>
 .hero-section {
-  min-height: calc(100vh - var(--public-header-height, 4.5rem));
-  min-height: calc(100dvh - var(--public-header-height, 4.5rem));
-}
-
-@media (min-width: 640px) {
-  .hero-section {
-    min-height: calc(100vh - var(--public-header-height, 5rem));
-    min-height: calc(100dvh - var(--public-header-height, 5rem));
-  }
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 </style>

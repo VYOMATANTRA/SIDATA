@@ -243,36 +243,6 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
     expect(wrapper.find('section#cerita-preview').text()).toContain('Kartu Cerita Terintegrasi');
   });
 
-  it('renders dismissible logout error banner and dismisses it when close button is clicked', async () => {
-    const { pinia, router } = setupHomeView();
-    await router.push('/');
-    await router.isReady();
-
-    const wrapper = mount(HomeView, {
-      global: { plugins: [pinia, router] },
-    });
-
-    // Initially banner is not present
-    expect(wrapper.find('[data-test="logout-error-banner"]').exists()).toBe(false);
-
-    // When logout error occurs
-    (wrapper.vm as unknown as { logoutError: string }).logoutError =
-      'Gagal keluar dari sesi. Silakan coba lagi.';
-    await nextTick();
-
-    const banner = wrapper.find('[data-test="logout-error-banner"]');
-    expect(banner.exists()).toBe(true);
-    expect(banner.text()).toContain('Gagal keluar dari sesi. Silakan coba lagi.');
-
-    // Dismiss button clears the banner
-    const dismissBtn = wrapper.find('[data-test="logout-error-dismiss"]');
-    expect(dismissBtn.exists()).toBe(true);
-    await dismissBtn.trigger('click');
-    await nextTick();
-
-    expect(wrapper.find('[data-test="logout-error-banner"]').exists()).toBe(false);
-  });
-
   // Edge Case 10: Resilient initial mount when public settings and content blocks reject
   it('renders gracefully with default content when API calls for settings and blocks fail', async () => {
     const { pinia, router } = setupHomeView();
@@ -516,10 +486,10 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
     ).toBeTruthy();
   });
 
-  it('does not fetch page hierarchy on mount, only on menu open', async () => {
+  it('fetches page hierarchy on mount, and menu open does not duplicate in-flight fetch', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
       ok: true,
-      json: async () => ({}),
+      json: async () => ({ pages: [] }),
     } as Response);
     globalThis.fetch = fetchMock;
 
@@ -528,15 +498,18 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
     await router.isReady();
 
     const wrapper = mountHome(pinia, router);
+    await nextTick();
 
-    let urls = fetchMock.mock.calls.map(([input]) => String(input));
-    expect(urls).not.toContain('/api/pages?include=sections');
+    const urls = fetchMock.mock.calls.map(([input]) => String(input));
+    expect(urls).toContain('/api/pages?include=sections');
 
     await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
     await nextTick();
 
-    urls = fetchMock.mock.calls.map(([input]) => String(input));
-    expect(urls).toContain('/api/pages?include=sections');
+    const hierarchyCalls = fetchMock.mock.calls
+      .map(([input]) => String(input))
+      .filter((u) => u.includes('/api/pages?include=sections'));
+    expect(hierarchyCalls).toHaveLength(1);
     wrapper.unmount();
   });
 });
