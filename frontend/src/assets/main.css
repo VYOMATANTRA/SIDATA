@@ -1,107 +1,116 @@
 @import url('https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,100..900;1,100..900&display=swap');
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme {
-    /*
+  /*
      * Colors. Brand = navy + white. Neutrals are navy composited over white (precomputed hex, so
      * text is never faded with opacity). Status colors are the one allowed exception. See
      * docs/UI_STYLE_GUIDE.md for the rules and contrast ratios.
      */
 
-    /* Brand */
-    --color-brand-navy: #0a2353; /* Primary brand colour; 15.24:1 on white */
-    --color-brand-navy-deep: #112c71; /* Tonal navy for gradients only; prefer --color-brand-navy */
-    --color-brand-navy-overlay: rgba(
-    0,
-    27,
-    72,
-    0.9
-    ); /* Pressed state / overlays on navy */
+  /* Brand */
+  --color-brand-navy: #0a2353; /* Primary brand colour; 15.24:1 on white */
+  --color-brand-navy-deep: #112c71; /* Tonal navy for gradients only; prefer --color-brand-navy */
+  --color-brand-navy-overlay: rgba(0, 27, 72, 0.9); /* Pressed state / overlays on navy */
 
-    /* Surfaces */
-    --color-surface: #ffffff;
-    --color-surface-muted: #f3f4f6; /* navy 5% over white */
-    --color-surface-hover: #e7e9ee; /* navy 10% over white; hover/pressed tint and disabled fill */
-    --color-surface-inverse: #0a2353; /* navy */
-    --color-surface-glass: rgba(255, 255, 255, 0.2); /* Frosted cards over photos; text on it is white */
+  /* Surfaces */
+  --color-surface: #ffffff;
+  --color-surface-muted: #f3f4f6; /* navy 5% over white */
+  --color-surface-hover: #e7e9ee; /* navy 10% over white; hover/pressed tint and disabled fill */
+  --color-surface-inverse: #0a2353; /* navy */
+  --color-surface-glass: rgba(
+    255,
+    255,
+    255,
+    0.2
+  ); /* Frosted cards over photos; text on it is white */
 
-    /* Borders */
-    --color-border: #d3d7e0; /* navy 18% over white; decorative dividers (1.44:1, not for controls) */
-    --color-border-strong: #8491a9; /* navy 50% over white; form control and UI-component edges (3.18:1) */
+  /* Borders */
+  --color-border: #d3d7e0; /* navy 18% over white; decorative dividers (1.44:1, not for controls) */
+  --color-border-strong: #8491a9; /* navy 50% over white; form control and UI-component edges (3.18:1) */
 
-    /* Text */
-    --color-text-muted: #4f6183; /* navy 72% over white; 6.23:1 on white, 5.66:1 on surface-muted */
-    --color-text-inverse: #ffffff; /* on navy; 15.24:1 */
-    --color-text-inverse-muted: #b6bdcb; /* white 70% over navy; secondary/disabled text on navy; 8.08:1 */
+  /* Text */
+  --color-text-muted: #4f6183; /* navy 72% over white; 6.23:1 on white, 5.66:1 on surface-muted */
+  --color-text-inverse: #ffffff; /* on navy; 15.24:1 */
+  --color-text-inverse-muted: #b6bdcb; /* white 70% over navy; secondary/disabled text on navy; 8.08:1 */
 
-    /* Focus rings: navy on light surfaces, white on navy surfaces (both 15.24:1 on their backdrop) */
-    --color-focus-ring: #0a2353;
-    --color-focus-ring-inverse: #ffffff;
+  /* Focus rings: navy on light surfaces, white on navy surfaces (both 15.24:1 on their backdrop) */
+  --color-focus-ring: #0a2353;
+  --color-focus-ring-inverse: #ffffff;
 
-    /*
+  /*
      * Semantic status. The only non-navy colours allowed in the UI, and only for conveying
      * error / warning / success. Always pair with text or an icon, never colour alone (WCAG 1.4.1).
      * Foregrounds were measured against white and against their own tint.
      */
-    --color-status-error: #be123c; /* 6.29:1 on white, 5.72:1 on error-surface */
-    --color-status-error-surface: #fff1f2;
-    --color-status-error-border: #fecdd3;
-    --color-status-warning: #92400e; /* 7.09:1 on white, 6.84:1 on warning-surface */
-    --color-status-warning-surface: #fffbeb;
-    --color-status-warning-border: #fde68a;
-    --color-status-success: #047857; /* 5.48:1 on white, 5.21:1 on success-surface */
-    --color-status-success-surface: #ecfdf5;
-    --color-status-success-border: #a7f3d0;
+  --color-status-error: #be123c; /* 6.29:1 on white, 5.72:1 on error-surface */
+  --color-status-error-surface: #fff1f2;
+  --color-status-error-border: #fecdd3;
+  --color-status-warning: #92400e; /* 7.09:1 on white, 6.84:1 on warning-surface */
+  --color-status-warning-surface: #fffbeb;
+  --color-status-warning-border: #fde68a;
+  --color-status-success: #047857; /* 5.48:1 on white, 5.21:1 on success-surface */
+  --color-status-success-surface: #ecfdf5;
+  --color-status-success-border: #a7f3d0;
 
-    /*
+  /*
      * DEPRECATED decorative accents. Not part of the navy/white brand and must not be used in new
      * code. Still defined because admin/CMS screens, the map and a few public pages reference them;
      * remove each token once its last reference is migrated.
      */
-    --color-brand-violet: #bb63ff; /* deprecated */
-    --color-brand-indigo: #5b58eb; /* deprecated */
-    --color-brand-cyan: #56e1e9; /* deprecated */
-    --color-brand-teal-deep: #0b7285; /* deprecated */
+  --color-brand-violet: #bb63ff; /* deprecated */
+  --color-brand-indigo: #5b58eb; /* deprecated */
+  --color-brand-cyan: #56e1e9; /* deprecated */
+  --color-brand-teal-deep: #0b7285; /* deprecated */
 
+  /* Typography */
+  --font-sans: 'Public Sans', sans-serif;
 
-    /* Typography */
-    --font-sans: "Public Sans", sans-serif;
+  --text-xs: 10px;
+  --text-xs--line-height: 16px;
+  --text-xs--font-weight: 400;
 
-    --text-xs: 10px;
-    --text-xs--line-height: 16px;
-    --text-xs--font-weight: 400;
+  --text-sm: 14px;
+  --text-sm--line-height: 23px;
+  --text-sm--font-weight: 400;
 
-    --text-sm: 14px;
-    --text-sm--line-height: 23px;
-    --text-sm--font-weight: 400;
+  --text-base: 16px;
+  --text-base--line-height: 26px;
+  --text-base--font-weight: 400;
 
-    --text-base: 16px;
-    --text-base--line-height: 26px;
-    --text-base--font-weight: 400;
+  --text-lg: 26px;
+  --text-lg--line-height: 42px;
+  --text-lg--font-weight: 600;
 
-    --text-lg: 26px;
-    --text-lg--line-height: 42px;
-    --text-lg--font-weight: 600;
+  --text-xl: 42px;
+  --text-xl--line-height: 68px;
+  --text-xl--font-weight: 700;
 
-    --text-xl: 42px;
-    --text-xl--line-height: 68px;
-    --text-xl--font-weight: 700;
-
-    /* Border Radius */
-    --radius-btn: 10px;
-    --radius-card: 12px;
+  /* Border Radius */
+  --radius-btn: 10px;
+  --radius-card: 12px;
 }
 
 @layer base {
-    h1 {
-        font-size: var(--text-xl);
-    }
+  :root {
+    --navbar-height: 4.75rem;
+  }
 
-    h2 {
-        font-size: var(--text-lg);
+  @media (min-width: 640px) {
+    :root {
+      --navbar-height: 6rem;
     }
+  }
 
-    p {
-        font-size: var(--text-base);
-    }
+  h1 {
+    font-size: var(--text-xl);
+  }
+
+  h2 {
+    font-size: var(--text-lg);
+  }
+
+  p {
+    font-size: var(--text-base);
+  }
 }

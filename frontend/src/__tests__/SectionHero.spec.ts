@@ -200,6 +200,27 @@ describe('Landing SectionHero.vue', () => {
     expect(weatherContainer.find('#custom-weather-card').exists()).toBe(true);
     expect(weatherContainer.text()).toContain('Cuaca Kustom');
   });
+
+  it('applies hero-section for scoped dynamic viewport height and omits legacy static min-height classes', () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+
+    const wrapper = mount(LandingSectionHero, {
+      global: { plugins: [pinia] },
+    });
+
+    const heroSection = wrapper.find('section#hero');
+    const classes = heroSection.classes();
+
+    // Sizing: scoped .hero-section handles dynamic viewport height with standard vh fallback
+    expect(classes).toContain('hero-section');
+    expect(classes).not.toContain('min-h-[520px]');
+    expect(classes).not.toContain('sm:min-h-[580px]');
+
+    // Accessibility landmark and heading connection
+    expect(heroSection.attributes('aria-labelledby')).toBe('hero-title');
+    expect(heroSection.find('#hero-title').exists()).toBe(true);
+  });
 });
 
 describe('Common SectionHero.vue', () => {
