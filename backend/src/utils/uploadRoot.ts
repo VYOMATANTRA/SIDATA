@@ -48,10 +48,10 @@ export function resolveUploadDirPath(
   return path.isAbsolute(trimmed) ? path.normalize(trimmed) : path.resolve(repoRoot, trimmed);
 }
 
-/** True when `child` is `parent` itself or lives anywhere beneath it (both already absolute). */
-export function isInsideOrEqual(parent: string, child: string): boolean {
-  const rel = path.relative(parent, child);
-  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+/** True when `candidate` is `root` itself or lives anywhere beneath it (both already absolute). */
+export function isInsideOrEqual(root: string, candidate: string): boolean {
+  const rel = path.relative(root, candidate);
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
 }
 
 /**

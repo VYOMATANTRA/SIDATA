@@ -15,6 +15,7 @@ import {
   sanitizeOriginalName,
   stagingDirFor,
 } from '../utils/mediaStorage.js';
+import { isInsideOrEqual } from '../utils/uploadRoot.js';
 
 let sandbox: string;
 let root: string;
@@ -197,5 +198,14 @@ describe('buildAttachmentDisposition', () => {
     const ascii = /filename="([^"]*)"/.exec(header)?.[1] ?? '';
     assert.match(ascii, /^[A-Za-z0-9._-]+$/);
     assert.match(header, /filename\*=UTF-8''[A-Za-z0-9%._-]+$/);
+  });
+});
+
+describe('isInsideOrEqual', () => {
+  it('accepts children starting with .. in the directory name but rejects directory traversal', () => {
+    assert.equal(isInsideOrEqual('/srv/uploads', '/srv/uploads/..cache'), true);
+    assert.equal(isInsideOrEqual('/srv/uploads', '/srv/uploads/../etc'), false);
+    assert.equal(isInsideOrEqual('/srv/uploads', '/srv/uploads/..'), false);
+    assert.equal(isInsideOrEqual('/srv/uploads', '/srv/uploads'), true);
   });
 });

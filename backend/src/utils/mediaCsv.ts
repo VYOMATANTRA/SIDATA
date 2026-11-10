@@ -151,19 +151,28 @@ export async function scanCsvFile(
     return null;
   };
 
-  try {
-    for await (const chunk of createReadStream(filePath, { highWaterMark: chunkBytes })) {
-      const buffer = chunk as Buffer;
-      if (buffer.includes(0)) return { ok: false, reason: 'binary' };
-      const failure = handleText(decoder.decode(buffer, { stream: true }));
-      if (failure) return failure;
+  for await (const chunk of createReadStream(filePath, { highWaterMark: chunkBytes })) {
+    const buffer = chunk as Buffer;
+    if (buffer.includes(0)) return { ok: false, reason: 'binary' };
+    let text: string;
+    try {
+      text = decoder.decode(buffer, { stream: true });
+    } catch (error) {
+      if (error instanceof TypeError) return { ok: false, reason: 'binary' };
+      throw error;
     }
-    const failure = handleText(decoder.decode());
+    const failure = handleText(text);
     if (failure) return failure;
+  }
+  let finalChunk: string;
+  try {
+    finalChunk = decoder.decode();
   } catch (error) {
-    if (error instanceof TypeError) return { ok: false, reason: 'binary' }; // invalid UTF-8
+    if (error instanceof TypeError) return { ok: false, reason: 'binary' };
     throw error;
   }
+  const failure = handleText(finalChunk);
+  if (failure) return failure;
 
   if (!headChecked && MARKUP_START.test(head)) return { ok: false, reason: 'binary' };
   if (formula || !scanner.end()) return { ok: false, reason: 'formula' };
