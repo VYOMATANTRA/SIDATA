@@ -414,6 +414,42 @@ describe('comparison templates store', () => {
       expect(postCount).toBe(4);
       expect(getCount).toBe(3);
     });
+
+    it('sorts templates in store alphabetically by label and slug on creation and update', async () => {
+      route({
+        'POST /api/comparison-templates': () =>
+          json({ template: makeTemplate({ id: 'tpl-1', slug: 'b-slug', label: 'B Label' }) }),
+        'PATCH /api/comparison-templates/tpl-2': () =>
+          json({ template: makeTemplate({ id: 'tpl-2', slug: 'a-slug', label: 'A Label' }) }),
+      });
+      const store = useComparisonTemplatesStore();
+      store.templates = [
+        makeTemplate({ id: 'tpl-2', slug: 'z-slug', label: 'Z Label' }),
+        makeTemplate({ id: 'tpl-3', slug: 'm-slug', label: 'M Label' }),
+      ];
+
+      // Create 'B Label': should be inserted in sorted order: [M, Z] -> [B, M, Z]
+      await store.createTemplate({ ...DRAFT, label: 'B Label' });
+      expect(store.templates.map((t) => t.label)).toEqual(['B Label', 'M Label', 'Z Label']);
+
+      // Update 'tpl-2' from 'Z Label' to 'A Label': should re-sort to [A, B, M]
+      await store.updateTemplate('tpl-2', { ...DRAFT, label: 'A Label' });
+      expect(store.templates.map((t) => t.label)).toEqual(['A Label', 'B Label', 'M Label']);
+    });
+
+    it('uses slug as tie-breaker when labels are identical on replacement', async () => {
+      route({
+        'POST /api/comparison-templates': () =>
+          json({ template: makeTemplate({ id: 'tpl-new', slug: 'alpha', label: 'Same Label' }) }),
+      });
+      const store = useComparisonTemplatesStore();
+      store.templates = [
+        makeTemplate({ id: 'tpl-existing', slug: 'beta', label: 'Same Label' }),
+      ];
+
+      await store.createTemplate({ ...DRAFT, label: 'Same Label' });
+      expect(store.templates.map((t) => t.slug)).toEqual(['alpha', 'beta']);
+    });
   });
 
   describe('describeTemplateFailure', () => {
