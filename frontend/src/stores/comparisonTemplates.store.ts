@@ -188,6 +188,10 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
 
     if (isLoaded.value && !force) return;
 
+    if (inFlight && force) {
+      await inFlight;
+    }
+
     if (forSelector) {
       selectorError.value = null;
       inFlightForSelector = true;
@@ -242,6 +246,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
     draft: TemplateDraft,
     acknowledgedWarnings: readonly string[] = [],
   ): Promise<SaveOutcome> {
+    let lastError: unknown;
     for (let attempt = 0; attempt <= MAX_SLUG_RETRIES; attempt += 1) {
       const slug = uniqueSlug(
         draft.label,
@@ -264,6 +269,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
         replaceTemplate(data.template);
         return { ok: true, template: data.template };
       } catch (err) {
+        lastError = err;
         if (
           err instanceof ApiError &&
           err.status === 409 &&
@@ -276,7 +282,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
         return failureToOutcome(err, 'menyimpan templat kalimat');
       }
     }
-    return { ok: false, kind: 'error', message: describeTemplateFailure({ status: 409 }, '') };
+    return failureToOutcome(lastError, 'menyimpan templat kalimat');
   }
 
   async function updateTemplate(

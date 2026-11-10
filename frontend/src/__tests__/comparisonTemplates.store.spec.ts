@@ -113,6 +113,36 @@ describe('comparison templates store', () => {
     expect(store.selectorError).toBeNull();
   });
 
+  it('awaits in-flight request and performs a fresh fetch when force is true', async () => {
+    let getCalls = 0;
+    let resolveFirstGet!: (res: Response) => void;
+    const firstGetPromise = new Promise<Response>((resolve) => {
+      resolveFirstGet = resolve;
+    });
+
+    route({
+      'GET /api/comparison-templates': () => {
+        getCalls += 1;
+        if (getCalls === 1) {
+          return firstGetPromise;
+        }
+        return json({ templates: [makeTemplate({ id: 'tpl-fresh' })] });
+      },
+    });
+
+    const store = useComparisonTemplatesStore();
+    const firstFetch = store.fetchTemplates();
+
+    const forcedFetch = store.fetchTemplates({ force: true });
+
+    resolveFirstGet(json({ templates: [makeTemplate({ id: 'tpl-stale' })] }));
+
+    await Promise.all([firstFetch, forcedFetch]);
+
+    expect(getCalls).toBe(2);
+    expect(store.templates.map((t) => t.id)).toEqual(['tpl-fresh']);
+  });
+
   describe('delete', () => {
     it('explains an in-use template with the usage count and what to do first', async () => {
       route({
@@ -327,6 +357,28 @@ describe('comparison templates store', () => {
       expect(outcome).toMatchObject({ kind: 'error' });
       expect(postCount).toBe(1);
       expect(getCount).toBe(0);
+    });
+
+    it('flows to failureToOutcome when SLUG_TAKEN retry attempts are exhausted', async () => {
+      let postCount = 0;
+      let getCount = 0;
+      route({
+        'POST /api/comparison-templates': () => {
+          postCount += 1;
+          return json({ error: 'Slug sudah dipakai', code: 'SLUG_TAKEN' }, 409);
+        },
+        'GET /api/comparison-templates': () => {
+          getCount += 1;
+          return json({ templates: [makeTemplate({ slug: `perbandingan-${getCount}` })] });
+        },
+      });
+      const store = useComparisonTemplatesStore();
+      const outcome = await store.createTemplate(DRAFT);
+
+      expect(outcome.ok).toBe(false);
+      expect(outcome).toMatchObject({ kind: 'error' });
+      expect(postCount).toBe(4);
+      expect(getCount).toBe(3);
     });
   });
 
