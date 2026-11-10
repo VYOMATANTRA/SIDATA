@@ -13,6 +13,8 @@ import {
   RT_CONFLICT_MESSAGE,
   sanitizeFieldErrors,
   SESSION_EXPIRED_MESSAGE,
+  SESSION_EXPIRED_NEUTRAL_MESSAGE,
+  STALE_WRITE_NEUTRAL_MESSAGE,
   toUserMessage,
   UNKNOWN_FIELD_MESSAGE,
   USER_MESSAGES,
@@ -52,11 +54,29 @@ describe('toUserMessage mappings', () => {
     ).toBe('network');
   });
 
-  it('keeps the session-ended wording for 401', () => {
+  it('keeps the session-ended wording for 401 form writes', () => {
     const result = toUserMessage(httpFailure(401));
 
     expect(result.kind).toBe('session');
     expect(result.message).toBe(SESSION_EXPIRED_MESSAGE);
+    expect(toUserMessage(httpFailure(401), 'menyimpan profil', 'POST').message).toBe(
+      `Gagal menyimpan profil. ${SESSION_EXPIRED_MESSAGE}`,
+    );
+  });
+
+  it('uses neutral session wording for 401 on reads, deletes, or reordering', () => {
+    expect(toUserMessage(httpFailure(401), undefined, 'GET').message).toBe(
+      SESSION_EXPIRED_NEUTRAL_MESSAGE,
+    );
+    expect(toUserMessage(httpFailure(401), undefined, 'DELETE').message).toBe(
+      SESSION_EXPIRED_NEUTRAL_MESSAGE,
+    );
+    expect(toUserMessage(httpFailure(401), 'menghapus pengguna').message).toBe(
+      `Gagal menghapus pengguna. ${SESSION_EXPIRED_NEUTRAL_MESSAGE}`,
+    );
+    expect(toUserMessage(httpFailure(401), 'mengurutkan halaman').message).toBe(
+      `Gagal mengurutkan halaman. ${SESSION_EXPIRED_NEUTRAL_MESSAGE}`,
+    );
   });
 
   it('maps 403 to the permission wording', () => {
@@ -101,6 +121,17 @@ describe('toUserMessage mappings', () => {
     expect(result.kind).toBe('stale');
     expect(result.message).toBe(
       'Data ini baru saja diubah oleh orang lain. Muat ulang untuk melihat versi terbaru; isian Anda tetap tersimpan di formulir.',
+    );
+  });
+
+  it('uses neutral stale-write wording for 409 STALE_WRITE on deletes or reordering', () => {
+    const error = Object.assign(httpFailure(409), { code: 'STALE_WRITE' });
+    expect(toUserMessage(error, undefined, 'DELETE').message).toBe(STALE_WRITE_NEUTRAL_MESSAGE);
+    expect(toUserMessage(error, 'menghapus pengguna').message).toBe(
+      `Gagal menghapus pengguna. ${STALE_WRITE_NEUTRAL_MESSAGE}`,
+    );
+    expect(toUserMessage(error, 'mengurutkan halaman', 'PUT').message).toBe(
+      `Gagal mengurutkan halaman. ${STALE_WRITE_NEUTRAL_MESSAGE}`,
     );
   });
 

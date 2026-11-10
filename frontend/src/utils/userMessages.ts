@@ -19,6 +19,17 @@ export const SESSION_EXPIRED_MESSAGE =
   'Sesi Anda berakhir. Silakan masuk kembali — isi formulir ini belum dikirim.';
 
 /**
+ * Shown when a session expires on a read, delete, reorder, or other action outside an active form draft.
+ */
+export const SESSION_EXPIRED_NEUTRAL_MESSAGE = 'Sesi Anda berakhir. Silakan masuk kembali.';
+
+/**
+ * Shown when a record was modified by another operator during a delete, reorder, or non-form action.
+ */
+export const STALE_WRITE_NEUTRAL_MESSAGE =
+  'Data ini baru saja diubah oleh orang lain. Muat ulang untuk melihat versi terbaru.';
+
+/**
  * Shown when a request is rejected with 403 because the CSRF token was missing, invalid, or expired.
  */
 export const CSRF_INVALID_MESSAGE =
@@ -79,6 +90,7 @@ export const USER_MESSAGES: Readonly<Record<FailureKind, string>> = {
  */
 export const READ_USER_MESSAGES: Readonly<Partial<Record<FailureKind, string>>> = {
   network: 'Tidak dapat terhubung ke server. Periksa koneksi lalu coba lagi.',
+  session: SESSION_EXPIRED_NEUTRAL_MESSAGE,
   server: 'Terjadi kendala di server. Coba lagi beberapa saat lagi.',
   unknown: 'Terjadi kendala di server. Coba lagi beberapa saat lagi.',
 };
@@ -90,8 +102,22 @@ export function isReadMethod(method: unknown): boolean {
   return upper === 'GET' || upper === 'HEAD';
 }
 
+/** True for reads, deletes, or actions whose context indicates an operation outside an active form draft. */
+export function isNonFormAction(method?: unknown, context?: string): boolean {
+  if (isReadMethod(method)) return true;
+  if (typeof method === 'string' && method.toUpperCase() === 'DELETE') return true;
+  if (typeof context === 'string' && /menghapus|mengurutkan/i.test(context)) return true;
+  return false;
+}
+
 /** Approved text for a failure kind, worded for a read or a write request. */
-export function approvedMessage(kind: FailureKind, method?: unknown): string {
+export function approvedMessage(kind: FailureKind, method?: unknown, context?: string): string {
+  if (kind === 'session' && isNonFormAction(method, context)) {
+    return SESSION_EXPIRED_NEUTRAL_MESSAGE;
+  }
+  if (kind === 'stale' && isNonFormAction(method, context)) {
+    return STALE_WRITE_NEUTRAL_MESSAGE;
+  }
   return (isReadMethod(method) ? READ_USER_MESSAGES[kind] : undefined) ?? USER_MESSAGES[kind];
 }
 
@@ -360,11 +386,12 @@ export function toUserMessage(error: unknown, context?: string, method?: string)
   // Validation failures are the one place the server's own sentence is shown: the backend
   // answers 400/422 with a short, user-oriented Indonesian reason ("Judul tidak boleh memuat
   // HTML"). Every other status keeps approved wording so 5xx/SQL/stack text never leaks.
+  const methodUsed = record['method'] ?? method;
   const base = isCsrf
     ? CSRF_INVALID_MESSAGE
     : kind === 'validation' && Object.keys(fieldErrors).length === 0
       ? (readableServerMessage(record['serverMessage']) ?? USER_MESSAGES.validation)
-      : approvedMessage(kind, record['method'] ?? method);
+      : approvedMessage(kind, methodUsed, context);
   const message = phrase ? `Gagal ${phrase}. ${base}` : base;
 
   return { message, kind, status, fieldErrors };
