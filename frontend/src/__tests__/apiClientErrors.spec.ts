@@ -10,6 +10,7 @@ import {
 import {
   CSRF_INVALID_MESSAGE,
   READ_USER_MESSAGES,
+  SESSION_EXPIRED_NEUTRAL_MESSAGE,
   toUserMessage,
   USER_MESSAGES,
 } from '../utils/userMessages';
@@ -259,11 +260,19 @@ describe('apiClient error object', () => {
       return json({ error: 'Token tidak valid' }, 401);
     });
 
-    const error = await apiRequestJson('/api/indicators').catch((e: unknown) => e);
+    const readError = await apiRequestJson('/api/indicators').catch((e: unknown) => e);
 
-    expect(error).toBeInstanceOf(ApiError);
-    expect((error as ApiError).userMessage).toBe(SESSION_EXPIRED_MESSAGE);
-    expect((error as ApiError).message).toBe(SESSION_EXPIRED_MESSAGE);
+    expect(readError).toBeInstanceOf(ApiError);
+    expect((readError as ApiError).userMessage).toBe(SESSION_EXPIRED_NEUTRAL_MESSAGE);
+    expect((readError as ApiError).message).toBe(SESSION_EXPIRED_MESSAGE);
+
+    const writeError = await apiRequestJson('/api/indicators', { method: 'POST', body: '{}' }).catch(
+      (e: unknown) => e,
+    );
+
+    expect(writeError).toBeInstanceOf(ApiError);
+    expect((writeError as ApiError).userMessage).toBe(SESSION_EXPIRED_MESSAGE);
+    expect((writeError as ApiError).message).toBe(SESSION_EXPIRED_MESSAGE);
   });
 
   it('maps a transient refresh failure to the server wording', async () => {
