@@ -382,6 +382,13 @@ describe('router scrollBehavior', () => {
     expect(await scrollBehavior(loc('/peta'), loc('/peta'), null)).toBe(false);
   });
 
+  it('restores savedPosition on same-path query-only history back/forward (popstate)', async () => {
+    const saved = { left: 0, top: 450 };
+    const from = loc('/peta', '', '/peta?page=2');
+    const to = loc('/peta', '', '/peta?page=1');
+    expect(await scrollBehavior(to, from, saved)).toBe(saved);
+  });
+
   it('preserves scroll position (returns false) on same-path query-only changes even if the URL has a hash', async () => {
     mkEl('target', '50px');
     const from = loc('/peta', '#target', '/peta#target');

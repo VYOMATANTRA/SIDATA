@@ -86,6 +86,9 @@ function hashTarget(hash: string): { el: Element; top: number; behavior: ScrollB
 }
 
 export const scrollBehavior: RouterScrollBehavior = (to, from, savedPosition) => {
+  if (savedPosition && to.path === from.path && to.hash === from.hash && to.fullPath !== from.fullPath) {
+    return savedPosition;
+  }
   if (to.path === from.path && to.hash === from.hash && to.fullPath !== from.fullPath) {
     return false;
   }
