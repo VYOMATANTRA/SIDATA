@@ -672,6 +672,66 @@ describe('ComparisonTemplateForm', () => {
       wrapper.unmount();
     });
 
+    it('announces updating status and shows visible loading feedback with opacity-60 on cards', async () => {
+      vi.useFakeTimers();
+      const wrapper = mountForm();
+
+      // Before initial preview completes, status is loading
+      const live = wrapper.find('[data-test="preview"] [aria-live="polite"]');
+      expect(live.text()).toBe('Memperbarui pratinjau');
+
+      // Complete initial preview
+      await vi.advanceTimersByTimeAsync(800);
+      await flushPromises();
+
+      expect(live.text()).toBe('Pratinjau diperbarui');
+      const items = wrapper.findAll('[data-test="preview-item"]');
+      expect(items).toHaveLength(2);
+      expect(items[0]!.classes()).not.toContain('opacity-60');
+      expect(wrapper.find('[data-test="preview-updating"]').exists()).toBe(false);
+
+      // Trigger an edit so preview reloads while previews exist
+      const text = wrapper.find('[data-test="builder-trendTetap"] textarea');
+      await text.setValue('tidak berubah lagi');
+
+      // Now previewStatus is loading with existing previews
+      expect(live.text()).toBe('Memperbarui pratinjau');
+      expect(wrapper.find('[data-test="preview-updating"]').text()).toBe('Memperbarui pratinjau…');
+      expect(wrapper.findAll('[data-test="preview-item"]')[0]!.classes()).toContain('opacity-60');
+
+      // Advance timers to complete
+      await vi.advanceTimersByTimeAsync(800);
+      await flushPromises();
+
+      expect(live.text()).toBe('Pratinjau diperbarui');
+      expect(wrapper.find('[data-test="preview-updating"]').exists()).toBe(false);
+      expect(wrapper.findAll('[data-test="preview-item"]')[0]!.classes()).not.toContain('opacity-60');
+
+      wrapper.unmount();
+    });
+
+    it('clears existing previews when a subsequent preview fails with server error', async () => {
+      vi.useFakeTimers();
+      // First preview succeeds
+      const wrapper = mountForm();
+      await vi.advanceTimersByTimeAsync(800);
+      await flushPromises();
+      expect(wrapper.findAll('[data-test="preview-item"]')).toHaveLength(2);
+
+      // Subsequent preview fails with 500 error
+      previewResponse = () => json({ error: 'Internal Server Error' }, 500);
+      const text = wrapper.find('[data-test="builder-trendTetap"] textarea');
+      await text.setValue('tetap sama');
+      await vi.advanceTimersByTimeAsync(800);
+      await flushPromises();
+
+      expect(wrapper.findAll('[data-test="preview-item"]')).toHaveLength(0);
+      expect(wrapper.find('[data-test="preview-error"]').text()).toContain(
+        'Pratinjau belum bisa dimuat',
+      );
+      wrapper.unmount();
+    });
+
     it('exposes focusNameInput to programmatically focus the name input', async () => {
       const wrapper = mountForm();
       const input = wrapper.find<HTMLInputElement>('#templat-nama');

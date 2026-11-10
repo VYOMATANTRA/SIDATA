@@ -368,6 +368,7 @@ onBeforeUnmount(cancelPreview);
 // Only a short status is announced; the sentences themselves sit outside the live region so
 // every debounced update does not re-read up to four full sentences.
 const previewAnnouncement = computed(() => {
+  if (previewStatus.value === 'loading') return 'Memperbarui pratinjau';
   if (previewStatus.value === 'ready') return 'Pratinjau diperbarui';
   if (previewStatus.value === 'error') return 'Pratinjau belum bisa dimuat';
   return '';
@@ -530,7 +531,14 @@ const usageNote = computed(() => {
           Menyiapkan pratinjau…
         </p>
         <p
-          v-if="previewStatus === 'error'"
+          v-else-if="previewStatus === 'loading' && previews.length > 0"
+          class="text-text-muted text-sm"
+          data-test="preview-updating"
+        >
+          Memperbarui pratinjau…
+        </p>
+        <p
+          v-else-if="previewStatus === 'error'"
           class="text-status-error text-sm"
           data-test="preview-error"
         >
@@ -541,7 +549,8 @@ const usageNote = computed(() => {
           <li
             v-for="item in previews"
             :key="item.title"
-            class="rounded-btn border-border bg-surface border p-3"
+            class="rounded-btn border-border bg-surface border p-3 transition-opacity duration-200"
+            :class="{ 'opacity-60': previewStatus === 'loading' }"
             data-test="preview-item"
           >
             <p class="text-text-muted text-xs font-semibold">{{ item.title }}</p>
