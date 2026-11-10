@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   TEMPLATE_CHIPS,
+  TEMPLATE_SLOTS,
   VARIANT_CHIPS,
   chipSegment,
   describeBody,
@@ -46,6 +49,16 @@ describe('chip catalogue', () => {
     for (const chip of TEMPLATE_CHIPS) {
       expect(chip.name + chip.help).not.toMatch(/[{}_]/);
     }
+  });
+
+  it('matches the exact slot catalogue defined in backend comparisonProse.ts', () => {
+    const backendFile = resolve(__dirname, '../../../backend/src/utils/comparisonProse.ts');
+    const source = readFileSync(backendFile, 'utf-8');
+    const match = source.match(/export const TEMPLATE_SLOTS = \[([\s\S]*?)\] as const;/);
+    expect(match).not.toBeNull();
+    const slotBlock = match?.[1] ?? '';
+    const backendSlots = Array.from(slotBlock.matchAll(/'([^']+)'/g)).map((m) => m[1]);
+    expect(TEMPLATE_SLOTS).toEqual(backendSlots);
   });
 });
 

@@ -8,16 +8,19 @@
  * (`backend/src/utils/comparisonProse.ts`), and the two lists must stay identical.
  */
 
-export type TemplateSlot =
-  | 'label'
-  | 'unit'
-  | 'value_current'
-  | 'value_previous'
-  | 'period_current'
-  | 'period_previous'
-  | 'delta'
-  | 'delta_percent'
-  | 'trend';
+export const TEMPLATE_SLOTS = [
+  'label',
+  'unit',
+  'value_current',
+  'value_previous',
+  'period_current',
+  'period_previous',
+  'delta',
+  'delta_percent',
+  'trend',
+] as const;
+
+export type TemplateSlot = (typeof TEMPLATE_SLOTS)[number];
 
 export interface TemplateChip {
   slot: TemplateSlot;
