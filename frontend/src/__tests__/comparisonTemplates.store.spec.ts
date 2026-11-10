@@ -143,6 +143,61 @@ describe('comparison templates store', () => {
     expect(store.templates.map((t) => t.id)).toEqual(['tpl-fresh']);
   });
 
+  it('isolates error channels when selector fetch is followed by forced admin refresh that fails', async () => {
+    let getCalls = 0;
+    let resolveFirstGet!: (res: Response) => void;
+    const firstGetPromise = new Promise<Response>((resolve) => {
+      resolveFirstGet = resolve;
+    });
+
+    route({
+      'GET /api/comparison-templates': () => {
+        getCalls += 1;
+        if (getCalls === 1) return firstGetPromise;
+        return json({ error: 'Admin refresh failed' }, 500);
+      },
+    });
+
+    const store = useComparisonTemplatesStore();
+    const selectorFetch = store.fetchTemplates({ force: false, forSelector: true });
+    const adminFetch = store.fetchTemplates({ force: true, forSelector: false });
+
+    resolveFirstGet(json({ templates: [makeTemplate({ id: 'tpl-selector' })] }));
+
+    await Promise.all([selectorFetch, adminFetch]);
+
+    expect(getCalls).toBe(2);
+    expect(store.selectorError).toBeNull();
+    expect(store.error).toContain('Gagal memuat daftar templat kalimat.');
+  });
+
+  it('prevents a slow in-flight fetchTemplates from overwriting templates mutated in the meantime', async () => {
+    let resolveGet!: (res: Response) => void;
+    const getPromise = new Promise<Response>((resolve) => {
+      resolveGet = resolve;
+    });
+
+    route({
+      'GET /api/comparison-templates': () => getPromise,
+      'POST /api/comparison-templates': () =>
+        json({ template: makeTemplate({ id: 'tpl-created', label: 'Created While In Flight' }) }),
+    });
+
+    const store = useComparisonTemplatesStore();
+    const slowFetch = store.fetchTemplates({ force: true });
+
+    // While slowFetch is in flight, an admin creates a template
+    await store.createTemplate({ ...DRAFT, label: 'Created While In Flight' });
+    expect(store.templates.map((t) => t.id)).toEqual(['tpl-created']);
+
+    // Now the slow fetch resolves with an older snapshot
+    resolveGet(json({ templates: [makeTemplate({ id: 'tpl-stale-from-server' })] }));
+    await slowFetch;
+
+    // Mutated list must not be clobbered by the stale GET response
+    expect(store.templates.map((t) => t.id)).toEqual(['tpl-created']);
+  });
+
   describe('delete', () => {
     it('explains an in-use template with the usage count and what to do first', async () => {
       route({
@@ -265,14 +320,14 @@ describe('comparison templates store', () => {
       });
       const store = useComparisonTemplatesStore();
 
-      await store.updateTemplate('tpl-1', DRAFT);
-      await store.updateTemplate('tpl-1', DRAFT, ['k1', 'k2']);
+      await store.updateTemplate('tpl-1', DRAFT, '2026-01-02T00:00:00.000Z');
+      await store.updateTemplate('tpl-1', DRAFT, '2026-01-02T00:00:00.000Z', ['k1', 'k2']);
 
       expect(bodies[0]).not.toHaveProperty('acknowledgedWarnings');
       expect(bodies[1]).toMatchObject({ acknowledgedWarnings: ['k1', 'k2'] });
     });
 
-    it('sends expectedUpdatedAt in PATCH body when provided', async () => {
+    it('always sends expectedUpdatedAt in PATCH body', async () => {
       let body: Record<string, unknown> | null = null;
       route({
         'PATCH /api/comparison-templates/tpl-1': (init) => {
@@ -281,7 +336,7 @@ describe('comparison templates store', () => {
         },
       });
       const store = useComparisonTemplatesStore();
-      await store.updateTemplate('tpl-1', DRAFT, [], '2026-01-02T00:00:00.000Z');
+      await store.updateTemplate('tpl-1', DRAFT, '2026-01-02T00:00:00.000Z');
 
       expect(body).toMatchObject({
         expectedUpdatedAt: '2026-01-02T00:00:00.000Z',
@@ -294,7 +349,7 @@ describe('comparison templates store', () => {
           json({ error: 'Data telah diubah', code: 'STALE_WRITE' }, 409),
       });
       const store = useComparisonTemplatesStore();
-      const outcome = await store.updateTemplate('tpl-1', DRAFT, [], '2026-01-01T00:00:00.000Z');
+      const outcome = await store.updateTemplate('tpl-1', DRAFT, '2026-01-01T00:00:00.000Z');
 
       expect(outcome).toMatchObject({
         ok: false,
@@ -433,7 +488,7 @@ describe('comparison templates store', () => {
       expect(store.templates.map((t) => t.label)).toEqual(['B Label', 'M Label', 'Z Label']);
 
       // Update 'tpl-2' from 'Z Label' to 'A Label': should re-sort to [A, B, M]
-      await store.updateTemplate('tpl-2', { ...DRAFT, label: 'A Label' });
+      await store.updateTemplate('tpl-2', { ...DRAFT, label: 'A Label' }, '2026-01-02T00:00:00.000Z');
       expect(store.templates.map((t) => t.label)).toEqual(['A Label', 'B Label', 'M Label']);
     });
 

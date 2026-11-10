@@ -156,9 +156,16 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
   const error = ref<string | null>(null);
   const selectorError = ref<string | null>(null);
 
-  let inFlight: Promise<void> | null = null;
-  let inFlightForSelector = false;
-  let inFlightForAdmin = false;
+  interface ActiveFetch {
+    token: symbol;
+    promise: Promise<boolean>;
+    forSelector: boolean;
+    forAdmin: boolean;
+    epoch: number;
+  }
+
+  let activeFetch: ActiveFetch | null = null;
+  let mutationEpoch = 0;
 
   /**
    * Replaces an existing template in place or appends a new one, keeping the list
@@ -181,37 +188,61 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
 
   async function fetchTemplates(
     options: boolean | FetchTemplatesOptions = false,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const force = typeof options === 'boolean' ? options : Boolean(options.force);
     const forSelector = typeof options === 'object' && Boolean(options.forSelector);
+    const forAdmin = !forSelector;
 
-    if (isLoaded.value && !force) return;
+    if (isLoaded.value && !force) return true;
 
-    if (inFlight && force) {
-      await inFlight;
+    if (activeFetch && force) {
+      await activeFetch.promise;
+    }
+
+    if (activeFetch && !force) {
+      if (forSelector) {
+        selectorError.value = null;
+        activeFetch.forSelector = true;
+      }
+      if (forAdmin) {
+        error.value = null;
+        activeFetch.forAdmin = true;
+      }
+      return activeFetch.promise;
     }
 
     if (forSelector) {
       selectorError.value = null;
-      inFlightForSelector = true;
-    } else {
+    }
+    if (forAdmin) {
       error.value = null;
-      inFlightForAdmin = true;
     }
 
-    if (inFlight) return inFlight;
-
     isLoading.value = true;
+    const requestEpoch = mutationEpoch;
+    const requestToken = Symbol();
+    const request = {
+      forSelector,
+      forAdmin,
+      epoch: requestEpoch,
+    };
 
-    inFlight = (async () => {
+    const fetchPromise = (async (): Promise<boolean> => {
       try {
         const data = await apiRequestJson<{ templates?: ComparisonTemplate[] }>(
           '/api/comparison-templates',
         );
-        templates.value = Array.isArray(data.templates) ? data.templates : [];
-        isLoaded.value = true;
-        error.value = null;
-        selectorError.value = null;
+        if (requestEpoch === mutationEpoch) {
+          templates.value = Array.isArray(data.templates) ? data.templates : [];
+          isLoaded.value = true;
+        }
+        if (request.forSelector) {
+          selectorError.value = null;
+        }
+        if (request.forAdmin) {
+          error.value = null;
+        }
+        return true;
       } catch (err) {
         // A failed refetch keeps the rows already on screen rather than blanking the list.
         const failureMessage = describeTemplateFailure(
@@ -219,21 +250,41 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
           'memuat daftar templat kalimat',
           'GET',
         );
-        if (inFlightForSelector) {
+        if (request.forSelector) {
           selectorError.value = failureMessage;
         }
-        if (inFlightForAdmin) {
+        if (request.forAdmin) {
           error.value = failureMessage;
         }
+        return false;
       } finally {
-        isLoading.value = false;
-        inFlight = null;
-        inFlightForSelector = false;
-        inFlightForAdmin = false;
+        if (activeFetch?.token === requestToken) {
+          activeFetch = null;
+          isLoading.value = false;
+        }
       }
     })();
 
-    return inFlight;
+    const currentRequest: ActiveFetch = {
+      token: requestToken,
+      get forSelector() {
+        return request.forSelector;
+      },
+      set forSelector(val: boolean) {
+        request.forSelector = val;
+      },
+      get forAdmin() {
+        return request.forAdmin;
+      },
+      set forAdmin(val: boolean) {
+        request.forAdmin = val;
+      },
+      epoch: requestEpoch,
+      promise: fetchPromise,
+    };
+
+    activeFetch = currentRequest;
+    return currentRequest.promise;
   }
 
   /**
@@ -265,6 +316,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
             }),
           },
         );
+        mutationEpoch += 1;
         replaceTemplate(data.template);
         return { ok: true, template: data.template };
       } catch (err) {
@@ -275,7 +327,10 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
           err.code === 'SLUG_TAKEN' &&
           attempt < MAX_SLUG_RETRIES
         ) {
-          await fetchTemplates(true);
+          const fetched = await fetchTemplates(true);
+          if (!fetched) {
+            return failureToOutcome(err, 'menyimpan templat kalimat');
+          }
           continue;
         }
         return failureToOutcome(err, 'menyimpan templat kalimat');
@@ -287,8 +342,8 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
   async function updateTemplate(
     id: string,
     draft: TemplateDraft,
+    expectedUpdatedAt: string,
     acknowledgedWarnings: readonly string[] = [],
-    expectedUpdatedAt?: string,
   ): Promise<SaveOutcome> {
     try {
       const data = await apiRequestJson<{ template: ComparisonTemplate }>(
@@ -297,13 +352,14 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
           method: 'PATCH',
           body: JSON.stringify({
             ...draft,
-            ...(expectedUpdatedAt !== undefined ? { expectedUpdatedAt } : {}),
+            expectedUpdatedAt,
             ...(acknowledgedWarnings.length > 0
               ? { acknowledgedWarnings: [...acknowledgedWarnings] }
               : {}),
           }),
         },
       );
+      mutationEpoch += 1;
       replaceTemplate(data.template);
       return { ok: true, template: data.template };
     } catch (err) {
@@ -327,13 +383,14 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
       await apiRequestJson(`/api/comparison-templates/${encodeURIComponent(template.id)}`, {
         method: 'DELETE',
       });
+      mutationEpoch += 1;
       templates.value = templates.value.filter((item) => item.id !== template.id);
       return { ok: true };
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         // The count on screen may be stale; refresh it so the message and badge stay honest.
-        await fetchTemplates(true);
-        const fresh = templates.value.find((item) => item.id === template.id);
+        const fetched = await fetchTemplates(true);
+        const fresh = fetched ? templates.value.find((item) => item.id === template.id) : undefined;
         if (err.code === 'TEMPLATE_IN_USE' || (fresh?.usageCount ?? 0) > 0) {
           return {
             ok: false,
@@ -351,8 +408,10 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
   }
 
   /**
-   * Renders a draft through the server's own renderer. Throws on failure so the caller can keep
-   * the last good preview; `signal` lets a newer keystroke cancel the request it supersedes.
+   * Renders a draft through the server's own renderer.
+   * Throws `ApiError` (e.g. 422 TREND_KEYWORD_ACK_REQUIRED, 400, or 429) on failure rather
+   * than returning null, so the caller can handle or keep the last good preview;
+   * `signal` lets a newer keystroke cancel the request it supersedes.
    */
   async function previewTemplate(
     draft: Omit<TemplateDraft, 'label'>,

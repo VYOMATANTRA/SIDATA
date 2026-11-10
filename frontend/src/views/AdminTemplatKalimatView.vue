@@ -165,8 +165,11 @@ async function openDelete(template: ComparisonTemplate): Promise<void> {
   deleting.value = template;
   deleteBusy.value = true;
   try {
-    await store.fetchTemplates(true);
-    if (!deleting.value) return;
+    const fetched = await store.fetchTemplates(true);
+    if (!deleting.value || deleting.value.id !== template.id) return;
+    if (!fetched) {
+      return;
+    }
     const refreshed = store.templates.find((item) => item.id === template.id);
     if (refreshed) {
       deleting.value = refreshed;

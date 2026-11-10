@@ -55,12 +55,6 @@ const SENTENCE_FIELDS: readonly SentenceField[] = ['body', 'trendNaik', 'trendTu
 
 const nameInput = ref<HTMLInputElement | null>(null);
 const baseUpdatedAt = ref(props.template?.updatedAt ?? '');
-watch(
-  () => props.template?.updatedAt,
-  (val) => {
-    if (val) baseUpdatedAt.value = val;
-  },
-);
 const label = ref(props.template?.label ?? '');
 const segments = ref<Record<SentenceField, TemplateSegment[]>>({
   body: parseBody(props.template?.body ?? ''),
@@ -71,7 +65,9 @@ const segments = ref<Record<SentenceField, TemplateSegment[]>>({
 
 const submitted = ref(false);
 const saving = ref(false);
-watch(saving, (value) => emit('busy', value));
+const reloadingLatest = ref(false);
+const formBusy = computed(() => saving.value || reloadingLatest.value);
+watch(formBusy, (value) => emit('busy', value));
 const serverError = ref('');
 const isStale = ref(false);
 const staleMessage = ref('');
@@ -204,7 +200,7 @@ function buildDraft(): TemplateDraft {
 }
 
 async function handleSubmit(): Promise<void> {
-  if (saving.value) return;
+  if (formBusy.value) return;
   submitted.value = true;
   serverError.value = '';
   warningNotice.value = '';
@@ -220,8 +216,8 @@ async function handleSubmit(): Promise<void> {
       ? await store.updateTemplate(
           props.template.id,
           draft,
-          acknowledged,
           baseUpdatedAt.value,
+          acknowledged,
         )
       : await store.createTemplate(draft, acknowledged);
 
@@ -242,7 +238,6 @@ async function handleSubmit(): Promise<void> {
     if (outcome.kind === 'stale') {
       isStale.value = true;
       staleMessage.value = outcome.message;
-      void store.fetchTemplates(true);
       return;
     }
     // The draft stays exactly as typed; only the banner changes.
@@ -252,39 +247,75 @@ async function handleSubmit(): Promise<void> {
   }
 }
 
+const lastSyncedUpdatedAt = ref<string | null>(props.template?.updatedAt ?? null);
+let isUnmounted = false;
+
+function syncFromTemplate(fresh: ComparisonTemplate | null): void {
+  lastSyncedUpdatedAt.value = fresh?.updatedAt ?? null;
+  baseUpdatedAt.value = fresh?.updatedAt ?? '';
+  label.value = fresh?.label ?? '';
+  segments.value = {
+    body: parseBody(fresh?.body ?? ''),
+    trendNaik: parseBody(fresh?.trendNaik ?? ''),
+    trendTurun: parseBody(fresh?.trendTurun ?? ''),
+    trendTetap: parseBody(fresh?.trendTetap ?? ''),
+  };
+  baseline.value = JSON.stringify([
+    label.value.trim(),
+    ...SENTENCE_FIELDS.map((field) => serializeSegments(segments.value[field]).trim()),
+  ]);
+  touched.value.clear();
+  submitted.value = false;
+  isStale.value = false;
+  staleMessage.value = '';
+  serverError.value = '';
+  pendingWarnings.value = [];
+  confirmed.value = {};
+  warningNotice.value = '';
+}
+
+watch(
+  () => props.template?.id,
+  (nextId, prevId) => {
+    if (nextId !== prevId) {
+      syncFromTemplate(props.template ?? null);
+    }
+  },
+);
+
 async function handleReloadLatest(): Promise<void> {
+  if (reloadingLatest.value || saving.value || !props.template) return;
+  const targetId = props.template.id;
+  reloadingLatest.value = true;
+  serverError.value = '';
+  let fetched = false;
+  try {
+    fetched = await store.fetchTemplates(true);
+  } finally {
+    reloadingLatest.value = false;
+  }
+
+  if (isUnmounted || props.template?.id !== targetId) return;
+
+  if (!fetched) {
+    serverError.value = store.error ?? 'Gagal memuat versi terbaru templat. Silakan coba lagi.';
+    return;
+  }
+
+  const fresh = store.templates.find((t) => t.id === targetId);
+  if (!fresh) {
+    serverError.value = store.error ?? 'Gagal memuat versi terbaru templat. Silakan coba lagi.';
+    return;
+  }
+
   if (isDirty() && typeof window !== 'undefined' && typeof window.confirm === 'function') {
     const ok = window.confirm(
       'Perubahan yang belum disimpan akan digantikan dengan versi terbaru. Lanjutkan?',
     );
     if (!ok) return;
   }
-  if (!props.template) return;
-  let fresh = store.templates.find((t) => t.id === props.template?.id);
-  if (!fresh) {
-    await store.fetchTemplates(true);
-    fresh = store.templates.find((t) => t.id === props.template?.id);
-  }
-  if (fresh) {
-    baseUpdatedAt.value = fresh.updatedAt;
-    label.value = fresh.label;
-    segments.value = {
-      body: parseBody(fresh.body),
-      trendNaik: parseBody(fresh.trendNaik),
-      trendTurun: parseBody(fresh.trendTurun),
-      trendTetap: parseBody(fresh.trendTetap),
-    };
-    baseline.value = JSON.stringify([
-      label.value.trim(),
-      ...SENTENCE_FIELDS.map((field) => serializeSegments(segments.value[field]).trim()),
-    ]);
-    isStale.value = false;
-    staleMessage.value = '';
-    serverError.value = '';
-    pendingWarnings.value = [];
-    confirmed.value = {};
-    warningNotice.value = '';
-  }
+
+  syncFromTemplate(fresh);
 }
 
 // --- Live preview -------------------------------------------------------------------------
@@ -363,7 +394,10 @@ watch(() => SENTENCE_FIELDS.map((f) => serialized.value[f]).join('\u0000'), sche
   immediate: true,
 });
 
-onBeforeUnmount(cancelPreview);
+onBeforeUnmount(() => {
+  isUnmounted = true;
+  cancelPreview();
+});
 
 // Only a short status is announced; the sentences themselves sit outside the live region so
 // every debounced update does not re-read up to four full sentences.
@@ -411,6 +445,7 @@ const usageNote = computed(() => {
             size="sm"
             class="min-h-11"
             data-test="reload-latest"
+            :disabled="formBusy"
             @click="handleReloadLatest"
           >
             Muat versi terbaru
@@ -441,7 +476,7 @@ const usageNote = computed(() => {
         v-model="label"
         type="text"
         maxlength="255"
-        :disabled="saving"
+        :disabled="formBusy"
         :class="INPUT_CLASSES"
         :aria-describedby="describedBy"
         :aria-invalid="invalid ? 'true' : undefined"
@@ -461,7 +496,7 @@ const usageNote = computed(() => {
       :label="SENTENCE_FIELD_NAMES.body"
       hint="Kalimat utama yang tampil di halaman publik. Wajib memuat satu bagian “Keterangan perubahan”."
       :error="visibleSentenceError('body')"
-      :disabled="saving"
+      :disabled="formBusy"
     />
 
     <div class="grid gap-4 lg:grid-cols-1">
@@ -473,7 +508,7 @@ const usageNote = computed(() => {
         :label="SENTENCE_FIELD_NAMES.trendNaik"
         hint="Mengisi bagian “Keterangan perubahan” bila nilai sekarang lebih besar dari nilai sebelumnya."
         :error="visibleSentenceError('trendNaik')"
-        :disabled="saving"
+        :disabled="formBusy"
       />
       <TemplateSentenceBuilder
         v-model="segments.trendTurun"
@@ -483,7 +518,7 @@ const usageNote = computed(() => {
         :label="SENTENCE_FIELD_NAMES.trendTurun"
         hint="Mengisi bagian “Keterangan perubahan” bila nilai sekarang lebih kecil dari nilai sebelumnya."
         :error="visibleSentenceError('trendTurun')"
-        :disabled="saving"
+        :disabled="formBusy"
       />
       <TemplateSentenceBuilder
         v-model="segments.trendTetap"
@@ -493,7 +528,7 @@ const usageNote = computed(() => {
         :label="SENTENCE_FIELD_NAMES.trendTetap"
         hint="Mengisi bagian “Keterangan perubahan” bila kedua nilai sama."
         :error="visibleSentenceError('trendTetap')"
-        :disabled="saving"
+        :disabled="formBusy"
       />
     </div>
 
@@ -599,6 +634,7 @@ const usageNote = computed(() => {
               :id="fieldId(`konfirmasi-${index}`)"
               v-model="confirmed[warning.ackKey]"
               type="checkbox"
+              :disabled="formBusy"
               class="border-border-strong text-brand-navy focus-visible:outline-focus-ring h-5 w-5 shrink-0 rounded-xs focus-visible:outline-2 focus-visible:outline-offset-2"
             />
             <span>
@@ -624,7 +660,7 @@ const usageNote = computed(() => {
         variant="secondary"
         size="md"
         class="min-h-11"
-        :disabled="saving"
+        :disabled="formBusy"
         @click="emit('cancel')"
       >
         Batal
@@ -633,7 +669,7 @@ const usageNote = computed(() => {
         type="submit"
         size="md"
         class="min-h-11"
-        :disabled="saving || awaitingConfirmation"
+        :disabled="formBusy || awaitingConfirmation"
         :aria-describedby="awaitingConfirmation ? fieldId('simpan-bantuan') : undefined"
         data-test="save"
       >
