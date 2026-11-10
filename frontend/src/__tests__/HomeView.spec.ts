@@ -260,6 +260,12 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
 
     expect(wrapper.text()).toContain('Terjadi kesalahan tidak terduga');
     expect(authStore.isAuthenticated).toBe(true);
+
+    // Dismiss button clears the banner
+    const dismissBtn = wrapper.find('[data-test="logout-error-dismiss"]');
+    expect(dismissBtn.exists()).toBe(true);
+    await dismissBtn.trigger('click');
+    expect(wrapper.find('[data-test="logout-error-banner"]').exists()).toBe(false);
   });
 
   // Edge Case 9: Mobile Drawer Auth State and Mobile Logout Action

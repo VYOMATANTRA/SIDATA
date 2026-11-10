@@ -134,6 +134,10 @@ const { logout } = useLogout();
 const isLoggingOut = ref(false);
 const logoutError = ref('');
 
+function clearLogoutError() {
+  logoutError.value = '';
+}
+
 function isRouteAvailable(path: string): boolean {
   return checkRouteAvailable(router, path);
 }
@@ -307,13 +311,22 @@ async function handleLogout() {
       </template>
     </AppNavbar>
 
-    <!-- Logout Error Notification Banner -->
+    <!-- Logout Error Notification Banner (floating overlay positioned safely below navbar) -->
     <div
       v-if="logoutError"
-      class="mx-auto mt-2 max-w-7xl rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-center text-xs font-medium text-rose-600 sm:text-sm"
+      class="fixed top-24 left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-center text-xs font-medium text-rose-600 shadow-lg sm:top-28 sm:text-sm"
       role="alert"
     >
-      {{ logoutError }}
+      <span>{{ logoutError }}</span>
+      <button
+        type="button"
+        @click="clearLogoutError"
+        aria-label="Tutup pemberitahuan"
+        data-test="logout-error-dismiss"
+        class="shrink-0 rounded p-1 text-rose-500 hover:bg-rose-100 hover:text-rose-700 focus-visible:outline-2 focus-visible:outline-rose-500"
+      >
+        <span aria-hidden="true" class="text-base leading-none font-bold">&times;</span>
+      </button>
     </div>
 
     <!-- Main Content Landmark per docs/ACCESSIBILITY.md -->
