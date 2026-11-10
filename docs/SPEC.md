@@ -463,8 +463,9 @@ displayed dataset has an address value. A prominent sample-data notice follows t
 collapsible bands — flat table only.
 
 Operational roster entry is available in the CMS: manual editing of name, phone, WhatsApp flag,
-address, and an optional home location set by placing a pin on a map (no coordinate fields; the
-same `LocationPicker` as the default map view, in pin mode), plus CSV preview/apply. CSV columns are
+address, and an optional pin placed on the map (click, drag, or keyboard buttons; no typed
+coordinate fields; uses the same `LocationPicker` as the default map view, in pin mode), plus
+CSV preview/apply for exact coordinates. CSV columns are
 `rtNumber,name,phone,phoneIsWhatsapp,alamat,latitude,longitude`; blank cells preserve existing
 values, omitted RTs are never deleted, and the whole import rolls back if any row is invalid.
 Coordinates create or update the RT's 1:1 `ketua_rt` spatial point.
