@@ -82,7 +82,8 @@ Backend runs on port from `PORT` env var (default 3000). Prisma client is genera
 - `src/components/data/`: CMS forms and cards (`ScalarIndicatorForm.vue`, `TableIndicatorForm.vue`, `ContentBlockForm.vue`, `PublicSettingsForm.vue`, `IndicatorCard.vue`)
 - `src/views/DataManagementView.vue`: Consolidated `/data` CMS view with tabbed management of indicators, content blocks, and settings
 - `src/views/AdminRukunTetanggaView.vue`: `/admin/rukun-tetangga` CMS for official roster edits, CSV preview/apply, and the explicit sample-status control
-- `src/components/maps/RtLocationPicker.vue`: tap/drag coordinate picker with current-location detection
+- `src/components/maps/LocationPicker.vue`: shared visual location picker (Leaflet). Pin mode places/drags one point; viewport mode (`includeZoom`) edits the map centre and zoom. Click/drag, direction and zoom buttons and a labelled keyboard mode; no coordinate or zoom fields. Optional device-location draft. Used by `RtLocationPicker.vue` and `PublicSettingsForm.vue`; pure geometry helpers live in `src/utils/geoPicker.ts`
+- `src/components/maps/RtLocationPicker.vue`: Ketua RT home location, a thin pin-mode wrapper over `LocationPicker.vue` (public props/events unchanged)
 - `src/layouts/`: `AdminLayout.vue` — the admin/CMS base layout shell (sidebar, header, breadcrumb) every `/admin`, `/data`, `/users`, `/audit-logs`, and `/settings/audit-retention` route is mounted inside
 - `src/components/admin/`: Admin shell components — `AdminSidebar.vue`, `AdminHeader.vue`, `AdminBreadcrumb.vue`
 - `src/config/adminNav.ts`: Single role-to-items source of truth for the admin sidebar, also read by the router guards (`src/router/index.ts`) so sidebar visibility and route access can't drift apart
