@@ -66,7 +66,7 @@ interface CollectableClause {
 
 interface CollectableWhere {
   attachedAt?: null | Date;
-  cleanupClaimedAt?: null | { not: null };
+  cleanupClaimedAt?: null | Date | { not: null };
   cleanupQuarantineReason?: string | null;
   OR?: CollectableClause[];
   id?: string | { gt?: string; in?: string[] };
@@ -87,7 +87,14 @@ function collectable(row: MediaAsset, where: CollectableWhere): boolean {
   if (where.attachedAt === null && row.attachedAt !== null) return false;
   if (where.cleanupClaimedAt === null && row.cleanupClaimedAt !== null) return false;
   if (
+    where.cleanupClaimedAt instanceof Date &&
+    row.cleanupClaimedAt?.getTime() !== where.cleanupClaimedAt.getTime()
+  ) {
+    return false;
+  }
+  if (
     where.cleanupClaimedAt &&
+    !(where.cleanupClaimedAt instanceof Date) &&
     typeof where.cleanupClaimedAt === 'object' &&
     'not' in where.cleanupClaimedAt &&
     row.cleanupClaimedAt === null
@@ -133,7 +140,10 @@ interface StoredRef {
   slot: string;
 }
 
-function fakeClient(assets: MediaAsset[], opts: { raceLoses?: Set<string> } = {}) {
+function fakeClient(
+  assets: MediaAsset[],
+  opts: { raceLoses?: Set<string>; attachBeforeQuarantine?: Set<string> } = {},
+) {
   const rows = new Map(assets.map((a) => [a.id, a]));
   const references = new Map<string, StoredRef>();
   const deletes: string[] = [];
@@ -188,6 +198,13 @@ function fakeClient(assets: MediaAsset[], opts: { raceLoses?: Set<string> } = {}
         for (const targetId of targetIds) {
           const row = rows.get(targetId);
           if (!row) continue;
+          // An editor attaches the asset between batch selection and this write.
+          if (
+            args.data.cleanupQuarantineReason !== undefined &&
+            opts.attachBeforeQuarantine?.has(targetId)
+          ) {
+            row.attachedAt = NOW;
+          }
           if (!collectable(row, args.where)) continue;
           if (args.data.cleanupClaimedAt !== undefined)
             row.cleanupClaimedAt = args.data.cleanupClaimedAt;
@@ -473,6 +490,38 @@ describe('runMediaCleanup: unattached assets', () => {
     });
     assert.equal(second.assetsQuarantined, 0);
     assert.equal(second.assetsRemoved, 0);
+  });
+
+  it('does not quarantine (or count) an asset attached after the batch was selected', async () => {
+    const hostile = asset(ID_OLD, { storageKey: '../victim.webp' });
+    const { client, rows } = fakeClient([hostile], { attachBeforeQuarantine: new Set([ID_OLD]) });
+    const result = await runMediaCleanup({
+      root,
+      graceMs: GRACE,
+      now: NOW,
+      client,
+      recordAudit: noAudit().record,
+    });
+    assert.equal(result.assetsQuarantined, 0);
+    assert.equal(rows.get(ID_OLD)?.cleanupQuarantineReason, null);
+    assert.equal(rows.get(ID_OLD)?.cleanupClaimedAt, null);
+    assert.notEqual(rows.get(ID_OLD)?.attachedAt, null, 'row stays attached and live');
+    assert.equal(result.assetsRemoved, 0);
+  });
+
+  it('quarantines an already-claimed row with an invalid path', async () => {
+    const claimedAt = new Date(NOW.getTime() - HOUR);
+    const hostile = asset(ID_OLD, { storageKey: '../victim.webp', cleanupClaimedAt: claimedAt });
+    const { client, rows } = fakeClient([hostile]);
+    const result = await runMediaCleanup({
+      root,
+      graceMs: GRACE,
+      now: NOW,
+      client,
+      recordAudit: noAudit().record,
+    });
+    assert.equal(result.assetsQuarantined, 1);
+    assert.equal(rows.get(ID_OLD)?.cleanupQuarantineReason, 'invalid-path');
   });
 
   it('does not follow a symlinked parent directory out of the root and quarantines the row', async () => {

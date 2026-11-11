@@ -252,11 +252,19 @@ export async function runMediaCleanup(options: MediaCleanupOptions): Promise<Med
         validateInsideRoot(options.root, `${DERIVATIVES_DIR}/${asset.id}`),
       ]);
       if (pathChecks.some((r) => r === 'invalid-path')) {
-        await client.mediaAsset.updateMany({
-          where: { id: asset.id },
+        // Re-assert the selection conditions: an editor may have attached the asset since the batch
+        // was read, and quarantining a live asset would make its page serve 404. Rows picked as
+        // already claimed keep that claim value in the filter (they can never be attached).
+        const quarantined = await client.mediaAsset.updateMany({
+          where: {
+            id: asset.id,
+            attachedAt: null,
+            cleanupClaimedAt: asset.cleanupClaimedAt,
+            cleanupQuarantineReason: null,
+          },
           data: { cleanupQuarantineReason: 'invalid-path' },
         });
-        assetsQuarantined += 1;
+        if (quarantined.count === 1) assetsQuarantined += 1;
         continue;
       }
 
