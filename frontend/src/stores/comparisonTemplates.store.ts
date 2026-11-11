@@ -111,8 +111,7 @@ export function describeTemplateFailure(error: unknown, context: string, method?
     method,
   );
 
-  const hasFieldErrors =
-    userMsg.fieldErrors && Object.keys(userMsg.fieldErrors).length > 0;
+  const hasFieldErrors = userMsg.fieldErrors && Object.keys(userMsg.fieldErrors).length > 0;
   if (userMsg.kind === 'validation' && !hasFieldErrors) {
     if (userMsg.message.endsWith(USER_MESSAGES.validation)) {
       return userMsg.message.replace(USER_MESSAGES.validation, TEMPLATE_VALIDATION_FALLBACK);
@@ -143,6 +142,7 @@ function parseWarnings(body: unknown): TrendWarning[] {
 }
 
 const MAX_SLUG_RETRIES = 3;
+const MAX_STALE_FETCH_RETRIES = 2;
 
 export interface FetchTemplatesOptions {
   force?: boolean;
@@ -229,28 +229,39 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
 
     const fetchPromise = (async (): Promise<boolean> => {
       try {
-        const data = await apiRequestJson<{ templates?: ComparisonTemplate[] }>(
-          '/api/comparison-templates',
-        );
-        if (requestEpoch !== mutationEpoch) {
-          return false;
+        for (let attempt = 0; attempt <= MAX_STALE_FETCH_RETRIES; attempt += 1) {
+          // Each attempt is stamped with the epoch current when it starts, so a response is
+          // only applied if no mutation landed while it was in flight.
+          const attemptEpoch = mutationEpoch;
+          const data = await apiRequestJson<{ templates?: ComparisonTemplate[] }>(
+            '/api/comparison-templates',
+          );
+          if (attemptEpoch !== mutationEpoch) {
+            // Stale snapshot: discard it and ask the server again.
+            continue;
+          }
+          templates.value = Array.isArray(data.templates) ? data.templates : [];
+          isLoaded.value = true;
+          if (request.forSelector) {
+            selectorError.value = null;
+          }
+          if (request.forAdmin) {
+            error.value = null;
+          }
+          return true;
         }
-        templates.value = Array.isArray(data.templates) ? data.templates : [];
-        isLoaded.value = true;
+        // Mutations kept landing: keep the loaded state (mutations already merged their rows)
+        // and report no misleading failure.
         if (request.forSelector) {
           selectorError.value = null;
         }
         if (request.forAdmin) {
           error.value = null;
         }
-        return true;
+        return isLoaded.value;
       } catch (err) {
         // A failed refetch keeps the rows already on screen rather than blanking the list.
-        const failureMessage = describeTemplateFailure(
-          err,
-          'memuat daftar templat kalimat',
-          'GET',
-        );
+        const failureMessage = describeTemplateFailure(err, 'memuat daftar templat kalimat', 'GET');
         if (request.forSelector) {
           selectorError.value = failureMessage;
         }

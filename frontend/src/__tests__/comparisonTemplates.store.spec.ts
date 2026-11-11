@@ -171,33 +171,85 @@ describe('comparison templates store', () => {
     expect(store.error).toContain('Gagal memuat daftar templat kalimat.');
   });
 
-  it('prevents a slow in-flight fetchTemplates from overwriting templates mutated in the meantime', async () => {
-    let resolveGet!: (res: Response) => void;
-    const getPromise = new Promise<Response>((resolve) => {
-      resolveGet = resolve;
+  it('retries a fetch made stale by a mutation and never applies the stale response', async () => {
+    let resolveFirst!: (res: Response) => void;
+    const first = new Promise<Response>((resolve) => {
+      resolveFirst = resolve;
     });
+    let getCalls = 0;
+    const created = makeTemplate({ id: 'tpl-created', label: 'Created While In Flight' });
 
     route({
-      'GET /api/comparison-templates': () => getPromise,
-      'POST /api/comparison-templates': () =>
-        json({ template: makeTemplate({ id: 'tpl-created', label: 'Created While In Flight' }) }),
+      'GET /api/comparison-templates': () => {
+        getCalls += 1;
+        return getCalls === 1 ? first : json({ templates: [created] });
+      },
+      'POST /api/comparison-templates': () => json({ template: created }),
     });
 
     const store = useComparisonTemplatesStore();
-    const slowFetch = store.fetchTemplates({ force: true });
+    const slowFetch = store.fetchTemplates({ force: true, forSelector: true });
 
-    // While slowFetch is in flight, an admin creates a template
     await store.createTemplate({ ...DRAFT, label: 'Created While In Flight' });
     expect(store.templates.map((t) => t.id)).toEqual(['tpl-created']);
 
-    // Now the slow fetch resolves with an older snapshot
-    resolveGet(json({ templates: [makeTemplate({ id: 'tpl-stale-from-server' })] }));
-    const slowResult = await slowFetch;
+    resolveFirst(json({ templates: [makeTemplate({ id: 'tpl-stale-from-server' })] }));
+    const result = await slowFetch;
 
-    expect(slowResult).toBe(false);
-    expect(store.isLoaded).toBe(false);
+    expect(result).toBe(true);
+    expect(getCalls).toBe(2);
+    expect(store.templates.map((t) => t.id)).toEqual(['tpl-created']);
+    expect(store.isLoaded).toBe(true);
+    expect(store.isLoading).toBe(false);
+    expect(store.error).toBeNull();
+    expect(store.selectorError).toBeNull();
+  });
 
-    // Mutated list must not be clobbered by the stale GET response
+  it('leaves no error and no stuck loading when mutations keep outpacing the fetch', async () => {
+    const mutated = makeTemplate({ id: 'tpl-m', label: 'M' });
+    const store = useComparisonTemplatesStore();
+    let getCalls = 0;
+    route({
+      'GET /api/comparison-templates': async () => {
+        getCalls += 1;
+        await store.updateTemplate(mutated.id, DRAFT, mutated.updatedAt);
+        return json({ templates: [makeTemplate({ id: 'tpl-stale' })] });
+      },
+      'PATCH /api/comparison-templates/tpl-m': () => json({ template: mutated }),
+    });
+
+    const result = await store.fetchTemplates({ force: true });
+
+    expect(getCalls).toBe(3);
+    expect(result).toBe(false);
+    expect(store.error).toBeNull();
+    expect(store.selectorError).toBeNull();
+    expect(store.isLoading).toBe(false);
+    expect(store.templates.map((t) => t.id)).toEqual(['tpl-m']);
+  });
+
+  it('still reports a failed retry after a stale response', async () => {
+    let getCalls = 0;
+    const created = makeTemplate({ id: 'tpl-created' });
+    let resolveFirst!: (res: Response) => void;
+    const first = new Promise<Response>((resolve) => {
+      resolveFirst = resolve;
+    });
+    route({
+      'GET /api/comparison-templates': () => {
+        getCalls += 1;
+        return getCalls === 1 ? first : json({ error: 'boom' }, 500);
+      },
+      'POST /api/comparison-templates': () => json({ template: created }),
+    });
+    const store = useComparisonTemplatesStore();
+    const fetching = store.fetchTemplates({ force: true });
+    await store.createTemplate(DRAFT);
+    resolveFirst(json({ templates: [] }));
+
+    expect(await fetching).toBe(false);
+    expect(store.error).toContain('Gagal memuat daftar templat kalimat.');
+    expect(store.isLoading).toBe(false);
     expect(store.templates.map((t) => t.id)).toEqual(['tpl-created']);
   });
 
@@ -491,7 +543,11 @@ describe('comparison templates store', () => {
       expect(store.templates.map((t) => t.label)).toEqual(['B Label', 'M Label', 'Z Label']);
 
       // Update 'tpl-2' from 'Z Label' to 'A Label': should re-sort to [A, B, M]
-      await store.updateTemplate('tpl-2', { ...DRAFT, label: 'A Label' }, '2026-01-02T00:00:00.000Z');
+      await store.updateTemplate(
+        'tpl-2',
+        { ...DRAFT, label: 'A Label' },
+        '2026-01-02T00:00:00.000Z',
+      );
       expect(store.templates.map((t) => t.label)).toEqual(['A Label', 'B Label', 'M Label']);
     });
 
@@ -501,9 +557,7 @@ describe('comparison templates store', () => {
           json({ template: makeTemplate({ id: 'tpl-new', slug: 'alpha', label: 'Same Label' }) }),
       });
       const store = useComparisonTemplatesStore();
-      store.templates = [
-        makeTemplate({ id: 'tpl-existing', slug: 'beta', label: 'Same Label' }),
-      ];
+      store.templates = [makeTemplate({ id: 'tpl-existing', slug: 'beta', label: 'Same Label' })];
 
       await store.createTemplate({ ...DRAFT, label: 'Same Label' });
       expect(store.templates.map((t) => t.slug)).toEqual(['alpha', 'beta']);
