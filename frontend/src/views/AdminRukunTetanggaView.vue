@@ -108,7 +108,6 @@ const draft = ref({
 const isSaving = ref(false);
 const saveError = ref('');
 const locationConflict = ref(false);
-const locationValid = ref(true);
 
 const csvText = ref('');
 const inputRevision = ref(0);
@@ -143,7 +142,6 @@ function openEditor(row: LeaderRow) {
   editing.value = row;
   saveError.value = '';
   locationConflict.value = false;
-  locationValid.value = true;
   baseline.value = {
     rtNumber: row.rtNumber,
     name: row.name,
@@ -173,7 +171,7 @@ function closeEditor() {
 
 async function saveLeader() {
   const base = baseline.value;
-  if (!base || isSaving.value || locationConflict.value || !locationValid.value) return;
+  if (!base || isSaving.value || locationConflict.value) return;
 
   // 1. Capture immutable submission snapshot
   const snapshot = {
@@ -715,7 +713,6 @@ async function setSampleStatus(isSample: boolean) {
         <RtLocationPicker
           v-model="draft.location"
           :disabled="isSaving"
-          @validity-change="locationValid = $event"
         />
         <p v-if="saveError" class="text-sm text-rose-700" role="alert">{{ saveError }}</p>
         <BaseButton
@@ -734,7 +731,7 @@ async function setSampleStatus(isSample: boolean) {
             type="submit"
             variant="primary"
             size="md"
-            :disabled="isSaving || locationConflict || !locationValid"
+            :disabled="isSaving || locationConflict"
           >
             {{ isSaving ? 'Menyimpan…' : 'Simpan' }}
           </BaseButton>
