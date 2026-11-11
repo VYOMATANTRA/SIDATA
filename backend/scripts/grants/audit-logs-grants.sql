@@ -45,8 +45,8 @@
 --    MySQL records a db-level grant on a name containing `_` in ESCAPED form (`sidata\_x`), and a
 --    REVOKE naming the unescaped spelling does not touch that record (verified on MySQL 8.0). So
 --    each REVOKE runs for both spellings, via prepared statements.
---    Wildcard grants (e.g. `sidata%`.*) are a DIFFERENT scope and cannot be revoked by naming
---    <DB_NAME>; the operator must remove them by hand (review SHOW GRANTS for the app user).
+--    Wildcard (`sidata%`.*) and server-wide (*.*) grants are DIFFERENT scopes and are not revoked
+--    here; the final check below stops the script naming them, and the operator removes them by hand.
 USE `<DB_NAME>`;
 DROP PROCEDURE IF EXISTS _sidata_revoke_blanket_db_grant;
 DELIMITER $$
@@ -96,30 +96,66 @@ GRANT UPDATE (`acknowledgedAt`, `acknowledgedById`) ON `<DB_NAME>`.`audit_logs`
 
 FLUSH PRIVILEGES;
 
--- Post-condition check: fail loudly if any database-level grant on exactly <DB_NAME> remains for
--- the app user. Matches the exact name only (no LIKE: `_` and `%` in a database name are wildcards
--- there). MySQL may store `_` escaped as `\_` in a db-level grant, so both spellings are compared.
--- Wildcard grants such as `sidata%`.* are another scope: this script cannot revoke them and the
--- check ignores them, so the operator must remove them (REVOKE ... ON `sidata%`.*) manually.
+-- Post-condition check: fail loudly if the app user still holds ANY grant, at any scope, that
+-- would let it delete or rewrite audit_logs rows. Three scopes are inspected:
+--   (a) database-level grants (information_schema.SCHEMA_PRIVILEGES) whose schema pattern matches
+--       <DB_NAME>: the exact name (plain or `\_`-escaped) AND wildcard patterns such as
+--       `sidata%`.* (a pattern matches when '<DB_NAME>' LIKE the stored pattern; `\_` in a stored
+--       pattern is a literal underscore, a bare `_` or `%` is a wildcard);
+--   (b) server-wide grants (information_schema.USER_PRIVILEGES) of DELETE, UPDATE, DROP, ALTER or
+--       GRANT OPTION. A global USAGE (or SELECT/INSERT) does not fail;
+--   (c) table-level grants on <DB_NAME>.audit_logs (information_schema.TABLE_PRIVILEGES) other than
+--       SELECT and INSERT, or any grantable one. The column-scoped UPDATE this script grants is
+--       recorded in COLUMN_PRIVILEGES, so it never trips this check.
+-- This script can only revoke the exact-name database grant (step 1). A wildcard or global grant
+-- is a different scope that it must not silently rewrite, so the check stops with an error naming
+-- the problem and the operator revokes it by hand (see SHOW GRANTS FOR the app user) and re-runs.
 USE `<DB_NAME>`;
 DROP PROCEDURE IF EXISTS _sidata_verify_no_blanket_db_grant;
 DELIMITER $$
 CREATE PROCEDURE _sidata_verify_no_blanket_db_grant()
 BEGIN
-  DECLARE remaining_db_grants INT DEFAULT 0;
-  DECLARE leftover_grants TEXT DEFAULT NULL;
+  DECLARE db_grants INT DEFAULT 0;
+  DECLARE db_list TEXT DEFAULT NULL;
+  DECLARE global_grants INT DEFAULT 0;
+  DECLARE global_list TEXT DEFAULT NULL;
+  DECLARE table_grants INT DEFAULT 0;
+  DECLARE table_list TEXT DEFAULT NULL;
   DECLARE failure_message VARCHAR(128) DEFAULT '';
+  DECLARE app_grantee VARCHAR(400) DEFAULT CONCAT('''', '<APP_DB_USER>', '''@''', '<APP_DB_HOST>', '''');
+
   SELECT COUNT(*),
-         GROUP_CONCAT(CONCAT(PRIVILEGE_TYPE, IF(IS_GRANTABLE = 'YES', ' (GRANTABLE)', '')) SEPARATOR ', ')
-    INTO remaining_db_grants, leftover_grants
+         GROUP_CONCAT(DISTINCT TABLE_SCHEMA SEPARATOR ', ')
+    INTO db_grants, db_list
   FROM information_schema.SCHEMA_PRIVILEGES
-  WHERE GRANTEE = CONCAT('''', '<APP_DB_USER>', '''@''', '<APP_DB_HOST>', '''')
-    AND TABLE_SCHEMA IN ('<DB_NAME>', REPLACE('<DB_NAME>', '_', '\\_'));
-  IF remaining_db_grants > 0 THEN
-    -- MESSAGE_TEXT is capped at 128 characters: put the actionable part first.
-    SET failure_message = LEFT(CONCAT(
-      remaining_db_grants, ' db-level grant(s) left on <DB_NAME>: ',
-      IFNULL(leftover_grants, '?'), ' - revoke manually'), 128);
+  WHERE GRANTEE = app_grantee
+    AND ('<DB_NAME>' LIKE TABLE_SCHEMA OR TABLE_SCHEMA IN ('<DB_NAME>', REPLACE('<DB_NAME>', '_', '\\_')));
+
+  SELECT COUNT(*), GROUP_CONCAT(PRIVILEGE_TYPE SEPARATOR ', ')
+    INTO global_grants, global_list
+  FROM information_schema.USER_PRIVILEGES
+  WHERE GRANTEE = app_grantee
+    AND PRIVILEGE_TYPE IN ('DELETE', 'UPDATE', 'DROP', 'ALTER', 'GRANT OPTION');
+
+  SELECT COUNT(*), GROUP_CONCAT(PRIVILEGE_TYPE SEPARATOR ', ')
+    INTO table_grants, table_list
+  FROM information_schema.TABLE_PRIVILEGES
+  WHERE GRANTEE = app_grantee
+    AND TABLE_SCHEMA IN ('<DB_NAME>', REPLACE('<DB_NAME>', '_', '\\_'))
+    AND TABLE_NAME = 'audit_logs'
+    AND (PRIVILEGE_TYPE NOT IN ('SELECT', 'INSERT') OR IS_GRANTABLE = 'YES');
+
+  -- MESSAGE_TEXT is capped at 128 characters: put the actionable part first.
+  IF db_grants > 0 THEN
+    SET failure_message = LEFT(CONCAT('Revoke db-level grant on <DB_NAME> (wildcard?): ', IFNULL(db_list, '?')), 128);
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = failure_message;
+  END IF;
+  IF global_grants > 0 THEN
+    SET failure_message = LEFT(CONCAT('Revoke server-wide grant on *.* : ', IFNULL(global_list, '?')), 128);
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = failure_message;
+  END IF;
+  IF table_grants > 0 THEN
+    SET failure_message = LEFT(CONCAT('Revoke extra table grant on <DB_NAME>.audit_logs: ', IFNULL(table_list, '?')), 128);
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = failure_message;
   END IF;
 END$$

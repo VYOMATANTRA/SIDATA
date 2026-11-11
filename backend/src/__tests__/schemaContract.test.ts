@@ -96,22 +96,30 @@ describe('schema contract', () => {
       assert.ok(verifyUse < grantsSql.indexOf('CREATE PROCEDURE _sidata_verify'));
     });
 
-    it('verifies post-condition that no blanket db-level grant remains on exactly <DB_NAME>', () => {
+    it('verifies post-condition that no blanket, wildcard, global or extra audit_logs grant remains', () => {
       assert.match(grantsSql, /CREATE PROCEDURE _sidata_verify_no_blanket_db_grant\(\)/);
       assert.match(grantsSql, /FROM information_schema\.SCHEMA_PRIVILEGES/);
+      assert.match(grantsSql, /WHERE GRANTEE = app_grantee/);
       assert.match(
         grantsSql,
-        /WHERE GRANTEE = CONCAT\('''', '<APP_DB_USER>', '''@''', '<APP_DB_HOST>', ''''\)/,
+        /app_grantee VARCHAR\(400\) DEFAULT CONCAT\('''', '<APP_DB_USER>', '''@''', '<APP_DB_HOST>', ''''\)/,
       );
-      assert.doesNotMatch(grantsSql, /LIKE\s+TABLE_SCHEMA/);
-      assert.doesNotMatch(grantsSql, /TABLE_SCHEMA\s+LIKE/);
+      assert.match(grantsSql, /'<DB_NAME>' LIKE TABLE_SCHEMA/);
       assert.match(
         grantsSql,
         /TABLE_SCHEMA IN \('<DB_NAME>', REPLACE\('<DB_NAME>', '_', '\\\\_'\)\)/,
       );
+      assert.match(grantsSql, /FROM information_schema\.USER_PRIVILEGES/);
+      assert.match(
+        grantsSql,
+        /PRIVILEGE_TYPE IN \('DELETE', 'UPDATE', 'DROP', 'ALTER', 'GRANT OPTION'\)/,
+      );
+      assert.match(grantsSql, /FROM information_schema\.TABLE_PRIVILEGES/);
+      assert.match(grantsSql, /PRIVILEGE_TYPE NOT IN \('SELECT', 'INSERT'\)/);
       assert.match(grantsSql, /SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = failure_message;/);
-      assert.match(grantsSql, /GROUP_CONCAT\(CONCAT\(PRIVILEGE_TYPE/);
-      assert.match(grantsSql, /db-level grant\(s\) left on <DB_NAME>: /);
+      assert.match(grantsSql, /Revoke db-level grant on <DB_NAME>/);
+      assert.match(grantsSql, /Revoke server-wide grant on \*\.\*/);
+      assert.match(grantsSql, /Revoke extra table grant on <DB_NAME>\.audit_logs/);
       assert.match(grantsSql, /CALL _sidata_verify_no_blanket_db_grant\(\);/);
       assert.match(grantsSql, /DROP PROCEDURE IF EXISTS _sidata_verify_no_blanket_db_grant;/);
     });
