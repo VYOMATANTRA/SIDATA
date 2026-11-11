@@ -130,7 +130,7 @@ describe('CeritaPageView', () => {
     wrapper.unmount();
   });
 
-  it('restores savedPosition when chapters render and no hash target exists', async () => {
+  it('does not re-scroll to a stale savedPosition once chapters render', async () => {
     const page = makePage('kependudukan', 'Kependudukan');
     globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
       const url = String(input);
@@ -155,7 +155,7 @@ describe('CeritaPageView', () => {
     } as unknown as RouteLocationNormalized;
     const from = { path: '/', hash: '', fullPath: '/' } as unknown as RouteLocationNormalized;
     const saved = { left: 0, top: 850 };
-    scrollBehavior(to, from, saved);
+    expect(scrollBehavior(to, from, saved)).toEqual({ top: 0, left: 0, behavior: 'instant' });
 
     const { pinia, router } = await setupAndPush('kependudukan');
     const wrapper = mount(CeritaPageView, {
@@ -164,7 +164,7 @@ describe('CeritaPageView', () => {
     });
     await flushPromises();
 
-    expect(scrollToSpy).toHaveBeenCalledWith({ top: 850, left: 0, behavior: 'instant' });
+    expect(scrollToSpy).not.toHaveBeenCalled();
     scrollToSpy.mockRestore();
     wrapper.unmount();
   });

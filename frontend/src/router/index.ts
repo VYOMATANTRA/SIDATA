@@ -54,8 +54,8 @@ export function rolesFor(path: string): AdminNavRole[] {
  * - a hash on the same path (in-page anchor, TOC, skip link) scrolls to its target first. Native
  *   anchor clicks fire `popstate` with no state, so vue-router passes a STALE `savedPosition`
  *   that must not override the anchor;
- * - Cerita routes (`to.name === 'cerita-page'`) ignore `savedPosition` and always land on their
- *   hash target (or reset to the top), because content loads asynchronously and the saved offset
+ * - Cerita routes (`to.name === 'cerita-page'`, checked before `savedPosition`, so Back too) ignore
+ *   it and always land on their hash target (or reset to the top), because content loads asynchronously and the saved offset
  *   would be clamped to the short page (SPEC §6);
  * - otherwise back/forward restores the saved position;
  * - a hash that resolves to an element (cross-path) scrolls to it, clearing the sticky header by
@@ -81,44 +81,22 @@ function hashTarget(hash: string): { el: Element; top: number; behavior: ScrollB
   return { el, top, behavior: 'instant' };
 }
 
-let latestSavedPosition: { left: number; top: number } | null = null;
-
-export function consumeSavedPosition(): { left: number; top: number } | null {
-  const pos = latestSavedPosition;
-  latestSavedPosition = null;
-  return pos;
-}
-
 export const scrollBehavior: RouterScrollBehavior = (to, from, savedPosition) => {
-  if (
-    savedPosition &&
-    to.path === from.path &&
-    to.hash === from.hash &&
-    to.fullPath !== from.fullPath
-  ) {
-    latestSavedPosition = savedPosition;
-    return savedPosition;
+  const queryOnly = to.path === from.path && to.hash === from.hash && to.fullPath !== from.fullPath;
+  // Cerita pages load asynchronously, so a saved offset would be clamped to the short skeleton:
+  // ignore it (Back included) and land on the hash target or the top.
+  if (to.name === 'cerita-page' && !queryOnly) {
+    return hashTarget(to.hash) ?? { top: 0, left: 0, behavior: 'instant' };
   }
-  if (to.path === from.path && to.hash === from.hash && to.fullPath !== from.fullPath) {
-    return false;
-  }
-  if (to.hash === '#' && !savedPosition) {
-    latestSavedPosition = null;
-    return { top: 0, left: 0, behavior: 'instant' };
-  }
+  if (savedPosition && queryOnly) return savedPosition;
+  if (queryOnly) return false;
+  if (to.hash === '#' && !savedPosition) return { top: 0, left: 0, behavior: 'instant' };
   const samePath = to.path === from.path;
   if (samePath) {
     const target = hashTarget(to.hash);
     if (target) return target;
   }
-  if (savedPosition) {
-    latestSavedPosition = savedPosition;
-    return savedPosition;
-  }
-  latestSavedPosition = null;
-  if (to.name === 'cerita-page') {
-    return hashTarget(to.hash) ?? { top: 0, left: 0, behavior: 'instant' };
-  }
+  if (savedPosition) return savedPosition;
   if (!samePath) return hashTarget(to.hash) ?? { top: 0, left: 0, behavior: 'instant' };
   return false;
 };

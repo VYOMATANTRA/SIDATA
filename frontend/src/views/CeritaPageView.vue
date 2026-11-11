@@ -10,7 +10,6 @@ import {
 import { useContentBlocksStore, type ContentBlock } from '../stores/contentBlocks.store';
 import ChapterToc, { type TocChapter } from '../components/cerita/ChapterToc.vue';
 import ChapterSection from '../components/cerita/ChapterSection.vue';
-import { consumeSavedPosition } from '@/router';
 
 const route = useRoute();
 const pagesStore = usePagesStore();
@@ -166,13 +165,7 @@ async function loadPage() {
   isLoading.value = false;
   await nextTick();
   setupScrollSpy();
-  const scrolledToHash = scrollToHashTarget();
-  if (!scrolledToHash) {
-    const saved = consumeSavedPosition();
-    if (saved) {
-      window.scrollTo({ top: saved.top, left: saved.left, behavior: 'instant' });
-    }
-  }
+  scrollToHashTarget();
 }
 
 // Remembers the last slug+hash scrolled to so retry/reload of the same anchor does not snap the

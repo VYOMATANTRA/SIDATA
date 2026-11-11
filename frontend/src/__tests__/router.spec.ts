@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest';
 import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
-import router, { scrollBehavior, consumeSavedPosition } from '../router/index';
+import router, { scrollBehavior } from '../router/index';
 import type { RouteLocationNormalized } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 
@@ -396,13 +396,26 @@ describe('router scrollBehavior', () => {
     expect(await scrollBehavior(to, from, null)).toBe(false);
   });
 
-  it('restores savedPosition on Cerita routes on back/forward navigation', async () => {
+  it('ignores savedPosition on Cerita routes on back/forward and lands on the top', async () => {
     const saved = { left: 0, top: 1500 };
     const to = loc('/cerita/penduduk', '', '/cerita/penduduk', 'cerita-page');
     const from = loc('/', '', '/');
-    expect(await scrollBehavior(to, from, saved)).toBe(saved);
-    expect(consumeSavedPosition()).toBe(saved);
-    expect(consumeSavedPosition()).toBeNull();
+    expect(await scrollBehavior(to, from, saved)).toEqual({
+      top: 0,
+      left: 0,
+      behavior: 'instant',
+    });
+  });
+
+  it('lands on the hash target on Cerita back/forward instead of savedPosition', async () => {
+    const el = mkEl('bab-2', '72px');
+    const to = loc('/cerita/penduduk', '#bab-2', '/cerita/penduduk#bab-2', 'cerita-page');
+    const from = loc('/peta', '', '/peta');
+    expect(await scrollBehavior(to, from, { left: 0, top: 1500 })).toEqual({
+      el,
+      top: 72,
+      behavior: 'instant',
+    });
   });
 
   it('scrolls to top on Cerita routes on fresh navigation without savedPosition or hash', async () => {
@@ -413,7 +426,6 @@ describe('router scrollBehavior', () => {
       left: 0,
       behavior: 'instant',
     });
-    expect(consumeSavedPosition()).toBeNull();
   });
 
   it('scrolls to hash target on Cerita routes on fresh navigation with a hash', async () => {
