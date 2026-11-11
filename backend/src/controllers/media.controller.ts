@@ -42,6 +42,7 @@ const MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
   webp: 'image/webp',
   pdf: 'application/pdf',
   csv: 'text/csv; charset=utf-8',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 };
 

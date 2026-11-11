@@ -386,6 +386,28 @@ describe('media delivery routes', () => {
     assert.doesNotMatch(disposition, /exe/);
   });
 
+  it('download: serves a stored .docx with the Word content type', async () => {
+    const doc = makeAsset({
+      id: ID_DOC,
+      kind: 'document',
+      mimeType: 'application/octet-stream',
+      storageKey: `documents/publikasi-document/u1/${ID_DOC}.docx`,
+      originalName: 'Laporan.docx',
+      attachedAt: new Date(),
+    });
+    db.assets.set(doc.id, doc);
+    const file = await putFile(doc.storageKey, 'PK');
+    const res = makeMediaRes();
+    await publicMediaDownloadHandler(req(ID_DOC), asRes(res));
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.sentFile, file);
+    assert.equal(
+      res.headers['content-type'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    assert.match(res.headers['content-disposition'] ?? '', /\.docx"/);
+  });
+
   it('preview: serves unattached assets, privately, and documents only as attachments', async () => {
     const photo = makeAsset({ id: ID, attachedAt: null });
     db.assets.set(photo.id, photo);
