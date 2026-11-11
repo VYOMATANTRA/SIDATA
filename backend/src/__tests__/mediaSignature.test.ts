@@ -285,6 +285,14 @@ describe('CSV formula-injection scan', () => {
     ['semicolon quoted formula', 'a;"=1+1"'],
     ['semicolon +cmd', 'a;+cmd|x'],
     ['semicolon @SUM', 'a;@SUM(1)'],
+    ['=1+1 cell', 'a\n=1+1\n'],
+    ['@SUM(A1)', 'a\n@SUM(A1)\n'],
+    ['+SUM(A1)', 'a\n+SUM(A1)\n'],
+    ['-1+1 expression', 'a\n-1+1\n'],
+    ['-2+3 expression', 'a,b\n-2+3,x\n'],
+    ['+ then paren', 'a\n+(1)\n'],
+    ['+cmd pipe with quote', "a\n+cmd|' /C calc'!A0\n"],
+    ['digit then equals sign', 'a,b\n1,-5=1\n'],
   ];
   const accepted: Array<[string, string]> = [
     ['negative integer', 'a,b\n-5,2\n'],
@@ -303,6 +311,10 @@ describe('CSV formula-injection scan', () => {
     ],
     ['CRLF number', 'a\r\n-5\r\n'],
     ['semicolon negative and decimal', 'a;-5;+3,5'],
+    ['international phone number', 'a,b\n+62 812-3456-7890,x\n'],
+    ['negative percent', 'a\n-5%\n'],
+    ['negative thousands with decimal comma', 'a\n-1.234,56\n'],
+    ['negative with a space after the sign', 'a\n- 5\n'],
     ['semicolon plain text with newline', 'nama;rt\nBudi;12'],
   ];
 

@@ -309,7 +309,7 @@ export async function validateStagedFile(
     if (!scan.ok && scan.reason === 'formula') {
       throw new MediaValidationError(
         'CSV_FORMULA',
-        "Ada sel CSV yang diawali =, +, -, atau @ sehingga akan dibaca sebagai rumus oleh Excel/Google Sheets. Tambahkan tanda petik tunggal (') di depan nilai tersebut (misalnya '=SUM(A1)), lalu unggah ulang. Angka biasa seperti -5 atau +3,2 tidak bermasalah.",
+        "Ada sel CSV yang akan dibaca sebagai rumus oleh Excel/Google Sheets: sel yang diawali = atau @, atau diawali + atau - tetapi tidak hanya berisi angka. Tambahkan tanda petik tunggal (') di depan nilai tersebut (misalnya '=SUM(A1)), lalu unggah ulang. Angka bertanda seperti -5, -5%, atau +62 812-3456-7890 tidak bermasalah.",
         415,
       );
     }

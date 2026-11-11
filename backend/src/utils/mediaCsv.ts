@@ -27,6 +27,12 @@ const FORMULA_TRIGGERS = new Set(['=', '+', '-', '@', '\t', '\r']);
 // A cell that is wholly a number is data, not a formula: -5, +3.2, -0,5, .5, 1e-3.
 const PLAIN_NUMBER = /^[+-]?(?:\d+(?:[.,]\d+)?|[.,]\d+)(?:[eE][+-]?\d+)?$/;
 
+// Signed numbers and phone numbers: a sign, an optional single space, a digit, then only digits,
+// spaces, dots, commas, '%' and '-' separators (+62 812-3456-7890, -5%, -1.234,56). No letters,
+// '+', '=', '(', '|', '!' or '@' can follow, so nothing that looks like a function call or an
+// arithmetic expression with '+' passes.
+const SIGNED_NUMERIC_TEXT = /^[+-] ?\d[\d .,%-]*$/;
+
 type State = 'fieldStart' | 'unquoted' | 'quoted' | 'quoteInQuoted';
 
 /**
@@ -117,7 +123,7 @@ export class CsvFormulaScanner {
     const pending = this.suspect;
     this.suspect = null;
     this.cellChars = 0;
-    return pending === null || PLAIN_NUMBER.test(pending);
+    return pending === null || PLAIN_NUMBER.test(pending) || SIGNED_NUMERIC_TEXT.test(pending);
   }
 }
 
