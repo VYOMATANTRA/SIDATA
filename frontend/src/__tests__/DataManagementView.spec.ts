@@ -476,48 +476,57 @@ describe('DataManagementView.vue', () => {
     wrapper.unmount();
   });
 
-  it('does not render PublicSettingsForm and shows error alert if settings fail to load while modal is open', async () => {
-    let rejectSettings!: (err: Error) => void;
-    const settingsPromise = new Promise<Response>((_resolve, reject) => {
-      rejectSettings = reject;
-    });
-
-    installFetchMock({
-      settingsGet: () => settingsPromise,
-    });
-
+  async function mountAdmin(settingsGet?: () => Promise<Response> | Response) {
+    if (settingsGet) installFetchMock({ settingsGet });
     const pinia = createPinia();
     setActivePinia(pinia);
     const authStore = useAuthStore();
     authStore.setAuth({ id: '1', email: 'admin@example.com', role: 'admin' }, 'token');
-
     const wrapper = mount(DataManagementView, {
-      global: {
-        plugins: [pinia],
-        stubs: { RouterLink: true, teleport: true },
-      },
+      global: { plugins: [pinia], stubs: { RouterLink: true, teleport: true } },
     });
     await flushPromises();
-
     await wrapper.find('[data-test="tab-pengaturan"]').trigger('click');
     await flushPromises();
+    return wrapper;
+  }
 
+  async function clickEdit(wrapper: Awaited<ReturnType<typeof mountAdmin>>) {
     const editBtn = wrapper.findAll('button').find((b) => b.text().includes('Edit'));
     await editBtn?.trigger('click');
     await flushPromises();
+  }
 
-    expect(wrapper.text()).toContain('Memuat pengaturan…');
+  it('refuses to open the settings dialog while settings load, then opens once loaded', async () => {
+    let resolveSettings!: (r: Response) => void;
+    const wrapper = await mountAdmin(
+      () => new Promise<Response>((resolve) => (resolveSettings = resolve)),
+    );
+
+    await clickEdit(wrapper);
+
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
     expect(wrapper.findComponent({ name: 'PublicSettingsForm' }).exists()).toBe(false);
+    expect(wrapper.find('[data-test="page-message"]').text()).toContain(
+      'Pengaturan publik masih dimuat',
+    );
 
-    // Simulate fetch failure
-    rejectSettings(new Error('Network failure'));
+    resolveSettings(json({ settings: DEFAULT_PUBLIC_SETTINGS }));
     await flushPromises();
+    await clickEdit(wrapper);
 
+    expect(wrapper.findComponent({ name: 'PublicSettingsForm' }).exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('refuses to open the settings dialog when settings failed to load and shows the error on the page', async () => {
+    const wrapper = await mountAdmin(() => Promise.reject(new Error('Network failure')));
+
+    await clickEdit(wrapper);
+
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
     expect(wrapper.findComponent({ name: 'PublicSettingsForm' }).exists()).toBe(false);
-    const alert = wrapper.find('[role="alert"]');
-    expect(alert.exists()).toBe(true);
-    expect(alert.text()).toContain('Gagal memuat pengaturan publik');
-
+    expect(wrapper.find('[role="alert"]').text()).toContain('Gagal memuat pengaturan publik');
     wrapper.unmount();
   });
 });

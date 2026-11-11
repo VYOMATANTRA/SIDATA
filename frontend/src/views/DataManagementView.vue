@@ -324,9 +324,12 @@ function handleEdit(card: IndicatorCardModel): void {
 
   if (card.type === 'pengaturan') {
     if (!authStore.isAdmin) return;
-    if (settingsStore.error || (!settingsStore.isLoaded && !settingsStore.isLoading)) {
-      serverError.value =
-        settingsStore.error || 'Pengaturan publik belum siap. Muat ulang halaman lalu coba lagi.';
+    if (settingsStore.error || !settingsStore.isLoaded) {
+      serverError.value = settingsStore.error
+        ? settingsStore.error
+        : settingsStore.isLoading
+          ? 'Pengaturan publik masih dimuat. Coba lagi sebentar lagi.'
+          : 'Pengaturan publik belum siap. Muat ulang halaman lalu coba lagi.';
       return;
     }
     settingsFormDirty.value = false;
@@ -514,6 +517,15 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
     </div>
 
     <p
+      v-if="serverError && !isEditorOpen && serverError !== loadError"
+      role="alert"
+      class="rounded-card mt-4 border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+      data-test="page-message"
+    >
+      {{ serverError }}
+    </p>
+
+    <p
       v-if="pagesStore.hierarchyError"
       class="rounded-card mt-4 border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900"
     >
@@ -679,16 +691,8 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
         @cancel="resetEditor"
       />
 
-      <p
-        v-else-if="isEditingSettings && !settingsStore.isLoaded && settingsStore.isLoading"
-        class="text-sm text-slate-600"
-        aria-live="polite"
-      >
-        Memuat pengaturan…
-      </p>
-
       <PublicSettingsForm
-        v-else-if="isEditingSettings && settingsStore.isLoaded"
+        v-else-if="isEditingSettings"
         v-show="!settingsDiscardPromptOpen"
         ref="settingsForm"
         :settings="settingsStore.settings"
@@ -698,14 +702,6 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
         @cancel="requestCloseSettings"
         @dirty-change="settingsFormDirty = $event"
       />
-
-      <p v-else-if="isEditingSettings" role="alert" class="text-sm text-rose-700">
-        {{
-          serverError ||
-          settingsStore.error ||
-          'Pengaturan publik belum siap. Muat ulang halaman lalu coba lagi.'
-        }}
-      </p>
 
       <p v-else-if="serverError" role="alert" class="text-sm text-rose-700">
         {{ serverError }}
