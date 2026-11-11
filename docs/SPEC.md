@@ -458,7 +458,7 @@ setup-password, the OAuth callback, `/dashboard` (its own `<main>`) and the admi
   localized navy scrim) at the top with the menu closed, navy once scrolled past 64px or while the
   menu is open. Every other page is navy. State is re-read on load, scroll, resize, back/forward and
   route change, so a refresh at a scrolled position starts navy. Reduced motion makes transitions
-  instant. The hero reserves the header's height as top padding, and in-page anchors (hero, chapters,
+  instant. The hero is full viewport height (`100dvh`, not reduced by the header) and reserves the header's height as top padding, and in-page anchors (hero, chapters,
   skip link target) clear it via `scroll-margin`.
 - **Scroll and focus.** Public routes scroll the window to the top on a new path; back/forward
   restore the previous position, except between two entries of the same path that differ only by

@@ -216,6 +216,8 @@ describe('Landing SectionHero.vue', () => {
 
     // Sizing: scoped .hero-section handles dynamic viewport height with standard vh fallback
     expect(classes).toContain('hero-section');
+    // Exactly one min-height source: the shared header-subtracting class must not be present
+    expect(classes).not.toContain('landing-hero-min-height');
     expect(classes).not.toContain('min-h-[520px]');
     expect(classes).not.toContain('sm:min-h-[580px]');
 
