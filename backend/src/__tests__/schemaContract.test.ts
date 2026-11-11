@@ -74,25 +74,44 @@ describe('schema contract', () => {
       assert.match(grantsSql, /DECLARE CONTINUE HANDLER FOR 1141 BEGIN END;/);
       assert.match(
         grantsSql,
-        /REVOKE ALL PRIVILEGES ON `<DB_NAME>`\.\* FROM '<APP_DB_USER>'@'<APP_DB_HOST>';/,
+        /'REVOKE ALL PRIVILEGES ON `', db_plain, '`\.\* FROM ''<APP_DB_USER>''@''<APP_DB_HOST>'''/,
       );
+      assert.match(
+        grantsSql,
+        /'REVOKE GRANT OPTION ON `', db_plain, '`\.\* FROM ''<APP_DB_USER>''@''<APP_DB_HOST>'''/,
+      );
+      // MySQL stores `_` escaped in db-level grants; the escaped spelling must be revoked too.
+      assert.match(grantsSql, /'REVOKE ALL PRIVILEGES ON `', db_escaped, '`/);
+      assert.match(grantsSql, /'REVOKE GRANT OPTION ON `', db_escaped, '`/);
       assert.match(grantsSql, /CALL _sidata_revoke_blanket_db_grant\(\);/);
       assert.match(grantsSql, /DROP PROCEDURE IF EXISTS _sidata_revoke_blanket_db_grant;/);
     });
 
-    it('verifies post-condition that no blanket db-level grant remains matching <DB_NAME>', () => {
+    it('selects the database before creating any procedure (no ERROR 1046)', () => {
+      const use = grantsSql.indexOf('USE `<DB_NAME>`;');
+      const firstCreate = grantsSql.indexOf('CREATE PROCEDURE');
+      assert.ok(use >= 0, 'script has a USE `<DB_NAME>` line');
+      assert.ok(use < firstCreate, 'USE precedes the first CREATE PROCEDURE');
+      const verifyUse = grantsSql.lastIndexOf('USE `<DB_NAME>`;');
+      assert.ok(verifyUse < grantsSql.indexOf('CREATE PROCEDURE _sidata_verify'));
+    });
+
+    it('verifies post-condition that no blanket db-level grant remains on exactly <DB_NAME>', () => {
       assert.match(grantsSql, /CREATE PROCEDURE _sidata_verify_no_blanket_db_grant\(\)/);
       assert.match(grantsSql, /FROM information_schema\.SCHEMA_PRIVILEGES/);
       assert.match(
         grantsSql,
         /WHERE GRANTEE = CONCAT\('''', '<APP_DB_USER>', '''@''', '<APP_DB_HOST>', ''''\)/,
       );
-      assert.match(grantsSql, /\('<DB_NAME>' LIKE TABLE_SCHEMA OR TABLE_SCHEMA = '<DB_NAME>'\)/);
-      assert.match(grantsSql, /SIGNAL SQLSTATE '45000'/);
+      assert.doesNotMatch(grantsSql, /LIKE\s+TABLE_SCHEMA/);
+      assert.doesNotMatch(grantsSql, /TABLE_SCHEMA\s+LIKE/);
       assert.match(
         grantsSql,
-        /SET MESSAGE_TEXT = 'Security assertion failed: blanket database-level grant was not revoked\.';/,
+        /TABLE_SCHEMA IN \('<DB_NAME>', REPLACE\('<DB_NAME>', '_', '\\\\_'\)\)/,
       );
+      assert.match(grantsSql, /SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = failure_message;/);
+      assert.match(grantsSql, /GROUP_CONCAT\(CONCAT\(PRIVILEGE_TYPE/);
+      assert.match(grantsSql, /db-level grant\(s\) left on <DB_NAME>: /);
       assert.match(grantsSql, /CALL _sidata_verify_no_blanket_db_grant\(\);/);
       assert.match(grantsSql, /DROP PROCEDURE IF EXISTS _sidata_verify_no_blanket_db_grant;/);
     });

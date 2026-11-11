@@ -32,14 +32,37 @@
 --                    network (the `mysql` service is not reachable from outside it), or a
 --                    specific host/CIDR in a VPS deployment with a locked-down MySQL bind.
 --   <DB_NAME>      — the value of MYSQL_DATABASE (e.g. sidata)
+--
+-- Run it with no database preselected (`mysql -u root -p < file`); the USE below selects one.
+-- (The helper procedures are stored routines and must live inside a database; without a USE,
+-- MySQL stops with ERROR 1046: No database selected.) A `--database` flag is harmless: USE wins.
 
 -- 1. Remove the blanket database-level grant.
+--    GRANT OPTION is revoked by its own statement (MySQL has no `ALL PRIVILEGES, GRANT OPTION ON
+--    db.*` form): `REVOKE ALL PRIVILEGES` alone leaves a lone GRANT OPTION behind, which would be
+--    a db-level grant record the check below (rightly) rejects. Error 1141 (no such grant) is
+--    ignored for each statement, so re-runs are idempotent.
+--    MySQL records a db-level grant on a name containing `_` in ESCAPED form (`sidata\_x`), and a
+--    REVOKE naming the unescaped spelling does not touch that record (verified on MySQL 8.0). So
+--    each REVOKE runs for both spellings, via prepared statements.
+--    Wildcard grants (e.g. `sidata%`.*) are a DIFFERENT scope and cannot be revoked by naming
+--    <DB_NAME>; the operator must remove them by hand (review SHOW GRANTS for the app user).
+USE `<DB_NAME>`;
 DROP PROCEDURE IF EXISTS _sidata_revoke_blanket_db_grant;
 DELIMITER $$
 CREATE PROCEDURE _sidata_revoke_blanket_db_grant()
 BEGIN
+  DECLARE db_plain VARCHAR(128) DEFAULT '<DB_NAME>';
+  DECLARE db_escaped VARCHAR(256) DEFAULT REPLACE('<DB_NAME>', '_', '\\_');
   DECLARE CONTINUE HANDLER FOR 1141 BEGIN END;
-  REVOKE ALL PRIVILEGES ON `<DB_NAME>`.* FROM '<APP_DB_USER>'@'<APP_DB_HOST>';
+  SET @sidata_stmt = CONCAT('REVOKE ALL PRIVILEGES ON `', db_plain, '`.* FROM ''<APP_DB_USER>''@''<APP_DB_HOST>''');
+  PREPARE sidata_revoke FROM @sidata_stmt; EXECUTE sidata_revoke; DEALLOCATE PREPARE sidata_revoke;
+  SET @sidata_stmt = CONCAT('REVOKE GRANT OPTION ON `', db_plain, '`.* FROM ''<APP_DB_USER>''@''<APP_DB_HOST>''');
+  PREPARE sidata_revoke FROM @sidata_stmt; EXECUTE sidata_revoke; DEALLOCATE PREPARE sidata_revoke;
+  SET @sidata_stmt = CONCAT('REVOKE ALL PRIVILEGES ON `', db_escaped, '`.* FROM ''<APP_DB_USER>''@''<APP_DB_HOST>''');
+  PREPARE sidata_revoke FROM @sidata_stmt; EXECUTE sidata_revoke; DEALLOCATE PREPARE sidata_revoke;
+  SET @sidata_stmt = CONCAT('REVOKE GRANT OPTION ON `', db_escaped, '`.* FROM ''<APP_DB_USER>''@''<APP_DB_HOST>''');
+  PREPARE sidata_revoke FROM @sidata_stmt; EXECUTE sidata_revoke; DEALLOCATE PREPARE sidata_revoke;
 END$$
 DELIMITER ;
 CALL _sidata_revoke_blanket_db_grant();
@@ -73,19 +96,31 @@ GRANT UPDATE (`acknowledgedAt`, `acknowledgedById`) ON `<DB_NAME>`.`audit_logs`
 
 FLUSH PRIVILEGES;
 
--- Post-condition check: fail loudly if any database-level grant still exists for the app user on <DB_NAME>
+-- Post-condition check: fail loudly if any database-level grant on exactly <DB_NAME> remains for
+-- the app user. Matches the exact name only (no LIKE: `_` and `%` in a database name are wildcards
+-- there). MySQL may store `_` escaped as `\_` in a db-level grant, so both spellings are compared.
+-- Wildcard grants such as `sidata%`.* are another scope: this script cannot revoke them and the
+-- check ignores them, so the operator must remove them (REVOKE ... ON `sidata%`.*) manually.
+USE `<DB_NAME>`;
 DROP PROCEDURE IF EXISTS _sidata_verify_no_blanket_db_grant;
 DELIMITER $$
 CREATE PROCEDURE _sidata_verify_no_blanket_db_grant()
 BEGIN
   DECLARE remaining_db_grants INT DEFAULT 0;
-  SELECT COUNT(*) INTO remaining_db_grants
+  DECLARE leftover_grants TEXT DEFAULT NULL;
+  DECLARE failure_message VARCHAR(128) DEFAULT '';
+  SELECT COUNT(*),
+         GROUP_CONCAT(CONCAT(PRIVILEGE_TYPE, IF(IS_GRANTABLE = 'YES', ' (GRANTABLE)', '')) SEPARATOR ', ')
+    INTO remaining_db_grants, leftover_grants
   FROM information_schema.SCHEMA_PRIVILEGES
   WHERE GRANTEE = CONCAT('''', '<APP_DB_USER>', '''@''', '<APP_DB_HOST>', '''')
-    AND ('<DB_NAME>' LIKE TABLE_SCHEMA OR TABLE_SCHEMA = '<DB_NAME>');
+    AND TABLE_SCHEMA IN ('<DB_NAME>', REPLACE('<DB_NAME>', '_', '\\_'));
   IF remaining_db_grants > 0 THEN
-    SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'Security assertion failed: blanket database-level grant was not revoked.';
+    -- MESSAGE_TEXT is capped at 128 characters: put the actionable part first.
+    SET failure_message = LEFT(CONCAT(
+      remaining_db_grants, ' db-level grant(s) left on <DB_NAME>: ',
+      IFNULL(leftover_grants, '?'), ' - revoke manually'), 128);
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = failure_message;
   END IF;
 END$$
 DELIMITER ;
