@@ -346,6 +346,59 @@ describe('runMediaCleanup: unattached assets', () => {
     assert.equal(rows.has(ID_OLD), true);
   });
 
+  it('refuses the claim and deletes nothing when the grace period has not elapsed under the lock', async () => {
+    const fresh = asset(ID_OLD, { createdAt: new Date(NOW.getTime() - HOUR) });
+    const files = await putAssetFiles(fresh);
+    const { client, rows, deletes } = fakeClient([fresh]);
+    // The scan believed it was eligible; the locked re-read says otherwise.
+    (client.mediaAsset as { findMany: unknown }).findMany = (async (args: {
+      where: { id?: { gt: string } };
+    }) => (args.where.id?.gt ? [] : [rows.get(ID_OLD)])) as never;
+    let updateCalls = 0;
+    const originalUpdate = client.mediaAsset.updateMany;
+    (client.mediaAsset as { updateMany: unknown }).updateMany = ((...a: never[]) => {
+      updateCalls += 1;
+      return (originalUpdate as (...x: unknown[]) => unknown)(...a);
+    }) as never;
+    const result = await runMediaCleanup({
+      root,
+      graceMs: GRACE,
+      now: NOW,
+      client,
+      recordAudit: noAudit().record,
+    });
+    assert.equal(result.assetsRemoved, 0);
+    assert.equal(updateCalls, 0, 'no claim attempted');
+    assert.equal(rows.get(ID_OLD)!.cleanupClaimedAt, null);
+    assert.deepEqual(deletes, []);
+    assert.equal(existsSync(files.file), true);
+    assert.equal(existsSync(files.derivative), true);
+  });
+
+  it('refuses the claim and deletes nothing when a reference still exists', async () => {
+    const referenced = asset(ID_OLD);
+    const files = await putAssetFiles(referenced);
+    const { client, rows, references, deletes } = fakeClient([referenced]);
+    references.set('k', {
+      assetId: ID_OLD,
+      referenceType: 'content_block',
+      referenceId: 'landing-hero',
+      slot: 'backgroundImage',
+    });
+    const result = await runMediaCleanup({
+      root,
+      graceMs: GRACE,
+      now: NOW,
+      client,
+      recordAudit: noAudit().record,
+    });
+    assert.equal(result.assetsRemoved, 0);
+    assert.equal(rows.get(ID_OLD)!.cleanupClaimedAt, null);
+    assert.deepEqual(deletes, []);
+    assert.equal(existsSync(files.file), true);
+    assert.equal(existsSync(files.derivative), true);
+  });
+
   it('reports (and keeps the row of) an asset attached in the residual window after file removal', async () => {
     const racy = asset(ID_OLD);
     const files = await putAssetFiles(racy);

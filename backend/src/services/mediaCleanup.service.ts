@@ -34,9 +34,9 @@ function collectableWhere(cutoff: Date) {
 }
 
 export interface MediaCleanupTransactionClient {
-  $queryRaw?: Prisma.TransactionClient['$queryRaw'];
+  $queryRaw: Prisma.TransactionClient['$queryRaw'];
   mediaAsset: Pick<typeof prisma.mediaAsset, 'findMany' | 'count' | 'updateMany' | 'deleteMany'>;
-  mediaAssetReference?: Pick<typeof prisma.mediaAssetReference, 'count'>;
+  mediaAssetReference: Pick<typeof prisma.mediaAssetReference, 'count'>;
 }
 
 export interface MediaCleanupClient extends MediaCleanupTransactionClient {
@@ -130,42 +130,29 @@ async function claimAssetForCleanup(
   now: Date,
 ): Promise<boolean> {
   const runClaim = async (tx: MediaCleanupTransactionClient): Promise<boolean> => {
-    if (tx.$queryRaw) {
-      const locked = await tx.$queryRaw<
-        Array<{
-          id: string;
-          attachedAt?: Date | null;
-          detachedAt?: Date | null;
-          createdAt?: Date;
-          cleanupClaimedAt?: Date | null;
-          cleanupQuarantineReason?: string | null;
-        }>
-      >(
-        Prisma.sql`SELECT id, attached_at AS attachedAt, detached_at AS detachedAt, created_at AS createdAt, cleanup_claimed_at AS cleanupClaimedAt, cleanup_quarantine_reason AS cleanupQuarantineReason FROM media_assets WHERE id = ${assetId} FOR UPDATE`,
-      );
-      if (locked.length === 0) return false;
-      const row = locked[0]!;
-      if ('attachedAt' in row && 'createdAt' in row) {
-        if (row.cleanupQuarantineReason !== null && row.cleanupQuarantineReason !== undefined) {
-          return false;
-        }
-        if (row.cleanupClaimedAt !== null && row.cleanupClaimedAt !== undefined) {
-          return true;
-        }
-        if (row.attachedAt !== null && row.attachedAt !== undefined) {
-          return false;
-        }
-        const detachedAt = row.detachedAt ?? null;
-        const createdAt = row.createdAt!;
-        const graceElapsed = detachedAt !== null ? detachedAt < cutoff : createdAt < cutoff;
-        if (!graceElapsed) return false;
-      }
-    }
+    const locked = await tx.$queryRaw<
+      Array<{
+        id: string;
+        attachedAt: Date | null;
+        detachedAt: Date | null;
+        createdAt: Date;
+        cleanupClaimedAt: Date | null;
+        cleanupQuarantineReason: string | null;
+      }>
+    >(
+      Prisma.sql`SELECT id, attached_at AS attachedAt, detached_at AS detachedAt, created_at AS createdAt, cleanup_claimed_at AS cleanupClaimedAt, cleanup_quarantine_reason AS cleanupQuarantineReason FROM media_assets WHERE id = ${assetId} FOR UPDATE`,
+    );
+    const row = locked[0];
+    if (!row) return false;
+    if (row.cleanupQuarantineReason !== null) return false;
+    // Already irreversibly claimed on an earlier run: stay claimed and let the caller retry files.
+    if (row.cleanupClaimedAt !== null) return true;
+    if (row.attachedAt !== null) return false;
+    const graceElapsed = (row.detachedAt ?? row.createdAt) < cutoff;
+    if (!graceElapsed) return false;
 
-    if (tx.mediaAssetReference) {
-      const refCount = await tx.mediaAssetReference.count({ where: { assetId } });
-      if (refCount > 0) return false;
-    }
+    const refCount = await tx.mediaAssetReference.count({ where: { assetId } });
+    if (refCount > 0) return false;
 
     const claimed = await tx.mediaAsset.updateMany({
       where: {
