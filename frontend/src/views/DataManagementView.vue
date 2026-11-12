@@ -27,7 +27,13 @@ import { useSettingsStore, type PublicSettings } from '../stores/settings.store'
 import { useAuthStore } from '../stores/auth';
 import { formatDecimalId } from '../utils/formatNumber';
 import { INPUT_CLASSES } from '../utils/formStyles';
-import { toUserMessage } from '../utils/userMessages';
+import { classifyFailure, toUserMessage } from '../utils/userMessages';
+import {
+  blockDisplayName,
+  blockPlacement,
+  isBlockShownOnSite,
+} from '../components/data/blocks/blockMeta';
+import type { BlockSavePayload } from '../components/data/blocks/blockFormShared';
 
 /**
  * CMS entry point for indicator data, content blocks, and public settings (SPEC §3/§4).
@@ -91,6 +97,8 @@ const activeScalar = ref<Indicator | null>(null);
 const activeTableId = ref<string | null>(null);
 const activeTable = ref<IndicatorTableDetail | null>(null);
 const activeContentBlock = ref<ContentBlock | null>(null);
+/** Set when a content-block save was refused because someone else saved it first. */
+const contentBlockStale = ref(false);
 const isEditingSettings = ref(false);
 const settingsForm = ref<InstanceType<typeof PublicSettingsForm> | null>(null);
 const settingsFormDirty = ref(false);
@@ -120,7 +128,8 @@ const isLoading = computed(() => {
 
 const loadError = computed(() => {
   if (activeTab.value === 'konten') return contentBlocksStore.error;
-  if (activeTab.value === 'pengaturan') return settingsStore.error;
+  // The settings tab only links to the configuration page; it loads nothing of its own.
+  if (activeTab.value === 'pengaturan') return null;
   return indicatorsStore.error || tablesStore.error;
 });
 
@@ -183,18 +192,19 @@ const cards = computed<IndicatorCardModel[]>(() => {
       .map((block) => ({
         id: block.slug,
         type: 'konten' as const,
-        title: block.title ?? block.slug,
+        title: blockDisplayName(block),
         kicker: 'Blok Konten',
-        sectionLabel: `Tipe: ${block.type} · Slug: ${block.slug}`,
+        sectionLabel: placementFor(block),
         stats: [
-          { label: 'Tipe blok', value: block.type },
           {
             label: 'Terakhir diperbarui',
-            value: new Date(block.updatedAt).toLocaleDateString('id-ID'),
+            value: formatBlockUpdated(block.updatedAt),
           },
         ],
         source: null,
-        hedgeNote: null,
+        hedgeNote: isBlockShownOnSite(block)
+          ? null
+          : 'Isian tersimpan, tetapi belum muncul di halaman mana pun.',
         isStale: false,
       }))
       .sort(compareCards);
@@ -235,7 +245,7 @@ const filteredCards = computed(() => {
 
 const modalTitle = computed(() => {
   if (activeContentBlock.value) {
-    return `Edit Blok Konten: ${activeContentBlock.value.title ?? activeContentBlock.value.slug}`;
+    return `Edit Blok Konten: ${blockDisplayName(activeContentBlock.value)}`;
   }
   if (isEditingSettings.value) {
     return 'Edit Pengaturan Publik Portal';
@@ -248,9 +258,8 @@ const modalSize = computed<'md' | 'xl'>(() =>
 );
 
 const modalDescription = computed(() => {
-  if (activeContentBlock.value) {
-    return `Slug: ${activeContentBlock.value.slug} · Tipe: ${activeContentBlock.value.type}`;
-  }
+  // A content block's own form opens with the "Tampil di: …" line, so the dialog adds none.
+  if (activeContentBlock.value) return undefined;
   if (isEditingSettings.value) {
     return 'Pengaturan profil institusi, kontak pelayanan, dan tampilan awal peta.';
   }
@@ -259,6 +268,16 @@ const modalDescription = computed(() => {
   const parts = pagesStore.breadcrumbParts(sectionId);
   return parts.length > 0 ? parts.join(' › ') : undefined;
 });
+
+function placementFor(block: ContentBlock): string {
+  const parts = block.sectionId ? pagesStore.breadcrumbParts(block.sectionId) : [];
+  return blockPlacement(block, parts.length > 0 ? parts.join(' › ') : null);
+}
+
+function formatBlockUpdated(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('id-ID');
+}
 
 function announce(message: string): void {
   statusMessage.value = message;
@@ -325,6 +344,7 @@ function handleEdit(card: IndicatorCardModel): void {
   if (card.type === 'konten') {
     const block = contentBlocksStore.blocks[card.id];
     if (block) {
+      contentBlockStale.value = false;
       activeContentBlock.value = block;
     }
     return;
@@ -370,6 +390,7 @@ function resetEditor(): void {
   activeTableId.value = null;
   activeTable.value = null;
   activeContentBlock.value = null;
+  contentBlockStale.value = false;
   isEditingSettings.value = false;
   settingsFormDirty.value = false;
   isTableDetailLoading.value = false;
@@ -377,25 +398,48 @@ function resetEditor(): void {
   templatesStore.clearSelectorError();
 }
 
-async function handleContentBlockSubmit(payload: {
-  title: string | null;
-  body: string;
-  metadata: Record<string, unknown> | null;
-}): Promise<void> {
+async function handleContentBlockSubmit(payload: BlockSavePayload): Promise<void> {
   const target = activeContentBlock.value;
   if (!target) return;
 
   saving.value = true;
   serverError.value = '';
   try {
-    const updated = await contentBlocksStore.updateBlock(target.slug, payload);
+    const updated = await contentBlocksStore.updateBlock(target.slug, {
+      ...payload,
+      // The precondition that stops a stale tab from overwriting someone else's save.
+      ...(typeof target.updatedAt === 'string' ? { expectedUpdatedAt: target.updatedAt } : {}),
+    });
     resetEditor();
-    announce(`Perubahan blok konten “${updated.title ?? updated.slug}” disimpan.`);
+    announce(`Perubahan blok konten “${blockDisplayName(updated)}” disimpan.`);
   } catch (error) {
+    // The dialog stays open with every field as typed; nothing is cleared on a failed save.
     serverError.value = errorMessage(error, 'menyimpan perubahan blok konten');
+    if (classifyFailure(error).kind === 'stale') {
+      contentBlockStale.value = true;
+      // Refresh the list behind the dialog; the open draft is untouched until the editor asks.
+      void contentBlocksStore.fetchBlocks(true);
+    }
   } finally {
     saving.value = false;
   }
+}
+
+/** "Muat versi terbaru" after a stale save: swaps in the stored block and drops the old draft. */
+async function handleContentBlockReload(): Promise<void> {
+  const target = activeContentBlock.value;
+  if (!target) return;
+  await contentBlocksStore.fetchBlocks(true);
+  const fresh = contentBlocksStore.serverBlocks[target.slug];
+  if (!fresh) {
+    resetEditor();
+    announce('Blok konten ini tidak ditemukan lagi. Daftar sudah dimuat ulang.');
+    return;
+  }
+  serverError.value = '';
+  contentBlockStale.value = false;
+  activeContentBlock.value = fresh;
+  announce('Versi terbaru blok konten dimuat.');
 }
 
 /**
@@ -550,7 +594,25 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
       :aria-labelledby="`tab-${tab.id}`"
       :hidden="activeTab !== tab.id"
     >
-      <template v-if="activeTab === tab.id">
+      <div
+        v-if="tab.id === 'pengaturan' && activeTab === tab.id"
+        class="rounded-card border-border bg-surface-muted mt-6 space-y-3 border p-6"
+        data-test="settings-moved"
+      >
+        <p class="text-brand-navy text-sm">
+          Pengaturan portal kini dikelola di halaman Konfigurasi sistem, bersama tampilan awal peta,
+          cuaca, dan masa simpan log.
+        </p>
+        <router-link
+          to="/admin/sistem/konfigurasi"
+          class="rounded-btn border-brand-navy text-brand-navy hover:bg-brand-navy hover:text-text-inverse focus-visible:outline-focus-ring inline-flex min-h-11 items-center justify-center border-2 bg-white px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+          data-test="settings-moved-link"
+        >
+          Buka Konfigurasi sistem
+        </router-link>
+      </div>
+
+      <template v-if="activeTab === tab.id && tab.id !== 'pengaturan'">
         <div class="mt-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <form
             role="search"
@@ -695,11 +757,19 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
 
       <ContentBlockForm
         v-else-if="activeContentBlock"
+        :key="`${activeContentBlock.slug}:${activeContentBlock.updatedAt}`"
         :block="activeContentBlock"
         :busy="saving"
         :server-error="serverError"
+        :stale="contentBlockStale"
+        :section-label="
+          activeContentBlock.sectionId
+            ? pagesStore.breadcrumbParts(activeContentBlock.sectionId).join(' › ') || undefined
+            : undefined
+        "
         @submit="handleContentBlockSubmit"
         @cancel="resetEditor"
+        @reload="handleContentBlockReload"
       />
 
       <PublicSettingsForm

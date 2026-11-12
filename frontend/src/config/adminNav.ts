@@ -123,7 +123,6 @@ export const ADMIN_NAV: (AdminNavLink | AdminNavGroup)[] = [
         icon: AdjustmentsHorizontalIcon,
         roles: ['admin'],
         dataTest: 'nav-sistem-konfigurasi',
-        badge: 'Segera hadir',
       },
       {
         label: 'Log sistem',

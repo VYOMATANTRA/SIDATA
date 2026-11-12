@@ -205,8 +205,16 @@ is still outstanding and tracked as unstarted, not merely undocumented.
 - **Dividers:** Vertical/Horizontal lines using `border-white/10` on navy.
 - **Link Columns:** `flex flex-col gap-[5px]`
   - **Column Titles:** `text-base font-medium text-text-inverse`
-  - **Links:** `text-sm` via `BaseLink variant="white"` (white text, white focus ring)
+  - **Links:** `text-sm` via `BaseLink variant="white" size="md"` (white text, white focus ring).
+    Never `size="sm"` plus a `text-xs` override: `sm` is the 10px size and the link would stay 10px on mobile.
 - **Copyright Text:** `text-sm text-text-inverse-muted text-center w-full mt-4`
+- **Local type roles (mobile):** section label 16px, links and contact 14px, copyright 14px
+  (`sm:text-base` from 640px up). Put the size on the `<p>` itself: the global `p` rule in
+  `main.css` overrides a size set on a wrapper, so a wrapper's `text-xs` never reached the
+  paragraph. `--text-xs` stays unchanged.
+- **SDG badges:** own full-width row under the two mobile link columns (no empty grid cell).
+- **Logos:** a fixed height per row with `w-auto object-contain` so heights match whatever the
+  aspect ratio.
 
 ## 4. Accessibility
 
@@ -237,9 +245,27 @@ right visually but is not programmatically associated with its input. Credential
 `frontend/src/utils/formStyles.ts` (`border-border-strong`, navy focus outline, `status-error`
 invalid border). See [`docs/ACCESSIBILITY.md`](ACCESSIBILITY.md) §4 for the rest.
 
+### Reusable public treatments (Tentang / profile pages)
+
+- **White card** (`TentangPotentialCard`, `TentangPublicationCard`): `bg-white border border-border`,
+  navy heading and body, icon in a `bg-surface-muted text-brand-navy` circle. For content that sits
+  on a white section.
+- **Resource band** (`TentangResourceCard` inside `TentangFeatureBand`): solid `bg-brand-navy` card,
+  white text, white icon chip, white action button. One treatment for every page that shows the band
+  (Kelurahan Manggar, Desa Cantik, VYOMATANTRA); `brand-navy-deep` is not used for cards.
+- **Muted section** (`TentangFeatureBand`, Gambaran Umum): `bg-surface-muted` with white cards.
+- **Photo hero** (`TentangPhotoHero`): no blanket tint; a navy fade only behind the text (from the
+  bottom on narrow widths, from the left from `md`), a mobile crop via `object-position`, and a
+  white wave handing over to the white section below.
+- **Greeting band** (`SectionSambutanLurah`): vertical gradient `#0a2353` to `#475a7e` (navy 75% over
+  white), all text white (white keeps at least 6.9:1 on the lightest end). Copy and portrait are
+  separate zones: stacked below `md` with the portrait on the bottom edge, side by side from `md`.
+- **Wide tables** (SOTK): keep every column; the table has a readable minimum width and scrolls
+  inside a focusable `role="region"` box instead of scrolling the page.
+
 ### Layer order (public shell)
 
-Lowest to highest: map root `z-0` (Leaflet stays inside it), chapter TOC sheet `z-30`, map summary
+Lowest to highest: map root `z-0` (Leaflet stays inside it), Cerita chapter selector bar `z-30` (sticky under the header below `lg`; its list opens inside the bar's own layer), map summary
 overlay `z-50`, sticky header `z-[55]` (its menu backdrop and sheet sit inside the header's own
 stacking context), modals `z-[58]` (`BaseModal`, `OtpVerificationModal`), focused skip link `z-[60]`.
 Keep page content at or below `z-50`. The same list is commented in `main.css`.
@@ -258,8 +284,7 @@ owned by other PRs and are intentionally left untouched here.
 
 | Surface                                                                  | Expected PR                      |
 | ------------------------------------------------------------------------ | -------------------------------- |
-| Landing sections (hero, highlights, Sambutan) and the weather widget     | Public visual refinements PR     |
-| Remaining `AppFooter` spots (slate/indigo leftovers)                     | Public visual refinements PR     |
+| Landing hero and the weather widget (Sambutan and footer are done)       | Public visual refinements PR     |
 | VYOMATANTRA view (partially; check for remaining raw palette classes)    | Public visual refinements PR     |
 | Map components (`InteractiveMap`, map summary/filters)                   | Map experience PR                |
 | Auth views and components (Login, Register, SetupPassword, OTP modal)    | Public shell PR / auth follow-up |

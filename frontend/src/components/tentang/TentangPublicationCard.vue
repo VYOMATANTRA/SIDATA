@@ -13,9 +13,9 @@ withDefaults(
 </script>
 
 <template>
-  <div class="flex flex-col gap-4 rounded-btn bg-surface-muted p-5 sm:flex-row sm:items-center">
+  <div class="flex flex-col gap-4 rounded-btn border border-border bg-white p-5 sm:flex-row sm:items-center">
     <span
-      class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-navy text-white"
+      class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-surface-muted text-brand-navy"
       aria-hidden="true"
     >
       <TentangIcon :name="icon" />

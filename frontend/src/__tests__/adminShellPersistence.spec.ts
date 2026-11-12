@@ -64,7 +64,7 @@ describe('Admin shell persistence across navigation (real router)', () => {
       '/data',
       '/users',
       '/audit-logs',
-      '/settings/audit-retention',
+      '/admin/sistem/konfigurasi',
     ];
 
     await router.push('/admin');

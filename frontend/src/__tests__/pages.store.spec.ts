@@ -226,6 +226,49 @@ describe('pages store (public page by slug)', () => {
     expect(store.notFound).toBe(true);
   });
 
+  it('keeps the outcome of each slug apart, so one topic failing never marks another', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/hilang')) {
+        return { ok: false, status: 404, json: async () => ({}) } as Response;
+      }
+      if (url.endsWith('/rusak')) {
+        return { ok: false, status: 500, json: async () => ({}) } as Response;
+      }
+      return { ok: true, status: 200, json: async () => ({ page: samplePage }) } as Response;
+    });
+
+    const store = usePagesStore();
+    await store.fetchPageBySlug('hilang');
+    await store.fetchPageBySlug('rusak');
+    await store.fetchPageBySlug('kependudukan');
+
+    expect(store.notFoundBySlug['hilang']).toBe(true);
+    expect(store.notFoundBySlug['rusak']).toBeUndefined();
+    expect(store.errorsBySlug['rusak']).toBe(`Gagal memuat halaman. ${READ_USER_MESSAGES.server}`);
+    expect(store.errorsBySlug['hilang']).toBeUndefined();
+    expect(store.errorsBySlug['kependudukan']).toBeUndefined();
+    expect(store.notFoundBySlug['kependudukan']).toBeUndefined();
+  });
+
+  it('clears a slug failure when a later request for the same slug succeeds', async () => {
+    let calls = 0;
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async () => {
+      calls += 1;
+      return calls === 1
+        ? ({ ok: false, status: 500, json: async () => ({}) } as Response)
+        : ({ ok: true, status: 200, json: async () => ({ page: samplePage }) } as Response);
+    });
+
+    const store = usePagesStore();
+    await store.fetchPageBySlug('kependudukan');
+    expect(store.errorsBySlug['kependudukan']).toBeTruthy();
+
+    await store.fetchPageBySlug('kependudukan');
+    expect(store.errorsBySlug['kependudukan']).toBeUndefined();
+    expect(store.pagesBySlug['kependudukan']).toEqual(samplePage);
+  });
+
   it('records a network error without throwing', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockRejectedValue(new TypeError('Failed to fetch'));
     globalThis.fetch = fetchMock;

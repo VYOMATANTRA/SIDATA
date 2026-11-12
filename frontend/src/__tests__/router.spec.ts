@@ -322,7 +322,7 @@ describe('router auth guard retry behavior', () => {
     });
   });
 
-  it('protects /settings/audit-retention route with authentication and admin role guards (SPEC §3)', async () => {
+  it('redirects /settings/audit-retention to the configuration page behind the same guards (SPEC §3)', async () => {
     sessionStorage.clear();
     const pinia = createPinia();
     setActivePinia(pinia);
@@ -342,11 +342,12 @@ describe('router auth guard retry behavior', () => {
     await router.push('/settings/audit-retention');
     expect(router.currentRoute.value.name).toBe('home');
 
-    // 3. Authenticated admin -> allowed to access audit-retention-settings (happy path last)
+    // 3. Authenticated admin -> lands on the configuration page's retention section (happy path last)
     authStore.setAuth({ id: '2', email: 'admin@example.com', role: 'admin' }, 'valid-token');
     await router.push('/settings/audit-retention');
-    expect(router.currentRoute.value.name).toBe('audit-retention-settings');
-    expect(router.currentRoute.value.meta.title).toBe('Pengaturan Retensi Audit');
+    expect(router.currentRoute.value.name).toBe('admin-konfigurasi-sistem');
+    expect(router.currentRoute.value.hash).toBe('#retensi-log');
+    expect(router.currentRoute.value.meta.title).toBe('Konfigurasi sistem');
   });
 });
 

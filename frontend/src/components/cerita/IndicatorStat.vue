@@ -34,13 +34,13 @@ const displayValue = computed(() => formatIndicatorValue(props.indicator.valueCu
 
     <div
       v-if="narrative.isStale"
-      class="mt-3 inline-flex items-center gap-1.5 rounded-full bg-status-warning-surface px-2.5 py-1 text-xs font-medium text-status-warning"
+      class="mt-3 inline-flex items-center gap-1.5 rounded-full bg-status-warning-surface px-2.5 py-1 text-sm font-medium text-status-warning"
       data-test="indicator-stale-badge"
     >
       Data berumur
     </div>
 
-    <p v-if="indicator.source" class="mt-3 text-xs text-text-muted" data-test="indicator-source">
+    <p v-if="indicator.source" class="mt-3 text-sm text-text-muted" data-test="indicator-source">
       Sumber: {{ indicator.source }}
     </p>
   </div>

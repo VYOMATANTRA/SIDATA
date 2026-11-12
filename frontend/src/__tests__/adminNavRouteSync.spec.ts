@@ -82,7 +82,7 @@ describe('router/index.ts — ADMIN_NAV route synchronization and role guards', 
     });
   });
 
-  it('rejects an authenticated editor on every admin-only route (including /settings/audit-retention) and allows an admin', async () => {
+  it('rejects an authenticated editor on every admin-only route and allows an admin', async () => {
     const pinia = createPinia();
     setActivePinia(pinia);
     const authStore = useAuthStore(pinia);
@@ -90,7 +90,6 @@ describe('router/index.ts — ADMIN_NAV route synchronization and role guards', 
     const adminOnlyPaths = [
       '/users',
       '/audit-logs',
-      '/settings/audit-retention',
       '/admin/sistem/templat-kalimat',
       '/admin/sistem/konfigurasi',
     ];
@@ -114,20 +113,24 @@ describe('router/index.ts — ADMIN_NAV route synchronization and role guards', 
     }
   });
 
-  it('explicitly locks /settings/audit-retention to ["admin"] and rejects an editor', async () => {
-    const retentionRoute = router.resolve('/settings/audit-retention');
-    expect(retentionRoute.meta.requiresAuth).toBe(true);
-    expect(retentionRoute.meta.requiresAdmin).toBe(true);
-    expect(retentionRoute.meta.requiresEditor).toBe(true);
-
+  it('sends the old /settings/audit-retention URL to the Admin-only configuration page', async () => {
     const pinia = createPinia();
     setActivePinia(pinia);
     const authStore = useAuthStore(pinia);
 
+    // Editor: turned away by the guards of the final target, like on the configuration page.
     authStore.setAuth({ id: 'ed-1', email: 'editor@manggar.go.id', role: 'editor' }, 'token');
     await router.push('/admin');
     await router.push('/settings/audit-retention');
     expect(router.currentRoute.value.name).toBe('home');
+
+    // Admin: lands on the configuration page, on the retention section.
+    authStore.setAuth({ id: 'ad-1', email: 'admin@manggar.go.id', role: 'admin' }, 'token');
+    await router.push('/settings/audit-retention');
+    expect(router.currentRoute.value.name).toBe('admin-konfigurasi-sistem');
+    expect(router.currentRoute.value.path).toBe('/admin/sistem/konfigurasi');
+    expect(router.currentRoute.value.hash).toBe('#retensi-log');
+    expect(router.currentRoute.value.meta.requiresAdmin).toBe(true);
   });
 });
 

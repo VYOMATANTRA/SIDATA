@@ -5,6 +5,8 @@ import {
   validateRetentionPolicy,
   parseRetention,
   formatDurationLabel,
+  RETENTION_ORDER_MESSAGE,
+  RETENTION_SAVE_REFUSED_MESSAGE,
   type AuditRetentionPolicy,
 } from '../stores/auditRetention.store';
 import { useAuthStore } from '../stores/auth';
@@ -14,51 +16,71 @@ import * as userMessagesModule from '../utils/userMessages';
 describe('validateRetentionPolicy helper', () => {
   it('rejects negative numbers', () => {
     expect(validateRetentionPolicy({ info: -1, warning: 30, critical: 60 })).toMatch(
-      /non-negatif/i,
+      /jumlah hari bulat/i,
     );
     expect(validateRetentionPolicy({ info: 30, warning: -5, critical: 60 })).toMatch(
-      /non-negatif/i,
+      /jumlah hari bulat/i,
     );
     expect(validateRetentionPolicy({ info: 30, warning: 60, critical: -10 })).toMatch(
-      /non-negatif/i,
+      /jumlah hari bulat/i,
     );
   });
 
   it('rejects non-integer floating point numbers', () => {
     expect(validateRetentionPolicy({ info: 1.5, warning: 30, critical: 60 })).toMatch(
-      /bilangan bulat/i,
+      /jumlah hari bulat/i,
     );
     expect(validateRetentionPolicy({ info: 10, warning: 30.2, critical: 60 })).toMatch(
-      /bilangan bulat/i,
+      /jumlah hari bulat/i,
     );
   });
 
   it('rejects values exceeding max allowable days (36500)', () => {
     expect(validateRetentionPolicy({ info: 36501, warning: 36501, critical: 36501 })).toMatch(
-      /36500/i,
+      /36\.500/i,
     );
   });
 
   it('rejects invalid ordering where finite info > finite warning', () => {
     const error = validateRetentionPolicy({ info: 60, warning: 30, critical: 90 });
-    expect(error).toMatch(/critical.*warning.*info/i);
+    expect(error).toMatch(/Kritis.*Peringatan.*Info/);
   });
 
   it('rejects invalid ordering where finite warning > finite critical', () => {
     const error = validateRetentionPolicy({ info: 30, warning: 120, critical: 90 });
-    expect(error).toMatch(/critical.*warning.*info/i);
+    expect(error).toMatch(/Kritis.*Peringatan.*Info/);
   });
 
   it('rejects 0 (infinite) info paired with finite warning', () => {
     // 0 is infinite, so info=0 means info outlives warning=30, which is forbidden
     const error = validateRetentionPolicy({ info: 0, warning: 30, critical: 90 });
-    expect(error).toMatch(/critical.*warning.*info/i);
+    expect(error).toMatch(/Kritis.*Peringatan.*Info/);
   });
 
   it('rejects 0 (infinite) warning paired with finite critical', () => {
     // warning=0 means warning outlives critical=90, which is forbidden
     const error = validateRetentionPolicy({ info: 30, warning: 0, critical: 90 });
-    expect(error).toMatch(/critical.*warning.*info/i);
+    expect(error).toMatch(/Kritis.*Peringatan.*Info/);
+  });
+
+  it('words every client-side message in plain Indonesian with the log viewer severity labels', () => {
+    const messages = [
+      validateRetentionPolicy({ info: 1.5, warning: 30, critical: 60 }),
+      validateRetentionPolicy({ info: 36501, warning: 36501, critical: 36501 }),
+      validateRetentionPolicy({ info: 60, warning: 30, critical: 90 }),
+    ];
+    for (const message of messages) {
+      expect(message).not.toBeNull();
+      expect(message).not.toMatch(/\bcritical\b|\bwarning\b|>=|non-negatif|severity/i);
+    }
+    expect(validateRetentionPolicy({ info: 60, warning: 30, critical: 90 })).toBe(
+      RETENTION_ORDER_MESSAGE,
+    );
+    expect(validateRetentionPolicy({ info: 5.5, warning: 30, critical: 60 })).toContain('Info');
+    expect(validateRetentionPolicy({ info: 5, warning: 30.5, critical: 60 })).toContain(
+      'Peringatan',
+    );
+    expect(validateRetentionPolicy({ info: 5, warning: 30, critical: -1 })).toContain('Kritis');
   });
 
   it('accepts valid finite ordering: info <= warning <= critical (happy path)', () => {
@@ -141,7 +163,7 @@ describe('useAuditRetentionStore', () => {
     const store = useAuditRetentionStore();
     await store.fetchRetention();
 
-    expect(store.error).toBe(`Gagal memuat pengaturan retensi audit. ${READ_USER_MESSAGES.server}`);
+    expect(store.error).toBe(`Gagal memuat masa simpan log. ${READ_USER_MESSAGES.server}`);
     expect(store.error).not.toContain('internal server');
     expect(store.isLoading).toBe(false);
   });
@@ -168,8 +190,33 @@ describe('useAuditRetentionStore', () => {
 
     const success = await store.updateRetention(badPolicy);
     expect(success).toBe(false);
-    expect(store.error).toContain('Retensi critical harus >= warning >= info');
+    // Refused on the client before any request; plain wording with no internal severity names.
+    expect(store.error).toBe(RETENTION_ORDER_MESSAGE);
+    expect(store.error).not.toMatch(/critical|warning|>=/);
     expect(store.isSaving).toBe(false);
+  });
+
+  it('never shows the server sentence for a refused save, only approved wording', async () => {
+    const authStore = useAuthStore();
+    authStore.setAuth({ id: 'admin-1', email: 'admin@example.com', role: 'admin' }, 'valid-token');
+    globalThis.fetch = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ csrfToken: 'fake-csrf-token' }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: 'Retensi critical harus >= warning >= info.' }),
+      } as Response);
+
+    const store = useAuditRetentionStore();
+    const success = await store.updateRetention({ info: 30, warning: 60, critical: 90 });
+
+    expect(success).toBe(false);
+    expect(store.error).toBe(RETENTION_SAVE_REFUSED_MESSAGE);
+    expect(store.error).not.toMatch(/critical|warning|>=/);
   });
 
   it('successfully fetches and updates retention settings (happy path)', async () => {
@@ -211,7 +258,7 @@ describe('useAuditRetentionStore', () => {
     const success = await store.updateRetention(updatedPolicy);
     expect(success).toBe(true);
     expect(store.retention).toEqual(updatedPolicy);
-    expect(store.successMessage).toBe('Pengaturan retensi audit log berhasil diperbarui.');
+    expect(store.successMessage).toBe('Masa simpan log berhasil disimpan.');
 
     // 3. Subsequent fetch resets successMessage to null
     globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValueOnce({
@@ -242,7 +289,7 @@ describe('useAuditRetentionStore', () => {
     const success = await store.fetchRetention();
 
     expect(success).toBe(false);
-    expect(store.error).toMatch(/tidak valid/i);
+    expect(store.error).toMatch(/tidak dapat dibaca/i);
     expect(store.retention).toEqual({ info: 10, warning: 20, critical: 30 });
     expect(store.isLoading).toBe(false);
   });
@@ -270,7 +317,7 @@ describe('useAuditRetentionStore', () => {
 
     expect(success).toBe(true);
     expect(store.error).toBeNull();
-    expect(store.successMessage).toBe('Pengaturan retensi audit log berhasil diperbarui.');
+    expect(store.successMessage).toBe('Masa simpan log berhasil disimpan.');
     expect(store.retention).toEqual({ info: 30, warning: 60, critical: 90 });
     expect(store.isSaving).toBe(false);
   });
@@ -301,7 +348,7 @@ describe('useAuditRetentionStore', () => {
     const success = await store.updateRetention(policy);
 
     expect(success).toBe(false);
-    expect(store.error).toMatch(/tidak valid/i);
+    expect(store.error).toMatch(/tidak dapat dibaca/i);
     expect(store.retention).toEqual({ info: 10, warning: 20, critical: 30 });
     expect(store.isSaving).toBe(false);
   });
@@ -352,8 +399,8 @@ describe('formatDurationLabel helper', () => {
     expect(formatDurationLabel(-365)).toBe('—');
   });
 
-  it('returns "Selamanya (Keep Forever)" for 0', () => {
-    expect(formatDurationLabel(0)).toBe('Selamanya (Keep Forever)');
+  it('returns "Selamanya" for 0', () => {
+    expect(formatDurationLabel(0)).toBe('Selamanya');
   });
 
   it('formats multiples of 365 as years and days', () => {

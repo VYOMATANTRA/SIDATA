@@ -155,3 +155,24 @@ describe('MatrixTableBlock.vue', () => {
     expect(wrapper.find('[data-test="bar-label"]').text()).toBe('Petani');
   });
 });
+
+describe('MatrixTableBlock.vue (no data)', () => {
+  it('shows a plain message for a table without rows instead of an empty chart and a period claim', () => {
+    const wrapper = mount(MatrixTableBlock, {
+      props: {
+        table: {
+          ...singleValueTable,
+          rows: [],
+          totals: { rowCount: 0, male: null, female: null, total: null },
+        },
+      },
+    });
+
+    expect(wrapper.find('[data-test="matrix-table-empty"]').text()).toContain(
+      'Data tabel ini belum tersedia.',
+    );
+    expect(wrapper.find('[data-test="bar-diagram-card"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="matrix-table-period"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="matrix-table-source"]').exists()).toBe(false);
+  });
+});

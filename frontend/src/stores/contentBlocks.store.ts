@@ -185,9 +185,19 @@ export const useContentBlocksStore = defineStore('contentBlocks', () => {
     return inFlight;
   }
 
+  /**
+   * Saves one block. `expectedUpdatedAt` is the block's `updatedAt` as the editor last saw it: the
+   * server refuses the save with a stale-write conflict if someone else saved first, so a stale
+   * tab can never silently overwrite newer content.
+   */
   async function updateBlock(
     slug: string,
-    payload: { title?: string | null; body?: string; metadata?: Record<string, unknown> | null },
+    payload: {
+      title?: string | null;
+      body?: string;
+      metadata?: Record<string, unknown> | null;
+      expectedUpdatedAt?: string;
+    },
   ): Promise<ContentBlock> {
     const data = await apiRequestJson<{ block: ContentBlock }>(
       `/api/content-blocks/${encodeURIComponent(slug)}`,
