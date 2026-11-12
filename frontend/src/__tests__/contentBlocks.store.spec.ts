@@ -7,7 +7,7 @@ import {
   DEFAULT_HIGHLIGHTS_BLOCK,
 } from '../stores/contentBlocks.store';
 import { useAuthStore } from '../stores/auth';
-import { READ_USER_MESSAGES } from '../utils/userMessages';
+import { READ_USER_MESSAGES, classifyFailure } from '../utils/userMessages';
 
 describe('contentBlocks store', () => {
   beforeEach(() => {
@@ -177,5 +177,75 @@ describe('contentBlocks store', () => {
     expect(headers.get('Content-Type')).toBe('application/json');
     expect(headers.get('x-csrf-token')).toBe('test-csrf-token');
     expect(headers.get('Authorization')).toBeNull();
+  });
+
+  it('updateBlock sends expectedUpdatedAt as the stale-write precondition', async () => {
+    let sentBody: Record<string, unknown> | undefined;
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
+      if (String(input).includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response;
+      }
+      sentBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return {
+        ok: true,
+        json: async () => ({
+          block: {
+            id: '1',
+            sectionId: null,
+            type: 'hero',
+            slug: 'landing-hero',
+            title: 'T',
+            body: 'B',
+            metadata: null,
+            sortOrder: null,
+            updatedAt: '2026-09-18T00:00:00.000Z',
+          },
+        }),
+      } as Response;
+    });
+
+    const store = useContentBlocksStore();
+    await store.updateBlock('landing-hero', {
+      title: 'T',
+      body: 'B',
+      expectedUpdatedAt: '2026-09-17T00:00:00.000Z',
+    });
+
+    expect(sentBody).toEqual({
+      title: 'T',
+      body: 'B',
+      expectedUpdatedAt: '2026-09-17T00:00:00.000Z',
+    });
+    expect(store.hero.updatedAt).toBe('2026-09-18T00:00:00.000Z');
+  });
+
+  it('updateBlock surfaces a stale-write conflict as a stale failure and keeps the stored block', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      if (String(input).includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response;
+      }
+      return {
+        ok: false,
+        status: 409,
+        json: async () => ({
+          error: 'Blok konten telah diubah oleh pengguna lain. Muat ulang data lalu coba lagi.',
+          code: 'STALE_WRITE',
+          details: { currentUpdatedAt: '2026-09-18T00:00:00.000Z' },
+        }),
+      } as Response;
+    });
+
+    const store = useContentBlocksStore();
+    const before = store.hero.title;
+    const failure = await store
+      .updateBlock('landing-hero', {
+        title: 'Draf',
+        body: 'Draf',
+        expectedUpdatedAt: '2026-09-17T00:00:00.000Z',
+      })
+      .catch((error: unknown) => error);
+
+    expect(classifyFailure(failure).kind).toBe('stale');
+    expect(store.hero.title).toBe(before);
   });
 });
