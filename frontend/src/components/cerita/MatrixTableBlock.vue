@@ -50,13 +50,26 @@ const chartItems = computed<BarDiagramItem[]>(() => {
 
 <template>
   <div data-test="matrix-table-block">
-    <p class="mb-2 text-sm text-text-muted" data-test="matrix-table-period">
+    <p
+      v-if="table.rows.length > 0"
+      class="mb-2 text-sm text-text-muted"
+      data-test="matrix-table-period"
+    >
       Berdasarkan data periode {{ table.period }}.
     </p>
 
-    <BarDiagram :title="table.title" :items="chartItems" />
+    <div
+      v-if="table.rows.length === 0"
+      class="rounded-card border-border bg-surface-muted text-text-muted border px-4 py-4 text-base"
+      data-test="matrix-table-empty"
+    >
+      <p class="text-brand-navy font-semibold">{{ table.title }}</p>
+      <p class="mt-1">Data tabel ini belum tersedia.</p>
+    </div>
 
-    <details class="mt-3" data-test="matrix-table-details">
+    <BarDiagram v-else :title="table.title" :items="chartItems" />
+
+    <details v-if="table.rows.length > 0" class="mt-3" data-test="matrix-table-details">
       <summary class="text-brand-navy cursor-pointer text-sm font-medium">
         Lihat sebagai tabel
       </summary>
@@ -104,7 +117,7 @@ const chartItems = computed<BarDiagramItem[]>(() => {
       </div>
     </details>
 
-    <p v-if="table.source" class="mt-2 text-xs text-text-muted" data-test="matrix-table-source">
+    <p v-if="table.source && table.rows.length > 0" class="mt-2 text-sm text-text-muted" data-test="matrix-table-source">
       Sumber: {{ table.source }}
     </p>
   </div>
