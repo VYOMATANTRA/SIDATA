@@ -57,6 +57,43 @@ describe('contentBlocks store', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/content-blocks');
   });
 
+  it('keeps figure blocks out of the editable (CMS card) list but still stores them', async () => {
+    const blocks = [
+      {
+        id: 'p1',
+        sectionId: 's1',
+        type: 'prose',
+        slug: 'pembuka',
+        title: 'Pembuka',
+        body: 'Isi.',
+        metadata: null,
+        sortOrder: 0,
+        updatedAt: '2026-09-17T00:00:00.000Z',
+      },
+      {
+        id: 'f1',
+        sectionId: 's1',
+        type: 'figure',
+        slug: 'figure-s1',
+        title: null,
+        body: '',
+        metadata: { kind: 'photo', photos: [{ mediaId: 'm1', alt: 'Balai' }] },
+        sortOrder: null,
+        updatedAt: '2026-09-17T00:00:00.000Z',
+      },
+    ];
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({ blocks }),
+    } as Response);
+
+    const store = useContentBlocksStore();
+    await store.fetchBlocks();
+
+    expect(store.editableBlocks.map((block) => block.slug)).toEqual(['pembuka']);
+    expect(store.serverBlocks['figure-s1']).toBeDefined();
+  });
+
   it('dedupes concurrent fetchBlocks calls into a single network request', async () => {
     let callCount = 0;
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () => {

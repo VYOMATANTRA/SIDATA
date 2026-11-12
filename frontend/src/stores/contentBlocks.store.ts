@@ -131,7 +131,11 @@ export const useContentBlocksStore = defineStore('contentBlocks', () => {
 
   let inFlight: Promise<void> | null = null;
 
-  const editableBlocks = computed<ContentBlock[]>(() => Object.values(serverBlocks.value));
+  // Figure blocks are managed only on /admin/cerita (the section figure endpoints), never as a
+  // card in the content-block CMS, so they stay out of this list. `serverBlocks` keeps them.
+  const editableBlocks = computed<ContentBlock[]>(() =>
+    Object.values(serverBlocks.value).filter((block) => block.type !== 'figure'),
+  );
   const hero = computed<ContentBlock>(() => blocks.value['landing-hero'] ?? DEFAULT_HERO_BLOCK);
   const sambutanLurah = computed<ContentBlock>(
     () => blocks.value['landing-sambutan-lurah'] ?? DEFAULT_SAMBUTAN_BLOCK,

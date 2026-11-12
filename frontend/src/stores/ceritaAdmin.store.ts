@@ -92,6 +92,10 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
   async function load(): Promise<void> {
     await Promise.all([pagesStore.fetchHierarchy(true), blocksStore.fetchBlocks(true)]);
     hasLoaded.value = true;
+    // Pin the selection to a real page, so a later reorder cannot shift "the first page" under it.
+    if (!tree.value.some((page) => page.slug === selectedSlug.value)) {
+      selectedSlug.value = tree.value[0]?.slug ?? null;
+    }
   }
 
   async function refresh(what: 'tree' | 'both'): Promise<void> {
@@ -102,6 +106,11 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
   }
 
   // --- Lookups ---
+
+  /** Paragraphs plus the figure (if any) a section holds: what blocks deleting it. */
+  function contentCountFor(sectionId: string): number {
+    return paragraphsFor(sectionId).length + (figureFor(sectionId) ? 1 : 0);
+  }
 
   function findPage(slug: string): AdminPage | undefined {
     return tree.value.find((page) => page.slug === slug);
@@ -128,13 +137,13 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
   }
 
   function paragraphsFor(sectionId: string): ContentBlock[] {
-    return blocksStore.editableBlocks
+    return Object.values(blocksStore.serverBlocks)
       .filter((block) => block.sectionId === sectionId && block.type === 'prose')
       .sort(byOrder);
   }
 
   function figureFor(sectionId: string): SectionFigureEntry | null {
-    const block = blocksStore.editableBlocks.find(
+    const block = Object.values(blocksStore.serverBlocks).find(
       (item) => item.sectionId === sectionId && item.type === figureApi.FIGURE_BLOCK_TYPE,
     );
     return block ? { block, figure: figureFromBlock(block) } : null;
@@ -392,6 +401,7 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     findSection,
     paragraphsFor,
     figureFor,
+    contentCountFor,
     addPage,
     renamePage,
     removePage,
