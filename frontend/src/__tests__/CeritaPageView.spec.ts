@@ -1,8 +1,22 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
+import { h } from 'vue';
+import type { Pinia } from 'pinia';
+import type { Router, RouteLocationNormalized } from 'vue-router';
 import CeritaPageView from '../views/CeritaPageView.vue';
+import PublicLayout from '../layouts/PublicLayout.vue';
+
+const originalScrollIntoView = Element.prototype.scrollIntoView;
+
+/** CeritaPageView as App.vue mounts it: inside the shared PublicLayout, which owns <main>. */
+function mountInShell(pinia: Pinia, router: Router) {
+  return mount(PublicLayout, {
+    global: { plugins: [pinia, router] },
+    slots: { default: () => h(CeritaPageView) },
+  });
+}
 
 function makePage(slug: string, title: string) {
   return {
@@ -44,6 +58,10 @@ describe('CeritaPageView', () => {
     vi.restoreAllMocks();
   });
 
+  afterEach(() => {
+    Element.prototype.scrollIntoView = originalScrollIntoView;
+  });
+
   it.each([
     ['kependudukan', 'Kependudukan'],
     ['pendidikan', 'Pendidikan'],
@@ -68,13 +86,87 @@ describe('CeritaPageView', () => {
     });
 
     const { pinia, router } = await setupAndPush(slug);
-    const wrapper = mount(CeritaPageView, { global: { plugins: [pinia, router] } });
+    const wrapper = mountInShell(pinia, router);
     await flushPromises();
 
+    expect(wrapper.findAll('h1')).toHaveLength(1);
     expect(wrapper.find('h1').text()).toBe(title);
     expect(wrapper.find('[data-test="chapter-section"]').exists()).toBe(true);
+    // The shell owns the skip link and the single <main>; the view must not add its own.
     expect(wrapper.find('a[href="#main-content"]').exists()).toBe(true);
-    expect(wrapper.find('main#main-content').exists()).toBe(true);
+    expect(wrapper.findAll('main')).toHaveLength(1);
+    expect(wrapper.find('main#main-content [data-test="cerita-hero"]').exists()).toBe(true);
+    expect(wrapper.find('nav[aria-label="Navigasi Utama"]').exists()).toBe(true);
+    expect(wrapper.find('footer').exists()).toBe(true);
+  });
+
+  it('scrolls to the #hash chapter once the chapters have rendered', async () => {
+    const page = makePage('kependudukan', 'Kependudukan');
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith('/api/pages/')) {
+        return { ok: true, status: 200, json: async () => ({ page }) } as Response;
+      }
+      const key = url.startsWith('/api/indicator-tables')
+        ? 'tables'
+        : url.startsWith('/api/indicators')
+          ? 'indicators'
+          : 'blocks';
+      return { ok: true, json: async () => ({ [key]: [] }) } as Response;
+    });
+    const scrollIntoView = vi.fn<() => void>();
+    Element.prototype.scrollIntoView = scrollIntoView;
+
+    const { pinia, router } = await setupAndPush('kependudukan');
+    await router.push('/cerita/kependudukan#kependudukan-bab-1');
+    const wrapper = mount(CeritaPageView, {
+      global: { plugins: [pinia, router] },
+      attachTo: document.body,
+    });
+    await flushPromises();
+
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView.mock.contexts[0]).toBe(document.getElementById('kependudukan-bab-1'));
+    wrapper.unmount();
+  });
+
+  it('does not re-scroll to a stale savedPosition once chapters render', async () => {
+    const page = makePage('kependudukan', 'Kependudukan');
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith('/api/pages/')) {
+        return { ok: true, status: 200, json: async () => ({ page }) } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => ({ blocks: [], indicators: [], tables: [] }),
+      } as Response;
+    });
+
+    const scrollToSpy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+
+    // Simulate popstate navigation with savedPosition
+    const { scrollBehavior } = await import('@/router');
+    const to = {
+      path: '/cerita/kependudukan',
+      hash: '',
+      fullPath: '/cerita/kependudukan',
+      name: 'cerita-page',
+    } as unknown as RouteLocationNormalized;
+    const from = { path: '/', hash: '', fullPath: '/' } as unknown as RouteLocationNormalized;
+    const saved = { left: 0, top: 850 };
+    expect(scrollBehavior(to, from, saved)).toEqual({ top: 0, left: 0, behavior: 'instant' });
+
+    const { pinia, router } = await setupAndPush('kependudukan');
+    const wrapper = mount(CeritaPageView, {
+      global: { plugins: [pinia, router] },
+      attachTo: document.body,
+    });
+    await flushPromises();
+
+    expect(scrollToSpy).not.toHaveBeenCalled();
+    scrollToSpy.mockRestore();
+    wrapper.unmount();
   });
 
   it('shows a loading state before the page resolves', async () => {
@@ -99,7 +191,11 @@ describe('CeritaPageView', () => {
     globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
       const url = String(input);
       if (url.startsWith('/api/pages/')) {
-        return { ok: false, status: 404, json: async () => ({ error: 'Halaman tidak ditemukan' }) } as Response;
+        return {
+          ok: false,
+          status: 404,
+          json: async () => ({ error: 'Halaman tidak ditemukan' }),
+        } as Response;
       }
       return { ok: true, json: async () => ({ blocks: [] }) } as Response;
     });
@@ -109,7 +205,9 @@ describe('CeritaPageView', () => {
     await flushPromises();
 
     expect(wrapper.find('[data-test="cerita-not-found"]').exists()).toBe(true);
-    expect(wrapper.find('[data-test="cerita-not-found"]').text()).toContain('Halaman tidak ditemukan');
+    expect(wrapper.find('[data-test="cerita-not-found"]').text()).toContain(
+      'Halaman tidak ditemukan',
+    );
   });
 
   it('shows an error state with a retry button on a server error, instead of a blank main', async () => {
@@ -122,10 +220,10 @@ describe('CeritaPageView', () => {
     });
 
     const { pinia, router } = await setupAndPush('kependudukan');
-    const wrapper = mount(CeritaPageView, { global: { plugins: [pinia, router] } });
+    const wrapper = mountInShell(pinia, router);
     await flushPromises();
 
-    expect(wrapper.find('main#main-content h1').exists()).toBe(true);
+    expect(wrapper.findAll('main#main-content h1')).toHaveLength(1);
     expect(wrapper.find('[data-test="cerita-error"]').exists()).toBe(true);
     expect(wrapper.find('[data-test="cerita-retry"]').exists()).toBe(true);
     expect(wrapper.find('[data-test="cerita-not-found"]').exists()).toBe(false);
@@ -251,7 +349,8 @@ describe('CeritaPageView', () => {
     const wrapper = mount(CeritaPageView, { global: { plugins: [pinia, router] } });
     await flushPromises();
 
-    const firstPageChapterLink = () => wrapper.find('[data-test="chapter-toc-rail"] [aria-current="true"]');
+    const firstPageChapterLink = () =>
+      wrapper.find('[data-test="chapter-toc-rail"] [aria-current="true"]');
     expect(firstPageChapterLink().exists()).toBe(true);
     expect(firstPageChapterLink().attributes('href')).toBe('#kependudukan-bab-1');
 
@@ -260,7 +359,8 @@ describe('CeritaPageView', () => {
 
     // Must highlight pendidikan's own chapter, never stay stuck on kependudukan's id (which no
     // longer matches anything in the new page's chapter list, so nothing would be highlighted).
-    const secondPageChapterLink = () => wrapper.find('[data-test="chapter-toc-rail"] [aria-current="true"]');
+    const secondPageChapterLink = () =>
+      wrapper.find('[data-test="chapter-toc-rail"] [aria-current="true"]');
     expect(secondPageChapterLink().exists()).toBe(true);
     expect(secondPageChapterLink().attributes('href')).toBe('#pendidikan-bab-1');
   });
@@ -372,5 +472,199 @@ describe('CeritaPageView', () => {
 
     expect(wrapper.find('[data-test="cerita-loading"]').exists()).toBe(false);
     expect(wrapper.find('h1').text()).toBe('Kesehatan');
+  });
+
+  describe('anchor scroll behavior (127-2)', () => {
+    let scrollSpy: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      scrollSpy = vi.fn<() => void>();
+      Element.prototype.scrollIntoView =
+        scrollSpy as unknown as typeof Element.prototype.scrollIntoView;
+    });
+
+    afterEach(() => {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+      document.body.innerHTML = '';
+    });
+
+    function makeMultiChapterPage(slug: string) {
+      return {
+        id: `page-${slug}`,
+        slug,
+        title: 'Kependudukan',
+        sortOrder: 1,
+        chapters: [
+          {
+            id: `chap-${slug}-1`,
+            slug: `${slug}-bab-1`,
+            number: '01',
+            title: 'Bab Pertama',
+            sortOrder: 1,
+            sections: [{ id: `sec-${slug}-1`, slug: 'seksi-1', title: null, sortOrder: 1 }],
+          },
+          {
+            id: `chap-${slug}-2`,
+            slug: `${slug}-bab-2`,
+            number: '02',
+            title: 'Bab Kedua',
+            sortOrder: 2,
+            sections: [{ id: `sec-${slug}-2`, slug: 'seksi-2', title: null, sortOrder: 2 }],
+          },
+        ],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      };
+    }
+
+    function mockSuccess(page: ReturnType<typeof makeMultiChapterPage>) {
+      globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input);
+        if (url.startsWith('/api/pages/')) {
+          return { ok: true, status: 200, json: async () => ({ page }) } as Response;
+        }
+        if (url.startsWith('/api/content-blocks')) {
+          return { ok: true, json: async () => ({ blocks: [] }) } as Response;
+        }
+        if (url.startsWith('/api/indicators')) {
+          return { ok: true, json: async () => ({ indicators: [] }) } as Response;
+        }
+        if (url.startsWith('/api/indicator-tables')) {
+          return { ok: true, json: async () => ({ tables: [] }) } as Response;
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
+    }
+
+    it('scrolls to chapter anchor once on first successful load with hash', async () => {
+      const page = makeMultiChapterPage('kependudukan');
+      mockSuccess(page);
+
+      const pinia = createPinia();
+      setActivePinia(pinia);
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [{ path: '/cerita/:slug', component: CeritaPageView }],
+      });
+      await router.push('/cerita/kependudukan#kependudukan-bab-1');
+      await router.isReady();
+
+      const wrapper = mount(CeritaPageView, {
+        global: { plugins: [pinia, router] },
+        attachTo: document.body,
+      });
+      await flushPromises();
+
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+      expect(scrollSpy).toHaveBeenCalledWith({ behavior: 'instant', block: 'start' });
+      wrapper.unmount();
+    });
+
+    it('does not re-scroll on retry or reload of the same slug and hash', async () => {
+      const page = makeMultiChapterPage('kependudukan');
+      mockSuccess(page);
+
+      const pinia = createPinia();
+      setActivePinia(pinia);
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [{ path: '/cerita/:slug', component: CeritaPageView }],
+      });
+      await router.push('/cerita/kependudukan#kependudukan-bab-1');
+      await router.isReady();
+
+      const wrapper = mount(CeritaPageView, {
+        global: { plugins: [pinia, router] },
+        attachTo: document.body,
+      });
+      await flushPromises();
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+
+      // Trigger a reload / retry for the same slug and hash
+      wrapper.vm.retryLoad();
+      await flushPromises();
+
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+      wrapper.unmount();
+    });
+
+    it('scrolls to new anchor when hash changes on the same page', async () => {
+      const page = makeMultiChapterPage('kependudukan');
+      mockSuccess(page);
+
+      const pinia = createPinia();
+      setActivePinia(pinia);
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [{ path: '/cerita/:slug', component: CeritaPageView }],
+      });
+      await router.push('/cerita/kependudukan#kependudukan-bab-1');
+      await router.isReady();
+
+      const wrapper = mount(CeritaPageView, {
+        global: { plugins: [pinia, router] },
+        attachTo: document.body,
+      });
+      await flushPromises();
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+
+      await router.push('/cerita/kependudukan#kependudukan-bab-2');
+      await flushPromises();
+
+      expect(scrollSpy).toHaveBeenCalledTimes(2);
+      wrapper.unmount();
+    });
+
+    it('scrolls to chapter anchor on first successful load after a failed attempt', async () => {
+      const page = makeMultiChapterPage('kependudukan');
+      let shouldFail = true;
+      globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input);
+        if (shouldFail && url.startsWith('/api/pages/')) {
+          return { ok: false, status: 500, json: async () => ({}) } as Response;
+        }
+        if (url.startsWith('/api/pages/')) {
+          return { ok: true, status: 200, json: async () => ({ page }) } as Response;
+        }
+        if (url.startsWith('/api/content-blocks')) {
+          return { ok: true, json: async () => ({ blocks: [] }) } as Response;
+        }
+        if (url.startsWith('/api/indicators')) {
+          return { ok: true, json: async () => ({ indicators: [] }) } as Response;
+        }
+        if (url.startsWith('/api/indicator-tables')) {
+          return { ok: true, json: async () => ({ tables: [] }) } as Response;
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
+
+      const pinia = createPinia();
+      setActivePinia(pinia);
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [{ path: '/cerita/:slug', component: CeritaPageView }],
+      });
+      await router.push('/cerita/kependudukan#kependudukan-bab-1');
+      await router.isReady();
+
+      const wrapper = mount(CeritaPageView, {
+        global: { plugins: [pinia, router] },
+        attachTo: document.body,
+      });
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="cerita-error"]').exists()).toBe(true);
+      expect(scrollSpy).not.toHaveBeenCalled();
+
+      // Now fix fetch and retry via "Coba lagi" button
+      shouldFail = false;
+      await wrapper.find('[data-test="cerita-error"] button').trigger('click');
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="cerita-error"]').exists()).toBe(false);
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+      expect(scrollSpy).toHaveBeenCalledWith({ behavior: 'instant', block: 'start' });
+      wrapper.unmount();
+    });
   });
 });

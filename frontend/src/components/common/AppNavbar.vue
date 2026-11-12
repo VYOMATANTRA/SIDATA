@@ -1,25 +1,35 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { useRouter, useRoute, RouterLink } from 'vue-router';
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
+import { useRoute, RouterLink } from 'vue-router';
+import { XMarkIcon } from '@heroicons/vue/24/outline';
 import balikpapanLogo from '@/assets/img/logo_balikpapan.webp';
-import { getAvailableNavItems, isNavItemActive } from '@/config/publicNav';
+import { isEventFromOpenDialog, useDrawerFocusTrap } from '@/composables/useDrawerFocusTrap';
+import { useIsDesktop } from '@/composables/useIsDesktop';
+import { acquireBodyScrollLock } from '@/utils/bodyScrollLock';
 
 export interface NavbarProps {
-  variant?: 'navy' | 'white' | 'transparent';
+  /** Background mode of the bar. Independent of `foreground`. */
+  variant?: 'navy' | 'transparent';
+  /** Colour of the identity and controls; defaults to light. */
+  foreground?: 'light' | 'dark';
   title?: string;
   subtitle?: string;
   logoSrc?: string;
   homeRoute?: string;
   sticky?: boolean;
+  /** The bar overlays the content below it (e.g. a hero) instead of pushing it down. */
+  overlay?: boolean;
 }
 
 const props = withDefaults(defineProps<NavbarProps>(), {
   variant: 'navy',
+  foreground: undefined,
   title: 'Kelurahan Manggar',
   subtitle: 'Kelurahan Cinta Statistik',
   logoSrc: balikpapanLogo,
   homeRoute: '/',
   sticky: false,
+  overlay: false,
 });
 
 const emit = defineEmits<{
@@ -27,13 +37,18 @@ const emit = defineEmits<{
   (e: 'logoClick'): void;
 }>();
 
-const router = useRouter();
 const route = useRoute();
-const currentPath = computed(() => route?.path ?? '/');
-const navItems = computed(() => getAvailableNavItems(router));
 
 const isMenuOpen = ref(false);
+const headerRef = ref<HTMLElement | null>(null);
+const panelRef = ref<HTMLElement | null>(null);
 const toggleButtonRef = ref<HTMLButtonElement | null>(null);
+const closeButtonRef = ref<HTMLButtonElement | null>(null);
+
+// Below the `md` breakpoint the menu is a modal sheet (focus trap, backdrop, scroll lock); from
+// `md` up it is an anchored disclosure panel with the normal tab order.
+const { isDesktop } = useIsDesktop();
+const isModal = computed(() => isMenuOpen.value && !isDesktop.value);
 
 function toggleMenu() {
   isMenuOpen.value = !isMenuOpen.value;
@@ -47,77 +62,157 @@ function closeMenu() {
   }
 }
 
-function isEventFromOpenDialog(event: KeyboardEvent): boolean {
-  if (event.defaultPrevented) return true;
-  const target =
-    (event.target instanceof HTMLElement ? event.target : null) ??
-    (document.activeElement instanceof HTMLElement ? document.activeElement : null);
-  if (target?.closest('[role="dialog"], [role="alertdialog"], dialog')) {
-    return true;
-  }
-  return false;
+async function closeAndRestoreFocus() {
+  closeMenu();
+  // The bar is `inert` while the sheet is modal; wait for that to lift before focusing the toggle.
+  await nextTick();
+  toggleButtonRef.value?.focus();
 }
 
-function handleKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape' && isMenuOpen.value) {
-    if (isEventFromOpenDialog(event)) return;
-    closeMenu();
+async function handleNavigateClose() {
+  const pathBefore = route?.path;
+  closeMenu();
+  await nextTick();
+  // When a link for the current active route is clicked, no cross-route transition occurred.
+  // Restore focus to the toggle button so focus is never lost to body.
+  if (route?.path === pathBefore) {
     toggleButtonRef.value?.focus();
   }
 }
 
+// Focus in on open, Tab/Shift+Tab trapped inside the sheet and Escape to close. Only active while
+// the menu is a modal sheet, so the desktop disclosure never traps focus (WCAG 2.1.2).
+useDrawerFocusTrap({
+  isOpen: isModal,
+  containerRef: panelRef,
+  initialFocusRef: closeButtonRef,
+  onEscape: () => void closeAndRestoreFocus(),
+  ignoreDialogRef: panelRef,
+});
+
+function handleDesktopKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || !isMenuOpen.value || isModal.value) return;
+  if (isEventFromOpenDialog(event, panelRef.value)) return;
+  if (headerRef.value?.contains(document.activeElement)) {
+    void closeAndRestoreFocus();
+  } else {
+    closeMenu();
+  }
+}
+
+function handleOutsidePointerDown(event: PointerEvent) {
+  const target = event.target;
+  if (target instanceof Node && headerRef.value && !headerRef.value.contains(target)) {
+    // Leave focus where the click put it.
+    closeMenu();
+  }
+}
+
+let releaseScrollLock: (() => void) | null = null;
+
+function releaseLock() {
+  releaseScrollLock?.();
+  releaseScrollLock = null;
+}
+
+watch(isModal, (modal) => {
+  if (modal) {
+    releaseScrollLock ??= acquireBodyScrollLock();
+  } else {
+    releaseLock();
+    const hadFocusInDrawer = Boolean(panelRef.value?.contains(document.activeElement));
+    if (isMenuOpen.value && hadFocusInDrawer) {
+      void nextTick(() => {
+        toggleButtonRef.value?.focus();
+      });
+    }
+  }
+});
+
+// Desktop disclosure only: a click outside the header dismisses the panel.
+const listensForOutsideClicks = computed(() => isMenuOpen.value && isDesktop.value);
+watch(listensForOutsideClicks, (listen) => {
+  if (listen) {
+    document.addEventListener('pointerdown', handleOutsidePointerDown);
+  } else {
+    document.removeEventListener('pointerdown', handleOutsidePointerDown);
+  }
+});
+
+// Navigating (link, back/forward, programmatic) always dismisses the menu. The layout owns
+// post-navigation focus (focusing <main>), so the navbar only closes the menu and does nothing
+// with focus. Focus restoration to the toggle is reserved for closes that did NOT navigate
+// (Escape, mobile close button, outside click).
+watch(
+  () => route?.fullPath,
+  () => {
+    closeMenu();
+  },
+);
+
 onMounted(() => {
-  window.addEventListener('keydown', handleKeydown);
+  window.addEventListener('keydown', handleDesktopKeydown);
 });
 
 onUnmounted(() => {
-  window.removeEventListener('keydown', handleKeydown);
+  window.removeEventListener('keydown', handleDesktopKeydown);
+  document.removeEventListener('pointerdown', handleOutsidePointerDown);
+  releaseLock();
 });
 
-const isNavy = computed(() => props.variant === 'navy');
+const isLight = computed(() => (props.foreground ?? 'light') === 'light');
+const isTransparent = computed(() => props.variant === 'transparent');
 
-const containerClasses = computed(() => {
-  if (isNavy.value) {
-    return [
-      'bg-brand-navy text-white',
-      props.sticky ? 'sticky top-0 z-40 backdrop-blur-md' : 'relative',
-    ];
-  }
-  if (props.variant === 'transparent') {
-    return [
-      'bg-transparent text-slate-900',
-      props.sticky ? 'sticky top-0 z-40 backdrop-blur-md' : 'relative',
-    ];
-  }
-  // Solid white variant
-  return ['bg-white text-slate-900', props.sticky ? 'sticky top-0 z-40 shadow-xs' : 'relative'];
-});
+const containerClasses = computed(() => [
+  'transition-colors duration-200 motion-reduce:transition-none',
+  props.variant === 'navy' ? 'bg-brand-navy' : 'bg-transparent',
+  isLight.value ? 'text-white' : 'text-brand-navy',
+  props.sticky ? 'sticky top-0 z-[55]' : 'relative', // layer order: see main.css
+  props.overlay ? '-mb-[var(--public-header-height)]' : '',
+]);
 
-const subtitleClasses = computed(() => {
-  return isNavy.value ? 'text-slate-200/90' : 'text-slate-500';
-});
+const focusRingClasses = computed(() =>
+  isLight.value ? 'focus-visible:outline-focus-ring-inverse' : 'focus-visible:outline-focus-ring',
+);
 
-const titleClasses = computed(() => {
-  return isNavy.value ? 'text-white' : 'text-slate-900';
-});
-
-const hamburgerBarClasses = computed(() => {
-  return isNavy.value ? 'bg-white' : 'bg-slate-800';
-});
+const subtitleClasses = computed(() =>
+  isLight.value ? 'text-text-inverse-muted' : 'text-text-muted',
+);
+const titleClasses = computed(() => (isLight.value ? 'text-white' : 'text-brand-navy'));
+const hamburgerBarClasses = computed(() => (isLight.value ? 'bg-white' : 'bg-brand-navy'));
 </script>
 
 <template>
-  <header class="w-full transition-colors duration-200" :class="containerClasses">
-    <nav aria-label="Navigasi Utama" class="w-full">
-      <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 sm:px-8 sm:py-5">
-        <!-- Brand & Identity Lockup -->
-        <div class="flex items-center">
+  <header
+    ref="headerRef"
+    class="w-full"
+    :class="containerClasses"
+    :data-variant="variant"
+    data-test="app-navbar"
+  >
+    <!-- Localized scrim: keeps the white identity legible when the bar is transparent over a photo -->
+    <div
+      v-if="isTransparent"
+      class="from-brand-navy/70 pointer-events-none absolute inset-x-0 top-0 h-[calc(100%+1.5rem)] bg-gradient-to-b to-transparent"
+      aria-hidden="true"
+      data-test="navbar-scrim"
+    />
+
+    <nav aria-label="Navigasi Utama" class="relative w-full">
+      <div class="relative mx-auto max-w-7xl">
+        <!-- The sheet is a modal dialog below `md`: the logo and toggle must not stay reachable behind it -->
+        <div
+          class="flex h-[var(--public-header-height)] items-center justify-between gap-4 px-6 sm:px-8"
+          :inert="isModal ? true : undefined"
+          data-test="navbar-bar"
+        >
+          <!-- Brand & Identity Lockup -->
           <RouterLink
             :to="homeRoute"
-            class="group focus-visible:ring-brand-indigo rounded-btn flex items-center gap-3.5 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+            class="rounded-btn flex min-w-0 items-center gap-3.5 focus-visible:outline-2 focus-visible:outline-offset-2"
+            :class="focusRingClasses"
             @click="emit('logoClick')"
           >
-            <!-- Logo Image -->
             <slot name="logo">
               <img
                 :src="logoSrc"
@@ -126,18 +221,17 @@ const hamburgerBarClasses = computed(() => {
               />
             </slot>
 
-            <!-- Text Titles -->
-            <div class="flex flex-col text-left">
+            <div class="flex min-w-0 flex-col text-left">
               <slot name="title">
                 <span
-                  class="text-xs font-normal tracking-wide sm:text-sm"
+                  class="truncate text-xs font-normal tracking-wide sm:text-sm"
                   :class="subtitleClasses"
                   data-test="navbar-subtitle"
                 >
                   {{ subtitle }}
                 </span>
                 <span
-                  class="text-base leading-tight font-bold tracking-tight sm:text-lg"
+                  class="truncate text-base leading-tight font-bold tracking-tight sm:text-lg"
                   :class="titleClasses"
                   data-test="navbar-title"
                 >
@@ -146,87 +240,96 @@ const hamburgerBarClasses = computed(() => {
               </slot>
             </div>
           </RouterLink>
-        </div>
 
-        <!-- Right Actions & Hamburger Menu -->
-        <div class="flex items-center gap-4">
-          <!-- Optional desktop actions slot -->
-          <div v-if="$slots.actions" class="hidden items-center gap-3 md:flex">
-            <slot name="actions" />
-          </div>
-
-          <!-- Hamburger Toggle Button: Solid corners & equal row heights -->
+          <!-- Hamburger Toggle -->
           <button
             ref="toggleButtonRef"
             type="button"
-            class="focus-visible:ring-brand-indigo inline-flex h-10 w-10 items-center justify-center p-1 transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:outline-none"
+            class="rounded-btn inline-flex h-11 w-11 shrink-0 items-center justify-center transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2"
+            :class="focusRingClasses"
             :aria-expanded="isMenuOpen"
             aria-controls="primary-navigation-menu"
             :aria-label="isMenuOpen ? 'Tutup menu navigasi' : 'Buka menu navigasi'"
             data-test="hamburger-btn"
+            data-testid="public-nav-mobile-toggle"
             @click="toggleMenu"
           >
             <div class="flex w-6 flex-col justify-center gap-[5px]" aria-hidden="true">
               <span
-                class="block h-[3px] w-full shrink-0 origin-center rounded-none transition-transform duration-200"
+                class="block h-[3px] w-full shrink-0 origin-center transition-transform duration-200 motion-reduce:transition-none"
                 :class="[hamburgerBarClasses, isMenuOpen ? 'translate-y-[8px] rotate-45' : '']"
               />
               <span
-                class="block h-[3px] w-full shrink-0 rounded-none transition-opacity duration-200"
+                class="block h-[3px] w-full shrink-0 transition-opacity duration-200 motion-reduce:transition-none"
                 :class="[hamburgerBarClasses, isMenuOpen ? 'opacity-0' : 'opacity-100']"
               />
               <span
-                class="block h-[3px] w-full shrink-0 origin-center rounded-none transition-transform duration-200"
+                class="block h-[3px] w-full shrink-0 origin-center transition-transform duration-200 motion-reduce:transition-none"
                 :class="[hamburgerBarClasses, isMenuOpen ? '-translate-y-[8px] -rotate-45' : '']"
               />
             </div>
           </button>
         </div>
-      </div>
 
-      <!-- Mobile Drawer / Dropdown Navigation Menu -->
-      <transition
-        enter-active-class="transition duration-200 ease-out"
-        enter-from-class="opacity-0 -translate-y-2"
-        enter-to-class="opacity-100 translate-y-0"
-        leave-active-class="transition duration-150 ease-in"
-        leave-from-class="opacity-100 translate-y-0"
-        leave-to-class="opacity-0 -translate-y-2"
-      >
-        <div
-          v-show="isMenuOpen"
-          id="primary-navigation-menu"
-          class="border-t border-white/10 px-6 py-6 shadow-xl"
-          :class="isNavy ? 'bg-brand-navy text-white' : 'border-slate-200 bg-white text-slate-900'"
-          data-test="nav-menu-drawer"
+        <!-- Backdrop: mobile sheet only. Clicking it closes the menu and returns focus to the toggle -->
+        <transition
+          enter-active-class="transition-opacity duration-200 motion-reduce:transition-none"
+          enter-from-class="opacity-0"
+          enter-to-class="opacity-100"
+          leave-active-class="transition-opacity duration-150 motion-reduce:transition-none"
+          leave-from-class="opacity-100"
+          leave-to-class="opacity-0"
         >
-          <div class="mx-auto max-w-7xl space-y-4">
-            <slot name="menu" :close="closeMenu">
-              <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                <RouterLink
-                  v-for="item in navItems"
-                  :key="item.to"
-                  :to="item.to"
-                  class="rounded-btn focus-visible:ring-brand-indigo block px-4 py-2.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
-                  :class="[
-                    isNavy
-                      ? isNavItemActive(item.to, currentPath)
-                        ? 'bg-white/20 font-semibold text-white'
-                        : 'text-white hover:bg-white/10'
-                      : isNavItemActive(item.to, currentPath)
-                        ? 'bg-slate-200 font-semibold text-slate-900'
-                        : 'text-slate-800 hover:bg-slate-100',
-                  ]"
-                  :aria-current="isNavItemActive(item.to, currentPath) ? 'page' : undefined"
-                  @click="closeMenu"
-                >
-                  {{ item.label }}
-                </RouterLink>
-              </div>
-            </slot>
+          <div
+            v-show="isMenuOpen"
+            class="bg-brand-navy/60 fixed inset-0 z-40 md:hidden"
+            aria-hidden="true"
+            data-test="nav-backdrop"
+            @click="closeAndRestoreFocus"
+          />
+        </transition>
+
+        <!-- Menu panel: bounded sheet below `md`, anchored panel under the bar from `md` up -->
+        <transition
+          enter-active-class="transition duration-200 ease-out motion-reduce:transition-none"
+          enter-from-class="opacity-0 max-md:translate-x-full md:-translate-y-2"
+          enter-to-class="opacity-100 max-md:translate-x-0 md:translate-y-0"
+          leave-active-class="transition duration-150 ease-in motion-reduce:transition-none"
+          leave-from-class="opacity-100 max-md:translate-x-0 md:translate-y-0"
+          leave-to-class="opacity-0 max-md:translate-x-full md:-translate-y-2"
+        >
+          <div
+            v-show="isMenuOpen"
+            id="primary-navigation-menu"
+            ref="panelRef"
+            :role="isModal ? 'dialog' : undefined"
+            :aria-modal="isModal ? 'true' : undefined"
+            :aria-label="isModal ? 'Menu navigasi' : undefined"
+            class="md:rounded-card bg-brand-navy border-white/15 text-white fixed inset-y-0 right-0 z-50 flex w-[min(88vw,22rem)] flex-col overflow-hidden border-l shadow-xl md:absolute md:inset-y-auto md:top-full md:right-6 md:mt-2 md:max-h-[calc(100dvh-var(--public-header-height)-1rem)] md:w-[46rem] md:max-w-[calc(100vw-3rem)] md:border lg:right-8"
+            data-test="nav-menu-drawer"
+          >
+            <div
+              class="flex shrink-0 items-center justify-between border-b border-white/15 px-5 py-3 md:hidden"
+            >
+              <span class="text-base font-semibold">Menu</span>
+              <button
+                ref="closeButtonRef"
+                type="button"
+                class="rounded-btn hover:bg-white/10 focus-visible:outline-focus-ring-inverse inline-flex h-11 w-11 items-center justify-center focus-visible:outline-2 focus-visible:outline-offset-2"
+                aria-label="Tutup menu"
+                data-test="menu-close-btn"
+                @click="closeAndRestoreFocus"
+              >
+                <XMarkIcon class="h-6 w-6" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 md:py-4">
+              <slot name="menu" :close="handleNavigateClose" :open="isMenuOpen" />
+            </div>
           </div>
-        </div>
-      </transition>
+        </transition>
+      </div>
     </nav>
   </header>
 </template>

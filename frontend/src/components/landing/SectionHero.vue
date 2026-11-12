@@ -102,7 +102,7 @@ const backgroundStyle = computed(() => {
 <template>
   <section
     id="hero"
-    class="hero-section relative flex w-full flex-col justify-center overflow-hidden px-5 py-6 text-white transition-all sm:px-12 sm:py-8 md:py-10"
+    class="hero-section relative flex w-full flex-col justify-center overflow-hidden px-5 pt-[calc(var(--public-header-height)+4rem)] pb-16 text-white transition-all sm:px-12 sm:pt-[calc(var(--public-header-height)+5rem)] sm:pb-20 md:pt-[calc(var(--public-header-height)+6rem)] md:pb-24"
     :style="backgroundStyle"
     aria-labelledby="hero-title"
     data-test="section-hero"
@@ -140,15 +140,13 @@ const backgroundStyle = computed(() => {
 </template>
 
 <style scoped>
+/*
+ * Full viewport on purpose: the Home header is transparent and overlays the hero, and the
+ * section already pads its top by --public-header-height, so the height must not subtract it.
+ * This is the hero's only min-height source.
+ */
 .hero-section {
-  min-height: calc(100vh - var(--navbar-height, 4.75rem));
-  min-height: calc(100dvh - var(--navbar-height, 4.75rem));
-}
-
-@media (min-width: 640px) {
-  .hero-section {
-    min-height: calc(100vh - var(--navbar-height, 6rem));
-    min-height: calc(100dvh - var(--navbar-height, 6rem));
-  }
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 </style>

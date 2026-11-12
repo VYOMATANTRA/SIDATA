@@ -54,4 +54,30 @@ describe('TentangBreadcrumb.vue', () => {
     const currentPage = wrapper.find('[aria-current="page"]');
     expect(currentPage.text()).toBe('Permintaan Data');
   });
+
+  it('sits on the navy header surface with white text, not a white strip between navy regions', async () => {
+    const router = createTestRouter();
+    const wrapper = mount(TentangBreadcrumb, {
+      props: { label: 'Kelurahan Manggar' },
+      global: { plugins: [router] },
+    });
+
+    const nav = wrapper.find('nav[aria-label="Breadcrumb"]');
+    expect(nav.classes()).toContain('bg-brand-navy');
+    expect(nav.classes()).toContain('text-white');
+    expect(nav.classes()).not.toContain('bg-white');
+  });
+
+  it('wraps long labels instead of overflowing, keeping the current-page marker', async () => {
+    const router = createTestRouter();
+    const longLabel = 'Program Desa/Kelurahan Cantik '.repeat(8).trim();
+    const wrapper = mount(TentangBreadcrumb, {
+      props: { label: longLabel },
+      global: { plugins: [router] },
+    });
+
+    expect(wrapper.find('ol').classes()).toContain('flex-wrap');
+    expect(wrapper.find('li:last-child').classes()).toContain('break-words');
+    expect(wrapper.find('[aria-current="page"]').text()).toBe(longLabel);
+  });
 });

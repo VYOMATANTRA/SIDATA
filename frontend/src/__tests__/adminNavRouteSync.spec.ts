@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import router, { metaForRoles, rolesByPath, rolesFor } from '../router/index';
-import { ADMIN_NAV, isAdminNavGroup } from '../config/adminNav';
+import { ADMIN_NAV, isAdminNavGroup, getAdminEntryLink } from '../config/adminNav';
 import { useAuthStore } from '../stores/auth';
 
 /**
@@ -128,5 +128,21 @@ describe('router/index.ts — ADMIN_NAV route synchronization and role guards', 
     await router.push('/admin');
     await router.push('/settings/audit-retention');
     expect(router.currentRoute.value.name).toBe('home');
+  });
+});
+
+describe('getAdminEntryLink', () => {
+  it('returns /admin for admin and editor access', () => {
+    const adminEntry = getAdminEntryLink({ isAdmin: true, canEditData: true });
+    expect(adminEntry?.to).toBe('/admin');
+    expect(adminEntry?.dataTest).toBe('nav-beranda');
+
+    const editorEntry = getAdminEntryLink({ isAdmin: false, canEditData: true });
+    expect(editorEntry?.to).toBe('/admin');
+    expect(editorEntry?.dataTest).toBe('nav-beranda');
+  });
+
+  it('returns null for unauthorized visitor without admin or editor access', () => {
+    expect(getAdminEntryLink({ isAdmin: false, canEditData: false })).toBeNull();
   });
 });

@@ -467,6 +467,54 @@ caching live in `system_settings` as a separate operational concern.
 
 ## 8. Site Structure
 
+**Public shell.** Every public page is mounted inside one layout (`PublicLayout.vue`, selected by
+`meta.layout = 'public'` on the route): skip link, header with the navigation menu, the single
+`<main id="main-content">`, and the footer. Views supply page content only and never add their own
+`<main>`, skip link, navbar or footer; each settled view has exactly one `<h1>`. Login, register,
+setup-password, the OAuth callback, `/dashboard` (its own `<main>`) and the admin shell are outside it.
+
+- **Branding.** The header's institution and app names come from the public settings on every
+  route, never from per-view defaults.
+- **Navigation groups.** Beranda, then **Cerita**, **Sumber Daya** and **Tentang**, each a labelled
+  list of plain links (not an application `role="menu"`); the current destination carries
+  `aria-current="page"` and its group is marked. Cerita topics derive from the page hierarchy
+  (`GET /api/pages`) in `sort_order`; if it has not loaded, fixed fallback links to the eight
+  Cerita pages are shown instead. Sumber Daya holds Publikasi, Peta, Permintaan Data and Ketua RT;
+  Tentang holds the three Tentang pages. Links to unregistered routes are omitted.
+- **Account area.** One place, inside the menu, identical on every public page. Signed out: a single
+  "Masuk" link. Signed in: email and role, the CMS entry the role may use (the first top-level
+  `ADMIN_NAV` link the role is allowed, so Editor and Admin get the admin shell and a plain user gets
+  none), and logout via the shared logout flow.
+- **Menu behavior.** Below `md` it is a bounded right-anchored sheet (`min(88vw, 22rem)`, so a dimmed
+  backdrop strip stays visible and tappable) exposed as a named modal dialog (`role="dialog"`,
+  `aria-modal`, label "Menu navigasi"): focus moves in and is trapped, Escape / backdrop / close
+  button dismiss it, focus returns to the toggle, the page behind and the header's logo and toggle
+  are inert and body scroll is locked (ref-counted, so it never releases another overlay's lock).
+  Escape is ignored while any other modal dialog is open in the document. From `md` it is an
+  anchored navy panel with normal tab order; Escape and an outside click dismiss it. Following a link
+  or any route change closes it (focus goes to the toggle if it was inside the panel). On a route
+  path change after the first load, focus moves to `main#main-content` unless the user is typing in
+  a field; query/hash-only changes do not move focus.
+- **Header states.** The header has one height in every state. Foreground is always white; only the
+  background changes. On Home (`meta.headerOverlay`) it overlays the hero: transparent (over a
+  localized navy scrim) at the top with the menu closed, navy once scrolled past 64px or while the
+  menu is open. Every other page is navy. State is re-read on load, scroll, resize, back/forward and
+  route change, so a refresh at a scrolled position starts navy. Reduced motion makes transitions
+  instant. The hero is full viewport height (`100dvh`, not reduced by the header) and reserves the header's height as top padding, and in-page anchors (hero, chapters,
+  skip link target) clear it via `scroll-margin`.
+- **Scroll and focus.** Public routes scroll the window to the top on a new path; back/forward
+  restore the previous position, except between two entries of the same path that differ only by
+  hash, which return to that hash target; a hash link (in-page anchor, chapter TOC, skip link)
+  scrolls to its target below the sticky header, including repeat clicks on the same link and
+  `/cerita/x#chapter` deep links once the chapters have rendered. Going back (or forward) to a Cerita URL lands
+  on its hash target (or the top) rather than the earlier reading offset, with no second scroll, because the content loads
+  asynchronously and the saved offset would be clamped to the short page. Query-only changes keep the
+  position. Focus moves to
+  `main#main-content` on a path change without scrolling. Admin routes scroll an inner container,
+  which the admin shell resets to the top on a path change.
+- **Breadcrumb.** Tentang/Sumber Daya breadcrumbs are a navy strip continuing the header and the navy
+  hero panel (no white band between them); long labels wrap.
+
 **Landing page**, top to bottom:
 
 1. Hero — institutional voice: what the site is and what it covers. Framed toward Manggar's general "potensi wilayah," not an explicit Bank Sampah callout even though the main potential is Bank Sampah. Mounted directly on top of the hero background image beneath the title and body text is the **Widget Cuaca** (frosted glassmorphic card presenting current conditions and next 2 forecast slots (about 3 hours apart) in Manggar from BMKG: condition description, temperature Celsius, humidity percent, wind speed, localized wind direction, accessible skeleton loading, error alert with retry button, and stale notice).

@@ -202,6 +202,30 @@ export const usePagesStore = defineStore('pages', () => {
 
         const data = (await response.json()) as { page: PageDetail };
         pagesBySlug.value = { ...pagesBySlug.value, [slug]: data.page };
+
+        if (isLoaded.value && data.page) {
+          const existing = pages.value.find((p) => p.slug === slug);
+          if (existing) {
+            const nextChapterCount = data.page.chapters?.length ?? 0;
+            if (
+              existing.title !== data.page.title ||
+              existing.sortOrder !== data.page.sortOrder ||
+              existing.chapterCount !== nextChapterCount
+            ) {
+              pages.value = pages.value.map((p) =>
+                p.slug === slug
+                  ? {
+                      ...p,
+                      title: data.page.title,
+                      sortOrder: data.page.sortOrder,
+                      chapterCount: nextChapterCount,
+                    }
+                  : p,
+              );
+            }
+          }
+        }
+
         return data.page;
       } catch (err) {
         error.value = toUserMessage(err, 'memuat halaman', 'GET').message;

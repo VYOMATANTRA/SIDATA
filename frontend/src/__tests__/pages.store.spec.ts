@@ -237,4 +237,73 @@ describe('pages store (public page by slug)', () => {
     expect(store.error).toBe(`Gagal memuat halaman. ${READ_USER_MESSAGES.network}`);
     expect(store.isLoading).toBe(false);
   });
+
+  it('synchronizes page title, sortOrder, and chapterCount into summary list on fetchPageBySlug when loaded', async () => {
+    const store = usePagesStore();
+    store.pages = [
+      {
+        id: 'page-1',
+        slug: 'kependudukan',
+        title: 'Judul Lama',
+        sortOrder: 1,
+        chapterCount: 1,
+      },
+      {
+        id: 'page-2',
+        slug: 'pendidikan',
+        title: 'Pendidikan',
+        sortOrder: 2,
+        chapterCount: 3,
+      },
+    ];
+    store.isLoaded = true;
+
+    const updatedPage = {
+      ...samplePage,
+      title: 'Judul Baru Kependudukan',
+      sortOrder: 5,
+      chapters: [
+        ...samplePage.chapters,
+        {
+          id: 'chap-2',
+          slug: 'komposisi',
+          number: '02',
+          title: 'Komposisi Penduduk',
+          sortOrder: 2,
+          sections: [],
+        },
+      ],
+    };
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue(
+      json({ page: updatedPage }),
+    );
+
+    await store.fetchPageBySlug('kependudukan', true);
+
+    const summary = store.pages.find((p) => p.slug === 'kependudukan');
+    expect(summary).toEqual({
+      id: 'page-1',
+      slug: 'kependudukan',
+      title: 'Judul Baru Kependudukan',
+      sortOrder: 5,
+      chapterCount: 2,
+    });
+    // Other pages remain untouched
+    expect(store.pages.find((p) => p.slug === 'pendidikan')?.title).toBe('Pendidikan');
+  });
+
+  it('does not touch pages when isLoaded is false', async () => {
+    const store = usePagesStore();
+    store.pages = [];
+    store.isLoaded = false;
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue(
+      json({ page: samplePage }),
+    );
+
+    await store.fetchPageBySlug('kependudukan', true);
+
+    expect(store.pages).toEqual([]);
+  });
 });
