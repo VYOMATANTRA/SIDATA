@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  MAX_FIGURE_JSON_LENGTH,
   figureAuditSummary,
   figureMediaIds,
   figureSlugForSection,
@@ -292,6 +293,72 @@ describe('sectionFigureSchema', () => {
         message({ kind: 'diagram', title: 'J', image: { mediaId: ID(1), alt: 'A', url: 'x' } }),
         /tidak dikenal/,
       );
+    });
+  });
+
+  describe('extra limits', () => {
+    const diagramWith = (items: Array<{ label: string; value: number }>) => ({
+      kind: 'diagram',
+      title: 'J',
+      bars: { items },
+    });
+
+    it('bar values must stay within +/- 1 000 000 000', () => {
+      for (const value of [1e9, -1e9, 0, 123.45]) {
+        assert.equal(
+          sectionFigureSchema.safeParse(diagramWith([{ label: 'A', value }])).success,
+          true,
+          String(value),
+        );
+      }
+      for (const value of [1e9 + 1, -1e9 - 1, 1e308, -1e308]) {
+        assert.match(
+          message(diagramWith([{ label: 'A', value }])),
+          /Nilai batang diagram tidak wajar/,
+          String(value),
+        );
+      }
+    });
+
+    it('rejects duplicate bar labels, ignoring case and surrounding spaces', () => {
+      assert.match(
+        message(
+          diagramWith([
+            { label: 'Laki-laki', value: 1 },
+            { label: '  laki-LAKI ', value: 2 },
+          ]),
+        ),
+        /Label batang diagram tidak boleh sama/,
+      );
+      assert.equal(
+        sectionFigureSchema.safeParse(
+          diagramWith([
+            { label: 'Laki-laki', value: 1 },
+            { label: 'Perempuan', value: 2 },
+          ]),
+        ).success,
+        true,
+      );
+    });
+
+    it('caps the serialized figure length', () => {
+      assert.equal(MAX_FIGURE_JSON_LENGTH, 12_000);
+      // Full-length plain text in all 12 photos still fits...
+      const plain = Array.from({ length: 12 }, (_, i) => ({
+        mediaId: ID(i + 1),
+        alt: 'a'.repeat(300),
+        caption: 'c'.repeat(200),
+        credit: 'k'.repeat(120),
+      }));
+      assert.equal(sectionFigureSchema.safeParse({ kind: 'photos', photos: plain }).success, true);
+      // ...but text that JSON escapes (every quote doubles) does not.
+      const escaped = plain.map((p) => ({
+        ...p,
+        alt: '"'.repeat(300),
+        caption: '"'.repeat(200),
+        credit: '"'.repeat(120),
+      }));
+      assert.match(message({ kind: 'photos', photos: escaped }), /Gambar terlalu besar/);
     });
   });
 

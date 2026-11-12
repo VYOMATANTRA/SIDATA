@@ -13,6 +13,15 @@ import { hasControlCharacters } from './hierarchyAuthoring.js';
 export const FIGURE_BLOCK_SLUG_PREFIX = 'figure-';
 export const MAX_FIGURE_PHOTOS = 12;
 export const MAX_FIGURE_BARS = 20;
+/** Bar values are plain statistics; anything beyond this magnitude is a typo, not data. */
+export const MAX_FIGURE_BAR_VALUE = 1_000_000_000;
+/**
+ * Cap on the serialized figure (`JSON.stringify(figure).length`), checked after the per-field
+ * limits. A full-length group of 12 photos is about 8 400 characters; the rest is headroom for
+ * JSON escaping. It keeps the stored `metadata` (echoed in every public content-block payload)
+ * bounded the same way the spatial-point metadata is.
+ */
+export const MAX_FIGURE_JSON_LENGTH = 12_000;
 
 export const figureSlugForSection = (sectionId: string): string =>
   `${FIGURE_BLOCK_SLUG_PREFIX}${sectionId}`;
@@ -62,7 +71,8 @@ const barSchema = z.strictObject(
     label: text('Label batang diagram', 80, { required: true }),
     value: z
       .number({ error: 'Nilai batang diagram harus berupa angka' })
-      .refine((v) => Number.isFinite(v), 'Nilai batang diagram harus berupa angka'),
+      .refine((v) => Number.isFinite(v), 'Nilai batang diagram harus berupa angka')
+      .refine((v) => Math.abs(v) <= MAX_FIGURE_BAR_VALUE, 'Nilai batang diagram tidak wajar'),
   },
   { error: 'Batang diagram memuat isian yang tidak dikenal' },
 );
@@ -73,7 +83,11 @@ const barsSchema = z.strictObject(
     items: z
       .array(barSchema, { error: 'Daftar batang diagram harus berupa daftar' })
       .min(1, 'Diagram batang minimal memiliki 1 batang')
-      .max(MAX_FIGURE_BARS, `Diagram batang maksimal ${MAX_FIGURE_BARS} batang`),
+      .max(MAX_FIGURE_BARS, `Diagram batang maksimal ${MAX_FIGURE_BARS} batang`)
+      .refine(
+        (items) => new Set(items.map((i) => i.label.trim().toLowerCase())).size === items.length,
+        'Label batang diagram tidak boleh sama',
+      ),
   },
   { error: 'Diagram batang memuat isian yang tidak dikenal' },
 );
@@ -132,6 +146,12 @@ export const sectionFigureSchema = z
       ctx.addIssue({
         code: 'custom',
         message: 'Foto yang sama tidak boleh dipakai lebih dari sekali dalam satu gambar',
+      });
+    }
+    if (JSON.stringify(figure).length > MAX_FIGURE_JSON_LENGTH) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Gambar terlalu besar. Kurangi isi teks atau jumlah foto',
       });
     }
   });
