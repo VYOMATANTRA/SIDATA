@@ -14,6 +14,7 @@ import ChapterSection from '../components/cerita/ChapterSection.vue';
 import CeritaHero from '../components/cerita/CeritaHero.vue';
 import CeritaLoadingState from '../components/cerita/CeritaLoadingState.vue';
 import CeritaStatePanel from '../components/cerita/CeritaStatePanel.vue';
+import { READER_GRID, READER_MAIN } from '../components/cerita/readerLayout';
 
 /**
  * Public reader of one Cerita topic (SPEC §8, "Cerita reader"). PublicLayout supplies the skip
@@ -369,34 +370,33 @@ defineExpose({ retryLoad, loadPage });
     <template v-else-if="page">
       <CeritaHero :title="page.title" :chapter-count="page.chapters.length" />
 
-      <div
-        v-if="proseUnavailable || showPageEmptyNotice"
-        class="mx-auto max-w-5xl px-4 pt-8 sm:px-6"
-      >
-        <div
-          v-if="proseUnavailable"
-          class="rounded-card border-status-error-border bg-status-error-surface text-status-error flex flex-wrap items-center justify-between gap-3 border px-4 py-3 text-sm"
-          role="alert"
-          data-test="cerita-prose-error"
-        >
-          <p>Teks pada halaman ini belum dapat dimuat.</p>
-          <button
-            type="button"
-            class="rounded-btn border-status-error focus-visible:outline-focus-ring min-h-9 border bg-white px-3 py-1.5 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed"
-            :disabled="isRetryingProse"
-            data-test="cerita-prose-retry"
-            @click="retryProse"
+      <div v-if="proseUnavailable || showPageEmptyNotice" :class="[READER_GRID, 'pt-8']">
+        <div :class="READER_MAIN">
+          <div
+            v-if="proseUnavailable"
+            class="rounded-card border-status-error-border bg-status-error-surface text-status-error flex flex-wrap items-center justify-between gap-3 border px-4 py-3 text-sm"
+            role="alert"
+            data-test="cerita-prose-error"
           >
-            Coba lagi
-          </button>
+            <p>Teks pada halaman ini belum dapat dimuat.</p>
+            <button
+              type="button"
+              class="rounded-btn border-status-error focus-visible:outline-focus-ring min-h-9 border bg-white px-3 py-1.5 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed"
+              :disabled="isRetryingProse"
+              data-test="cerita-prose-retry"
+              @click="retryProse"
+            >
+              Coba lagi
+            </button>
+          </div>
+          <p
+            v-else
+            class="rounded-card border-border bg-surface-muted text-text-muted border px-4 py-3 text-base"
+            data-test="cerita-page-empty"
+          >
+            Belum ada konten yang dapat ditampilkan pada halaman ini.
+          </p>
         </div>
-        <p
-          v-else
-          class="rounded-card border-border bg-surface-muted text-text-muted border px-4 py-3 text-base"
-          data-test="cerita-page-empty"
-        >
-          Belum ada konten yang dapat ditampilkan pada halaman ini.
-        </p>
       </div>
 
       <!-- The sticky mobile selector lives in this wrapper so it can never reach the footer. -->
@@ -410,7 +410,7 @@ defineExpose({ retryLoad, loadPage });
           @navigate="handleNavigate"
         />
 
-        <div class="mx-auto flex max-w-5xl gap-10 px-4 sm:px-6">
+        <div :class="READER_GRID">
           <ChapterToc
             v-if="tocChapters.length > 0"
             variant="rail"
@@ -419,7 +419,7 @@ defineExpose({ retryLoad, loadPage });
             @navigate="handleNavigate"
           />
 
-          <div class="cerita-reader-content divide-border min-w-0 flex-1 divide-y">
+          <div :class="[READER_MAIN, 'cerita-reader-content divide-border divide-y']">
             <ChapterSection
               v-for="chapter in page.chapters"
               :key="chapter.id"

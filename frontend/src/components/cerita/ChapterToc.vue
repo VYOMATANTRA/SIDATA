@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
+import { READER_ASIDE } from './readerLayout';
 
 export interface TocChapter {
   id: string;
@@ -12,7 +13,7 @@ export interface ChapterTocProps {
   chapters: TocChapter[];
   activeChapterId: string | null;
   /**
-   * 'rail' = persistent desktop list beside the chapters (from `lg`).
+   * 'rail' = persistent desktop list in the right-hand column, beside the article (from `lg`).
    * 'sheet' = mobile selector: a navy bar that sticks just under the public header and opens a
    * list of chapters beneath it (below `lg`).
    */
@@ -88,7 +89,10 @@ onBeforeUnmount(() => {
 <template>
   <nav
     v-if="variant === 'rail'"
-    class="sticky top-[calc(var(--public-header-height)+1.5rem)] hidden max-h-[calc(100dvh-var(--public-header-height)-3rem)] w-60 shrink-0 self-start overflow-y-auto py-10 lg:block"
+    :class="[
+      READER_ASIDE,
+      'sticky top-[calc(var(--public-header-height)+1.5rem)] hidden max-h-[calc(100dvh-var(--public-header-height)-3rem)] w-full max-w-60 self-start overflow-y-auto py-10 lg:block',
+    ]"
     aria-label="Daftar Bab"
     data-test="chapter-toc-rail"
   >
