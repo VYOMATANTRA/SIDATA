@@ -89,7 +89,10 @@ async function buildInit(init: RequestInit): Promise<RequestInit> {
 
   if (MUTATING_METHODS.has(method)) {
     headers.set('x-csrf-token', await getCsrfToken());
-    if (!headers.has('Content-Type')) {
+    // A FormData body (media upload) needs the browser's own multipart boundary, so it must not
+    // be forced to JSON. The body is not a stream, so a replay after a refresh can resend it.
+    const isFormData = typeof FormData !== 'undefined' && init.body instanceof FormData;
+    if (!headers.has('Content-Type') && !isFormData) {
       headers.set('Content-Type', 'application/json');
     }
   }
