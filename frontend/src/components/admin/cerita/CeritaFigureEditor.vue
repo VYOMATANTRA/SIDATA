@@ -220,6 +220,11 @@ async function save(): Promise<void> {
     return;
   }
 
+  // "Satu foto" stores one photo: drop the hidden rows now so they cannot resurface later.
+  if (kind.value === 'photo' && photoRows.rows.value.length > 1) {
+    photoRows.setRows(photoRows.rows.value.slice(0, 1));
+  }
+
   saving.value = true;
   const outcome = await store.saveFigure(props.sectionId, result.figure);
   saving.value = false;

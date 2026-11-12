@@ -105,14 +105,43 @@ export function draftFromFigure(figure: SectionFigure | null): FigureDraft {
   return draft;
 }
 
+function isBlankPhoto(photo: PhotoFields): boolean {
+  return (
+    !photo.mediaId &&
+    photo.alt.trim() === '' &&
+    photo.caption.trim() === '' &&
+    photo.credit.trim() === ''
+  );
+}
+
+function isBlankBar(bar: BarFields): boolean {
+  return bar.label.trim() === '' && bar.value.trim() === '';
+}
+
 /**
  * What the figure editor would store, as a string, so "has the draft changed?" is a plain
- * comparison. Only the parts that matter for the chosen kind count: a photo kept in the draft
- * after switching to a diagram does not make the draft look edited.
+ * comparison. Only real content counts:
+ * - slots that hold nothing (an empty photo row added by choosing "Beberapa foto", a bar row nobody
+ *   typed in) are ignored;
+ * - "Satu foto" and "Beberapa foto" with the same photos are the same content, so choosing the other
+ *   kind is not an edit until a photo, text or bar really changes;
+ * - a figure with nothing in it is `none`, whatever kind is chosen;
+ * - parts of a kind that is not chosen (a photo kept in the draft after switching to a diagram) do
+ *   not count.
  */
 export function draftSignature(draft: FigureDraft): string {
   if (draft.kind === null) return 'none';
+
   if (draft.kind === 'diagram') {
+    const bars = draft.bars.filter((bar) => !isBlankBar(bar));
+    const empty =
+      draft.diagramTitle.trim() === '' &&
+      draft.diagramSource.trim() === '' &&
+      draft.diagramImageId === null &&
+      draft.diagramImageAlt.trim() === '' &&
+      draft.barUnit.trim() === '' &&
+      bars.length === 0;
+    if (empty) return 'none';
     return JSON.stringify([
       'diagram',
       draft.diagramTitle,
@@ -120,12 +149,16 @@ export function draftSignature(draft: FigureDraft): string {
       draft.diagramImageId,
       draft.diagramImageAlt,
       draft.barUnit,
-      draft.bars.map((bar) => [bar.label, bar.value]),
+      bars.map((bar) => [bar.label, bar.value]),
     ]);
   }
-  const photos = draft.kind === 'photo' ? draft.photos.slice(0, 1) : draft.photos;
+
+  const photos = (draft.kind === 'photo' ? draft.photos.slice(0, 1) : draft.photos).filter(
+    (photo) => !isBlankPhoto(photo),
+  );
+  if (photos.length === 0) return 'none';
   return JSON.stringify([
-    draft.kind,
+    'photos',
     photos.map((photo) => [photo.mediaId, photo.alt, photo.caption, photo.credit]),
   ]);
 }

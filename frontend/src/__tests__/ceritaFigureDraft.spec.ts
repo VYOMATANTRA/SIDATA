@@ -273,6 +273,57 @@ describe('validateFigureDraft', () => {
   });
 });
 
+describe('draftSignature ignores blank rows and kind switches without real edits', () => {
+  const none = draftSignature(emptyDraft());
+
+  it('treats a chosen kind with only blank slots as no change from an empty figure', () => {
+    expect(draftSignature(photoDraft('photo', [{ mediaId: null, alt: '' }]))).toBe(none);
+    expect(
+      draftSignature(
+        photoDraft('photos', [
+          { mediaId: null, alt: '' },
+          { mediaId: null, alt: '' },
+        ]),
+      ),
+    ).toBe(none);
+    expect(draftSignature({ ...emptyDraft(), kind: 'diagram' })).toBe(none);
+  });
+
+  it('does not count a blank trailing photo row or a blank bar row as an edit', () => {
+    const stored = photoDraft('photos', [{ mediaId: 'a' }, { mediaId: 'b' }]);
+    const withBlank = photoDraft('photos', [
+      { mediaId: 'a' },
+      { mediaId: 'b' },
+      { mediaId: null, alt: '' },
+    ]);
+    expect(draftSignature(withBlank)).toBe(draftSignature(stored));
+
+    const diagram = { ...emptyDraft(), kind: 'diagram' as const, diagramTitle: 'D' };
+    expect(draftSignature({ ...diagram, bars: [{ label: ' ', value: '' }] })).toBe(
+      draftSignature(diagram),
+    );
+  });
+
+  it('keeps the same signature when one stored photo is viewed as a series with a blank slot', () => {
+    const photo = photoDraft('photo', [{ mediaId: 'a' }]);
+    const series = photoDraft('photos', [{ mediaId: 'a' }, { mediaId: null, alt: '' }]);
+    expect(draftSignature(series)).toBe(draftSignature(photo));
+  });
+
+  it('still notices real edits: a second photo, typed text, or dropping photos', () => {
+    const photo = photoDraft('photo', [{ mediaId: 'a' }]);
+    expect(draftSignature(photoDraft('photos', [{ mediaId: 'a' }, { mediaId: 'b' }]))).not.toBe(
+      draftSignature(photo),
+    );
+    expect(draftSignature(photoDraft('photo', [{ mediaId: 'a', alt: 'lain' }]))).not.toBe(
+      draftSignature(photo),
+    );
+    const series = photoDraft('photos', [{ mediaId: 'a' }, { mediaId: 'b' }]);
+    expect(draftSignature({ ...series, kind: 'photo' })).not.toBe(draftSignature(series));
+    expect(draftSignature({ ...emptyDraft(), kind: 'diagram', diagramTitle: 'x' })).not.toBe(none);
+  });
+});
+
 describe('draft helpers', () => {
   it('round-trips a stored figure and changes signature only when something relevant changes', () => {
     const draft = draftFromFigure({

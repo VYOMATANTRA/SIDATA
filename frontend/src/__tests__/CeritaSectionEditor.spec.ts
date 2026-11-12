@@ -519,6 +519,74 @@ describe('CeritaSectionEditor', () => {
       wrapper.unmount();
     });
 
+    it('is not dirty just from choosing a kind, and only real edits make it dirty', async () => {
+      const wrapper = await mountEditor();
+      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([false]);
+
+      await wrapper.find('[data-test="kind-photos"]').setValue();
+      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([false]);
+      await wrapper.find('[data-test="kind-photo"]').setValue();
+      await wrapper.find('[data-test="kind-diagram"]').setValue();
+      await click(wrapper, 'Tambah batang');
+      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([false]);
+
+      await wrapper.find('[data-test="diagram-title"]').setValue('Judul');
+      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([true]);
+      wrapper.unmount();
+    });
+
+    it('does not count switching a stored photo to a series as an edit until a second photo is added', async () => {
+      fake.blocks.push({
+        id: 'fig-1',
+        sectionId,
+        type: 'figure',
+        slug: `figure-${sectionId}`,
+        title: null,
+        body: '',
+        metadata: { kind: 'photo', photos: [{ mediaId: 'media-9', alt: 'Balai' }] },
+        sortOrder: null,
+        updatedAt: '2026-11-13T10:00:00.000Z',
+      });
+      const wrapper = await mountEditor();
+
+      await wrapper.find('[data-test="kind-photos"]').setValue();
+      expect(wrapper.findAll('[data-test="figure-photo-row"]')).toHaveLength(2);
+      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([false]);
+
+      await upload(wrapper, 1);
+      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([true]);
+      wrapper.unmount();
+    });
+
+    it('drops the hidden extra photos when saving as one photo so they cannot come back', async () => {
+      const wrapper = await mountEditor();
+      await wrapper.find('[data-test="kind-photos"]').setValue();
+      for (let i = 0; i < 2; i += 1) {
+        await upload(wrapper, i);
+        await wrapper.findAll('[data-test="photo-alt"]')[i]!.setValue(`Foto ${i + 1}`);
+      }
+      await wrapper.find('[data-test="kind-photo"]').setValue();
+      expect(wrapper.findAll('[data-test="figure-photo-row"]')).toHaveLength(1);
+      expect(wrapper.find('[data-test="figure-extra-note"]').exists()).toBe(true);
+
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      await flushPromises();
+
+      const figure = (fake.lastWrite()!.body as { figure: { kind: string; photos: unknown[] } })
+        .figure;
+      expect(figure.kind).toBe('photo');
+      expect(figure.photos).toHaveLength(1);
+
+      await wrapper.find('[data-test="kind-photos"]').setValue();
+      const rows = wrapper.findAll('[data-test="figure-photo-row"]');
+      expect(rows).toHaveLength(2);
+      expect(rows[1]!.find('[data-test="photo-preview"]').exists()).toBe(false);
+      expect((rows[1]!.find('[data-test="photo-alt"]').element as HTMLTextAreaElement).value).toBe(
+        '',
+      );
+      wrapper.unmount();
+    });
+
     it('loads a stored figure into the form and reverts edits on request', async () => {
       fake.blocks.push({
         id: 'fig-1',
