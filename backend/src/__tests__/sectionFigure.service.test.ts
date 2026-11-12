@@ -349,6 +349,78 @@ describe('sectionFigure.service', () => {
     });
   });
 
+  describe('a damaged stored figure can always be removed or replaced', () => {
+    /** A stored figure whose photos no longer pass the save-time checks: asset 1 belongs to another
+     * purpose, asset 9 does not exist, asset 2 is healthy. */
+    const seedDamagedFigure = () => {
+      db.mediaAsset.rows.find((a) => a.id === ID(1))!.purpose = 'portal-hero';
+      for (const n of [1, 2]) {
+        asset(n).attachedAt = T0;
+        db.mediaAssetReference.rows.push({
+          id: `ref-${n}`,
+          assetId: ID(n),
+          referenceType: 'content_block',
+          referenceId: 'blk-fig',
+          slot: 'figure',
+        });
+      }
+      db.addBlock({
+        id: 'blk-fig',
+        slug: 'figure-sec-1',
+        type: 'figure',
+        title: null,
+        body: '',
+        sortOrder: null,
+        metadata: { kind: 'photos', photos: [photo(1), photo(9), photo(2)] },
+      });
+    };
+
+    it('DELETE removes the block and releases what it can, without the save-time sentence', async () => {
+      seedDamagedFigure();
+
+      const result = await deleteSectionFigure('sec-1', T0_ISO, actor, ctx);
+
+      assert.equal(figureRow(), undefined);
+      assert.notEqual(result.section.updatedAt, T0_ISO);
+      assert.equal(asset(2).attachedAt, null, 'the healthy photo is released');
+      assert.notEqual(asset(2).detachedAt, null);
+      assert.equal(refs(1).length, 0, 'the wrong-purpose reference is dropped too');
+      assert.equal(refs(2).length, 0);
+      const audit = db.auditRows.at(-1)!;
+      assert.equal(audit.action, 'section.figure_deleted');
+      assert.deepEqual(audit.metadata, { sectionId: 'sec-1', kind: 'photos' });
+    });
+
+    it('DELETE tolerates a photo already claimed for deletion', async () => {
+      seedDamagedFigure();
+      asset(2).cleanupClaimedAt = T0;
+      await deleteSectionFigure('sec-1', T0_ISO, actor, ctx);
+      assert.equal(figureRow(), undefined);
+    });
+
+    it('PUT can replace a damaged figure (the repair path)', async () => {
+      seedDamagedFigure();
+
+      const result = await put(single(3));
+
+      assert.equal(result.block.id, 'blk-fig');
+      assert.deepEqual(figureRow()!.metadata, single(3));
+      assert.equal(refs(1).length, 0);
+      assert.equal(refs(2).length, 0);
+      assert.equal(refs(3).length, 1);
+      assert.notEqual(asset(3).attachedAt, null);
+    });
+
+    it('a delete failure is never worded as a re-upload request', async () => {
+      seedDamagedFigure();
+      db.failAudit = true;
+      await assert.rejects(deleteSectionFigure('sec-1', T0_ISO, actor, ctx), (err) => {
+        assert.equal(/unggah ulang/i.test((err as Error).message), false);
+        return true;
+      });
+    });
+  });
+
   describe('interaction with the rest of the hierarchy', () => {
     it('a section that holds a figure cannot be deleted: HAS_DEPENDENTS counts it as a content block', async () => {
       const saved = await put(single(1));

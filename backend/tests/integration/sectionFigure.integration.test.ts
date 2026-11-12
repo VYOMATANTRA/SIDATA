@@ -404,4 +404,84 @@ describe('section figure against real MySQL', () => {
       (err) => statusOf(err) === 400,
     );
   });
+
+  describe('a damaged stored figure', () => {
+    /** Writes a figure straight into the table: photo 1 belongs to another purpose, photo 9 is
+     * missing, photo 2 is healthy. The service would refuse to save this, but it must still be removable. */
+    async function seedDamagedFigure(sectionId: string): Promise<string> {
+      await seedPhotos(2);
+      await prisma.mediaAsset.create({
+        data: {
+          id: ID(1),
+          provider: 'local',
+          storageKey: `photos/portal-hero/synthetic/${ID(1)}.webp`,
+          kind: 'photo',
+          purpose: 'portal-hero',
+          ownerKey: 'synthetic',
+          mimeType: 'image/webp',
+          byteSize: 1024,
+          originalName: 'hero.jpg',
+          attachedAt: new Date(),
+        },
+      });
+      await prisma.mediaAsset.update({ where: { id: ID(2) }, data: { attachedAt: new Date() } });
+      const block = await prisma.contentBlock.create({
+        data: {
+          sectionId,
+          type: 'figure',
+          slug: `figure-${sectionId}`,
+          title: null,
+          body: '',
+          sortOrder: null,
+          metadata: { kind: 'photos', photos: [photo(1), photo(9), photo(2)] },
+        },
+      });
+      await prisma.mediaAssetReference.createMany({
+        data: [1, 2].map((n) => ({
+          assetId: ID(n),
+          referenceType: 'content_block',
+          referenceId: block.id,
+          slot: 'figure',
+        })),
+      });
+      return block.id;
+    }
+
+    it('DELETE removes it and releases what it can', async () => {
+      const section = await seedSection();
+      await seedDamagedFigure(section.id);
+      const fresh = await prisma.section.findUniqueOrThrow({ where: { id: section.id } });
+
+      const result = await deleteSectionFigure(
+        section.id,
+        fresh.updatedAt.toISOString(),
+        ACTOR,
+        REQUEST_CONTEXT,
+      );
+
+      assert.equal(result.section.id, section.id);
+      assert.equal((await figureBlocks(section.id)).length, 0);
+      assert.equal(await prisma.mediaAssetReference.count(), 0);
+      assert.equal((await asset(2)).attachedAt, null);
+      assert.notEqual((await asset(2)).detachedAt, null);
+      assert.equal(await prisma.auditLog.count({ where: { action: 'section.figure_deleted' } }), 1);
+      // The section is deletable again.
+      await deleteSection(section.id, result.section.updatedAt, ACTOR, REQUEST_CONTEXT);
+    });
+
+    it('PUT can replace it', async () => {
+      await seedPhotos(3);
+      const section = await seedSection();
+      const blockId = await seedDamagedFigure(section.id);
+      const fresh = await prisma.section.findUniqueOrThrow({ where: { id: section.id } });
+
+      const saved = await save(section.id, fresh.updatedAt.toISOString(), single(3));
+
+      assert.equal(saved.block.id, blockId);
+      assert.equal(await refCount(1), 0);
+      assert.equal(await refCount(2), 0);
+      assert.equal(await refCount(3), 1);
+      assert.notEqual((await asset(3)).attachedAt, null);
+    });
+  });
 });

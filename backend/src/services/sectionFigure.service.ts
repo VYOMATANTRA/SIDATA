@@ -83,8 +83,16 @@ const mediaReference = (blockId: string) => ({
 const asMediaTx = (tx: unknown): MediaTransactionClient => tx as MediaTransactionClient;
 
 /** Media failures become plain 400s (the CMS shows the sentence); anything else bubbles up. */
-function toFigureMediaError(err: unknown): unknown {
+function toFigureMediaError(err: unknown, mode: 'save' | 'delete' = 'save'): unknown {
   if (!(err instanceof MediaServiceError)) return err;
+  if (mode === 'delete') {
+    // Releasing media is lenient, so this is not expected; never ask the editor to re-upload
+    // when the goal was to remove the figure.
+    return new HierarchyServiceError(
+      'Gambar bagian belum dapat dihapus karena foto-fotonya gagal dilepas. Coba lagi beberapa saat lagi.',
+      409,
+    );
+  }
   if (err.code === 'MEDIA_PURPOSE_MISMATCH') {
     return new HierarchyServiceError(
       'Salah satu foto tidak dapat dipakai di gambar bagian ini. Unggah ulang fotonya dari halaman ini.',
@@ -205,7 +213,9 @@ export const putSectionFigure = async (
 
       try {
         await lockAffectedAssets(tx, [...removedIds, ...newIds]);
-        await detachMedia(asMediaTx(tx), removedIds, mediaReference(block.id));
+        await detachMedia(asMediaTx(tx), removedIds, mediaReference(block.id), new Date(), {
+          lenient: true,
+        });
         await attachMedia(asMediaTx(tx), newIds, mediaReference(block.id));
       } catch (err) {
         throw toFigureMediaError(err);
@@ -279,9 +289,11 @@ export const deleteSectionFigure = async (
       await tx.contentBlock.delete({ where: { id: existing.id } });
       try {
         await lockAffectedAssets(tx, mediaIds);
-        await detachMedia(asMediaTx(tx), mediaIds, mediaReference(existing.id));
+        await detachMedia(asMediaTx(tx), mediaIds, mediaReference(existing.id), new Date(), {
+          lenient: true,
+        });
       } catch (err) {
-        throw toFigureMediaError(err);
+        throw toFigureMediaError(err, 'delete');
       }
       const touched = await tx.section.update({
         where: { id: sectionId },
