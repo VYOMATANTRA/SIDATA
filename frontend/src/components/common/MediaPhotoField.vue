@@ -84,6 +84,9 @@ watch(uploading, (value) => emit('busy', value));
 
 onBeforeUnmount(() => {
   unmounted = true;
+  // The slot is going away mid-upload (a row removed, another section opened). Tell the parent the
+  // upload no longer blocks it; the late result is ignored in `handleFile`.
+  if (uploading.value) emit('busy', false);
 });
 
 async function handleFile(file: File): Promise<void> {

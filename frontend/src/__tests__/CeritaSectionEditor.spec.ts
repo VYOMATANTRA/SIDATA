@@ -711,6 +711,80 @@ describe('CeritaSectionEditor', () => {
       wrapper.unmount();
     });
 
+    function holdNextUpload(): () => void {
+      let finish: (value: Response) => void = () => undefined;
+      const original = globalThis.fetch;
+      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input) === '/api/media') {
+          return new Promise<Response>((resolve) => (finish = resolve));
+        }
+        return original(input, init);
+      }) as typeof fetch;
+      return () =>
+        finish(
+          fake.json(
+            {
+              media: {
+                id: 'media-late',
+                kind: 'photo',
+                mimeType: 'image/webp',
+                byteSize: 1,
+                width: 1,
+                height: 1,
+                originalName: 'a.jpg',
+                previewUrl: '/api/media/media-late/preview',
+              },
+            },
+            201,
+          ),
+        );
+    }
+
+    it('locks the kind choice and the photo buttons while a photo is uploading', async () => {
+      const wrapper = await mountEditor();
+      await wrapper.find('[data-test="kind-photos"]').setValue();
+      const finish = holdNextUpload();
+
+      pickFile(wrapper, 0, 'a.jpg', 'image/jpeg');
+      await flushPromises();
+
+      for (const radio of wrapper.findAll('input[type="radio"]')) {
+        // The fieldset around the radios is disabled, which disables each of them.
+        expect((radio.element as HTMLInputElement).matches(':disabled')).toBe(true);
+      }
+      expect(wrapper.find('[data-test="add-photo"]').attributes('disabled')).toBeDefined();
+      const removes = wrapper.findAll('button').filter((b) => b.text().startsWith('Hapus foto'));
+      expect(removes.length).toBeGreaterThan(0);
+      expect(removes.every((b) => b.attributes('disabled') !== undefined)).toBe(true);
+
+      finish();
+      await flushPromises();
+      for (const radio of wrapper.findAll('input[type="radio"]')) {
+        expect((radio.element as HTMLInputElement).matches(':disabled')).toBe(false);
+      }
+      wrapper.unmount();
+    });
+
+    it('does not stay blocked after the upload slot disappears mid-upload', async () => {
+      fake.addPage('Pendidikan', [{ title: 'Tingkat', sections: ['Jenjang'] }]);
+      const otherSection = fake.pages[1]!.chapters[0]!.sections[0]!.id;
+      const wrapper = await mountEditor();
+      await wrapper.find('[data-test="kind-photo"]').setValue();
+      holdNextUpload();
+
+      pickFile(wrapper, 0, 'a.jpg', 'image/jpeg');
+      await flushPromises();
+      expect(wrapper.find('[data-test="figure-save"]').attributes('disabled')).toBeDefined();
+
+      // The editor is pointed at another section, which replaces every photo slot.
+      await wrapper.setProps({ sectionId: otherSection });
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="figure-save"]').attributes('disabled')).toBeUndefined();
+      expect(wrapper.find('[data-test="figure-save"]').text()).toBe('Simpan gambar');
+      wrapper.unmount();
+    });
+
     it('asks before deleting the figure, deletes it with the section token and says so', async () => {
       fake.blocks.push({
         id: 'fig-1',

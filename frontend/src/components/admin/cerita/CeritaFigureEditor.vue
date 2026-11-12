@@ -329,7 +329,7 @@ defineExpose({ isDirty: () => dirty.value });
       </BaseButton>
     </div>
 
-    <fieldset class="space-y-2" :disabled="busy">
+    <fieldset class="space-y-2" :disabled="busy || uploading">
       <legend class="text-text-muted text-sm font-medium">Jenis gambar</legend>
       <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-5">
         <label
@@ -374,7 +374,7 @@ defineExpose({ isDirty: () => dirty.value });
         :show-actions="kind === 'photos'"
         :is-first="index === 0"
         :is-last="index === visiblePhotoRows.length - 1"
-        :busy="busy"
+        :busy="busy || uploading"
         @move-up="photoRows.move(index, -1)"
         @move-down="photoRows.move(index, 1)"
         @remove="photoRows.remove(index)"
@@ -388,7 +388,7 @@ defineExpose({ isDirty: () => dirty.value });
           variant="secondary"
           size="md"
           class="min-h-11"
-          :disabled="busy || photoRows.isFull()"
+          :disabled="busy || uploading || photoRows.isFull()"
           data-test="add-photo"
           @click="photoRows.add()"
         >

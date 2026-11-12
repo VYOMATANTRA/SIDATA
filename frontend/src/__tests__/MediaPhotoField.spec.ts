@@ -237,6 +237,32 @@ describe('MediaPhotoField', () => {
     wrapper.unmount();
   });
 
+  it('releases the busy state when it unmounts mid-upload and ignores the late result', async () => {
+    let finish: (response: Response) => void = () => undefined;
+    uploadResponse = () => new Promise<Response>((resolve) => (finish = resolve));
+    const wrapper = mountField();
+
+    pickFile(wrapper, 'a.jpg', 'image/jpeg');
+    await flushPromises();
+    expect(lastBusy(wrapper)).toEqual([true]);
+
+    wrapper.unmount();
+    expect(lastBusy(wrapper)).toEqual([false]);
+
+    finish(json({ media: MEDIA }, 201));
+    await flushPromises();
+    // The slot is gone, so the finished upload must not report a value to its old parent.
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+    expect(wrapper.emitted('uploaded')).toBeUndefined();
+    expect(lastBusy(wrapper)).toEqual([false]);
+  });
+
+  it('does not emit a busy change on unmount when nothing was uploading', () => {
+    const wrapper = mountField();
+    wrapper.unmount();
+    expect(wrapper.emitted('busy')).toBeUndefined();
+  });
+
   it('removes the photo from the slot and moves focus back to the file input', async () => {
     const wrapper = mountField({ modelValue: 'm-1' });
     await flushPromises();
