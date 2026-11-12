@@ -274,6 +274,31 @@ describe('sectionFigure.service', () => {
     });
   });
 
+  describe('putSectionFigure: lost race on the figure slug', () => {
+    it('turns a unique violation on insert into a 409 conflict with the current token', async () => {
+      db.contentBlock.create = async () => {
+        throw Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+      };
+
+      await assert.rejects(put(single(1)), (err) => {
+        expectError(409, 'STALE_WRITE')(err);
+        assert.match((err as Error).message, /pengguna lain/);
+        assert.equal(/P2002|unique/i.test((err as Error).message), false);
+        assert.equal((err as HierarchyServiceError).details?.currentUpdatedAt, T0_ISO);
+        return true;
+      });
+      assert.equal(asset(1).attachedAt, null);
+      assert.equal(db.mediaAssetReference.rows.length, 0);
+    });
+
+    it('does not mask other insert failures', async () => {
+      db.contentBlock.create = async () => {
+        throw new Error('disk full');
+      };
+      await assert.rejects(put(single(1)), /disk full/);
+    });
+  });
+
   describe('deleteSectionFigure', () => {
     const del = (expected: string, sectionId = 'sec-1') =>
       deleteSectionFigure(sectionId, expected, actor, ctx);

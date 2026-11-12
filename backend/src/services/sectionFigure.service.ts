@@ -11,10 +11,12 @@ import { hasFieldChanged } from '../utils/comparator.js';
 import {
   FIGURE_NOT_FOUND_CODE,
   HierarchyServiceError,
+  STALE_WRITE_CODE,
   assertFresh,
   assertPlainObject,
   expectedUpdatedAtSchema,
   idParamSchema,
+  isUniqueViolation,
   parseOrThrow,
 } from '../utils/hierarchyAuthoring.js';
 import {
@@ -155,95 +157,114 @@ export const putSectionFigure = async (
   const newIds = figureMediaIds(figure);
   const actorId = actor?.id?.trim() ? actor.id.trim() : null;
 
-  return executeLockedTransaction({
-    client,
-    // ReadCommitted: detachMedia counts the remaining references with a plain read, which under
-    // REPEATABLE READ would use a snapshot older than the asset locks and miss a reference a
-    // competing figure committed while this transaction waited (it would unpublish a shared photo).
-    isolationLevel: 'ReadCommitted',
-    lockQuery: (tx) => lockSectionAndFigure(tx, sectionId),
-    execute: async (tx) => {
-      const section = await tx.section.findUnique({
-        where: { id: sectionId },
-        select: { id: true, title: true, updatedAt: true },
-      });
-      if (!section) {
-        throw new ContentBlockServiceError('Bagian tidak ditemukan', 404);
-      }
-      assertFresh(section.updatedAt, body.expectedUpdatedAt, 'Bagian');
-
-      const existing = await tx.contentBlock.findUnique({ where: { slug } });
-      if (existing && (existing.type !== 'figure' || existing.sectionId !== sectionId)) {
-        // A prose block whose generated slug happens to equal the reserved figure slug.
-        throw new HierarchyServiceError(
-          'Gambar bagian tidak dapat dibuat karena nama internalnya sudah terpakai. Hubungi administrator.',
-          409,
-        );
-      }
-
-      // Same figure again: nothing to write, audit or invalidate; the token stays as it was.
-      if (existing && !hasFieldChanged(existing.metadata, figure)) {
-        return withChangeResult(
-          { block: formatContentBlock(existing), section: toToken(section) },
-          false,
-        );
-      }
-
-      const oldIds = existing ? mediaIdsOfStoredFigure(existing.metadata) : [];
-      const removedIds = oldIds.filter((id) => !newIds.includes(id));
-
-      const metadata = figure as unknown as Prisma.InputJsonValue;
-      const block = existing
-        ? await tx.contentBlock.update({
-            where: { id: existing.id },
-            data: { metadata, updatedById: actorId },
-          })
-        : await tx.contentBlock.create({
-            data: {
-              sectionId,
-              type: 'figure',
-              slug,
-              title: null,
-              body: '',
-              metadata,
-              sortOrder: null,
-              updatedById: actorId,
-            },
-          });
-
-      try {
-        await lockAffectedAssets(tx, [...removedIds, ...newIds]);
-        await detachMedia(asMediaTx(tx), removedIds, mediaReference(block.id), new Date(), {
-          lenient: true,
+  const run = () =>
+    executeLockedTransaction({
+      client,
+      // ReadCommitted: detachMedia counts the remaining references with a plain read, which under
+      // REPEATABLE READ would use a snapshot older than the asset locks and miss a reference a
+      // competing figure committed while this transaction waited (it would unpublish a shared photo).
+      isolationLevel: 'ReadCommitted',
+      lockQuery: (tx) => lockSectionAndFigure(tx, sectionId),
+      execute: async (tx) => {
+        const section = await tx.section.findUnique({
+          where: { id: sectionId },
+          select: { id: true, title: true, updatedAt: true },
         });
-        await attachMedia(asMediaTx(tx), newIds, mediaReference(block.id));
-      } catch (err) {
-        throw toFigureMediaError(err);
-      }
+        if (!section) {
+          throw new ContentBlockServiceError('Bagian tidak ditemukan', 404);
+        }
+        assertFresh(section.updatedAt, body.expectedUpdatedAt, 'Bagian');
 
-      const touched = await tx.section.update({
-        where: { id: sectionId },
-        data: { updatedAt: new Date() },
-        select: { id: true, updatedAt: true },
-      });
+        const existing = await tx.contentBlock.findUnique({ where: { slug } });
+        if (existing && (existing.type !== 'figure' || existing.sectionId !== sectionId)) {
+          // A prose block whose generated slug happens to equal the reserved figure slug.
+          throw new HierarchyServiceError(
+            'Gambar bagian tidak dapat dibuat karena nama internalnya sudah terpakai. Hubungi administrator.',
+            409,
+          );
+        }
 
-      await buildAuditLog(
-        {
-          action: AUDIT_ACTIONS.SECTION_FIGURE_SAVED,
-          actor,
-          target: { type: 'section', id: sectionId, label: section.title },
-          metadata: { sectionId, ...figureAuditSummary(figure) },
-          context: reqContext,
-        },
-        tx,
-      );
+        // Same figure again: nothing to write, audit or invalidate; the token stays as it was.
+        if (existing && !hasFieldChanged(existing.metadata, figure)) {
+          return withChangeResult(
+            { block: formatContentBlock(existing), section: toToken(section) },
+            false,
+          );
+        }
 
-      return { block: formatContentBlock(block), section: toToken(touched) };
-    },
-    onCommit: (committed, didChange) => {
-      if (didChange) invalidateContentBlocksCache(committed.block.slug);
-    },
-  });
+        const oldIds = existing ? mediaIdsOfStoredFigure(existing.metadata) : [];
+        const removedIds = oldIds.filter((id) => !newIds.includes(id));
+
+        const metadata = figure as unknown as Prisma.InputJsonValue;
+        const block = existing
+          ? await tx.contentBlock.update({
+              where: { id: existing.id },
+              data: { metadata, updatedById: actorId },
+            })
+          : await tx.contentBlock.create({
+              data: {
+                sectionId,
+                type: 'figure',
+                slug,
+                title: null,
+                body: '',
+                metadata,
+                sortOrder: null,
+                updatedById: actorId,
+              },
+            });
+
+        try {
+          await lockAffectedAssets(tx, [...removedIds, ...newIds]);
+          await detachMedia(asMediaTx(tx), removedIds, mediaReference(block.id), new Date(), {
+            lenient: true,
+          });
+          await attachMedia(asMediaTx(tx), newIds, mediaReference(block.id));
+        } catch (err) {
+          throw toFigureMediaError(err);
+        }
+
+        const touched = await tx.section.update({
+          where: { id: sectionId },
+          data: { updatedAt: new Date() },
+          select: { id: true, updatedAt: true },
+        });
+
+        await buildAuditLog(
+          {
+            action: AUDIT_ACTIONS.SECTION_FIGURE_SAVED,
+            actor,
+            target: { type: 'section', id: sectionId, label: section.title },
+            metadata: { sectionId, ...figureAuditSummary(figure) },
+            context: reqContext,
+          },
+          tx,
+        );
+
+        return { block: formatContentBlock(block), section: toToken(touched) };
+      },
+      onCommit: (committed, didChange) => {
+        if (didChange) invalidateContentBlocksCache(committed.block.slug);
+      },
+    });
+
+  try {
+    return await run();
+  } catch (err) {
+    if (!isUniqueViolation(err)) throw err;
+    // Another writer inserted this section's figure between our read and write. Answer like any
+    // stale write so the editor reloads, with the section's current token when it still exists.
+    const current = await client.section.findUnique({
+      where: { id: sectionId },
+      select: { updatedAt: true },
+    });
+    throw new HierarchyServiceError(
+      'Gambar bagian ini baru saja disimpan oleh pengguna lain. Muat ulang data lalu coba lagi.',
+      409,
+      STALE_WRITE_CODE,
+      current ? { currentUpdatedAt: current.updatedAt.toISOString() } : undefined,
+    );
+  }
 };
 
 export const deleteSectionFigure = async (
