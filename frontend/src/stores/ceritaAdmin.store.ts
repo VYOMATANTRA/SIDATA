@@ -238,6 +238,12 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     return { ok: true, value };
   }
 
+  /** Drops deleted sections from the flat list the /data pickers read (labels, breadcrumbs). */
+  function forgetSections(sectionIds: string[]): void {
+    const gone = new Set(sectionIds);
+    pagesStore.sections = pagesStore.sections.filter((item) => !gone.has(item.sectionId));
+  }
+
   /** Drops a deleted chapter or section from the shared page cache without a reload. */
   function pruneCachedPage(slug: string, edit: (page: AdminPage) => AdminPage): void {
     const cached = pagesStore.pagesBySlug[slug] as unknown as AdminPage | undefined;
@@ -351,11 +357,13 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
         return undefined;
       },
       { subject: 'Bab' },
-      () =>
+      () => {
         pruneCachedPage(found.page.slug, (page) => ({
           ...page,
           chapters: page.chapters.filter((item) => item.id !== chapterId),
-        })),
+        }));
+        forgetSections(found.chapter.sections.map((item) => item.id));
+      },
     );
   }
 
@@ -408,14 +416,16 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
         return undefined;
       },
       { subject: 'Bagian' },
-      () =>
+      () => {
         pruneCachedPage(found.page.slug, (page) => ({
           ...page,
           chapters: page.chapters.map((chapter) => ({
             ...chapter,
             sections: chapter.sections.filter((item) => item.id !== sectionId),
           })),
-        })),
+        }));
+        forgetSections([sectionId]);
+      },
     );
   }
 

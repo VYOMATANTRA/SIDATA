@@ -251,6 +251,35 @@ describe('ceritaAdmin store when the reload after a saved write fails', () => {
     expect(store.tree[0]!.chapters.map((c) => c.title)).toEqual(['Jumlah Penduduk']);
   });
 
+  it('also drops a deleted section from the flat section list the /data pickers use', async () => {
+    const sectionId = store.tree[0]!.chapters[0]!.sections[1]!.id;
+    const pages = usePagesStore();
+    expect(pages.sectionById.has(sectionId)).toBe(true);
+
+    failTreeReload();
+    expect(await store.removeSection(sectionId)).toMatchObject({ ok: true, refreshFailed: true });
+
+    expect(pages.sections.some((section) => section.sectionId === sectionId)).toBe(false);
+    expect(pages.sectionById.has(sectionId)).toBe(false);
+    expect(pages.labelFor(sectionId)).toBe('Tanpa bagian');
+    // The other sections stay.
+    expect(pages.sections).toHaveLength(2);
+  });
+
+  it('drops the sections of a deleted chapter from the flat list as well', async () => {
+    const chapter = store.tree[0]!.chapters[1]!;
+    const sectionIds = chapter.sections.map((section) => section.id);
+    const pages = usePagesStore();
+
+    failTreeReload();
+    expect(await store.removeChapter(chapter.id)).toMatchObject({ ok: true, refreshFailed: true });
+
+    for (const id of sectionIds) {
+      expect(pages.sectionById.has(id)).toBe(false);
+    }
+    expect(pages.sections.map((section) => section.chapterTitle)).not.toContain('Jumlah Keluarga');
+  });
+
   it('flags a failed reload of paragraphs after a paragraph write too', async () => {
     const section = store.tree[0]!.chapters[0]!.sections[0]!;
     fake.failNext(
