@@ -219,7 +219,8 @@ const router = createRouter({
           meta: {
             ...metaForRoles(rolesFor('/admin/sistem/konfigurasi')),
             title: 'Konfigurasi sistem',
-            subtitle: 'Pengaturan portal publik dan konfigurasi cuaca operasional.',
+            subtitle:
+              'Atur identitas portal, tampilan awal peta, penyegaran cuaca, dan masa simpan log.',
             breadcrumb: ['Sistem', 'Konfigurasi sistem'],
           },
         },
@@ -247,29 +248,14 @@ const router = createRouter({
             breadcrumb: ['Sistem', 'Log sistem'],
           },
         },
-        {
-          // Reached today via the "Retensi Audit" link inside UserManagement.vue, not a direct
-          // sidebar item (SPEC §3 Sistem group has no separate retention entry). Still mounted
-          // in the shell so the sidebar persists when an admin follows that link, with its own
-          // explicit Admin-only role requirement (SPEC §3) rather than borrowing /users's roles.
-          path: '/settings/audit-retention',
-          name: 'audit-retention-settings',
-          component: () => import('../views/AuditRetentionSettingsView.vue'),
-          meta: {
-            ...metaForRoles(['admin']),
-            title: 'Pengaturan Retensi Audit',
-            subtitle:
-              'Atur masa penyimpanan log audit sistem berdasarkan tingkat keparahan (severity).',
-            // Declares which sidebar item this child page belongs to, since its own path
-            // doesn't match any ADMIN_NAV `to` (naive path-prefix matching would be unsafe here —
-            // most ADMIN_NAV entries are /admin/* siblings, so prefix matching against '/admin'
-            // would wrongly also light up Beranda). AdminSidebar.vue reads this to highlight
-            // "Akun pengguna" and keep the Sistem group expanded while on this page.
-            navActiveFor: '/users',
-            breadcrumb: ['Sistem', { label: 'Akun pengguna', to: '/users' }, 'Retensi Audit'],
-          },
-        },
       ],
+    },
+    {
+      // The standalone retention page moved into the system configuration page (SPEC §8); the
+      // redirect keeps old bookmarks and links working. Guards apply to the final target, so an
+      // Editor or a signed-out visitor is turned away exactly as on the configuration page itself.
+      path: '/settings/audit-retention',
+      redirect: '/admin/sistem/konfigurasi#retensi-log',
     },
     {
       path: '/dashboard',
