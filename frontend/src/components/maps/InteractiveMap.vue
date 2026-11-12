@@ -45,6 +45,17 @@ const markerSignatures = new Map<string, string>();
  */
 let hasFramedPoints = false;
 let userMovedViewport = false;
+/**
+ * Counts viewport changes that started with the visitor (drag, wheel, touch, zoom controls or keys),
+ * so a caller can tell whether the visitor moved the map while it was waiting for something else,
+ * such as a location fix. Programmatic moves never count.
+ */
+let userInteractionCount = 0;
+
+function markUserMoved() {
+  userMovedViewport = true;
+  userInteractionCount += 1;
+}
 
 /**
  * Leaflet makes markers focusable, so each one needs a name a screen reader can
@@ -256,18 +267,18 @@ const ZOOM_KEYS = new Set(['+', '=', '-', '_', 'ArrowUp', 'ArrowDown', 'ArrowLef
  */
 function handleUserInteraction(event: Event) {
   if (event.type === 'wheel' || event.type === 'touchstart' || event.type === 'dblclick') {
-    userMovedViewport = true;
+    markUserMoved();
     return;
   }
   if (event.type === 'click') {
     const target = event.target as HTMLElement | null;
     if (target?.closest('.leaflet-control-zoom-in, .leaflet-control-zoom-out')) {
-      userMovedViewport = true;
+      markUserMoved();
     }
     return;
   }
   if (event.type === 'keydown' && ZOOM_KEYS.has((event as KeyboardEvent).key)) {
-    userMovedViewport = true;
+    markUserMoved();
   }
 }
 
@@ -320,9 +331,7 @@ onMounted(() => {
     }).setView(props.defaultCenter, props.defaultZoom);
 
     // A user pan must also win over a late-arriving CMS default.
-    map.on('dragstart', () => {
-      userMovedViewport = true;
-    });
+    map.on('dragstart', markUserMoved);
 
     mapContainer.value.addEventListener('wheel', handleUserInteraction, { passive: true });
     mapContainer.value.addEventListener('touchstart', handleUserInteraction, { passive: true });
@@ -427,7 +436,12 @@ function invalidateSize() {
   map?.invalidateSize();
 }
 
-defineExpose({ revealPoint, focusUserLocation, invalidateSize });
+/** See {@link userInteractionCount}. */
+function getInteractionCount(): number {
+  return userInteractionCount;
+}
+
+defineExpose({ revealPoint, focusUserLocation, invalidateSize, getInteractionCount });
 
 onUnmounted(() => {
   isUnmounted = true;
@@ -455,7 +469,7 @@ onUnmounted(() => {
 
 <template>
   <div
-    class="rounded-btn relative isolate z-0 h-[420px] w-full overflow-hidden border border-gray-300 bg-gray-100 sm:h-[520px] lg:h-[640px]"
+    class="rounded-btn border-border-strong bg-surface-muted relative isolate z-0 h-[min(70dvh,26rem)] min-h-[16rem] w-full overflow-hidden border sm:h-[min(520px,max(70dvh,16rem))] lg:h-[640px]"
     data-test="interactive-map"
     @keydown="handleEscape"
   >

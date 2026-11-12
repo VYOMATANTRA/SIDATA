@@ -97,7 +97,7 @@ Backend runs on port from `PORT` env var (default 3000). Prisma client is genera
 - `src/config/publicNav.ts`: public navigation data — footer link lists, the Cerita/Sumber Daya/Tentang groups, exact-destination active matching and the Cerita fallback links
 - `src/utils/bodyScrollLock.ts`: ref-counted body scroll lock shared by `BaseModal` and the mobile menu
 - `src/config/adminNav.ts`: Single role-to-items source of truth for the admin sidebar, also read by the router guards (`src/router/index.ts`) so sidebar visibility and route access can't drift apart
-- `src/composables/`: `useAdminHeader.ts` (admin shell header title/subtitle channel), `useDrawerFocusTrap.ts` (mobile drawer focus trap, visibility filter, and Escape handling), `usePublicHeaderState.ts` (public header background state and the single `HEADER_SCROLL_THRESHOLD_PX`), `useIsDesktop.ts` (reactive `md` desktop breakpoint media query), `useLogout.ts` (shared logout flow)
+- `src/composables/`: `useAdminHeader.ts` (admin shell header title/subtitle channel), `useDrawerFocusTrap.ts` (mobile drawer focus trap, visibility filter, and Escape handling), `usePublicHeaderState.ts` (public header background state and the single `HEADER_SCROLL_THRESHOLD_PX`), `useGeolocation.ts` (session-wide, deduplicated, permission-aware visitor location for the public map; in memory only), `useIsDesktop.ts` (reactive `md` desktop breakpoint media query), `useLogout.ts` (shared logout flow)
 - `src/__tests__/`: Unit tests with Vitest
 - `src/assets/`: Static assets, including `main.css` (Tailwind entry, imported in `main.ts`)
 - Styling: Tailwind CSS via Vite plugin
