@@ -175,6 +175,7 @@ enum ContentBlockType {
   sambutan_lurah
   highlight
   prose
+  figure
 }
 
 model ContentBlock {
