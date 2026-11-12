@@ -6,7 +6,7 @@ import type { Indicator } from '../stores/indicators.store';
 import type { IndicatorTable } from '../stores/indicatorTables.store';
 import { useAuthStore } from '../stores/auth';
 import { useComparisonTemplatesStore } from '../stores/comparisonTemplates.store';
-import { DEFAULT_PUBLIC_SETTINGS, useSettingsStore } from '../stores/settings.store';
+import { DEFAULT_PUBLIC_SETTINGS } from '../stores/settings.store';
 import { USER_MESSAGES } from '../utils/userMessages';
 import { resetLeafletMock } from './leafletMock';
 
@@ -681,7 +681,7 @@ describe('DataManagementView.vue', () => {
     wrapper.unmount();
   });
 
-  it('switches to public settings tab and displays public settings card for admins', async () => {
+  it('shows only a link to the configuration page on the settings tab, with no settings form or card', async () => {
     const pinia = createPinia();
     setActivePinia(pinia);
     const authStore = useAuthStore();
@@ -698,8 +698,16 @@ describe('DataManagementView.vue', () => {
     await wrapper.find('[data-test="tab-pengaturan"]').trigger('click');
     await flushPromises();
 
-    expect(wrapper.text()).toContain('Pengaturan Publik Portal');
-    expect(wrapper.text()).toContain('Kelurahan Manggar');
+    const moved = wrapper.find('[data-test="settings-moved"]');
+    expect(moved.exists()).toBe(true);
+    expect(moved.text()).toContain('Konfigurasi sistem');
+    const link = wrapper.find('[data-test="settings-moved-link"]');
+    expect(link.attributes('to')).toBe('/admin/sistem/konfigurasi');
+    // No card list, search or edit button for settings any more.
+    expect(wrapper.find('[data-test="result-count"]').exists()).toBe(false);
+    expect(wrapper.find('#data-search').exists()).toBe(false);
+    expect(wrapper.findAll('button').some((b) => b.text().includes('Edit'))).toBe(false);
+    expect(wrapper.findComponent({ name: 'PublicSettingsForm' }).exists()).toBe(false);
 
     wrapper.unmount();
   });
@@ -773,104 +781,20 @@ describe('DataManagementView.vue', () => {
     wrapper.unmount();
   });
 
-  it('keeps public settings form mounted and interactive during background loading, closing without discard prompt', async () => {
+  it('does not show a settings load error on the link-only settings tab', async () => {
+    installFetchMock({ settingsGet: () => Promise.reject(new Error('Network failure')) });
     const pinia = createPinia();
     setActivePinia(pinia);
-    const authStore = useAuthStore();
-    authStore.setAuth({ id: '1', email: 'admin@example.com', role: 'admin' }, 'token');
-
-    const settingsStore = useSettingsStore();
-    settingsStore.settings = { ...DEFAULT_PUBLIC_SETTINGS };
-    settingsStore.isLoaded = true;
-
-    const wrapper = mount(DataManagementView, {
-      global: {
-        plugins: [pinia],
-        stubs: { RouterLink: true, teleport: true },
-      },
-    });
-    await flushPromises();
-
-    await wrapper.find('[data-test="tab-pengaturan"]').trigger('click');
-    await flushPromises();
-
-    const editBtn = wrapper.findAll('button').find((b) => b.text().includes('Edit'));
-    await editBtn?.trigger('click');
-    await flushPromises();
-
-    const form = wrapper.findComponent({ name: 'PublicSettingsForm' });
-    expect(form.exists()).toBe(true);
-
-    // Simulate background refresh starting
-    settingsStore.isLoading = true;
-    await flushPromises();
-
-    // The form should stay mounted and NOT be marked busy
-    expect(wrapper.findComponent({ name: 'PublicSettingsForm' }).exists()).toBe(true);
-    expect(form.props('busy')).toBe(false);
-
-    // Closing an untouched form while loading should close cleanly without prompt
-    const cancelBtn = form.findAll('button').find((b) => b.text() === 'Batal');
-    await cancelBtn?.trigger('click');
-    await flushPromises();
-
-    expect(wrapper.find('[data-test="settings-discard-prompt"]').exists()).toBe(false);
-    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
-
-    wrapper.unmount();
-  });
-
-  async function mountAdmin(settingsGet?: () => Promise<Response> | Response) {
-    if (settingsGet) installFetchMock({ settingsGet });
-    const pinia = createPinia();
-    setActivePinia(pinia);
-    const authStore = useAuthStore();
-    authStore.setAuth({ id: '1', email: 'admin@example.com', role: 'admin' }, 'token');
+    useAuthStore().setAuth({ id: '1', email: 'admin@example.com', role: 'admin' }, 'token');
     const wrapper = mount(DataManagementView, {
       global: { plugins: [pinia], stubs: { RouterLink: true, teleport: true } },
     });
     await flushPromises();
     await wrapper.find('[data-test="tab-pengaturan"]').trigger('click');
     await flushPromises();
-    return wrapper;
-  }
 
-  async function clickEdit(wrapper: Awaited<ReturnType<typeof mountAdmin>>) {
-    const editBtn = wrapper.findAll('button').find((b) => b.text().includes('Edit'));
-    await editBtn?.trigger('click');
-    await flushPromises();
-  }
-
-  it('refuses to open the settings dialog while settings load, then opens once loaded', async () => {
-    let resolveSettings!: (r: Response) => void;
-    const wrapper = await mountAdmin(
-      () => new Promise<Response>((resolve) => (resolveSettings = resolve)),
-    );
-
-    await clickEdit(wrapper);
-
-    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
-    expect(wrapper.findComponent({ name: 'PublicSettingsForm' }).exists()).toBe(false);
-    expect(wrapper.find('[data-test="page-message"]').text()).toContain(
-      'Pengaturan publik masih dimuat',
-    );
-
-    resolveSettings(json({ settings: DEFAULT_PUBLIC_SETTINGS }));
-    await flushPromises();
-    await clickEdit(wrapper);
-
-    expect(wrapper.findComponent({ name: 'PublicSettingsForm' }).exists()).toBe(true);
-    wrapper.unmount();
-  });
-
-  it('refuses to open the settings dialog when settings failed to load and shows the error on the page', async () => {
-    const wrapper = await mountAdmin(() => Promise.reject(new Error('Network failure')));
-
-    await clickEdit(wrapper);
-
-    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
-    expect(wrapper.findComponent({ name: 'PublicSettingsForm' }).exists()).toBe(false);
-    expect(wrapper.find('[role="alert"]').text()).toContain('Gagal memuat pengaturan publik');
+    expect(wrapper.find('[data-test="settings-moved"]').exists()).toBe(true);
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
     wrapper.unmount();
   });
 });

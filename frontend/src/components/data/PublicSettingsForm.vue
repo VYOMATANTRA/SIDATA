@@ -39,13 +39,29 @@ export interface PublicSettingsFormProps {
   /** Plain-Indonesian failure text for the last save (the parent maps API errors with `toUserMessage`). */
   serverError?: string;
   idPrefix?: string;
+  /**
+   * Which part of the settings this form edits. `identity` is the portal name and contact
+   * fields, `map` is the starting map view, `all` (the default) is both in one form. A part form
+   * only validates, tracks and submits its own fields, so each part saves independently.
+   */
+  part?: 'all' | 'identity' | 'map';
+  /** Text of the secondary button (the page decides what it does). */
+  cancelLabel?: string;
+  /** Save stays disabled until something has changed. */
+  requireChanges?: boolean;
 }
 
 const props = withDefaults(defineProps<PublicSettingsFormProps>(), {
   busy: false,
   serverError: '',
   idPrefix: 'settings',
+  part: 'all',
+  cancelLabel: 'Batal',
+  requireChanges: false,
 });
+
+const showIdentity = computed(() => props.part !== 'map');
+const showMap = computed(() => props.part !== 'identity');
 
 const emit = defineEmits<{
   (e: 'submit', patch: Partial<PublicSettings>): void;
@@ -128,27 +144,30 @@ const submitted = ref(false);
 const fieldErrors = computed<Record<string, string | undefined>>(() => {
   const errors: Record<string, string | undefined> = {};
 
-  if (!appName.value.trim()) {
-    errors.appName = 'Nama aplikasi tidak boleh kosong.';
-  }
-  if (!institutionName.value.trim()) {
-    errors.institutionName = 'Nama institusi tidak boleh kosong.';
-  }
-  if (!contactEmail.value.trim()) {
-    errors.contactEmail = 'Email kontak tidak boleh kosong.';
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.value.trim())) {
-    errors.contactEmail = 'Format email tidak valid.';
+  if (showIdentity.value) {
+    if (!appName.value.trim()) {
+      errors.appName = 'Nama aplikasi tidak boleh kosong.';
+    }
+    if (!institutionName.value.trim()) {
+      errors.institutionName = 'Nama institusi tidak boleh kosong.';
+    }
+    if (!contactEmail.value.trim()) {
+      errors.contactEmail = 'Email kontak tidak boleh kosong.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.value.trim())) {
+      errors.contactEmail = 'Format email tidak valid.';
+    }
   }
 
   const view = mapViewModel.value;
   // Defensive: the picker only emits normalised, clamped views, so this branch is a safety net
   // for a malformed value from a future caller rather than a state an editor can reach.
   if (
-    view === null ||
-    !Number.isFinite(view.latitude) ||
-    !Number.isFinite(view.longitude) ||
-    typeof view.zoom !== 'number' ||
-    !Number.isFinite(view.zoom)
+    showMap.value &&
+    (view === null ||
+      !Number.isFinite(view.latitude) ||
+      !Number.isFinite(view.longitude) ||
+      typeof view.zoom !== 'number' ||
+      !Number.isFinite(view.zoom))
   ) {
     errors.mapView = 'Tampilan peta belum valid. Geser atau perbesar peta untuk memilihnya lagi.';
   }
@@ -209,7 +228,9 @@ const mapDirty = computed(() => {
   return !sameMapView(mapViewOverride.value, baselineView.value);
 });
 
-const isDirty = computed(() => isTextDirty.value || mapDirty.value);
+const isDirty = computed(
+  () => (showIdentity.value && isTextDirty.value) || (showMap.value && mapDirty.value),
+);
 
 watch(
   isDirty,
@@ -279,6 +300,8 @@ function handleSubmit(): void {
   if (props.busy || submitGuard) return;
   const view = mapViewModel.value;
   if (errorEntries.value.length > 0 || view === null) return;
+  // A part form with nothing changed has nothing to send (an empty update is refused upstream).
+  if (props.part !== 'all' && !isDirty.value) return;
 
   submitGuard = true;
   void nextTick(() => {
@@ -286,15 +309,19 @@ function handleSubmit(): void {
     if (!props.busy) submitGuard = false;
   });
   const payload: Partial<PublicSettings> = {
-    appName: appName.value.trim(),
-    institutionName: institutionName.value.trim(),
-    tagline: tagline.value.trim(),
-    administrativeArea: administrativeArea.value.trim(),
-    contactPhone: contactPhone.value.trim(),
-    contactWhatsapp: contactWhatsapp.value.trim(),
-    contactEmail: contactEmail.value.trim(),
-    contactAddress: contactAddress.value.trim(),
-    ...(mapDirty.value
+    ...(showIdentity.value
+      ? {
+          appName: appName.value.trim(),
+          institutionName: institutionName.value.trim(),
+          tagline: tagline.value.trim(),
+          administrativeArea: administrativeArea.value.trim(),
+          contactPhone: contactPhone.value.trim(),
+          contactWhatsapp: contactWhatsapp.value.trim(),
+          contactEmail: contactEmail.value.trim(),
+          contactAddress: contactAddress.value.trim(),
+        }
+      : {}),
+    ...(showMap.value && mapDirty.value
       ? {
           defaultCoordinates: {
             lat: view.latitude,
@@ -316,7 +343,10 @@ function handleSubmit(): void {
       :form-error="serverError"
     />
 
-    <fieldset class="rounded-card border-border bg-surface-muted space-y-4 border p-4">
+    <fieldset
+      v-if="showIdentity"
+      class="rounded-card border-border bg-surface-muted space-y-4 border p-4"
+    >
       <legend class="text-brand-navy px-1 text-xs font-semibold tracking-wider uppercase">
         Identitas Portal
       </legend>
@@ -384,7 +414,10 @@ function handleSubmit(): void {
       </FormField>
     </fieldset>
 
-    <fieldset class="rounded-card border-border bg-surface-muted space-y-4 border p-4">
+    <fieldset
+      v-if="showIdentity"
+      class="rounded-card border-border bg-surface-muted space-y-4 border p-4"
+    >
       <legend class="text-brand-navy px-1 text-xs font-semibold tracking-wider uppercase">
         Kontak &amp; Pelayanan
       </legend>
@@ -444,7 +477,7 @@ function handleSubmit(): void {
       </FormField>
     </fieldset>
 
-    <div class="rounded-card border-border bg-surface-muted border p-4">
+    <div v-if="showMap" class="rounded-card border-border bg-surface-muted border p-4">
       <LocationPicker
         v-model="mapViewModel"
         :id-prefix="fieldId('mapView')"
@@ -478,9 +511,15 @@ function handleSubmit(): void {
           :disabled="busy"
           @click="emit('cancel')"
         >
-          Batal
+          {{ cancelLabel }}
         </BaseButton>
-        <BaseButton type="submit" variant="primary" size="md" class="min-h-11" :disabled="busy">
+        <BaseButton
+          type="submit"
+          variant="primary"
+          size="md"
+          class="min-h-11"
+          :disabled="busy || (requireChanges && !isDirty)"
+        >
           {{ busy ? 'Menyimpan…' : 'Simpan perubahan' }}
         </BaseButton>
       </div>

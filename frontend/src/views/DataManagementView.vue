@@ -128,7 +128,8 @@ const isLoading = computed(() => {
 
 const loadError = computed(() => {
   if (activeTab.value === 'konten') return contentBlocksStore.error;
-  if (activeTab.value === 'pengaturan') return settingsStore.error;
+  // The settings tab only links to the configuration page; it loads nothing of its own.
+  if (activeTab.value === 'pengaturan') return null;
   return indicatorsStore.error || tablesStore.error;
 });
 
@@ -593,7 +594,25 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
       :aria-labelledby="`tab-${tab.id}`"
       :hidden="activeTab !== tab.id"
     >
-      <template v-if="activeTab === tab.id">
+      <div
+        v-if="tab.id === 'pengaturan' && activeTab === tab.id"
+        class="rounded-card border-border bg-surface-muted mt-6 space-y-3 border p-6"
+        data-test="settings-moved"
+      >
+        <p class="text-brand-navy text-sm">
+          Pengaturan portal kini dikelola di halaman Konfigurasi sistem, bersama tampilan awal peta,
+          cuaca, dan masa simpan log.
+        </p>
+        <router-link
+          to="/admin/sistem/konfigurasi"
+          class="rounded-btn border-brand-navy text-brand-navy hover:bg-brand-navy hover:text-text-inverse focus-visible:outline-focus-ring inline-flex min-h-11 items-center justify-center border-2 bg-white px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+          data-test="settings-moved-link"
+        >
+          Buka Konfigurasi sistem
+        </router-link>
+      </div>
+
+      <template v-if="activeTab === tab.id && tab.id !== 'pengaturan'">
         <div class="mt-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <form
             role="search"

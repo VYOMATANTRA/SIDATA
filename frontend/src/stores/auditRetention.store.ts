@@ -13,27 +13,38 @@ export interface AuditRetentionPolicy {
 
 export const MAX_RETENTION_DAYS = 36500; // 100 years
 
+/** Words an Admin knows for each severity; the same labels the system log uses. */
+export const SEVERITY_LABELS: Record<keyof AuditRetentionPolicy, string> = {
+  info: 'Info',
+  warning: 'Peringatan',
+  critical: 'Kritis',
+};
+
+/** Shown when the order rule is broken, on the client and when the server refuses a save. */
+export const RETENTION_ORDER_MESSAGE =
+  'Log Kritis harus disimpan paling sedikit selama log Peringatan, dan log Peringatan paling sedikit selama log Info. Kejadian yang lebih penting tidak boleh dihapus lebih cepat.';
+
+/** Approved wording when the server refuses a save (its own sentence quotes internal names). */
+export const RETENTION_SAVE_REFUSED_MESSAGE = `Gagal menyimpan masa simpan log. ${RETENTION_ORDER_MESSAGE}`;
+
 /**
  * Validates retention policy per SPEC §3:
  * - Whole days (non-negative integers).
  * - Maximum 36500 days.
  * - critical >= warning >= info (treating 0 as infinite).
- * Returns an error message string if invalid, or null if valid.
+ * Returns a plain-Indonesian error message string if invalid, or null if valid.
  */
 export function validateRetentionPolicy(policy: AuditRetentionPolicy): string | null {
-  const fields: Array<{ key: keyof AuditRetentionPolicy; label: string }> = [
-    { key: 'info', label: 'info' },
-    { key: 'warning', label: 'warning' },
-    { key: 'critical', label: 'critical' },
-  ];
+  const keys: Array<keyof AuditRetentionPolicy> = ['info', 'warning', 'critical'];
 
-  for (const { key, label } of fields) {
+  for (const key of keys) {
     const val = policy[key];
+    const label = SEVERITY_LABELS[key];
     if (typeof val !== 'number' || !Number.isInteger(val) || val < 0) {
-      return `Nilai retensi "${label}" harus berupa bilangan bulat non-negatif (0 = simpan selamanya).`;
+      return `Masa simpan log ${label} harus berupa jumlah hari bulat. Pilih "Simpan selamanya" jika log tidak boleh dihapus.`;
     }
     if (val > MAX_RETENTION_DAYS) {
-      return `Nilai retensi "${label}" maksimal ${MAX_RETENTION_DAYS} hari (100 tahun). Gunakan 0 untuk menyimpan selamanya.`;
+      return `Masa simpan log ${label} paling lama ${MAX_RETENTION_DAYS.toLocaleString('id-ID')} hari (100 tahun). Pilih "Simpan selamanya" jika log tidak boleh dihapus.`;
     }
   }
 
@@ -44,7 +55,7 @@ export function validateRetentionPolicy(policy: AuditRetentionPolicy): string | 
     effective(policy.info) > effective(policy.warning) ||
     effective(policy.warning) > effective(policy.critical)
   ) {
-    return 'Retensi critical harus >= warning >= info. Kejadian yang lebih parah tidak boleh dihapus lebih cepat daripada kejadian yang lebih ringan.';
+    return RETENTION_ORDER_MESSAGE;
   }
 
   return null;
@@ -87,7 +98,7 @@ export function parseRetention(raw: unknown): AuditRetentionPolicy | null {
 /**
  * Formats a retention period (in days) into human-readable Indonesian text:
  * - Returns '—' for non-number, NaN, nullish, or negative inputs.
- * - Returns 'Selamanya (Keep Forever)' for 0.
+ * - Returns 'Selamanya' for 0.
  * - Multiples of 365 -> 'X Tahun (Y hari)'.
  * - Multiples of 30 -> 'X Bulan (Y hari)'.
  * - Other positive integers -> 'X Hari'.
@@ -96,7 +107,7 @@ export function formatDurationLabel(days: number | unknown): string {
   if (typeof days !== 'number' || Number.isNaN(days) || days < 0) {
     return '—';
   }
-  if (days === 0) return 'Selamanya (Keep Forever)';
+  if (days === 0) return 'Selamanya';
   if (days % 365 === 0) return `${days / 365} Tahun (${days} hari)`;
   if (days % 30 === 0) return `${days / 30} Bulan (${days} hari)`;
   return `${days} Hari`;
@@ -105,7 +116,7 @@ export function formatDurationLabel(days: number | unknown): string {
 /** The server answered 200 with a retention payload this client cannot read. Our own text. */
 class RetentionFormatError extends Error {
   constructor() {
-    super('Format pengaturan retensi dari server tidak valid.');
+    super('Masa simpan log dari server tidak dapat dibaca. Coba muat ulang halaman.');
     this.name = 'RetentionFormatError';
   }
 }
@@ -154,7 +165,7 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
       error.value =
         err instanceof RetentionFormatError
           ? err.message
-          : toUserMessage(err, 'memuat pengaturan retensi audit', 'GET').message;
+          : toUserMessage(err, 'memuat masa simpan log', 'GET').message;
       return false;
     } finally {
       isLoading.value = false;
@@ -205,19 +216,16 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
         retention.value = { ...policy };
       }
 
-      const message =
-        data &&
-        typeof data === 'object' &&
-        typeof (data as Record<string, unknown>).message === 'string'
-          ? ((data as Record<string, unknown>).message as string)
-          : null;
-      successMessage.value = message || 'Pengaturan retensi audit log berhasil diperbarui.';
+      successMessage.value = 'Masa simpan log berhasil disimpan.';
       return true;
     } catch (err) {
-      error.value =
-        err instanceof RetentionFormatError
-          ? err.message
-          : toUserMessage(err, 'memperbarui pengaturan retensi audit').message;
+      if (err instanceof RetentionFormatError) {
+        error.value = err.message;
+      } else {
+        const mapped = toUserMessage(err, 'menyimpan masa simpan log');
+        error.value =
+          mapped.kind === 'validation' ? RETENTION_SAVE_REFUSED_MESSAGE : mapped.message;
+      }
       return false;
     } finally {
       isSaving.value = false;
