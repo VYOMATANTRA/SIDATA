@@ -776,3 +776,102 @@ describe('PublicSettingsForm in the CMS dialog', () => {
     wrapper.unmount();
   });
 });
+
+describe('PublicSettingsForm parts (system configuration page)', () => {
+  beforeEach(() => {
+    resetLeafletMock();
+    document.body.innerHTML = '';
+  });
+
+  it('identity part shows only the portal and contact fields, with no map', async () => {
+    const wrapper = mountForm({ part: 'identity', idPrefix: 'identitas' });
+    await flushPromises();
+
+    expect(wrapper.find('input#identitas-appName').exists()).toBe(true);
+    expect(wrapper.find('input#identitas-contactEmail').exists()).toBe(true);
+    expect(wrapper.text()).not.toContain('Atur tampilan peta');
+    expect(leafletState.handlers.moveend).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it('identity part submits only text fields and never the map view', async () => {
+    const wrapper = mountForm({ part: 'identity', settings: SETTINGS });
+    await flushPromises();
+
+    await wrapper.find('input#settings-tagline').setValue('Tagline baru');
+    await wrapper.find('form').trigger('submit.prevent');
+
+    const payload = wrapper.emitted('submit')?.[0]?.[0] as Record<string, unknown>;
+    expect(payload.tagline).toBe('Tagline baru');
+    expect(payload).not.toHaveProperty('defaultCoordinates');
+    wrapper.unmount();
+  });
+
+  it('map part shows only the map picker and submits only the new view', async () => {
+    const wrapper = mountForm({ part: 'map', settings: SETTINGS });
+    await flushPromises();
+
+    expect(wrapper.find('input#settings-appName').exists()).toBe(false);
+    expect(wrapper.text()).toContain('Atur tampilan peta');
+
+    panTo(-1.2411, 116.9702, 16);
+    await wrapper.find('form').trigger('submit.prevent');
+
+    const payload = wrapper.emitted('submit')?.[0]?.[0] as Record<string, unknown>;
+    expect(payload).toEqual({ defaultCoordinates: { lat: -1.2411, lon: 116.9702, zoom: 16 } });
+    wrapper.unmount();
+  });
+
+  it('map part does not validate or block on identity fields it does not show', async () => {
+    const wrapper = mountForm({
+      part: 'map',
+      settings: { ...SETTINGS, appName: '', contactEmail: '' },
+    });
+    await flushPromises();
+
+    panTo(-1.25, 116.99, 14);
+    await wrapper.find('form').trigger('submit.prevent');
+
+    expect(wrapper.emitted('submit')).toHaveLength(1);
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('a part form with nothing changed sends nothing', async () => {
+    const wrapper = mountForm({ part: 'map', settings: SETTINGS });
+    await flushPromises();
+
+    await wrapper.find('form').trigger('submit.prevent');
+
+    expect(wrapper.emitted('submit')).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it('reports dirtiness only for its own part', async () => {
+    const identity = mountForm({ part: 'identity', settings: SETTINGS });
+    await flushPromises();
+    panTo(-1.5, 117.5, 10);
+    await flushPromises();
+    expect((identity.vm as unknown as { isDirty: boolean }).isDirty).toBe(false);
+    await identity.find('input#settings-appName').setValue('Lain');
+    expect((identity.vm as unknown as { isDirty: boolean }).isDirty).toBe(true);
+    identity.unmount();
+  });
+
+  it('requireChanges keeps Save disabled until something changes, and cancelLabel renames Batal', async () => {
+    const wrapper = mountForm({
+      part: 'identity',
+      requireChanges: true,
+      cancelLabel: 'Batalkan perubahan',
+    });
+    await flushPromises();
+    const save = () => wrapper.findAll('button').find((b) => b.text() === 'Simpan perubahan')!;
+
+    expect(save().attributes('disabled')).toBeDefined();
+    expect(wrapper.findAll('button').some((b) => b.text() === 'Batalkan perubahan')).toBe(true);
+
+    await wrapper.find('input#settings-appName').setValue('Nama baru');
+    expect(save().attributes('disabled')).toBeUndefined();
+    wrapper.unmount();
+  });
+});
