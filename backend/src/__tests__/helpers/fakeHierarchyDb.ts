@@ -29,6 +29,10 @@ class Table {
   private matches(row: Row, where: Record<string, unknown> | undefined): boolean {
     if (!where) return true;
     return Object.entries(where).every(([key, cond]) => {
+      if (cond && typeof cond === 'object' && 'in' in cond) {
+        return ((cond as { in: unknown[] }).in as unknown[]).includes(row[key]);
+      }
+      if (cond === null) return row[key] === null || row[key] === undefined;
       if (cond && typeof cond === 'object' && 'startsWith' in cond) {
         return String(row[key]).startsWith((cond as { startsWith: string }).startsWith);
       }
@@ -108,6 +112,30 @@ class Table {
     return this.decorate(row, args.include);
   };
 
+  updateMany = async (args: { where?: Record<string, unknown>; data: Record<string, unknown> }) => {
+    const hit = this.rows.filter((r) => this.matches(r, args.where));
+    for (const row of hit) Object.assign(row, args.data);
+    return { count: hit.length };
+  };
+
+  createMany = async (args: { data: Array<Record<string, unknown>>; skipDuplicates?: boolean }) => {
+    let count = 0;
+    for (const data of args.data) {
+      const dup = this.rows.some((r) => Object.entries(data).every(([k, v]) => r[k] === v));
+      if (dup && args.skipDuplicates) continue;
+      this.rows.push({ id: `${this.name}-${++idCounter}`, ...data } as Row);
+      count++;
+    }
+    return { count };
+  };
+
+  deleteMany = async (args: { where?: Record<string, unknown> } = {}) => {
+    const keep = this.rows.filter((r) => !this.matches(r, args.where));
+    const count = this.rows.length - keep.length;
+    this.rows = keep;
+    return { count };
+  };
+
   delete = async (args: { where: Record<string, unknown> }) => {
     const idx = this.rows.findIndex((r) => this.matches(r, args.where));
     if (idx === -1)
@@ -130,6 +158,8 @@ export class FakeHierarchyDb {
   contentBlock = new Table(this, 'contentBlock');
   indicator = new Table(this, 'indicator');
   indicatorTable = new Table(this, 'indicatorTable');
+  mediaAsset = new Table(this, 'mediaAsset');
+  mediaAssetReference = new Table(this, 'mediaAssetReference');
   auditRows: Row[] = [];
   /** The options argument of every `$transaction` call, e.g. to assert `isolationLevel`. */
   transactionOptions: unknown[] = [];
@@ -159,6 +189,8 @@ export class FakeHierarchyDb {
       contentBlock: this.contentBlock,
       indicator: this.indicator,
       indicatorTable: this.indicatorTable,
+      mediaAsset: this.mediaAsset,
+      mediaAssetReference: this.mediaAssetReference,
     };
   }
 
@@ -212,6 +244,19 @@ export class FakeHierarchyDb {
     this.lockLog.push(sql.sql.replace(/\s+/g, ' ').trim());
     const text = sql.sql;
     const [value] = sql.values as string[];
+    if (text.includes('FROM media_assets WHERE id IN')) {
+      // The locking read of attachMedia/detachMedia: current column values, ids as bound.
+      return this.mediaAsset.rows
+        .filter((a) => (sql.values as string[]).includes(a.id))
+        .map((a) => ({
+          id: a.id,
+          purpose: a.purpose,
+          attachedAt: a.attachedAt ?? null,
+          detachedAt: a.detachedAt ?? null,
+          cleanupClaimedAt: a.cleanupClaimedAt ?? null,
+          cleanupQuarantineReason: a.cleanupQuarantineReason ?? null,
+        }));
+    }
     if (text.includes('SELECT page_id FROM chapters')) {
       const r = this.chapter.rows.find((c) => c.id === value);
       return r ? [{ page_id: r.pageId }] : [];
@@ -293,6 +338,22 @@ export class FakeHierarchyDb {
     return row;
   }
 
+  addMedia(overrides: Partial<Row> = {}): Row {
+    const row = {
+      id: '11111111-1111-4111-8111-111111111111',
+      purpose: 'cerita',
+      kind: 'photo',
+      attachedAt: null,
+      detachedAt: null,
+      cleanupClaimedAt: null,
+      cleanupQuarantineReason: null,
+      createdAt: T0,
+      ...overrides,
+    } as Row;
+    this.mediaAsset.rows.push(row);
+    return row;
+  }
+
   addBlock(overrides: Partial<Row> = {}): Row {
     const row = {
       id: 'blk-1',
@@ -323,6 +384,8 @@ export function installFakeHierarchyDb(): FakeHierarchyHandle {
     'contentBlock',
     'indicator',
     'indicatorTable',
+    'mediaAsset',
+    'mediaAssetReference',
     'auditLog',
     '$transaction',
     '$queryRaw',
@@ -336,6 +399,8 @@ export function installFakeHierarchyDb(): FakeHierarchyHandle {
     'contentBlock',
     'indicator',
     'indicatorTable',
+    'mediaAsset',
+    'mediaAssetReference',
   ] as const) {
     target[n] = db[n];
   }
@@ -352,6 +417,8 @@ export function installFakeHierarchyDb(): FakeHierarchyHandle {
       contentBlock: db.contentBlock,
       indicator: db.indicator,
       indicatorTable: db.indicatorTable,
+      mediaAsset: db.mediaAsset,
+      mediaAssetReference: db.mediaAssetReference,
       auditLog: db.auditLog,
       $queryRaw: (sql: Prisma.Sql) => db.$queryRaw(sql),
     };
