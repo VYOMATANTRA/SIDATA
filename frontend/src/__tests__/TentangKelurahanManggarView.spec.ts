@@ -511,4 +511,51 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
 
     expect(fetchSpy).toHaveBeenCalledWith('jumlah-penduduk');
   });
+
+  it('keeps the SOTK table real, with every column and a contained, keyboard-scrollable box', async () => {
+    const { pinia, router } = mountView();
+    vi.spyOn(useContentBlocksStore(), 'fetchBlocks').mockResolvedValue(undefined);
+    vi.spyOn(useIndicatorsStore(), 'fetchBySlug').mockResolvedValue(null);
+    await router.push('/tentang/kelurahan-manggar');
+    await router.isReady();
+
+    const wrapper = mount(TentangKelurahanManggarView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    const scroll = wrapper.find('[data-test="sotk-scroll"]');
+    expect(scroll.exists()).toBe(true);
+    expect(scroll.classes()).toContain('overflow-x-auto');
+    expect(scroll.attributes('tabindex')).toBe('0');
+    expect(scroll.attributes('role')).toBe('region');
+    expect(scroll.attributes('aria-labelledby')).toBe('sotk-title');
+
+    const table = scroll.find('table');
+    expect(table.exists()).toBe(true);
+    expect(table.find('caption').exists()).toBe(true);
+    const headers = table.findAll('thead th[scope="col"]');
+    expect(headers).toHaveLength(3);
+    headers.forEach((th) => {
+      expect(th.classes()).not.toContain('hidden');
+      expect(th.classes().some((c) => c.endsWith(':table-cell'))).toBe(false);
+    });
+    expect(table.classes().join(' ')).toContain('min-w-[44rem]');
+  });
+
+  it('renders the Potensi cards as white cards, not tinted ones', async () => {
+    const { pinia, router } = mountView();
+    vi.spyOn(useContentBlocksStore(), 'fetchBlocks').mockResolvedValue(undefined);
+    vi.spyOn(useIndicatorsStore(), 'fetchBySlug').mockResolvedValue(null);
+    await router.push('/tentang/kelurahan-manggar');
+    await router.isReady();
+
+    const wrapper = mount(TentangKelurahanManggarView, {
+      global: { plugins: [pinia, router] },
+    });
+
+    const cards = wrapper.findAll('section[aria-labelledby="potensi-title"] article');
+    expect(cards).toHaveLength(4);
+    cards.forEach((card) => expect(card.classes()).toContain('bg-white'));
+    expect(wrapper.html()).not.toMatch(/brand-(cyan|violet|indigo|teal)/);
+  });
 });

@@ -383,7 +383,7 @@ const wilayahStats = computed<StatItem[]>(() => [
           <StatCard :items="wilayahStats" variant="light" title="Statistik Umum Wilayah" />
         </div>
 
-        <div class="rounded-btn border-brand-navy/20 mt-6 border bg-white p-5">
+        <div class="rounded-btn mt-6 border border-border bg-white p-5">
           <h3 class="text-brand-navy text-base font-bold">Batas-Batas Wilayah Administratif:</h3>
           <ul class="mt-3 flex flex-wrap gap-x-6 gap-y-3 text-base text-brand-navy">
             <li
@@ -413,12 +413,25 @@ const wilayahStats = computed<StatItem[]>(() => [
           pemerintahan dan pelayanan warga.
         </p>
 
-        <div class="rounded-btn mt-5 overflow-x-auto border border-border bg-white">
-          <table class="min-w-full divide-y divide-border text-left text-sm text-brand-navy">
+        <!--
+          Real table, every column kept. On narrow screens the table keeps a readable minimum
+          width and scrolls inside this box (focusable so keyboard users can scroll it) instead
+          of squeezing the columns or scrolling the whole page.
+        -->
+        <div
+          class="rounded-btn focus-visible:outline-focus-ring mt-5 overflow-x-auto border border-border bg-white focus-visible:outline-2 focus-visible:outline-offset-2"
+          role="region"
+          aria-labelledby="sotk-title"
+          tabindex="0"
+          data-test="sotk-scroll"
+        >
+          <table
+            class="w-full min-w-[44rem] divide-y divide-border text-left text-sm text-brand-navy"
+          >
             <caption class="sr-only">
               Daftar Struktur Organisasi dan Tata Kerja Kelurahan Manggar
             </caption>
-            <thead class="bg-brand-navy text-xs font-semibold tracking-wider text-white uppercase">
+            <thead class="bg-brand-navy text-sm font-semibold tracking-wider text-white uppercase">
               <tr>
                 <th scope="col" class="px-4 py-3.5 sm:px-6">Jabatan / Satuan Tugas</th>
                 <th scope="col" class="px-4 py-3.5 sm:px-6">Nama Pejabat / Pelaksana</th>
