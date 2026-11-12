@@ -14,23 +14,30 @@ withDefaults(
 </script>
 
 <template>
-  <nav aria-label="Breadcrumb" class="border-b border-border bg-white px-4 py-3 sm:px-6">
-    <ol class="mx-auto flex max-w-5xl items-center gap-2 text-base">
+  <!--
+    Navy strip that continues the header and the navy hero panel below it, so no white band
+    interrupts the navy region. Long labels wrap instead of overflowing.
+  -->
+  <nav
+    aria-label="Breadcrumb"
+    class="bg-brand-navy border-t border-white/15 px-4 py-3 text-white sm:px-6"
+  >
+    <ol class="mx-auto flex max-w-5xl flex-wrap items-baseline gap-x-2 gap-y-1 text-base">
       <li>
         <RouterLink
           v-if="parentTo"
           :to="parentTo"
-          class="text-brand-navy focus-visible:outline-brand-navy font-medium hover:underline focus-visible:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+          class="focus-visible:outline-focus-ring-inverse rounded-xs font-medium text-white underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           {{ parentLabel }}
         </RouterLink>
-        <span v-else class="text-text-muted font-medium">
+        <span v-else class="text-text-inverse-muted font-medium">
           {{ parentLabel }}
         </span>
       </li>
-      <li aria-hidden="true" class="text-text-muted">&gt;</li>
-      <li>
-        <span class="text-text-muted" aria-current="page">{{ label }}</span>
+      <li aria-hidden="true" class="text-text-inverse-muted">&gt;</li>
+      <li class="min-w-0 break-words">
+        <span class="text-white" aria-current="page">{{ label }}</span>
       </li>
     </ol>
   </nav>

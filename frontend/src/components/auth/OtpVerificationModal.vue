@@ -205,7 +205,7 @@ async function resendOtp() {
     aria-modal="true"
     aria-labelledby="otp-verification-title"
     v-if="isOpen"
-    class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
+    class="fixed inset-0 z-[58] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
   >
     <div
       class="w-full max-w-md scale-100 transform rounded-2xl border border-slate-100 bg-white p-6 shadow-2xl transition-all md:p-8"

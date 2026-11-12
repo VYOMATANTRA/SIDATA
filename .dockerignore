@@ -1,0 +1,9 @@
+# Keep secrets, VCS metadata and runtime data out of any build context rooted here.
+.git
+.env
+.env.*
+!.env.example
+node_modules
+
+# Uploaded media (UPLOAD_DIR default) is runtime data, never part of an image
+/uploads

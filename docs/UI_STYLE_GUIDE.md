@@ -237,6 +237,13 @@ right visually but is not programmatically associated with its input. Credential
 `frontend/src/utils/formStyles.ts` (`border-border-strong`, navy focus outline, `status-error`
 invalid border). See [`docs/ACCESSIBILITY.md`](ACCESSIBILITY.md) §4 for the rest.
 
+### Layer order (public shell)
+
+Lowest to highest: map root `z-0` (Leaflet stays inside it), chapter TOC sheet `z-30`, map summary
+overlay `z-50`, sticky header `z-[55]` (its menu backdrop and sheet sit inside the header's own
+stacking context), modals `z-[58]` (`BaseModal`, `OtpVerificationModal`), focused skip link `z-[60]`.
+Keep page content at or below `z-50`. The same list is commented in `main.css`.
+
 ## 5. Coding Directives
 
 1. **Vue `<script setup>` Structure:** Use Vue 3 Composition API with `<script setup>`.
@@ -251,7 +258,6 @@ owned by other PRs and are intentionally left untouched here.
 
 | Surface                                                                  | Expected PR                      |
 | ------------------------------------------------------------------------ | -------------------------------- |
-| `AppNavbar`                                                              | Public shell PR                  |
 | Landing sections (hero, highlights, Sambutan) and the weather widget     | Public visual refinements PR     |
 | Remaining `AppFooter` spots (slate/indigo leftovers)                     | Public visual refinements PR     |
 | VYOMATANTRA view (partially; check for remaining raw palette classes)    | Public visual refinements PR     |

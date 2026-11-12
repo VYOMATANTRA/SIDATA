@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'node:path';
+import { resolveUploadDirPath } from '../utils/uploadRoot.js';
 
 dotenv.config({ path: path.resolve(import.meta.dirname, '../../../.env') });
 
@@ -101,3 +102,43 @@ export const TRUST_PROXY = process.env.TRUST_PROXY;
 // falling back to DATABASE_URL if it's unset. See backend/scripts/prune-audit-logs.ts and
 // backend/scripts/grants/audit-logs-grants.sql.
 export const AUDIT_ADMIN_DATABASE_URL = process.env.AUDIT_ADMIN_DATABASE_URL;
+
+// Raw environment setting for upload root directory.
+export const RAW_UPLOAD_DIR = process.env.UPLOAD_DIR;
+
+// Lazy getter for resolved upload directory. Resolves against REPO_ROOT and enforces that UPLOAD_DIR
+// is explicitly provided when NODE_ENV=production.
+export function getConfiguredUploadDir(): string {
+  return resolveUploadDirPath(process.env.UPLOAD_DIR);
+}
+
+// Where uploaded media (photos, documents, data files) lives on disk. Optional in development/test
+// (defaults to <repo-root>/uploads). In production (NODE_ENV=production), an explicit UPLOAD_DIR is
+// required, but this export resolves with a safe non-throwing fallback so merely importing
+// configs/index.ts does not crash processes at boot before media storage initializes. Media code
+// lazily validates through getConfiguredUploadDir() / initUploadRoot().
+export const UPLOAD_DIR = resolveUploadDirPath(
+  process.env.UPLOAD_DIR,
+  path.resolve(import.meta.dirname, '../../..'),
+  'development',
+);
+
+// Max concurrent photo re-encoding operations (sharp). Optional integer 1-8, defaults to 2.
+function parseOptionalIntInRange(
+  name: string,
+  min: number,
+  max: number,
+  defaultValue: number,
+): number {
+  const raw = process.env[name];
+  if (!raw || raw.trim() === '') return defaultValue;
+  const parsed = Number(raw.trim());
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
+    throw new Error(
+      `Invalid environment variable ${name}: expected an integer between ${min} and ${max}, received "${raw}".`,
+    );
+  }
+  return parsed;
+}
+
+export const MEDIA_IMAGE_CONCURRENCY = parseOptionalIntInRange('MEDIA_IMAGE_CONCURRENCY', 1, 8, 2);

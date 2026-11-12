@@ -4,6 +4,15 @@ import { useAuthStore } from '../stores/auth';
 import { useSettingsStore } from '../stores/settings.store';
 import { ADMIN_NAV, isAdminNavGroup, type AdminNavRole } from '../config/adminNav';
 
+declare module 'vue-router' {
+  interface RouteMeta {
+    /** `'public'` mounts the route inside `PublicLayout` (header, single `<main>`, footer). */
+    layout?: 'public';
+    /** The public header overlays this route's hero: transparent at the top, navy once scrolled. */
+    headerOverlay?: boolean;
+  }
+}
+
 export function metaForRoles(roles: AdminNavRole[]): {
   requiresAuth: true;
   requiresAdmin: boolean;
@@ -36,20 +45,60 @@ export function rolesFor(path: string): AdminNavRole[] {
   return rolesByPath.get(path) ?? ['admin'];
 }
 
+/**
+ * Scroll policy for window-scrolling (public) routes. Admin routes scroll an inner container
+ * instead, which `AdminLayout` resets itself on a path change.
+ * - query-only changes on the same path keep the position, even if the URL has a hash (views use
+ *   them to sync filters);
+ * - a bare `#` hash scrolls to the top (on same-path and cross-path);
+ * - a hash on the same path (in-page anchor, TOC, skip link) scrolls to its target first. Native
+ *   anchor clicks fire `popstate` with no state, so vue-router passes a STALE `savedPosition`
+ *   that must not override the anchor;
+ * - Cerita routes (`to.name === 'cerita-page'`, checked before `savedPosition`, so Back too) ignore
+ *   it and always land on their hash target (or reset to the top), because content loads asynchronously and the saved offset
+ *   would be clamped to the short page (SPEC §6);
+ * - otherwise back/forward restores the saved position;
+ * - a hash that resolves to an element (cross-path) scrolls to it, clearing the sticky header by
+ *   the element's own computed `scroll-margin-top` (vue-router positions with
+ *   getBoundingClientRect, which ignores that CSS). `.public-shell [id]` sets it from
+ *   `--public-header-height`, so public pages clear the header with no hardcoded number;
+ * - a path change otherwise resets to the top.
+ * Always `behavior: 'instant'` (ignores any CSS `scroll-behavior`, so reduced-motion needs no
+ * special case). vue-router already awaits a tick before calling this, so the new route component
+ * has rendered by the time the target is measured.
+ */
+function hashTarget(hash: string): { el: Element; top: number; behavior: ScrollBehavior } | null {
+  if (!hash) return null;
+  let id = hash.slice(1);
+  try {
+    id = decodeURIComponent(id);
+  } catch {
+    // keep the raw id
+  }
+  const el = document.getElementById(id);
+  if (!el) return null;
+  const top = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+  return { el, top, behavior: 'instant' };
+}
+
 export const scrollBehavior: RouterScrollBehavior = (to, from, savedPosition) => {
-  if (savedPosition) {
-    return savedPosition;
+  const queryOnly = to.path === from.path && to.hash === from.hash && to.fullPath !== from.fullPath;
+  // Cerita pages load asynchronously, so a saved offset would be clamped to the short skeleton:
+  // ignore it (Back included) and land on the hash target or the top.
+  if (to.name === 'cerita-page' && !queryOnly) {
+    return hashTarget(to.hash) ?? { top: 0, left: 0, behavior: 'instant' };
   }
-  if (to.hash && to.hash !== '#') {
-    return { el: to.hash };
+  if (savedPosition && queryOnly) return savedPosition;
+  if (queryOnly) return false;
+  if (to.hash === '#' && !savedPosition) return { top: 0, left: 0, behavior: 'instant' };
+  const samePath = to.path === from.path;
+  if (samePath) {
+    const target = hashTarget(to.hash);
+    if (target) return target;
   }
-  if (to.hash === '#') {
-    return { top: 0, left: 0 };
-  }
-  if (to.path === from.path) {
-    return false;
-  }
-  return { top: 0, left: 0 };
+  if (savedPosition) return savedPosition;
+  if (!samePath) return hashTarget(to.hash) ?? { top: 0, left: 0, behavior: 'instant' };
+  return false;
 };
 
 const router = createRouter({
@@ -60,7 +109,7 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: () => import('../views/HomeView.vue'),
-      meta: { title: 'Beranda' },
+      meta: { layout: 'public', headerOverlay: true, title: 'Beranda' },
     },
     {
       path: '/login',
@@ -159,7 +208,7 @@ const router = createRouter({
           meta: {
             ...metaForRoles(rolesFor('/admin/sistem/templat-kalimat')),
             title: 'Templat kalimat',
-            subtitle: 'Kelola templat kalimat perbandingan tier-1 (SPEC §5).',
+            subtitle: 'Atur kalimat perbandingan tahun ke tahun yang tampil di halaman Cerita.',
             breadcrumb: ['Sistem', 'Templat kalimat'],
           },
         },
@@ -232,7 +281,7 @@ const router = createRouter({
       path: '/cerita/:slug',
       name: 'cerita-page',
       component: () => import('../views/CeritaPageView.vue'),
-      meta: { title: 'Cerita' },
+      meta: { layout: 'public', title: 'Cerita' },
     },
     {
       path: '/auth/callback',
@@ -248,43 +297,43 @@ const router = createRouter({
       path: '/tentang/kelurahan-manggar',
       name: 'tentang-kelurahan-manggar',
       component: () => import('../views/TentangKelurahanManggarView.vue'),
-      meta: { title: 'Tentang Kelurahan Manggar' },
+      meta: { layout: 'public', title: 'Tentang Kelurahan Manggar' },
     },
     {
       path: '/tentang/desa-cantik',
       name: 'tentang-desa-cantik',
       component: () => import('../views/TentangDesaCantikView.vue'),
-      meta: { title: 'Program Desa Cantik' },
+      meta: { layout: 'public', title: 'Program Desa Cantik' },
     },
     {
       path: '/tentang/vyomatantra',
       name: 'tentang-vyomatantra',
       component: () => import('../views/TentangVyomatantraView.vue'),
-      meta: { title: 'Inovasi Sosial VYOMATANTRA' },
+      meta: { layout: 'public', title: 'Inovasi Sosial VYOMATANTRA' },
     },
     {
       path: '/permintaan-data',
       name: 'permintaan-data',
       component: () => import('../views/PermintaanDataView.vue'),
-      meta: { title: 'Permintaan Data' },
+      meta: { layout: 'public', title: 'Permintaan Data' },
     },
     {
       path: '/ketua-rt',
       name: 'ketua-rt',
       component: () => import('../views/KetuaRtView.vue'),
-      meta: { title: 'Ketua RT' },
+      meta: { layout: 'public', title: 'Ketua RT' },
     },
     {
       path: '/peta',
       name: 'peta',
       component: () => import('../views/PetaView.vue'),
-      meta: { title: 'Peta' },
+      meta: { layout: 'public', title: 'Peta' },
     },
     {
       path: '/publikasi',
       name: 'publikasi',
       component: () => import('../views/PublikasiView.vue'),
-      meta: { title: 'Publikasi' },
+      meta: { layout: 'public', title: 'Publikasi' },
     },
   ],
 });

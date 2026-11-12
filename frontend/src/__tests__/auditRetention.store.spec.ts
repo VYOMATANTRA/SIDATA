@@ -9,6 +9,7 @@ import {
 } from '../stores/auditRetention.store';
 import { useAuthStore } from '../stores/auth';
 import { READ_USER_MESSAGES } from '../utils/userMessages';
+import * as userMessagesModule from '../utils/userMessages';
 
 describe('validateRetentionPolicy helper', () => {
   it('rejects negative numbers', () => {
@@ -303,6 +304,40 @@ describe('useAuditRetentionStore', () => {
     expect(store.error).toMatch(/tidak valid/i);
     expect(store.retention).toEqual({ info: 10, warning: 20, critical: 30 });
     expect(store.isSaving).toBe(false);
+  });
+
+  it('records PATCH method on audit retention save failure', async () => {
+    const authStore = useAuthStore();
+    authStore.setAuth({ id: 'admin-1', email: 'admin@example.com', role: 'admin' }, 'valid-token');
+
+    const toUserMessageSpy = vi.spyOn(userMessagesModule, 'toUserMessage');
+
+    globalThis.fetch = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ csrfToken: 'fake-csrf-token' }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => ({ error: 'Gagal memperbarui di server' }),
+      } as Response);
+
+    const store = useAuditRetentionStore();
+    const policy: AuditRetentionPolicy = { info: 30, warning: 60, critical: 90 };
+
+    const success = await store.updateRetention(policy);
+
+    expect(success).toBe(false);
+    expect(toUserMessageSpy).toHaveBeenCalled();
+    const calls = toUserMessageSpy.mock.calls;
+    const lastCall = calls[calls.length - 1];
+    expect(lastCall).toBeDefined();
+    const lastCallArg = lastCall![0] as { method?: string };
+    expect(lastCallArg.method).toBe('PATCH');
+
+    toUserMessageSpy.mockRestore();
   });
 });
 

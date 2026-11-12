@@ -5,7 +5,12 @@ import DataManagementView from '../views/DataManagementView.vue';
 import type { Indicator } from '../stores/indicators.store';
 import type { IndicatorTable } from '../stores/indicatorTables.store';
 import { useAuthStore } from '../stores/auth';
+import { useComparisonTemplatesStore } from '../stores/comparisonTemplates.store';
+import { DEFAULT_PUBLIC_SETTINGS, useSettingsStore } from '../stores/settings.store';
 import { USER_MESSAGES } from '../utils/userMessages';
+import { resetLeafletMock } from './leafletMock';
+
+vi.mock('leaflet', async () => (await import('./leafletMock')).createLeafletMock());
 
 const CREATED = '2026-01-01T00:00:00.000Z';
 
@@ -50,6 +55,10 @@ const table: IndicatorTable = {
 interface FetchOverrides {
   /** Answers `PATCH /api/indicator-tables/tbl-1`; the default succeeds with the stored detail. */
   tablePatch?: (body: Record<string, unknown>) => Response;
+  /** Answers `GET /api/comparison-templates`; defaults to empty templates array. */
+  templatesResponse?: () => Response;
+  /** Answers `GET /api/settings/public`. */
+  settingsGet?: () => Promise<Response> | Response;
 }
 
 function installFetchMock(overrides: FetchOverrides = {}) {
@@ -58,6 +67,11 @@ function installFetchMock(overrides: FetchOverrides = {}) {
 
     if (url === '/api/auth/csrf-token') {
       return json({ csrfToken: 'csrf-token' });
+    }
+
+    if (url === '/api/settings/public') {
+      if (overrides.settingsGet) return overrides.settingsGet();
+      return json({ settings: DEFAULT_PUBLIC_SETTINGS });
     }
 
     if (url === '/api/pages?include=sections') {
@@ -144,6 +158,13 @@ function installFetchMock(overrides: FetchOverrides = {}) {
       return json({ table: tableDetail() });
     }
 
+    if (url === '/api/comparison-templates') {
+      if (overrides.templatesResponse) {
+        return overrides.templatesResponse();
+      }
+      return json({ templates: [] });
+    }
+
     throw new Error(`unexpected fetch: ${url}`);
   }) as typeof fetch;
 }
@@ -182,6 +203,7 @@ describe('DataManagementView.vue', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.restoreAllMocks();
+    resetLeafletMock();
     installFetchMock();
   });
 
@@ -414,6 +436,176 @@ describe('DataManagementView.vue', () => {
     expect(wrapper.text()).toContain('Pengaturan Publik Portal');
     expect(wrapper.text()).toContain('Kelurahan Manggar');
 
+    wrapper.unmount();
+  });
+
+  it('does not render template-error note in scalar form when an earlier admin page fetch failed', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const templatesStore = useComparisonTemplatesStore();
+    templatesStore.error = 'Gagal memuat daftar templat kalimat dari admin page';
+
+    const wrapper = mount(DataManagementView, {
+      global: {
+        plugins: [pinia],
+        stubs: { RouterLink: true, teleport: true },
+      },
+    });
+    await flushPromises();
+
+    const editButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Total Penduduk'));
+    await editButton?.trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="template-error"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("renders template-error note in scalar form when the form's own template fetch fails", async () => {
+    installFetchMock({
+      templatesResponse: () => json({ error: 'Server error' }, false, 500),
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+
+    const editButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Total Penduduk'));
+    await editButton?.trigger('click');
+    await flushPromises();
+
+    const errorNote = wrapper.find('[data-test="template-error"]');
+    expect(errorNote.exists()).toBe(true);
+    expect(errorNote.text()).toContain('Gagal memuat daftar templat kalimat.');
+    wrapper.unmount();
+  });
+
+  it('forces a fresh template fetch when opening scalar forms', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const templatesStore = useComparisonTemplatesStore();
+    const fetchSpy = vi.spyOn(templatesStore, 'fetchTemplates');
+
+    const wrapper = mount(DataManagementView, {
+      global: {
+        plugins: [pinia],
+        stubs: { RouterLink: true, teleport: true },
+      },
+    });
+    await flushPromises();
+
+    const editButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Total Penduduk'));
+    await editButton?.trigger('click');
+    await flushPromises();
+
+    expect(fetchSpy).toHaveBeenCalledWith({ force: true, forSelector: true });
+
+    wrapper.unmount();
+  });
+
+  it('keeps public settings form mounted and interactive during background loading, closing without discard prompt', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore();
+    authStore.setAuth({ id: '1', email: 'admin@example.com', role: 'admin' }, 'token');
+
+    const settingsStore = useSettingsStore();
+    settingsStore.settings = { ...DEFAULT_PUBLIC_SETTINGS };
+    settingsStore.isLoaded = true;
+
+    const wrapper = mount(DataManagementView, {
+      global: {
+        plugins: [pinia],
+        stubs: { RouterLink: true, teleport: true },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.find('[data-test="tab-pengaturan"]').trigger('click');
+    await flushPromises();
+
+    const editBtn = wrapper.findAll('button').find((b) => b.text().includes('Edit'));
+    await editBtn?.trigger('click');
+    await flushPromises();
+
+    const form = wrapper.findComponent({ name: 'PublicSettingsForm' });
+    expect(form.exists()).toBe(true);
+
+    // Simulate background refresh starting
+    settingsStore.isLoading = true;
+    await flushPromises();
+
+    // The form should stay mounted and NOT be marked busy
+    expect(wrapper.findComponent({ name: 'PublicSettingsForm' }).exists()).toBe(true);
+    expect(form.props('busy')).toBe(false);
+
+    // Closing an untouched form while loading should close cleanly without prompt
+    const cancelBtn = form.findAll('button').find((b) => b.text() === 'Batal');
+    await cancelBtn?.trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="settings-discard-prompt"]').exists()).toBe(false);
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  async function mountAdmin(settingsGet?: () => Promise<Response> | Response) {
+    if (settingsGet) installFetchMock({ settingsGet });
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore();
+    authStore.setAuth({ id: '1', email: 'admin@example.com', role: 'admin' }, 'token');
+    const wrapper = mount(DataManagementView, {
+      global: { plugins: [pinia], stubs: { RouterLink: true, teleport: true } },
+    });
+    await flushPromises();
+    await wrapper.find('[data-test="tab-pengaturan"]').trigger('click');
+    await flushPromises();
+    return wrapper;
+  }
+
+  async function clickEdit(wrapper: Awaited<ReturnType<typeof mountAdmin>>) {
+    const editBtn = wrapper.findAll('button').find((b) => b.text().includes('Edit'));
+    await editBtn?.trigger('click');
+    await flushPromises();
+  }
+
+  it('refuses to open the settings dialog while settings load, then opens once loaded', async () => {
+    let resolveSettings!: (r: Response) => void;
+    const wrapper = await mountAdmin(
+      () => new Promise<Response>((resolve) => (resolveSettings = resolve)),
+    );
+
+    await clickEdit(wrapper);
+
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+    expect(wrapper.findComponent({ name: 'PublicSettingsForm' }).exists()).toBe(false);
+    expect(wrapper.find('[data-test="page-message"]').text()).toContain(
+      'Pengaturan publik masih dimuat',
+    );
+
+    resolveSettings(json({ settings: DEFAULT_PUBLIC_SETTINGS }));
+    await flushPromises();
+    await clickEdit(wrapper);
+
+    expect(wrapper.findComponent({ name: 'PublicSettingsForm' }).exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('refuses to open the settings dialog when settings failed to load and shows the error on the page', async () => {
+    const wrapper = await mountAdmin(() => Promise.reject(new Error('Network failure')));
+
+    await clickEdit(wrapper);
+
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+    expect(wrapper.findComponent({ name: 'PublicSettingsForm' }).exists()).toBe(false);
+    expect(wrapper.find('[role="alert"]').text()).toContain('Gagal memuat pengaturan publik');
     wrapper.unmount();
   });
 });

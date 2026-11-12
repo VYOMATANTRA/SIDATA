@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest';
 import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import router, { scrollBehavior } from '../router/index';
+import type { RouteLocationNormalized } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 
 let globalScrollToSpy: ReturnType<typeof vi.spyOn>;
@@ -288,7 +289,10 @@ describe('router auth guard retry behavior', () => {
       setActivePinia(pinia);
       const authStore = useAuthStore(pinia);
 
-      authStore.setAuth({ id: '30', email: 'editor@manggar.go.id', role: 'editor' }, 'editor-token');
+      authStore.setAuth(
+        { id: '30', email: 'editor@manggar.go.id', role: 'editor' },
+        'editor-token',
+      );
       await router.push('/');
       await router.push('/dashboard');
 
@@ -347,128 +351,145 @@ describe('router auth guard retry behavior', () => {
 });
 
 describe('router scrollBehavior', () => {
-  const dummyFrom = {
-    path: '/previous',
-    fullPath: '/previous',
-    name: 'previous',
-    hash: '',
-    query: {},
-    params: {},
-    matched: [],
-    meta: {},
-    redirectedFrom: undefined,
-  } as unknown as Parameters<typeof scrollBehavior>[1];
-
-  it('restores savedPosition when provided (e.g. browser back/forward navigation)', () => {
-    const to = {
-      path: '/target',
-      fullPath: '/target',
-      hash: '',
-    } as unknown as Parameters<typeof scrollBehavior>[0];
-    const savedPosition = { left: 0, top: 450 };
-
-    const result = scrollBehavior(to, dummyFrom, savedPosition);
-
-    expect(result).toEqual({ left: 0, top: 450 });
+  const loc = (path: string, hash = '', fullPath = path + hash, name?: string) =>
+    ({ path, hash, fullPath, name }) as unknown as RouteLocationNormalized;
+  const mkEl = (id: string, margin = '0px') => {
+    const el = document.createElement('section');
+    el.id = id;
+    el.style.scrollMarginTop = margin;
+    document.body.appendChild(el);
+    return el;
+  };
+  afterEach(() => {
+    document.body.innerHTML = '';
   });
 
-  it('scrolls to element selector when to.hash is present and no savedPosition', () => {
-    const to = {
-      path: '/target',
-      fullPath: '/target#section-anchor',
-      hash: '#section-anchor',
-    } as unknown as Parameters<typeof scrollBehavior>[0];
-
-    const result = scrollBehavior(to, dummyFrom, null);
-
-    expect(result).toEqual({ el: '#section-anchor' });
+  it('resets to the top when the path changes (window-scrolling routes)', async () => {
+    expect(await scrollBehavior(loc('/peta'), loc('/'), null)).toEqual({
+      top: 0,
+      left: 0,
+      behavior: 'instant',
+    });
+    expect(await scrollBehavior(loc('/users'), loc('/data'), null)).toMatchObject({ top: 0 });
   });
 
-  it('prioritizes savedPosition over to.hash when both are present', () => {
-    const to = {
-      path: '/target',
-      fullPath: '/target#section-anchor',
-      hash: '#section-anchor',
-    } as unknown as Parameters<typeof scrollBehavior>[0];
-    const savedPosition = { left: 0, top: 200 };
-
-    const result = scrollBehavior(to, dummyFrom, savedPosition);
-
-    expect(result).toEqual({ left: 0, top: 200 });
+  it('restores the saved position on cross-path back/forward without a hash', async () => {
+    const saved = { left: 0, top: 1500 };
+    expect(await scrollBehavior(loc('/peta'), loc('/'), saved)).toBe(saved);
   });
 
-  it('scrolls to top ({ top: 0, left: 0 }) for standard page navigation without hash or savedPosition', () => {
-    const to = {
-      path: '/publikasi',
-      fullPath: '/publikasi',
-      hash: '',
-    } as unknown as Parameters<typeof scrollBehavior>[0];
-
-    const result = scrollBehavior(to, dummyFrom, null);
-
-    expect(result).toEqual({ top: 0, left: 0 });
+  it('keeps the position on a query-only change', async () => {
+    expect(await scrollBehavior(loc('/peta'), loc('/peta'), null)).toBe(false);
   });
 
-  it('scrolls to top when hash is empty string', () => {
-    const to = {
-      path: '/ketua-rt',
-      fullPath: '/ketua-rt',
-      hash: '',
-    } as unknown as Parameters<typeof scrollBehavior>[0];
-
-    const result = scrollBehavior(to, dummyFrom, null);
-
-    expect(result).toEqual({ top: 0, left: 0 });
+  it('restores savedPosition on same-path query-only history back/forward (popstate)', async () => {
+    const saved = { left: 0, top: 450 };
+    const from = loc('/peta', '', '/peta?page=2');
+    const to = loc('/peta', '', '/peta?page=1');
+    expect(await scrollBehavior(to, from, saved)).toBe(saved);
   });
 
-  it('scrolls to top when hash is bare "#"', () => {
-    const to = {
-      path: '/ketua-rt',
-      fullPath: '/ketua-rt#',
-      hash: '#',
-    } as unknown as Parameters<typeof scrollBehavior>[0];
-
-    const result = scrollBehavior(to, dummyFrom, null);
-
-    expect(result).toEqual({ top: 0, left: 0 });
+  it('preserves scroll position (returns false) on same-path query-only changes even if the URL has a hash', async () => {
+    mkEl('target', '50px');
+    const from = loc('/peta', '#target', '/peta#target');
+    const to = loc('/peta', '#target', '/peta?filter=rt#target');
+    expect(await scrollBehavior(to, from, null)).toBe(false);
   });
 
-  it('returns false (does not scroll) when navigating on the same path with query parameter changes', () => {
-    const to = {
-      path: '/publikasi',
-      fullPath: '/publikasi?q=kemiskinan',
-      hash: '',
-      query: { q: 'kemiskinan' },
-    } as unknown as Parameters<typeof scrollBehavior>[0];
-    const from = {
-      path: '/publikasi',
-      fullPath: '/publikasi',
-      hash: '',
-      query: {},
-    } as unknown as Parameters<typeof scrollBehavior>[1];
-
-    const result = scrollBehavior(to, from, null);
-
-    expect(result).toBe(false);
+  it('ignores savedPosition on Cerita routes on back/forward and lands on the top', async () => {
+    const saved = { left: 0, top: 1500 };
+    const to = loc('/cerita/penduduk', '', '/cerita/penduduk', 'cerita-page');
+    const from = loc('/', '', '/');
+    expect(await scrollBehavior(to, from, saved)).toEqual({
+      top: 0,
+      left: 0,
+      behavior: 'instant',
+    });
   });
 
-  it('scrolls to top when hash is bare "#" even on the same path', () => {
-    const to = {
-      path: '/publikasi',
-      fullPath: '/publikasi#',
-      hash: '#',
-      query: {},
-    } as unknown as Parameters<typeof scrollBehavior>[0];
-    const from = {
-      path: '/publikasi',
-      fullPath: '/publikasi',
-      hash: '',
-      query: {},
-    } as unknown as Parameters<typeof scrollBehavior>[1];
+  it('lands on the hash target on Cerita back/forward instead of savedPosition', async () => {
+    const el = mkEl('bab-2', '72px');
+    const to = loc('/cerita/penduduk', '#bab-2', '/cerita/penduduk#bab-2', 'cerita-page');
+    const from = loc('/peta', '', '/peta');
+    expect(await scrollBehavior(to, from, { left: 0, top: 1500 })).toEqual({
+      el,
+      top: 72,
+      behavior: 'instant',
+    });
+  });
 
-    const result = scrollBehavior(to, from, null);
+  it('scrolls to top on Cerita routes on fresh navigation without savedPosition or hash', async () => {
+    const to = loc('/cerita/penduduk', '', '/cerita/penduduk', 'cerita-page');
+    const from = loc('/', '', '/');
+    expect(await scrollBehavior(to, from, null)).toEqual({
+      top: 0,
+      left: 0,
+      behavior: 'instant',
+    });
+  });
 
-    expect(result).toEqual({ top: 0, left: 0 });
+  it('scrolls to hash target on Cerita routes on fresh navigation with a hash', async () => {
+    const el = mkEl('bab-2', '72px');
+    const to = loc('/cerita/penduduk', '#bab-2', '/cerita/penduduk#bab-2', 'cerita-page');
+    const from = loc('/', '', '/');
+    expect(await scrollBehavior(to, from, null)).toEqual({
+      el,
+      top: 72,
+      behavior: 'instant',
+    });
+  });
+
+  it('scrolls to the hash target using its scroll-margin-top, on path or hash-only changes', async () => {
+    const el = mkEl('bab-1', '88px');
+    const expected = { el, top: 88, behavior: 'instant' };
+    expect(await scrollBehavior(loc('/cerita/x', '#bab-1'), loc('/'), null)).toEqual(expected);
+    expect(await scrollBehavior(loc('/cerita/x', '#bab-1'), loc('/cerita/x'), null)).toEqual(
+      expected,
+    );
+  });
+
+  it('prefers a same-path hash target over a stale savedPosition (native anchor click popstate)', async () => {
+    const el = mkEl('a', '10px');
+    const stale = { left: 0, top: 2500 };
+    expect(await scrollBehavior(loc('/cerita/x', '#a'), loc('/cerita/x', '#a'), stale)).toEqual({
+      el,
+      top: 10,
+      behavior: 'instant',
+    });
+  });
+
+  it('A to B to A on the same path with different hashes lands on the hash target', async () => {
+    const a = mkEl('a');
+    const b = mkEl('b');
+    const stale = { left: 0, top: 900 };
+    expect(await scrollBehavior(loc('/c', '#b'), loc('/c', '#a'), stale)).toMatchObject({ el: b });
+    expect(await scrollBehavior(loc('/c', '#a'), loc('/c', '#b'), stale)).toMatchObject({ el: a });
+  });
+
+  it('falls back to top (path change) or nothing (same path) for a missing hash target', async () => {
+    expect(await scrollBehavior(loc('/a', '#none'), loc('/b'), null)).toMatchObject({ top: 0 });
+    expect(await scrollBehavior(loc('/a', '#none'), loc('/a'), null)).toBe(false);
+  });
+
+  it('same-path missing hash target falls through to savedPosition when given', async () => {
+    const saved = { left: 0, top: 321 };
+    expect(await scrollBehavior(loc('/a', '#none'), loc('/a'), saved)).toBe(saved);
+  });
+
+  it('scrolls to top when hash is bare "#"', async () => {
+    expect(await scrollBehavior(loc('/ketua-rt', '#'), loc('/previous'), null)).toEqual({
+      top: 0,
+      left: 0,
+      behavior: 'instant',
+    });
+  });
+
+  it('scrolls to top when hash is bare "#" even on the same path', async () => {
+    expect(await scrollBehavior(loc('/publikasi', '#'), loc('/publikasi'), null)).toEqual({
+      top: 0,
+      left: 0,
+      behavior: 'instant',
+    });
   });
 
   it('is wired into the router instance configuration', () => {
@@ -480,7 +501,7 @@ describe('router scrollBehavior', () => {
     const scrollToSpy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
     await router.push('/permintaan-data');
     await nextTick();
-    expect(scrollToSpy).toHaveBeenCalledWith({ left: 0, top: 0 });
+    expect(scrollToSpy).toHaveBeenCalledWith({ left: 0, top: 0, behavior: 'instant' });
     scrollToSpy.mockRestore();
   });
 });

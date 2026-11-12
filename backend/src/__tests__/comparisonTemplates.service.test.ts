@@ -748,11 +748,12 @@ describe('comparisonTemplates.service createComparisonTemplate', () => {
         throw prismaError('P2002');
       };
 
-      await assertServiceError(
+      const err = await assertServiceError(
         createComparisonTemplate(validPayload(), ACTOR, CONTEXT),
         409,
         /perbandingan-tahunan/,
       );
+      assert.equal(err.code, 'SLUG_TAKEN');
     });
 
     it('lets an audit-write failure fail the request instead of swallowing it', async () => {
@@ -778,15 +779,34 @@ describe('comparisonTemplates.service createComparisonTemplate', () => {
 });
 
 describe('comparisonTemplates.service updateComparisonTemplate', () => {
-  const update = (payload: unknown, id: unknown = 'tpl-1') =>
-    updateComparisonTemplate(id, payload, ACTOR, CONTEXT);
+  const update = (payload: unknown, id: unknown = 'tpl-1') => {
+    const storedRow = stored as { updatedAt?: Date } | null;
+    const fullPayload =
+      payload &&
+      typeof payload === 'object' &&
+      !Array.isArray(payload) &&
+      !('expectedUpdatedAt' in payload)
+        ? {
+            expectedUpdatedAt: (
+              storedRow?.updatedAt ?? new Date('2026-01-02T00:00:00.000Z')
+            ).toISOString(),
+            ...payload,
+          }
+        : payload;
+    return updateComparisonTemplate(id, fullPayload, ACTOR, CONTEXT);
+  };
 
   describe('input validation', () => {
     it('rejects an invalid id with 400 before opening a transaction', async () => {
       // Called directly: the `update` helper's default id would swallow `undefined`.
       for (const id of [undefined, null, 42, '', '   ', 'x'.repeat(192)]) {
         await assertServiceError(
-          updateComparisonTemplate(id, { label: 'Baru' }, ACTOR, CONTEXT),
+          updateComparisonTemplate(
+            id,
+            { label: 'Baru', expectedUpdatedAt: '2026-01-02T00:00:00.000Z' },
+            ACTOR,
+            CONTEXT,
+          ),
           400,
         );
       }
@@ -862,7 +882,61 @@ describe('comparisonTemplates.service updateComparisonTemplate', () => {
         throw prismaError('P2002');
       };
 
-      await assertServiceError(update({ slug: 'dipakai' }), 409);
+      const err = await assertServiceError(update({ slug: 'dipakai' }), 409);
+      assert.equal(err.code, 'SLUG_TAKEN');
+    });
+  });
+
+  describe('optimistic concurrency', () => {
+    it('rejects a missing expectedUpdatedAt with 400', async () => {
+      await assertServiceError(
+        updateComparisonTemplate('tpl-1', { label: 'Baru' }, ACTOR, CONTEXT),
+        400,
+      );
+      assert.equal(txCalls.length, 0);
+    });
+
+    it('rejects an invalid expectedUpdatedAt with 400', async () => {
+      await assertServiceError(
+        update({ label: 'Baru', expectedUpdatedAt: 'bukan-tanggal-iso' }),
+        400,
+      );
+      assert.equal(txCalls.length, 0);
+    });
+
+    it('rejects a stale expectedUpdatedAt with 409 STALE_WRITE and writes nothing', async () => {
+      const err = await assertServiceError(
+        update({ label: 'Baru', expectedUpdatedAt: '2026-01-01T12:00:00.000Z' }),
+        409,
+      );
+      assert.equal(err.code, 'STALE_WRITE');
+      assert.deepEqual(err.details, {
+        currentUpdatedAt: (stored!.updatedAt as Date).toISOString(),
+      });
+      assert.equal(templateCalls['update'], undefined);
+      assert.equal(auditRows.length, 0);
+    });
+
+    it('rejects a stale expectedUpdatedAt even when the update payload would be a no-op', async () => {
+      const err = await assertServiceError(
+        update({ label: stored!.label, expectedUpdatedAt: '2026-01-01T12:00:00.000Z' }),
+        409,
+      );
+      assert.equal(err.code, 'STALE_WRITE');
+      assert.deepEqual(err.details, {
+        currentUpdatedAt: (stored!.updatedAt as Date).toISOString(),
+      });
+      assert.equal(templateCalls['update'], undefined);
+      assert.equal(auditRows.length, 0);
+    });
+
+    it('accepts matching expectedUpdatedAt and proceeds with update', async () => {
+      const res = await update({
+        label: 'Baru',
+        expectedUpdatedAt: (stored!.updatedAt as Date).toISOString(),
+      });
+      assert.equal(res.label, 'Baru');
+      assert.equal(templateCalls['update']!.length, 1);
     });
   });
 
@@ -1106,7 +1180,8 @@ describe('comparisonTemplates.service deleteComparisonTemplate', () => {
   it('refuses with 409 while indicators still use the template, deleting and logging nothing', async () => {
     usage = 2;
 
-    await assertServiceError(remove(), 409, /indikator/i);
+    const err = await assertServiceError(remove(), 409, /indikator/i);
+    assert.equal(err.code, 'TEMPLATE_IN_USE');
 
     assert.equal(templateCalls['delete'], undefined);
     assert.equal(auditRows.length, 0);

@@ -1,8 +1,32 @@
-import { describe, it, expect } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { describe, it, expect, afterEach } from 'vitest';
+import { mount as baseMount, type VueWrapper } from '@vue/test-utils';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import AppNavbar from '../components/common/AppNavbar.vue';
-import { isNavItemActive } from '@/config/publicNav';
+import { isDestinationActive, matchesPath } from '@/config/publicNav';
+import { installScrollLockTracker, cleanupBodyScrollLocks } from './helpers/bodyScrollLock';
+
+installScrollLockTracker();
+
+const mounted: VueWrapper[] = [];
+
+function mount(...args: Parameters<typeof baseMount>) {
+  const wrapper = baseMount(...args);
+  mounted.push(wrapper);
+  return wrapper;
+}
+
+function cleanupMounted() {
+  for (const w of mounted.splice(0)) {
+    try {
+      w.unmount();
+    } catch {
+      // Already unmounted by the test itself.
+    }
+  }
+  cleanupBodyScrollLocks();
+}
+
+afterEach(cleanupMounted);
 
 function createMockRouter() {
   return createRouter({
@@ -34,26 +58,7 @@ describe('AppNavbar.vue', () => {
     expect(wrapper.find('nav').attributes('aria-label')).toBe('Navigasi Utama');
   });
 
-  it('renders white variant with solid bg-white and high contrast text colors', async () => {
-    const router = createMockRouter();
-    await router.push('/');
-    await router.isReady();
-
-    const wrapper = mount(AppNavbar, {
-      props: {
-        variant: 'white',
-      },
-      global: {
-        plugins: [router],
-      },
-    });
-
-    expect(wrapper.find('header').classes()).toContain('bg-white');
-    expect(wrapper.find('[data-test="navbar-title"]').classes()).toContain('text-slate-900');
-    expect(wrapper.find('[data-test="navbar-subtitle"]').classes()).toContain('text-slate-500');
-  });
-
-  it('renders transparent variant with correct high contrast text colors', async () => {
+  it('keeps white foreground on the transparent background (background and foreground are separate)', async () => {
     const router = createMockRouter();
     await router.push('/');
     await router.isReady();
@@ -67,27 +72,35 @@ describe('AppNavbar.vue', () => {
       },
     });
 
-    expect(wrapper.find('header').classes()).toContain('bg-transparent');
-    expect(wrapper.find('[data-test="navbar-title"]').classes()).toContain('text-slate-900');
-    expect(wrapper.find('[data-test="navbar-subtitle"]').classes()).toContain('text-slate-500');
+    const header = wrapper.find('header');
+    expect(header.classes()).toContain('bg-transparent');
+    expect(header.classes()).toContain('text-white');
+    expect(header.classes().join(' ')).not.toContain('backdrop-blur');
+    expect(wrapper.find('[data-test="navbar-title"]').classes()).toContain('text-white');
+    expect(wrapper.find('[data-test="navbar-scrim"]').exists()).toBe(true);
   });
 
-  it('uses dark hamburger icon bars on white variant for non-text contrast', async () => {
+  it('lets the foreground be set independently of the background', async () => {
     const router = createMockRouter();
     await router.push('/');
     await router.isReady();
 
     const wrapper = mount(AppNavbar, {
-      props: {
-        variant: 'white',
-      },
-      global: {
-        plugins: [router],
-      },
+      props: { variant: 'transparent', foreground: 'dark' },
+      global: { plugins: [router] },
     });
 
-    const bar = wrapper.find('[data-test="hamburger-btn"] span');
-    expect(bar.classes()).toContain('bg-slate-800');
+    expect(wrapper.find('header').classes()).toContain('bg-transparent');
+    expect(wrapper.find('[data-test="navbar-title"]').classes()).toContain('text-brand-navy');
+  });
+
+  it('shows no scrim on a solid navy bar', async () => {
+    const router = createMockRouter();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(AppNavbar, { global: { plugins: [router] } });
+    expect(wrapper.find('[data-test="navbar-scrim"]').exists()).toBe(false);
   });
 
   it('supports custom title and subtitle props', async () => {
@@ -155,6 +168,9 @@ describe('AppNavbar.vue', () => {
       global: {
         plugins: [router],
       },
+      slots: {
+        menu: '<a href="/first">Pertama</a>',
+      },
       attachTo: document.body,
     });
 
@@ -180,7 +196,7 @@ describe('AppNavbar.vue', () => {
     wrapper.unmount();
   });
 
-  it('renders complete default public navigation items in drawer when no custom menu slot is passed', async () => {
+  it('renders menu slot content and exposes close callback', async () => {
     const router = createMockRouter();
     await router.push('/');
     await router.isReady();
@@ -189,24 +205,24 @@ describe('AppNavbar.vue', () => {
       global: {
         plugins: [router],
       },
+      slots: {
+        menu: `<template #menu="{ close, open }">
+          <div data-test="custom-menu">
+            <span data-test="open-state">{{ open }}</span>
+            <button data-test="close-action" @click="close">Close</button>
+          </div>
+        </template>`,
+      },
       attachTo: document.body,
     });
 
-    // Open menu
     await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
+    expect(wrapper.find('[data-test="custom-menu"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="open-state"]').text()).toBe('true');
 
-    const drawer = wrapper.find('[data-test="nav-menu-drawer"]');
-    expect(drawer.find('a[href="/"]').text()).toBe('Beranda');
-    expect(drawer.find('a[href="/publikasi"]').text()).toBe('Publikasi');
-    expect(drawer.find('a[href="/peta"]').text()).toBe('Peta');
-    expect(drawer.find('a[href="/ketua-rt"]').text()).toBe('Ketua RT');
-    expect(drawer.find('a[href="/permintaan-data"]').text()).toBe('Permintaan Data');
-    expect(drawer.find('a[href="/tentang/kelurahan-manggar"]').text()).toBe('Tentang');
-
-    // Clicking a nav link closes drawer
-    await drawer.find('a[href="/publikasi"]').trigger('click');
+    await wrapper.find('[data-test="close-action"]').trigger('click');
     await wrapper.vm.$nextTick();
-    expect(drawer.isVisible()).toBe(false);
+    expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(false);
 
     wrapper.unmount();
   });
@@ -220,6 +236,9 @@ describe('AppNavbar.vue', () => {
       global: {
         plugins: [router],
       },
+      slots: {
+        menu: '<a href="/1">1</a><a href="/2">2</a>',
+      },
       attachTo: document.body,
     });
 
@@ -227,7 +246,7 @@ describe('AppNavbar.vue', () => {
     await hamburger.trigger('click');
 
     const focusables = wrapper.findAll<HTMLAnchorElement>('[data-test="nav-menu-drawer"] a');
-    expect(focusables.length).toBe(6);
+    expect(focusables.length).toBe(2);
 
     // Focus can naturally move to all links and return to the hamburger toggle button
     for (const link of focusables) {
@@ -251,6 +270,9 @@ describe('AppNavbar.vue', () => {
       global: {
         plugins: [router],
       },
+      slots: {
+        menu: '<a href="/item">Link</a>',
+      },
       attachTo: document.body,
     });
 
@@ -273,7 +295,8 @@ describe('AppNavbar.vue', () => {
     await wrapper.vm.$nextTick();
     expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(true);
 
-    // Conversely, when focus is inside the navbar menu, Escape must close the drawer
+    // Once the dialog is gone, Escape from inside the navbar menu must close the drawer
+    modal.remove();
     const drawerLink = wrapper.find<HTMLAnchorElement>('[data-test="nav-menu-drawer"] a');
     drawerLink.element.focus();
     drawerLink.element.dispatchEvent(
@@ -282,71 +305,41 @@ describe('AppNavbar.vue', () => {
     await wrapper.vm.$nextTick();
     expect(wrapper.find('[data-test="nav-menu-drawer"]').isVisible()).toBe(false);
 
-    modal.remove();
     wrapper.unmount();
   });
 
-  it('filters out unregistered routes from the navigation drawer', async () => {
-    const limitedRouter = createRouter({
-      history: createMemoryHistory(),
-      routes: [
-        { path: '/', component: { template: '<div>Home</div>' } },
-        { path: '/publikasi', component: { template: '<div>Publikasi</div>' } },
-      ],
-    });
-    await limitedRouter.push('/');
-    await limitedRouter.isReady();
-
-    const wrapper = mount(AppNavbar, {
-      global: { plugins: [limitedRouter] },
-      attachTo: document.body,
-    });
-
-    await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
-    const drawerLinks = wrapper.findAll('[data-test="nav-menu-drawer"] a');
-    expect(drawerLinks.length).toBe(2);
-    expect(wrapper.find('a[href="/"]').exists()).toBe(true);
-    expect(wrapper.find('a[href="/publikasi"]').exists()).toBe(true);
-    expect(wrapper.find('a[href="/peta"]').exists()).toBe(false);
-
-    wrapper.unmount();
-  });
-
-  it('marks current route and /tentang subpaths with aria-current="page" and active class', async () => {
+  it('keeps the sticky header above page overlays (z-50) and below modals and the skip link', async () => {
     const router = createMockRouter();
-    await router.push('/tentang/desa-cantik');
+    await router.push('/');
     await router.isReady();
 
-    const wrapper = mount(AppNavbar, {
-      global: { plugins: [router] },
-      attachTo: document.body,
-    });
-
-    await wrapper.find('[data-test="hamburger-btn"]').trigger('click');
-    const tentangLink = wrapper.find('a[href="/tentang/kelurahan-manggar"]');
-    expect(tentangLink.exists()).toBe(true);
-    expect(tentangLink.attributes('aria-current')).toBe('page');
-    expect(tentangLink.classes()).toContain('bg-white/20');
-
-    const homeLink = wrapper.find('a[href="/"]');
-    expect(homeLink.attributes('aria-current')).toBeUndefined();
-
+    const wrapper = mount(AppNavbar, { props: { sticky: true }, global: { plugins: [router] } });
+    const classes = wrapper.find('header').classes();
+    expect(classes).toContain('sticky');
+    expect(classes).toContain('z-[55]');
+    expect(classes).not.toContain('z-40');
     wrapper.unmount();
   });
 
-  describe('publicNav utilities', () => {
-    it('exact matches home route for isNavItemActive', () => {
-      expect(isNavItemActive('/', '/')).toBe(true);
-      expect(isNavItemActive('/', '/publikasi')).toBe(false);
+  describe('publicNav active matching utilities', () => {
+    it('exact matches home route for isDestinationActive and matchesPath', () => {
+      expect(isDestinationActive('/', '/')).toBe(true);
+      expect(isDestinationActive('/', '/publikasi')).toBe(false);
+      expect(matchesPath('/', '/')).toBe(true);
+      expect(matchesPath('/', '/publikasi')).toBe(false);
     });
 
-    it('matches /tentang subpaths for isNavItemActive', () => {
-      expect(isNavItemActive('/tentang/kelurahan-manggar', '/tentang/kelurahan-manggar')).toBe(
+    it('matches path exactly or for subpaths with isDestinationActive and matchesPath', () => {
+      expect(isDestinationActive('/tentang/kelurahan-manggar', '/tentang/kelurahan-manggar')).toBe(
         true,
       );
-      expect(isNavItemActive('/tentang/kelurahan-manggar', '/tentang/desa-cantik')).toBe(true);
-      expect(isNavItemActive('/tentang/kelurahan-manggar', '/tentang/vyomatantra')).toBe(true);
-      expect(isNavItemActive('/tentang/kelurahan-manggar', '/peta')).toBe(false);
+      expect(
+        isDestinationActive('/tentang/kelurahan-manggar', '/tentang/kelurahan-manggar/visi'),
+      ).toBe(true);
+      expect(isDestinationActive('/tentang/kelurahan-manggar', '/tentang/desa-cantik')).toBe(false);
+      expect(isDestinationActive('/tentang/kelurahan-manggar', '/peta')).toBe(false);
+      expect(matchesPath('/tentang/kelurahan-manggar', '/tentang/kelurahan-manggar')).toBe(true);
+      expect(matchesPath('/tentang/kelurahan-manggar', '/tentang/desa-cantik')).toBe(false);
     });
   });
 });

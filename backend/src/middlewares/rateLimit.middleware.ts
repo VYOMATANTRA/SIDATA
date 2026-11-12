@@ -71,10 +71,49 @@ export const indicatorsWriteLimiter = createUserKeyedLimiter(100);
 // admin user ID, so authoring templates does not drain the indicator or prose edit budgets)
 export const comparisonTemplatesWriteLimiter = createUserKeyedLimiter(100);
 
+// Comparison template live preview (debounced calls while an admin types; continuous typing
+// at 700 ms debounce is ~1,290 / 15 min, 3000 leaves headroom; it stores nothing, so it gets
+// its own roomier bucket keyed by user ID rather than draining the 100/15min save budget)
+export const comparisonTemplatesPreviewLimiter = createUserKeyedLimiter(3000);
+
+// Pre-auth flood guard for the preview route only. A separate instance from the shared
+// apiLimiter (so preview traffic never drains the 300/15min public-site budget).
+// With skipSuccessfulRequests: true, requestWasSuccessful: statusCode !== 401 && statusCode !== 403,
+// and limit: 600, unauthenticated/unauthorized callers (which receive 401/403) are capped at
+// 600 requests per 15 min per IP. Requests that pass authentication (200 OK, 400 validation, or
+// 422 trend-keyword warnings from authenticated admins) are skipped here and instead governed by
+// comparisonTemplatesPreviewLimiter (3000 req/15min per admin user ID), ensuring that multiple
+// admins behind a shared NAT/office IP do not exhaust the shared IP quota while typing.
+// Note: In deployments behind a reverse proxy, TRUST_PROXY must be configured so req.ip resolves to
+// the real client IP rather than the proxy address.
+export const comparisonTemplatesPreviewPreAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 600,
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: (_req, res) => res.statusCode !== 401 && res.statusCode !== 403,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    if (!req.ip) {
+      throw new Error('Identitas koneksi tidak valid');
+    }
+    return ipKeyGenerator(req.ip);
+  },
+});
+
 // Indicator tables CMS write operations rate limiter (dedicated 100 req/15min bucket keyed by
 // user ID, separate from indicatorsWriteLimiter so matrix-table edits and scalar-figure edits
 // do not drain each other)
 export const indicatorTablesWriteLimiter = createUserKeyedLimiter(100);
+
+// Media uploads (multipart, sharp re-encode) are the most expensive writes in the API: a tighter,
+// dedicated per-user bucket, so uploading does not drain (or get drained by) other CMS edits.
+export const mediaWriteLimiter = createUserKeyedLimiter(60);
+
+// Public media delivery (images/downloads) and editor previews. Roomier than apiLimiter: one
+// content page can reference many images, and visitors on a shared NAT would otherwise lock
+// each other out of the same page.
+export const mediaReadLimiter = createLimiter(600);
 
 // Settings write operations rate limiter (dedicated 100 req/15min bucket keyed by admin user ID,
 // separate from userManagementWriteLimiter so settings edits and user management do not drain each other)

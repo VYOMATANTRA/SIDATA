@@ -44,6 +44,7 @@ function runSeed(testCase: SeedCase): void {
   delete env.SEED_SAMPLE_DATA;
   if (testCase.nodeEnv !== null) env.NODE_ENV = testCase.nodeEnv;
   if (testCase.seedSampleData !== null) env.SEED_SAMPLE_DATA = testCase.seedSampleData;
+  env.UPLOAD_DIR = process.env.UPLOAD_DIR ?? '/tmp/sidata-test-uploads';
 
   const result = spawnSync('npx', ['tsx', 'prisma/seed.ts'], {
     cwd: backendRoot,

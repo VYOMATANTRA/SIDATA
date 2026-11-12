@@ -125,7 +125,7 @@ Notes:
 
 | Role   | Can do                                                                                                                                                            |
 | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Editor | Edit data figures and prose; choose which comparison template an indicator uses (§5); manage the Cerita page list and hierarchy (pages, chapters, sections, section prose blocks); edit Sambutan Lurah |
+| Editor | Edit data figures and prose; choose which comparison template an indicator uses (§5); manage the Cerita page list and hierarchy (pages, chapters, sections, section prose blocks); edit Sambutan Lurah; upload photos, documents and data files (§7 `media_assets`) |
 | Admin  | Everything Editor can, plus user/role management and authoring new phrase-structure templates for the computed-comparison prose builder (§5)                      |
 
 No third role (e.g. viewer/approver) is defined. No periodic-review role exists — see §6.
@@ -166,7 +166,9 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
     returns the fresh target and parent tokens. `DELETE /api/pages/:slug`
     requires it too (400 when missing or invalid), so a stale tab cannot delete a page that gained new
     chapters. The one exception kept for existing clients: `PATCH /api/content-blocks/:slug` accepts
-    `expectedUpdatedAt` optionally and enforces it when present. The existing page-list reorder has no parent
+    `expectedUpdatedAt` optionally and enforces it when present; whereas `PATCH /api/comparison-templates/:id`
+    requires `expectedUpdatedAt` (ISO 8601 timestamp from `GET /api/comparison-templates` `updatedAt`) and
+    returns `409` with code `STALE_WRITE` on mismatch. The existing page-list reorder has no parent
     and takes none.
   - **Locking.** Locks are taken parent-first (page → chapter → section → block) and children in ascending id
     order, so concurrent authoring cannot deadlock. A no-op reorder, and a retitle to the same title, write
@@ -182,7 +184,7 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
 ### Audit Trail
 
 Every admin user-management action (create, reactivate, role change, password reset, deactivate),
-every page list mutation (page creation, deletion, reordering, rename),
+every page list mutation (page creation, deletion, reordering, rename), every media upload (`media.uploaded`, info) and the media cleanup run (`media.cleanup`, counts only),
 every chapter, section and section prose block mutation (create, update, delete, reorder),
 and every security-relevant auth event (login success/failure, logout, first-login password set,
 Google account linking, session revocation, OAuth state mismatch, refresh-token mismatch, OTP
@@ -271,7 +273,7 @@ the admin base layout shell from §8), organized into three accessible tabbed ca
 3. **Pengaturan Publik Portal:** Displays system portal settings and opens `PublicSettingsForm`. Admins
    can update identity settings (`public.app_name`, `public.institution_name`, `public.tagline`,
    `public.administrative_area`), public contact channels (`public.contact_phone`, `public.contact_whatsapp`,
-   `public.contact_email`, `public.contact_address`), and default map coordinates & zoom (`public.default_coordinates`).
+   `public.contact_email`, `public.contact_address`), and the default map view (`public.default_coordinates`, edited visually on a map picker: staff pan and zoom the map instead of typing latitude, longitude or a zoom number; the stored value stays `{ lat, lon, zoom }`).
    Mutations use `PATCH /api/settings/public` (audited as `settings.public_updated`).
 
 A matrix-table save is one atomic request: `PATCH /api/indicator-tables/:id` carries the table
@@ -338,6 +340,42 @@ saved, so changing the wording needs a fresh acknowledgment. Overrides are logge
 (`comparison_template.keyword_warning_overridden`, §3) for after-the-fact tracing only, not
 proactive catching — see §6 for why.
 
+**Authoring and selection UI.** Admin authors templates at *Sistem → Templat kalimat*
+(`/admin/sistem/templat-kalimat`, Admin-only; an Editor is redirected even by direct URL). Editors
+only choose: `ScalarIndicatorForm` shows a "Templat kalimat perbandingan" selector, with a
+"Tanpa templat" option, when the indicator is already flagged `is_computed_comparison` **and** its
+draft has both a previous value and a previous period; a pair alone never makes it appear, and
+clearing the pair still detaches the template in the same request.
+
+- **No syntax is shown to people.** The sentence is edited as an ordered list of parts (free text
+  and named chips) with add, remove and move up/down buttons — no textarea showing braces, no
+  drag-only ordering. Chips are UI-only names for the slots: Nama indikator `{label}`, Satuan
+  `{unit}`, Nilai sekarang `{value_current}`, Nilai sebelumnya `{value_previous}`, Periode sekarang
+  `{period_current}`, Periode sebelumnya `{period_previous}`, Selisih `{delta}`, Persentase
+  perubahan `{delta_percent}`, Keterangan perubahan `{trend}`. Stored data and the API are
+  unchanged. Free text drops braces as typed; any unrecognised or legacy braces in an existing
+  body parse into a removable "Bagian tidak dikenali" part and block saving until removed.
+- **Fields.** Nama templat (`label`), Susunan kalimat (`body`, exactly one "Keterangan perubahan"
+  chip; a second cannot be added), Saat nilai naik / turun / tetap (`trendNaik` / `trendTurun` /
+  `trendTetap`; every chip except "Keterangan perubahan"). The `slug` is generated from the name on
+  create (suffix `-2`, `-3`… on collision, retried if another admin takes it first), never shown,
+  never edited.
+- **Live preview** comes from `POST /api/comparison-templates/preview` (Admin-only, CSRF, own
+  per-user limiter of 1000 req/15min, behind a separate generous pre-auth IP guard rather than the
+  shared public `apiLimiter`), which renders the draft through the same `renderComparison` the public read
+  path uses over synthetic naik / turun / tetap / zero-previous examples, so exact decimals, id-ID
+  numbers and the "no percentage of a zero base" rule are identical. An unfinished draft answers 200
+  with `valid: false` and plain-language `problems`; it stores and audits nothing. The client
+  debounces it and skips it while its own checks fail.
+- **Trend-keyword acknowledgment.** On `422 TREND_KEYWORD_ACK_REQUIRED` the form lists each flagged
+  phrase with a plain warning and one confirmation checkbox per phrase; the app echoes the `ackKey`s
+  in `acknowledgedWarnings` and clears them after any edit to the main sentence. Status, code and
+  key are never displayed, and the server's 400/422 sentence (which quotes placeholder syntax) is
+  never shown for template saves — only approved wording from `toUserMessage`.
+- **Delete.** Confirmation names the template. An in-use template (usage count > 0, or a `409`)
+  explains with the count that indicators must be detached or reassigned first. The "Terpasang"
+  badge derives from `usageCount`.
+
 **Tier 2 — general narrative** (page prose, Sambutan Lurah). Free text, house-style-guided, no
 system enforcement.
 
@@ -357,18 +395,18 @@ Instead, safety is built into what prose is _allowed to claim at write-time_:
 
 ## 7. Database Schema (content data)
 
-10 tables. Scope is content data only — CMS/admin tables (roles, prose-builder templates,
+11 tables. Scope is content data only — CMS/admin tables (roles, prose-builder templates,
 override logs) are a separate concern and not covered by this pass. (The existing `Role`, `User`,
 `RefreshToken`, and `EmailOtp` tables in `schema.prisma` are the auth layer, already implemented, and distinct
 from the tables below.)
 
 This section expresses design intent in raw-DDL vocabulary (`ENUM`, `CHECK`, snake_case table
-names). All 10 tables are implemented in `backend/prisma/schema.prisma`: `spatial_points`,
+names). All 11 tables are implemented in `backend/prisma/schema.prisma`: `spatial_points`,
 `spatial_point_rt`, `rt_leaders` (migration `20260819000000_add_spatial_and_rt_tables`),
 `content_blocks` (migration `20260917103839_add_content_blocks`), `pages`, `chapters`, `sections`
 (migration `20261009000000_add_content_hierarchy`), `indicators` in migration
 `20261010011827_add_indicators`, and `indicator_tables`, `indicator_table_rows` in migration
-`20261010120000_add_indicator_tables`. Translate into Prisma models with `@@map` when
+`20261010120000_add_indicator_tables`, and `media_assets` in migration `20261107000000_add_media_assets`. Translate into Prisma models with `@@map` when
 implementing.
 
 | Table                                       | Purpose / key design notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -380,6 +418,7 @@ implementing.
 | `spatial_point_rt`                          | Junction table (`point_id`, `rt_number`). Needed because Ketua RT points are always 1:1 with an RT, but a Bank Sampah unit can cover multiple RTs (e.g. one unit serving RT 30/72/60) — a flat `rt_number` column on `spatial_points` would be lossy. **Enforcement notes**: (1) The 1:1 invariant for `ketua_rt` points cannot be enforced with a partial unique index (`UNIQUE (point_id) WHERE type = 'ketua_rt'`) because MySQL does not support partial unique indexes. The write path now adds the missing enforcement on every type/coverage write (see the `spatial_points` row): before committing, the post-write global `ketua_rt` coverage state is re-derived and run through the same shared resolution rule the read paths use (`resolveRtCoverage` in `maps.service.ts`) — a `ketua_rt` point ending up with more or fewer than exactly one RT is rejected with 400, an RT ending up covered by more than one `ketua_rt` point is rejected with 409. The check is scoped to the point being written and only runs when the write touches the point's type or coverage, so field-only edits on legacy-violating rows stay possible and every violation is repairable via a coverage write; violations untouched by a given write remain read-side `integrityWarning` territory, i.e. the read path is now a safety net rather than the only guard. Unit tests pin the 1:1 invariant (`src/__tests__/maps.service.write.test.ts`). The read path (`maps.service.ts`) detects violations at query time via one shared resolution rule applied on both sides of the join: an RT resolves to a `ketua_rt` point only if exactly one `ketua_rt` point covers it **and** that point covers exactly one RT. On the points side (`GET /api/maps/points`, `/points/:id`) a violation sets `rtLeader` to `null`; on the leaders side (`GET /api/maps/rt-leaders`, `/rt-leaders/:rtNumber`) it sets `coordinates` to `null`. In both cases an `integrityWarning` field describes the anomaly (multiple `ketua_rt` points on one RT, a `ketua_rt` point spanning several RTs, or an RT coverage referencing an RT with no matching `rt_leaders` row), and the anomaly is logged server-side. `GET /api/maps/summary` applies the same rule: conflicted RTs are excluded from `rtLeadersWithCoordinates` (so they fall into `rtLeadersWithoutCoordinates`) and are additionally reported via `rtLeadersWithIntegrityConflicts`, so a data problem is visible from the summary endpoint without cross-referencing the points list. (2) The FK from `rt_number` → `rt_leaders.rt_number` was intentionally dropped (migration `20260820000000`) because Prisma 7 requires a declared back-relation on both sides of a `@relation`, and adding `spatialPointRts SpatialPointRt[]` to the `RtLeader` model has no semantic meaning in this domain — the coordinate join is an asymmetric, query-time filtered read. In place of the FK, migration `20260826000000` adds `CHECK (rt_number BETWEEN 1 AND 100)` to enforce the valid RT range at the DB layer. Manggar has 100 RTs; if this changes, update the `BETWEEN` bounds in that migration and here. |
 | `content_blocks`                            | Prose/narrative content. `section_id` nullable FK to `sections.id` (`ON DELETE RESTRICT` — a section that still has blocks cannot be deleted, since MySQL forbids `SET NULL`/`CASCADE` on a column used in the `CHECK` below; populated for normal Cerita/stat-page prose tied to the hierarchy; null for standalone blocks like hero, Sambutan Lurah, landing highlights). `block_type` ENUM (`hero`, `sambutan_lurah`, `highlight`, `prose`), `slug` (stable lookup key), `body` TEXT (tier-2 free text). `sort_order INT NULL` with `CHECK (section_id IS NOT NULL OR sort_order IS NULL)` — ordering only means something within a section; standalone blocks are unique named slots with no siblings to sort against. Read via public `GET /api/content-blocks` and `GET /api/content-blocks/:slug` (in-memory cached); mutated via `PATCH /api/content-blocks/:slug` (Editor or Admin only, CSRF-protected, logged in `audit_logs` as `content_block.updated`). Section prose blocks (`block_type` `prose`, `section_id` set) are authored via Editor/Admin `POST /api/sections/:id/content-blocks` (body `{title, body}`; slug generated from the title, `sort_order` = max + 1 within the section), `PUT /api/sections/:id/content-blocks/reorder` (`{expectedUpdatedAt, items}` against the section's token) and `DELETE /api/content-blocks/:slug?expectedUpdatedAt=` (audited as `content_block.created` / `.reordered` / `.deleted`, deletes at warning; body never logged). `PATCH /:slug` accepts an optional `expectedUpdatedAt`. Standalone singleton blocks (`section_id` NULL) are never created or deleted through the API (409 `STANDALONE_BLOCK_PROTECTED`). |
 | `rt_leaders`                                | Single table, 100 rows (one per RT — not per-RT pages). `rt_number`, `name`, `phone`, `phone_is_whatsapp BOOLEAN` (some numbers aren't WhatsApp-registered — determines tap-to-chat vs. call-only rendering), `alamat` nullable (some addresses genuinely missing). No lat/lng column — coordinates are reached by joining `rt_leaders.rt_number` → `spatial_point_rt.rt_number` → `spatial_points.id`, filtered on `spatial_points.type` (required, not optional: a Bank Sampah unit covering RT 30/72/60 means `rt_number` is not unique in `spatial_point_rt`, so an unfiltered join also returns Bank Sampah points). Avoids duplicating/drifting lat-lng across two tables. Edit path: editor/admin-only `PATCH /api/maps/rt-leaders/:rtNumber` (CSRF-protected, user-keyed write rate limit, audited as `rt_leader.updated`) covering `name`, `phone`, `phone_is_whatsapp`, and nullable `alamat`; `rt_number` is validated 1–100 and the row must exist (404). The 100 rows are seeded; there is no create or delete endpoint, and no per-RT pages (§2).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `media_assets` + `media_asset_references`   | Uploaded photos, documents and data files. One service for all three kinds. `id`, `provider` (`local`), `storage_key` (relative path under `UPLOAD_DIR`, unique), `kind` ENUM (`photo`, `document`, `data`), `purpose`, `owner_key`, `mime_type`, `byte_size`, nullable `width`/`height`, `original_name` (display only, sanitized, never part of a path), `created_by_id` FK → `users` (`ON DELETE SET NULL`), `created_at`, `attached_at` (null = unattached/private), `detached_at` (set by `detachMedia`, cleared by `attachMedia`; starts the cleanup grace period for a swapped-out asset, migration `20261108000000_add_media_assets_detached_at`), `cleanup_claimed_at` (nullable datetime, irreversible deletion claim set before unlinking files, migration `20261110000000_add_media_lifecycle_columns`), `cleanup_quarantine_reason` (nullable varchar(64), set to `'invalid-path'` if `storage_key` escapes upload root). `media_asset_references` tracks persistent reference ownership tuples `(reference_type, reference_id, slot, asset_id)` (`UNIQUE` index `media_asset_references_tuple_key`, `asset_id` index, `ON DELETE RESTRICT ON UPDATE RESTRICT` FK to `media_assets.id`). No processing state machine. **Storage**: bytes live under `UPLOAD_DIR` (default `<repo-root>/uploads`; relative values resolve against the repository root, never the working directory; absolute values are used as-is). Boot creates it, proves it writable, and rejects a root whose real path overlaps `backend/` or `frontend/`; a rejected or unusable root does not stop the server: it logs a loud warning, media uploads and delivery answer 503 `MEDIA_STORAGE_UNAVAILABLE` (no path in the body), and a failed check is never cached, so media recovers once the storage is usable. The path is never exposed in an API response or public setting. Layout: `photos/<purpose>/<ownerKey>/<assetId>.webp`, `documents/<purpose>/<ownerKey>/<assetId>.<ext>` (documents and data), `derivatives/<assetId>/thumbnail.webp`, `_staging/<uploadId>/`. `assetId` is a random UUID. `purpose` is a server-side allowlist (`portal-hero`, `sambutan-lurah`, `cerita`, `tentang`, `publikasi-cover`, `publikasi-document`, `sumber-daya-data`), each allowing specific kinds. `owner_key` is server-determined: a fixed key for singleton purposes (`hero`, `lurah`), the uploader's user id otherwise. **Policy** (named constants in `backend/src/utils/mediaPolicy.ts`): photos JPEG/PNG/WebP ≤ 5 MiB, documents PDF/DOCX ≤ 20 MiB, data XLSX/CSV ≤ 10 MiB; SVG, HTML, executables, archives and macro-enabled Office are rejected. Type is decided by file signature, not extension or client MIME, and the declared extension must agree with it; DOCX/XLSX need `[Content_Types].xml` plus `word/document.xml` or `xl/workbook.xml` and must contain no `vbaProject.bin` or macro content type (time-boxed central-directory check, nothing is extracted); CSV must be UTF-8 text without NUL or control characters, and no cell may start with `=`, `+`, `-`, `@`, TAB or CR (spreadsheet formula injection) unless the cell is only a signed number or phone number (sign, optional space, a digit, then digits, spaces, `.`, `,`, `%` and `-` only, e.g. `-5`, `-5%`, `-1.234,56`, `+62 812-3456-7890`); `=` and `@` leads are always refused; the upload is refused (`CSV_FORMULA`, 415) with a message telling the editor to prefix the value with an apostrophe. The scan is a streaming RFC 4180 tokenizer (`backend/src/utils/mediaCsv.ts`), so memory stays bounded for any file size. **Photos are re-encoded** with sharp to WebP: EXIF/GPS and all other metadata are dropped, input pixels are bounded, the long edge is capped at 2560 px, and a 320 px thumbnail is written. **Upload** `POST /api/media` (Editor or Admin, CSRF-protected, user-keyed write rate limit): multipart `file` + `purpose`, one file per request, staged on disk and deleted on any failure; audited as `media.uploaded` (info; ids, purpose, kind and size only, never bytes, server paths or the filename). The response is `{ id, kind, mimeType, byteSize, width, height, originalName, previewUrl }`, where `previewUrl` is an API path, not a browser-loadable URL (see Delivery). **Delivery**: `GET /api/media/:id/preview` (Editor or Admin) serves any asset including unattached; `GET /api/media/:id` (public) serves photos and `GET /api/media/:id/download` (public) serves documents/data, both only when `attached_at` is set, otherwise 404 indistinguishable from a missing id; `?variant=thumbnail` selects the thumbnail of a photo. Every response resolves `storage_key` under the canonical root with a realpath containment check, takes `Content-Type` from the stored extension (not the DB column or the client), sets `X-Content-Type-Options: nosniff` and a `default-src 'none'; sandbox` CSP, and a missing file is a plain 404 with code `MEDIA_FILE_MISSING` and no path. Assets claimed for deletion (`cleanup_claimed_at IS NOT NULL`) or quarantined (`cleanup_quarantine_reason IS NOT NULL`) return 404 immediately. Attached assets are cached `public, max-age=3600, must-revalidate` (an hour, so un-publishing via `detachMedia` takes effect promptly; not `immutable`); previews are `private, no-store` and authenticate with the `Authorization` header only (no cookie, no signed URLs — settled), so the editor UI must load them with the authenticated API client and display a blob URL; a bare `<img src>`/`<a href>` gets 401. Documents and data are only ever sent as `Content-Disposition: attachment` with a sanitized filename carrying the stored extension. **Lifecycle**: an upload is private until a content transaction calls `attachMedia(tx, assetIds, { purpose, reference })` (backend/src/services/media.service.ts), which locks target rows `FOR UPDATE`, validates that each asset exists, was uploaded for that purpose, and is not claimed for deletion or quarantined, records the `(reference_type, reference_id, slot, asset_id)` tuple idempotently in `media_asset_references`, sets `attached_at = now` when previously unattached, and clears `detached_at`. `detachMedia` deletes the matching reference tuple from `media_asset_references` and unpublishes (`attached_at = null, detached_at = now`) only when 0 references remain for that asset (idempotent if already unattached, and a no-op if deleted by cleanup). Content PRs call these inside their own transactions. `npm run media:cleanup` (scheduled, see README Deployment) removes `_staging/` directories and unattached assets whose grace period (default 24 h) has passed, measured from `COALESCE(detached_at, created_at)` so an old asset that content just replaced is not deleted by the very next run. Cleanup validates paths first (quarantining escaped paths with `cleanup_quarantine_reason = 'invalid-path'` without claiming deletion), locks unclaimed eligible rows `FOR UPDATE` to verify zero references and commit an irreversible `cleanup_claimed_at` timestamp before removing files, keeps `cleanup_claimed_at` set across failed removals for retry on the next run, and deletes the DB row once files are absent. The app DB user keeps full DML on both tables (grants script). |
 
 No indicator-citation-tracking table exists. Cerita-page data citations (e.g. the Bank Sampah
 page citing Ekonomi & Ketertiban figures) stay informal/manual in prose text, not structurally
@@ -389,7 +428,7 @@ Three more tables exist alongside the auth layer (`Role`, `User`, `RefreshToken`
 implemented and out of scope for this schema pass in the same way those are:
 
 - `audit_logs` — the audit trail (§3). `target_type`/`target_id` are deliberately not a foreign
-  key, so it can log actions against any of the 10 content tables above once they exist, without
+  key, so it can log actions against any of the 11 content tables above once they exist, without
   a schema change. This is also where the §5 tier-1 prose-builder override log lives.
 - `system_settings` — generic key/value store. Stores admin-configurable audit log
   retention (`audit.retention_*`, §3), public portal profile/contact metadata (`public.*`
@@ -414,7 +453,10 @@ RESTRICT` (MySQL forbids CASCADE/SET NULL on a column used in a `CHECK`), so a t
   enforces the §5 attach rule in the database. Read via `GET /api/comparison-templates` and
   `/:id` (Editor or Admin — templates are not public content, only the rendered sentence is);
   mutated via Admin-only `POST` / `PATCH /:id` / `DELETE /:id` (CSRF-protected, logged as
-  `comparison_template.created` / `.updated` / `.deleted`, plus the override action in §3).
+  `comparison_template.created` / `.updated` / `.deleted`, plus the override action in §3;
+  `PATCH /:id` carries required `expectedUpdatedAt` and answers 409 `STALE_WRITE` on concurrent modification;
+  unique-slug conflicts on `POST` and `PATCH` answer 409 `SLUG_TAKEN`),
+  and the Admin-only, stateless `POST /preview` of §5 (no table access, no audit row).
   Seeded with a default `perbandingan-tahunan` template.
 
 Weather widget data (§8) has no table here, and isn't merely uncovered by this pass — it's
@@ -424,6 +466,54 @@ authored or versioned, so nothing needs storing. Operational knobs governing its
 caching live in `system_settings` as a separate operational concern.
 
 ## 8. Site Structure
+
+**Public shell.** Every public page is mounted inside one layout (`PublicLayout.vue`, selected by
+`meta.layout = 'public'` on the route): skip link, header with the navigation menu, the single
+`<main id="main-content">`, and the footer. Views supply page content only and never add their own
+`<main>`, skip link, navbar or footer; each settled view has exactly one `<h1>`. Login, register,
+setup-password, the OAuth callback, `/dashboard` (its own `<main>`) and the admin shell are outside it.
+
+- **Branding.** The header's institution and app names come from the public settings on every
+  route, never from per-view defaults.
+- **Navigation groups.** Beranda, then **Cerita**, **Sumber Daya** and **Tentang**, each a labelled
+  list of plain links (not an application `role="menu"`); the current destination carries
+  `aria-current="page"` and its group is marked. Cerita topics derive from the page hierarchy
+  (`GET /api/pages`) in `sort_order`; if it has not loaded, fixed fallback links to the eight
+  Cerita pages are shown instead. Sumber Daya holds Publikasi, Peta, Permintaan Data and Ketua RT;
+  Tentang holds the three Tentang pages. Links to unregistered routes are omitted.
+- **Account area.** One place, inside the menu, identical on every public page. Signed out: a single
+  "Masuk" link. Signed in: email and role, the CMS entry the role may use (the first top-level
+  `ADMIN_NAV` link the role is allowed, so Editor and Admin get the admin shell and a plain user gets
+  none), and logout via the shared logout flow.
+- **Menu behavior.** Below `md` it is a bounded right-anchored sheet (`min(88vw, 22rem)`, so a dimmed
+  backdrop strip stays visible and tappable) exposed as a named modal dialog (`role="dialog"`,
+  `aria-modal`, label "Menu navigasi"): focus moves in and is trapped, Escape / backdrop / close
+  button dismiss it, focus returns to the toggle, the page behind and the header's logo and toggle
+  are inert and body scroll is locked (ref-counted, so it never releases another overlay's lock).
+  Escape is ignored while any other modal dialog is open in the document. From `md` it is an
+  anchored navy panel with normal tab order; Escape and an outside click dismiss it. Following a link
+  or any route change closes it (focus goes to the toggle if it was inside the panel). On a route
+  path change after the first load, focus moves to `main#main-content` unless the user is typing in
+  a field; query/hash-only changes do not move focus.
+- **Header states.** The header has one height in every state. Foreground is always white; only the
+  background changes. On Home (`meta.headerOverlay`) it overlays the hero: transparent (over a
+  localized navy scrim) at the top with the menu closed, navy once scrolled past 64px or while the
+  menu is open. Every other page is navy. State is re-read on load, scroll, resize, back/forward and
+  route change, so a refresh at a scrolled position starts navy. Reduced motion makes transitions
+  instant. The hero is full viewport height (`100dvh`, not reduced by the header) and reserves the header's height as top padding, and in-page anchors (hero, chapters,
+  skip link target) clear it via `scroll-margin`.
+- **Scroll and focus.** Public routes scroll the window to the top on a new path; back/forward
+  restore the previous position, except between two entries of the same path that differ only by
+  hash, which return to that hash target; a hash link (in-page anchor, chapter TOC, skip link)
+  scrolls to its target below the sticky header, including repeat clicks on the same link and
+  `/cerita/x#chapter` deep links once the chapters have rendered. Going back (or forward) to a Cerita URL lands
+  on its hash target (or the top) rather than the earlier reading offset, with no second scroll, because the content loads
+  asynchronously and the saved offset would be clamped to the short page. Query-only changes keep the
+  position. Focus moves to
+  `main#main-content` on a path change without scrolling. Admin routes scroll an inner container,
+  which the admin shell resets to the top on a path change.
+- **Breadcrumb.** Tentang/Sumber Daya breadcrumbs are a navy strip continuing the header and the navy
+  hero panel (no white band between them); long labels wrap.
 
 **Landing page**, top to bottom:
 
@@ -463,7 +553,9 @@ displayed dataset has an address value. A prominent sample-data notice follows t
 collapsible bands — flat table only.
 
 Operational roster entry is available in the CMS: manual editing of name, phone, WhatsApp flag,
-address, and optional coordinates, plus CSV preview/apply. CSV columns are
+address, and an optional pin placed on the map (click, drag, or keyboard buttons; no typed
+coordinate fields; uses the same `LocationPicker` as the default map view, in pin mode), plus
+CSV preview/apply for exact coordinates. CSV columns are
 `rtNumber,name,phone,phoneIsWhatsapp,alamat,latitude,longitude`; blank cells preserve existing
 values, omitted RTs are never deleted, and the whole import rolls back if any row is invalid.
 Coordinates create or update the RT's 1:1 `ketua_rt` spatial point.
@@ -513,7 +605,7 @@ Provides three tabbed operational interfaces:
 
 1. **Indikator & Tabel**: Searchable and filterable list of all scalar indicators and matrix tables with modal editing forms (`ScalarIndicatorForm` and `TableIndicatorForm`).
 2. **Blok Konten & Profil**: Direct editing of narrative content blocks (`landing-hero`, `landing-sambutan-lurah`, `landing-highlights`, `tentang-kelurahan-profil`, `publikasi-katalog`) using `ContentBlockForm`.
-3. **Pengaturan Publik Portal** (admin only): Management of public metadata (`public.*` keys: app name, institution, tagline, contact channels, default map coordinates and zoom) using `PublicSettingsForm`. Editors do not see this tab; `PATCH /api/settings/public` requires the admin role.
+3. **Pengaturan Publik Portal** (admin only): Management of public metadata (`public.*` keys: app name, institution, tagline, contact channels, default map view) using `PublicSettingsForm`. The default map view is set with the shared `LocationPicker` ("Atur tampilan peta"): panning and zooming the map, or its direction/zoom buttons and keyboard mode, define the center and zoom; there is no numeric latitude, longitude or zoom entry. Nothing is saved until "Simpan perubahan"; "Batal" leaves the stored view unchanged. Closing the dialog with unsaved changes asks for confirmation ("Perubahan belum disimpan" / "Tutup tanpa menyimpan perubahan?"); Escape, the backdrop or the X on that prompt means "stay". The API still validates latitude -90..90, longitude -180..180 and integer zoom 1..20. The dialog opens only once the public settings have loaded; while they are still loading, or after a failed load, it stays closed and the page shows the message instead (the load error with its retry, or a short "still loading" note). Editors do not see this tab; `PATCH /api/settings/public` requires the admin role.
 
 **Dynamic View & Component Integration:**
 
@@ -562,9 +654,10 @@ Admin-only **Sistem** group (Akun pengguna, Templat kalimat, Konfigurasi sistem,
 Visibility is driven by a single role-to-items map (`frontend/src/config/adminNav.ts`) that the
 route guards also read from, so the sidebar and the guards cannot disagree about who can reach a
 given page — a resource a role isn't authorized for is absent from the sidebar entirely, not
-merely disabled. Cerita, Templat kalimat, and Konfigurasi sistem are not built yet; their sidebar
-entries carry a "Segera hadir" badge and open a minimal placeholder view rather than being hidden.
-Rukun Tetangga opens its real management view; Peta and Publikasi still open placeholders.
+merely disabled. Cerita and Konfigurasi sistem are not built yet; their sidebar entries carry a
+"Segera hadir" badge and open a minimal placeholder view rather than being hidden. Rukun Tetangga
+and Templat kalimat (§5) open their real management views; Peta and Publikasi still open
+placeholders.
 
 ## 9. Explicitly Out of Scope
 

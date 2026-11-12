@@ -3,7 +3,10 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router';
 import { usePagesStore } from '../stores/pages.store';
 import { useIndicatorsStore, type IndicatorDto } from '../stores/indicators.store';
-import { useIndicatorTablesStore, type IndicatorTableDetailDto } from '../stores/indicatorTables.store';
+import {
+  useIndicatorTablesStore,
+  type IndicatorTableDetailDto,
+} from '../stores/indicatorTables.store';
 import { useContentBlocksStore, type ContentBlock } from '../stores/contentBlocks.store';
 import ChapterToc, { type TocChapter } from '../components/cerita/ChapterToc.vue';
 import ChapterSection from '../components/cerita/ChapterSection.vue';
@@ -99,7 +102,9 @@ function setupScrollSpy() {
     (entries) => {
       const visible = entries.filter((entry) => entry.isIntersecting);
       if (visible.length === 0) return;
-      const topMost = visible.reduce((a, b) => (a.boundingClientRect.top < b.boundingClientRect.top ? a : b));
+      const topMost = visible.reduce((a, b) =>
+        a.boundingClientRect.top < b.boundingClientRect.top ? a : b,
+      );
       const id = topMost.target.getAttribute('data-chapter-id');
       if (id) activeChapterId.value = id;
     },
@@ -160,93 +165,123 @@ async function loadPage() {
   isLoading.value = false;
   await nextTick();
   setupScrollSpy();
+  scrollToHashTarget();
+}
+
+// Remembers the last slug+hash scrolled to so retry/reload of the same anchor does not snap the
+// user back to the anchor once they have scrolled elsewhere.
+let lastScrolledSlugHash: string | null = null;
+
+// A `/cerita/x#bab` deep link resolves before the chapters exist (the page is still a skeleton
+// when the router scrolls), so the router finds no target. Once the chapters render, honour the
+// hash here. Uses native scrollIntoView so the element's own `scroll-margin-top` clears the header.
+function scrollToHashTarget(): boolean {
+  if (!route.hash) return false;
+  const currentPair = `${slug.value}${route.hash}`;
+  if (lastScrolledSlugHash === currentPair) return false;
+  let id = route.hash.slice(1);
+  try {
+    id = decodeURIComponent(id);
+  } catch {
+    // keep the raw id
+  }
+  const el = document.getElementById(id);
+  if (el) {
+    el.scrollIntoView({ behavior: 'instant', block: 'start' });
+    lastScrolledSlugHash = currentPair;
+    return true;
+  }
+  return false;
 }
 
 onMounted(loadPage);
-watch(slug, loadPage);
+watch(slug, () => {
+  lastScrolledSlugHash = null;
+  loadPage();
+});
+watch(
+  () => route.hash,
+  () => {
+    scrollToHashTarget();
+  },
+);
 onBeforeUnmount(() => observer?.disconnect());
+
+defineExpose({ retryLoad, loadPage });
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col bg-white">
-    <a
-      href="#main-content"
-      class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-xl focus:bg-brand-navy focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white"
+  <!-- PublicLayout supplies the skip link, header, <main id="main-content"> and footer. -->
+  <div class="pb-24 lg:pb-12">
+    <div v-if="isLoading" class="mx-auto max-w-3xl px-4 py-16 sm:px-6" data-test="cerita-loading">
+      <div class="bg-surface-hover h-8 w-2/3 animate-pulse rounded-md" />
+      <div class="bg-surface-muted mt-4 h-4 w-full animate-pulse rounded-md" />
+    </div>
+
+    <div
+      v-else-if="notFound"
+      class="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6"
+      data-test="cerita-not-found"
     >
-      Lewati ke konten utama
-    </a>
+      <h1 class="text-brand-navy text-lg font-semibold">Halaman tidak ditemukan</h1>
+      <p class="text-text-muted mt-2 text-sm">
+        Halaman yang Anda cari tidak tersedia. Periksa kembali tautan yang Anda gunakan.
+      </p>
+    </div>
 
-    <main id="main-content" class="grow pb-24 lg:pb-12">
-      <div v-if="isLoading" class="mx-auto max-w-3xl px-4 py-16 sm:px-6" data-test="cerita-loading">
-        <div class="h-8 w-2/3 animate-pulse rounded-md bg-surface-hover" />
-        <div class="mt-4 h-4 w-full animate-pulse rounded-md bg-surface-muted" />
-      </div>
-
-      <div
-        v-else-if="notFound"
-        class="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6"
-        data-test="cerita-not-found"
+    <div
+      v-else-if="hasError"
+      class="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6"
+      data-test="cerita-error"
+    >
+      <h1 class="text-brand-navy text-lg font-semibold">Gagal memuat halaman</h1>
+      <p class="text-text-muted mt-2 text-sm">
+        Terjadi kesalahan saat memuat data. Periksa koneksi Anda dan coba lagi.
+      </p>
+      <button
+        type="button"
+        class="bg-brand-navy rounded-btn mt-5 px-4 py-2 text-sm font-semibold text-white"
+        data-test="cerita-retry"
+        @click="retryLoad"
       >
-        <h1 class="text-lg font-semibold text-brand-navy">Halaman tidak ditemukan</h1>
-        <p class="mt-2 text-sm text-text-muted">
-          Halaman yang Anda cari tidak tersedia. Periksa kembali tautan yang Anda gunakan.
-        </p>
+        Coba lagi
+      </button>
+    </div>
+
+    <template v-else-if="page">
+      <div class="mx-auto max-w-3xl px-4 pt-12 sm:px-6" data-test="cerita-hero">
+        <h1 class="text-brand-navy text-xl leading-tight font-bold tracking-tight">
+          {{ page.title }}
+        </h1>
       </div>
 
-      <div
-        v-else-if="hasError"
-        class="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6"
-        data-test="cerita-error"
-      >
-        <h1 class="text-lg font-semibold text-brand-navy">Gagal memuat halaman</h1>
-        <p class="mt-2 text-sm text-text-muted">
-          Terjadi kesalahan saat memuat data. Periksa koneksi Anda dan coba lagi.
-        </p>
-        <button
-          type="button"
-          class="bg-brand-navy mt-5 rounded-btn px-4 py-2 text-sm font-semibold text-white"
-          data-test="cerita-retry"
-          @click="retryLoad"
-        >
-          Coba lagi
-        </button>
-      </div>
-
-      <template v-else-if="page">
-        <div class="mx-auto max-w-3xl px-4 pt-12 sm:px-6" data-test="cerita-hero">
-          <h1 class="text-brand-navy text-xl leading-tight font-bold tracking-tight">
-            {{ page.title }}
-          </h1>
-        </div>
-
-        <div class="mx-auto flex max-w-5xl gap-10 px-4 sm:px-6">
-          <ChapterToc
-            variant="rail"
-            :chapters="tocChapters"
-            :active-chapter-id="activeChapterId"
-            @navigate="handleNavigate"
-          />
-
-          <div class="min-w-0 flex-1 divide-y divide-border">
-            <ChapterSection
-              v-for="chapter in page.chapters"
-              :key="chapter.id"
-              :chapter="chapter"
-              :prose-by-section-id="proseBySectionId"
-              :indicators-by-section-id="indicatorsBySectionId"
-              :tables-by-section-id="tablesBySectionId"
-              :section-errors-by-section-id="sectionErrorsBySectionId"
-            />
-          </div>
-        </div>
-
+      <div class="mx-auto flex max-w-5xl gap-10 px-4 sm:px-6">
         <ChapterToc
-          variant="sheet"
+          variant="rail"
           :chapters="tocChapters"
           :active-chapter-id="activeChapterId"
           @navigate="handleNavigate"
         />
-      </template>
-    </main>
+
+        <div class="divide-border min-w-0 flex-1 divide-y">
+          <ChapterSection
+            v-for="chapter in page.chapters"
+            :key="chapter.id"
+            :chapter="chapter"
+            :prose-by-section-id="proseBySectionId"
+            :indicators-by-section-id="indicatorsBySectionId"
+            :tables-by-section-id="tablesBySectionId"
+            :section-errors-by-section-id="sectionErrorsBySectionId"
+          />
+        </div>
+      </div>
+
+      <ChapterToc
+        variant="sheet"
+        :chapters="tocChapters"
+        :active-chapter-id="activeChapterId"
+        @navigate="handleNavigate"
+      />
+    </template>
   </div>
 </template>

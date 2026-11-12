@@ -8,10 +8,18 @@ import {
   type AuditRequestContext,
 } from './audit.service.js';
 import { SLUG_REGEX, indicatorCachesInvalidator } from './indicators.service.js';
+import {
+  expectedUpdatedAtSchema,
+  assertFresh,
+  HierarchyServiceError,
+} from '../utils/hierarchyAuthoring.js';
 import { executeLockedTransaction, withChangeResult } from '../utils/lockTransactionCache.js';
 import {
   TEMPLATE_SLOTS,
+  renderComparison,
+  computeTrend,
   validateTemplateStructure,
+  type Trend,
   type ComparisonTemplateText,
   type TemplateField,
   type TemplateStructureError,
@@ -34,19 +42,25 @@ export interface TrendWarning extends TrendKeywordMatch {
 
 export class ComparisonTemplateServiceError extends Error {
   statusCode: number;
-  code?: string;
-  warnings?: TrendWarning[];
+  code?: string | undefined;
+  warnings?: TrendWarning[] | undefined;
+  details?: Record<string, unknown> | undefined;
 
   constructor(
     message: string,
     statusCode: number,
-    options: { code?: string; warnings?: TrendWarning[] } = {},
+    options: {
+      code?: string | undefined;
+      warnings?: TrendWarning[] | undefined;
+      details?: Record<string, unknown> | undefined;
+    } = {},
   ) {
     super(message);
     this.name = 'ComparisonTemplateServiceError';
     this.statusCode = statusCode;
     if (options.code !== undefined) this.code = options.code;
     if (options.warnings !== undefined) this.warnings = options.warnings;
+    if (options.details !== undefined) this.details = options.details;
   }
 }
 
@@ -150,12 +164,19 @@ export const updateComparisonTemplateSchema = z
     trendNaik: templateFields.trendNaik.optional(),
     trendTurun: templateFields.trendTurun.optional(),
     trendTetap: templateFields.trendTetap.optional(),
+    expectedUpdatedAt: expectedUpdatedAtSchema,
     acknowledgedWarnings,
   })
   .strict()
-  .refine((data) => Object.keys(data).some((key) => key !== 'acknowledgedWarnings'), {
-    message: 'Setidaknya satu bidang harus disediakan untuk diperbarui',
-  });
+  .refine(
+    (data) =>
+      Object.keys(data).some(
+        (key) => key !== 'acknowledgedWarnings' && key !== 'expectedUpdatedAt',
+      ),
+    {
+      message: 'Setidaknya satu bidang harus disediakan untuk diperbarui',
+    },
+  );
 
 const FIELD_NAMES: Record<TemplateField, string> = {
   body: 'body',
@@ -346,6 +367,7 @@ export const createComparisonTemplate = async (
       throw new ComparisonTemplateServiceError(
         `Slug '${input.slug}' sudah digunakan template lain.`,
         409,
+        { code: 'SLUG_TAKEN' },
       );
     }
     throw error;
@@ -383,6 +405,8 @@ export const updateComparisonTemplate = async (
         if (!existing) {
           throw new ComparisonTemplateServiceError('Template tidak ditemukan.', 404);
         }
+
+        assertFresh(existing.updatedAt, input.expectedUpdatedAt, 'Templat');
 
         // The merged template is what indicators will render, so that is what must be valid.
         if (
@@ -441,9 +465,17 @@ export const updateComparisonTemplate = async (
       },
     });
   } catch (error) {
+    if (error instanceof HierarchyServiceError) {
+      throw new ComparisonTemplateServiceError(error.message, error.statusCode, {
+        code: error.code,
+        details: error.details,
+      });
+    }
     if (error instanceof ComparisonTemplateServiceError) throw error;
     if (isPrismaKnownError(error, 'P2002')) {
-      throw new ComparisonTemplateServiceError('Slug sudah digunakan template lain.', 409);
+      throw new ComparisonTemplateServiceError('Slug sudah digunakan template lain.', 409, {
+        code: 'SLUG_TAKEN',
+      });
     }
     if (isPrismaKnownError(error, 'P2025')) {
       throw new ComparisonTemplateServiceError('Template tidak ditemukan.', 404);
@@ -485,6 +517,7 @@ export const deleteComparisonTemplate = async (
           throw new ComparisonTemplateServiceError(
             `Template masih dipakai ${existing._count.indicators} indikator. Lepaskan dari indikator tersebut sebelum menghapusnya.`,
             409,
+            { code: 'TEMPLATE_IN_USE' },
           );
         }
 
@@ -519,6 +552,219 @@ export const deleteComparisonTemplate = async (
     }
     throw error;
   }
+};
+
+// --- Live preview (SPEC §5, §8) --------------------------------------------------------------
+
+/** Matches the indicator service's Decimal(18,4) guard, so a preview accepts what a save would. */
+const PREVIEW_DECIMAL = /^-?\d{1,14}(\.\d{1,4})?$/;
+
+const previewSampleSchema = z
+  .object({
+    title: z.string().trim().min(1).max(60).optional(),
+    label: z.string().trim().min(1).max(255).optional(),
+    unit: z.string().trim().max(32).nullable().optional(),
+    valueCurrent: z.string().trim().regex(PREVIEW_DECIMAL, 'Nilai contoh harus berupa angka.'),
+    valuePrevious: z.string().trim().regex(PREVIEW_DECIMAL, 'Nilai contoh harus berupa angka.'),
+    periodCurrent: z.string().trim().min(1).max(64).optional(),
+    periodPrevious: z.string().trim().min(1).max(64).optional(),
+  })
+  .strict();
+
+// Unlike a save, a preview of a half-written draft is the normal case, so the text fields may be
+// empty: that is reported as a problem in the 200 response rather than rejected as a bad request.
+export const previewComparisonTemplateSchema = z
+  .object({
+    body: z
+      .string()
+      .trim()
+      .max(MAX_BODY_LENGTH, `Susunan kalimat maksimal ${MAX_BODY_LENGTH} karakter`),
+    trendNaik: z.string().trim().max(500, 'Teks saat nilai naik maksimal 500 karakter'),
+    trendTurun: z.string().trim().max(500, 'Teks saat nilai turun maksimal 500 karakter'),
+    trendTetap: z.string().trim().max(500, 'Teks saat nilai tetap maksimal 500 karakter'),
+    samples: z.array(previewSampleSchema).min(1).max(6).optional(),
+  })
+  .strict();
+
+export interface PreviewProblem {
+  field: TemplateField;
+  /** Plain Indonesian; never mentions placeholder syntax, slugs or status codes. */
+  message: string;
+}
+
+export interface PreviewSentence {
+  title: string;
+  trend: Trend;
+  /** Null when no sentence would be shown publicly for this example (see `note`). */
+  text: string | null;
+  note: string | null;
+}
+
+export interface ComparisonTemplatePreview {
+  valid: boolean;
+  problems: PreviewProblem[];
+  previews: PreviewSentence[];
+}
+
+interface PreviewSample {
+  title: string;
+  label: string;
+  unit: string | null;
+  valueCurrent: string;
+  valuePrevious: string;
+  periodCurrent: string;
+  periodPrevious: string;
+}
+
+/** Synthetic examples used when the caller sends none: one per direction plus a zero base. */
+export const DEFAULT_PREVIEW_SAMPLES: readonly PreviewSample[] = [
+  {
+    title: 'Contoh saat nilai naik',
+    label: 'Jumlah Penduduk',
+    unit: 'jiwa',
+    valueCurrent: '12480',
+    valuePrevious: '12360',
+    periodCurrent: '2026',
+    periodPrevious: '2025',
+  },
+  {
+    title: 'Contoh saat nilai turun',
+    label: 'Jumlah Penduduk',
+    unit: 'jiwa',
+    valueCurrent: '12240',
+    valuePrevious: '12360',
+    periodCurrent: '2026',
+    periodPrevious: '2025',
+  },
+  {
+    title: 'Contoh saat nilai tetap',
+    label: 'Jumlah Penduduk',
+    unit: 'jiwa',
+    valueCurrent: '12360',
+    valuePrevious: '12360',
+    periodCurrent: '2026',
+    periodPrevious: '2025',
+  },
+  {
+    title: 'Contoh saat nilai sebelumnya nol',
+    label: 'Jumlah Penduduk',
+    unit: 'jiwa',
+    valueCurrent: '120',
+    valuePrevious: '0',
+    periodCurrent: '2026',
+    periodPrevious: '2025',
+  },
+];
+
+const FRIENDLY_FIELD_NAMES: Record<TemplateField, string> = {
+  body: 'susunan kalimat',
+  trendNaik: 'teks saat nilai naik',
+  trendTurun: 'teks saat nilai turun',
+  trendTetap: 'teks saat nilai tetap',
+};
+
+/**
+ * Preview-time wording for the structure rules. The editor UI builds sentences from named parts,
+ * so these never quote placeholder syntax; the save path keeps `describeStructureError` for API
+ * callers who do type it.
+ */
+function describeStructureProblem(error: TemplateStructureError): PreviewProblem {
+  const where = FRIENDLY_FIELD_NAMES[error.field];
+  switch (error.code) {
+    case 'TREND_SLOT_MISSING':
+      return {
+        field: error.field,
+        message:
+          'Susunan kalimat perlu memuat satu bagian "Keterangan perubahan" agar kata naik, turun, atau tetap terisi otomatis.',
+      };
+    case 'TREND_SLOT_DUPLICATE':
+      return {
+        field: error.field,
+        message: 'Bagian "Keterangan perubahan" hanya boleh dipakai satu kali dalam kalimat.',
+      };
+    case 'TREND_SLOT_IN_VARIANT':
+      return {
+        field: error.field,
+        message: `Bagian "Keterangan perubahan" tidak bisa dipakai di ${where}, karena bagian itu sendiri yang mengisinya.`,
+      };
+    case 'UNKNOWN_PLACEHOLDER':
+    case 'STRAY_BRACE':
+      return {
+        field: error.field,
+        message: `Ada bagian tidak dikenali di ${where}. Hapus bagian tersebut.`,
+      };
+  }
+}
+
+const EMPTY_FIELD_PROBLEMS: Record<TemplateField, string> = {
+  body: 'Susunan kalimat belum diisi.',
+  trendNaik: 'Teks saat nilai naik belum diisi.',
+  trendTurun: 'Teks saat nilai turun belum diisi.',
+  trendTetap: 'Teks saat nilai tetap belum diisi.',
+};
+
+const ZERO_BASE_NOTE =
+  'Kalimat ini tidak ditampilkan untuk contoh ini: ia memuat persentase perubahan, padahal nilai sebelumnya nol sehingga persentasenya tidak bisa dihitung.';
+
+/**
+ * Renders what the public Cerita page would show for a draft template, through the same
+ * `renderComparison` the indicator read path uses (exact decimals, id-ID numbers, no percentage
+ * of a zero base). Pure: touches no database and writes no audit row.
+ */
+export const previewComparisonTemplate = (rawInput: unknown): ComparisonTemplatePreview => {
+  const input = parsePayload(previewComparisonTemplateSchema, rawInput);
+  const template: ComparisonTemplateText = {
+    body: input.body,
+    trendNaik: input.trendNaik,
+    trendTurun: input.trendTurun,
+    trendTetap: input.trendTetap,
+  };
+
+  const problems: PreviewProblem[] = [];
+  for (const field of ['body', 'trendNaik', 'trendTurun', 'trendTetap'] as const) {
+    if (template[field] === '') problems.push({ field, message: EMPTY_FIELD_PROBLEMS[field] });
+  }
+  // An empty field has nothing to validate beyond its own "belum diisi".
+  problems.push(
+    ...validateTemplateStructure(template)
+      .filter((error) => template[error.field] !== '')
+      .map(describeStructureProblem),
+  );
+
+  if (problems.length > 0) return { valid: false, problems, previews: [] };
+
+  const samples: PreviewSample[] = input.samples?.map((sample, index) => ({
+    title: sample.title ?? `Contoh ${index + 1}`,
+    label: sample.label ?? 'Jumlah Penduduk',
+    unit: sample.unit === undefined ? 'jiwa' : sample.unit,
+    valueCurrent: sample.valueCurrent,
+    valuePrevious: sample.valuePrevious,
+    periodCurrent: sample.periodCurrent ?? '2026',
+    periodPrevious: sample.periodPrevious ?? '2025',
+  })) ?? [...DEFAULT_PREVIEW_SAMPLES];
+
+  const previews = samples.map((sample): PreviewSentence => {
+    const rendered = renderComparison(
+      {
+        label: sample.label,
+        unit: sample.unit,
+        valueCurrent: sample.valueCurrent,
+        valuePrevious: sample.valuePrevious,
+        periodCurrent: sample.periodCurrent,
+        periodPrevious: sample.periodPrevious,
+        isComputedComparison: true,
+      },
+      template,
+    );
+    return {
+      title: sample.title,
+      trend: rendered?.trend ?? computeTrend(sample.valueCurrent, sample.valuePrevious),
+      text: rendered?.text ?? null,
+      note: rendered ? null : ZERO_BASE_NOTE,
+    };
+  });
+
+  return { valid: true, problems: [], previews };
 };
 
 /**

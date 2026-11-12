@@ -38,3 +38,5 @@ const inertDefaults: Record<string, string> = {
 for (const [key, value] of Object.entries(inertDefaults)) {
   process.env[key] ??= value;
 }
+
+process.env['UPLOAD_DIR'] ??= '/tmp/sidata-test-uploads';

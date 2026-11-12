@@ -5,6 +5,11 @@ export interface UseDrawerFocusTrapOptions {
   containerRef: Ref<HTMLElement | null>;
   initialFocusRef?: Ref<HTMLElement | null>;
   onEscape: () => void;
+  /**
+   * Dialog semantics the drawer carries itself (`containerRef` usually has `role="dialog"` while
+   * modal). The Escape guard must not mistake it for "an unrelated dialog is open".
+   */
+  ignoreDialogRef?: Ref<HTMLElement | null>;
 }
 
 function isElementVisible(el: HTMLElement): boolean {
@@ -22,15 +27,32 @@ function isElementVisible(el: HTMLElement): boolean {
   return style.display !== 'none' && style.visibility !== 'hidden';
 }
 
-function isEventFromOpenDialog(event: KeyboardEvent): boolean {
+const DIALOG_SELECTOR = '[role="dialog"], [role="alertdialog"], dialog';
+const OPEN_MODAL_SELECTOR = '[role="dialog"][aria-modal="true"], dialog[open]';
+
+/**
+ * Whether an Escape press belongs to some other dialog rather than to the caller's own overlay.
+ *
+ * Deliberately broader than "the event originated in a dialog": while ANY modal dialog is open
+ * anywhere in the document it is the topmost layer, so Escape dismisses that dialog and must not
+ * also close the drawer underneath (focus may legitimately sit on the body or the drawer while a
+ * dialog is open). The caller's own dialog panel (`ignore`) is excluded from both checks, so
+ * Escape inside the drawer still closes it.
+ */
+export function isEventFromOpenDialog(event: KeyboardEvent, ignore?: HTMLElement | null): boolean {
   if (event.defaultPrevented) return true;
+  const isOwn = (el: Element | null) =>
+    Boolean(el && ignore && (el === ignore || ignore.contains(el)));
   const target =
     (event.target instanceof HTMLElement ? event.target : null) ??
     (document.activeElement instanceof HTMLElement ? document.activeElement : null);
-  if (target?.closest('[role="dialog"], [role="alertdialog"], dialog')) {
+  const enclosing = target?.closest(DIALOG_SELECTOR) ?? null;
+  if (enclosing && !isOwn(enclosing)) {
     return true;
   }
-  return Boolean(document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]'));
+  return Array.from(document.querySelectorAll<HTMLElement>(OPEN_MODAL_SELECTOR))
+    .filter(isElementVisible)
+    .some((el) => !isOwn(el));
 }
 
 /**
@@ -42,6 +64,7 @@ export function useDrawerFocusTrap({
   containerRef,
   initialFocusRef,
   onEscape,
+  ignoreDialogRef,
 }: UseDrawerFocusTrapOptions) {
   function getFocusableElements(): HTMLElement[] {
     const container = containerRef.value;
@@ -56,7 +79,7 @@ export function useDrawerFocusTrap({
     if (!isOpen.value) return;
 
     if (event.key === 'Escape') {
-      if (isEventFromOpenDialog(event)) return;
+      if (isEventFromOpenDialog(event, ignoreDialogRef?.value ?? containerRef.value)) return;
       onEscape();
       return;
     }
