@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, useId } from 'vue';
+import { computed, onBeforeUnmount, ref, useId, watch } from 'vue';
 import type { ArticlePhoto } from '../../types/ceritaArticle';
 import FigureCard from './FigureCard.vue';
 
@@ -8,11 +8,16 @@ import FigureCard from './FigureCard.vue';
  * buttons (swiping is never the only way) and position dots.
  */
 const props = defineProps<{ photos: ArticlePhoto[] }>();
+defineEmits<{ 'image-error': [photo: ArticlePhoto] }>();
 
 const labelId = useId();
 const track = ref<HTMLElement | null>(null);
 const index = ref(0);
 const total = computed(() => props.photos.length);
+// A photo that failed to load is removed from the row, so the position must stay within it.
+watch(total, (count) => {
+  index.value = Math.min(index.value, Math.max(0, count - 1));
+});
 
 function cardStep(): number {
   const first = track.value?.firstElementChild as HTMLElement | null;
@@ -70,6 +75,7 @@ onBeforeUnmount(() => cancelAnimationFrame(raf));
         :key="photo.id"
         :photo="photo"
         class="w-[78%] shrink-0 snap-start sm:w-[60%]"
+        @image-error="$emit('image-error', photo)"
       />
     </div>
 

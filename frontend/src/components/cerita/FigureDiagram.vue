@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { DiagramFigure } from '../../types/ceritaArticle';
 import { safeImageSrc } from '../../utils/ceritaFigures';
 import BarDiagram from '../common/BarDiagram.vue';
@@ -7,7 +7,19 @@ import BarDiagram from '../common/BarDiagram.vue';
 /** A plot or diagram on a white card: centred title, the picture (or live bars), source below. */
 const props = defineProps<{ figure: DiagramFigure }>();
 
+const emit = defineEmits<{ 'image-error': [] }>();
+
 const failed = ref(false);
+watch(
+  () => props.figure.src,
+  () => {
+    failed.value = false;
+  },
+);
+function onImageError() {
+  failed.value = true;
+  emit('image-error');
+}
 const src = computed(() => safeImageSrc(props.figure.src));
 const showImage = computed(() => src.value !== null && !failed.value);
 const showBars = computed(() => !showImage.value && (props.figure.bars?.items.length ?? 0) > 0);
@@ -26,7 +38,7 @@ const showBars = computed(() => !showImage.value && (props.figure.bars?.items.le
         :alt="figure.alt ?? figure.title"
         loading="lazy"
         class="mt-3 block h-auto w-full object-contain"
-        @error="failed = true"
+        @error="onImageError"
       />
     </template>
     <BarDiagram
