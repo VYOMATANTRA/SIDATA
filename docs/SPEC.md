@@ -230,7 +230,11 @@ seed and the maintenance CLI call the shared cleanup service. The CLI refuses pr
   > values, since shortening it is the single most useful move for covering one's tracks. Pruning
   > executes outside the running app, via a separate privileged DB connection
   > (`backend/scripts/prune-audit-logs.ts`), never through the app's own (deliberately
-  > DELETE-incapable) runtime user.
+  > DELETE-incapable) runtime user. The Admin screen is the "Retensi log" section of Konfigurasi
+  > sistem (§8): severities are named as in the system log (Info, Peringatan, Kritis), keep-forever is a
+  > "Simpan selamanya" checkbox instead of the number `0`, a limit must be at least one day, the order
+  > rule is checked as the Admin types, and the section states that unacknowledged critical rows are
+  > never deleted. Save failures show approved wording, never the server's sentence.
 
 ## 4. Data Entry
 
@@ -270,11 +274,16 @@ the admin base layout shell from §8), organized into three accessible tabbed ca
    boundaries, SOTK roster, or raw JSON for structured collections). Mutations use `PATCH /api/content-blocks/:slug`
    (audited as `content_block.updated`) with prototype pollution guards and URL validation.
 
-3. **Pengaturan Publik Portal:** Displays system portal settings and opens `PublicSettingsForm`. Admins
-   can update identity settings (`public.app_name`, `public.institution_name`, `public.tagline`,
-   `public.administrative_area`), public contact channels (`public.contact_phone`, `public.contact_whatsapp`,
-   `public.contact_email`, `public.contact_address`), and the default map view (`public.default_coordinates`, edited visually on a map picker: staff pan and zoom the map instead of typing latitude, longitude or a zoom number; the stored value stays `{ lat, lon, zoom }`).
-   Mutations use `PATCH /api/settings/public` (audited as `settings.public_updated`).
+3. **Pengaturan Publik Portal** (Admin only): a short note and a link to Konfigurasi sistem
+   (`/admin/sistem/konfigurasi`), which owns the portal settings (§8). Those settings are the identity
+   settings (`public.app_name`, `public.institution_name`, `public.tagline`,
+   `public.administrative_area`), the public contact channels (`public.contact_phone`,
+   `public.contact_whatsapp`, `public.contact_email`, `public.contact_address`), and the default map
+   view (`public.default_coordinates`, edited visually on a map picker: staff pan and zoom the map
+   instead of typing latitude, longitude or a zoom number; the stored value stays `{ lat, lon, zoom }`).
+   Identity/contact and the map view are separate forms with separate saves. Mutations use
+   `PATCH /api/settings/public` (audited as `settings.public_updated`); a part form sends only its own
+   fields.
 
 A matrix-table save is one atomic request: `PATCH /api/indicator-tables/:id` carries the table
 header plus every changed row (at most 500) and applies them in a single transaction, mirroring
@@ -441,7 +450,15 @@ implemented and out of scope for this schema pass in the same way those are:
   `PATCH /api/settings/public` (audited as `settings.public_updated`). Operational weather settings are
   managed by Admins via `GET` and `PATCH /api/settings/weather-config` (cached in-memory, audited as
   `settings.weather_updated`), allowing runtime tuning of BMKG endpoint, cache TTL, and retry backoffs
-  without code redeployment.
+  without code redeployment. These knobs stay in the protected API; they are not moved to environment
+  variables. The Admin screen exposes only the refresh interval, as three named choices ("Setiap 30
+  menit", "Setiap 1 jam (standar)", "Setiap 2 jam" = `weather.cache_ttl_ms` 1 800 000 / 3 600 000 /
+  7 200 000), and sends `cacheTtlMs` alone, so the BMKG address, retry wait and request timeout keep
+  their stored values and are never shown in the CMS. A stored interval that matches no choice appears
+  as "Pengaturan khusus (N menit)", is not changed on load, and is replaced only when an Admin picks a
+  named choice. The choice sets how often the site checks for updates, not how often BMKG publishes.
+  The weather area is fixed to Manggar: the screen shows its name read-only and offers no selector, and
+  `public.weather_adm4` is not editable from the CMS.
 
 - `comparison_templates` — the admin-authored sentence templates of the §5 tier-1 builder
   (migration `20261010123453_add_comparison_templates`): `slug` (unique), `label`, `body` TEXT with
@@ -605,7 +622,29 @@ Provides three tabbed operational interfaces:
 
 1. **Indikator & Tabel**: Searchable and filterable list of all scalar indicators and matrix tables with modal editing forms (`ScalarIndicatorForm` and `TableIndicatorForm`).
 2. **Blok Konten & Profil**: Direct editing of narrative content blocks (`landing-hero`, `landing-sambutan-lurah`, `landing-highlights`, `tentang-kelurahan-profil`, `publikasi-katalog`) using `ContentBlockForm`.
-3. **Pengaturan Publik Portal** (admin only): Management of public metadata (`public.*` keys: app name, institution, tagline, contact channels, default map view) using `PublicSettingsForm`. The default map view is set with the shared `LocationPicker` ("Atur tampilan peta"): panning and zooming the map, or its direction/zoom buttons and keyboard mode, define the center and zoom; there is no numeric latitude, longitude or zoom entry. Nothing is saved until "Simpan perubahan"; "Batal" leaves the stored view unchanged. Closing the dialog with unsaved changes asks for confirmation ("Perubahan belum disimpan" / "Tutup tanpa menyimpan perubahan?"); Escape, the backdrop or the X on that prompt means "stay". The API still validates latitude -90..90, longitude -180..180 and integer zoom 1..20. The dialog opens only once the public settings have loaded; while they are still loading, or after a failed load, it stays closed and the page shows the message instead (the load error with its retry, or a short "still loading" note). Editors do not see this tab; `PATCH /api/settings/public` requires the admin role.
+3. **Pengaturan Publik Portal** (admin only): a note and a link to Konfigurasi sistem (`/admin/sistem/konfigurasi`); no settings card, form or dialog. Editors do not see this tab.
+
+**Konfigurasi sistem (`/admin/sistem/konfigurasi`).** The single Admin destination for system
+settings (Editors are redirected, even by direct URL, and none of its calls are made). One page
+with four sections, each a labelled `<h2>` with its own form, Save and result, plus section links
+that move focus to the chosen heading:
+
+- **Identitas dan kontak portal** and **Tampilan awal peta** (`PublicSettingsForm`, `part` identity /
+  map): identity and contact fields; the default map view set with the shared `LocationPicker`
+  ("Atur tampilan peta"), where panning and zooming the map, or its direction/zoom buttons and
+  keyboard mode, define the centre and zoom and there is no numeric latitude, longitude or zoom
+  entry. The API still validates latitude -90..90, longitude -180..180 and integer zoom 1..20. A
+  form is shown only once the stored settings have loaded (never built on defaults); a failed load
+  shows its message with a retry. Save stays disabled until something changed; "Batalkan perubahan"
+  returns to the stored values; a failed save keeps the draft and shows approved wording.
+- **Cuaca**: area name read-only (Manggar), the plain service status and last successful update (in
+  WITA) from the public weather endpoint, and the three named refresh choices of §7.
+- **Retensi log**: see §3.
+
+Leaving the page (route change or closing the tab) with an unsaved edit in any section asks
+"Perubahan belum disimpan" / "Tinggalkan halaman ini tanpa menyimpan perubahan?"; Escape, the
+backdrop or "Tetap di sini" means stay. `/settings/audit-retention` redirects to the Retensi log
+section behind the same Admin guards, so old bookmarks and links keep working.
 
 **Dynamic View & Component Integration:**
 
@@ -645,7 +684,7 @@ program work as designed in the proposal and attributes it to that document, poi
 Monografi, the map, and the booklet for the field record.
 
 **Admin base layout shell.** Every admin/CMS route (`/admin`, `/data`, `/users`, `/audit-logs`,
-`/settings/audit-retention`, and the `/admin/*` placeholder destinations named below) is mounted
+and the `/admin/*` destinations named below) is mounted
 inside one shared layout (`AdminLayout.vue`): a collapsible sidebar, a header showing the page
 title and a one-line subtitle the view supplies, and a breadcrumb. Shell access requires Editor or
 Admin; individual routes still layer their own `requiresAdmin` guard where SPEC §3 restricts them
@@ -654,9 +693,10 @@ Admin-only **Sistem** group (Akun pengguna, Templat kalimat, Konfigurasi sistem,
 Visibility is driven by a single role-to-items map (`frontend/src/config/adminNav.ts`) that the
 route guards also read from, so the sidebar and the guards cannot disagree about who can reach a
 given page — a resource a role isn't authorized for is absent from the sidebar entirely, not
-merely disabled. Cerita and Konfigurasi sistem are not built yet; their sidebar entries carry a
-"Segera hadir" badge and open a minimal placeholder view rather than being hidden. Rukun Tetangga
-and Templat kalimat (§5) open their real management views; Peta and Publikasi still open
+merely disabled. Cerita is not built yet; its sidebar entry carries a
+"Segera hadir" badge and opens a minimal placeholder view rather than being hidden. Rukun Tetangga,
+Konfigurasi sistem (above) and
+Templat kalimat (§5) open their real management views; Peta and Publikasi still open
 placeholders.
 
 ## 9. Explicitly Out of Scope
