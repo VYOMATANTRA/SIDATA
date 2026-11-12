@@ -656,8 +656,49 @@ route guards also read from, so the sidebar and the guards cannot disagree about
 given page — a resource a role isn't authorized for is absent from the sidebar entirely, not
 merely disabled. Cerita and Konfigurasi sistem are not built yet; their sidebar entries carry a
 "Segera hadir" badge and open a minimal placeholder view rather than being hidden. Rukun Tetangga
-and Templat kalimat (§5) open their real management views; Peta and Publikasi still open
-placeholders.
+, Templat kalimat (§5) and Peta (below) open their real management views; Publikasi still opens
+a placeholder.
+
+**Peta management (`/admin/peta`).** Editor and Admin manage map points (`spatial_points`, §7) on
+the existing maps API and the shared `LocationPicker`. Nothing on this screen shows or accepts
+latitude, longitude, zoom, a point id or a metadata field.
+
+- **Layout.** From 1280px the point list and the map sit side by side; below that a "Daftar" /
+  "Peta" switch shows one at a time. The list is the keyboard and screen-reader path to every point
+  (10 per page, with the pagination focus hand-off of `docs/ACCESSIBILITY.md` §4); the map is
+  `InteractiveMap` and selecting a marker or a row highlights the other and opens a detail panel
+  with the same Ubah / Hapus actions. Search matches name or RT number (digits match an RT number by
+  prefix, as on the Ketua RT page); the type filter offers the real point types (Ketua RT, Bank
+  Sampah, Fasilitas Umum). The result count is a live region and says whether it covers all points
+  or a filtered subset.
+- **Create / edit.** Fields: name (1–191 characters), type, position (`LocationPicker`, pin mode,
+  required) and RT coverage chosen from a grid of RT 1–100 (never typed): a native radio group for
+  Ketua RT, checkboxes for Bank Sampah and Fasilitas Umum. A new Ketua RT point's name defaults to
+  "Pos RT NN Kelurahan Manggar" until the editor types one. An edit sends only the changed fields.
+  Existing `metadata` is never read or sent by this screen, so it is preserved.
+- **Invariants (§7), worded for the editor.** A Ketua RT point covers exactly one RT; an RT has at
+  most one Ketua RT point (the picker marks RTs that already have one and the form explains the
+  clash before any request); a Bank Sampah or Fasilitas Umum point may cover any number of RTs,
+  including ones that have a Ketua RT point. As on the server, the coverage rules are applied only
+  when the type or coverage changes, so an unrelated edit of a legacy point is not blocked. A point
+  whose stored coverage breaks a rule is listed with "Perlu diperbaiki", the specific problem and
+  what to do, and the list can be narrowed to those points. The wording is derived from the points,
+  not from the server's technical `integrityWarning`.
+- **Concurrency.** A save or delete of a Ketua RT point that owns exactly one RT carries
+  `expectedRtNumber`; other points send none. On `409 STALE_WRITE` or `404` the editor keeps the
+  whole draft, reloads the points, and refuses to save until the editor presses "Muat ulang titik",
+  which replaces the draft with the saved version (or closes with a notice if the point is gone). A
+  stale or already-deleted delete closes the confirmation and reloads, so the editor re-opens Hapus
+  from fresh data. A duplicate-Ketua-RT `409` is explained in plain words, and the server's sentence
+  (which names internal ids) is never shown.
+- **Delete.** The confirmation names the point and its type and says it cannot be undone; for a
+  Ketua RT point it also says the Ketua RT's name and phone are not deleted. Deleting a seeded
+  Ketua RT point still tombstones it server-side (§2).
+- **Boundaries.** Ketua RT name, phone and address stay in `/admin/rukun-tetangga`, which this screen
+  links to; a point never carries a second contact field. The sample-roster flag is Admin-only and
+  lives there; point edits never change it. After every create, edit or delete the shared maps
+  store (points and summary) and the Ketua RT roster are reloaded, so the public map and the Ketua
+  RT page show the change without waiting for their caches.
 
 ## 9. Explicitly Out of Scope
 
