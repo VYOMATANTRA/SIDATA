@@ -4,6 +4,7 @@ import {
   deleteSection,
   reorderSections,
 } from '../services/sections.service.js';
+import { putSectionFigure, deleteSectionFigure } from '../services/sectionFigure.service.js';
 import { createProseBlock, reorderProseBlocks } from '../services/proseBlocks.service.js';
 import { authoringHandler, expectedUpdatedAtFromQuery, paramOf } from './hierarchyHandler.js';
 
@@ -65,5 +66,28 @@ export const reorderSectionBlocksHandler = authoringHandler({
   run: async (req, actor, context) => {
     const result = await reorderProseBlocks(paramOf(req, 'id'), req.body, actor, context);
     return { message: 'Urutan blok konten berhasil diperbarui', ...result };
+  },
+});
+
+// PUT /api/sections/:id/figure
+export const putSectionFigureHandler = authoringHandler({
+  errorLabel: 'menyimpan gambar bagian',
+  run: async (req, actor, context) => {
+    const result = await putSectionFigure(paramOf(req, 'id'), req.body, actor, context);
+    return { message: 'Gambar bagian berhasil disimpan', ...result };
+  },
+});
+
+// DELETE /api/sections/:id/figure?expectedUpdatedAt=…
+export const deleteSectionFigureHandler = authoringHandler({
+  errorLabel: 'menghapus gambar bagian',
+  run: async (req, actor, context) => {
+    const result = await deleteSectionFigure(
+      paramOf(req, 'id'),
+      expectedUpdatedAtFromQuery(req),
+      actor,
+      context,
+    );
+    return { message: 'Gambar bagian berhasil dihapus', ...result };
   },
 });
