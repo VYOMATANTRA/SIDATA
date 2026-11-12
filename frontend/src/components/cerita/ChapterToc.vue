@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
+import { READER_ASIDE } from './readerLayout';
 
 export interface TocChapter {
   id: string;
@@ -11,14 +12,26 @@ export interface TocChapter {
 export interface ChapterTocProps {
   chapters: TocChapter[];
   activeChapterId: string | null;
-  /** 'rail' = persistent desktop sidebar. 'sheet' = mobile sticky bar that expands into a list. */
+  /**
+   * 'rail' = persistent desktop list in the right-hand column, beside the article (from `lg`).
+   * 'sheet' = mobile selector: a navy bar that sticks just under the public header and opens a
+   * list of chapters beneath it (below `lg`).
+   */
   variant: 'rail' | 'sheet';
+  /**
+   * Where the 'sheet' bar sticks: 'top' = under the public header (default), 'bottom' = at the
+   * bottom of the reader (the article template); its list then opens upward.
+   */
+  placement?: 'top' | 'bottom';
 }
 
-const props = defineProps<ChapterTocProps>();
+const props = withDefaults(defineProps<ChapterTocProps>(), { placement: 'top' });
 const emit = defineEmits<{ navigate: [chapterId: string] }>();
 
 const isSheetOpen = ref(false);
+const panelId = useId();
+const rootRef = ref<HTMLElement | null>(null);
+const triggerRef = ref<HTMLButtonElement | null>(null);
 
 function activeChapter(): TocChapter | null {
   return props.chapters.find((chapter) => chapter.id === props.activeChapterId) ?? null;
@@ -32,86 +45,119 @@ function handleSelect(chapterId: string) {
 function toggleSheet() {
   isSheetOpen.value = !isSheetOpen.value;
 }
+
+function closeSheet(restoreFocus: boolean) {
+  if (!isSheetOpen.value) return;
+  isSheetOpen.value = false;
+  if (restoreFocus) void nextTick(() => triggerRef.value?.focus());
+}
+
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && isSheetOpen.value) {
+    event.stopPropagation();
+    closeSheet(true);
+  }
+}
+
+// Keyboard: tabbing out of the open list dismisses it instead of leaving it covering the page.
+function handleFocusOut(event: FocusEvent) {
+  const next = event.relatedTarget;
+  if (isSheetOpen.value && next instanceof Node && !rootRef.value?.contains(next)) {
+    isSheetOpen.value = false;
+  }
+}
+
+// Pointer: a press anywhere outside the selector dismisses it (this also covers opening the
+// navigation menu, so only one primary overlay is ever open).
+function handleOutsidePointer(event: Event) {
+  if (event.target instanceof Node && !rootRef.value?.contains(event.target)) {
+    isSheetOpen.value = false;
+  }
+}
+
+watch(isSheetOpen, (open) => {
+  if (typeof document === 'undefined') return;
+  if (open) {
+    document.addEventListener('pointerdown', handleOutsidePointer);
+  } else {
+    document.removeEventListener('pointerdown', handleOutsidePointer);
+  }
+});
+
+onBeforeUnmount(() => {
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('pointerdown', handleOutsidePointer);
+  }
+});
 </script>
 
 <template>
   <nav
     v-if="variant === 'rail'"
-    class="sticky top-24 hidden max-h-[calc(100vh-7rem)] w-56 shrink-0 overflow-y-auto lg:block"
+    :class="[
+      READER_ASIDE,
+      'sticky top-[calc(var(--public-header-height)+1.5rem)] hidden max-h-[calc(100dvh-var(--public-header-height)-3rem)] w-full max-w-60 self-start overflow-y-auto py-10 lg:block',
+    ]"
     aria-label="Daftar Bab"
     data-test="chapter-toc-rail"
   >
-    <ol class="space-y-1 border-l border-border">
+    <p class="text-brand-navy mb-3 px-3 text-sm font-semibold">Daftar bab</p>
+    <ol class="space-y-1">
       <li v-for="chapter in chapters" :key="chapter.id">
         <a
           :href="`#${chapter.slug}`"
-          class="-ml-px flex items-start gap-2.5 border-l-2 py-1.5 pl-4 text-sm transition-colors"
+          class="rounded-btn focus-visible:outline-focus-ring flex items-start gap-3 px-3 py-2 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
           :class="
             chapter.id === activeChapterId
-              ? 'border-brand-navy text-brand-navy font-semibold'
-              : 'border-transparent text-text-muted hover:text-brand-navy'
+              ? 'bg-brand-navy font-semibold text-white'
+              : 'text-brand-navy hover:bg-surface-muted'
           "
           :aria-current="chapter.id === activeChapterId ? 'true' : undefined"
           data-test="chapter-toc-link"
           @click="handleSelect(chapter.id)"
         >
-          <span v-if="chapter.number" class="text-xs tabular-nums">{{ chapter.number }}</span>
-          <span>{{ chapter.title }}</span>
+          <span v-if="chapter.number" class="shrink-0 tabular-nums">{{ chapter.number }}</span>
+          <span class="min-w-0 break-words">{{ chapter.title }}</span>
         </a>
       </li>
     </ol>
   </nav>
 
-  <div v-else class="fixed right-0 bottom-0 left-0 z-30 lg:hidden" data-test="chapter-toc-sheet">
-    <div
-      v-show="isSheetOpen"
-      id="chapter-toc-sheet-panel"
-      class="max-h-[60vh] overflow-y-auto border-t border-border bg-white shadow-lg"
-      data-test="chapter-toc-sheet-panel"
-    >
-      <ol class="divide-y divide-border">
-        <li v-for="chapter in chapters" :key="chapter.id">
-          <a
-            :href="`#${chapter.slug}`"
-            class="flex items-center gap-3 px-4 py-3 text-sm"
-            :class="chapter.id === activeChapterId ? 'text-brand-navy font-semibold' : 'text-text-muted'"
-            :aria-current="chapter.id === activeChapterId ? 'true' : undefined"
-            data-test="chapter-toc-link"
-            @click="handleSelect(chapter.id)"
-          >
-            <span
-              v-if="chapter.number"
-              class="bg-brand-navy/5 text-brand-navy flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs tabular-nums"
-            >
-              {{ chapter.number }}
-            </span>
-            <span>{{ chapter.title }}</span>
-          </a>
-        </li>
-      </ol>
-    </div>
-
+  <div
+    v-else
+    ref="rootRef"
+    class="bg-surface-inverse sticky z-30 border-white/15 lg:hidden"
+    :class="
+      placement === 'bottom'
+        ? 'bottom-0 border-t shadow-[0_-4px_12px_rgba(0,0,0,0.15)]'
+        : 'top-[var(--public-header-height)] border-t'
+    "
+    data-test="chapter-toc-sheet"
+    @keydown="handleKeydown"
+    @focusout="handleFocusOut"
+  >
     <button
+      ref="triggerRef"
       type="button"
-      class="border-brand-navy/10 bg-brand-navy flex w-full items-center justify-between gap-3 border-t px-4 py-3 text-left text-white"
+      class="focus-visible:outline-focus-ring-inverse flex min-h-12 w-full items-center justify-between gap-3 px-4 py-2 text-left text-white focus-visible:outline-2 focus-visible:-outline-offset-2 sm:px-6"
       :aria-expanded="isSheetOpen"
-      aria-controls="chapter-toc-sheet-panel"
+      :aria-controls="panelId"
       data-test="chapter-toc-trigger"
       @click="toggleSheet"
     >
-      <span class="flex min-w-0 items-center gap-2.5">
-        <span
-          v-if="activeChapter()?.number"
-          class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/15 text-xs tabular-nums"
-        >
-          {{ activeChapter()?.number }}
-        </span>
-        <span class="truncate text-sm font-semibold">
-          {{ activeChapter()?.title ?? 'Daftar Bab' }}
+      <span class="flex min-w-0 items-baseline gap-2.5">
+        <span class="text-text-inverse-muted shrink-0 text-sm">Daftar bab</span>
+        <span class="truncate text-sm font-semibold" data-test="chapter-toc-current">
+          <template v-if="activeChapter()">
+            <span v-if="activeChapter()?.number" class="mr-1.5 tabular-nums">{{
+              activeChapter()?.number
+            }}</span
+            >{{ activeChapter()?.title }}
+          </template>
         </span>
       </span>
       <svg
-        class="h-4 w-4 shrink-0 transition-transform"
+        class="h-4 w-4 shrink-0 transition-transform motion-reduce:transition-none"
         :class="{ 'rotate-180': isSheetOpen }"
         viewBox="0 0 24 24"
         fill="none"
@@ -124,5 +170,42 @@ function toggleSheet() {
         <path d="m6 9 6 6 6-6" />
       </svg>
     </button>
+
+    <nav
+      v-show="isSheetOpen"
+      :id="panelId"
+      aria-label="Pilih bab"
+      class="border-border absolute inset-x-0 max-h-[calc(100dvh-var(--public-header-height)-4rem)] overflow-y-auto overscroll-contain bg-white shadow-lg"
+      :class="placement === 'bottom' ? 'bottom-full border-t' : 'top-full border-t'"
+      data-test="chapter-toc-sheet-panel"
+    >
+      <ol class="divide-border divide-y">
+        <li v-for="chapter in chapters" :key="chapter.id">
+          <a
+            :href="`#${chapter.slug}`"
+            class="focus-visible:outline-focus-ring flex min-h-12 items-center gap-3 px-4 py-3 text-base focus-visible:outline-2 focus-visible:-outline-offset-2 sm:px-6"
+            :class="
+              chapter.id === activeChapterId
+                ? 'bg-surface-muted text-brand-navy font-semibold'
+                : 'text-brand-navy'
+            "
+            :aria-current="chapter.id === activeChapterId ? 'true' : undefined"
+            data-test="chapter-toc-link"
+            @click="handleSelect(chapter.id)"
+          >
+            <span
+              v-if="chapter.number"
+              class="border-brand-navy flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-sm tabular-nums"
+              :class="
+                chapter.id === activeChapterId ? 'bg-brand-navy text-white' : 'text-brand-navy'
+              "
+            >
+              {{ chapter.number }}
+            </span>
+            <span class="min-w-0 break-words">{{ chapter.title }}</span>
+          </a>
+        </li>
+      </ol>
+    </nav>
   </div>
 </template>

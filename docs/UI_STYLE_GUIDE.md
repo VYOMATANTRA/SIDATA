@@ -265,7 +265,7 @@ invalid border). See [`docs/ACCESSIBILITY.md`](ACCESSIBILITY.md) §4 for the res
 
 ### Layer order (public shell)
 
-Lowest to highest: map root `z-0` (Leaflet stays inside it), chapter TOC sheet `z-30`, map summary
+Lowest to highest: map root `z-0` (Leaflet stays inside it), Cerita chapter selector bar `z-30` (sticky under the header below `lg`; its list opens inside the bar's own layer), map summary
 overlay `z-50`, sticky header `z-[55]` (its menu backdrop and sheet sit inside the header's own
 stacking context), modals `z-[58]` (`BaseModal`, `OtpVerificationModal`), focused skip link `z-[60]`.
 Keep page content at or below `z-50`. The same list is commented in `main.css`.
