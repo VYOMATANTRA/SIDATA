@@ -442,9 +442,13 @@ const deleteLocalBlock = computed(() => {
         .findPage(target.slug)
         ?.chapters.flatMap((chapter) => chapter.sections.map((item) => item.id)) ?? [];
   }
-  const holding = sectionIds.filter((id) => store.contentCountFor(id) > 0);
-  const count = holding.reduce((sum, id) => sum + store.contentCountFor(id), 0);
-  if (count === 0) return null;
+  const counts = sectionIds.map((id) => ({ id, ...store.contentCountsFor(id) }));
+  const holding = counts
+    .filter((item) => item.paragraphs + item.figures > 0)
+    .map((item) => item.id);
+  const paragraphs = counts.reduce((sum, item) => sum + item.paragraphs, 0);
+  const figures = counts.reduce((sum, item) => sum + item.figures, 0);
+  if (holding.length === 0) return null;
   const subject = target.kind === 'page' ? 'Halaman' : target.kind === 'chapter' ? 'Bab' : 'Bagian';
   const names = holding
     .map((id) => store.findSection(id))
@@ -452,7 +456,8 @@ const deleteLocalBlock = computed(() => {
     .map((found) => sectionLabel(found.section, found.chapter));
   return {
     message: dependentsMessage(subject, {
-      contentBlocks: count,
+      contentBlocks: paragraphs,
+      figures,
       indicators: 0,
       indicatorTables: 0,
     }),

@@ -11,7 +11,10 @@ export const HAS_DEPENDENTS_CODE = 'HAS_DEPENDENTS';
 export type StructureSubject = 'Halaman' | 'Bab' | 'Bagian' | 'Paragraf' | 'Gambar';
 
 export interface DependencyCounts {
+  /** Section content blocks. The server counts figures apart; an older answer folds them in here. */
   contentBlocks: number;
+  /** Figures. Undefined when the server did not say, so paragraphs and figures cannot be told apart. */
+  figures?: number;
   indicators: number;
   indicatorTables: number;
 }
@@ -32,8 +35,12 @@ export function dependencyCountsOf(error: unknown): DependencyCounts | null {
       : undefined;
   if (typeof deps !== 'object' || deps === null) return null;
   const record = deps as Record<string, unknown>;
+  const figures = record['figures'];
   return {
     contentBlocks: countOf(record['contentBlocks']),
+    ...(typeof figures === 'number' && Number.isFinite(figures)
+      ? { figures: countOf(figures) }
+      : {}),
     indicators: countOf(record['indicators']),
     indicatorTables: countOf(record['indicatorTables']),
   };
@@ -44,14 +51,20 @@ function joinWords(parts: string[]): string {
   return `${parts.slice(0, -1).join(', ')} dan ${parts[parts.length - 1]}`;
 }
 
-/** "Bab ini belum bisa dihapus karena masih berisi 2 paragraf atau gambar dan 1 tabel. …" */
+/** "Bab ini belum bisa dihapus karena masih berisi 2 paragraf, 1 gambar dan 1 tabel. …" */
 export function dependentsMessage(
   subject: StructureSubject,
   counts: DependencyCounts | null,
 ): string {
   const parts: string[] = [];
   if (counts) {
-    if (counts.contentBlocks > 0) parts.push(`${counts.contentBlocks} paragraf atau gambar`);
+    if (counts.figures === undefined) {
+      // No separate figure count: the total is all that is known.
+      if (counts.contentBlocks > 0) parts.push(`${counts.contentBlocks} paragraf atau gambar`);
+    } else {
+      if (counts.contentBlocks > 0) parts.push(`${counts.contentBlocks} paragraf`);
+      if (counts.figures > 0) parts.push(`${counts.figures} gambar`);
+    }
     if (counts.indicators > 0) parts.push(`${counts.indicators} angka indikator`);
     if (counts.indicatorTables > 0) parts.push(`${counts.indicatorTables} tabel`);
   }

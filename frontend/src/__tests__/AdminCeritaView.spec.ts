@@ -388,7 +388,7 @@ describe('AdminCeritaView', () => {
 
       const error = body().find('[data-test="delete-error"]').text();
       expect(error).toContain('Halaman ini belum bisa dihapus');
-      expect(error).toContain('2 paragraf atau gambar');
+      expect(error).toContain('masih berisi 2 paragraf.');
       expect(error).not.toMatch(RAW_TERMS);
       expect(error).not.toContain('blok konten:');
       expect(body().find('[data-test="delete-hint"]').text()).toContain('Ringkasan');
@@ -411,9 +411,7 @@ describe('AdminCeritaView', () => {
       await flushPromises();
 
       const error = body().find('[data-test="delete-error"]').text();
-      expect(error).toContain(
-        'Halaman ini belum bisa dihapus karena masih berisi 1 paragraf atau gambar',
-      );
+      expect(error).toContain('Halaman ini belum bisa dihapus karena masih berisi 1 paragraf.');
       expect(error).not.toMatch(RAW_TERMS);
       expect(body().find('[data-test="delete-confirm"]').exists()).toBe(false);
       expect(pageTitles(wrapper)).toContain('Kependudukan');
@@ -468,7 +466,7 @@ describe('AdminCeritaView', () => {
 
       await click('Hapus bab Jumlah Penduduk');
       expect(body().find('[data-test="delete-error"]').text()).toContain(
-        'Bab ini belum bisa dihapus karena masih berisi 1 paragraf atau gambar',
+        'Bab ini belum bisa dihapus karena masih berisi 1 paragraf.',
       );
       expect(body().find('[data-test="delete-confirm"]').exists()).toBe(false);
       await body().find('[data-test="delete-cancel"]').trigger('click');
@@ -560,7 +558,7 @@ describe('AdminCeritaView', () => {
       await click('Hapus bagian Ringkasan');
 
       expect(body().find('[data-test="delete-error"]').text()).toContain(
-        'Bagian ini belum bisa dihapus karena masih berisi 1 paragraf atau gambar',
+        'Bagian ini belum bisa dihapus karena masih berisi 1 paragraf.',
       );
       expect(body().find('[data-test="delete-hint"]').text()).toContain('Buka isi bagian');
       expect(body().find('[data-test="delete-confirm"]').exists()).toBe(false);
@@ -590,9 +588,7 @@ describe('AdminCeritaView', () => {
 
       await click('Hapus bagian Ringkasan');
 
-      expect(body().find('[data-test="delete-error"]').text()).toContain(
-        'masih berisi 1 paragraf atau gambar',
-      );
+      expect(body().find('[data-test="delete-error"]').text()).toContain('masih berisi 1 gambar.');
       expect(body().find('[data-test="delete-action"]').text()).toBe('Buka isi bagian');
       expect(fake.writes()).toHaveLength(0);
       wrapper.unmount();

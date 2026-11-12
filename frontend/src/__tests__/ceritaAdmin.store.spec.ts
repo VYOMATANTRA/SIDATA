@@ -135,7 +135,7 @@ describe('ceritaAdmin store', () => {
       blocked: true,
       message: expect.stringContaining('Bagian ini belum bisa dihapus') as string,
     });
-    expect(JSON.stringify(outcome)).toContain('1 paragraf atau gambar');
+    expect(JSON.stringify(outcome)).toContain('masih berisi 1 paragraf.');
     expect(store.tree[0]!.chapters[0]!.sections).toHaveLength(2);
   });
 

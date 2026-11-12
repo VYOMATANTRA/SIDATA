@@ -788,8 +788,9 @@ add, edit, reorder, delete) and its one figure.
 - **Deleting** asks first. A page or chapter delete says that its empty chapters and sections go with
   it. A page, chapter or section that still holds paragraphs, a figure, indicators or tables is
   refused (`HAS_DEPENDENTS`): the loaded data is checked first so the dialog already names what holds
-  it (paragraphs and a figure count together as "paragraf atau gambar"), the server's refusal is
-  worded the same way, and for a section the dialog offers "Buka isi bagian" so the editor is never at
+  it ("2 paragraf dan 1 gambar"; the server counts figures apart from other content blocks, and an
+  answer without a figure count reads "N paragraf atau gambar"), the server's refusal is worded the
+  same way, and for a section the dialog offers "Buka isi bagian" so the editor is never at
   a dead end.
 - **The section editor** keeps one paragraph form open at a time (a draft is never silently replaced)
   and asks before closing or leaving the route with unsaved work. Figure kinds: one photo, several

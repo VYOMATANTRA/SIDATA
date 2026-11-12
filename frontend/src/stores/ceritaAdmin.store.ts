@@ -130,9 +130,9 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
 
   // --- Lookups ---
 
-  /** Paragraphs plus the figure (if any) a section holds: what blocks deleting it. */
-  function contentCountFor(sectionId: string): number {
-    return paragraphsFor(sectionId).length + (figureFor(sectionId) ? 1 : 0);
+  /** Paragraphs and figure (0 or 1) a section holds: what blocks deleting it. */
+  function contentCountsFor(sectionId: string): { paragraphs: number; figures: number } {
+    return { paragraphs: paragraphsFor(sectionId).length, figures: figureFor(sectionId) ? 1 : 0 };
   }
 
   function findPage(slug: string): AdminPage | undefined {
@@ -558,7 +558,7 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     captureSectionToken,
     paragraphsFor,
     figureFor,
-    contentCountFor,
+    contentCountsFor,
     addPage,
     renamePage,
     removePage,

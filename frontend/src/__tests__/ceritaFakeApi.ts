@@ -150,15 +150,22 @@ export function createFakeCerita() {
     );
   const notFound = (): Response => json({ error: 'Tidak ditemukan' }, 404);
 
-  function dependentsOf(sectionIds: string[]): number {
-    return blocks.filter((b) => b.sectionId !== null && sectionIds.includes(b.sectionId)).length;
+  /** Same shape as the server's answer: figures are counted apart from other content blocks. */
+  function dependentsOf(sectionIds: string[]): { contentBlocks: number; figures: number } {
+    const held = blocks.filter((b) => b.sectionId !== null && sectionIds.includes(b.sectionId));
+    return {
+      contentBlocks: held.filter((b) => b.type !== 'figure').length,
+      figures: held.filter((b) => b.type === 'figure').length,
+    };
   }
-  const dependents = (count: number): Response =>
+  const hasDependents = (c: { contentBlocks: number; figures: number }): boolean =>
+    c.contentBlocks + c.figures > 0;
+  const dependents = (counts: { contentBlocks: number; figures: number }): Response =>
     json(
       {
         error: 'Tidak dapat dihapus karena masih memiliki data terkait (blok konten: 1).',
         code: 'HAS_DEPENDENTS',
-        details: { dependencies: { contentBlocks: count, indicators: 0, indicatorTables: 0 } },
+        details: { dependencies: { ...counts, indicators: 0, indicatorTables: 0 } },
       },
       409,
     );
@@ -264,7 +271,7 @@ export function createFakeCerita() {
         if (token !== page.updatedAt) return stale(page.updatedAt);
         const sectionIds = page.chapters.flatMap((c) => c.sections.map((s) => s.id));
         const count = dependentsOf(sectionIds);
-        if (count > 0) return dependents(count);
+        if (hasDependents(count)) return dependents(count);
         pages.splice(pages.indexOf(page), 1);
         return json({ page });
       }
@@ -313,7 +320,7 @@ export function createFakeCerita() {
       if (method === 'DELETE') {
         if (token !== found.chapter.updatedAt) return stale(found.chapter.updatedAt);
         const count = dependentsOf(found.chapter.sections.map((s) => s.id));
-        if (count > 0) return dependents(count);
+        if (hasDependents(count)) return dependents(count);
         found.page.chapters.splice(found.page.chapters.indexOf(found.chapter), 1);
         found.page.updatedAt = stamp();
         return json({ chapter: found.chapter });
@@ -398,7 +405,7 @@ export function createFakeCerita() {
       if (method === 'DELETE') {
         if (token !== found.section.updatedAt) return stale(found.section.updatedAt);
         const count = dependentsOf([found.section.id]);
-        if (count > 0) return dependents(count);
+        if (hasDependents(count)) return dependents(count);
         found.chapter.sections.splice(found.chapter.sections.indexOf(found.section), 1);
         found.chapter.updatedAt = stamp();
         return json({ section: found.section });

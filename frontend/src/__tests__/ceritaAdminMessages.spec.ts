@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../utils/apiClient';
-import { ceritaFailure, dependentsMessage } from '../utils/ceritaAdminMessages';
+import { ceritaFailure, dependencyCountsOf, dependentsMessage } from '../utils/ceritaAdminMessages';
 
 describe('dependentsMessage', () => {
   it('lists what still blocks the delete in plain words', () => {
@@ -22,6 +22,60 @@ describe('dependentsMessage', () => {
   });
 });
 
+describe('dependentsMessage with the separate figure count', () => {
+  it('names paragraphs and figures apart when the server counts figures separately', () => {
+    expect(
+      dependentsMessage('Bagian', {
+        contentBlocks: 2,
+        figures: 1,
+        indicators: 0,
+        indicatorTables: 0,
+      }),
+    ).toContain('masih berisi 2 paragraf dan 1 gambar.');
+    expect(
+      dependentsMessage('Bagian', {
+        contentBlocks: 0,
+        figures: 1,
+        indicators: 0,
+        indicatorTables: 0,
+      }),
+    ).toContain('masih berisi 1 gambar.');
+    expect(
+      dependentsMessage('Bab', { contentBlocks: 3, figures: 0, indicators: 1, indicatorTables: 0 }),
+    ).toContain('masih berisi 3 paragraf dan 1 angka indikator.');
+  });
+
+  it('falls back to the combined wording when the server sends no figure count', () => {
+    expect(
+      dependentsMessage('Bagian', { contentBlocks: 2, indicators: 0, indicatorTables: 0 }),
+    ).toContain('masih berisi 2 paragraf atau gambar.');
+  });
+});
+
+describe('dependencyCountsOf', () => {
+  const failure = (dependencies: unknown) =>
+    new ApiError('x', 409, { code: 'HAS_DEPENDENTS', body: { details: { dependencies } } });
+
+  it('reads figures when present and leaves them unknown when absent', () => {
+    expect(
+      dependencyCountsOf(
+        failure({ contentBlocks: 2, figures: 1, indicators: 0, indicatorTables: 0 }),
+      ),
+    ).toEqual({ contentBlocks: 2, figures: 1, indicators: 0, indicatorTables: 0 });
+    const withoutFigures = dependencyCountsOf(
+      failure({ contentBlocks: 2, indicators: 0, indicatorTables: 0 }),
+    );
+    expect(withoutFigures?.figures).toBeUndefined();
+    expect(withoutFigures?.contentBlocks).toBe(2);
+  });
+
+  it('ignores a malformed figure count instead of failing', () => {
+    expect(
+      dependencyCountsOf(failure({ contentBlocks: 1, figures: 'banyak', indicators: 0 }))?.figures,
+    ).toBeUndefined();
+  });
+});
+
 describe('ceritaFailure', () => {
   it('turns HAS_DEPENDENTS into the dependency sentence and marks it blocked', () => {
     const error = new ApiError('Halaman tidak dapat dihapus (blok konten: 2)', 409, {
@@ -35,6 +89,21 @@ describe('ceritaFailure', () => {
     expect(failure.message).toContain('Halaman ini belum bisa dihapus');
     expect(failure.message).toContain('2 paragraf atau gambar');
     expect(failure.message).not.toMatch(/blok konten:|HAS_DEPENDENTS|409/);
+  });
+
+  it('words a refusal that counts a figure separately', () => {
+    const error = new ApiError('x', 409, {
+      code: 'HAS_DEPENDENTS',
+      body: {
+        details: {
+          dependencies: { contentBlocks: 1, figures: 1, indicators: 0, indicatorTables: 0 },
+        },
+      },
+      method: 'DELETE',
+    });
+    const failure = ceritaFailure(error, 'menghapus bagian', { subject: 'Bagian' });
+    expect(failure.blocked).toBe(true);
+    expect(failure.message).toContain('masih berisi 1 paragraf dan 1 gambar');
   });
 
   it('marks a stale write and uses the neutral wording for a delete or reorder', () => {
