@@ -198,7 +198,6 @@ describe('AdminSidebar.vue', () => {
       'nav-cerita',
       'nav-peta',
       'nav-publikasi',
-      'nav-sistem-templat-kalimat',
       'nav-sistem-konfigurasi',
     ];
     for (const dataTest of unbuilt) {
@@ -211,6 +210,7 @@ describe('AdminSidebar.vue', () => {
       'nav-data',
       'nav-rukun-tetangga',
       'nav-sistem-akun-pengguna',
+      'nav-sistem-templat-kalimat',
       'nav-sistem-log',
     ];
     for (const dataTest of built) {

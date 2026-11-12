@@ -7,7 +7,13 @@ import {
   REFRESH_UNAVAILABLE_MESSAGE,
   SESSION_EXPIRED_MESSAGE,
 } from '../utils/apiClient';
-import { READ_USER_MESSAGES, toUserMessage, USER_MESSAGES } from '../utils/userMessages';
+import {
+  CSRF_INVALID_MESSAGE,
+  READ_USER_MESSAGES,
+  SESSION_EXPIRED_NEUTRAL_MESSAGE,
+  toUserMessage,
+  USER_MESSAGES,
+} from '../utils/userMessages';
 
 const EDITOR = { id: 'u-1', email: 'editor@example.com', role: 'editor' };
 
@@ -129,6 +135,14 @@ describe('apiClient error object', () => {
     },
   );
 
+  it('maps 403 with CSRF failure to CSRF_INVALID_MESSAGE', async () => {
+    const error1 = await failureOf(json({ error: 'CSRF token tidak valid' }, 403));
+    expect(error1.userMessage).toBe(CSRF_INVALID_MESSAGE);
+
+    const error2 = await failureOf(json({ error: 'Forbidden', code: 'EBADCSRFTOKEN' }, 403));
+    expect(error2.userMessage).toBe(CSRF_INVALID_MESSAGE);
+  });
+
   it('shows the server sentence for a 400 without a field map', async () => {
     const error = await failureOf(json({ error: 'Judul halaman tidak boleh memuat HTML.' }, 400));
 
@@ -200,6 +214,36 @@ describe('apiClient error object', () => {
     });
   });
 
+  it('parses numeric Retry-After response header into retryAfterSeconds', async () => {
+    const response = {
+      ok: false,
+      status: 429,
+      headers: new Headers({ 'retry-after': '120' }),
+      json: async () => ({ error: 'Too many requests' }),
+    } as unknown as Response;
+
+    const error = await failureOf(response);
+
+    expect(error.status).toBe(429);
+    expect(error.retryAfterSeconds).toBe(120);
+    expect(error.userMessage).toBe(USER_MESSAGES.rate_limited);
+  });
+
+  it('leaves retryAfterSeconds undefined when Retry-After is absent or non-numeric', async () => {
+    const errorWithoutHeader = await failureOf(json({ error: 'Too many requests' }, 429));
+    expect(errorWithoutHeader.retryAfterSeconds).toBeUndefined();
+
+    const responseWithInvalid = {
+      ok: false,
+      status: 429,
+      headers: new Headers({ 'retry-after': 'invalid' }),
+      json: async () => ({ error: 'Too many requests' }),
+    } as unknown as Response;
+
+    const errorWithInvalid = await failureOf(responseWithInvalid);
+    expect(errorWithInvalid.retryAfterSeconds).toBeUndefined();
+  });
+
   it('gives a non-JSON error page the server wording and a fallback message', async () => {
     const error = await failureOf(htmlError(502));
 
@@ -216,11 +260,19 @@ describe('apiClient error object', () => {
       return json({ error: 'Token tidak valid' }, 401);
     });
 
-    const error = await apiRequestJson('/api/indicators').catch((e: unknown) => e);
+    const readError = await apiRequestJson('/api/indicators').catch((e: unknown) => e);
 
-    expect(error).toBeInstanceOf(ApiError);
-    expect((error as ApiError).userMessage).toBe(SESSION_EXPIRED_MESSAGE);
-    expect((error as ApiError).message).toBe(SESSION_EXPIRED_MESSAGE);
+    expect(readError).toBeInstanceOf(ApiError);
+    expect((readError as ApiError).userMessage).toBe(SESSION_EXPIRED_NEUTRAL_MESSAGE);
+    expect((readError as ApiError).message).toBe(SESSION_EXPIRED_MESSAGE);
+
+    const writeError = await apiRequestJson('/api/indicators', { method: 'POST', body: '{}' }).catch(
+      (e: unknown) => e,
+    );
+
+    expect(writeError).toBeInstanceOf(ApiError);
+    expect((writeError as ApiError).userMessage).toBe(SESSION_EXPIRED_MESSAGE);
+    expect((writeError as ApiError).message).toBe(SESSION_EXPIRED_MESSAGE);
   });
 
   it('maps a transient refresh failure to the server wording', async () => {

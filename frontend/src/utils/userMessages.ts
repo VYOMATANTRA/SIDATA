@@ -19,6 +19,23 @@ export const SESSION_EXPIRED_MESSAGE =
   'Sesi Anda berakhir. Silakan masuk kembali — isi formulir ini belum dikirim.';
 
 /**
+ * Shown when a session expires on a read, delete, reorder, or other action outside an active form draft.
+ */
+export const SESSION_EXPIRED_NEUTRAL_MESSAGE = 'Sesi Anda berakhir. Silakan masuk kembali.';
+
+/**
+ * Shown when a record was modified by another operator during a delete, reorder, or non-form action.
+ */
+export const STALE_WRITE_NEUTRAL_MESSAGE =
+  'Data ini baru saja diubah oleh orang lain. Muat ulang untuk melihat versi terbaru.';
+
+/**
+ * Shown when a request is rejected with 403 because the CSRF token was missing, invalid, or expired.
+ */
+export const CSRF_INVALID_MESSAGE =
+  'Token keamanan kedaluwarsa atau tidak valid. Muat ulang halaman lalu coba lagi.';
+
+/**
  * Shown when the 401 refresh could not even be attempted (network error) or the server failed
  * (5xx). The client cannot tell whether the session is still valid — the access token already
  * got a 401 and the refresh never finished — so the wording promises nothing and asks for a
@@ -73,6 +90,7 @@ export const USER_MESSAGES: Readonly<Record<FailureKind, string>> = {
  */
 export const READ_USER_MESSAGES: Readonly<Partial<Record<FailureKind, string>>> = {
   network: 'Tidak dapat terhubung ke server. Periksa koneksi lalu coba lagi.',
+  session: SESSION_EXPIRED_NEUTRAL_MESSAGE,
   server: 'Terjadi kendala di server. Coba lagi beberapa saat lagi.',
   unknown: 'Terjadi kendala di server. Coba lagi beberapa saat lagi.',
 };
@@ -84,8 +102,22 @@ export function isReadMethod(method: unknown): boolean {
   return upper === 'GET' || upper === 'HEAD';
 }
 
+/** True for reads, deletes, or actions whose context indicates an operation outside an active form draft. */
+export function isNonFormAction(method?: unknown, context?: string): boolean {
+  if (isReadMethod(method)) return true;
+  if (typeof method === 'string' && method.toUpperCase() === 'DELETE') return true;
+  if (typeof context === 'string' && /menghapus|mengurutkan/i.test(context)) return true;
+  return false;
+}
+
 /** Approved text for a failure kind, worded for a read or a write request. */
-export function approvedMessage(kind: FailureKind, method?: unknown): string {
+export function approvedMessage(kind: FailureKind, method?: unknown, context?: string): string {
+  if (kind === 'session' && isNonFormAction(method, context)) {
+    return SESSION_EXPIRED_NEUTRAL_MESSAGE;
+  }
+  if (kind === 'stale' && isNonFormAction(method, context)) {
+    return STALE_WRITE_NEUTRAL_MESSAGE;
+  }
   return (isReadMethod(method) ? READ_USER_MESSAGES[kind] : undefined) ?? USER_MESSAGES[kind];
 }
 
@@ -174,10 +206,151 @@ export function sanitizeFieldErrors(fieldMap: unknown): Record<string, string> {
   return result;
 }
 
+/**
+ * Internal API field, parameter and table names that appear inside backend error sentences.
+ * A sentence naming any of them (as a whole token) is never shown. An explicit list, not a
+ * camelCase/snake_case heuristic: units and acronyms ("kWh", "eKTP") and e-mail addresses
+ * would be false positives of a pattern.
+ */
+export const HIDDEN_API_TOKENS: readonly string[] = [
+  'comparisonTemplateId',
+  'comparisonTemplate',
+  'isComputedComparison',
+  'isSample',
+  'value_previous',
+  'period_previous',
+  'value_current',
+  'period_current',
+  'valuePrevious',
+  'periodPrevious',
+  'valueCurrent',
+  'periodCurrent',
+  'rowKey',
+  'sectionId',
+  'chapterId',
+  'pageId',
+  'pageSlug',
+  'tableId',
+  'templateId',
+  'pointId',
+  'pointIds',
+  'roleId',
+  'sortOrder',
+  'expectedUpdatedAt',
+  'expectedRtNumber',
+  'acknowledgedWarnings',
+  'ackKey',
+  'trendNaik',
+  'trendTurun',
+  'trendTetap',
+  'pageSize',
+  'includeStale',
+  'rtNumber',
+  'rt_number',
+  'point_id',
+  'section_id',
+  'chapter_id',
+  'page_id',
+  'setting_key',
+  'comparison_templates',
+  'content_blocks',
+  'indicator_tables',
+  'indicator_table_rows',
+  'rt_leaders',
+  'spatial_points',
+  'spatial_point_rt',
+  'system_settings',
+  'audit_logs',
+  'acknowledgedAt',
+  'acknowledgedById',
+];
+
+/** Camel-case API name to its lower-case concatenated, snake_case and kebab-case spellings. */
+function tokenSpellings(token: string): string[] {
+  const words = token
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[\s_-]+/);
+  return [words.join(''), words.join('_'), words.join('-')];
+}
+
+/**
+ * Matched against the lower-cased sentence, so `RowKey`, `foo_rowKey`, `rowKeys`, `row_key`
+ * and `row-key2` are all caught. A trailing plural `s` or digits are tolerated.
+ */
+const HIDDEN_TOKEN_PATTERN = new RegExp(
+  `(?<![a-z0-9])(?:${[...new Set(HIDDEN_API_TOKENS.flatMap(tokenSpellings))].join('|')})(?:s|\\d+)?(?![a-z0-9])`,
+);
+
+/**
+ * Enum-like values the backend puts in sentences, with the words a reader knows. Only
+ * standalone tokens: not part of a URL, path, file name, code span or longer identifier.
+ */
+const FRIENDLY_TERMS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/(?<![\w/.\-`])ketua_rt(?![\w/\-`]|\.\w)/g, 'Ketua RT'],
+  [/(?<![\w/.\-`])bank_sampah(?![\w/\-`]|\.\w)/g, 'Bank Sampah'],
+  [/(?<![\w/.\-`])fasilitas_umum(?![\w/\-`]|\.\w)/g, 'Fasilitas Umum'],
+];
+
+/** Approved wording for a refused template attach (indicators.service `assertTemplateAttachable`). */
+export const TEMPLATE_ATTACH_MESSAGE =
+  'Templat kalimat hanya bisa dipakai pada indikator yang memiliki nilai dan periode sebelumnya.';
+
+/** Approved wording for an orphaned half of the previous value/period pair. */
+export const PREVIOUS_PAIR_MESSAGE = 'Nilai dan periode sebelumnya harus diisi berpasangan.';
+
+/** Approved wording for a computed-comparison indicator that lacks its previous value/period. */
+export const PREVIOUS_REQUIRED_MESSAGE =
+  'Nilai dan periode sebelumnya harus diisi untuk indikator perbandingan.';
+
+export const UNKNOWN_FIELD_MESSAGE =
+  'Ada isian yang tidak dikenali. Muat ulang halaman lalu coba lagi.';
+export const INPUT_MISMATCH_MESSAGE = 'Isian belum sesuai. Periksa kembali isian yang ditandai.';
+export const CSV_FORMAT_MESSAGE =
+  'Format berkas CSV tidak sesuai. Unduh contoh berkas lalu coba lagi.';
+export const RT_CONFLICT_MESSAGE =
+  'Data Ketua RT/RT bertentangan. Periksa kembali koordinat dan RT yang dipilih.';
+
+const TEMPLATE_ATTACH_SOURCE =
+  /^Template perbandingan (?:membutuhkan value_previous|hanya dapat dipakai pada indikator perbandingan terkomputasi)/;
+const PREVIOUS_PAIR_SOURCE = /^value_previous dan period_previous harus diisi berpasangan/;
+const PREVIOUS_REQUIRED_SOURCE =
+  /^Indikator perbandingan terkomputasi membutuhkan (?:value_previous|period_previous)/;
+const CSV_HEADER_SOURCE = /^Header CSV harus\b/;
+const RT_INVARIANT_SOURCE = /^Invariant (?:Ketua RT|ketua_rt)\/RT dilanggar/i;
+const UNRECOGNIZED_SOURCE = /^Terdapat bidang .{0,60}\byang tidak dikenali\b|Unrecognized keys?\b/i;
+const VALIDATION_PREFIX = /^Validasi [^:]{1,60} gagal:/i;
+
+/** Zod's default English wording, which must never reach an operator. */
+const ZOD_PATTERNS: readonly RegExp[] = [
+  /(?:^|[\s:,;])(?:Invalid (?:input|option|type|value|enum)|Too (?:big|small)|Unrecognized keys?|Required|Expected|Unexpected)\b/,
+  /^Invalid\b/,
+  /^(?:String|Number|Array) must\b/,
+  /\breceived (?:undefined|null|number|string|object|array|boolean|nan)\b/i,
+  /\bexpected (?:one of|string|number|boolean|object|array|record)\b/i,
+];
+
+const QUOTED_ID =
+  /"(?:c[a-z0-9]{20,}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"/gi;
+
 function readableServerMessage(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const text = value.trim();
-  return text !== '' && text.length <= MAX_SERVER_MESSAGE_LENGTH ? text : undefined;
+  if (text === '' || text.length > MAX_SERVER_MESSAGE_LENGTH) return undefined;
+  if (TEMPLATE_ATTACH_SOURCE.test(text)) return TEMPLATE_ATTACH_MESSAGE;
+  if (PREVIOUS_PAIR_SOURCE.test(text)) return PREVIOUS_PAIR_MESSAGE;
+  if (PREVIOUS_REQUIRED_SOURCE.test(text)) return PREVIOUS_REQUIRED_MESSAGE;
+  if (CSV_HEADER_SOURCE.test(text)) return CSV_FORMAT_MESSAGE;
+  if (RT_INVARIANT_SOURCE.test(text)) return RT_CONFLICT_MESSAGE;
+  if (UNRECOGNIZED_SOURCE.test(text)) return UNKNOWN_FIELD_MESSAGE;
+  if (ZOD_PATTERNS.some((pattern) => pattern.test(text))) {
+    return VALIDATION_PREFIX.test(text) ? INPUT_MISMATCH_MESSAGE : undefined;
+  }
+  const friendly = FRIENDLY_TERMS.reduce(
+    (acc, [pattern, term]) => acc.replace(pattern, term),
+    text.replace(QUOTED_ID, '').replace(/ {2,}/g, ' '),
+  );
+  return HIDDEN_TOKEN_PATTERN.test(friendly.toLowerCase()) ? undefined : friendly;
 }
 
 /**
@@ -196,13 +369,29 @@ export function toUserMessage(error: unknown, context?: string, method?: string)
   const record =
     typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : {};
   const fieldErrors = kind === 'validation' ? sanitizeFieldErrors(record['fieldErrors']) : {};
+  const body =
+    typeof record['body'] === 'object' && record['body'] !== null
+      ? (record['body'] as Record<string, unknown>)
+      : undefined;
+  const code = record['code'] ?? body?.code;
+  const serverMsg =
+    (typeof record['serverMessage'] === 'string' ? record['serverMessage'] : undefined) ??
+    (typeof record['message'] === 'string' ? record['message'] : undefined) ??
+    (typeof body?.error === 'string' ? body.error : undefined) ??
+    (typeof body?.message === 'string' ? body.message : undefined) ??
+    '';
+  const isCsrf =
+    status === 403 && (code === 'EBADCSRFTOKEN' || /\bcsrf\b/i.test(serverMsg));
+
   // Validation failures are the one place the server's own sentence is shown: the backend
   // answers 400/422 with a short, user-oriented Indonesian reason ("Judul tidak boleh memuat
   // HTML"). Every other status keeps approved wording so 5xx/SQL/stack text never leaks.
-  const base =
-    kind === 'validation' && Object.keys(fieldErrors).length === 0
+  const methodUsed = record['method'] ?? method;
+  const base = isCsrf
+    ? CSRF_INVALID_MESSAGE
+    : kind === 'validation' && Object.keys(fieldErrors).length === 0
       ? (readableServerMessage(record['serverMessage']) ?? USER_MESSAGES.validation)
-      : approvedMessage(kind, record['method'] ?? method);
+      : approvedMessage(kind, methodUsed, context);
   const message = phrase ? `Gagal ${phrase}. ${base}` : base;
 
   return { message, kind, status, fieldErrors };

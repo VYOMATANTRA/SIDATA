@@ -159,7 +159,7 @@ const router = createRouter({
           meta: {
             ...metaForRoles(rolesFor('/admin/sistem/templat-kalimat')),
             title: 'Templat kalimat',
-            subtitle: 'Kelola templat kalimat perbandingan tier-1 (SPEC §5).',
+            subtitle: 'Atur kalimat perbandingan tahun ke tahun yang tampil di halaman Cerita.',
             breadcrumb: ['Sistem', 'Templat kalimat'],
           },
         },

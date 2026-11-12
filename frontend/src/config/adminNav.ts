@@ -117,7 +117,6 @@ export const ADMIN_NAV: (AdminNavLink | AdminNavGroup)[] = [
         icon: ChatBubbleLeftRightIcon,
         roles: ['admin'],
         dataTest: 'nav-sistem-templat-kalimat',
-        badge: 'Segera hadir',
       },
       {
         label: 'Konfigurasi sistem',

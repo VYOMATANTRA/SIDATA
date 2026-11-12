@@ -20,6 +20,7 @@ import {
   type Indicator,
   type IndicatorPatch,
 } from '../stores/indicators.store';
+import { useComparisonTemplatesStore } from '../stores/comparisonTemplates.store';
 import { usePagesStore } from '../stores/pages.store';
 import { useContentBlocksStore, type ContentBlock } from '../stores/contentBlocks.store';
 import { useSettingsStore, type PublicSettings } from '../stores/settings.store';
@@ -47,6 +48,7 @@ const pagesStore = usePagesStore();
 const contentBlocksStore = useContentBlocksStore();
 const settingsStore = useSettingsStore();
 const authStore = useAuthStore();
+const templatesStore = useComparisonTemplatesStore();
 
 const activeTab = ref<ActiveTab>('indikator');
 const searchQuery = ref('');
@@ -287,6 +289,12 @@ function openScalar(indicator: Indicator): void {
   activeContentBlock.value = null;
   isEditingSettings.value = false;
   activeScalar.value = indicator;
+  templatesStore.clearSelectorError();
+  // Only a computed-comparison indicator can be given a template, so only then is the list
+  // worth fetching. Editors may read it; a failure shows beside the selector, not as a blocker.
+  if (indicator.isComputedComparison) {
+    void templatesStore.fetchTemplates({ force: true, forSelector: true });
+  }
 }
 
 /**
@@ -366,6 +374,7 @@ function resetEditor(): void {
   settingsFormDirty.value = false;
   isTableDetailLoading.value = false;
   serverError.value = '';
+  templatesStore.clearSelectorError();
 }
 
 async function handleContentBlockSubmit(payload: {
@@ -669,6 +678,8 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
         :indicator="activeScalar"
         :busy="saving"
         :server-error="serverError"
+        :templates="templatesStore.templates"
+        :templates-error="templatesStore.selectorError ?? ''"
         @submit="handleScalarSubmit"
         @cancel="resetEditor"
       />

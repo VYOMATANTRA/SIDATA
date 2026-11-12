@@ -9,12 +9,13 @@ import {
   createComparisonTemplate,
   updateComparisonTemplate,
   deleteComparisonTemplate,
+  previewComparisonTemplate,
 } from '../services/comparisonTemplates.service.js';
+import { sendHierarchyError } from '../utils/hierarchyAuthoring.js';
 
 /**
  * Service errors carry their own status. Only the 422 acknowledgment flow adds `code` and
- * `warnings`, which the admin UI needs to render and echo back the exact flagged wording;
- * every other error stays a plain `{ error }`.
+ * `warnings`, and 409 STALE_WRITE adds `code` and `details`; every other error stays a plain `{ error }`.
  */
 function respondWithFailure(res: Response, error: unknown, logContext: string): Response {
   if (error instanceof ComparisonTemplateServiceError) {
@@ -22,7 +23,11 @@ function respondWithFailure(res: Response, error: unknown, logContext: string): 
       error: error.message,
       ...(error.code !== undefined ? { code: error.code } : {}),
       ...(error.warnings !== undefined ? { warnings: error.warnings } : {}),
+      ...(error.details !== undefined ? { details: error.details } : {}),
     });
+  }
+  if (sendHierarchyError(res, error)) {
+    return res;
   }
   console.error(
     `Error saat ${logContext}:`,
@@ -139,5 +144,19 @@ export const deleteComparisonTemplateHandler = async (
     });
   } catch (error) {
     return respondWithFailure(res, error, 'menghapus template perbandingan');
+  }
+};
+
+/**
+ * Admin-only live preview of a draft template. Same renderer as the public read path; nothing is
+ * stored or audited. An unfinished draft is answered 200 with `valid: false` and plain-language
+ * `problems`, since that is the normal state while someone is typing.
+ */
+export const previewComparisonTemplateHandler = (req: Request, res: Response): Response | void => {
+  try {
+    const preview = previewComparisonTemplate(req.body);
+    return res.status(200).json(preview);
+  } catch (error) {
+    return respondWithFailure(res, error, 'membuat pratinjau template perbandingan');
   }
 };
