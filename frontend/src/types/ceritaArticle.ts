@@ -1,61 +1,55 @@
 /**
- * Extra article content a Cerita section can carry beyond prose, indicators and matrix tables
- * (SPEC §8, "Cerita reader"). These are the shapes the reader's template renders; nothing in the
- * backend produces them yet, so a page that supplies none looks exactly as before. Wave 4
- * (Cerita management) maps stored content onto these types.
+ * The shape of a Cerita page as the article template renders it (SPEC §8, "Cerita reader").
+ * A page holds chapters; a chapter holds sections; a section has one heading, its paragraphs and,
+ * optionally, one figure. Nothing in the backend produces this yet: Wave 4 builds a `CeritaArticle`
+ * from the stored page, chapters, sections and media.
  */
 
-export interface ArticleFigureBlock {
-  kind: 'figure';
+/** One photo with its caption and credit. */
+export interface ArticlePhoto {
   id: string;
-  /** Path or HTTPS URL of the photo. A figure without one is not rendered at all. */
+  /** Path or HTTPS URL. A photo without a usable address is left out. */
   src: string;
   /** What the photo shows, for people who cannot see it. */
   alt: string;
+  /** Short label such as "Foto 1", or a caption. */
   caption?: string;
   /** Who took it or who it belongs to. */
   credit?: string;
 }
 
-export interface ArticleQuoteBlock {
-  kind: 'quote';
-  id: string;
-  text: string;
-  attribution?: string;
+/** A single picture. */
+export interface PhotoFigure {
+  kind: 'photo';
+  photo: ArticlePhoto;
 }
 
-export interface ArticleStatItem {
-  id: string;
-  /** Already formatted for display, e.g. "7.500". */
-  value: string;
-  unit?: string;
-  label: string;
+/** Several pictures: two are shown as an offset pair, more than two as a swipeable row. */
+export interface PhotoGroupFigure {
+  kind: 'photos';
+  photos: ArticlePhoto[];
 }
 
-export interface ArticleStatsBlock {
-  kind: 'stats';
-  id: string;
+/** A plot or diagram: a title, the picture (or live bars) and its source. */
+export interface DiagramFigure {
+  kind: 'diagram';
   title: string;
-  items: ArticleStatItem[];
+  /** Picture of the plot. Either this or `bars` is shown. */
+  src?: string;
+  alt?: string;
+  bars?: { unit?: string; items: { id: string; label: string; value: number }[] };
+  /** Where the numbers come from, shown under the diagram. */
+  source?: string;
 }
 
-export interface ArticleProseBlock {
-  kind: 'prose';
+export type ArticleFigure = PhotoFigure | PhotoGroupFigure | DiagramFigure;
+
+export interface ArticleSection {
   id: string;
-  /** One entry per paragraph. */
+  heading: string;
   paragraphs: string[];
+  figure?: ArticleFigure;
 }
-
-export interface ArticleBarsBlock {
-  kind: 'bars';
-  id: string;
-  title: string;
-  unit?: string;
-  items: { id: string; label: string; value: number }[];
-}
-
-export type ArticleBlock =
-  ArticleProseBlock | ArticleFigureBlock | ArticleQuoteBlock | ArticleStatsBlock | ArticleBarsBlock;
 
 /** Optional authorship line under the headline. */
 export interface ArticleByline {
@@ -63,21 +57,19 @@ export interface ArticleByline {
   affiliation?: string;
 }
 
-/**
- * One Cerita page as the article template renders it: an ordered list of blocks per chapter.
- * Wave 4 builds this from the stored page, chapters, sections and their content.
- */
+export interface ArticleChapter {
+  id: string;
+  slug: string;
+  number: string | null;
+  title: string;
+  sections: ArticleSection[];
+}
+
 export interface CeritaArticle {
   /** Topic title (the page title), e.g. "Pendidikan". */
   title: string;
   /** Optional editorial headline shown as the page heading. */
   headline?: string;
   byline?: ArticleByline;
-  chapters: {
-    id: string;
-    slug: string;
-    number: string | null;
-    title: string;
-    blocks: ArticleBlock[];
-  }[];
+  chapters: ArticleChapter[];
 }

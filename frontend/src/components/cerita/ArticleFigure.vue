@@ -1,45 +1,28 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
-import type { ArticleFigureBlock } from '../../types/ceritaArticle';
+import { computed } from 'vue';
+import type { ArticleFigure } from '../../types/ceritaArticle';
+import { safeImageSrc } from '../../utils/ceritaFigures';
+import FigureCard from './FigureCard.vue';
+import FigurePhotoPair from './FigurePhotoPair.vue';
+import FigureCarousel from './FigureCarousel.vue';
+import FigureDiagram from './FigureDiagram.vue';
 
-const props = defineProps<{ block: ArticleFigureBlock }>();
+/** Picks the layout for a section's figure: one picture, a pair, a carousel, or a diagram. */
+const props = defineProps<{ figure: ArticleFigure }>();
 
-// A photo that fails to load is dropped together with its caption, so the page never shows a
-// broken frame.
-const failed = ref(false);
-watch(
-  () => props.block.src,
-  () => {
-    failed.value = false;
-  },
+const usablePhotos = computed(() =>
+  props.figure.kind === 'photos'
+    ? props.figure.photos.filter((photo) => safeImageSrc(photo.src) !== null)
+    : [],
 );
-
-const safeSrc = computed(() => {
-  const src = props.block.src.trim();
-  if ((src.startsWith('/') && !src.startsWith('//')) || /^https:\/\/[^/]+/i.test(src)) return src;
-  return null;
-});
-const visible = computed(() => safeSrc.value !== null && !failed.value);
 </script>
 
 <template>
-  <figure v-if="visible" class="space-y-2" data-test="article-figure">
-    <img
-      :src="safeSrc ?? undefined"
-      :alt="block.alt"
-      loading="lazy"
-      class="rounded-card border-border block h-auto w-full border object-cover"
-      @error="failed = true"
-    />
-    <figcaption
-      v-if="block.caption || block.credit"
-      class="text-text-muted text-sm leading-snug"
-      data-test="article-figure-caption"
-    >
-      <span v-if="block.caption" class="text-brand-navy block font-medium">{{
-        block.caption
-      }}</span>
-      <span v-if="block.credit" class="block">{{ block.credit }}</span>
-    </figcaption>
-  </figure>
+  <FigureCard v-if="figure.kind === 'photo'" :photo="figure.photo" />
+  <template v-else-if="figure.kind === 'photos'">
+    <FigureCard v-if="usablePhotos.length === 1" :photo="usablePhotos[0]!" />
+    <FigurePhotoPair v-else-if="usablePhotos.length === 2" :photos="usablePhotos" />
+    <FigureCarousel v-else-if="usablePhotos.length > 2" :photos="usablePhotos" />
+  </template>
+  <FigureDiagram v-else-if="figure.kind === 'diagram'" :figure="figure" />
 </template>

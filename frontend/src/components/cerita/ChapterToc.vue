@@ -18,9 +18,14 @@ export interface ChapterTocProps {
    * list of chapters beneath it (below `lg`).
    */
   variant: 'rail' | 'sheet';
+  /**
+   * Where the 'sheet' bar sticks: 'top' = under the public header (default), 'bottom' = at the
+   * bottom of the reader (the article template); its list then opens upward.
+   */
+  placement?: 'top' | 'bottom';
 }
 
-const props = defineProps<ChapterTocProps>();
+const props = withDefaults(defineProps<ChapterTocProps>(), { placement: 'top' });
 const emit = defineEmits<{ navigate: [chapterId: string] }>();
 
 const isSheetOpen = ref(false);
@@ -121,7 +126,12 @@ onBeforeUnmount(() => {
   <div
     v-else
     ref="rootRef"
-    class="bg-surface-inverse sticky top-[var(--public-header-height)] z-30 border-t border-white/15 lg:hidden"
+    class="bg-surface-inverse sticky z-30 border-white/15 lg:hidden"
+    :class="
+      placement === 'bottom'
+        ? 'bottom-0 border-t shadow-[0_-4px_12px_rgba(0,0,0,0.15)]'
+        : 'top-[var(--public-header-height)] border-t'
+    "
     data-test="chapter-toc-sheet"
     @keydown="handleKeydown"
     @focusout="handleFocusOut"
@@ -165,7 +175,8 @@ onBeforeUnmount(() => {
       v-show="isSheetOpen"
       :id="panelId"
       aria-label="Pilih bab"
-      class="border-border absolute inset-x-0 top-full max-h-[calc(100dvh-var(--public-header-height)-4rem)] overflow-y-auto overscroll-contain border-t bg-white shadow-lg"
+      class="border-border absolute inset-x-0 max-h-[calc(100dvh-var(--public-header-height)-4rem)] overflow-y-auto overscroll-contain bg-white shadow-lg"
+      :class="placement === 'bottom' ? 'bottom-full border-t' : 'top-full border-t'"
       data-test="chapter-toc-sheet-panel"
     >
       <ol class="divide-border divide-y">

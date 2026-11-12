@@ -565,11 +565,15 @@ buried inside a stat page. Entry points:
   regardless of the chapter list; from `xl` the chapter list is the right-hand column, from `lg` it is
   a fixed right track, and below `lg` it is the sticky selector bar. The title band has a "Kembali"
   link to the home page. The article template (`CeritaArticleTemplate`) renders a `CeritaArticle`
-  (`types/ceritaArticle.ts`): per chapter, an ordered list of blocks (prose, bar chart, quote,
-  figure with caption and credit, stat tiles), plus an optional editorial headline and byline.
-  Nothing in the backend produces these yet; Wave 4 builds the `CeritaArticle` from stored content.
-  Until then the template runs only in development at `/cerita/contoh`, fed mockup text
-  (`content/ceritaArticleDummy.ts`, one page: the Pendidikan mockup) that is not sourced data and never shown to residents.
+  (`types/ceritaArticle.ts`): a page holds chapters, a chapter holds sections, and a section has one
+  heading, its paragraphs and optionally one figure. A figure is one photo, two photos (an offset
+  pair), more than two (a swipeable row with Sebelumnya/Berikutnya buttons and a position label), or
+  a diagram (title, picture or bars, source). Each chapter ends with a "Bab berikutnya" link; below
+  `lg` the chapter bar sticks to the bottom of the reader and opens upward. Photos without a safe
+  address, or that fail to load, are left out with their caption. Nothing in the backend produces a
+  `CeritaArticle` yet; Wave 4 builds it from stored content. Until then the template runs only in
+  development at `/cerita/contoh`, fed mockup text (`content/ceritaArticleDummy.ts`, one page) that is
+  not sourced data and never shown to residents.
 - Footer, under **Sumber Daya**.
 - The interactive map — tapping an RT point opens that leader's contact card.
 - Pemerintahan & Kelembagaan, chapter 2.3 (Pemerintahan Kelurahan), **links to** this page rather
@@ -722,8 +726,9 @@ placeholders.
 
 Single register — unresolved questions live here and nowhere else.
 
-- **Cerita article content model (Wave 4):** how editors author figures, quotes, stat tiles, an
-  editorial headline and a byline, and how their order relative to prose is stored. A byline names
+- **Cerita article content model (Wave 4):** how editors author a section's figure (photos with
+  caption, credit and alt text; diagrams), an editorial headline and a byline, and how they are
+  stored against sections. A byline names
   authorship, so it needs an approved source before it is published.
 - **Source-version reconciliation (Google Drive: Descan Manggar 2026):** Confirm which of the two
   `Monografi Kelurahan Manggar 2026` editions is current/approved for public facts. The expanded

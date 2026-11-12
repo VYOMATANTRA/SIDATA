@@ -7,8 +7,6 @@ import type { ContentBlock } from '../../stores/contentBlocks.store';
 import SectionProse from './SectionProse.vue';
 import IndicatorStat from './IndicatorStat.vue';
 import MatrixTableBlock from './MatrixTableBlock.vue';
-import ArticleBlocks from './ArticleBlocks.vue';
-import type { ArticleBlock } from '../../types/ceritaArticle';
 
 export interface ChapterSectionProps {
   chapter: ChapterDto;
@@ -18,11 +16,6 @@ export interface ChapterSectionProps {
   indicatorsBySectionId: Record<string, IndicatorDto[]>;
   /** Matrix tables, keyed by sectionId. */
   tablesBySectionId: Record<string, IndicatorTableDetailDto[]>;
-  /**
-   * Figures, quotes and stat tiles, keyed by sectionId. Optional: no source feeds these yet
-   * (Wave 4), and without them a section renders exactly as before.
-   */
-  extraBlocksBySectionId?: Record<string, ArticleBlock[]>;
   /** Combined indicator/matrix-table fetch error for a section, keyed by sectionId. */
   sectionErrorsBySectionId: Record<string, string>;
   /**
@@ -38,7 +31,6 @@ const emit = defineEmits<{ 'retry-section': [sectionId: string] }>();
 function hasContent(sectionId: string): boolean {
   return (
     (props.proseBySectionId[sectionId]?.length ?? 0) > 0 ||
-    (props.extraBlocksBySectionId?.[sectionId]?.length ?? 0) > 0 ||
     (props.indicatorsBySectionId[sectionId]?.length ?? 0) > 0 ||
     (props.tablesBySectionId[sectionId]?.length ?? 0) > 0
   );
@@ -89,12 +81,6 @@ const isEmptyChapter = computed(
           v-for="block in proseBySectionId[section.id] ?? []"
           :key="block.id"
           :body="block.body"
-        />
-
-        <!-- Order of figures/quotes relative to prose is a Wave 4 decision; for now they follow it. -->
-        <ArticleBlocks
-          v-if="extraBlocksBySectionId?.[section.id]?.length"
-          :blocks="extraBlocksBySectionId[section.id] ?? []"
         />
 
         <div
