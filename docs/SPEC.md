@@ -263,12 +263,35 @@ the admin base layout shell from §8), organized into three accessible tabbed ca
    same indicator also leaves the open draft untouched — both forms key their draft on the record
    id, so only opening a different record resets it.
 
-2. **Blok Konten & Profil:** Displays editable cards for all standalone content blocks (`landing-hero`,
-   `landing-sambutan-lurah`, `landing-highlights`, `tentang-kelurahan-profil`, `publikasi-katalog`).
-   Opens `ContentBlockForm`, providing accessible inputs for block title, body (up to 50,000 characters),
-   and specialized metadata editors (Lurah title/photo, profile RT count/administrative hierarchy,
-   boundaries, SOTK roster, or raw JSON for structured collections). Mutations use `PATCH /api/content-blocks/:slug`
-   (audited as `content_block.updated`) with prototype pollution guards and URL validation.
+2. **Blok Konten & Profil:** Displays an editable card for every content block: the five standalone
+   blocks (`landing-hero`, `landing-sambutan-lurah`, `landing-highlights`, `tentang-kelurahan-profil`,
+   `publikasi-katalog`) and any block attached to a Cerita section. Cards and dialogs name a block by its
+   title and say where residents see it ("Tampil di: Beranda, bagian atas"); slugs and block types are
+   never shown. `ContentBlockForm` is a thin dispatcher to one named form per block purpose, all sharing the
+   title (up to 255 characters) and body (up to 50,000 characters) fields:
+   - **Hero**: optional background image address. **Sambutan Lurah**: name, official title, optional portrait
+     address. **Profil Kelurahan**: RT count, kecamatan, kota, landscape, Lurah, boundaries and the SOTK roster.
+     Photo and background fields stay plain address text until the photo picker replaces them.
+   - **Potensi unggulan** (`landing-highlights`): repeatable rows of Judul (up to 100 characters) and Deskripsi
+     (up to 500), at most 10, saved as `metadata.items[]`. Decision D1: no public page reads this block, so it
+     stays editable but is labelled "Tidak ditampilkan di situs", and the form says so; it is not described as
+     changing the landing page.
+   - **Katalog Publikasi**: repeatable rows of kategori, judul, deskripsi, optional sumber rujukan (the citation),
+     optional tautan unduhan, format and size (entered in KB or MB, saved as whole bytes; an untouched size is
+     saved byte-for-byte), at most 25, saved as `metadata.publications[]`. Availability is derived from the link
+     (a link means `isAvailableOnline`, no link means "Segera hadir"), so the server's link/availability rule
+     cannot be violated. Links must start with `https://`. A saved empty list stays empty and is not refilled
+     with the built-in catalog (settled D2); the built-in list is only offered for a block that never stored one.
+   - **Cerita section blocks**: title and body only; the save sends no metadata, so stored metadata is untouched.
+   - Any other block opens no editor, only "Blok ini belum bisa diubah dari sini. Hubungi pengelola teknis."
+     (no data is shown). **No JSON or code editor exists in any role or state.**
+   Repeatable rows are reordered with Naik / Turun buttons (never drag-only) and removed with Hapus; each row
+   shows its own errors tied to the field, and focus and a live-region message follow every add, move and
+   remove. Mutations use `PATCH /api/content-blocks/:slug` (audited as `content_block.updated`) with prototype
+   pollution guards and URL validation. Every save sends the block's `updatedAt` as `expectedUpdatedAt`; a
+   `STALE_WRITE` refusal keeps the whole draft in the open dialog, shows the approved stale-write message and
+   offers "Muat versi terbaru", which replaces the draft with the stored block only when the editor asks.
+   Any failed save keeps every field as typed.
 
 3. **Pengaturan Publik Portal:** Displays system portal settings and opens `PublicSettingsForm`. Admins
    can update identity settings (`public.app_name`, `public.institution_name`, `public.tagline`,
@@ -604,7 +627,7 @@ Implemented frontend routes:
 Provides three tabbed operational interfaces:
 
 1. **Indikator & Tabel**: Searchable and filterable list of all scalar indicators and matrix tables with modal editing forms (`ScalarIndicatorForm` and `TableIndicatorForm`).
-2. **Blok Konten & Profil**: Direct editing of narrative content blocks (`landing-hero`, `landing-sambutan-lurah`, `landing-highlights`, `tentang-kelurahan-profil`, `publikasi-katalog`) using `ContentBlockForm`.
+2. **Blok Konten & Profil**: Direct editing of narrative content blocks (`landing-hero`, `landing-sambutan-lurah`, `landing-highlights`, `tentang-kelurahan-profil`, `publikasi-katalog`) through named forms (§4): collections are edited as repeatable rows, never as raw JSON, and each card states where residents see the block. `landing-highlights` stays editable but is labelled "Tidak ditampilkan di situs" because no public page reads it.
 3. **Pengaturan Publik Portal** (admin only): Management of public metadata (`public.*` keys: app name, institution, tagline, contact channels, default map view) using `PublicSettingsForm`. The default map view is set with the shared `LocationPicker` ("Atur tampilan peta"): panning and zooming the map, or its direction/zoom buttons and keyboard mode, define the center and zoom; there is no numeric latitude, longitude or zoom entry. Nothing is saved until "Simpan perubahan"; "Batal" leaves the stored view unchanged. Closing the dialog with unsaved changes asks for confirmation ("Perubahan belum disimpan" / "Tutup tanpa menyimpan perubahan?"); Escape, the backdrop or the X on that prompt means "stay". The API still validates latitude -90..90, longitude -180..180 and integer zoom 1..20. The dialog opens only once the public settings have loaded; while they are still loading, or after a failed load, it stays closed and the page shows the message instead (the load error with its retry, or a short "still loading" note). Editors do not see this tab; `PATCH /api/settings/public` requires the admin role.
 
 **Dynamic View & Component Integration:**
