@@ -32,23 +32,41 @@
 --                    network (the `mysql` service is not reachable from outside it), or a
 --                    specific host/CIDR in a VPS deployment with a locked-down MySQL bind.
 --   <DB_NAME>      — the value of MYSQL_DATABASE (e.g. sidata)
+--
+-- Run it with no database preselected (`mysql -u root -p < file`); the USE below selects one.
+-- (The helper procedures are stored routines and must live inside a database; without a USE,
+-- MySQL stops with ERROR 1046: No database selected.) A `--database` flag is harmless: USE wins.
 
--- 1. Remove the blanket database-level grant unconditionally. MySQL 8.4 returns ERROR 1141
---    (42000) on REVOKE if the database-level grant row in mysql.db was already removed on a
---    previous run of this script. Running the REVOKE inside a temporary helper procedure with a
---    CONTINUE HANDLER for error 1141 ignores ONLY the "no such grant" error, avoiding fragile
---    pre-checks that can miss wildcard database grants (e.g. `sidata%`.*) and making repeated
---    executions idempotent without mysql --force.
-DROP PROCEDURE IF EXISTS `<DB_NAME>`.`_revoke_app_db_grants`;
+-- 1. Remove the blanket database-level grant.
+--    GRANT OPTION is revoked by its own statement (MySQL has no `ALL PRIVILEGES, GRANT OPTION ON
+--    db.*` form): `REVOKE ALL PRIVILEGES` alone leaves a lone GRANT OPTION behind, which would be
+--    a db-level grant record the check below (rightly) rejects. Error 1141 (no such grant) is
+--    ignored for each statement, so re-runs are idempotent.
+--    MySQL records a db-level grant on a name containing `_` in ESCAPED form (`sidata\_x`), and a
+--    REVOKE naming the unescaped spelling does not touch that record (verified on MySQL 8.0). So
+--    each REVOKE runs for both spellings, via prepared statements.
+--    Wildcard (`sidata%`.*) and server-wide (*.*) grants are DIFFERENT scopes and are not revoked
+--    here; the final check below stops the script naming them, and the operator removes them by hand.
+USE `<DB_NAME>`;
+DROP PROCEDURE IF EXISTS _sidata_revoke_blanket_db_grant;
 DELIMITER $$
-CREATE PROCEDURE `<DB_NAME>`.`_revoke_app_db_grants`()
+CREATE PROCEDURE _sidata_revoke_blanket_db_grant()
 BEGIN
+  DECLARE db_plain VARCHAR(128) DEFAULT '<DB_NAME>';
+  DECLARE db_escaped VARCHAR(256) DEFAULT REPLACE('<DB_NAME>', '_', '\\_');
   DECLARE CONTINUE HANDLER FOR 1141 BEGIN END;
-  REVOKE ALL PRIVILEGES ON `<DB_NAME>`.* FROM '<APP_DB_USER>'@'<APP_DB_HOST>';
+  SET @sidata_stmt = CONCAT('REVOKE ALL PRIVILEGES ON `', db_plain, '`.* FROM ''<APP_DB_USER>''@''<APP_DB_HOST>''');
+  PREPARE sidata_revoke FROM @sidata_stmt; EXECUTE sidata_revoke; DEALLOCATE PREPARE sidata_revoke;
+  SET @sidata_stmt = CONCAT('REVOKE GRANT OPTION ON `', db_plain, '`.* FROM ''<APP_DB_USER>''@''<APP_DB_HOST>''');
+  PREPARE sidata_revoke FROM @sidata_stmt; EXECUTE sidata_revoke; DEALLOCATE PREPARE sidata_revoke;
+  SET @sidata_stmt = CONCAT('REVOKE ALL PRIVILEGES ON `', db_escaped, '`.* FROM ''<APP_DB_USER>''@''<APP_DB_HOST>''');
+  PREPARE sidata_revoke FROM @sidata_stmt; EXECUTE sidata_revoke; DEALLOCATE PREPARE sidata_revoke;
+  SET @sidata_stmt = CONCAT('REVOKE GRANT OPTION ON `', db_escaped, '`.* FROM ''<APP_DB_USER>''@''<APP_DB_HOST>''');
+  PREPARE sidata_revoke FROM @sidata_stmt; EXECUTE sidata_revoke; DEALLOCATE PREPARE sidata_revoke;
 END$$
 DELIMITER ;
-CALL `<DB_NAME>`.`_revoke_app_db_grants`();
-DROP PROCEDURE `<DB_NAME>`.`_revoke_app_db_grants`;
+CALL _sidata_revoke_blanket_db_grant();
+DROP PROCEDURE IF EXISTS _sidata_revoke_blanket_db_grant;
 
 -- 2. Full access to every table EXCEPT audit_logs. Keep this list in sync with
 --    backend/prisma/schema.prisma's `@@map(...)` table names.
@@ -80,27 +98,72 @@ GRANT UPDATE (`acknowledgedAt`, `acknowledgedById`) ON `<DB_NAME>`.`audit_logs`
 
 FLUSH PRIVILEGES;
 
--- 4. Post-condition verification: inspect SCHEMA_PRIVILEGES for any remaining database-level
---    grant matching <DB_NAME> (including wildcards like '%' or '_' via '<DB_NAME>' LIKE TABLE_SCHEMA)
---    for '<APP_DB_USER>'@'<APP_DB_HOST>'. If any database-level grant remains, raise an error.
-DROP PROCEDURE IF EXISTS `<DB_NAME>`.`_assert_no_db_grants`;
+-- Post-condition check: fail loudly if the app user still holds ANY grant, at any scope, that
+-- would let it delete or rewrite audit_logs rows. Three scopes are inspected:
+--   (a) database-level grants (information_schema.SCHEMA_PRIVILEGES) whose schema pattern matches
+--       <DB_NAME>: the exact name (plain or `\_`-escaped) AND wildcard patterns such as
+--       `sidata%`.* (a pattern matches when '<DB_NAME>' LIKE the stored pattern; `\_` in a stored
+--       pattern is a literal underscore, a bare `_` or `%` is a wildcard);
+--   (b) server-wide grants (information_schema.USER_PRIVILEGES) of DELETE, UPDATE, DROP, ALTER or
+--       GRANT OPTION. A global USAGE (or SELECT/INSERT) does not fail;
+--   (c) table-level grants on <DB_NAME>.audit_logs (information_schema.TABLE_PRIVILEGES) other than
+--       SELECT and INSERT, or any grantable one. The column-scoped UPDATE this script grants is
+--       recorded in COLUMN_PRIVILEGES, so it never trips this check.
+-- This script can only revoke the exact-name database grant (step 1). A wildcard or global grant
+-- is a different scope that it must not silently rewrite, so the check stops with an error naming
+-- the problem and the operator revokes it by hand (see SHOW GRANTS FOR the app user) and re-runs.
+USE `<DB_NAME>`;
+DROP PROCEDURE IF EXISTS _sidata_verify_no_blanket_db_grant;
 DELIMITER $$
-CREATE PROCEDURE `<DB_NAME>`.`_assert_no_db_grants`()
+CREATE PROCEDURE _sidata_verify_no_blanket_db_grant()
 BEGIN
-  DECLARE remaining_grants INT DEFAULT 0;
-  SELECT COUNT(*) INTO remaining_grants
-  FROM information_schema.SCHEMA_PRIVILEGES
-  WHERE GRANTEE = CONCAT('''', '<APP_DB_USER>', '''@''', '<APP_DB_HOST>', '''')
-    AND ('<DB_NAME>' LIKE TABLE_SCHEMA OR TABLE_SCHEMA = '<DB_NAME>');
+  DECLARE db_grants INT DEFAULT 0;
+  DECLARE db_list TEXT DEFAULT NULL;
+  DECLARE global_grants INT DEFAULT 0;
+  DECLARE global_list TEXT DEFAULT NULL;
+  DECLARE table_grants INT DEFAULT 0;
+  DECLARE table_list TEXT DEFAULT NULL;
+  DECLARE failure_message VARCHAR(128) DEFAULT '';
+  DECLARE app_grantee VARCHAR(400) DEFAULT CONCAT('''', '<APP_DB_USER>', '''@''', '<APP_DB_HOST>', '''');
 
-  IF remaining_grants > 0 THEN
-    SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'Failed to revoke database-level grants: database-level privileges remain for the application user.';
+  SELECT COUNT(*),
+         GROUP_CONCAT(DISTINCT TABLE_SCHEMA SEPARATOR ', ')
+    INTO db_grants, db_list
+  FROM information_schema.SCHEMA_PRIVILEGES
+  WHERE GRANTEE = app_grantee
+    AND ('<DB_NAME>' LIKE TABLE_SCHEMA OR TABLE_SCHEMA IN ('<DB_NAME>', REPLACE('<DB_NAME>', '_', '\\_')));
+
+  SELECT COUNT(*), GROUP_CONCAT(PRIVILEGE_TYPE SEPARATOR ', ')
+    INTO global_grants, global_list
+  FROM information_schema.USER_PRIVILEGES
+  WHERE GRANTEE = app_grantee
+    AND PRIVILEGE_TYPE IN ('DELETE', 'UPDATE', 'DROP', 'ALTER', 'GRANT OPTION');
+
+  SELECT COUNT(*), GROUP_CONCAT(PRIVILEGE_TYPE SEPARATOR ', ')
+    INTO table_grants, table_list
+  FROM information_schema.TABLE_PRIVILEGES
+  WHERE GRANTEE = app_grantee
+    AND TABLE_SCHEMA IN ('<DB_NAME>', REPLACE('<DB_NAME>', '_', '\\_'))
+    AND TABLE_NAME = 'audit_logs'
+    AND (PRIVILEGE_TYPE NOT IN ('SELECT', 'INSERT') OR IS_GRANTABLE = 'YES');
+
+  -- MESSAGE_TEXT is capped at 128 characters: put the actionable part first.
+  IF db_grants > 0 THEN
+    SET failure_message = LEFT(CONCAT('Revoke db-level grant on <DB_NAME> (wildcard?): ', IFNULL(db_list, '?')), 128);
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = failure_message;
+  END IF;
+  IF global_grants > 0 THEN
+    SET failure_message = LEFT(CONCAT('Revoke server-wide grant on *.* : ', IFNULL(global_list, '?')), 128);
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = failure_message;
+  END IF;
+  IF table_grants > 0 THEN
+    SET failure_message = LEFT(CONCAT('Revoke extra table grant on <DB_NAME>.audit_logs: ', IFNULL(table_list, '?')), 128);
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = failure_message;
   END IF;
 END$$
 DELIMITER ;
-CALL `<DB_NAME>`.`_assert_no_db_grants`();
-DROP PROCEDURE `<DB_NAME>`.`_assert_no_db_grants`;
+CALL _sidata_verify_no_blanket_db_grant();
+DROP PROCEDURE IF EXISTS _sidata_verify_no_blanket_db_grant;
 
 -- Verification (run as the app user, or via `SHOW GRANTS FOR '<APP_DB_USER>'@'<APP_DB_HOST>'`):
 --   DELETE FROM audit_logs LIMIT 1;                     -- must fail: command denied

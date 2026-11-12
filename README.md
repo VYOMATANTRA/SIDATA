@@ -144,7 +144,13 @@ Checklist for a new environment (Docker on a VPS). Background: [`AGENTS.md`](AGE
    start by default, which the restricted app user can no longer do after step 3.
 3. **Apply the audit-log grants once per environment.** Substitute `<APP_DB_USER>`, `<APP_DB_HOST>`
    and `<DB_NAME>` in `backend/scripts/grants/audit-logs-grants.sql`, run it as a MySQL user with
-   `GRANT` privileges (e.g. root), then run the verification queries at the bottom of the file.
+   `GRANT` privileges (e.g. root) with no database preselected (the script runs its own
+   ``USE `<DB_NAME>` ``; e.g. `mysql -u root -p < grants.sql` on the substituted copy), then run the
+   verification queries at the bottom of the file. It revokes the db-level grant by exact name
+   (and GRANT OPTION). Wildcard grants such as `sidata%`.* and server-wide grants such as
+   `DELETE ON *.*` (or an extra table-level grant on `audit_logs`) are a different scope the
+   script does not touch: it ends with a check that stops with an error naming any such grant
+   still held by the app user — revoke that one manually and re-run.
    Skipping this leaves the app user with full rights on `audit_logs` (no tamper defense layer 2).
    Re-apply it after any migration that adds a table.
 4. Schedule retention pruning, using either:

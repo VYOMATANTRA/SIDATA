@@ -246,7 +246,8 @@ describe('toUserMessage mappings', () => {
     let checked = 0;
     for (const dir of ['services', 'controllers', 'middlewares', 'utils']) {
       for (const file of readdirSync(join(root, dir)).filter((f) => f.endsWith('.ts'))) {
-        const source = readFileSync(join(root, dir, file), 'utf8');
+        // Block comments (JSDoc) hold prose and code spans, never client-visible messages.
+        const source = readFileSync(join(root, dir, file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
         for (const match of source.matchAll(literal)) {
           const raw = match[1] ?? match[2] ?? match[3] ?? '';
           const text = raw.replace(/\$\{[^}]*\}/g, 'X');
@@ -255,6 +256,8 @@ describe('toUserMessage mappings', () => {
           // start or end mid-expression) and developer-only errors thrown for programmer
           // mistakes, which never travel as a 400 (`name: ...` prefix or English internals).
           if (/[{}]/.test(text) || /^[\s,)?&|]|[\s(=!]$/.test(text)) continue;
+          // Raw SQL (column aliases are camelCase by design) is never sent to a client as a message.
+          if (/^(?:SELECT|INSERT|UPDATE|DELETE)\b.*\b(?:FROM|INTO|SET)\b/.test(text)) continue;
           if (
             /^(?:withTimeoutFallback|formatDecimalId|executeLockedTransaction):|^ttlMs /.test(text)
           )
@@ -362,7 +365,10 @@ describe('toUserMessage mappings', () => {
       'Terdapat bidang yang tidak dikenali: "extra"',
     ]) {
       const error = Object.assign(httpFailure(400), { serverMessage });
-      expect([serverMessage, toUserMessage(error).message]).toEqual([serverMessage, UNKNOWN_FIELD_MESSAGE]);
+      expect([serverMessage, toUserMessage(error).message]).toEqual([
+        serverMessage,
+        UNKNOWN_FIELD_MESSAGE,
+      ]);
     }
   });
 
