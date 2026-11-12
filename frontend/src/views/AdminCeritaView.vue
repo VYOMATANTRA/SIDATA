@@ -20,6 +20,7 @@ import BaseButton from '../components/common/BaseButton.vue';
 import BaseModal from '../components/common/BaseModal.vue';
 import CeritaDeleteDialog from '../components/admin/cerita/CeritaDeleteDialog.vue';
 import CeritaNameDialog from '../components/admin/cerita/CeritaNameDialog.vue';
+import CeritaReloadNotice from '../components/admin/cerita/CeritaReloadNotice.vue';
 import CeritaPageList from '../components/admin/cerita/CeritaPageList.vue';
 import CeritaSectionEditor from '../components/admin/cerita/CeritaSectionEditor.vue';
 import CeritaStructurePanel from '../components/admin/cerita/CeritaStructurePanel.vue';
@@ -654,8 +655,10 @@ onUnmounted(() => {
 
     <p class="sr-only" role="status" aria-live="polite" data-test="status">{{ statusMessage }}</p>
 
+    <CeritaReloadNotice />
+
     <div
-      v-if="store.loadError"
+      v-if="store.loadError && !store.reloadNeeded"
       role="alert"
       class="rounded-card border-status-error-border bg-status-error-surface border p-4"
       data-test="load-error"

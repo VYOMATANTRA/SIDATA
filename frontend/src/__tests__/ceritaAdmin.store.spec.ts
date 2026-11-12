@@ -196,3 +196,78 @@ describe('ceritaAdmin store', () => {
     expect(store.figureFor(section.id)).toBeNull();
   });
 });
+
+describe('ceritaAdmin store when the reload after a saved write fails', () => {
+  let store: ReturnType<typeof useCeritaAdminStore>;
+  const failTreeReload = (): void =>
+    fake.failNext(
+      (r) => r.method === 'GET' && r.url === '/api/pages?include=sections',
+      fake.json({ error: 'SQL boom' }, 500),
+    );
+
+  beforeEach(async () => {
+    store = setup();
+    await store.load();
+  });
+
+  it('reports the saved change, asks for a reload and leaves no deleted page selected', async () => {
+    store.selectPage('pendidikan');
+    failTreeReload();
+
+    const outcome = await store.removePage('pendidikan');
+
+    expect(outcome).toMatchObject({ ok: true, refreshFailed: true });
+    expect(store.reloadNeeded).toBe(true);
+    expect(fake.pages.map((p) => p.slug)).toEqual(['kependudukan']);
+    // The deleted page is gone from the screen's data and from every shared cache.
+    expect(store.tree.map((p) => p.slug)).toEqual(['kependudukan']);
+    expect(store.selectedPage?.slug).toBe('kependudukan');
+    const pages = usePagesStore();
+    expect(pages.pages.map((p) => p.slug)).toEqual(['kependudukan']);
+    expect(pages.pagesBySlug['pendidikan']).toBeUndefined();
+    expect(pages.sections.some((s) => s.pageSlug === 'pendidikan')).toBe(false);
+
+    await store.load();
+    expect(store.reloadNeeded).toBe(false);
+  });
+
+  it('drops a deleted chapter or section from the screen even though the reload failed', async () => {
+    const chapter = store.tree[0]!.chapters[1]!;
+    const sectionId = store.tree[0]!.chapters[0]!.sections[1]!.id;
+
+    failTreeReload();
+    expect(await store.removeSection(sectionId)).toMatchObject({ ok: true, refreshFailed: true });
+    expect(store.tree[0]!.chapters[0]!.sections.map((s) => s.title)).toEqual(['Ringkasan']);
+
+    await store.load();
+    failTreeReload();
+    expect(await store.removeSection(chapter.sections[0]!.id)).toMatchObject({ ok: true });
+    // The screen still shows the chapter as it was, so a delete now would carry an old token:
+    // the editor reloads first.
+    expect(await store.removeChapter(chapter.id)).toMatchObject({ ok: false, stale: true });
+    await store.load();
+    failTreeReload();
+    expect(await store.removeChapter(chapter.id)).toMatchObject({ ok: true, refreshFailed: true });
+    expect(store.tree[0]!.chapters.map((c) => c.title)).toEqual(['Jumlah Penduduk']);
+  });
+
+  it('flags a failed reload of paragraphs after a paragraph write too', async () => {
+    const section = store.tree[0]!.chapters[0]!.sections[0]!;
+    fake.failNext(
+      (r) => r.method === 'GET' && r.url === '/api/content-blocks',
+      fake.json({ error: 'x' }, 500),
+    );
+
+    const outcome = await store.addParagraph(section.id, { title: 'Baru', body: 'Isi.' });
+
+    expect(outcome).toMatchObject({ ok: true, refreshFailed: true });
+    expect(store.reloadNeeded).toBe(true);
+  });
+
+  it('does not flag a reload that worked', async () => {
+    const outcome = await store.addChapter('kependudukan', 'Bab baru');
+    expect(outcome).toMatchObject({ ok: true });
+    expect(outcome).not.toHaveProperty('refreshFailed', true);
+    expect(store.reloadNeeded).toBe(false);
+  });
+});

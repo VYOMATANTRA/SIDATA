@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, useId } from 'vue';
 import CeritaFigureEditor from './CeritaFigureEditor.vue';
 import CeritaParagraphList from './CeritaParagraphList.vue';
+import CeritaReloadNotice from './CeritaReloadNotice.vue';
 
 /**
  * Everything a Cerita section holds, in one place: its paragraphs and its one figure. It reports
@@ -51,6 +52,8 @@ defineExpose({ isDirty: () => isDirty.value });
 <template>
   <div class="space-y-8" data-test="section-editor">
     <p class="sr-only" role="status" aria-live="polite">{{ statusMessage }}</p>
+
+    <CeritaReloadNotice />
 
     <section :aria-labelledby="`${baseId}-paragraf`" class="space-y-3">
       <h3 :id="`${baseId}-paragraf`" class="text-brand-navy text-base font-semibold">Paragraf</h3>

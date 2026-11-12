@@ -47,7 +47,13 @@ export interface AdminPage {
 }
 
 export type WriteOutcome<T = undefined> =
-  { ok: true; value: T } | { ok: false; message: string; stale: boolean; blocked: boolean };
+  | {
+      ok: true;
+      value: T;
+      /** The change is saved, but the lists could not be reloaded afterwards. */
+      refreshFailed?: boolean;
+    }
+  | { ok: false; message: string; stale: boolean; blocked: boolean };
 
 export interface SectionFigureEntry {
   block: ContentBlock;
@@ -67,6 +73,8 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
 
   const selectedSlug = ref<string | null>(null);
   const hasLoaded = ref(false);
+  /** A write was saved but the reload after it failed: what is shown may be out of date. */
+  const reloadNeeded = ref(false);
 
   const tree = computed<AdminPage[]>(() => {
     const result: AdminPage[] = [];
@@ -92,17 +100,23 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
   async function load(): Promise<void> {
     await Promise.all([pagesStore.fetchHierarchy(true), blocksStore.fetchBlocks(true)]);
     hasLoaded.value = true;
+    // A successful reload clears the notice; a failed one leaves it as it was.
+    if (pagesStore.hierarchyError === null && blocksStore.error === null) {
+      reloadNeeded.value = false;
+    }
     // Pin the selection to a real page, so a later reorder cannot shift "the first page" under it.
     if (!tree.value.some((page) => page.slug === selectedSlug.value)) {
       selectedSlug.value = tree.value[0]?.slug ?? null;
     }
   }
 
-  async function refresh(what: 'tree' | 'both'): Promise<void> {
+  /** Reloads the shared caches. Returns false when a reload failed (the stores swallow errors). */
+  async function refresh(what: 'tree' | 'both'): Promise<boolean> {
     await Promise.all([
       pagesStore.fetchHierarchy(true),
       what === 'both' ? blocksStore.fetchBlocks(true) : Promise.resolve(),
     ]);
+    return pagesStore.hierarchyError === null && (what === 'tree' || blocksStore.error === null);
   }
 
   // --- Lookups ---
@@ -156,6 +170,7 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     refreshWhat: 'tree' | 'both',
     action: () => Promise<T>,
     options: FailureOptions = {},
+    onSaved?: () => void,
   ): Promise<WriteOutcome<T>> {
     let value: T;
     try {
@@ -163,10 +178,27 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     } catch (error) {
       return { ok: false, ...ceritaFailure(error, context, options) };
     }
-    // The write is done; a failed refresh must not turn it into a failure. The load error
-    // banner reports it and the next reload fixes the screen.
-    await refresh(refreshWhat).catch(() => undefined);
+    // The write is saved. If the reload that follows fails, it is still not a failed write: the
+    // screen says so plainly and offers a reload (`reloadNeeded`), and `onSaved` removes what the
+    // write deleted from the shared data so nothing deleted stays on screen or selected.
+    const refreshed = await refresh(refreshWhat).catch(() => false);
+    if (!refreshed) {
+      onSaved?.();
+      reloadNeeded.value = true;
+      return { ok: true, value, refreshFailed: true };
+    }
+    reloadNeeded.value = false;
     return { ok: true, value };
+  }
+
+  /** Drops a deleted chapter or section from the shared page cache without a reload. */
+  function pruneCachedPage(slug: string, edit: (page: AdminPage) => AdminPage): void {
+    const cached = pagesStore.pagesBySlug[slug] as unknown as AdminPage | undefined;
+    if (!cached) return;
+    pagesStore.pagesBySlug = {
+      ...pagesStore.pagesBySlug,
+      [slug]: edit(cached) as unknown as (typeof pagesStore.pagesBySlug)[string],
+    };
   }
 
   function missing(context: string): WriteOutcome<never> {
@@ -211,10 +243,13 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
       { subject: 'Halaman' },
     );
     if (outcome.ok) {
-      // A deleted page must not stay readable from the shared cache.
+      // A deleted page must not stay readable from the shared caches, whether or not the reload
+      // after the delete worked: the page itself, its summary row and its flattened sections.
       const remaining = { ...pagesStore.pagesBySlug };
       delete remaining[slug];
       pagesStore.pagesBySlug = remaining;
+      pagesStore.pages = pagesStore.pages.filter((item) => item.slug !== slug);
+      pagesStore.sections = pagesStore.sections.filter((item) => item.pageSlug !== slug);
       if (selectedSlug.value === slug) selectedSlug.value = neighbour?.slug ?? null;
     }
     return outcome;
@@ -258,6 +293,11 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
         return undefined;
       },
       { subject: 'Bab' },
+      () =>
+        pruneCachedPage(found.page.slug, (page) => ({
+          ...page,
+          chapters: page.chapters.filter((item) => item.id !== chapterId),
+        })),
     );
   }
 
@@ -303,6 +343,14 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
         return undefined;
       },
       { subject: 'Bagian' },
+      () =>
+        pruneCachedPage(found.page.slug, (page) => ({
+          ...page,
+          chapters: page.chapters.map((chapter) => ({
+            ...chapter,
+            sections: chapter.sections.filter((item) => item.id !== sectionId),
+          })),
+        })),
     );
   }
 
@@ -390,6 +438,7 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
   return {
     selectedSlug,
     hasLoaded,
+    reloadNeeded,
     tree,
     isLoading,
     loadError,

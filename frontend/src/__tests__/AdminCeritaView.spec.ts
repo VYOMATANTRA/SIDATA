@@ -754,6 +754,59 @@ describe('AdminCeritaView', () => {
     });
   });
 
+  describe('when the reload after a saved change fails', () => {
+    it('says the change is saved, offers a reload, and keeps a deleted page off the screen', async () => {
+      const wrapper = await mountView();
+      await wrapper.findAll('[data-test="page-select"]')[2]!.trigger('click');
+      await flushPromises();
+      fake.failNext(
+        (r) => r.method === 'GET' && r.url === '/api/pages?include=sections',
+        fake.json({ error: 'SQL boom' }, 500),
+      );
+
+      await click('Hapus halaman Kesehatan');
+      await body().find('[data-test="delete-confirm"]').trigger('click');
+      await flushPromises();
+
+      const notice = wrapper.find('[data-test="reload-notice"]');
+      expect(notice.text()).toContain('sudah tersimpan');
+      expect(notice.text()).toContain('belum bisa dimuat ulang');
+      expect(notice.text()).not.toMatch(RAW_TERMS);
+      expect(notice.text()).not.toContain('SQL');
+      // The deleted page is gone and another page is open, not a dead selection.
+      expect(pageTitles(wrapper)).toEqual(['Kependudukan', 'Pendidikan']);
+      expect(wrapper.find('[data-test="page-heading"]').text()).toBe('Pendidikan');
+      // The generic load error is replaced by this clearer notice.
+      expect(wrapper.find('[data-test="load-error"]').exists()).toBe(false);
+
+      await wrapper.find('[data-test="reload-notice-button"]').trigger('click');
+      await flushPromises();
+      expect(wrapper.find('[data-test="reload-notice"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('shows the same notice inside the section editor after a paragraph is saved', async () => {
+      const wrapper = await mountView();
+      await click('Isi bagian Ringkasan');
+      await click('Tambah paragraf');
+      await body().find('[data-test="paragraph-title"]').setValue('Pembuka');
+      await body().find('[data-test="paragraph-body"]').setValue('Isi.');
+      fake.failNext(
+        (r) => r.method === 'GET' && r.url === '/api/content-blocks',
+        fake.json({ error: 'x' }, 500),
+      );
+
+      await body().find('[data-test="paragraph-form"]').trigger('submit');
+      await flushPromises();
+
+      expect(fake.blocks).toHaveLength(1);
+      const notice = body().find('[data-test="section-editor"] [data-test="reload-notice"]');
+      expect(notice.exists()).toBe(true);
+      expect(notice.text()).toContain('sudah tersimpan');
+      wrapper.unmount();
+    });
+  });
+
   describe('accessibility and wording', () => {
     it('gives every button a name, every control a label and shows no raw API text', async () => {
       const wrapper = await mountView();
