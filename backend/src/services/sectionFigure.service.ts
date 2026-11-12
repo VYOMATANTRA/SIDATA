@@ -252,6 +252,13 @@ export const putSectionFigure = async (
     return await run();
   } catch (err) {
     if (!isUniqueViolation(err)) throw err;
+    // A unique violation is the figure-slug race only if that section's figure exists now; any
+    // other one (e.g. a media reference tuple) is not ours to relabel as a stale write.
+    const raced = await client.contentBlock.findUnique({
+      where: { slug: figureSlugForSection(sectionId) },
+      select: { id: true },
+    });
+    if (!raced) throw err;
     // Another writer inserted this section's figure between our read and write. Answer like any
     // stale write so the editor reloads, with the section's current token when it still exists.
     const current = await client.section.findUnique({

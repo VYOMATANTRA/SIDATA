@@ -276,7 +276,13 @@ describe('sectionFigure.service', () => {
 
   describe('putSectionFigure: lost race on the figure slug', () => {
     it('turns a unique violation on insert into a 409 conflict with the current token', async () => {
+      // The other writer's figure is committed by the time we look after the rollback.
+      let raced = false;
+      const originalFind = db.contentBlock.findUnique;
+      db.contentBlock.findUnique = (async (args: unknown) =>
+        raced ? { id: 'winner' } : originalFind.call(db.contentBlock, args as never)) as never;
       db.contentBlock.create = async () => {
+        raced = true;
         throw Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
       };
 
@@ -289,6 +295,14 @@ describe('sectionFigure.service', () => {
       });
       assert.equal(asset(1).attachedAt, null);
       assert.equal(db.mediaAssetReference.rows.length, 0);
+    });
+
+    it('does not relabel a unique violation that is not the figure-slug race', async () => {
+      // e.g. the media reference tuple: no figure exists for the section afterwards.
+      db.contentBlock.create = async () => {
+        throw Object.assign(new Error('Unique constraint failed on tuple'), { code: 'P2002' });
+      };
+      await assert.rejects(put(single(1)), /Unique constraint failed on tuple/);
     });
 
     it('does not mask other insert failures', async () => {
