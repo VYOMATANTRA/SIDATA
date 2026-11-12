@@ -764,10 +764,48 @@ Admin-only **Sistem** group (Akun pengguna, Templat kalimat, Konfigurasi sistem,
 Visibility is driven by a single role-to-items map (`frontend/src/config/adminNav.ts`) that the
 route guards also read from, so the sidebar and the guards cannot disagree about who can reach a
 given page — a resource a role isn't authorized for is absent from the sidebar entirely, not
-merely disabled. Cerita is not built yet; its sidebar entry carries a
-"Segera hadir" badge and opens a minimal placeholder view rather than being hidden. Rukun Tetangga,
-Konfigurasi sistem (above), Templat kalimat (§5) and Peta (below) open their real management views;
-Publikasi still opens a placeholder.
+merely disabled. Cerita, Rukun Tetangga, Konfigurasi sistem (above), Templat kalimat (§5) and
+Peta (below) open their real management views; Publikasi is not built yet, so its sidebar entry
+carries a "Segera hadir" badge and opens a minimal placeholder view rather than being hidden.
+
+**Cerita management (`/admin/cerita`).** Editor and Admin manage the page → chapter → section
+hierarchy and what a section holds, on the authoring APIs of §2, §3 and §7. One master-detail screen:
+the page list (add, rename, reorder, delete) beside the chosen page's chapters and sections (add,
+rename, reorder, delete), and a section editor dialog for the section's paragraphs (prose blocks:
+add, edit, reorder, delete) and its one figure.
+
+- **Ordering is buttons only** ("Naik" / "Turun" on every page, chapter, section, paragraph, photo and
+  bar row; never drag-only). A move sends the whole sibling list with the two moved siblings'
+  `sortOrder` values swapped, and keyboard focus stays on a usable button afterwards.
+- **Every write sends the `expectedUpdatedAt` the screen loaded** (the page's for chapter reorders,
+  the chapter's for section reorders, the section's for paragraph reorders and the figure, the
+  record's own for the rest) and the screen reloads the shared pages and content-block caches after
+  each success, so public pages read the change next. A `STALE_WRITE` keeps the draft in place and
+  offers a reload that does not replace it; the editor then saves the same draft with the fresh token.
+- **A refused write never clears a draft** (offline, stale, duplicate title, server error). Messages
+  are plain Indonesian from `ceritaAdminMessages.ts` / `userMessages.ts`: no status code, field name
+  or server sentence is shown.
+- **Deleting** asks first. A page or chapter delete says that its empty chapters and sections go with
+  it. A page, chapter or section that still holds paragraphs, a figure, indicators or tables is
+  refused (`HAS_DEPENDENTS`): the loaded data is checked first so the dialog already names what holds
+  it (paragraphs and a figure count together as "paragraf atau gambar"), the server's refusal is
+  worded the same way, and for a section the dialog offers "Buka isi bagian" so the editor is never at
+  a dead end.
+- **The section editor** keeps one paragraph form open at a time (a draft is never silently replaced)
+  and asks before closing or leaving the route with unsaved work. Figure kinds: one photo, several
+  photos (2 to 12) or a diagram (an image, bars, or both). **Alt text is required for every photo and
+  every diagram image**; caption, credit, diagram source and bar unit are optional. Bar numbers accept
+  a decimal comma. Nothing is stored until "Simpan gambar"; "Hapus gambar" asks first and releases the
+  photos.
+- **Photo upload field (`MediaPhotoField`).** Used wherever a photo is chosen. It picks by file button
+  or drag-and-drop (the button is the real, focusable path), checks type (JPEG, PNG, WebP) and size
+  (5 MB) before sending, uploads with a purpose (`cerita` here), and previews the stored file through
+  the authenticated client as a blob URL (the preview route needs the `Authorization` header, so a
+  bare `<img src>` is never used; the URL is revoked on change and unmount). A failed upload leaves the
+  previous photo in place and states the reason in plain Indonesian for every media error code. Removing
+  clears only the slot; the unused file is released by the scheduled media cleanup.
+- Figure blocks (`type: 'figure'`) are managed only here, through the section figure endpoints; they
+  never appear as cards in `/data` "Blok Konten & Profil" and are never read as paragraphs.
 
 **Peta management (`/admin/peta`).** Editor and Admin manage map points (`spatial_points`, §7) on
 the existing maps API and the shared `LocationPicker`. Nothing on this screen shows or accepts
