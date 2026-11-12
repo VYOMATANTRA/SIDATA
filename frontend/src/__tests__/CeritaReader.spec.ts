@@ -133,6 +133,28 @@ function prose(sectionId: string, id: string, body: string, sortOrder: number) {
   };
 }
 
+const MEDIA_A = '11111111-1111-4111-8111-111111111111';
+const MEDIA_B = '22222222-2222-4222-8222-222222222222';
+const MEDIA_C = '33333333-3333-4333-8333-333333333333';
+
+function figureBlock(sectionId: string | null, metadata: unknown, id = `fig-${sectionId}`) {
+  return {
+    id,
+    sectionId,
+    type: 'figure',
+    slug: id,
+    title: null,
+    body: '',
+    metadata,
+    sortOrder: null,
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+}
+
+function storedPhoto(mediaId: string, n: number, extra: Record<string, unknown> = {}) {
+  return { mediaId, alt: `Alt foto ${n}`, ...extra };
+}
+
 function indicator(sectionId: string, overrides: Record<string, unknown> = {}) {
   return {
     id: `ind-${sectionId}`,
@@ -422,6 +444,292 @@ describe('Cerita reader', () => {
 
       const levels = wrapper.findAll('h1, h2, h3').map((h) => h.element.tagName);
       expect(levels).toEqual(['H1', 'H2', 'H2']);
+    });
+  });
+
+  describe('stored figures', () => {
+    const sectionId = (page: Page) => page.chapters[0]!.sections[0]!.id;
+
+    it('shows stored paragraphs and a single photo with its alt text, caption and credit', async () => {
+      const page = makePage('topik-satu', 'Topik Satu');
+      const sec = sectionId(page);
+      installApi({
+        pages: { 'topik-satu': page },
+        blocks: [
+          prose(sec, 'b-1', 'Paragraf pertama.', 1),
+          prose(sec, 'b-2', 'Paragraf kedua.', 2),
+          figureBlock(sec, {
+            kind: 'photo',
+            photos: [storedPhoto(MEDIA_A, 1, { caption: 'Gedung Contoh', credit: 'Tim Contoh' })],
+          }),
+        ],
+      });
+      const { pinia, router } = await setup('/cerita/topik-satu');
+      const wrapper = mountView(pinia, router);
+      await flushPromises();
+
+      expect(wrapper.findAll('[data-test="section-prose"]').map((p) => p.text())).toEqual([
+        'Paragraf pertama.',
+        'Paragraf kedua.',
+      ]);
+      const card = wrapper.find('[data-test="figure-card"]');
+      expect(card.exists()).toBe(true);
+      const img = card.find('img');
+      expect(img.attributes('src')).toBe(`/api/media/${MEDIA_A}`);
+      expect(img.attributes('alt')).toBe('Alt foto 1');
+      expect(card.find('figcaption').text()).toContain('Gedung Contoh');
+      expect(card.find('figcaption').text()).toContain('Tim Contoh');
+      // The paragraphs come first, then the figure.
+      const html = wrapper.html();
+      expect(html.indexOf('Paragraf kedua.')).toBeLessThan(html.indexOf('data-test="figure-card"'));
+      expect(wrapper.find('[data-test="cerita-page-empty"]').exists()).toBe(false);
+    });
+
+    it('lays two photos out as an offset pair and three or more as a swipeable carousel', async () => {
+      const page = makePage('topik-satu', 'Topik Satu', 2);
+      const [sec1, sec2] = page.chapters.map((c) => c.sections[0]!.id) as [string, string];
+      installApi({
+        pages: { 'topik-satu': page },
+        blocks: [
+          figureBlock(sec1, {
+            kind: 'photos',
+            photos: [storedPhoto(MEDIA_A, 1), storedPhoto(MEDIA_B, 2)],
+          }),
+          figureBlock(sec2, {
+            kind: 'photos',
+            photos: [storedPhoto(MEDIA_A, 1), storedPhoto(MEDIA_B, 2), storedPhoto(MEDIA_C, 3)],
+          }),
+        ],
+      });
+      const { pinia, router } = await setup('/cerita/topik-satu');
+      const wrapper = mountView(pinia, router);
+      await flushPromises();
+
+      const chapters = wrapper.findAll('[data-test="chapter-section"]');
+      expect(chapters[0]!.find('[data-test="figure-pair"]').exists()).toBe(true);
+      expect(chapters[0]!.find('[data-test="figure-carousel"]').exists()).toBe(false);
+      expect(chapters[1]!.find('[data-test="figure-carousel"]').exists()).toBe(true);
+      expect(chapters[1]!.findAll('[data-test="figure-card"]')).toHaveLength(3);
+    });
+
+    it('shows a diagram with its picture, and one with only bars', async () => {
+      const page = makePage('topik-satu', 'Topik Satu', 2);
+      const [sec1, sec2] = page.chapters.map((c) => c.sections[0]!.id) as [string, string];
+      installApi({
+        pages: { 'topik-satu': page },
+        blocks: [
+          figureBlock(sec1, {
+            kind: 'diagram',
+            title: 'Diagram Gambar',
+            source: 'Sumber Contoh',
+            image: { mediaId: MEDIA_A, alt: 'Grafik contoh' },
+          }),
+          figureBlock(sec2, {
+            kind: 'diagram',
+            title: 'Diagram Batang',
+            bars: { unit: 'orang', items: [{ label: 'Kelompok A', value: 40 }] },
+          }),
+        ],
+      });
+      const { pinia, router } = await setup('/cerita/topik-satu');
+      const wrapper = mountView(pinia, router);
+      await flushPromises();
+
+      const diagrams = wrapper.findAll('[data-test="figure-diagram"]');
+      expect(diagrams).toHaveLength(2);
+      expect(diagrams[0]!.find('img').attributes('src')).toBe(`/api/media/${MEDIA_A}`);
+      expect(diagrams[0]!.find('img').attributes('alt')).toBe('Grafik contoh');
+      expect(diagrams[0]!.text()).toContain('Sumber: Sumber Contoh');
+      expect(diagrams[1]!.find('img').exists()).toBe(false);
+      expect(diagrams[1]!.text()).toContain('Kelompok A');
+    });
+
+    it('renders a section that holds only a figure, and no empty notice anywhere', async () => {
+      const page = makePage('topik-satu', 'Topik Satu');
+      installApi({
+        pages: { 'topik-satu': page },
+        blocks: [
+          figureBlock(sectionId(page), { kind: 'photo', photos: [storedPhoto(MEDIA_A, 1)] }),
+        ],
+      });
+      const { pinia, router } = await setup('/cerita/topik-satu');
+      const wrapper = mountView(pinia, router);
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="figure-card"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test="section-empty"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="chapter-empty"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="cerita-page-empty"]').exists()).toBe(false);
+    });
+
+    it('ignores a figure without a section or for a section that is not on the page', async () => {
+      const page = makePage('topik-satu', 'Topik Satu');
+      const metadata = { kind: 'photo', photos: [storedPhoto(MEDIA_A, 1)] };
+      installApi({
+        pages: { 'topik-satu': page },
+        blocks: [figureBlock(null, metadata, 'fig-orphan'), figureBlock('sec-lain', metadata)],
+      });
+      const { pinia, router } = await setup('/cerita/topik-satu');
+      const wrapper = mountView(pinia, router);
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="figure-card"]').exists()).toBe(false);
+      expect(wrapper.find('img').exists()).toBe(false);
+      expect(wrapper.find('[data-test="cerita-page-empty"]').exists()).toBe(true);
+    });
+
+    it('treats stored data it cannot read as no figure, without breaking the page', async () => {
+      const page = makePage('topik-satu', 'Topik Satu');
+      const sec = sectionId(page);
+      installApi({
+        pages: { 'topik-satu': page },
+        blocks: [
+          prose(sec, 'b-1', 'Teks tetap tampil.', 1),
+          figureBlock(sec, { kind: 'hologram', photos: 'x' }),
+        ],
+      });
+      const { pinia, router } = await setup('/cerita/topik-satu');
+      const wrapper = mountView(pinia, router);
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="section-prose"]').text()).toBe('Teks tetap tampil.');
+      expect(wrapper.find('[data-test="figure-card"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="figure-diagram"]').exists()).toBe(false);
+    });
+
+    it('leaves out a photo that fails to load and lays the rest out again', async () => {
+      const page = makePage('topik-satu', 'Topik Satu');
+      installApi({
+        pages: { 'topik-satu': page },
+        blocks: [
+          figureBlock(sectionId(page), {
+            kind: 'photos',
+            photos: [storedPhoto(MEDIA_A, 1), storedPhoto(MEDIA_B, 2)],
+          }),
+        ],
+      });
+      const { pinia, router } = await setup('/cerita/topik-satu');
+      const wrapper = mountView(pinia, router);
+      await flushPromises();
+
+      await wrapper.findAll('img')[1]!.trigger('error');
+      expect(wrapper.find('[data-test="figure-pair"]').exists()).toBe(false);
+      const cards = wrapper.findAll('[data-test="figure-card"]');
+      expect(cards).toHaveLength(1);
+      expect(cards[0]!.find('img').attributes('src')).toBe(`/api/media/${MEDIA_A}`);
+    });
+
+    it('removes a figure whose photos all fail: no frame, no caption, and the section reads as empty', async () => {
+      const page = makePage('topik-satu', 'Topik Satu');
+      installApi({
+        pages: { 'topik-satu': page },
+        blocks: [
+          figureBlock(sectionId(page), {
+            kind: 'photos',
+            photos: [
+              storedPhoto(MEDIA_A, 1, { caption: 'Keterangan Yatim' }),
+              storedPhoto(MEDIA_B, 2, { credit: 'Kredit Yatim' }),
+            ],
+          }),
+        ],
+      });
+      const { pinia, router } = await setup('/cerita/topik-satu');
+      const wrapper = mountView(pinia, router);
+      await flushPromises();
+      expect(wrapper.find('[data-test="cerita-page-empty"]').exists()).toBe(false);
+
+      await wrapper.findAll('img')[0]!.trigger('error');
+      await wrapper.find('img').trigger('error');
+      await flushPromises();
+
+      expect(wrapper.find('img').exists()).toBe(false);
+      expect(wrapper.find('figure').exists()).toBe(false);
+      expect(wrapper.text()).not.toContain('Keterangan Yatim');
+      expect(wrapper.text()).not.toContain('Kredit Yatim');
+      expect(wrapper.find('[data-test="chapter-empty"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test="cerita-page-empty"]').exists()).toBe(true);
+    });
+
+    it('keeps the paragraphs and shows no empty notice when the figure of a section with text fails', async () => {
+      const page = makePage('topik-satu', 'Topik Satu');
+      const sec = sectionId(page);
+      installApi({
+        pages: { 'topik-satu': page },
+        blocks: [
+          prose(sec, 'b-1', 'Teks bertahan.', 1),
+          figureBlock(sec, { kind: 'photo', photos: [storedPhoto(MEDIA_A, 1)] }),
+        ],
+      });
+      const { pinia, router } = await setup('/cerita/topik-satu');
+      const wrapper = mountView(pinia, router);
+      await flushPromises();
+
+      await wrapper.find('img').trigger('error');
+      await flushPromises();
+
+      expect(wrapper.find('figure').exists()).toBe(false);
+      expect(wrapper.find('[data-test="section-prose"]').text()).toBe('Teks bertahan.');
+      expect(wrapper.find('[data-test="section-empty"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="chapter-empty"]').exists()).toBe(false);
+    });
+
+    it('falls back to the bars when a diagram picture fails to load', async () => {
+      const page = makePage('topik-satu', 'Topik Satu');
+      installApi({
+        pages: { 'topik-satu': page },
+        blocks: [
+          figureBlock(sectionId(page), {
+            kind: 'diagram',
+            title: 'Diagram Campuran',
+            image: { mediaId: MEDIA_A, alt: 'Grafik' },
+            bars: { items: [{ label: 'Kelompok A', value: 7 }] },
+          }),
+        ],
+      });
+      const { pinia, router } = await setup('/cerita/topik-satu');
+      const wrapper = mountView(pinia, router);
+      await flushPromises();
+
+      await wrapper.find('img').trigger('error');
+      expect(wrapper.find('img').exists()).toBe(false);
+      expect(wrapper.find('[data-test="figure-diagram"]').text()).toContain('Kelompok A');
+    });
+
+    it('covers figures in the "text unavailable" notice when the content request failed', async () => {
+      const page = makePage('topik-satu', 'Topik Satu');
+      installApi({ pages: { 'topik-satu': page }, blocks: 'fail' });
+      const { pinia, router } = await setup('/cerita/topik-satu');
+      const wrapper = mountView(pinia, router);
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="cerita-prose-error"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test="figure-card"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="section-empty"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="chapter-empty"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="cerita-page-empty"]').exists()).toBe(false);
+    });
+
+    it('still shows indicators and matrix tables beside the figure of the same section', async () => {
+      const page = makePage('topik-satu', 'Topik Satu');
+      const sec = sectionId(page);
+      installApi({
+        pages: { 'topik-satu': page },
+        blocks: [
+          prose(sec, 'b-1', 'Paragraf.', 1),
+          figureBlock(sec, { kind: 'photo', photos: [storedPhoto(MEDIA_A, 1)] }),
+        ],
+        indicators: { [sec]: [indicator(sec)] },
+        tables: { [sec]: [matrixTable(sec)] },
+      });
+      const { pinia, router } = await setup('/cerita/topik-satu');
+      const wrapper = mountView(pinia, router);
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="section-prose"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test="figure-card"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test="indicator-stat"]').text()).toContain('12.480');
+      expect(wrapper.find('[data-test="matrix-table-data"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test="section-empty"]').exists()).toBe(false);
     });
   });
 

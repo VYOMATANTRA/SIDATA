@@ -14,6 +14,7 @@ import ChapterSection from '../components/cerita/ChapterSection.vue';
 import CeritaHero from '../components/cerita/CeritaHero.vue';
 import CeritaLoadingState from '../components/cerita/CeritaLoadingState.vue';
 import CeritaStatePanel from '../components/cerita/CeritaStatePanel.vue';
+import { figuresBySectionId as buildFiguresBySectionId } from '../utils/ceritaStoredFigure';
 import { READER_GRID, READER_MAIN } from '../components/cerita/readerLayout';
 
 /**
@@ -68,6 +69,27 @@ const proseBySectionId = computed<Record<string, ContentBlock[]>>(() => {
   return map;
 });
 
+// The stored figure of each section (a `figure` block, SPEC §7). Blocks without a section, or
+// whose data does not parse to a figure, simply produce none.
+const figuresBySectionId = computed(() =>
+  buildFiguresBySectionId(Object.values(contentBlocksStore.blocks)),
+);
+
+// Sections whose figure ended up with no picture that loads. Reported by the figure itself, so the
+// page and chapter "empty" states do not count a figure the reader cannot see. Cleared whenever
+// the stored figures change, because a new figure gets its pictures tried again.
+const hiddenFigureSectionIds = ref<Set<string>>(new Set());
+watch(figuresBySectionId, () => {
+  hiddenFigureSectionIds.value = new Set();
+});
+function handleFigureVisibility(sectionId: string, visible: boolean) {
+  if (hiddenFigureSectionIds.value.has(sectionId) === !visible) return;
+  const hidden = new Set(hiddenFigureSectionIds.value);
+  if (visible) hidden.delete(sectionId);
+  else hidden.add(sectionId);
+  hiddenFigureSectionIds.value = hidden;
+}
+
 const indicatorsBySectionId = computed<Record<string, IndicatorDto[]>>(
   () => indicatorsStore.bySectionId,
 );
@@ -114,6 +136,8 @@ const hasAnyContent = computed(() =>
     (chapter.sections ?? []).some(
       (section) =>
         (proseBySectionId.value[section.id]?.length ?? 0) > 0 ||
+        (Boolean(figuresBySectionId.value[section.id]) &&
+          !hiddenFigureSectionIds.value.has(section.id)) ||
         (indicatorsBySectionId.value[section.id]?.length ?? 0) > 0 ||
         (tablesBySectionId.value[section.id]?.length ?? 0) > 0 ||
         Boolean(sectionErrorsBySectionId.value[section.id]),
@@ -425,11 +449,14 @@ defineExpose({ retryLoad, loadPage });
               :key="chapter.id"
               :chapter="chapter"
               :prose-by-section-id="proseBySectionId"
+              :figures-by-section-id="figuresBySectionId"
+              :hidden-figure-section-ids="hiddenFigureSectionIds"
               :indicators-by-section-id="indicatorsBySectionId"
               :tables-by-section-id="tablesBySectionId"
               :section-errors-by-section-id="sectionErrorsBySectionId"
               :prose-unavailable="proseUnavailable"
               @retry-section="retrySection"
+              @figure-visibility="handleFigureVisibility"
             />
           </div>
         </div>
