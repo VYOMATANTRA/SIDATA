@@ -267,12 +267,35 @@ the admin base layout shell from §8), organized into three accessible tabbed ca
    same indicator also leaves the open draft untouched — both forms key their draft on the record
    id, so only opening a different record resets it.
 
-2. **Blok Konten & Profil:** Displays editable cards for all standalone content blocks (`landing-hero`,
-   `landing-sambutan-lurah`, `landing-highlights`, `tentang-kelurahan-profil`, `publikasi-katalog`).
-   Opens `ContentBlockForm`, providing accessible inputs for block title, body (up to 50,000 characters),
-   and specialized metadata editors (Lurah title/photo, profile RT count/administrative hierarchy,
-   boundaries, SOTK roster, or raw JSON for structured collections). Mutations use `PATCH /api/content-blocks/:slug`
-   (audited as `content_block.updated`) with prototype pollution guards and URL validation.
+2. **Blok Konten & Profil:** Displays an editable card for every content block: the five standalone
+   blocks (`landing-hero`, `landing-sambutan-lurah`, `landing-highlights`, `tentang-kelurahan-profil`,
+   `publikasi-katalog`) and any block attached to a Cerita section. Cards and dialogs name a block by its
+   title and say where residents see it ("Tampil di: Beranda, bagian atas"); slugs and block types are
+   never shown. `ContentBlockForm` is a thin dispatcher to one named form per block purpose, all sharing the
+   title (up to 255 characters) and body (up to 50,000 characters) fields:
+   - **Hero**: optional background image address. **Sambutan Lurah**: name, official title, optional portrait
+     address. **Profil Kelurahan**: RT count, kecamatan, kota, landscape, Lurah, boundaries and the SOTK roster.
+     Photo and background fields stay plain address text until the photo picker replaces them.
+   - **Potensi unggulan** (`landing-highlights`): repeatable rows of Judul (up to 100 characters) and Deskripsi
+     (up to 500), at most 10, saved as `metadata.items[]`. Decision D1: no public page reads this block, so it
+     stays editable but is labelled "Tidak ditampilkan di situs", and the form says so; it is not described as
+     changing the landing page.
+   - **Katalog Publikasi**: repeatable rows of kategori, judul, deskripsi, optional sumber rujukan (the citation),
+     optional tautan unduhan, format and size (entered in KB or MB, saved as whole bytes; an untouched size is
+     saved byte-for-byte), at most 25, saved as `metadata.publications[]`. Availability is derived from the link
+     (a link means `isAvailableOnline`, no link means "Segera hadir"), so the server's link/availability rule
+     cannot be violated. Links must start with `https://`. A saved empty list stays empty and is not refilled
+     with the built-in catalog (settled D2); the built-in list is only offered for a block that never stored one.
+   - **Cerita section blocks**: title and body only; the save sends no metadata, so stored metadata is untouched.
+   - Any other block opens no editor, only "Blok ini belum bisa diubah dari sini. Hubungi pengelola teknis."
+     (no data is shown). **No JSON or code editor exists in any role or state.**
+   Repeatable rows are reordered with Naik / Turun buttons (never drag-only) and removed with Hapus; each row
+   shows its own errors tied to the field, and focus and a live-region message follow every add, move and
+   remove. Mutations use `PATCH /api/content-blocks/:slug` (audited as `content_block.updated`) with prototype
+   pollution guards and URL validation. Every save sends the block's `updatedAt` as `expectedUpdatedAt`; a
+   `STALE_WRITE` refusal keeps the whole draft in the open dialog, shows the approved stale-write message and
+   offers "Muat versi terbaru", which replaces the draft with the stored block only when the editor asks.
+   Any failed save keeps every field as typed.
 
 3. **Pengaturan Publik Portal** (Admin only): a short note and a link to Konfigurasi sistem
    (`/admin/sistem/konfigurasi`), which owns the portal settings (§8). Those settings are the identity
@@ -531,6 +554,34 @@ setup-password, the OAuth callback, `/dashboard` (its own `<main>`) and the admi
   which the admin shell resets to the top on a path change.
 - **Breadcrumb.** Tentang/Sumber Daya breadcrumbs are a navy strip continuing the header and the navy
   hero panel (no white band between them); long labels wrap.
+- **Cerita reader.** Every `/cerita/:slug` page opens with a navy title band (eyebrow "Cerita", the
+  page title as the single `<h1>`, and the chapter count when there are chapters) and carries no
+  introduction copy of its own: the page has none in data. The reader is always in exactly one state,
+  decided per slug so one topic's outcome never shows on another and a late answer for a topic the
+  reader has left is discarded:
+  - **Loading**: a worded skeleton (`role="status"`, "Memuat halaman…") with no heading.
+  - **Not found** (404): its own `<h1>` and a link back to Beranda.
+  - **Failed** (any other failure, or a success without a page): an `<h1>`, the approved plain-language
+    read message and a "Coba lagi" button; never a blank page.
+  - **Ready**: chapters in order, each section showing its prose blocks in `sort_order`, its scalar
+    figures with the backend-rendered comparison sentence (or hedged framing, §6) and source, and its
+    matrix tables with `—` for missing cells and no bar for them.
+  A chapter with nothing in it reads "Konten bab ini belum tersedia." (once, not per section); an empty
+  section beside filled ones reads "Konten bagian ini belum tersedia."; a page with no content at all
+  adds one note ("Belum ada konten yang dapat ditampilkan pada halaman ini.") so an empty seeded
+  database looks intentional; a matrix table with no rows reads "Data tabel ini belum tersedia." and
+  claims no period. A section whose figures or tables failed to load keeps what did load and shows its
+  own alert with "Coba lagi" for that section only. If the shared prose request failed, one alert with
+  a retry says the text could not be loaded and no section is called empty. Missing data is never drawn
+  as a zero.
+  Below `lg` the chapter selector is a navy bar that sticks directly under the header (its offset is
+  `--public-header-height`) and opens its list below it; it stays inside the reader, so it never sits
+  over the last paragraph or the footer. Escape, a selection, a press outside it or moving keyboard
+  focus out of it closes it (Escape returns focus to the bar's button). From `lg` the selector is a
+  sticky list beside the chapters. Chapter anchors and keyboard focus clear the header and, below
+  `lg`, the selector. The current chapter follows scrolling (an observer band measured from the
+  real header and selector heights, rebuilt on resize) and follows a `#chapter` deep link at once;
+  deep links and Back/Forward behave as in "Scroll and focus" above.
 
 **Landing page**, top to bottom:
 
@@ -550,6 +601,19 @@ publication-class artifact — a peer of Publikasi and Peta, not a subsection of
 of the site's highest-utility artifacts (a resident looking up their own RT head), so it is not
 buried inside a stat page. Entry points:
 
+  Layout: the article (text, figures, charts) is the middle column, centred at a readable width
+  regardless of the chapter list; from `xl` the chapter list is the right-hand column, from `lg` it is
+  a fixed right track, and below `lg` it is the sticky selector bar. The title band has a "Kembali"
+  link to the home page. The article template (`CeritaArticleTemplate`) renders a `CeritaArticle`
+  (`types/ceritaArticle.ts`): a page holds chapters, a chapter holds sections, and a section has one
+  heading, its paragraphs and optionally one figure. A figure is one photo, two photos (an offset
+  pair), more than two (a swipeable row with Sebelumnya/Berikutnya buttons and a position label), or
+  a diagram (title, picture or bars, source). Each chapter ends with a "Bab berikutnya" link; below
+  `lg` the chapter bar sticks to the bottom of the reader and opens upward. Photos without a safe
+  address, or that fail to load, are left out with their caption. Nothing in the backend produces a
+  `CeritaArticle` yet; Wave 4 builds it from stored content. Until then the template runs only in
+  development at `/cerita/contoh`, fed mockup text (`content/ceritaArticleDummy.ts`, one page) that is
+  not sourced data and never shown to residents.
 - Footer, under **Sumber Daya**.
 - The interactive map — tapping an RT point opens that leader's contact card.
 - Pemerintahan & Kelembagaan, chapter 2.3 (Pemerintahan Kelurahan), **links to** this page rather
@@ -621,7 +685,7 @@ Implemented frontend routes:
 Provides three tabbed operational interfaces:
 
 1. **Indikator & Tabel**: Searchable and filterable list of all scalar indicators and matrix tables with modal editing forms (`ScalarIndicatorForm` and `TableIndicatorForm`).
-2. **Blok Konten & Profil**: Direct editing of narrative content blocks (`landing-hero`, `landing-sambutan-lurah`, `landing-highlights`, `tentang-kelurahan-profil`, `publikasi-katalog`) using `ContentBlockForm`.
+2. **Blok Konten & Profil**: Direct editing of narrative content blocks (`landing-hero`, `landing-sambutan-lurah`, `landing-highlights`, `tentang-kelurahan-profil`, `publikasi-katalog`) through named forms (§4): collections are edited as repeatable rows, never as raw JSON, and each card states where residents see the block. `landing-highlights` stays editable but is labelled "Tidak ditampilkan di situs" because no public page reads it.
 3. **Pengaturan Publik Portal** (admin only): a note and a link to Konfigurasi sistem (`/admin/sistem/konfigurasi`); no settings card, form or dialog. Editors do not see this tab.
 
 **Konfigurasi sistem (`/admin/sistem/konfigurasi`).** The single Admin destination for system
@@ -649,9 +713,16 @@ section behind the same Admin guards, so old bookmarks and links keep working.
 **Dynamic View & Component Integration:**
 
 - **`AppFooter`**: Dynamically reflects verified public contact numbers (`contactPhone`) and office address lines (`contactAddress`) from `settingsStore` when loaded, falling back gracefully to static defaults. The `/publikasi` link in the "Sumber Daya" navigation is always included to provide public access to municipal reports and booklets.
-- **`InteractiveMap` & `PetaView`**: `PetaView` resolves `settingsStore.defaultCoordinates` once and passes the initial centre/zoom to `InteractiveMap`; the map applies a late settings change only before point framing or user interaction. Distance calculations in `PetaView` measure from this dynamic kelurahan coordinate origin when browser geolocation is unavailable or ungranted, with the shared Manggar constant only as an offline fallback.
+- **`InteractiveMap` & `PetaView`**: `PetaView` resolves `settingsStore.defaultCoordinates` once and passes the initial centre/zoom to `InteractiveMap`; the map applies a late settings change only before point framing or user interaction. The shared Manggar constant is only an offline fallback for the distance origin and the initial view. Behaviour of the page, including the location states, is in "Peta page" below.
 - **`TentangKelurahanManggarView`**: Dynamically renders profile metrics (RT count, kecamatan, kota), administrative boundaries, and SOTK officials from the `tentang-kelurahan-profil` content block, falling back to verified constants in `content/tentang.ts`.
 - **`PublikasiView`**: Dynamically renders publication entries from the `publikasi-katalog` content block, falling back to `content/publikasi.ts` when metadata is absent or uninitialized. An explicitly saved empty array (`publications: []`) renders an empty catalog state rather than restoring the defaults (settled D2). Each item optionally carries short `fileType` (e.g. PDF, XLSX) and `fileSizeBytes` metadata rendered alongside verified direct download actions, while unreleased items display the honest "Segera hadir" status.
+
+**Peta page (`/peta`).**
+
+- **Layout.** One toolbar holds the heading, the result count and the "Rincian data" disclosure (RT with coordinates, integrity conflicts and the per-type breakdown; an in-flow disclosure below `md`, a floating panel from `md`). Counts always say what they cover: "Menampilkan semua N titik" with no search or filter, "Menampilkan X dari N titik sesuai pencarian atau filter" otherwise; the list count repeats the same distinction. Reading order is search and filters, map, results. From `lg` the map sits beside the controls and the list; between `md` and `lg` they stack; below `md` the map comes first and the results are one panel directly under it.
+- **Results panel.** There is exactly one results panel, with two modes: the nearest-first list, or the detail of the selected point (marker or list selection opens it). Below `md` it is collapsed until a labelled button ("Lihat daftar hasil (N)" / "Lihat detail titik", "Sembunyikan …") opens it; the button carries `aria-expanded` and `aria-controls`, and Escape in the open list collapses it and returns focus to the button. The panel sits under the map, never over it, so the zoom buttons and attribution are never covered; opening or closing it re-measures the map (`invalidateSize`) without changing the view. Opening the navigation menu (the page becomes `inert`) puts the panel away. Marker selection, clusters, framing, filters, pagination focus hand-off, integrity warnings and the Ketua RT reciprocal link are unchanged. Leaflet stays inside its local stacking boundary (the map root is `isolate z-0`).
+- **Visitor location.** One session-wide, deduplicated request (`composables/useGeolocation.ts`), held in memory only: never written to storage, sent to the server, shown in the CMS or reported anywhere, and reused when the visitor returns to the map within the session. States: `idle`, `checking`, `prompt`, `granted-locating`, `located`, `denied`, `unsupported`, `timeout`, `unavailable`, `insecure`. On entering the map the saved browser permission is read (Permissions API where available): already granted starts one bounded request (10 s timeout, cached fix at most 60 s old); undecided, or unreadable, shows a prominent explanation and an "Aktifkan lokasi" button and asks nothing until it is pressed; denied explains the browser setting and never asks again; an unsupported browser or an insecure (non-HTTPS) page is explained. A timeout or an unavailable position offers one "Coba lagi". If the visitor later changes the browser setting, the page follows it. Late answers after the visitor chose "Pakai pusat kelurahan" or left the page are ignored. A fix obtained automatically never moves the map; a button press centres the map on the fix only when the visitor has not moved the map since pressing it. A location failure never blocks browsing the map or the list.
+- **Distance origin.** Every distance names its origin: "Jarak dari lokasi Anda" with a held fix, otherwise "Jarak dari pusat kelurahan" (the CMS default coordinates, then the shared constant). Each row's distance carries the origin for screen readers.
 
 The `/permintaan-data` guide cites UU 14/2008 Pasal 22 ayat (7)–(8) for the 10+7 working-day
 PPID reply window, Pasal 35 ayat (1) and Pasal 36 for the objection windows, and Pasal 37–38
@@ -725,6 +796,10 @@ placeholders.
 
 Single register — unresolved questions live here and nowhere else.
 
+- **Cerita article content model (Wave 4):** how editors author a section's figure (photos with
+  caption, credit and alt text; diagrams), an editorial headline and a byline, and how they are
+  stored against sections. A byline names
+  authorship, so it needs an approved source before it is published.
 - **Source-version reconciliation (Google Drive: Descan Manggar 2026):** Confirm which of the two
   `Monografi Kelurahan Manggar 2026` editions is current/approved for public facts. The expanded
   edition has 14 BSU profiles; another edition has a different page count and content.

@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { nextTick } from 'vue';
 import { mount } from '@vue/test-utils';
 import ChapterToc from '../components/cerita/ChapterToc.vue';
 
@@ -75,5 +76,124 @@ describe('ChapterToc.vue (sheet variant)', () => {
 
     expect(wrapper.emitted('navigate')).toEqual([['chap-2']]);
     expect(isHidden(wrapper, '[data-test="chapter-toc-sheet-panel"]')).toBe(true);
+  });
+});
+
+describe('ChapterToc.vue (layout contract)', () => {
+  it('offsets the rail and the mobile selector from the public header height, not a fixed number', () => {
+    const rail = mount(ChapterToc, {
+      props: { chapters, activeChapterId: 'chap-1', variant: 'rail' },
+    });
+    const sheet = mount(ChapterToc, {
+      props: { chapters, activeChapterId: 'chap-1', variant: 'sheet' },
+    });
+
+    expect(rail.find('[data-test="chapter-toc-rail"]').classes().join(' ')).toContain(
+      '--public-header-height',
+    );
+    expect(sheet.find('[data-test="chapter-toc-sheet"]').classes().join(' ')).toContain(
+      '--public-header-height',
+    );
+  });
+
+  it('keeps the mobile selector in the page flow (sticky) so it can never sit over the footer', () => {
+    const wrapper = mount(ChapterToc, {
+      props: { chapters, activeChapterId: 'chap-1', variant: 'sheet' },
+    });
+
+    const classes = wrapper.find('[data-test="chapter-toc-sheet"]').classes();
+    expect(classes).toContain('sticky');
+    expect(classes).not.toContain('fixed');
+    expect(classes).not.toContain('bottom-0');
+    expect(classes).toContain('lg:hidden');
+  });
+
+  it('shows the desktop rail only from lg and a labelled landmark for each variant', () => {
+    const rail = mount(ChapterToc, {
+      props: { chapters, activeChapterId: 'chap-1', variant: 'rail' },
+    });
+    expect(rail.find('nav').classes()).toContain('lg:block');
+    expect(rail.find('nav').attributes('aria-label')).toBe('Daftar Bab');
+    expect(rail.find('[data-test="chapter-toc-rail"] ol').exists()).toBe(true);
+
+    const sheet = mount(ChapterToc, {
+      props: { chapters, activeChapterId: 'chap-1', variant: 'sheet' },
+    });
+    expect(sheet.find('nav[aria-label="Pilih bab"]').exists()).toBe(true);
+  });
+});
+
+describe('ChapterToc.vue (sheet dismissal)', () => {
+  async function openSheet() {
+    const wrapper = mount(ChapterToc, {
+      props: { chapters, activeChapterId: 'chap-1', variant: 'sheet' },
+      attachTo: document.body,
+    });
+    await wrapper.find('[data-test="chapter-toc-trigger"]').trigger('click');
+    return wrapper;
+  }
+
+  it('closes on Escape and returns focus to the trigger', async () => {
+    const wrapper = await openSheet();
+    const trigger = wrapper.find('[data-test="chapter-toc-trigger"]');
+    (wrapper.findAll('[data-test="chapter-toc-link"]')[0]!.element as HTMLElement).focus();
+
+    await wrapper.find('[data-test="chapter-toc-sheet"]').trigger('keydown', { key: 'Escape' });
+    await nextTick();
+
+    expect(isHidden(wrapper, '[data-test="chapter-toc-sheet-panel"]')).toBe(true);
+    expect(trigger.attributes('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(trigger.element);
+    wrapper.unmount();
+  });
+
+  it('closes when a press lands outside the selector (for example on the navigation menu)', async () => {
+    const wrapper = await openSheet();
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+
+    outside.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    await nextTick();
+
+    expect(isHidden(wrapper, '[data-test="chapter-toc-sheet-panel"]')).toBe(true);
+    outside.remove();
+    wrapper.unmount();
+  });
+
+  it('stays open for a press inside the selector', async () => {
+    const wrapper = await openSheet();
+
+    wrapper
+      .find('[data-test="chapter-toc-sheet-panel"]')
+      .element.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    await nextTick();
+
+    expect(isHidden(wrapper, '[data-test="chapter-toc-sheet-panel"]')).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('closes when keyboard focus leaves the selector, but not while it moves inside it', async () => {
+    const wrapper = await openSheet();
+    const root = wrapper.find('[data-test="chapter-toc-sheet"]');
+    const links = wrapper.findAll('[data-test="chapter-toc-link"]');
+
+    await root.trigger('focusout', { relatedTarget: links[1]!.element });
+    expect(isHidden(wrapper, '[data-test="chapter-toc-sheet-panel"]')).toBe(false);
+
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    await root.trigger('focusout', { relatedTarget: outside });
+    expect(isHidden(wrapper, '[data-test="chapter-toc-sheet-panel"]')).toBe(true);
+    outside.remove();
+    wrapper.unmount();
+  });
+
+  it('removes its document listener when it is unmounted while open', async () => {
+    const removeSpy = vi.spyOn(document, 'removeEventListener');
+    const wrapper = await openSheet();
+    wrapper.unmount();
+
+    expect(removeSpy).toHaveBeenCalledWith('pointerdown', expect.any(Function));
+    removeSpy.mockRestore();
   });
 });

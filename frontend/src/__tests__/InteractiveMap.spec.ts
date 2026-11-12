@@ -140,6 +140,7 @@ const leafletMocks = vi.hoisted(() => {
     zoomToBounds,
     spiderfy,
     invalidateSize,
+    on,
     state,
     L,
     mapInstance,
@@ -450,6 +451,28 @@ describe('InteractiveMap.vue', () => {
       expect(leafletMocks.setView).not.toHaveBeenCalled();
       wrapper.unmount();
     }
+  });
+
+  it('counts visitor moves but not programmatic ones, so late recentring can be skipped', async () => {
+    const wrapper = await mountMap({ points: [point()] });
+    const vm = wrapper.vm as unknown as {
+      getInteractionCount: () => number;
+      focusUserLocation: () => void;
+    };
+    const canvas = wrapper.element.querySelector('[data-test="map-canvas"]') as HTMLElement;
+    expect(vm.getInteractionCount()).toBe(0);
+
+    // A drag reported by Leaflet is the visitor's own move.
+    const dragstart = leafletMocks.on.mock.calls.find(([event]) => event === 'dragstart')?.[1] as
+      (() => void) | undefined;
+    dragstart?.();
+    canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
+    expect(vm.getInteractionCount()).toBe(2);
+
+    // Framing and revealing are programmatic and do not count.
+    vm.focusUserLocation();
+    expect(vm.getInteractionCount()).toBe(2);
+    wrapper.unmount();
   });
 
   it('refreshes a marker aria-label when only the name changes', async () => {

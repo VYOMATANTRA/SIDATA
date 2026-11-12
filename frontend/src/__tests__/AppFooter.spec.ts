@@ -157,7 +157,7 @@ describe('AppFooter.vue', () => {
     expect(wrapper.text()).toContain('Tentang');
   });
 
-  it('applies harmonized responsive font size classes across headings, links, phone, and copyright', async () => {
+  it('uses explicit local type roles that stay legible on mobile', async () => {
     const router = createMockRouter();
     await router.push('/');
     await router.isReady();
@@ -168,29 +168,83 @@ describe('AppFooter.vue', () => {
       },
     });
 
-    // Column headings should maintain text-base
+    // Section labels: 16px on every width
     const headings = wrapper.findAll('h2');
+    expect(headings.length).toBe(3);
     headings.forEach((h2) => {
       expect(h2.classes()).toContain('text-base');
     });
 
-    // Navigation links should have responsive scale text-xs sm:text-sm
+    // Navigation links: 14px, never the 10px `text-xs` of the old mobile rule
     const navLinks = wrapper.findAll('nav a');
     expect(navLinks.length).toBeGreaterThan(0);
     navLinks.forEach((link) => {
-      expect(link.classes()).toContain('text-xs');
-      expect(link.classes()).toContain('sm:text-sm');
+      expect(link.classes()).toContain('text-sm');
+      expect(link.classes()).not.toContain('text-xs');
     });
 
-    // Phone link inside address should match the address text-xs sm:text-sm scale
+    // Phone link inside the address block is 14px as well
     const phoneLink = wrapper.find('address a');
-    expect(phoneLink.classes()).toContain('text-xs');
-    expect(phoneLink.classes()).toContain('sm:text-sm');
+    expect(phoneLink.classes()).toContain('text-sm');
+    expect(phoneLink.classes()).not.toContain('text-xs');
 
-    // Copyright container should scale text-xs sm:text-sm
-    const copyrightContainer = wrapper.find('[data-test="copyright-text"]').element.parentElement;
-    expect(copyrightContainer?.classList.contains('text-xs')).toBe(true);
-    expect(copyrightContainer?.classList.contains('sm:text-sm')).toBe(true);
+    // Address and copyright paragraphs carry their own size: the global `p` rule overrides any
+    // size set on a wrapper, so the role must sit on the <p> itself.
+    wrapper.findAll('address p').forEach((p) => {
+      expect(p.classes()).toContain('text-sm');
+    });
+    const copyright = wrapper.find('[data-test="copyright-text"]');
+    expect(copyright.classes()).toContain('text-sm');
+    expect(copyright.classes()).not.toContain('text-xs');
+    expect(copyright.element.parentElement?.classList.contains('text-xs')).toBe(false);
+  });
+
+  it('keeps the SDG badges inside the links grid on a row of their own', async () => {
+    const router = createMockRouter();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(AppFooter, {
+      global: { plugins: [router] },
+    });
+
+    const grid = wrapper.find('.footer-links-grid');
+    const badges = grid.find('.link-col-badges');
+    expect(badges.exists()).toBe(true);
+    expect(badges.find('[data-test="badge-sdgs-desa"]').exists()).toBe(true);
+    expect(badges.find('[data-test="badge-sdgs-17"]').exists()).toBe(true);
+    // The three link columns and the badges are the only direct grid items
+    expect(grid.element.children.length).toBe(4);
+  });
+
+  it('gives every logo a fixed height with object-contain so heights match', async () => {
+    const router = createMockRouter();
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mount(AppFooter, {
+      global: { plugins: [router] },
+    });
+
+    const logos = [
+      'logo-balikpapan',
+      'logo-desa-cantik',
+      'logo-bps',
+      'logo-itk',
+      'logo-vyomatantra',
+    ].map((name) => wrapper.find(`[data-test="${name}"]`));
+    logos.forEach((logo) => {
+      expect(logo.classes()).toContain('object-contain');
+      expect(logo.classes().some((c) => /^h-\d+/.test(c))).toBe(true);
+    });
+    const partnerHeights = ['logo-bps', 'logo-itk', 'logo-vyomatantra'].map((name) =>
+      wrapper
+        .find(`[data-test="${name}"]`)
+        .classes()
+        .filter((c) => /^(sm:)?h-\d+/.test(c))
+        .join(' '),
+    );
+    expect(new Set(partnerHeights).size).toBe(1);
   });
 
   it('always includes Publikasi link in the footer per SPEC §8', async () => {

@@ -124,7 +124,7 @@ const partnerLinks: PartnerLink[] = [
     <div class="mx-auto max-w-7xl px-6 py-10 sm:px-8 sm:py-12 lg:px-12 lg:py-16">
       <!-- 
         Responsive Grid via Container Queries:
-        - Mobile (< 768px): Vertical stack of Brand block, then 2-col Links grid (Left: Sumber Daya + Tentang; Right: Cerita + SDGs).
+        - Mobile (< 768px): Vertical stack of Brand block, then 2-col Links grid (Left: Sumber Daya + Tentang; Right: Cerita), then a full-width row for the SDG badges.
         - Tablet (768px - 1023px): Brand block full width on top, then 3-col Links grid (Col 1: Sumber Daya; Col 2: Cerita; Col 3: Tentang + SDGs).
         - Desktop (>= 1024px): 12-col side-by-side grid (4-col Brand block; 8-col Links grid).
       -->
@@ -146,7 +146,7 @@ const partnerLinks: PartnerLink[] = [
               data-test="logo-desa-cantik"
             />
             <div class="flex min-w-0 flex-col text-left">
-              <span class="text-xs font-normal tracking-wide text-text-inverse-muted sm:text-sm">
+              <span class="text-sm font-normal tracking-wide text-text-inverse-muted">
                 Kelurahan Cinta Statistik
               </span>
               <span class="text-base leading-tight font-bold tracking-tight text-white sm:text-lg">
@@ -157,19 +157,16 @@ const partnerLinks: PartnerLink[] = [
           </div>
 
           <!-- Office Address Block -->
-          <address
-            class="space-y-1 text-xs leading-relaxed text-text-inverse-muted not-italic sm:text-sm"
-          >
-            <p class="font-medium text-white">
+          <address class="space-y-1 leading-relaxed text-text-inverse-muted not-italic">
+            <p class="text-sm font-medium text-white sm:text-base">
               {{ displayAddressText }}
             </p>
-            <p class="pt-0.5">
+            <p class="pt-0.5 text-sm sm:text-base">
               Telp.
               <BaseLink
                 :href="`tel:${displayPhone.replace(/[^0-9+]/g, '')}`"
                 variant="white"
-                size="sm"
-                class="text-xs sm:text-sm"
+                size="md"
                 :with-arrow="false"
               >
                 {{ displayPhone }}
@@ -186,13 +183,12 @@ const partnerLinks: PartnerLink[] = [
           <!-- 1. Sumber Daya Navigation -->
           <nav aria-label="Navigasi Sumber Daya" class="link-col-sumber space-y-3">
             <h2 class="text-base font-semibold tracking-wide text-white">Sumber Daya</h2>
-            <ul class="space-y-1.5 sm:space-y-2">
+            <ul class="space-y-2">
               <li v-for="link in resourceLinks" :key="link.label">
                 <BaseLink
                   :to="link.to"
                   variant="white"
-                  size="sm"
-                  class="text-xs sm:text-sm"
+                  size="md"
                   :with-arrow="false"
                 >
                   {{ link.label }}
@@ -204,13 +200,12 @@ const partnerLinks: PartnerLink[] = [
           <!-- 2. Tentang Navigation -->
           <nav aria-label="Navigasi Tentang Kelurahan" class="link-col-tentang space-y-3">
             <h2 class="text-base font-semibold tracking-wide text-white">Tentang</h2>
-            <ul class="space-y-1.5 sm:space-y-2">
+            <ul class="space-y-2">
               <li v-for="link in aboutLinks" :key="link.label">
                 <BaseLink
                   :to="link.to"
                   variant="white"
-                  size="sm"
-                  class="text-xs sm:text-sm"
+                  size="md"
                   :with-arrow="false"
                 >
                   {{ link.label }}
@@ -222,13 +217,12 @@ const partnerLinks: PartnerLink[] = [
           <!-- 3. Cerita Navigation -->
           <nav aria-label="Navigasi Cerita Statistik" class="link-col-cerita space-y-3">
             <h2 class="text-base font-semibold tracking-wide text-white">Cerita</h2>
-            <ul class="space-y-1.5 sm:space-y-2">
+            <ul class="space-y-2">
               <li v-for="link in storyLinks" :key="link.label">
                 <BaseLink
                   :to="link.to"
                   variant="white"
-                  size="sm"
-                  class="text-xs sm:text-sm"
+                  size="md"
                   :with-arrow="false"
                 >
                   {{ link.label }}
@@ -239,7 +233,7 @@ const partnerLinks: PartnerLink[] = [
 
           <!-- 4. SDGs Badges -->
           <div class="link-col-badges">
-            <div class="flex items-center gap-2.5 sm:gap-3">
+            <div class="flex flex-wrap items-center gap-2.5 sm:gap-3">
               <img
                 :src="logoSdgsDesa"
                 alt="Logo SDGs Desa"
@@ -259,7 +253,10 @@ const partnerLinks: PartnerLink[] = [
 
       <!-- Partner Collaboration Logos Row -->
       <div class="mt-10 border-t border-white/10 pt-8 sm:mt-12 sm:pt-10">
-        <div class="flex items-center justify-center gap-8 sm:gap-12 md:gap-16">
+        <div
+          class="flex flex-wrap items-center justify-center gap-x-8 gap-y-5 sm:gap-x-12 md:gap-x-16"
+          data-test="partner-logos"
+        >
           <component
             :is="partner.to ? RouterLink : 'a'"
             v-for="partner in partnerLinks"
@@ -280,7 +277,7 @@ const partnerLinks: PartnerLink[] = [
             <img
               :src="partner.logoSrc"
               :alt="partner.logoAlt"
-              class="h-9 w-auto object-contain sm:h-11"
+              class="h-10 w-auto max-w-full object-contain sm:h-11"
               :data-test="partner.logoDataTest"
             />
           </component>
@@ -289,9 +286,9 @@ const partnerLinks: PartnerLink[] = [
 
       <!-- Copyright Section -->
       <div
-        class="mt-8 border-t border-white/10 pt-6 text-center text-xs text-text-inverse-muted sm:mt-10 sm:text-sm"
+        class="mt-8 border-t border-white/10 pt-6 text-center text-text-inverse-muted sm:mt-10"
       >
-        <p data-test="copyright-text">&copy; {{ year }}. Hak cipta dilindungi undang-undang.</p>
+        <p class="text-sm sm:text-base" data-test="copyright-text">&copy; {{ year }}. Hak cipta dilindungi undang-undang.</p>
       </div>
     </div>
   </footer>
@@ -340,10 +337,14 @@ const partnerLinks: PartnerLink[] = [
   grid-row: 1 / span 2;
 }
 
+/*
+ * Mobile: the SDG badges get their own full-width row, left-aligned under the link columns, so
+ * no grid cell is left empty (they used to sit alone in the right cell of a third row).
+ */
 .link-col-badges {
-  grid-column: 2;
+  grid-column: 1 / -1;
   grid-row: 3;
-  padding-top: 0.25rem;
+  padding-top: 0;
 }
 
 /* Tablet / Medium Screens (768px to 1023px): Brand block full width on top; Links in 3 spacious columns */

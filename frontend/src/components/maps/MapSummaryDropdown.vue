@@ -97,18 +97,18 @@ onUnmounted(() => {
     <button
       ref="triggerBtnRef"
       type="button"
-      class="text-brand-navy focus-visible:outline-brand-navy inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200/90 bg-white/95 px-3.5 py-2 text-sm font-medium shadow-md transition-all hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 motion-reduce:transition-none"
+      class="text-brand-navy focus-visible:outline-brand-navy border-border-strong hover:bg-surface-muted inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border bg-white px-3.5 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 motion-reduce:transition-none"
       :class="[
-        isOpen ? 'ring-brand-indigo/30 border-brand-indigo ring-2' : '',
-        isDesktop ? 'backdrop-blur-md' : 'w-full justify-between',
+        isOpen ? 'border-brand-navy ring-brand-navy ring-1' : '',
+        isDesktop ? '' : 'w-full justify-between',
       ]"
       :aria-expanded="isOpen"
       aria-controls="map-summary-panel"
       @click="toggleDropdown"
     >
-      <span>Ringkasan data</span>
+      <span>Rincian data</span>
       <svg
-        class="h-3.5 w-3.5 text-slate-400 transition-transform duration-200 motion-reduce:transition-none"
+        class="text-text-muted h-3.5 w-3.5 transition-transform duration-200 motion-reduce:transition-none"
         :class="{ 'rotate-180': isOpen }"
         aria-hidden="true"
         fill="none"
@@ -132,7 +132,7 @@ onUnmounted(() => {
       <div
         v-show="isOpen"
         id="map-summary-panel"
-        class="mt-2 divide-y divide-slate-100 rounded-2xl border border-slate-200/90 bg-white p-3.5 text-sm shadow-xl"
+        class="border-border divide-border mt-2 divide-y rounded-2xl border bg-white p-3.5 text-sm shadow-xl"
         :class="
           isDesktop
             ? 'absolute right-0 z-50 max-h-[min(24rem,calc(100dvh-8rem))] w-64 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain'
@@ -140,19 +140,19 @@ onUnmounted(() => {
         "
       >
         <div class="pb-2.5">
-          <span class="block text-xs font-semibold tracking-wider text-slate-400 uppercase">
+          <span class="text-text-muted block text-xs font-semibold tracking-wider uppercase">
             Statistik Wilayah
           </span>
-          <span class="text-xs text-slate-500">Kelurahan Manggar</span>
+          <span class="text-text-muted text-xs">Kelurahan Manggar</span>
         </div>
 
-        <ul class="space-y-2 py-2 text-slate-700">
+        <ul class="text-brand-navy space-y-2 py-2">
           <li class="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
             <div class="flex min-w-0 items-center gap-2">
               <span class="bg-brand-navy h-2.5 w-2.5 shrink-0 rounded-full" aria-hidden="true" />
               <span>Total Titik Spasial</span>
             </div>
-            <span class="font-bold text-slate-900">{{ summary.totalPoints }}</span>
+            <span class="text-brand-navy font-bold">{{ summary.totalPoints }}</span>
           </li>
 
           <li class="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
@@ -160,7 +160,7 @@ onUnmounted(() => {
               <span class="bg-brand-indigo h-2.5 w-2.5 shrink-0 rounded-full" aria-hidden="true" />
               <span>Pos / Ketua RT</span>
             </div>
-            <span class="font-semibold text-slate-800">{{
+            <span class="text-brand-navy font-semibold">{{
               summary.pointsByType.ketua_rt || 0
             }}</span>
           </li>
@@ -173,7 +173,7 @@ onUnmounted(() => {
               />
               <span>Bank Sampah Unit</span>
             </div>
-            <span class="font-semibold text-slate-800">{{
+            <span class="text-brand-navy font-semibold">{{
               summary.pointsByType.bank_sampah || 0
             }}</span>
           </li>
@@ -183,22 +183,22 @@ onUnmounted(() => {
               <span class="bg-brand-violet h-2.5 w-2.5 shrink-0 rounded-full" aria-hidden="true" />
               <span>Fasilitas Umum</span>
             </div>
-            <span class="font-semibold text-slate-800">{{
+            <span class="text-brand-navy font-semibold">{{
               summary.pointsByType.fasilitas_umum || 0
             }}</span>
           </li>
         </ul>
 
-        <div class="space-y-1.5 pt-2 text-xs text-slate-500">
+        <div class="text-text-muted space-y-1.5 pt-2 text-xs">
           <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
             <span>RT Berkoordinat:</span>
-            <span class="font-medium text-slate-700">
+            <span class="text-brand-navy font-medium">
               {{ summary.rtLeadersWithCoordinates }} / {{ summary.totalRtLeaders }} RT
             </span>
           </div>
           <div
             v-if="summary.rtLeadersWithIntegrityConflicts > 0"
-            class="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 font-medium text-amber-700"
+            class="text-status-warning flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 font-medium"
           >
             <span>Konflik Integritas:</span>
             <span>{{ summary.rtLeadersWithIntegrityConflicts }} RT</span>
