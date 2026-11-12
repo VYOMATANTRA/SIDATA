@@ -5,6 +5,7 @@ import FormErrorSummary from '../../common/FormErrorSummary.vue';
 import FormField from '../../common/FormField.vue';
 import { BODY_MAX_LENGTH, TITLE_MAX_LENGTH } from '../../data/blocks/blockFormShared';
 import { INPUT_CLASSES } from '../../../utils/formStyles';
+import { hasHtmlTag, hasUnsafeCharacters } from '../../../utils/titleTextRules';
 
 /**
  * Title and text of one paragraph of a Cerita section, for adding or editing. It keeps its own
@@ -52,15 +53,12 @@ const dirty = computed(
 );
 watch(dirty, (value) => emit('dirty-change', value), { immediate: true });
 
-const CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/;
-const BIDI_CHARS = /[‎‏‪-‮⁦-⁩]/;
-
 const titleError = computed(() => {
   const value = title.value.trim();
   if (value === '') return props.requireTitle ? 'Judul paragraf wajib diisi.' : undefined;
   if (value.length > TITLE_MAX_LENGTH) return 'Judul paragraf maksimal 255 karakter.';
-  if (/<[a-z!/]/i.test(value)) return 'Judul paragraf tidak boleh memuat tag HTML.';
-  if (CONTROL_CHARS.test(value) || BIDI_CHARS.test(value)) {
+  if (hasHtmlTag(value)) return 'Judul paragraf tidak boleh memuat tag HTML.';
+  if (hasUnsafeCharacters(value)) {
     return 'Judul paragraf memuat karakter yang tidak diizinkan.';
   }
   return undefined;

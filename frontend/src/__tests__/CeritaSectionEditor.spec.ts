@@ -27,7 +27,7 @@ async function mountEditor(): Promise<VueWrapper> {
 }
 
 function button(wrapper: VueWrapper, label: string): HTMLButtonElement {
-  const found = Array.from(wrapper.element.querySelectorAll('button')).find((element) =>
+  const found = Array.from(root(wrapper).querySelectorAll('button')).find((element) =>
     (element.textContent ?? '').replace(/\s+/g, ' ').trim().startsWith(label),
   );
   if (!found) throw new Error(`no button starting with "${label}"`);
@@ -56,6 +56,13 @@ function pickFile(
 async function upload(wrapper: VueWrapper, index: number): Promise<void> {
   pickFile(wrapper, index, 'foto.jpg', 'image/jpeg');
   await flushPromises();
+}
+
+const root = (wrapper: VueWrapper): HTMLElement => wrapper.element as HTMLElement;
+
+function lastEmitted(wrapper: VueWrapper, event: string): unknown[] | undefined {
+  const events = wrapper.emitted(event) ?? [];
+  return events[events.length - 1];
 }
 
 const headings = (wrapper: VueWrapper): string[] =>
@@ -161,11 +168,11 @@ describe('CeritaSectionEditor', () => {
 
       await click(wrapper, 'Ubah');
       await wrapper.find('[data-test="paragraph-body"]').setValue('berubah');
-      expect(wrapper.emitted('dirty-change')?.at(-1)).toEqual([true]);
+      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([true]);
 
       await wrapper.find('[data-test="paragraph-cancel"]').trigger('click');
       await flushPromises();
-      expect(wrapper.emitted('dirty-change')?.at(-1)).toEqual([false]);
+      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([false]);
       wrapper.unmount();
     });
 
@@ -534,12 +541,12 @@ describe('CeritaSectionEditor', () => {
       expect(wrapper.find('[data-test="figure-revert"]').exists()).toBe(false);
 
       await wrapper.find('[data-test="photo-alt"]').setValue('Lain');
-      expect(wrapper.emitted('dirty-change')?.at(-1)).toEqual([true]);
+      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([true]);
       await wrapper.find('[data-test="figure-revert"]').trigger('click');
       expect((wrapper.find('[data-test="photo-alt"]').element as HTMLTextAreaElement).value).toBe(
         'Balai',
       );
-      expect(wrapper.emitted('dirty-change')?.at(-1)).toEqual([false]);
+      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([false]);
       wrapper.unmount();
     });
 
@@ -701,13 +708,13 @@ describe('CeritaSectionEditor', () => {
     await click(wrapper, 'Tambah paragraf');
 
     const unlabelled = Array.from(
-      wrapper.element.querySelectorAll<HTMLElement>('input:not([type="hidden"]), textarea, select'),
+      root(wrapper).querySelectorAll<HTMLElement>('input:not([type="hidden"]), textarea, select'),
     ).filter((el) => {
       if (el.getAttribute('aria-label') || el.getAttribute('aria-labelledby')) return false;
-      return !el.id || !wrapper.element.querySelector(`label[for="${el.id}"]`);
+      return !el.id || !root(wrapper).querySelector(`label[for="${el.id}"]`);
     });
     expect(unlabelled).toHaveLength(0);
-    const unnamed = Array.from(wrapper.element.querySelectorAll('button')).filter(
+    const unnamed = Array.from(root(wrapper).querySelectorAll('button')).filter(
       (el) => (el.textContent ?? '').trim() === '' && !el.getAttribute('aria-label'),
     );
     expect(unnamed).toHaveLength(0);

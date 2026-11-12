@@ -4,6 +4,7 @@ import BaseButton from '../../common/BaseButton.vue';
 import BaseModal from '../../common/BaseModal.vue';
 import FormField from '../../common/FormField.vue';
 import { INPUT_CLASSES } from '../../../utils/formStyles';
+import { hasHtmlTag, hasUnsafeCharacters } from '../../../utils/titleTextRules';
 
 /**
  * One-line title dialog shared by "add" and "rename" for pages, chapters and sections. The field
@@ -46,15 +47,12 @@ watch(
   },
 );
 
-const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f]/;
-const BIDI_CHARS = /[‎‏‪-‮⁦-⁩]/;
-
 const problem = computed(() => {
   const value = title.value.trim();
   if (value === '') return `${props.label} wajib diisi.`;
   if (value.length > 255) return `${props.label} maksimal 255 karakter.`;
-  if (/<[a-z!/]/i.test(value)) return `${props.label} tidak boleh memuat tag HTML.`;
-  if (CONTROL_CHARS.test(value) || BIDI_CHARS.test(value)) {
+  if (hasHtmlTag(value)) return `${props.label} tidak boleh memuat tag HTML.`;
+  if (hasUnsafeCharacters(value)) {
     return `${props.label} memuat karakter yang tidak diizinkan.`;
   }
   return undefined;

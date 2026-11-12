@@ -1,3 +1,4 @@
+import { hasHtmlTag, hasUnsafeCharacters } from './titleTextRules';
 import {
   FIGURE_LIMITS,
   type FigurePhotoInput,
@@ -184,14 +185,10 @@ export function figureIds(prefix: string): FigureIds {
 
 // --- Validation ---
 
-const HTML_TAG = /<[a-z!/]/i;
-const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f]/;
-const BIDI_CHARS = /[‎‏‪-‮⁦-⁩]/;
-
 /** Text rules shared with the server: no tags, no control or direction-changing characters. */
 function textProblem(value: string, what: string): string | null {
-  if (HTML_TAG.test(value)) return `${what} tidak boleh memuat tag HTML.`;
-  if (CONTROL_CHARS.test(value) || BIDI_CHARS.test(value)) {
+  if (hasHtmlTag(value)) return `${what} tidak boleh memuat tag HTML.`;
+  if (hasUnsafeCharacters(value)) {
     return `${what} memuat karakter yang tidak diizinkan.`;
   }
   return null;
