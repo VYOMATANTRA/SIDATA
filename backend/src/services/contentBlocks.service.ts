@@ -18,6 +18,8 @@ import {
   HierarchyServiceError,
   assertFresh,
   expectedUpdatedAtSchema,
+  FIGURE_BLOCK_PROTECTED_CODE,
+  FIGURE_BLOCK_PROTECTED_MESSAGE,
   hasControlCharacters as hasSharedControlCharacters,
 } from '../utils/hierarchyAuthoring.js';
 
@@ -704,6 +706,16 @@ export const updateContentBlock = async (
         throw new ContentBlockServiceError(
           `Blok konten dengan slug '${normalizedSlug}' tidak ditemukan`,
           404,
+        );
+      }
+
+      // A section figure owns media attach/detach state; only the section figure endpoints may
+      // change it, so a generic edit can never bypass that bookkeeping.
+      if (existing.type === 'figure') {
+        throw new ContentBlockServiceError(
+          FIGURE_BLOCK_PROTECTED_MESSAGE,
+          409,
+          FIGURE_BLOCK_PROTECTED_CODE,
         );
       }
 

@@ -9,6 +9,8 @@ import {
 } from './audit.service.js';
 import { executeLockedTransaction, withChangeResult } from '../utils/lockTransactionCache.js';
 import {
+  FIGURE_BLOCK_PROTECTED_CODE,
+  FIGURE_BLOCK_PROTECTED_MESSAGE,
   STANDALONE_BLOCK_PROTECTED_CODE,
   assertFresh,
   assertPlainObject,
@@ -124,8 +126,9 @@ export const createProseBlock = async (
           new Set([...sameSlug.map((b) => b.slug), ...STANDALONE_BLOCK_SLUGS]),
         );
 
+        // Only prose blocks are ordered siblings; a section's figure block has no sort order.
         const siblings = await tx.contentBlock.findMany({
-          where: { sectionId },
+          where: { sectionId, type: 'prose' },
           select: { sortOrder: true },
         });
         const maxOrder = siblings.reduce((m, b) => Math.max(m, b.sortOrder ?? -1), -1);
@@ -239,6 +242,13 @@ export const deleteProseBlock = async (
           404,
         );
       }
+      if (existing.type === 'figure') {
+        throw new ContentBlockServiceError(
+          FIGURE_BLOCK_PROTECTED_MESSAGE,
+          409,
+          FIGURE_BLOCK_PROTECTED_CODE,
+        );
+      }
       if (
         existing.sectionId === null ||
         existing.type !== 'prose' ||
@@ -314,7 +324,7 @@ export const reorderProseBlocks = async (
       assertFresh(section.updatedAt, input.expectedUpdatedAt, 'Daftar blok konten');
 
       const blocks = await tx.contentBlock.findMany({
-        where: { sectionId },
+        where: { sectionId, type: 'prose' },
         orderBy: BLOCK_SORT_ORDER,
       });
       const plan = planReorder(input.items, blocks, 'blok konten');
@@ -361,7 +371,7 @@ export const reorderProseBlocks = async (
       );
 
       const fresh = await tx.contentBlock.findMany({
-        where: { sectionId },
+        where: { sectionId, type: 'prose' },
         orderBy: BLOCK_SORT_ORDER,
       });
       return { blocks: fresh.map(formatContentBlock), section: toSectionToken(touched) };
