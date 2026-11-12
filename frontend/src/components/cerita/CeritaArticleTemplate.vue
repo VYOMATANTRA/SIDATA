@@ -12,8 +12,8 @@ import { READER_GRID, READER_MAIN } from './readerLayout';
  * a page holds chapters, a chapter holds sections, a section has one heading, its paragraphs and
  * optionally one figure. Navy title band, the article in the middle column, the chapter list on the
  * right (a bar at the bottom on phones), and a "Bab berikutnya" link at the end of each chapter.
- * Wave 4 builds the `article` from stored content; until then it is fed mockup data in development
- * only (`/cerita/contoh`).
+ * It is fed mockup data in development only (`/cerita/contoh`); the live reader (`CeritaPageView`)
+ * uses the same figure components but also shows indicators and tables.
  */
 const props = defineProps<{ article: CeritaArticle }>();
 

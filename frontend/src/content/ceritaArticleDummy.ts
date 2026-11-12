@@ -8,8 +8,8 @@ import photoD from '@/assets/img/background_laman_depan_kelurahan.webp';
  * DUMMY CONTENT for the article template, adapted from the Figma mockup of the Pendidikan page and
  * the wireframe's four figure types, so the layout can be reviewed. It is NOT sourced data: text,
  * numbers, captions and credits are mockup text. It is only reachable in development
- * (`/cerita/contoh`) and must never be shown to residents. Wave 4 replaces it with content built
- * from the backend.
+ * (`/cerita/contoh`) and must never be shown to residents. Stored content is shown by the
+ * live reader, not through this template.
  */
 const credit = 'Tim Inovasi Sosial VYOMATANTRA';
 

@@ -1,8 +1,8 @@
 /**
  * The shape of a Cerita page as the article template renders it (SPEC §8, "Cerita reader").
  * A page holds chapters; a chapter holds sections; a section has one heading, its paragraphs and,
- * optionally, one figure. Nothing in the backend produces this yet: Wave 4 builds a `CeritaArticle`
- * from the stored page, chapters, sections and media.
+ * optionally, one figure. The live reader does not build a `CeritaArticle`; it shares the figure
+ * types: `utils/ceritaStoredFigure.ts` maps a stored figure block to an `ArticleFigure`.
  */
 
 /** One photo with its caption and credit. */
