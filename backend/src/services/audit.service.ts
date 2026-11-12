@@ -102,6 +102,11 @@ export const AUDIT_ACTIONS = {
   RT_LEADER_UPDATED: defineAction('rt_leader.updated', 'info'),
   RT_LEADERS_IMPORTED: defineAction('rt_leader.imported', 'warning'),
   RT_ROSTER_STATUS_CHANGED: defineAction('rt_leader.sample_status_changed', 'warning'),
+  // SPEC §7 media_assets. Metadata is ids, purpose, kind and size only — never file bytes,
+  // server paths or the original filename.
+  MEDIA_UPLOADED: defineAction('media.uploaded', 'info'),
+  // Ops script scripts/cleanup-media.ts: counts only.
+  MEDIA_CLEANUP: defineAction('media.cleanup', 'info'),
   AUDIT_PRUNED: defineAction('audit.pruned', 'info'),
   // One-off ops script: cleanup-legacy-sample-rt-leaders.ts --force.
   // Metadata holds counts only — never names or phone numbers.

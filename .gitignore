@@ -151,3 +151,6 @@ vite.config.ts.timestamp-*
 
 # Playwright MCP browser-session artifacts (console logs, snapshots)
 .playwright-mcp/
+
+# Uploaded media (UPLOAD_DIR default) — runtime data, never committed
+/uploads/

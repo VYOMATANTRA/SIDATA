@@ -67,6 +67,17 @@ describe('schema contract', () => {
         assert.ok(schemaTables.includes(table), `grants script lists unknown table ${table}`);
       }
     });
+
+    it('unconditionally revokes the blanket db grant with a 1141 handler and asserts no db-level grant remains', () => {
+      assert.doesNotMatch(grantsSql, /GRANT\s+SELECT\s+ON\s+`<DB_NAME>`\.\*/i);
+      assert.match(grantsSql, /DECLARE CONTINUE HANDLER FOR 1141/);
+      assert.match(
+        grantsSql,
+        /REVOKE ALL PRIVILEGES ON `<DB_NAME>`\.\* FROM '<APP_DB_USER>'@'<APP_DB_HOST>';/,
+      );
+      assert.match(grantsSql, /information_schema\.SCHEMA_PRIVILEGES/);
+      assert.match(grantsSql, /SIGNAL SQLSTATE '45000'/);
+    });
   });
 
   describe('add_comparison_templates migration', () => {
@@ -114,6 +125,35 @@ describe('schema contract', () => {
       assert.match(expr, /`is_computed_comparison` = TRUE/);
       assert.match(expr, /`value_previous` IS NOT NULL/);
       assert.match(expr, /`period_previous` IS NOT NULL/);
+    });
+  });
+
+  describe('add_media_lifecycle_columns migration', () => {
+    const migrationDirs = readdirSync(backendPath('prisma/migrations')).filter((d) =>
+      d.endsWith('_add_media_lifecycle_columns'),
+    );
+
+    it('exists', () => {
+      assert.equal(migrationDirs.length, 1);
+    });
+
+    const sql = stripSqlComments(
+      migrationDirs[0] ? read(`prisma/migrations/${migrationDirs[0]}/migration.sql`) : '',
+    );
+
+    it('adds cleanup_claimed_at and cleanup_quarantine_reason to media_assets and creates media_asset_references with RESTRICT FK', () => {
+      assert.match(sql, /ADD COLUMN `cleanup_claimed_at` DATETIME\(3\) NULL/);
+      assert.match(sql, /ADD COLUMN `cleanup_quarantine_reason` VARCHAR\(64\) NULL/);
+      assert.match(sql, /CREATE TABLE `media_asset_references`/);
+      assert.match(
+        sql,
+        /UNIQUE INDEX `media_asset_references_tuple_key`\(`reference_type`, `reference_id`, `slot`, `asset_id`\)/,
+      );
+      assert.match(sql, /INDEX `media_asset_references_asset_id_idx`\(`asset_id`\)/);
+      assert.match(
+        sql,
+        /FOREIGN KEY \(`asset_id`\) REFERENCES `media_assets`\(`id`\) ON DELETE RESTRICT ON UPDATE RESTRICT/,
+      );
     });
   });
 });
