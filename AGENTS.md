@@ -172,8 +172,8 @@ product rules. Things to know when touching it:
 - **New table grants**: `media_assets` is in `scripts/grants/audit-logs-grants.sql`.
 - **Cleanup removes files before the row** (a failed delete keeps the row for the next run) and re-verifies `attached_at IS NULL` before touching files; see `mediaCleanup.service.ts` for the documented residual window.
 - **Run `npm run media:cleanup` on a schedule** (see README Deployment) or abandoned uploads accumulate.
-- sharp ships prebuilt binaries for linux x64/arm64 including musl (`node:22-alpine`); the image build
-  needs no compiler toolchain.
+- sharp ships prebuilt binaries for the Debian-based Node 22 image on Linux x64 and arm64. The image
+  build needs no compiler toolchain.
 
 ## Tech Stack Summary
 

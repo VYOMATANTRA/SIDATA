@@ -49,7 +49,7 @@ services:
       start_period: 20s
 
   backend:
-    command: sh -c "npm ci && npx prisma generate && if [ \"$${RUN_MIGRATIONS:-1}\" = 1 ]; then npx prisma migrate deploy; fi && npx tsx prisma/seed.ts && npx tsx watch src/index.ts"
+    command: sh -c "npm ci --no-audit --prefer-offline && npx prisma generate && if [ \"$${RUN_MIGRATIONS:-1}\" = 1 ]; then npx prisma migrate deploy; fi && npx tsx prisma/seed.ts && npx tsx watch src/index.ts"
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -80,6 +80,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: audit-pruner
     working_dir: /app
     depends_on:
       mysql:
@@ -96,6 +97,7 @@ services:
       - sh
       - -c
       - |
+        set -e
         if [ -z "$$AUDIT_ADMIN_DATABASE_URL" ]; then
           echo "AUDIT_ADMIN_DATABASE_URL is not set; refusing to start audit-pruner" >&2
           exit 1
@@ -103,8 +105,9 @@ services:
         npx prisma generate
         umask 077
         export -p > /app/.cron-env
-        echo "$$AUDIT_PRUNE_SCHEDULE . /app/.cron-env; cd /app && npx tsx scripts/prune-audit-logs.ts >/proc/1/fd/1 2>/proc/1/fd/2" > /etc/crontabs/root
-        exec crond -f -l 8
+        mkdir -p /etc/crontabs
+        printf '%s (. /app/.cron-env; cd /app && npx tsx scripts/prune-audit-logs.ts) >/proc/1/fd/1 2>/proc/1/fd/2\n' "$$AUDIT_PRUNE_SCHEDULE" > /etc/crontabs/root
+        exec busybox crond -f -l 8 -L /dev/stderr -c /etc/crontabs
 
   frontend:
     build:
@@ -121,9 +124,9 @@ services:
       - "${FRONTEND_PORT}:${FRONTEND_PORT}"
     volumes:
       - ./frontend:/app
-      - frontend_node_modules:/app/node_modules
+      - frontend_node_modules_glibc:/app/node_modules
 
 volumes:
   mysql_data:
   backend_node_modules:
-  frontend_node_modules:
+  frontend_node_modules_glibc:
