@@ -33,6 +33,13 @@ describe('validatePhotoFile', () => {
     expect(validatePhotoFile(file('a.webp', 'image/webp', PHOTO_MAX_BYTES))).toBeNull();
   });
 
+  it('treats the non-standard image/jpg type as JPEG but still refuses HEIC and other non-images', () => {
+    expect(validatePhotoFile(file('a.jpg', 'image/jpg'))).toBeNull();
+    expect(validatePhotoFile(file('a.heic', 'image/heic'))).toContain('JPEG, PNG, atau WebP');
+    expect(validatePhotoFile(file('a.heif', 'image/heif'))).not.toBeNull();
+    expect(validatePhotoFile(file('a.gif', 'image/gif'))).not.toBeNull();
+  });
+
   it('refuses a wrong type, an oversize photo and an empty file with plain sentences', () => {
     expect(validatePhotoFile(file('a.pdf', 'application/pdf'))).toContain('JPEG, PNG, atau WebP');
     expect(validatePhotoFile(file('a.svg', 'image/svg+xml'))).toContain('JPEG, PNG, atau WebP');

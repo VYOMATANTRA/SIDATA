@@ -39,7 +39,13 @@ const MIB = 1024 * 1024;
 export const PHOTO_MAX_BYTES = 5 * MIB;
 export const PHOTO_MAX_MB_LABEL = '5 MB';
 export const PHOTO_ACCEPT = 'image/jpeg,image/png,image/webp';
-const PHOTO_MIME_TYPES: ReadonlySet<string> = new Set(['image/jpeg', 'image/png', 'image/webp']);
+// `image/jpg` is not a registered type, but some browsers and tools report it for a real JPEG.
+const PHOTO_MIME_TYPES: ReadonlySet<string> = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+]);
 const PHOTO_EXTENSIONS: ReadonlySet<string> = new Set(['jpg', 'jpeg', 'png', 'webp']);
 
 export interface MediaUploadResult {
