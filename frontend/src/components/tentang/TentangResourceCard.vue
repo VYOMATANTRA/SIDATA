@@ -18,7 +18,7 @@ withDefaults(
 </script>
 
 <template>
-  <article class="rounded-btn bg-brand-navy-deep flex flex-col p-5">
+  <article class="rounded-btn bg-brand-navy flex flex-col p-5">
     <div class="flex items-center gap-3">
       <span
         class="bg-white flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-brand-navy"

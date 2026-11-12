@@ -12,9 +12,9 @@ withDefaults(
 </script>
 
 <template>
-  <article class="flex h-full w-full flex-col rounded-btn bg-surface-muted p-5">
+  <article class="flex h-full w-full flex-col rounded-btn border border-border bg-white p-5">
     <span
-      class="flex h-12 w-12 items-center justify-center rounded-full bg-brand-navy text-white"
+      class="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-surface-muted text-brand-navy"
       aria-hidden="true"
     >
       <TentangIcon :name="icon" />
