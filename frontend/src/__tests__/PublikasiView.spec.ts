@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import PublikasiView from '../views/PublikasiView.vue';
+import { useStubbedPagesFetch } from './publicPagesFetch';
 
 function mountPublikasiView() {
   const pinia = createPinia();
@@ -24,6 +25,8 @@ function mountPublikasiView() {
     wrapper: mount(PublikasiView, { global: { plugins: [pinia, router] } }),
   };
 }
+
+useStubbedPagesFetch();
 
 describe('PublikasiView', () => {
   it('renders accessible public landmarks and one page heading using the shared layout', async () => {

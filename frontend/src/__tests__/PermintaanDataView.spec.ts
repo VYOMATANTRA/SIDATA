@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import PermintaanDataView from '../views/PermintaanDataView.vue';
+import { useStubbedPagesFetch } from './publicPagesFetch';
 
 function mountView() {
   const pinia = createPinia();
@@ -19,6 +20,8 @@ function mountView() {
 
   return { pinia, router };
 }
+
+useStubbedPagesFetch();
 
 describe('PermintaanDataView accessibility and content', () => {
   it('renders required semantic landmarks, skip link, and single h1', async () => {
@@ -101,7 +104,9 @@ describe('PermintaanDataView accessibility and content', () => {
 
     expect(wrapper.text()).toContain('Maksimal 10 Hari Kerja');
     expect(wrapper.text()).not.toContain('1 Hari Kerja');
-    expect(wrapper.text()).toContain('Informasi tanpa biaya; biaya salinan/media ditanggung pemohon');
+    expect(wrapper.text()).toContain(
+      'Informasi tanpa biaya; biaya salinan/media ditanggung pemohon',
+    );
     expect(wrapper.text()).not.toContain('Bebas Biaya (Gratis)');
     expect(wrapper.text()).toContain(
       'Pasal 22 ayat (7) UU No. 14 Tahun 2008 tentang Keterbukaan Informasi Publik',
