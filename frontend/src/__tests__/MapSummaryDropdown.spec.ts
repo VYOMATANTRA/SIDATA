@@ -41,7 +41,7 @@ describe('MapSummaryDropdown.vue (shared behaviour)', () => {
   it('renders the trigger with a plain Indonesian label and nothing without a summary', () => {
     stubViewport(true);
     const wrapper = mountSummary();
-    expect(wrapper.find('button').text()).toBe('Ringkasan data');
+    expect(wrapper.find('button').text()).toBe('Rincian data');
     wrapper.unmount();
 
     const empty = mountSummary(null);
