@@ -349,4 +349,89 @@ describe('pages store (public page by slug)', () => {
 
     expect(store.pages).toEqual([]);
   });
+
+  describe('a forced hierarchy reload while a request is already running', () => {
+    function pagesBody(title: string) {
+      return {
+        pages: [
+          {
+            id: 'p1',
+            slug: 'kependudukan',
+            title,
+            sortOrder: 0,
+            chapters: [],
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      };
+    }
+
+    function deferredFetch() {
+      const resolvers: Array<(response: Response) => void> = [];
+      const fetchMock = vi.fn<typeof fetch>(
+        () => new Promise<Response>((resolve) => resolvers.push(resolve)),
+      );
+      return {
+        fetchMock,
+        // The request starts a tick after the call (the client awaits first), so wait for it.
+        resolve: async (index: number, title: string) => {
+          await vi.waitFor(() => expect(resolvers[index]).toBeDefined());
+          resolvers[index]!(json(pagesBody(title)));
+        },
+      };
+    }
+
+    it('waits for the running request and then fetches again, so the result is newer than the save', async () => {
+      const { fetchMock, resolve } = deferredFetch();
+      vi.stubGlobal('fetch', fetchMock);
+      const store = usePagesStore();
+
+      const started = store.fetchHierarchy();
+      const forced = store.fetchHierarchy(true);
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+      await resolve(0, 'Judul lama');
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      await started;
+
+      await resolve(1, 'Judul baru');
+      await forced;
+      expect(store.pages[0]!.title).toBe('Judul baru');
+      expect(store.pagesBySlug['kependudukan']!.title).toBe('Judul baru');
+    });
+
+    it('shares one follow-up fetch between concurrent forced callers', async () => {
+      const { fetchMock, resolve } = deferredFetch();
+      vi.stubGlobal('fetch', fetchMock);
+      const store = usePagesStore();
+
+      void store.fetchHierarchy();
+      const calls = [
+        store.fetchHierarchy(true),
+        store.fetchHierarchy(true),
+        store.fetchHierarchy(true),
+      ];
+      await resolve(0, 'lama');
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      await resolve(1, 'baru');
+      await Promise.all(calls);
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(store.pages[0]!.title).toBe('baru');
+    });
+
+    it('keeps sharing the running request for a plain caller', async () => {
+      const { fetchMock, resolve } = deferredFetch();
+      vi.stubGlobal('fetch', fetchMock);
+      const store = usePagesStore();
+
+      const first = store.fetchHierarchy();
+      const second = store.fetchHierarchy();
+      await resolve(0, 'x');
+      await Promise.all([first, second]);
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
 });

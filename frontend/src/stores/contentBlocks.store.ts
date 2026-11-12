@@ -130,6 +130,7 @@ export const useContentBlocksStore = defineStore('contentBlocks', () => {
   const error = ref<string | null>(null);
 
   let inFlight: Promise<void> | null = null;
+  let followUp: Promise<void> | null = null;
 
   // Figure blocks are managed only on /admin/cerita (the section figure endpoints), never as a
   // card in the content-block CMS, so they stay out of this list. `serverBlocks` keeps them.
@@ -152,8 +153,25 @@ export const useContentBlocksStore = defineStore('contentBlocks', () => {
 
   async function fetchBlocks(force = false): Promise<void> {
     if (isLoaded.value && !force) return;
-    if (inFlight) return inFlight;
+    if (inFlight) {
+      if (!force) return inFlight;
+      // A forced reload is asked for because something was just saved. The running request may have
+      // started before that save, so wait for it and fetch once more. Forced callers that arrive
+      // meanwhile share that one follow-up.
+      if (!followUp) {
+        followUp = inFlight
+          .catch(() => undefined)
+          .then(() => {
+            followUp = null;
+            return startFetch();
+          });
+      }
+      return followUp;
+    }
+    return startFetch();
+  }
 
+  function startFetch(): Promise<void> {
     isLoading.value = true;
     error.value = null;
 

@@ -94,6 +94,107 @@ describe('contentBlocks store', () => {
     expect(store.serverBlocks['figure-s1']).toBeDefined();
   });
 
+  describe('a forced reload while a request is already running', () => {
+    function block(body: string) {
+      return {
+        id: '1',
+        sectionId: 's1',
+        type: 'prose',
+        slug: 'pembuka',
+        title: 'Pembuka',
+        body,
+        metadata: null,
+        sortOrder: 0,
+        updatedAt: '2026-09-17T00:00:00.000Z',
+      };
+    }
+
+    function deferredFetch(): {
+      fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
+      resolve: (index: number, body: string) => void;
+    } {
+      const resolvers: Array<(response: Response) => void> = [];
+      const fetchMock = vi.fn<typeof fetch>(
+        () => new Promise<Response>((resolve) => resolvers.push(resolve)),
+      );
+      return {
+        fetchMock,
+        resolve: (index, body) =>
+          resolvers[index]!({
+            ok: true,
+            json: async () => ({ blocks: [block(body)] }),
+          } as Response),
+      };
+    }
+
+    it('waits for the running request, then fetches again so the result is newer than the save', async () => {
+      const { fetchMock, resolve } = deferredFetch();
+      globalThis.fetch = fetchMock;
+      const store = useContentBlocksStore();
+
+      const started = store.fetchBlocks(); // started before the save: will return old data
+      const forced = store.fetchBlocks(true); // asked for after the save
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      resolve(0, 'lama (sebelum disimpan)');
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      await started;
+      // The old answer is not what the forced caller waits for.
+      let forcedDone = false;
+      void forced.then(() => (forcedDone = true));
+      await Promise.resolve();
+      expect(forcedDone).toBe(false);
+
+      resolve(1, 'baru (setelah disimpan)');
+      await forced;
+      expect(store.serverBlocks['pembuka']!.body).toBe('baru (setelah disimpan)');
+    });
+
+    it('shares one follow-up fetch between concurrent forced callers', async () => {
+      const { fetchMock, resolve } = deferredFetch();
+      globalThis.fetch = fetchMock;
+      const store = useContentBlocksStore();
+
+      void store.fetchBlocks();
+      const a = store.fetchBlocks(true);
+      const b = store.fetchBlocks(true);
+      const c = store.fetchBlocks(true);
+
+      resolve(0, 'lama');
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      resolve(1, 'baru');
+      await Promise.all([a, b, c]);
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(store.serverBlocks['pembuka']!.body).toBe('baru');
+    });
+
+    it('still lets a plain (not forced) caller share the running request', async () => {
+      const { fetchMock, resolve } = deferredFetch();
+      globalThis.fetch = fetchMock;
+      const store = useContentBlocksStore();
+
+      const first = store.fetchBlocks();
+      const second = store.fetchBlocks();
+      resolve(0, 'x');
+      await Promise.all([first, second]);
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('does nothing extra when no request is running', async () => {
+      const { fetchMock, resolve } = deferredFetch();
+      globalThis.fetch = fetchMock;
+      const store = useContentBlocksStore();
+
+      const forced = store.fetchBlocks(true);
+      resolve(0, 'x');
+      await forced;
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('dedupes concurrent fetchBlocks calls into a single network request', async () => {
     let callCount = 0;
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () => {

@@ -75,6 +75,7 @@ export const usePagesStore = defineStore('pages', () => {
   const hierarchyError = ref<string | null>(null);
 
   let hierarchyInFlight: Promise<void> | null = null;
+  let hierarchyFollowUp: Promise<void> | null = null;
 
   // --- Public Cerita: one page by slug ---
   const pagesBySlug = ref<Record<string, PageDetail>>({});
@@ -138,8 +139,25 @@ export const usePagesStore = defineStore('pages', () => {
 
   async function fetchHierarchy(force = false): Promise<void> {
     if (isLoaded.value && !force) return;
-    if (hierarchyInFlight) return hierarchyInFlight;
+    if (hierarchyInFlight) {
+      if (!force) return hierarchyInFlight;
+      // A forced reload is asked for because something was just saved, and the running request may
+      // have started before that save: wait for it and fetch once more. Forced callers that arrive
+      // meanwhile share that one follow-up.
+      if (!hierarchyFollowUp) {
+        hierarchyFollowUp = hierarchyInFlight
+          .catch(() => undefined)
+          .then(() => {
+            hierarchyFollowUp = null;
+            return startHierarchyFetch();
+          });
+      }
+      return hierarchyFollowUp;
+    }
+    return startHierarchyFetch();
+  }
 
+  function startHierarchyFetch(): Promise<void> {
     isHierarchyLoading.value = true;
     hierarchyError.value = null;
 
