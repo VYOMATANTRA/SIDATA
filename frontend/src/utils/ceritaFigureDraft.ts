@@ -69,9 +69,13 @@ export function emptyDraft(): FigureDraft {
   };
 }
 
-/** Number as an Indonesian editor would write it: decimal comma, no thousands dots. */
+/**
+ * A number the way an Indonesian editor writes it: dot for thousands, comma for the decimal mark
+ * ("1.234,5"). `parseBarValue` reads exactly this, so what the form shows can be saved unchanged.
+ */
 export function formatBarValue(value: number): string {
-  return String(value).replace('.', ',');
+  const english = value.toLocaleString('en-US', { maximumFractionDigits: 20, useGrouping: true });
+  return english.replace(/[,.]/g, (mark) => (mark === ',' ? '.' : ','));
 }
 
 export function draftFromFigure(figure: SectionFigure | null): FigureDraft {
@@ -194,14 +198,35 @@ function textProblem(value: string, what: string): string | null {
   return null;
 }
 
-/** Parses a typed number: "1234", "12,5" and "12.5" are numbers; "1.234,5" drops the dot. */
+// Whole part: plain digits, or digits grouped by dots in threes ("1.234.567").
+const WHOLE_PART = /^-?(?:\d+|\d{1,3}(?:\.\d{3})+)$/;
+
+/**
+ * Reads a typed number by the Indonesian convention: dots are thousands separators and the comma is
+ * the decimal mark. "1.234" is 1234, "1.234,5" is 1234.5 and "0,5" is 0.5. A dot that is not a
+ * valid thousands grouping ("12.5", "1.23") is refused rather than guessed at.
+ */
 export function parseBarValue(text: string): number | null {
   const trimmed = text.trim();
   if (trimmed === '') return null;
-  const normalised = trimmed.includes(',') ? trimmed.replace(/\./g, '').replace(',', '.') : trimmed;
-  if (!/^-?\d+(\.\d+)?$/.test(normalised)) return null;
-  const parsed = Number(normalised);
+  const parts = trimmed.split(',');
+  if (parts.length > 2) return null;
+  const [whole = '', fraction] = parts;
+  if (!WHOLE_PART.test(whole)) return null;
+  if (fraction !== undefined && !/^\d+$/.test(fraction)) return null;
+  const parsed = Number(
+    `${whole.replace(/\./g, '')}${fraction === undefined ? '' : `.${fraction}`}`,
+  );
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Plain-Indonesian reason a typed bar number cannot be used, or null when it can. */
+export function barValueProblem(text: string, where: string): string | null {
+  if (parseBarValue(text) !== null) return null;
+  if (/^-?\d+\.\d+$/.test(text.trim())) {
+    return `Angka untuk ${where} memakai titik desimal. Gunakan koma untuk desimal, misalnya 12,5; titik hanya untuk ribuan, misalnya 1.234.`;
+  }
+  return `Isi angka yang valid untuk ${where}, misalnya 125, 12,5 atau 1.234,5.`;
 }
 
 interface Collector {
@@ -344,8 +369,9 @@ function validateDiagram(draft: FigureDraft, ids: FigureIds, out: Collector): Se
       if (problem) out.add(ids.barLabel(index), problem);
     }
     const value = parseBarValue(bar.value);
-    if (value === null) {
-      out.add(ids.barValue(index), `Isi angka yang valid untuk ${where}, misalnya 125 atau 12,5.`);
+    const valueProblem = barValueProblem(bar.value, where);
+    if (value === null || valueProblem) {
+      out.add(ids.barValue(index), valueProblem ?? `Isi angka yang valid untuk ${where}.`);
     } else if (label !== '') {
       items.push({ label, value });
     }

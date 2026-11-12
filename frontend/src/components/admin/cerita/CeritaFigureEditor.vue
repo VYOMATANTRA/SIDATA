@@ -525,7 +525,7 @@ defineExpose({ isDirty: () => dirty.value });
             <FormField
               :id="ids.barValue(index)"
               :label="`Angka batang ${index + 1}`"
-              hint="Gunakan koma untuk desimal, tanpa titik ribuan."
+              hint="Titik untuk ribuan, koma untuk desimal. Contoh: 1.234,5."
               :error="errorByField[ids.barValue(index)]"
               v-slot="{ describedBy, invalid }"
             >

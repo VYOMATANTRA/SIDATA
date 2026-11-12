@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   draftFromFigure,
   draftSignature,
+  barValueProblem,
   emptyDraft,
+  formatBarValue,
   figureIds,
   parseBarValue,
   validateFigureDraft,
@@ -22,19 +24,72 @@ function photoDraft(
   };
 }
 
-describe('parseBarValue', () => {
+describe('parseBarValue (Indonesian convention: dot = thousands, comma = decimal)', () => {
   it.each([
     ['125', 125],
     ['12,5', 12.5],
-    ['12.5', 12.5],
+    ['0,5', 0.5],
+    ['1.234', 1234],
     ['1.234,5', 1234.5],
+    ['1.234.567', 1234567],
     ['-3', -3],
+    ['-1.234,25', -1234.25],
   ])('reads %s as %d', (text, expected) => {
     expect(parseBarValue(text)).toBe(expected);
   });
 
-  it.each(['', '  ', 'abc', '12abc', '1,2,3', 'Infinity'])('refuses "%s"', (text) => {
+  it.each([
+    '',
+    '  ',
+    'abc',
+    '12abc',
+    '1,2,3',
+    'Infinity',
+    // A dot that is not a thousands grouping is refused instead of guessed at.
+    '12.5',
+    '1.23',
+    '1234.5',
+    '0.5',
+    '.5',
+    '1.2345',
+    ',5',
+    '1,',
+  ])('refuses "%s"', (text) => {
     expect(parseBarValue(text)).toBeNull();
+  });
+
+  it('round-trips with formatBarValue for ordinary and awkward numbers', () => {
+    for (const value of [
+      0, 5, 12.5, 0.5, 125, 1234, 1234.5, 1000000, -3, -1234.25, 0.125, 99999.99,
+    ]) {
+      expect(parseBarValue(formatBarValue(value))).toBe(value);
+    }
+    expect(formatBarValue(1234.5)).toBe('1.234,5');
+    expect(formatBarValue(1234)).toBe('1.234');
+    expect(formatBarValue(0.5)).toBe('0,5');
+  });
+
+  it('shows stored numbers in the same convention the editor types them', () => {
+    const draft = draftFromFigure({
+      kind: 'diagram',
+      title: 'D',
+      bars: { items: [{ label: 'A', value: 1234.5 }] },
+    });
+    expect(draft.bars[0]!.value).toBe('1.234,5');
+  });
+});
+
+describe('barValueProblem', () => {
+  it('tells the editor to use a comma when a dot decimal was typed', () => {
+    const message = barValueProblem('12.5', 'batang 2');
+    expect(message).toContain('koma');
+    expect(message).toContain('batang 2');
+    expect(message).not.toMatch(/undefined|null|NaN/);
+  });
+
+  it('gives the general sentence for other mistakes and nothing for a good number', () => {
+    expect(barValueProblem('abc', 'batang 1')).toContain('angka yang valid');
+    expect(barValueProblem('1.234,5', 'batang 1')).toBeNull();
   });
 });
 
@@ -131,7 +186,7 @@ describe('validateFigureDraft', () => {
         bars: [
           { label: 'RT 1', value: '12,5' },
           { label: '', value: '' },
-          { label: 'RT 2', value: '30' },
+          { label: 'RT 2', value: '1.030' },
         ],
       },
       ids,
@@ -144,7 +199,7 @@ describe('validateFigureDraft', () => {
         unit: 'jiwa',
         items: [
           { label: 'RT 1', value: 12.5 },
-          { label: 'RT 2', value: 30 },
+          { label: 'RT 2', value: 1030 },
         ],
       },
     });

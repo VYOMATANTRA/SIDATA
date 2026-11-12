@@ -477,7 +477,11 @@ describe('CeritaSectionEditor', () => {
       await wrapper.find('[data-test="figure-editor"]').trigger('submit');
       expect(wrapper.find('[role="alert"]').text()).toContain('angka yang valid');
 
-      await wrapper.find('[data-test="bar-value"]').setValue('12,5');
+      await wrapper.find('[data-test="bar-value"]').setValue('12.5');
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      expect(wrapper.find('[role="alert"]').text()).toContain('Gunakan koma untuk desimal');
+
+      await wrapper.find('[data-test="bar-value"]').setValue('1.234,5');
       await wrapper.find('[data-test="figure-editor"]').trigger('submit');
       await flushPromises();
 
@@ -487,7 +491,7 @@ describe('CeritaSectionEditor', () => {
           figure: {
             kind: 'diagram',
             title: 'Penduduk per RT',
-            bars: { unit: 'jiwa', items: [{ label: 'RT 1', value: 12.5 }] },
+            bars: { unit: 'jiwa', items: [{ label: 'RT 1', value: 1234.5 }] },
           },
         },
       });
