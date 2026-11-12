@@ -22,9 +22,15 @@ function cardStep(): number {
 }
 
 function syncIndex() {
+  const el = track.value;
   const step = cardStep();
-  if (!track.value || step === 0) return;
-  index.value = Math.min(total.value - 1, Math.max(0, Math.round(track.value.scrollLeft / step)));
+  if (!el || step === 0) return;
+  // The row stops scrolling at its end, which can be short of the last card's own slot (e.g. three
+  // cards at tablet width). Scrolled all the way to the end therefore always means the last photo.
+  const atEnd = el.scrollLeft > 0 && el.scrollLeft >= el.scrollWidth - el.clientWidth - 1;
+  index.value = atEnd
+    ? total.value - 1
+    : Math.min(total.value - 1, Math.max(0, Math.round(el.scrollLeft / step)));
 }
 
 function goTo(next: number) {

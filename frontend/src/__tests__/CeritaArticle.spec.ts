@@ -55,6 +55,33 @@ describe('article figures', () => {
     expect(w.find('[data-test="figure-carousel-position"]').text()).toBe('Foto 2 dari 3');
   });
 
+  it('counts the last photo when the row is scrolled to its end, even if the card step does not divide it', async () => {
+    // Three cards of 300px; the row can only scroll 300px (1000px wide, 700px visible), so the
+    // last card never reaches its own 600px slot. Reaching the end must still read as photo 3.
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+    try {
+      const w = mount(ArticleFigure, {
+        props: { figure: { kind: 'photos', photos: [photo(1), photo(2), photo(3)] } },
+        attachTo: document.body,
+      });
+      const track = w.find('[data-test="figure-carousel-track"]').element as HTMLElement;
+      const first = track.firstElementChild as HTMLElement;
+      first.getBoundingClientRect = () => ({ width: 300 }) as DOMRect;
+      Object.defineProperty(track, 'scrollWidth', { value: 1000, configurable: true });
+      Object.defineProperty(track, 'clientWidth', { value: 700, configurable: true });
+      track.scrollLeft = 300;
+      await w.find('[data-test="figure-carousel-track"]').trigger('scroll');
+      expect(w.find('[data-test="figure-carousel-position"]').text()).toBe('Foto 3 dari 3');
+      expect(w.find('[data-test="figure-carousel-next"]').attributes('disabled')).toBeDefined();
+      w.unmount();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('leaves out pictures with an unsafe address and degrades the group', () => {
     const w = mount(ArticleFigure, {
       props: {
