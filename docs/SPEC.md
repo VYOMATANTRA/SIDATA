@@ -561,6 +561,15 @@ publication-class artifact — a peer of Publikasi and Peta, not a subsection of
 of the site's highest-utility artifacts (a resident looking up their own RT head), so it is not
 buried inside a stat page. Entry points:
 
+  Layout: the article (text, figures, charts) is the middle column, centred at a readable width
+  regardless of the chapter list; from `xl` the chapter list is the right-hand column, from `lg` it is
+  a fixed right track, and below `lg` it is the sticky selector bar. The title band has a "Kembali"
+  link to the home page. The article template (`CeritaArticleTemplate`) renders a `CeritaArticle`
+  (`types/ceritaArticle.ts`): per chapter, an ordered list of blocks (prose, bar chart, quote,
+  figure with caption and credit, stat tiles), plus an optional editorial headline and byline.
+  Nothing in the backend produces these yet; Wave 4 builds the `CeritaArticle` from stored content.
+  Until then the template runs only in development at `/cerita/contoh`, fed mockup text
+  (`content/ceritaArticleDummy.ts`, one page: the Pendidikan mockup) that is not sourced data and never shown to residents.
 - Footer, under **Sumber Daya**.
 - The interactive map — tapping an RT point opens that leader's contact card.
 - Pemerintahan & Kelembagaan, chapter 2.3 (Pemerintahan Kelurahan), **links to** this page rather
@@ -713,6 +722,9 @@ placeholders.
 
 Single register — unresolved questions live here and nowhere else.
 
+- **Cerita article content model (Wave 4):** how editors author figures, quotes, stat tiles, an
+  editorial headline and a byline, and how their order relative to prose is stored. A byline names
+  authorship, so it needs an approved source before it is published.
 - **Source-version reconciliation (Google Drive: Descan Manggar 2026):** Confirm which of the two
   `Monografi Kelurahan Manggar 2026` editions is current/approved for public facts. The expanded
   edition has 14 BSU profiles; another edition has a different page count and content.

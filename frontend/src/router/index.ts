@@ -277,6 +277,17 @@ const router = createRouter({
       component: () => import('../views/DashboardView.vue'),
       meta: { requiresAuth: true, title: 'Dasbor' },
     },
+    // Development-only preview of the Cerita article template with mockup content.
+    ...(import.meta.env.DEV
+      ? [
+          {
+            path: '/cerita/contoh',
+            name: 'cerita-contoh',
+            component: () => import('../views/CeritaArticleDummyView.vue'),
+            meta: { layout: 'public' as const, title: 'Cerita (contoh)' },
+          },
+        ]
+      : []),
     {
       path: '/cerita/:slug',
       name: 'cerita-page',
