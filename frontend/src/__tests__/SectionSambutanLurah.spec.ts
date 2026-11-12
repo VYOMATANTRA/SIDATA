@@ -95,4 +95,82 @@ describe('SectionSambutanLurah (TDD: Edge Cases First, Happy Path Last)', () => 
     expect(img.exists()).toBe(true);
     expect(img.attributes('src')).toBe('https://manggar.balikpapan.go.id/img/lurah.png');
   });
+
+  describe('layout and portrait handling', () => {
+    function mountWith(metadata: Record<string, unknown> | null, extra = {}) {
+      const pinia = createPinia();
+      setActivePinia(pinia);
+      const store = useContentBlocksStore(pinia);
+      store.blocks['landing-sambutan-lurah'] = {
+        ...DEFAULT_SAMBUTAN_BLOCK,
+        ...extra,
+        metadata,
+      };
+      return mount(SectionSambutanLurah, { global: { plugins: [pinia] } });
+    }
+
+    it('uses a navy-to-lightened-navy vertical gradient surface, not the old navy-deep one', () => {
+      const wrapper = mountWith(null);
+      const section = wrapper.find('section#sambutan-lurah');
+      expect(section.classes()).toContain('sambutan-surface');
+      expect(section.classes().join(' ')).not.toMatch(/navy-deep|cyan|violet|indigo|teal/);
+    });
+
+    it('keeps copy and portrait in separate zones and the author block in the copy zone', () => {
+      const wrapper = mountWith(null);
+      const copy = wrapper.find('[data-test="sambutan-copy"]');
+      const portrait = wrapper.find('[data-test="portrait-container"]');
+      expect(copy.exists()).toBe(true);
+      expect(portrait.exists()).toBe(true);
+      expect(copy.element.contains(portrait.element)).toBe(false);
+      expect(copy.find('[data-test="author-details"]').exists()).toBe(true);
+      expect(copy.find('h2#sambutan-title').exists()).toBe(true);
+      // The portrait is never taken out of flow, so it cannot cover the name or title
+      expect(portrait.classes()).not.toContain('absolute');
+      expect(portrait.find('img').classes()).toContain('object-bottom');
+      expect(portrait.find('img').classes()).toContain('object-contain');
+    });
+
+    it('shows the bundled portrait when the photo key is missing or empty', () => {
+      expect(mountWith({ authorName: 'A' }).find('[data-test="quote-image"]').exists()).toBe(true);
+      expect(mountWith({ photoUrl: '' }).find('[data-test="quote-image"]').exists()).toBe(true);
+    });
+
+    it('drops the portrait zone on explicit removal and lets the copy use the full width', () => {
+      const wrapper = mountWith({ photoUrl: null });
+      expect(wrapper.find('[data-test="portrait-container"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="portrait-placeholder"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="sambutan-layout"]').classes().join(' ')).not.toContain(
+        'md:grid-cols-',
+      );
+      expect(wrapper.find('[data-test="sambutan-section"]').classes()).toContain('pb-12');
+    });
+
+    it('never shows developer placeholder text when no portrait is available', () => {
+      const wrapper = mountWith({ photoUrl: 'javascript:alert(1)' });
+      expect(wrapper.text()).not.toContain('imageSrc');
+      expect(wrapper.text()).not.toContain('Prop dinamis');
+    });
+
+    it('drops the portrait when the photo fails to load', async () => {
+      const wrapper = mountWith({ photoUrl: 'https://example.com/broken.png' });
+      await wrapper.find('[data-test="quote-image"]').trigger('error');
+      expect(wrapper.find('[data-test="portrait-container"]').exists()).toBe(false);
+    });
+
+    it('lets a long name, title and quote wrap instead of overflowing', () => {
+      const longName = 'Dr. H. Muhammad Abdurrahman Al-Fatihah bin Sulaiman, S.Sos., M.Si., M.Ec.Dev';
+      const wrapper = mountWith(
+        { authorName: longName, authorTitle: 'Lurah Kelurahan Manggar, Kecamatan Balikpapan Timur' },
+        { body: 'Sangat'.repeat(200) },
+      );
+      expect(wrapper.text()).toContain(longName);
+      const name = wrapper.find('[data-test="author-details"] h3');
+      expect(name.classes()).not.toContain('whitespace-nowrap');
+      expect(name.classes().join(' ')).toContain('overflow-wrap:anywhere');
+      expect(wrapper.find('[data-test="sambutan-quote"]').classes().join(' ')).toContain(
+        'overflow-wrap:anywhere',
+      );
+    });
+  });
 });
