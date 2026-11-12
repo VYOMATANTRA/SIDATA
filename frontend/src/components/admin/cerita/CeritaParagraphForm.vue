@@ -3,9 +3,9 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import BaseButton from '../../common/BaseButton.vue';
 import FormErrorSummary from '../../common/FormErrorSummary.vue';
 import FormField from '../../common/FormField.vue';
-import { BODY_MAX_LENGTH, TITLE_MAX_LENGTH } from '../../data/blocks/blockFormShared';
+import { BODY_MAX_LENGTH } from '../../data/blocks/blockFormShared';
 import { INPUT_CLASSES } from '../../../utils/formStyles';
-import { hasHtmlTag, hasUnsafeCharacters } from '../../../utils/titleTextRules';
+import { titleTextProblem } from '../../../utils/titleTextRules';
 
 /**
  * Title and text of one paragraph of a Cerita section, for adding or editing. It keeps its own
@@ -58,14 +58,18 @@ const dirty = computed(
 watch(dirty, (value) => emit('dirty-change', value), { immediate: true });
 
 const titleError = computed(() => {
-  const value = title.value.trim();
-  if (value === '') return props.requireTitle ? 'Judul paragraf wajib diisi.' : undefined;
-  if (value.length > TITLE_MAX_LENGTH) return 'Judul paragraf maksimal 255 karakter.';
-  if (hasHtmlTag(value)) return 'Judul paragraf tidak boleh memuat tag HTML.';
-  if (hasUnsafeCharacters(value)) {
-    return 'Judul paragraf memuat karakter yang tidak diizinkan.';
+  switch (titleTextProblem(title.value)) {
+    case 'empty':
+      return props.requireTitle ? 'Judul paragraf wajib diisi.' : undefined;
+    case 'too-long':
+      return 'Judul paragraf maksimal 255 karakter.';
+    case 'html':
+      return 'Judul paragraf tidak boleh memuat tag HTML.';
+    case 'characters':
+      return 'Judul paragraf memuat karakter yang tidak diizinkan.';
+    default:
+      return undefined;
   }
-  return undefined;
 });
 
 const bodyError = computed(() => {
