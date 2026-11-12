@@ -521,6 +521,28 @@ describe('CeritaSectionEditor', () => {
       wrapper.unmount();
     });
 
+    it('drops the "reloaded" notice when the next save is refused again because the figure changed once more', async () => {
+      const wrapper = await mountEditor();
+      await staleFigureDraft(wrapper);
+      await wrapper.find('[data-test="figure-reload"]').trigger('click');
+      await flushPromises();
+      expect(wrapper.find('[data-test="figure-reloaded-notice"]').exists()).toBe(true);
+
+      fake.changeFigureByOther(sectionId, {
+        kind: 'photos',
+        photos: [
+          { mediaId: 'media-a', alt: 'A2' },
+          { mediaId: 'media-b', alt: 'B2' },
+        ],
+      });
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="figure-stale-notice"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test="figure-reloaded-notice"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
     it('does not call an own paragraph write a conflict: the figure still saves afterwards', async () => {
       const wrapper = await mountEditor();
       await wrapper.find('[data-test="kind-photo"]').setValue();

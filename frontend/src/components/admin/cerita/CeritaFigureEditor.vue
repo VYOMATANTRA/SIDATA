@@ -249,6 +249,8 @@ async function save(): Promise<void> {
   }
   serverError.value = outcome.message;
   stale.value = outcome.stale;
+  // A fresh conflict makes any earlier "reloaded" summary describe a version that is no longer current.
+  if (outcome.stale) reloadedSummary.value = null;
   focusSummary();
 }
 
@@ -321,6 +323,7 @@ async function confirmDelete(): Promise<void> {
   }
   deleteError.value = outcome.message;
   stale.value = outcome.stale;
+  if (outcome.stale) reloadedSummary.value = null;
 }
 
 defineExpose({ isDirty: () => dirty.value });
