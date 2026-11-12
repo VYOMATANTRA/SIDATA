@@ -81,7 +81,6 @@ export const ADMIN_NAV: (AdminNavLink | AdminNavGroup)[] = [
     icon: MapIcon,
     roles: ['editor', 'admin'],
     dataTest: 'nav-peta',
-    badge: 'Segera hadir',
   },
   {
     label: 'Publikasi',
