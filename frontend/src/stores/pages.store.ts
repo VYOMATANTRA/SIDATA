@@ -81,6 +81,24 @@ export const usePagesStore = defineStore('pages', () => {
   const isLoading = ref(false);
   const error = ref<string | null>(null);
   const notFound = ref(false);
+  // Outcome of the latest request per slug. `error` / `notFound` above are single shared flags that
+  // the most recent request overwrites; a reader that has moved on to another topic must read its
+  // own slug's outcome here instead, so one topic's failure never shows on another.
+  const errorsBySlug = ref<Record<string, string>>({});
+  const notFoundBySlug = ref<Record<string, boolean>>({});
+
+  function clearSlugOutcome(slug: string): void {
+    if (slug in errorsBySlug.value) {
+      const next = { ...errorsBySlug.value };
+      delete next[slug];
+      errorsBySlug.value = next;
+    }
+    if (slug in notFoundBySlug.value) {
+      const next = { ...notFoundBySlug.value };
+      delete next[slug];
+      notFoundBySlug.value = next;
+    }
+  }
 
   const inFlight: Record<string, Promise<PageDetail | null> | undefined> = {};
 
@@ -188,12 +206,14 @@ export const usePagesStore = defineStore('pages', () => {
     isLoading.value = true;
     error.value = null;
     notFound.value = false;
+    clearSlugOutcome(slug);
 
     const task = (async () => {
       try {
         const response = await fetch(`/api/pages/${encodeURIComponent(slug)}`);
         if (response.status === 404) {
           notFound.value = true;
+          notFoundBySlug.value = { ...notFoundBySlug.value, [slug]: true };
           return null;
         }
         if (!response.ok) {
@@ -228,7 +248,9 @@ export const usePagesStore = defineStore('pages', () => {
 
         return data.page;
       } catch (err) {
-        error.value = toUserMessage(err, 'memuat halaman', 'GET').message;
+        const message = toUserMessage(err, 'memuat halaman', 'GET').message;
+        error.value = message;
+        errorsBySlug.value = { ...errorsBySlug.value, [slug]: message };
         return null;
       } finally {
         isLoading.value = false;
@@ -250,6 +272,8 @@ export const usePagesStore = defineStore('pages', () => {
     isLoading,
     error,
     notFound,
+    errorsBySlug,
+    notFoundBySlug,
     sectionById,
     breadcrumbParts,
     pageTitleFor,
