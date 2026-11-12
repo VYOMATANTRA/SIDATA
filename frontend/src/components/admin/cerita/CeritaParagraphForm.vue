@@ -48,8 +48,12 @@ const submitted = ref(false);
 const titleId = computed(() => `${props.idPrefix}-judul`);
 const bodyId = computed(() => `${props.idPrefix}-isi`);
 
+// Compared the way saving normalises (trimmed), so text stored without its trailing spaces or
+// line breaks does not leave the form looking edited.
 const dirty = computed(
-  () => title.value !== props.initial.title || body.value !== props.initial.body,
+  () =>
+    title.value.trim() !== props.initial.title.trim() ||
+    body.value.trim() !== props.initial.body.trim(),
 );
 watch(dirty, (value) => emit('dirty-change', value), { immediate: true });
 
