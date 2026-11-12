@@ -126,6 +126,19 @@ cp .env.example .env
 docker compose up --build
 ```
 
+The frontend and backend use Node 22 on Debian Bookworm and install their lockfiles with `npm ci`.
+The backend uses the full Bookworm image for Prisma's OpenSSL dependency. The opt-in `audit-pruner`
+build target adds BusyBox for scheduled pruning.
+
+If an install fails, the Docker build prints npm's version, fetch failures and error details. To
+isolate a frontend build failure, build that service with plain output and check whether a Docker
+container can reach the npm registry:
+
+```bash
+docker compose --progress plain build frontend
+docker run --rm node:22-bookworm-slim npm ping --fetch-retries=0 --fetch-timeout=10000
+```
+
 Uploaded media is bind-mounted from `UPLOADS_HOST_DIR` (default `./uploads`, git-ignored) into the
 backend container at `/var/lib/sidata/uploads` (`UPLOAD_DIR`), so it survives rebuilds. Outside Docker,
 `UPLOAD_DIR` is optional and defaults to `<repo-root>/uploads`.
