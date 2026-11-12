@@ -10,6 +10,10 @@ import type { Response } from 'express';
 export const STALE_WRITE_CODE = 'STALE_WRITE';
 export const HAS_DEPENDENTS_CODE = 'HAS_DEPENDENTS';
 export const STANDALONE_BLOCK_PROTECTED_CODE = 'STANDALONE_BLOCK_PROTECTED';
+export const FIGURE_BLOCK_PROTECTED_CODE = 'FIGURE_BLOCK_PROTECTED';
+export const FIGURE_BLOCK_PROTECTED_MESSAGE =
+  'Gambar bagian tidak dapat diubah atau dihapus lewat blok konten. Gunakan pengaturan gambar pada bagian terkait.';
+export const FIGURE_NOT_FOUND_CODE = 'FIGURE_NOT_FOUND';
 
 export interface ServiceErrorDetails {
   [key: string]: unknown;

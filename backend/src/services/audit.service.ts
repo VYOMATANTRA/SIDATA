@@ -71,6 +71,10 @@ export const AUDIT_ACTIONS = {
   CONTENT_BLOCK_CREATED: defineAction('content_block.created', 'info'),
   CONTENT_BLOCK_DELETED: defineAction('content_block.deleted', 'warning'),
   CONTENT_BLOCK_REORDERED: defineAction('content_block.reordered', 'info'),
+  // SPEC §3 section figure. Metadata is ids, kind and photo count only — never alt text,
+  // captions or credits. Deleting a figure releases its media, so it is warning like other deletes.
+  SECTION_FIGURE_SAVED: defineAction('section.figure_saved', 'info'),
+  SECTION_FIGURE_DELETED: defineAction('section.figure_deleted', 'warning'),
   INDICATOR_CREATED: defineAction('indicator.created', 'info'),
   INDICATOR_UPDATED: defineAction('indicator.updated', 'info'),
   INDICATOR_DELETED: defineAction('indicator.deleted', 'warning'),
