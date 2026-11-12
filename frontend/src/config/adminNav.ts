@@ -73,7 +73,6 @@ export const ADMIN_NAV: (AdminNavLink | AdminNavGroup)[] = [
     icon: BookOpenIcon,
     roles: ['editor', 'admin'],
     dataTest: 'nav-cerita',
-    badge: 'Segera hadir',
   },
   {
     label: 'Peta',

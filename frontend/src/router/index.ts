@@ -164,7 +164,7 @@ const router = createRouter({
           meta: {
             ...metaForRoles(rolesFor('/admin/cerita')),
             title: 'Cerita',
-            subtitle: 'Kelola daftar halaman Cerita, bab, dan urutannya.',
+            subtitle: 'Kelola halaman, bab, bagian, paragraf, dan gambar Cerita.',
             breadcrumb: ['Cerita'],
           },
         },
