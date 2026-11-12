@@ -514,6 +514,34 @@ setup-password, the OAuth callback, `/dashboard` (its own `<main>`) and the admi
   which the admin shell resets to the top on a path change.
 - **Breadcrumb.** Tentang/Sumber Daya breadcrumbs are a navy strip continuing the header and the navy
   hero panel (no white band between them); long labels wrap.
+- **Cerita reader.** Every `/cerita/:slug` page opens with a navy title band (eyebrow "Cerita", the
+  page title as the single `<h1>`, and the chapter count when there are chapters) and carries no
+  introduction copy of its own: the page has none in data. The reader is always in exactly one state,
+  decided per slug so one topic's outcome never shows on another and a late answer for a topic the
+  reader has left is discarded:
+  - **Loading**: a worded skeleton (`role="status"`, "Memuat halaman…") with no heading.
+  - **Not found** (404): its own `<h1>` and a link back to Beranda.
+  - **Failed** (any other failure, or a success without a page): an `<h1>`, the approved plain-language
+    read message and a "Coba lagi" button; never a blank page.
+  - **Ready**: chapters in order, each section showing its prose blocks in `sort_order`, its scalar
+    figures with the backend-rendered comparison sentence (or hedged framing, §6) and source, and its
+    matrix tables with `—` for missing cells and no bar for them.
+  A chapter with nothing in it reads "Konten bab ini belum tersedia." (once, not per section); an empty
+  section beside filled ones reads "Konten bagian ini belum tersedia."; a page with no content at all
+  adds one note ("Belum ada konten yang dapat ditampilkan pada halaman ini.") so an empty seeded
+  database looks intentional; a matrix table with no rows reads "Data tabel ini belum tersedia." and
+  claims no period. A section whose figures or tables failed to load keeps what did load and shows its
+  own alert with "Coba lagi" for that section only. If the shared prose request failed, one alert with
+  a retry says the text could not be loaded and no section is called empty. Missing data is never drawn
+  as a zero.
+  Below `lg` the chapter selector is a navy bar that sticks directly under the header (its offset is
+  `--public-header-height`) and opens its list below it; it stays inside the reader, so it never sits
+  over the last paragraph or the footer. Escape, a selection, a press outside it or moving keyboard
+  focus out of it closes it (Escape returns focus to the bar's button). From `lg` the selector is a
+  sticky list beside the chapters. Chapter anchors and keyboard focus clear the header and, below
+  `lg`, the selector. The current chapter follows scrolling (an observer band measured from the
+  real header and selector heights, rebuilt on resize) and follows a `#chapter` deep link at once;
+  deep links and Back/Forward behave as in "Scroll and focus" above.
 
 **Landing page**, top to bottom:
 

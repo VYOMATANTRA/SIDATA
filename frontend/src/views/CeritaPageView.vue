@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { RouterLink, useRoute } from 'vue-router';
 import { usePagesStore } from '../stores/pages.store';
 import { useIndicatorsStore, type IndicatorDto } from '../stores/indicators.store';
 import {
@@ -8,26 +8,45 @@ import {
   type IndicatorTableDetailDto,
 } from '../stores/indicatorTables.store';
 import { useContentBlocksStore, type ContentBlock } from '../stores/contentBlocks.store';
+import BaseButton from '../components/common/BaseButton.vue';
 import ChapterToc, { type TocChapter } from '../components/cerita/ChapterToc.vue';
 import ChapterSection from '../components/cerita/ChapterSection.vue';
+import CeritaHero from '../components/cerita/CeritaHero.vue';
+import CeritaLoadingState from '../components/cerita/CeritaLoadingState.vue';
+import CeritaStatePanel from '../components/cerita/CeritaStatePanel.vue';
 
+/**
+ * Public reader of one Cerita topic (SPEC §8, "Cerita reader"). PublicLayout supplies the skip
+ * link, header, `<main id="main-content">` and footer; this view renders only the page content and
+ * is always in exactly one of four states: loading, not found, failed (retry) or ready.
+ */
 const route = useRoute();
 const pagesStore = usePagesStore();
 const indicatorsStore = useIndicatorsStore();
 const indicatorTablesStore = useIndicatorTablesStore();
 const contentBlocksStore = useContentBlocksStore();
 
-const isLoading = ref(true);
+type ReaderState = 'loading' | 'ready' | 'not-found' | 'error';
+
+const state = ref<ReaderState>('loading');
+// The slug `state` was resolved for. A route change moves `slug` first, so for that moment the
+// view reports `loading` instead of showing the previous topic's page, error or "not found".
+const resolvedSlug = ref<string | null>(null);
 const activeChapterId = ref<string | null>(null);
+const isRetryingProse = ref(false);
 
 const slug = computed(() => String(route.params['slug'] ?? ''));
-const page = computed(() => pagesStore.pagesBySlug[slug.value] ?? null);
-const notFound = computed(() => pagesStore.notFound && !page.value);
-// pagesStore.error is a single shared flag, not keyed per slug — fetchPageBySlug's cache-hit
-// path returns before it's ever cleared, so a failed load on one slug can otherwise leave a
-// stale error visible after navigating to a different, already-cached slug that loaded fine.
-// Guarding on `!page.value` (same pattern as notFound above) means a resolved page always wins.
-const hasError = computed(() => Boolean(pagesStore.error) && !page.value);
+const viewState = computed<ReaderState>(() =>
+  resolvedSlug.value === slug.value ? state.value : 'loading',
+);
+const page = computed(() =>
+  viewState.value === 'ready' ? (pagesStore.pagesBySlug[slug.value] ?? null) : null,
+);
+const errorMessage = computed(
+  () =>
+    pagesStore.errorsBySlug[slug.value] ??
+    'Terjadi kendala saat memuat halaman. Periksa koneksi Anda lalu coba lagi.',
+);
 
 // Grouped (not last-write-wins) and sorted by sortOrder, since a section can carry more than
 // one prose block and editors rely on sort_order to control reading order.
@@ -73,9 +92,15 @@ const sectionErrorsBySectionId = computed<Record<string, string>>(() => {
   return map;
 });
 
+// The prose blocks come from one request for the whole site. If it failed, a section without
+// figures is "unknown", not "empty", so the page says so once and the sections stay quiet.
+const proseUnavailable = computed(
+  () => Boolean(contentBlocksStore.error) && !contentBlocksStore.isLoaded,
+);
+
 const tocChapters = computed<TocChapter[]>(
   () =>
-    page.value?.chapters.map((chapter) => ({
+    page.value?.chapters?.map((chapter) => ({
       id: chapter.id,
       slug: chapter.slug,
       number: chapter.number,
@@ -83,17 +108,68 @@ const tocChapters = computed<TocChapter[]>(
     })) ?? [],
 );
 
+const hasAnyContent = computed(() =>
+  (page.value?.chapters ?? []).some((chapter) =>
+    (chapter.sections ?? []).some(
+      (section) =>
+        (proseBySectionId.value[section.id]?.length ?? 0) > 0 ||
+        (indicatorsBySectionId.value[section.id]?.length ?? 0) > 0 ||
+        (tablesBySectionId.value[section.id]?.length ?? 0) > 0 ||
+        Boolean(sectionErrorsBySectionId.value[section.id]),
+    ),
+  ),
+);
+const showPageEmptyNotice = computed(() => !hasAnyContent.value && !proseUnavailable.value);
+
+// ---- Scroll spy -------------------------------------------------------------------------------
+
+/** Space between the header (and the mobile selector under it) and the first readable line. */
+const SPY_TOP_GAP_PX = 16;
+const SPY_MIN_BAND_PX = 48;
+
+const tocSheetRef = ref<InstanceType<typeof ChapterToc> | null>(null);
 let observer: IntersectionObserver | null = null;
+let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+
+function readHeaderHeightPx(): number {
+  if (typeof document === 'undefined') return 0;
+  const root = document.documentElement;
+  const raw = getComputedStyle(root).getPropertyValue('--public-header-height').trim();
+  const value = parseFloat(raw);
+  if (Number.isFinite(value)) {
+    if (raw.endsWith('rem')) return value * (parseFloat(getComputedStyle(root).fontSize) || 16);
+    return value;
+  }
+  return document.querySelector('header')?.getBoundingClientRect().height ?? 0;
+}
+
+/**
+ * rootMargin for the spy, in px so it follows the real header and the mobile selector (which is
+ * display:none, so 0px, from `lg` up). The active band starts right under the sticky UI and is at
+ * least SPY_MIN_BAND_PX tall even on a short landscape viewport; a zero-height band would never
+ * intersect anything.
+ */
+function spyRootMargin(): string {
+  const viewport = typeof window === 'undefined' ? 0 : window.innerHeight;
+  const selectorEl = tocSheetRef.value?.$el as HTMLElement | undefined;
+  const selectorHeight = selectorEl?.getBoundingClientRect?.().height ?? 0;
+  const top = Math.round(readHeaderHeightPx() + selectorHeight + SPY_TOP_GAP_PX);
+  const bandBottom = Math.max(top + SPY_MIN_BAND_PX, viewport * 0.4);
+  const bottom = Math.max(0, Math.round(viewport - bandBottom));
+  return `-${top}px 0px -${bottom}px 0px`;
+}
 
 function setupScrollSpy() {
   observer?.disconnect();
-  if (!page.value) return;
+  observer = null;
+  const current = page.value;
+  if (!current) return;
 
   // Runs unconditionally (ahead of the IntersectionObserver feature check below) so the
   // first/current chapter is still highlighted in environments without IntersectionObserver
   // support, not only once the user scrolls.
-  if (!activeChapterId.value && page.value.chapters.length > 0) {
-    activeChapterId.value = page.value.chapters[0]!.id;
+  if (!activeChapterId.value && current.chapters.length > 0) {
+    activeChapterId.value = current.chapters[0]!.id;
   }
 
   if (typeof IntersectionObserver === 'undefined') return;
@@ -108,10 +184,10 @@ function setupScrollSpy() {
       const id = topMost.target.getAttribute('data-chapter-id');
       if (id) activeChapterId.value = id;
     },
-    { rootMargin: '-10% 0px -70% 0px' },
+    { rootMargin: spyRootMargin() },
   );
 
-  for (const chapter of page.value.chapters) {
+  for (const chapter of current.chapters) {
     const el = document.getElementById(chapter.slug);
     if (el) {
       el.setAttribute('data-chapter-id', chapter.id);
@@ -120,22 +196,36 @@ function setupScrollSpy() {
   }
 }
 
+// The band depends on the viewport (rotation, browser toolbars), so rebuild it after a resize.
+function handleResize() {
+  if (resizeTimer) clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    resizeTimer = null;
+    if (viewState.value === 'ready') setupScrollSpy();
+  }, 150);
+}
+
 function handleNavigate(chapterId: string) {
   activeChapterId.value = chapterId;
 }
 
+// ---- Loading ----------------------------------------------------------------------------------
+
+// Bumped by every load. Each load compares its own number after every await, so a response that
+// settles after the reader moved on (another topic, or the same one reloaded) is discarded
+// instead of clobbering the state of the page actually in view.
+let loadToken = 0;
+
 function retryLoad() {
-  loadPage();
+  void loadPage();
 }
 
 async function loadPage() {
-  // Captured once, compared against the live slug after every await below: if the route moves
-  // on to a different Cerita page before this call's requests resolve, its results are stale and
-  // must be discarded rather than clobbering isLoading/scroll-spy state for the page actually
-  // showing now (e.g. a slow A finishing after a faster B when navigating A -> B quickly).
+  const token = ++loadToken;
   const requestedSlug = slug.value;
+  const isCurrent = () => token === loadToken && slug.value === requestedSlug;
 
-  isLoading.value = true;
+  state.value = 'loading';
   // Reset here, not just left to setupScrollSpy's fallback: that fallback only fires when
   // activeChapterId is still falsy, so without this a stale id from the previous Cerita page
   // would survive the navigation and never get highlighted in the new page's chapter list.
@@ -147,25 +237,49 @@ async function loadPage() {
     contentBlocksStore.fetchBlocks(),
   ]);
 
-  if (slug.value !== requestedSlug) return;
+  if (!isCurrent()) return;
 
-  if (loadedPage) {
-    await Promise.allSettled(
-      loadedPage.chapters.flatMap((chapter) =>
-        chapter.sections.flatMap((section) => [
-          indicatorsStore.fetchBySectionId(section.id),
-          indicatorTablesStore.fetchBySectionId(section.id),
-        ]),
-      ),
-    );
+  if (!loadedPage) {
+    // A 200 without a page is as unusable as a failure; never fall through to a blank view.
+    resolvedSlug.value = requestedSlug;
+    state.value = pagesStore.notFoundBySlug[requestedSlug] ? 'not-found' : 'error';
+    return;
   }
 
-  if (slug.value !== requestedSlug) return;
+  await Promise.allSettled(
+    (loadedPage.chapters ?? []).flatMap((chapter) =>
+      (chapter.sections ?? []).flatMap((section) => [
+        indicatorsStore.fetchBySectionId(section.id),
+        indicatorTablesStore.fetchBySectionId(section.id),
+      ]),
+    ),
+  );
 
-  isLoading.value = false;
+  if (!isCurrent()) return;
+
+  resolvedSlug.value = requestedSlug;
+  state.value = 'ready';
   await nextTick();
+  if (!isCurrent()) return;
   setupScrollSpy();
   scrollToHashTarget();
+}
+
+async function retrySection(sectionId: string) {
+  await Promise.allSettled([
+    indicatorsStore.fetchBySectionId(sectionId, true),
+    indicatorTablesStore.fetchBySectionId(sectionId, true),
+  ]);
+}
+
+async function retryProse() {
+  if (isRetryingProse.value) return;
+  isRetryingProse.value = true;
+  try {
+    await contentBlocksStore.fetchBlocks(true);
+  } finally {
+    isRetryingProse.value = false;
+  }
 }
 
 // Remembers the last slug+hash scrolled to so retry/reload of the same anchor does not snap the
@@ -174,7 +288,8 @@ let lastScrolledSlugHash: string | null = null;
 
 // A `/cerita/x#bab` deep link resolves before the chapters exist (the page is still a skeleton
 // when the router scrolls), so the router finds no target. Once the chapters render, honour the
-// hash here. Uses native scrollIntoView so the element's own `scroll-margin-top` clears the header.
+// hash here. Uses native scrollIntoView so the element's own `scroll-margin-top` clears the header
+// and, below `lg`, the chapter selector.
 function scrollToHashTarget(): boolean {
   if (!route.hash) return false;
   const currentPair = `${slug.value}${route.hash}`;
@@ -189,15 +304,21 @@ function scrollToHashTarget(): boolean {
   if (el) {
     el.scrollIntoView({ behavior: 'instant', block: 'start' });
     lastScrolledSlugHash = currentPair;
+    // Highlight the chapter the link points at right away rather than waiting for the observer.
+    const target = page.value?.chapters.find((chapter) => chapter.slug === id);
+    if (target) activeChapterId.value = target.id;
     return true;
   }
   return false;
 }
 
-onMounted(loadPage);
+onMounted(() => {
+  window.addEventListener('resize', handleResize, { passive: true });
+  void loadPage();
+});
 watch(slug, () => {
   lastScrolledSlugHash = null;
-  loadPage();
+  void loadPage();
 });
 watch(
   () => route.hash,
@@ -205,83 +326,127 @@ watch(
     scrollToHashTarget();
   },
 );
-onBeforeUnmount(() => observer?.disconnect());
+onBeforeUnmount(() => {
+  loadToken += 1;
+  observer?.disconnect();
+  window.removeEventListener('resize', handleResize);
+  if (resizeTimer) clearTimeout(resizeTimer);
+});
 
 defineExpose({ retryLoad, loadPage });
 </script>
 
 <template>
   <!-- PublicLayout supplies the skip link, header, <main id="main-content"> and footer. -->
-  <div class="pb-24 lg:pb-12">
-    <div v-if="isLoading" class="mx-auto max-w-3xl px-4 py-16 sm:px-6" data-test="cerita-loading">
-      <div class="bg-surface-hover h-8 w-2/3 animate-pulse rounded-md" />
-      <div class="bg-surface-muted mt-4 h-4 w-full animate-pulse rounded-md" />
-    </div>
+  <div class="cerita-reader pb-16">
+    <CeritaLoadingState v-if="viewState === 'loading'" />
 
-    <div
-      v-else-if="notFound"
-      class="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6"
+    <CeritaStatePanel
+      v-else-if="viewState === 'not-found'"
+      title="Halaman tidak ditemukan"
+      message="Halaman yang Anda cari tidak tersedia. Periksa kembali tautan yang Anda gunakan."
       data-test="cerita-not-found"
     >
-      <h1 class="text-brand-navy text-lg font-semibold">Halaman tidak ditemukan</h1>
-      <p class="text-text-muted mt-2 text-sm">
-        Halaman yang Anda cari tidak tersedia. Periksa kembali tautan yang Anda gunakan.
-      </p>
-    </div>
+      <RouterLink
+        to="/"
+        class="rounded-btn border-brand-navy text-brand-navy hover:bg-brand-navy focus-visible:ring-focus-ring focus-visible:ring-offset-surface inline-flex items-center justify-center border-2 px-4 py-2 text-sm font-medium transition-colors hover:text-white focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+        data-test="cerita-home-link"
+      >
+        Kembali ke Beranda
+      </RouterLink>
+    </CeritaStatePanel>
 
-    <div
-      v-else-if="hasError"
-      class="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6"
+    <CeritaStatePanel
+      v-else-if="viewState === 'error'"
+      title="Gagal memuat halaman"
+      :message="errorMessage"
+      alert
       data-test="cerita-error"
     >
-      <h1 class="text-brand-navy text-lg font-semibold">Gagal memuat halaman</h1>
-      <p class="text-text-muted mt-2 text-sm">
-        Terjadi kesalahan saat memuat data. Periksa koneksi Anda dan coba lagi.
-      </p>
-      <button
-        type="button"
-        class="bg-brand-navy rounded-btn mt-5 px-4 py-2 text-sm font-semibold text-white"
-        data-test="cerita-retry"
-        @click="retryLoad"
-      >
-        Coba lagi
-      </button>
-    </div>
+      <BaseButton size="md" data-test="cerita-retry" @click="retryLoad">Coba lagi</BaseButton>
+    </CeritaStatePanel>
 
     <template v-else-if="page">
-      <div class="mx-auto max-w-3xl px-4 pt-12 sm:px-6" data-test="cerita-hero">
-        <h1 class="text-brand-navy text-xl leading-tight font-bold tracking-tight">
-          {{ page.title }}
-        </h1>
+      <CeritaHero :title="page.title" :chapter-count="page.chapters.length" />
+
+      <div
+        v-if="proseUnavailable || showPageEmptyNotice"
+        class="mx-auto max-w-5xl px-4 pt-8 sm:px-6"
+      >
+        <div
+          v-if="proseUnavailable"
+          class="rounded-card border-status-error-border bg-status-error-surface text-status-error flex flex-wrap items-center justify-between gap-3 border px-4 py-3 text-sm"
+          role="alert"
+          data-test="cerita-prose-error"
+        >
+          <p>Teks pada halaman ini belum dapat dimuat.</p>
+          <button
+            type="button"
+            class="rounded-btn border-status-error focus-visible:outline-focus-ring min-h-9 border bg-white px-3 py-1.5 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed"
+            :disabled="isRetryingProse"
+            data-test="cerita-prose-retry"
+            @click="retryProse"
+          >
+            Coba lagi
+          </button>
+        </div>
+        <p
+          v-else
+          class="rounded-card border-border bg-surface-muted text-text-muted border px-4 py-3 text-base"
+          data-test="cerita-page-empty"
+        >
+          Belum ada konten yang dapat ditampilkan pada halaman ini.
+        </p>
       </div>
 
-      <div class="mx-auto flex max-w-5xl gap-10 px-4 sm:px-6">
+      <!-- The sticky mobile selector lives in this wrapper so it can never reach the footer. -->
+      <div>
         <ChapterToc
-          variant="rail"
+          v-if="tocChapters.length > 0"
+          ref="tocSheetRef"
+          variant="sheet"
           :chapters="tocChapters"
           :active-chapter-id="activeChapterId"
           @navigate="handleNavigate"
         />
 
-        <div class="divide-border min-w-0 flex-1 divide-y">
-          <ChapterSection
-            v-for="chapter in page.chapters"
-            :key="chapter.id"
-            :chapter="chapter"
-            :prose-by-section-id="proseBySectionId"
-            :indicators-by-section-id="indicatorsBySectionId"
-            :tables-by-section-id="tablesBySectionId"
-            :section-errors-by-section-id="sectionErrorsBySectionId"
+        <div class="mx-auto flex max-w-5xl gap-10 px-4 sm:px-6">
+          <ChapterToc
+            v-if="tocChapters.length > 0"
+            variant="rail"
+            :chapters="tocChapters"
+            :active-chapter-id="activeChapterId"
+            @navigate="handleNavigate"
           />
+
+          <div class="cerita-reader-content divide-border min-w-0 flex-1 divide-y">
+            <ChapterSection
+              v-for="chapter in page.chapters"
+              :key="chapter.id"
+              :chapter="chapter"
+              :prose-by-section-id="proseBySectionId"
+              :indicators-by-section-id="indicatorsBySectionId"
+              :tables-by-section-id="tablesBySectionId"
+              :section-errors-by-section-id="sectionErrorsBySectionId"
+              :prose-unavailable="proseUnavailable"
+              @retry-section="retrySection"
+            />
+          </div>
         </div>
       </div>
-
-      <ChapterToc
-        variant="sheet"
-        :chapters="tocChapters"
-        :active-chapter-id="activeChapterId"
-        @navigate="handleNavigate"
-      />
     </template>
   </div>
 </template>
+
+<style>
+/*
+ * Below `lg` the chapter selector sticks under the header, so a control that keyboard focus
+ * scrolls into view must stop below both. Scoped to the chapter content (not the selector, which
+ * is itself stuck) and low-specificity so an element's own scroll-margin still wins.
+ */
+@media (max-width: 63.999rem) {
+  .cerita-reader-content :where(a[href], button, summary, [tabindex]) {
+    scroll-margin-top: calc(var(--public-header-height) + 4.5rem);
+  }
+}
+</style>
