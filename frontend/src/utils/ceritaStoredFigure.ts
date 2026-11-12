@@ -117,7 +117,7 @@ export function storedFigureToArticleFigure(metadata: unknown): ArticleFigure | 
     return {
       kind: 'diagram',
       title,
-      ...(picture ?? {}),
+      ...picture,
       ...(bars ? { bars } : {}),
       ...(source ? { source } : {}),
     };
