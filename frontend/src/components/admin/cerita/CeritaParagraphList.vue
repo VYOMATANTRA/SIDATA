@@ -27,6 +27,13 @@ const paragraphs = computed(() => store.paragraphsFor(props.sectionId));
 
 /** `'new'` for the add form, a paragraph slug while editing, null when no form is open. */
 const openForm = ref<string | null>(null);
+/**
+ * The paragraph's token as it was when its form or delete question was opened. The first save or
+ * delete carries it, so another editor's save made since is refused; only "Muat versi terbaru"
+ * moves it forward.
+ */
+const editToken = ref<string | null>(null);
+const deleteToken = ref<string | null>(null);
 const formBusy = ref(false);
 const formError = ref('');
 const formStale = ref(false);
@@ -88,6 +95,7 @@ function openAdd(): void {
 function openEdit(block: ContentBlock): void {
   formError.value = '';
   formStale.value = false;
+  editToken.value = block.updatedAt;
   openForm.value = block.slug;
 }
 
@@ -106,7 +114,11 @@ async function submitForm(payload: { title: string; body: string }): Promise<voi
   formStale.value = false;
   const block = editingBlock.value;
   const outcome = block
-    ? await store.editParagraph(block, { title: payload.title || null, body: payload.body })
+    ? await store.editParagraph(
+        block,
+        { title: payload.title || null, body: payload.body },
+        editToken.value ?? undefined,
+      )
     : await store.addParagraph(props.sectionId, payload);
   formBusy.value = false;
 
@@ -124,6 +136,13 @@ async function reload(): Promise<void> {
   if (reloading.value) return;
   reloading.value = true;
   await store.load();
+  // The explicit reload is the one path that takes the fresh tokens (the drafts stay as typed).
+  const editing = openForm.value && openForm.value !== 'new' ? editingBlock.value : null;
+  if (editing) editToken.value = editing.updatedAt;
+  const confirming = deleting.value
+    ? (paragraphs.value.find((item) => item.slug === deleting.value?.slug) ?? null)
+    : null;
+  if (confirming) deleteToken.value = confirming.updatedAt;
   reloading.value = false;
   formStale.value = false;
   formError.value = '';
@@ -166,6 +185,7 @@ async function move(block: ContentBlock, index: number, direction: -1 | 1): Prom
 function askDelete(block: ContentBlock): void {
   deleteError.value = '';
   deleteStale.value = false;
+  deleteToken.value = block.updatedAt;
   deleting.value = block;
 }
 
@@ -181,7 +201,7 @@ async function confirmDelete(): Promise<void> {
   if (!block || rowBusy.value) return;
   rowBusy.value = true;
   deleteError.value = '';
-  const outcome = await store.removeParagraph(block);
+  const outcome = await store.removeParagraph(block, deleteToken.value ?? undefined);
   rowBusy.value = false;
   if (outcome.ok) {
     deleting.value = null;
@@ -331,7 +351,7 @@ async function confirmDelete(): Promise<void> {
               :row-label="`paragraf ${index + 1}`"
               :is-first="index === 0"
               :is-last="index === paragraphs.length - 1"
-              :busy="rowBusy"
+              :busy="rowBusy || openForm !== null"
               :move-up-id="ids(block).up"
               :move-down-id="ids(block).down"
               :remove-id="ids(block).remove"

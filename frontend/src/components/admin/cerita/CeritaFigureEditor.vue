@@ -126,8 +126,15 @@ function applyDraft(next: FigureDraft): void {
   baseline.value = draftSignature(next);
 }
 
-function loadFromStored(): void {
+/**
+ * Shows what is stored now. Unless told otherwise it also records the section token this draft is
+ * based on: the first save carries that token, so someone else's save made after this point is
+ * refused rather than overwritten. After the editor's own save the store has already chained the
+ * token from the save's own answer, so it is left alone.
+ */
+function loadFromStored(captureToken = true): void {
   applyDraft(draftFromFigure(stored.value?.figure ?? null));
+  if (captureToken) store.captureSectionToken(props.sectionId);
 }
 
 loadFromStored();
@@ -231,7 +238,7 @@ async function save(): Promise<void> {
 
   if (outcome.ok) {
     submitted.value = false;
-    loadFromStored();
+    loadFromStored(false);
     announce('Gambar disimpan.');
     return;
   }
@@ -244,6 +251,8 @@ async function reload(): Promise<void> {
   if (reloading.value) return;
   reloading.value = true;
   await store.load();
+  // Only this explicit reload moves the draft onto the fresh token; the draft itself stays.
+  store.captureSectionToken(props.sectionId);
   reloading.value = false;
   stale.value = false;
   serverError.value = '';
@@ -283,7 +292,7 @@ async function confirmDelete(): Promise<void> {
     submitted.value = false;
     serverError.value = '';
     stale.value = false;
-    loadFromStored();
+    loadFromStored(false);
     announce('Gambar dihapus dari bagian ini.');
     await nextTick();
     document.getElementById(ids.kind)?.focus();

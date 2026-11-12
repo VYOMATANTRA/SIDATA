@@ -807,6 +807,85 @@ describe('AdminCeritaView', () => {
     });
   });
 
+  describe('a draft keeps the token it was opened with (no silent lost update)', () => {
+    // Another editor saves, and then something else on this screen reloads the shared data
+    // (any other save does). The first submit of the already-open form must still be refused.
+    async function otherEditorSavesThenScreenReloads(change: () => void): Promise<void> {
+      change();
+      await useCeritaAdminStore().load();
+      await flushPromises();
+    }
+
+    it('refuses a page rename opened before another editor saved, then saves after a reload', async () => {
+      const wrapper = await mountView();
+      await click('Ubah judul halaman Kependudukan');
+      await typeInto('[data-test="name-input"]', 'Judul saya');
+
+      await otherEditorSavesThenScreenReloads(() => fake.touchPage('kependudukan'));
+      await submitDialog();
+
+      expect(fake.pages[0]!.title).toBe('Kependudukan');
+      expect(body().find('[data-test="name-error"]').text()).toContain(
+        'baru saja diubah oleh orang lain',
+      );
+      expect((body().find('[data-test="name-input"]').element as HTMLInputElement).value).toBe(
+        'Judul saya',
+      );
+
+      await body().find('[data-test="name-reload"]').trigger('click');
+      await flushPromises();
+      await submitDialog();
+      expect(fake.pages[0]!.title).toBe('Judul saya');
+      wrapper.unmount();
+    });
+
+    it('does the same for a chapter and a section rename', async () => {
+      const wrapper = await mountView();
+      const chapter = fake.pages[0]!.chapters[0]!;
+
+      await click('Ubah judul bab Jumlah Penduduk');
+      await typeInto('[data-test="name-input"]', 'Bab saya');
+      await otherEditorSavesThenScreenReloads(() => fake.touchChapter(chapter.id));
+      await submitDialog();
+      expect(chapter.title).toBe('Jumlah Penduduk');
+      expect(body().find('[data-test="name-error"]').text()).toContain('baru saja diubah');
+      await body().find('[data-test="name-cancel"]').trigger('click');
+      await flushPromises();
+
+      const section = chapter.sections[0]!;
+      await click('Ubah judul bagian Ringkasan');
+      await typeInto('[data-test="name-input"]', 'Bagian saya');
+      await otherEditorSavesThenScreenReloads(() => fake.touchSection(section.id));
+      await submitDialog();
+      expect(section.title).toBe('Ringkasan');
+      expect(body().find('[data-test="name-error"]').text()).toContain('baru saja diubah');
+      wrapper.unmount();
+    });
+
+    it('refuses a delete confirmed after another editor changed the page, until reloaded', async () => {
+      const wrapper = await mountView();
+      await wrapper.findAll('[data-test="page-select"]')[2]!.trigger('click');
+      await flushPromises();
+      await click('Hapus halaman Kesehatan');
+
+      await otherEditorSavesThenScreenReloads(() => fake.touchPage('kesehatan'));
+      await body().find('[data-test="delete-confirm"]').trigger('click');
+      await flushPromises();
+
+      expect(fake.pages.map((p) => p.slug)).toContain('kesehatan');
+      expect(body().find('[data-test="delete-error"]').text()).toContain(
+        'baru saja diubah oleh orang lain',
+      );
+
+      await body().find('[data-test="delete-reload"]').trigger('click');
+      await flushPromises();
+      await body().find('[data-test="delete-confirm"]').trigger('click');
+      await flushPromises();
+      expect(fake.pages.map((p) => p.slug)).not.toContain('kesehatan');
+      wrapper.unmount();
+    });
+  });
+
   describe('accessibility and wording', () => {
     it('gives every button a name, every control a label and shows no raw API text', async () => {
       const wrapper = await mountView();

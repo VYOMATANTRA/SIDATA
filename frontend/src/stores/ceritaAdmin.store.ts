@@ -75,6 +75,13 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
   const hasLoaded = ref(false);
   /** A write was saved but the reload after it failed: what is shown may be out of date. */
   const reloadNeeded = ref(false);
+  /**
+   * The section token each open figure draft was loaded with. A first save carries this token, not
+   * whatever the shared data holds now, so another editor's save in between is still refused. It
+   * moves forward only when the editor reloads, or after the editor's own write in the section
+   * that left the figure untouched (see `trackSectionWrite`).
+   */
+  const sectionTokens = ref<Record<string, string>>({});
 
   const tree = computed<AdminPage[]>(() => {
     const result: AdminPage[] = [];
@@ -150,6 +157,44 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     return undefined;
   }
 
+  /** Records the section token the figure draft is being loaded with (editor open or reload). */
+  function captureSectionToken(sectionId: string): void {
+    const found = findSection(sectionId);
+    if (found)
+      sectionTokens.value = { ...sectionTokens.value, [sectionId]: found.section.updatedAt };
+  }
+
+  function setSectionToken(sectionId: string, token: string | undefined): void {
+    if (token) sectionTokens.value = { ...sectionTokens.value, [sectionId]: token };
+  }
+
+  function figureStamp(sectionId: string): string | null {
+    return figureFor(sectionId)?.block.updatedAt ?? null;
+  }
+
+  /**
+   * Runs one of the editor's own paragraph writes. Such a write bumps the section token, which would
+   * make the editor's own next figure save look stale. If the figure itself did not change across the
+   * write (and the reload worked), the figure draft's token moves to the current one; if it did, someone
+   * else changed the figure and the draft keeps its old token so the next save is refused.
+   */
+  async function trackSectionWrite<T>(
+    sectionId: string,
+    write: () => Promise<WriteOutcome<T>>,
+  ): Promise<WriteOutcome<T>> {
+    const before = figureStamp(sectionId);
+    const outcome = await write();
+    if (
+      outcome.ok &&
+      !outcome.refreshFailed &&
+      sectionId in sectionTokens.value &&
+      figureStamp(sectionId) === before
+    ) {
+      captureSectionToken(sectionId);
+    }
+    return outcome;
+  }
+
   function paragraphsFor(sectionId: string): ContentBlock[] {
     return Object.values(blocksStore.serverBlocks)
       .filter((block) => block.sectionId === sectionId && block.type === 'prose')
@@ -219,16 +264,20 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     return outcome;
   }
 
-  async function renamePage(slug: string, title: string): Promise<WriteOutcome> {
+  async function renamePage(
+    slug: string,
+    title: string,
+    expectedUpdatedAt?: string,
+  ): Promise<WriteOutcome> {
     const page = findPage(slug);
     if (!page) return missing('mengubah judul halaman');
     return run('mengubah judul halaman', 'tree', async () => {
-      await api.renamePage(slug, title, page.updatedAt);
+      await api.renamePage(slug, title, expectedUpdatedAt ?? page.updatedAt);
       return undefined;
     });
   }
 
-  async function removePage(slug: string): Promise<WriteOutcome> {
+  async function removePage(slug: string, expectedUpdatedAt?: string): Promise<WriteOutcome> {
     const page = findPage(slug);
     if (!page) return missing('menghapus halaman');
     const index = tree.value.findIndex((item) => item.slug === slug);
@@ -237,7 +286,7 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
       'menghapus halaman',
       'tree',
       async () => {
-        await api.deletePage(slug, page.updatedAt);
+        await api.deletePage(slug, expectedUpdatedAt ?? page.updatedAt);
         return undefined;
       },
       { subject: 'Halaman' },
@@ -273,23 +322,30 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     return run('menambah bab', 'tree', () => api.createChapter(pageSlug, title));
   }
 
-  async function renameChapter(chapterId: string, title: string): Promise<WriteOutcome> {
+  async function renameChapter(
+    chapterId: string,
+    title: string,
+    expectedUpdatedAt?: string,
+  ): Promise<WriteOutcome> {
     const found = findChapter(chapterId);
     if (!found) return missing('mengubah judul bab');
     return run('mengubah judul bab', 'tree', async () => {
-      await api.renameChapter(chapterId, title, found.chapter.updatedAt);
+      await api.renameChapter(chapterId, title, expectedUpdatedAt ?? found.chapter.updatedAt);
       return undefined;
     });
   }
 
-  async function removeChapter(chapterId: string): Promise<WriteOutcome> {
+  async function removeChapter(
+    chapterId: string,
+    expectedUpdatedAt?: string,
+  ): Promise<WriteOutcome> {
     const found = findChapter(chapterId);
     if (!found) return missing('menghapus bab');
     return run(
       'menghapus bab',
       'tree',
       async () => {
-        await api.deleteChapter(chapterId, found.chapter.updatedAt);
+        await api.deleteChapter(chapterId, expectedUpdatedAt ?? found.chapter.updatedAt);
         return undefined;
       },
       { subject: 'Bab' },
@@ -323,23 +379,30 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     return run('menambah bagian', 'tree', () => api.createSection(chapterId, title));
   }
 
-  async function renameSection(sectionId: string, title: string): Promise<WriteOutcome> {
+  async function renameSection(
+    sectionId: string,
+    title: string,
+    expectedUpdatedAt?: string,
+  ): Promise<WriteOutcome> {
     const found = findSection(sectionId);
     if (!found) return missing('mengubah judul bagian');
     return run('mengubah judul bagian', 'tree', async () => {
-      await api.renameSection(sectionId, title, found.section.updatedAt);
+      await api.renameSection(sectionId, title, expectedUpdatedAt ?? found.section.updatedAt);
       return undefined;
     });
   }
 
-  async function removeSection(sectionId: string): Promise<WriteOutcome> {
+  async function removeSection(
+    sectionId: string,
+    expectedUpdatedAt?: string,
+  ): Promise<WriteOutcome> {
     const found = findSection(sectionId);
     if (!found) return missing('menghapus bagian');
     return run(
       'menghapus bagian',
       'tree',
       async () => {
-        await api.deleteSection(sectionId, found.section.updatedAt);
+        await api.deleteSection(sectionId, expectedUpdatedAt ?? found.section.updatedAt);
         return undefined;
       },
       { subject: 'Bagian' },
@@ -375,26 +438,43 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     sectionId: string,
     input: api.ParagraphInput,
   ): Promise<WriteOutcome<ContentBlock>> {
-    return run('menambah paragraf', 'both', () => api.createParagraph(sectionId, input));
+    return trackSectionWrite(sectionId, () =>
+      run('menambah paragraf', 'both', () => api.createParagraph(sectionId, input)),
+    );
   }
 
+  /**
+   * `expectedUpdatedAt` is the paragraph's token as it was when the form was opened. Without it the
+   * token currently in the shared data is used, which is only right for a caller that has just
+   * loaded it.
+   */
   async function editParagraph(
     block: ContentBlock,
     input: { title: string | null; body: string },
+    expectedUpdatedAt?: string,
   ): Promise<WriteOutcome> {
-    const current = blocksStore.serverBlocks[block.slug] ?? block;
-    return run('menyimpan paragraf', 'both', async () => {
-      await api.updateParagraph(block.slug, input, current.updatedAt);
-      return undefined;
-    });
+    const token =
+      expectedUpdatedAt ?? blocksStore.serverBlocks[block.slug]?.updatedAt ?? block.updatedAt;
+    const write = (): Promise<WriteOutcome> =>
+      run('menyimpan paragraf', 'both', async () => {
+        await api.updateParagraph(block.slug, input, token);
+        return undefined;
+      });
+    return block.sectionId ? trackSectionWrite(block.sectionId, write) : write();
   }
 
-  async function removeParagraph(block: ContentBlock): Promise<WriteOutcome> {
-    const current = blocksStore.serverBlocks[block.slug] ?? block;
-    return run('menghapus paragraf', 'both', async () => {
-      await api.deleteParagraph(block.slug, current.updatedAt);
-      return undefined;
-    });
+  async function removeParagraph(
+    block: ContentBlock,
+    expectedUpdatedAt?: string,
+  ): Promise<WriteOutcome> {
+    const token =
+      expectedUpdatedAt ?? blocksStore.serverBlocks[block.slug]?.updatedAt ?? block.updatedAt;
+    const write = (): Promise<WriteOutcome> =>
+      run('menghapus paragraf', 'both', async () => {
+        await api.deleteParagraph(block.slug, token);
+        return undefined;
+      });
+    return block.sectionId ? trackSectionWrite(block.sectionId, write) : write();
   }
 
   async function moveParagraph(
@@ -406,33 +486,48 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     if (!found) return missing('mengurutkan paragraf');
     const items = swapReorderItems(paragraphsFor(sectionId), blockId, direction);
     if (!items) return { ok: true, value: undefined };
-    return run('mengurutkan paragraf', 'both', async () => {
-      await api.reorderParagraphs(sectionId, found.section.updatedAt, items);
-      return undefined;
-    });
+    return trackSectionWrite(sectionId, () =>
+      run('mengurutkan paragraf', 'both', async () => {
+        await api.reorderParagraphs(sectionId, found.section.updatedAt, items);
+        return undefined;
+      }),
+    );
   }
 
+  /**
+   * Saves the figure with the section token the draft was loaded with (`captureSectionToken`), so a
+   * change another editor made since is refused with a stale-write answer instead of overwritten.
+   */
   async function saveFigure(sectionId: string, figure: SectionFigure): Promise<WriteOutcome> {
     const found = findSection(sectionId);
     if (!found) return missing('menyimpan gambar');
-    return run('menyimpan gambar', 'both', async () => {
-      await figureApi.saveSectionFigure(sectionId, found.section.updatedAt, figure);
-      return undefined;
-    });
+    const token = sectionTokens.value[sectionId] ?? found.section.updatedAt;
+    const outcome = await run('menyimpan gambar', 'both', () =>
+      figureApi.saveSectionFigure(sectionId, token, figure),
+    );
+    if (outcome.ok) {
+      // Chain the next figure save from this write's own token; fall back to the reloaded one.
+      if (outcome.value) setSectionToken(sectionId, outcome.value);
+      else if (!outcome.refreshFailed) captureSectionToken(sectionId);
+    }
+    return outcome.ok ? { ...outcome, value: undefined } : outcome;
   }
 
   async function removeFigure(sectionId: string): Promise<WriteOutcome> {
     const found = findSection(sectionId);
     if (!found) return missing('menghapus gambar');
-    return run(
+    const token = sectionTokens.value[sectionId] ?? found.section.updatedAt;
+    const outcome = await run(
       'menghapus gambar',
       'both',
-      async () => {
-        await figureApi.deleteSectionFigure(sectionId, found.section.updatedAt);
-        return undefined;
-      },
+      () => figureApi.deleteSectionFigure(sectionId, token),
       { subject: 'Gambar' },
     );
+    if (outcome.ok) {
+      if (outcome.value) setSectionToken(sectionId, outcome.value);
+      else if (!outcome.refreshFailed) captureSectionToken(sectionId);
+    }
+    return outcome.ok ? { ...outcome, value: undefined } : outcome;
   }
 
   return {
@@ -448,6 +543,7 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     findPage,
     findChapter,
     findSection,
+    captureSectionToken,
     paragraphsFor,
     figureFor,
     contentCountFor,

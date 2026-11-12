@@ -162,6 +162,23 @@ describe('CeritaSectionEditor', () => {
       wrapper.unmount();
     });
 
+    it('locks reordering and deleting while a paragraph form is open, so its token stays valid', async () => {
+      fake.addParagraph(sectionId, 'Satu', 'a');
+      fake.addParagraph(sectionId, 'Dua', 'b');
+      const wrapper = await mountEditor();
+
+      await click(wrapper, 'Ubah');
+
+      const items = wrapper.findAll('[data-test="paragraph-item"]');
+      const second = items[1]!;
+      const names = ['Naik', 'Turun', 'Hapus'];
+      for (const name of names) {
+        const control = second.findAll('button').find((b) => b.text().startsWith(name))!;
+        expect(control.attributes('disabled')).toBeDefined();
+      }
+      wrapper.unmount();
+    });
+
     it('reports an unsaved paragraph through dirty-change and clears it on cancel', async () => {
       fake.addParagraph(sectionId, 'Satu', 'a');
       const wrapper = await mountEditor();
@@ -314,6 +331,139 @@ describe('CeritaSectionEditor', () => {
       await wrapper.find('[data-test="paragraph-delete-yes"]').trigger('click');
       await flushPromises();
       expect(fake.blocks).toHaveLength(0);
+      wrapper.unmount();
+    });
+  });
+
+  describe('a draft keeps the token it was opened with (no silent lost update)', () => {
+    async function reloadScreen(): Promise<void> {
+      await useCeritaAdminStore().load();
+      await flushPromises();
+    }
+
+    async function savePhotoFigure(wrapper: VueWrapper): Promise<void> {
+      await wrapper.find('[data-test="kind-photo"]').setValue();
+      await upload(wrapper, 0);
+      await wrapper.find('[data-test="photo-alt"]').setValue('Balai kelurahan');
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      await flushPromises();
+    }
+
+    it('refuses a paragraph edit when another editor saved it after the form was opened', async () => {
+      const block = fake.addParagraph(sectionId, 'Satu', 'asli');
+      const wrapper = await mountEditor();
+      await click(wrapper, 'Ubah');
+      await wrapper.find('[data-test="paragraph-body"]').setValue('draf saya');
+
+      fake.touchBlock(block.slug);
+      // Saving the figure is an ordinary write elsewhere in the section; it reloads the data.
+      await savePhotoFigure(wrapper);
+      expect(fake.blocks.some((b) => b.type === 'figure')).toBe(true);
+
+      await wrapper.find('[data-test="paragraph-form"]').trigger('submit');
+      await flushPromises();
+
+      expect(fake.blocks.find((b) => b.slug === block.slug)!.body).toBe('asli');
+      expect(wrapper.find('[data-test="paragraph-stale-notice"]').exists()).toBe(true);
+      expect(
+        (wrapper.find('[data-test="paragraph-body"]').element as HTMLTextAreaElement).value,
+      ).toBe('draf saya');
+
+      await wrapper.find('[data-test="paragraph-reload"]').trigger('click');
+      await flushPromises();
+      await wrapper.find('[data-test="paragraph-form"]').trigger('submit');
+      await flushPromises();
+      expect(fake.blocks.find((b) => b.slug === block.slug)!.body).toBe('draf saya');
+      wrapper.unmount();
+    });
+
+    it('refuses a paragraph delete confirmed after another editor saved it', async () => {
+      const block = fake.addParagraph(sectionId, 'Satu', 'asli');
+      const wrapper = await mountEditor();
+      await click(wrapper, 'Hapus paragraf 1');
+
+      fake.touchBlock(block.slug);
+      await reloadScreen();
+      await wrapper.find('[data-test="paragraph-delete-yes"]').trigger('click');
+      await flushPromises();
+
+      expect(fake.blocks).toHaveLength(1);
+      expect(wrapper.find('[data-test="paragraph-delete-error"]').text()).toContain(
+        'baru saja diubah oleh orang lain',
+      );
+
+      await wrapper.find('[data-test="paragraph-delete-reload"]').trigger('click');
+      await flushPromises();
+      await wrapper.find('[data-test="paragraph-delete-yes"]').trigger('click');
+      await flushPromises();
+      expect(fake.blocks).toHaveLength(0);
+      wrapper.unmount();
+    });
+
+    it('refuses a figure save when another editor replaced the figure, even after an own paragraph write reloaded the data', async () => {
+      const wrapper = await mountEditor();
+      await wrapper.find('[data-test="kind-photo"]').setValue();
+      await upload(wrapper, 0);
+      await wrapper.find('[data-test="photo-alt"]').setValue('Balai kelurahan');
+
+      fake.changeFigureByOther(sectionId, {
+        kind: 'photo',
+        photos: [{ mediaId: 'media-other', alt: 'Foto editor lain' }],
+      });
+      await click(wrapper, 'Tambah paragraf');
+      await wrapper.find('[data-test="paragraph-title"]').setValue('Pembuka');
+      await wrapper.find('[data-test="paragraph-body"]').setValue('Isi.');
+      await wrapper.find('[data-test="paragraph-form"]').trigger('submit');
+      await flushPromises();
+
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      await flushPromises();
+
+      const stored = fake.blocks.find((b) => b.type === 'figure')!.metadata as {
+        photos: { alt: string }[];
+      };
+      expect(stored.photos[0]!.alt).toBe('Foto editor lain');
+      expect(wrapper.find('[data-test="figure-stale-notice"]').exists()).toBe(true);
+      expect((wrapper.find('[data-test="photo-alt"]').element as HTMLTextAreaElement).value).toBe(
+        'Balai kelurahan',
+      );
+
+      await wrapper.find('[data-test="figure-reload"]').trigger('click');
+      await flushPromises();
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      await flushPromises();
+      const after = fake.blocks.find((b) => b.type === 'figure')!.metadata as {
+        photos: { alt: string }[];
+      };
+      expect(after.photos[0]!.alt).toBe('Balai kelurahan');
+      wrapper.unmount();
+    });
+
+    it('does not call an own paragraph write a conflict: the figure still saves afterwards', async () => {
+      const wrapper = await mountEditor();
+      await wrapper.find('[data-test="kind-photo"]').setValue();
+      await upload(wrapper, 0);
+      await wrapper.find('[data-test="photo-alt"]').setValue('Balai kelurahan');
+
+      await click(wrapper, 'Tambah paragraf');
+      await wrapper.find('[data-test="paragraph-title"]').setValue('Pembuka');
+      await wrapper.find('[data-test="paragraph-body"]').setValue('Isi.');
+      await wrapper.find('[data-test="paragraph-form"]').trigger('submit');
+      await flushPromises();
+      // Another editor only added a paragraph; that does not touch this figure.
+      fake.touchSection(sectionId);
+      fake.addParagraph(sectionId, 'Dari editor lain', 'Isi lain.');
+      await click(wrapper, 'Tambah paragraf');
+      await wrapper.find('[data-test="paragraph-title"]').setValue('Kedua');
+      await wrapper.find('[data-test="paragraph-body"]').setValue('Isi kedua.');
+      await wrapper.find('[data-test="paragraph-form"]').trigger('submit');
+      await flushPromises();
+
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="figure-stale-notice"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="figure-stored-note"]').text()).toBe('Tersimpan: satu foto.');
       wrapper.unmount();
     });
   });

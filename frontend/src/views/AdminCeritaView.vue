@@ -39,16 +39,19 @@ type Direction = -1 | 1;
 
 type NameTarget =
   | { kind: 'page-add' }
-  | { kind: 'page-rename'; slug: string; initial: string }
+  | { kind: 'page-rename'; slug: string; initial: string; token: string }
   | { kind: 'chapter-add'; pageSlug: string }
-  | { kind: 'chapter-rename'; id: string; initial: string }
+  | { kind: 'chapter-rename'; id: string; initial: string; token: string }
   | { kind: 'section-add'; chapterId: string }
-  | { kind: 'section-rename'; id: string; initial: string };
+  | { kind: 'section-rename'; id: string; initial: string; token: string };
 
+// `token` is the record's `updatedAt` as it was when the dialog opened. The first save or delete
+// carries it, so a change another editor made since is refused; only the dialog's own reload
+// button moves it forward (`reloadFromName` / `reloadFromDelete`).
 type DeleteTarget =
-  | { kind: 'page'; slug: string; title: string; chapters: number; sections: number }
-  | { kind: 'chapter'; id: string; title: string; sections: number }
-  | { kind: 'section'; id: string; chapterId: string; label: string };
+  | { kind: 'page'; slug: string; title: string; chapters: number; sections: number; token: string }
+  | { kind: 'chapter'; id: string; title: string; sections: number; token: string }
+  | { kind: 'section'; id: string; chapterId: string; label: string; token: string };
 
 const statusMessage = ref('');
 const actionError = ref('');
@@ -211,7 +214,7 @@ async function submitName(title: string): Promise<void> {
       break;
     }
     case 'page-rename':
-      outcome = await store.renamePage(target.slug, title);
+      outcome = await store.renamePage(target.slug, title, target.token);
       focus = ceritaIds.pageRename;
       message = `Judul halaman diubah menjadi “${title}”.`;
       break;
@@ -223,7 +226,7 @@ async function submitName(title: string): Promise<void> {
       break;
     }
     case 'chapter-rename':
-      outcome = await store.renameChapter(target.id, title);
+      outcome = await store.renameChapter(target.id, title, target.token);
       focus = ceritaIds.chapterRename(target.id);
       message = `Judul bab diubah menjadi “${title}”.`;
       break;
@@ -235,7 +238,7 @@ async function submitName(title: string): Promise<void> {
       break;
     }
     case 'section-rename':
-      outcome = await store.renameSection(target.id, title);
+      outcome = await store.renameSection(target.id, title, target.token);
       focus = ceritaIds.sectionRename(target.id);
       message = `Judul bagian diubah menjadi “${title}”.`;
       break;
@@ -253,6 +256,17 @@ async function submitName(title: string): Promise<void> {
 
 async function reloadFromName(): Promise<void> {
   await store.load();
+  const target = nameTarget.value;
+  if (target?.kind === 'page-rename') {
+    const token = store.findPage(target.slug)?.updatedAt;
+    if (token) nameTarget.value = { ...target, token };
+  } else if (target?.kind === 'chapter-rename') {
+    const token = store.findChapter(target.id)?.chapter.updatedAt;
+    if (token) nameTarget.value = { ...target, token };
+  } else if (target?.kind === 'section-rename') {
+    const token = store.findSection(target.id)?.section.updatedAt;
+    if (token) nameTarget.value = { ...target, token };
+  }
   nameStale.value = false;
   nameError.value = '';
 }
@@ -313,6 +327,7 @@ function openDeletePage(): void {
     title: current.title,
     chapters: current.chapters.length,
     sections: current.chapters.reduce((sum, chapter) => sum + chapter.sections.length, 0),
+    token: current.updatedAt,
   };
   resetDeleteState();
 }
@@ -323,6 +338,7 @@ function openDeleteChapter(chapter: AdminChapter): void {
     id: chapter.id,
     title: chapter.title,
     sections: chapter.sections.length,
+    token: chapter.updatedAt,
   };
   resetDeleteState();
 }
@@ -333,6 +349,7 @@ function openDeleteSection(chapter: AdminChapter, section: AdminSection): void {
     id: section.id,
     chapterId: chapter.id,
     label: sectionLabel(section, chapter),
+    token: section.updatedAt,
   };
   resetDeleteState();
 }
@@ -361,17 +378,17 @@ async function confirmDelete(): Promise<void> {
   const chapterIdOfSection = target.kind === 'section' ? target.chapterId : null;
   switch (target.kind) {
     case 'page':
-      outcome = await store.removePage(target.slug);
+      outcome = await store.removePage(target.slug, target.token);
       message = `Halaman “${target.title}” dihapus.`;
       focus = store.selectedPage ? ceritaIds.pageHeading : ceritaIds.addPage;
       break;
     case 'chapter':
-      outcome = await store.removeChapter(target.id);
+      outcome = await store.removeChapter(target.id, target.token);
       message = `Bab “${target.title}” dihapus.`;
       focus = ceritaIds.addChapter;
       break;
     case 'section':
-      outcome = await store.removeSection(target.id);
+      outcome = await store.removeSection(target.id, target.token);
       message = `Bagian “${target.label}” dihapus.`;
       focus = chapterIdOfSection ? ceritaIds.addSection(chapterIdOfSection) : null;
       break;
@@ -394,6 +411,17 @@ async function confirmDelete(): Promise<void> {
 
 async function reloadFromDelete(): Promise<void> {
   await store.load();
+  const target = deleteTarget.value;
+  if (target?.kind === 'page') {
+    const token = store.findPage(target.slug)?.updatedAt;
+    if (token) deleteTarget.value = { ...target, token };
+  } else if (target?.kind === 'chapter') {
+    const token = store.findChapter(target.id)?.chapter.updatedAt;
+    if (token) deleteTarget.value = { ...target, token };
+  } else if (target?.kind === 'section') {
+    const token = store.findSection(target.id)?.section.updatedAt;
+    if (token) deleteTarget.value = { ...target, token };
+  }
   resetDeleteState();
 }
 
@@ -718,12 +746,25 @@ onUnmounted(() => {
         :is-first-page="pageIndex <= 0"
         :is-last-page="pageIndex === pages.length - 1"
         :busy="structureBusy"
-        @rename-page="openName({ kind: 'page-rename', slug: page.slug, initial: page.title })"
+        @rename-page="
+          openName({
+            kind: 'page-rename',
+            slug: page.slug,
+            initial: page.title,
+            token: page.updatedAt,
+          })
+        "
         @move-page="movePage"
         @delete-page="openDeletePage"
         @add-chapter="openName({ kind: 'chapter-add', pageSlug: page.slug })"
         @rename-chapter="
-          (chapter) => openName({ kind: 'chapter-rename', id: chapter.id, initial: chapter.title })
+          (chapter) =>
+            openName({
+              kind: 'chapter-rename',
+              id: chapter.id,
+              initial: chapter.title,
+              token: chapter.updatedAt,
+            })
         "
         @move-chapter="moveChapter"
         @delete-chapter="openDeleteChapter"
@@ -731,7 +772,12 @@ onUnmounted(() => {
         @open-section="openEditor"
         @rename-section="
           (section) =>
-            openName({ kind: 'section-rename', id: section.id, initial: section.title ?? '' })
+            openName({
+              kind: 'section-rename',
+              id: section.id,
+              initial: section.title ?? '',
+              token: section.updatedAt,
+            })
         "
         @move-section="moveSection"
         @delete-section="

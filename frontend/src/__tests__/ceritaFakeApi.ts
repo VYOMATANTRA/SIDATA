@@ -483,6 +483,33 @@ export function createFakeCerita() {
       const found = findSection(id);
       if (found) found.section.updatedAt = stamp();
     },
+    touchChapter(id: string): void {
+      const found = findChapter(id);
+      if (found) found.chapter.updatedAt = stamp();
+    },
+    /** Simulates another editor replacing the section's figure (figure block and section token). */
+    changeFigureByOther(sectionId: string, figure: Record<string, unknown>): void {
+      const found = findSection(sectionId);
+      if (!found) return;
+      const existing = blocks.find((b) => b.sectionId === sectionId && b.type === 'figure');
+      if (existing) {
+        existing.metadata = figure;
+        existing.updatedAt = stamp();
+      } else {
+        blocks.push({
+          id: nextId('blk'),
+          sectionId,
+          type: 'figure',
+          slug: `figure-${sectionId}`,
+          title: null,
+          body: '',
+          metadata: figure,
+          sortOrder: null,
+          updatedAt: stamp(),
+        });
+      }
+      found.section.updatedAt = stamp();
+    },
     touchPage(slug: string): void {
       const page = pages.find((p) => p.slug === slug);
       if (page) page.updatedAt = stamp();

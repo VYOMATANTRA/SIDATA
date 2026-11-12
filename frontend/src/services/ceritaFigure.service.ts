@@ -119,25 +119,42 @@ export function figureFromBlock(block: ContentBlock | null | undefined): Section
   return null;
 }
 
-/** Creates or replaces the section's figure. `expectedUpdatedAt` is the section's token. */
+function sectionTokenOf(data: unknown): string | undefined {
+  if (typeof data !== 'object' || data === null) return undefined;
+  const section = (data as { section?: unknown }).section;
+  if (typeof section !== 'object' || section === null) return undefined;
+  const token = (section as { updatedAt?: unknown }).updatedAt;
+  return typeof token === 'string' ? token : undefined;
+}
+
+/**
+ * Creates or replaces the section's figure. `expectedUpdatedAt` is the section's token. Returns the
+ * section's new token from the response, so the editor can chain its next figure save from its own
+ * write (and only its own) without taking in someone else's change.
+ */
 export async function saveSectionFigure(
   sectionId: string,
   expectedUpdatedAt: string,
   figure: SectionFigure,
-): Promise<void> {
-  await apiRequestJson(`/api/sections/${encodeURIComponent(sectionId)}/figure`, {
-    method: 'PUT',
-    body: JSON.stringify({ expectedUpdatedAt, figure }),
-  });
+): Promise<string | undefined> {
+  const data = await apiRequestJson<unknown>(
+    `/api/sections/${encodeURIComponent(sectionId)}/figure`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ expectedUpdatedAt, figure }),
+    },
+  );
+  return sectionTokenOf(data);
 }
 
-/** Removes the section's figure and releases its photos. */
+/** Removes the section's figure and releases its photos. Returns the section's new token. */
 export async function deleteSectionFigure(
   sectionId: string,
   expectedUpdatedAt: string,
-): Promise<void> {
-  await apiRequestJson(
+): Promise<string | undefined> {
+  const data = await apiRequestJson<unknown>(
     `/api/sections/${encodeURIComponent(sectionId)}/figure?expectedUpdatedAt=${encodeURIComponent(expectedUpdatedAt)}`,
     { method: 'DELETE' },
   );
+  return sectionTokenOf(data);
 }
