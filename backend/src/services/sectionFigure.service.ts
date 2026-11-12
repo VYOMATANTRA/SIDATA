@@ -149,6 +149,10 @@ export const putSectionFigure = async (
 
   return executeLockedTransaction({
     client,
+    // ReadCommitted: detachMedia counts the remaining references with a plain read, which under
+    // REPEATABLE READ would use a snapshot older than the asset locks and miss a reference a
+    // competing figure committed while this transaction waited (it would unpublish a shared photo).
+    isolationLevel: 'ReadCommitted',
     lockQuery: (tx) => lockSectionAndFigure(tx, sectionId),
     execute: async (tx) => {
       const section = await tx.section.findUnique({
@@ -245,6 +249,10 @@ export const deleteSectionFigure = async (
 
   return executeLockedTransaction({
     client,
+    // ReadCommitted: detachMedia counts the remaining references with a plain read, which under
+    // REPEATABLE READ would use a snapshot older than the asset locks and miss a reference a
+    // competing figure committed while this transaction waited (it would unpublish a shared photo).
+    isolationLevel: 'ReadCommitted',
     lockQuery: (tx) => lockSectionAndFigure(tx, sectionId),
     execute: async (tx) => {
       const section = await tx.section.findUnique({
