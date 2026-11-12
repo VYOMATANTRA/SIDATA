@@ -26,6 +26,7 @@ import {
   resolveUniqueSlug,
   titleSchema,
 } from '../utils/hierarchyAuthoring.js';
+import { isFigureBlockSlug } from '../utils/sectionFigure.js';
 import {
   ContentBlockServiceError,
   DEFAULT_CONTENT_BLOCKS,
@@ -121,10 +122,13 @@ export const createProseBlock = async (
           select: { slug: true },
         });
         // The standalone slugs stay unavailable so a prose block can never shadow them.
-        const slug = resolveUniqueSlug(
-          baseSlug,
-          new Set([...sameSlug.map((b) => b.slug), ...STANDALONE_BLOCK_SLUGS]),
-        );
+        const taken = new Set([...sameSlug.map((b) => b.slug), ...STANDALONE_BLOCK_SLUGS]);
+        let slug = resolveUniqueSlug(baseSlug, taken);
+        // `figure-<sectionId>` belongs to that section's figure block, even before it exists.
+        while (isFigureBlockSlug(slug)) {
+          taken.add(slug);
+          slug = resolveUniqueSlug(baseSlug, taken);
+        }
 
         // Only prose blocks are ordered siblings; a section's figure block has no sort order.
         const siblings = await tx.contentBlock.findMany({

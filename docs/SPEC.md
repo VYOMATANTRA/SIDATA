@@ -153,7 +153,7 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
     most 100 characters). The reserved-word list protects page slugs only (they are top-level routes such as
     `/admin`); chapter, section and prose-block titles like "Public" or "Admin" are ordinary. A collision gets
     `-2`, `-3`, … within its scope: the page for chapters, the chapter for sections, the whole table for prose
-    blocks (`content_blocks.slug` is globally unique; the five standalone slugs are never available to prose
+    blocks (`content_blocks.slug` is globally unique; the five standalone slugs and every `figure-<section id>` slug are never available to prose
     blocks, so a clash resolves to the next free slug). A title that yields no slug is a 400. Clients
     never send a `slug`; unknown body fields are rejected.
   - New chapters, sections and prose blocks get `sort_order = max + 1` within their parent, taken under the

@@ -19,6 +19,11 @@ export const figureSlugForSection = (sectionId: string): string =>
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** True for the slug a section's figure block owns (`figure-<uuid>`); prose blocks never take it. */
+export const isFigureBlockSlug = (slug: string): boolean =>
+  slug.startsWith(FIGURE_BLOCK_SLUG_PREFIX) &&
+  UUID_PATTERN.test(slug.slice(FIGURE_BLOCK_SLUG_PREFIX.length));
+
 /** Trimmed text with no HTML tags and no control or bidi characters. */
 const text = (label: string, max: number, opts: { required: boolean }) => {
   const base = z
