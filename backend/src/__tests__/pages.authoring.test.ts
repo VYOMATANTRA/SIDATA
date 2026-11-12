@@ -107,6 +107,7 @@ describe('pages.service authoring additions', () => {
     it('reports counts per dependency type with the stable HAS_DEPENDENTS code', async () => {
       db.addSection({ id: 'sec-1', chapterId: 'ch-1' });
       db.addBlock({ sectionId: 'sec-1' });
+      db.addBlock({ id: 'fig', sectionId: 'sec-1', slug: 'figure-sec-1', type: 'figure' });
       db.indicator.rows.push({ id: 'i1', sectionId: 'sec-1' });
       db.indicator.rows.push({ id: 'i2', sectionId: 'sec-1' });
 
@@ -115,7 +116,7 @@ describe('pages.service authoring additions', () => {
         (err: unknown) => {
           expectError(409, 'HAS_DEPENDENTS')(err);
           assert.deepEqual((err as HierarchyServiceError).details, {
-            dependencies: { contentBlocks: 1, indicators: 2, indicatorTables: 0 },
+            dependencies: { contentBlocks: 1, figures: 1, indicators: 2, indicatorTables: 0 },
           });
           return true;
         },

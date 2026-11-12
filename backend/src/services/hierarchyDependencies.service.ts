@@ -8,7 +8,10 @@ import { HAS_DEPENDENTS_CODE, HierarchyServiceError } from '../utils/hierarchyAu
  */
 
 export interface DependencyCounts {
+  /** Prose and other content blocks; a section's figure is counted under `figures`. */
   contentBlocks: number;
+  /** Section figure blocks (SPEC §3): at most one per section. */
+  figures: number;
   indicators: number;
   indicatorTables: number;
 }
@@ -32,20 +35,28 @@ export async function countSectionDependents(
   scope: HierarchyScope,
 ): Promise<DependencyCounts> {
   const where = { section: sectionFilter(scope) };
-  const contentBlocks = await client.contentBlock.count({ where });
+  const contentBlocks = await client.contentBlock.count({
+    where: { ...where, type: { not: 'figure' } },
+  });
+  const figures = await client.contentBlock.count({ where: { ...where, type: 'figure' } });
   const indicators = await client.indicator.count({ where });
   const indicatorTables = await client.indicatorTable.count({ where });
-  return { contentBlocks, indicators, indicatorTables };
+  return { contentBlocks, figures, indicators, indicatorTables };
 }
 
 export function hasDependents(counts: DependencyCounts): boolean {
-  return counts.contentBlocks > 0 || counts.indicators > 0 || counts.indicatorTables > 0;
+  return (
+    counts.contentBlocks > 0 ||
+    counts.figures > 0 ||
+    counts.indicators > 0 ||
+    counts.indicatorTables > 0
+  );
 }
 
 export function dependentsError(label: string, counts: DependencyCounts): HierarchyServiceError {
   return new HierarchyServiceError(
     `${label} tidak dapat dihapus karena masih memiliki data terkait ` +
-      `(blok konten: ${counts.contentBlocks}, indikator: ${counts.indicators}, ` +
+      `(blok konten: ${counts.contentBlocks}, gambar: ${counts.figures}, indikator: ${counts.indicators}, ` +
       `tabel indikator: ${counts.indicatorTables}). Hapus atau pindahkan data tersebut terlebih dahulu.`,
     409,
     HAS_DEPENDENTS_CODE,

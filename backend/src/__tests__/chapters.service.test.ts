@@ -276,6 +276,8 @@ describe('chapters.service', () => {
       db.addSection({ id: 'sec-2', chapterId: 'ch-1', slug: 'lain', sortOrder: 1 });
       db.addBlock({ id: 'b1', sectionId: 'sec-1', slug: 'a' });
       db.addBlock({ id: 'b2', sectionId: 'sec-2', slug: 'b' });
+      db.addBlock({ id: 'f1', sectionId: 'sec-1', slug: 'figure-sec-1', type: 'figure' });
+      db.addBlock({ id: 'f2', sectionId: 'sec-2', slug: 'figure-sec-2', type: 'figure' });
       db.indicator.rows.push({ id: 'i1', sectionId: 'sec-2' });
       db.indicatorTable.rows.push({ id: 't1', sectionId: 'sec-1' });
       db.indicatorTable.rows.push({ id: 't2', sectionId: 'sec-1' });
@@ -284,7 +286,7 @@ describe('chapters.service', () => {
       await assert.rejects(deleteChapter('ch-1', T0_ISO, actor, ctx), (err: unknown) => {
         expectError(409, 'HAS_DEPENDENTS')(err);
         assert.deepEqual((err as HierarchyServiceError).details, {
-          dependencies: { contentBlocks: 2, indicators: 1, indicatorTables: 3 },
+          dependencies: { contentBlocks: 2, figures: 2, indicators: 1, indicatorTables: 3 },
         });
         return true;
       });

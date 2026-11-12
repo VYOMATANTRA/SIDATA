@@ -447,15 +447,17 @@ describe('sectionFigure.service', () => {
   });
 
   describe('interaction with the rest of the hierarchy', () => {
-    it('a section that holds a figure cannot be deleted: HAS_DEPENDENTS counts it as a content block', async () => {
+    it('a section that holds a figure cannot be deleted: HAS_DEPENDENTS counts it as a figure and names it', async () => {
       const saved = await put(single(1));
       await assert.rejects(deleteSection('sec-1', saved.section.updatedAt, actor, ctx), (err) => {
         expectError(409, 'HAS_DEPENDENTS')(err);
         assert.deepEqual((err as HierarchyServiceError).details?.dependencies, {
-          contentBlocks: 1,
+          contentBlocks: 0,
+          figures: 1,
           indicators: 0,
           indicatorTables: 0,
         });
+        assert.match((err as Error).message, /gambar: 1/);
         return true;
       });
       assert.notEqual(figureRow(), undefined);

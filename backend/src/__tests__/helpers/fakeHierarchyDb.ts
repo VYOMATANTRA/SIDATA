@@ -32,6 +32,9 @@ class Table {
       if (cond && typeof cond === 'object' && 'in' in cond) {
         return ((cond as { in: unknown[] }).in as unknown[]).includes(row[key]);
       }
+      if (cond && typeof cond === 'object' && 'not' in cond) {
+        return row[key] !== (cond as { not: unknown }).not;
+      }
       if (cond === null) return row[key] === null || row[key] === undefined;
       if (cond && typeof cond === 'object' && 'startsWith' in cond) {
         return String(row[key]).startsWith((cond as { startsWith: string }).startsWith);

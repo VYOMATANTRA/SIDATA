@@ -338,10 +338,12 @@ describe('section figure against real MySQL', () => {
         assert.equal(statusOf(err), 409);
         assert.equal(codeOf(err), 'HAS_DEPENDENTS');
         assert.deepEqual((err as HierarchyServiceError).details?.dependencies, {
-          contentBlocks: 1,
+          contentBlocks: 0,
+          figures: 1,
           indicators: 0,
           indicatorTables: 0,
         });
+        assert.match((err as Error).message, /gambar: 1/);
         return true;
       },
     );

@@ -189,6 +189,7 @@ describe('deletePageHandler expectedUpdatedAt query', () => {
     assert.equal(body.code, 'HAS_DEPENDENTS');
     assert.deepEqual(body.details.dependencies, {
       contentBlocks: 0,
+      figures: 0,
       indicators: 0,
       indicatorTables: 1,
     });

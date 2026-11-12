@@ -412,6 +412,7 @@ describe('hierarchy authoring routes', () => {
       assert.equal(body.code, 'HAS_DEPENDENTS');
       assert.deepEqual(body.details.dependencies, {
         contentBlocks: 1,
+        figures: 0,
         indicators: 0,
         indicatorTables: 0,
       });

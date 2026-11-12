@@ -160,17 +160,23 @@ describe('sections.service', () => {
       [
         'content blocks',
         (db: FakeHierarchyDb) => db.addBlock({ sectionId: 'sec-1' }),
-        { contentBlocks: 1, indicators: 0, indicatorTables: 0 },
+        { contentBlocks: 1, figures: 0, indicators: 0, indicatorTables: 0 },
       ],
       [
         'indicators',
         (db: FakeHierarchyDb) => db.indicator.rows.push({ id: 'i', sectionId: 'sec-1' }),
-        { contentBlocks: 0, indicators: 1, indicatorTables: 0 },
+        { contentBlocks: 0, figures: 0, indicators: 1, indicatorTables: 0 },
       ],
       [
         'indicator tables',
         (db: FakeHierarchyDb) => db.indicatorTable.rows.push({ id: 't', sectionId: 'sec-1' }),
-        { contentBlocks: 0, indicators: 0, indicatorTables: 1 },
+        { contentBlocks: 0, figures: 0, indicators: 0, indicatorTables: 1 },
+      ],
+      [
+        'a figure',
+        (db: FakeHierarchyDb) =>
+          db.addBlock({ sectionId: 'sec-1', type: 'figure', slug: 'figure-sec-1' }),
+        { contentBlocks: 0, figures: 1, indicators: 0, indicatorTables: 0 },
       ],
     ] as const) {
       it(`is blocked with 409 HAS_DEPENDENTS when ${label} remain`, async () => {
@@ -185,6 +191,14 @@ describe('sections.service', () => {
         assert.equal(db.auditRows.length, 0);
       });
     }
+
+    it('names the figure in the HAS_DEPENDENTS sentence', async () => {
+      db.addBlock({ sectionId: 'sec-1', type: 'figure', slug: 'figure-sec-1' });
+      await assert.rejects(deleteSection('sec-1', T0_ISO, actor, ctx), (err: unknown) => {
+        assert.match((err as Error).message, /blok konten: 0, gambar: 1, indikator: 0/);
+        return true;
+      });
+    });
 
     it('409 STALE_WRITE on stale token, 404 unknown, 400 without a token', async () => {
       await assert.rejects(
