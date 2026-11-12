@@ -439,6 +439,88 @@ describe('CeritaSectionEditor', () => {
       wrapper.unmount();
     });
 
+    async function staleFigureDraft(wrapper: VueWrapper): Promise<void> {
+      await wrapper.find('[data-test="kind-photo"]').setValue();
+      await upload(wrapper, 0);
+      await wrapper.find('[data-test="photo-alt"]').setValue('Balai kelurahan');
+      fake.changeFigureByOther(sectionId, {
+        kind: 'photos',
+        photos: [
+          { mediaId: 'media-a', alt: 'A' },
+          { mediaId: 'media-b', alt: 'B' },
+          { mediaId: 'media-c', alt: 'C' },
+        ],
+      });
+      // An own paragraph write reloads the shared data, so the tree is now newer than the draft.
+      await click(wrapper, 'Tambah paragraf');
+      await wrapper.find('[data-test="paragraph-title"]').setValue('Pembuka');
+      await wrapper.find('[data-test="paragraph-body"]').setValue('Isi.');
+      await wrapper.find('[data-test="paragraph-form"]').trigger('submit');
+      await flushPromises();
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      await flushPromises();
+      expect(wrapper.find('[data-test="figure-stale-notice"]').exists()).toBe(true);
+    }
+
+    const otherFigure = (): { kind: string; photos: unknown[] } =>
+      fake.blocks.find((b) => b.type === 'figure')!.metadata as { kind: string; photos: unknown[] };
+
+    it("says plainly, before reloading, that saving will replace the other editor's version", async () => {
+      const wrapper = await mountEditor();
+      await staleFigureDraft(wrapper);
+
+      const notice = wrapper.find('[data-test="figure-stale-notice"]').text();
+      expect(notice).toContain('menggantikan versi');
+      expect(notice).toContain('orang lain');
+      wrapper.unmount();
+    });
+
+    it('does not move the draft to a newer token when the reload failed: saving is still refused', async () => {
+      const wrapper = await mountEditor();
+      await staleFigureDraft(wrapper);
+      fake.failNext(
+        (r) => r.method === 'GET' && r.url === '/api/pages?include=sections',
+        fake.json({ error: 'SQL boom' }, 500),
+      );
+
+      await wrapper.find('[data-test="figure-reload"]').trigger('click');
+      await flushPromises();
+
+      // Still told that the version is old, with a plain reason; nothing replaced.
+      expect(wrapper.find('[data-test="figure-stale-notice"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test="figure-reloaded-notice"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="form-error"]').text()).not.toMatch(RAW_TERMS);
+
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      await flushPromises();
+      expect(otherFigure().kind).toBe('photos');
+      expect(wrapper.find('[data-test="figure-stale-notice"]').exists()).toBe(true);
+      wrapper.unmount();
+    });
+
+    it('after a successful reload shows what was loaded and warns that saving replaces it', async () => {
+      const wrapper = await mountEditor();
+      await staleFigureDraft(wrapper);
+
+      await wrapper.find('[data-test="figure-reload"]').trigger('click');
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="figure-stale-notice"]').exists()).toBe(false);
+      const notice = wrapper.find('[data-test="figure-reloaded-notice"]').text();
+      expect(notice).toContain('3 foto');
+      expect(notice).toContain('menggantikan');
+      // The draft itself is untouched.
+      expect((wrapper.find('[data-test="photo-alt"]').element as HTMLTextAreaElement).value).toBe(
+        'Balai kelurahan',
+      );
+
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      await flushPromises();
+      expect(otherFigure().kind).toBe('photo');
+      expect(wrapper.find('[data-test="figure-reloaded-notice"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
     it('does not call an own paragraph write a conflict: the figure still saves afterwards', async () => {
       const wrapper = await mountEditor();
       await wrapper.find('[data-test="kind-photo"]').setValue();

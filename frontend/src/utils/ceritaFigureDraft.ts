@@ -471,3 +471,12 @@ export function describeFigure(figure: SectionFigure | null): string {
   if (figure.kind === 'photos') return `Tersimpan: ${figure.photos.length} foto.`;
   return `Tersimpan: diagram “${figure.title}”.`;
 }
+
+/** What a stored figure is, in a few words, for a note about someone else's version. */
+export function summarizeFigure(figure: SectionFigure | null, exists: boolean): string {
+  if (!exists) return 'bagian ini tidak memiliki gambar';
+  if (!figure) return 'gambar yang isinya tidak dapat dibaca';
+  if (figure.kind === 'photo') return 'satu foto';
+  if (figure.kind === 'photos') return `${figure.photos.length} foto`;
+  return `diagram “${figure.title}”`;
+}

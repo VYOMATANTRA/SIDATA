@@ -18,6 +18,7 @@ import {
   emptyBar,
   emptyPhoto,
   figureIds,
+  summarizeFigure,
   validateFigureDraft,
   type BarFields,
   type FigureDraft,
@@ -83,6 +84,8 @@ const deleting = ref(false);
 const uploadingCount = ref(0);
 const serverError = ref('');
 const stale = ref(false);
+/** What the last successful reload found, shown until the draft is saved, reverted or replaced. */
+const reloadedSummary = ref<string | null>(null);
 const reloading = ref(false);
 const confirmingDelete = ref(false);
 const deleteError = ref('');
@@ -157,6 +160,7 @@ watch(
   () => props.sectionId,
   () => {
     submitted.value = false;
+    reloadedSummary.value = null;
     serverError.value = '';
     stale.value = false;
     confirmingDelete.value = false;
@@ -238,6 +242,7 @@ async function save(): Promise<void> {
 
   if (outcome.ok) {
     submitted.value = false;
+    reloadedSummary.value = null;
     loadFromStored(false);
     announce('Gambar disimpan.');
     return;
@@ -250,17 +255,32 @@ async function save(): Promise<void> {
 async function reload(): Promise<void> {
   if (reloading.value) return;
   reloading.value = true;
-  await store.load();
-  // Only this explicit reload moves the draft onto the fresh token; the draft itself stays.
-  store.captureSectionToken(props.sectionId);
+  const loaded = await store.load();
   reloading.value = false;
+
+  if (!loaded) {
+    // Nothing new was seen, so the draft must not move onto a newer token: saving would replace
+    // a version the editor never looked at. The notice stays and the save is still refused.
+    serverError.value =
+      store.loadError ?? 'Versi terbaru belum bisa dimuat. Periksa koneksi lalu coba lagi.';
+    announce('Versi terbaru belum bisa dimuat. Isian Anda masih ada.');
+    focusSummary();
+    return;
+  }
+
+  // Only a successful explicit reload moves the draft onto the fresh token; the draft itself stays.
+  store.captureSectionToken(props.sectionId);
   stale.value = false;
   serverError.value = '';
-  announce('Versi terbaru dimuat. Isian Anda masih ada; simpan lagi jika sudah sesuai.');
+  reloadedSummary.value = summarizeFigure(stored.value?.figure ?? null, stored.value !== null);
+  announce(
+    `Versi terbaru dimuat: ${reloadedSummary.value}. Jika Anda menyimpan sekarang, gambar Anda menggantikan versi itu.`,
+  );
 }
 
 function revert(): void {
   submitted.value = false;
+  reloadedSummary.value = null;
   serverError.value = '';
   stale.value = false;
   loadFromStored();
@@ -290,6 +310,7 @@ async function confirmDelete(): Promise<void> {
   if (outcome.ok) {
     confirmingDelete.value = false;
     submitted.value = false;
+    reloadedSummary.value = null;
     serverError.value = '';
     stale.value = false;
     loadFromStored(false);
@@ -323,7 +344,9 @@ defineExpose({ isDirty: () => dirty.value });
       data-test="figure-stale-notice"
     >
       <p class="text-status-warning text-sm">
-        Isian Anda masih ada di formulir ini. Memuat versi terbaru tidak menghapus isian Anda.
+        Orang lain sudah mengubah gambar di bagian ini. Isian Anda masih ada di formulir ini. Memuat
+        versi terbaru tidak menghapus isian Anda, tetapi jika Anda lalu menyimpan, gambar Anda
+        menggantikan versi orang lain tersebut.
       </p>
       <BaseButton
         type="button"
@@ -336,6 +359,17 @@ defineExpose({ isDirty: () => dirty.value });
       >
         {{ reloading ? 'Memuat…' : 'Muat versi terbaru' }}
       </BaseButton>
+    </div>
+
+    <div
+      v-if="reloadedSummary"
+      class="rounded-card border-status-warning-border bg-status-warning-surface border px-4 py-3"
+      data-test="figure-reloaded-notice"
+    >
+      <p class="text-status-warning text-sm">
+        Versi terbaru dimuat: {{ reloadedSummary }}. Isian Anda tidak berubah. Jika Anda menyimpan
+        sekarang, gambar Anda menggantikan versi itu.
+      </p>
     </div>
 
     <fieldset class="space-y-2" :disabled="busy || uploading">

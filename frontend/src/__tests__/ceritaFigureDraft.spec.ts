@@ -7,6 +7,7 @@ import {
   formatBarValue,
   figureIds,
   parseBarValue,
+  summarizeFigure,
   validateFigureDraft,
   type FigureDraft,
 } from '../utils/ceritaFigureDraft';
@@ -344,5 +345,31 @@ describe('draft helpers', () => {
     const one = photoDraft('photo', [{ mediaId: 'a' }]);
     const two = photoDraft('photo', [{ mediaId: 'a' }, { mediaId: 'b' }]);
     expect(draftSignature(one)).toBe(draftSignature(two));
+  });
+});
+
+describe('summarizeFigure', () => {
+  it('names the kind and size of a stored figure in a few plain words', () => {
+    expect(summarizeFigure(null, false)).toBe('bagian ini tidak memiliki gambar');
+    expect(summarizeFigure(null, true)).toContain('tidak dapat dibaca');
+    expect(summarizeFigure({ kind: 'photo', photos: [{ mediaId: 'a', alt: 'x' }] }, true)).toBe(
+      'satu foto',
+    );
+    expect(
+      summarizeFigure(
+        {
+          kind: 'photos',
+          photos: [
+            { mediaId: 'a', alt: 'x' },
+            { mediaId: 'b', alt: 'y' },
+            { mediaId: 'c', alt: 'z' },
+          ],
+        },
+        true,
+      ),
+    ).toBe('3 foto');
+    expect(summarizeFigure({ kind: 'diagram', title: 'Penduduk' }, true)).toBe(
+      'diagram “Penduduk”',
+    );
   });
 });

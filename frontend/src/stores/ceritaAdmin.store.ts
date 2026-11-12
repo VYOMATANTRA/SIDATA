@@ -103,18 +103,20 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     selectedSlug.value = slug;
   }
 
-  /** Loads (or reloads) the tree and every paragraph and figure. */
-  async function load(): Promise<void> {
+  /** Loads (or reloads) the tree and every paragraph and figure. True when both loads worked. */
+  async function load(): Promise<boolean> {
     await Promise.all([pagesStore.fetchHierarchy(true), blocksStore.fetchBlocks(true)]);
     hasLoaded.value = true;
     // A successful reload clears the notice; a failed one leaves it as it was.
-    if (pagesStore.hierarchyError === null && blocksStore.error === null) {
+    const succeeded = pagesStore.hierarchyError === null && blocksStore.error === null;
+    if (succeeded) {
       reloadNeeded.value = false;
     }
     // Pin the selection to a real page, so a later reorder cannot shift "the first page" under it.
     if (!tree.value.some((page) => page.slug === selectedSlug.value)) {
       selectedSlug.value = tree.value[0]?.slug ?? null;
     }
+    return succeeded;
   }
 
   /** Reloads the shared caches. Returns false when a reload failed (the stores swallow errors). */
