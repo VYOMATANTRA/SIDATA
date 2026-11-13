@@ -173,8 +173,8 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
   - **Locking.** Locks are taken parent-first (page → chapter → section → block) and children in ascending id
     order, so concurrent authoring cannot deadlock. A no-op reorder, and a retitle to the same title, write
     nothing and audit nothing.
-  - **Deletion safety.** A page, chapter or section that still holds content blocks, indicators or indicator
-    tables is not deleted: `409` with code `HAS_DEPENDENTS` and `details.dependencies` giving
+  - **Deletion safety.** A page, chapter or section that still holds content blocks, section figures,
+    indicators or indicator tables is not deleted: `409` with code `HAS_DEPENDENTS` and `details.dependencies` giving
     `{ contentBlocks, figures, indicators, indicatorTables }` (summed over the sections beneath a page or
     chapter). `figures` counts section figure blocks (below) and `contentBlocks` excludes them; the message
     names each ("blok konten: N, gambar: N, …"). A figure blocks deletion like any other dependent, so a
