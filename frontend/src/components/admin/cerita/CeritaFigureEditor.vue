@@ -148,13 +148,27 @@ loadFromStored();
 const storedSignature = computed(() =>
   JSON.stringify([stored.value?.block.id ?? null, stored.value?.figure ?? null]),
 );
+// The section token the draft follows is read only once the whole reload has finished: the blocks
+// can arrive before the page tree, and a token read in between would be the old one.
+let followToken = false;
 watch(storedSignature, () => {
   if (dirty.value) {
     baseline.value = draftSignature(draftFromFigure(stored.value?.figure ?? null));
-  } else {
-    loadFromStored();
+    return;
   }
+  loadFromStored(false);
+  if (store.isLoading) followToken = true;
+  else store.captureSectionToken(props.sectionId);
 });
+watch(
+  () => store.isLoading,
+  (loading) => {
+    if (loading || !followToken) return;
+    followToken = false;
+    // Only a draft that still has no edits of its own follows the reloaded token.
+    if (!dirty.value) store.captureSectionToken(props.sectionId);
+  },
+);
 
 watch(
   () => props.sectionId,
@@ -243,6 +257,14 @@ async function save(): Promise<void> {
   if (outcome.ok) {
     submitted.value = false;
     reloadedSummary.value = null;
+    if (outcome.refreshFailed) {
+      // Saved, but what the screen holds is still the old figure. Keep the draft (it is what was
+      // just saved) and do not show the old data over it; the reload notice offers the reload. The
+      // draft now matches what is saved, so it is not "unsaved" any more.
+      baseline.value = draftSignature(draft.value);
+      announce('Gambar disimpan, tetapi halaman belum bisa dimuat ulang.');
+      return;
+    }
     loadFromStored(false);
     announce('Gambar disimpan.');
     return;
@@ -315,8 +337,14 @@ async function confirmDelete(): Promise<void> {
     reloadedSummary.value = null;
     serverError.value = '';
     stale.value = false;
+    // The store has already dropped the figure from its data even if the reload failed, so this
+    // shows the empty state; the reload notice (store.reloadNeeded) offers the reload.
     loadFromStored(false);
-    announce('Gambar dihapus dari bagian ini.');
+    announce(
+      outcome.refreshFailed
+        ? 'Gambar dihapus, tetapi halaman belum bisa dimuat ulang.'
+        : 'Gambar dihapus dari bagian ini.',
+    );
     await nextTick();
     document.getElementById(ids.kind)?.focus();
     return;

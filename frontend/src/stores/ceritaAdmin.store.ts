@@ -238,6 +238,19 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     return { ok: true, value };
   }
 
+  /** Drops a deleted figure from the shared block data without a reload. */
+  function forgetFigure(sectionId: string): void {
+    const keep = (map: Record<string, ContentBlock>): Record<string, ContentBlock> =>
+      Object.fromEntries(
+        Object.entries(map).filter(
+          ([, block]) =>
+            !(block.sectionId === sectionId && block.type === figureApi.FIGURE_BLOCK_TYPE),
+        ),
+      );
+    blocksStore.serverBlocks = keep(blocksStore.serverBlocks);
+    blocksStore.blocks = keep(blocksStore.blocks);
+  }
+
   /** Drops deleted sections from the flat list the /data pickers read (labels, breadcrumbs). */
   function forgetSections(sectionIds: string[]): void {
     const gone = new Set(sectionIds);
@@ -534,6 +547,7 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
       'both',
       () => figureApi.deleteSectionFigure(sectionId, token),
       { subject: 'Gambar' },
+      () => forgetFigure(sectionId),
     );
     if (outcome.ok) {
       if (outcome.value) setSectionToken(sectionId, outcome.value);

@@ -1074,6 +1074,111 @@ describe('CeritaSectionEditor', () => {
       wrapper.unmount();
     });
 
+    // The write works but the reload that follows it fails: the whole screen is offline again.
+    const failPagesReload = (): void => {
+      for (const url of ['/api/pages?include=sections', '/api/content-blocks']) {
+        fake.failNext(
+          (r) => r.method === 'GET' && r.url === url,
+          fake.json({ error: 'SQL boom' }, 500),
+        );
+      }
+    };
+    const statusText = (wrapper: VueWrapper): string =>
+      wrapper
+        .findAll('[role="status"]')
+        .map((el) => el.text())
+        .join(' | ');
+
+    it('keeps the draft when the figure was saved but the reload failed, and says so plainly', async () => {
+      const wrapper = await mountEditor();
+      await wrapper.find('[data-test="kind-photo"]').setValue();
+      await upload(wrapper, 0);
+      await wrapper.find('[data-test="photo-alt"]').setValue('Balai kelurahan');
+      failPagesReload();
+
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      await flushPromises();
+
+      // It was saved on the server...
+      expect(fake.blocks.some((b) => b.type === 'figure')).toBe(true);
+      // ...so the editor's photo and text must still be on screen, not reset to the old (empty) figure.
+      expect(wrapper.find('[data-test="photo-preview-image"]').exists()).toBe(true);
+      expect((wrapper.find('[data-test="photo-alt"]').element as HTMLTextAreaElement).value).toBe(
+        'Balai kelurahan',
+      );
+      expect((wrapper.find('[data-test="kind-photo"]').element as HTMLInputElement).checked).toBe(
+        true,
+      );
+      expect(statusText(wrapper)).toContain(
+        'Gambar disimpan, tetapi halaman belum bisa dimuat ulang.',
+      );
+      expect(wrapper.find('[data-test="reload-notice"]').exists()).toBe(true);
+      // Nothing is left unsaved, so no discard prompt would fire.
+      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([false]);
+
+      // The reload notice brings the screen in line with what is stored, without touching the draft.
+      await wrapper.find('[data-test="reload-notice-button"]').trigger('click');
+      await flushPromises();
+      expect(wrapper.find('[data-test="reload-notice"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="figure-stored-note"]').text()).toBe('Tersimpan: satu foto.');
+      expect((wrapper.find('[data-test="photo-alt"]').element as HTMLTextAreaElement).value).toBe(
+        'Balai kelurahan',
+      );
+      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([false]);
+
+      // Saving again sends the same figure: no conflict and nothing is lost.
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      await flushPromises();
+      expect(wrapper.find('[data-test="figure-stale-notice"]').exists()).toBe(false);
+      const stored = fake.blocks.find((b) => b.type === 'figure')!.metadata as {
+        photos: { alt: string }[];
+      };
+      expect(stored.photos[0]!.alt).toBe('Balai kelurahan');
+      wrapper.unmount();
+    });
+
+    it('shows the figure as gone when it was deleted but the reload failed, and offers the reload', async () => {
+      fake.blocks.push({
+        id: 'fig-1',
+        sectionId,
+        type: 'figure',
+        slug: `figure-${sectionId}`,
+        title: null,
+        body: '',
+        metadata: { kind: 'photo', photos: [{ mediaId: 'media-9', alt: 'Balai' }] },
+        sortOrder: null,
+        updatedAt: '2026-11-13T10:00:00.000Z',
+      });
+      const wrapper = await mountEditor();
+      await wrapper.find('[data-test="figure-delete"]').trigger('click');
+      failPagesReload();
+
+      await wrapper.find('[data-test="figure-delete-confirm-button"]').trigger('click');
+      await flushPromises();
+
+      expect(fake.blocks.some((b) => b.type === 'figure')).toBe(false);
+      expect(wrapper.find('[data-test="figure-stored-note"]').text()).toContain(
+        'belum memiliki gambar',
+      );
+      expect(wrapper.find('[data-test="figure-delete"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="figure-delete-confirm"]').exists()).toBe(false);
+      expect((wrapper.find('[data-test="kind-photo"]').element as HTMLInputElement).checked).toBe(
+        false,
+      );
+      expect(statusText(wrapper)).toContain(
+        'Gambar dihapus, tetapi halaman belum bisa dimuat ulang.',
+      );
+      expect(wrapper.find('[data-test="reload-notice"]').exists()).toBe(true);
+
+      await wrapper.find('[data-test="reload-notice-button"]').trigger('click');
+      await flushPromises();
+      expect(wrapper.find('[data-test="reload-notice"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="figure-stored-note"]').text()).toContain(
+        'belum memiliki gambar',
+      );
+      wrapper.unmount();
+    });
+
     it('keeps the figure and explains when deleting it fails', async () => {
       fake.blocks.push({
         id: 'fig-1',
