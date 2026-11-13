@@ -103,12 +103,20 @@ function clearActionError(): void {
   actionStale.value = false;
 }
 
+const COULD_NOT_RELOAD = 'Belum bisa memuat versi terbaru. Periksa koneksi lalu coba lagi.';
+
 async function reload(): Promise<void> {
   if (reloading.value) return;
   reloading.value = true;
-  clearActionError();
-  await store.load();
+  const loaded = await store.load();
   reloading.value = false;
+  if (!loaded) {
+    // Nothing new was seen: leave the warning (and its reload button) up and say why.
+    actionError.value = COULD_NOT_RELOAD;
+    announce(COULD_NOT_RELOAD);
+    return;
+  }
+  clearActionError();
   announce('Data terbaru dimuat.');
 }
 
@@ -255,7 +263,12 @@ async function submitName(title: string): Promise<void> {
 }
 
 async function reloadFromName(): Promise<void> {
-  await store.load();
+  const loaded = await store.load();
+  if (!loaded) {
+    // The stale notice stays, the token is not advanced and the typed title is untouched.
+    nameError.value = COULD_NOT_RELOAD;
+    return;
+  }
   const target = nameTarget.value;
   if (target?.kind === 'page-rename') {
     const token = store.findPage(target.slug)?.updatedAt;
@@ -410,7 +423,11 @@ async function confirmDelete(): Promise<void> {
 }
 
 async function reloadFromDelete(): Promise<void> {
-  await store.load();
+  const loaded = await store.load();
+  if (!loaded) {
+    deleteError.value = COULD_NOT_RELOAD;
+    return;
+  }
   const target = deleteTarget.value;
   if (target?.kind === 'page') {
     const token = store.findPage(target.slug)?.updatedAt;

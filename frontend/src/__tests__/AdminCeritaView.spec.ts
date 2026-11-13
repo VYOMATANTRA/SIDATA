@@ -882,6 +882,85 @@ describe('AdminCeritaView', () => {
     });
   });
 
+  describe('when "Muat ulang" cannot reach the server', () => {
+    const COULD_NOT_RELOAD = 'Belum bisa memuat versi terbaru. Periksa koneksi lalu coba lagi.';
+    const failReload = (): void => {
+      for (const url of ['/api/pages?include=sections', '/api/content-blocks']) {
+        fake.failNext(
+          (r) => r.method === 'GET' && r.url === url,
+          fake.json({ error: 'SQL boom' }, 500),
+        );
+      }
+    };
+
+    it('keeps the stale notice and the typed title in the rename dialog, and still refuses the save', async () => {
+      const wrapper = await mountView();
+      await click('Ubah judul halaman Kependudukan');
+      await typeInto('[data-test="name-input"]', 'Judul saya');
+      fake.touchPage('kependudukan');
+      await submitDialog();
+      expect(body().find('[data-test="name-stale"]').exists()).toBe(true);
+
+      failReload();
+      await body().find('[data-test="name-reload"]').trigger('click');
+      await flushPromises();
+
+      expect(body().find('[data-test="name-stale"]').exists()).toBe(true);
+      expect(body().find('[data-test="name-error"]').text()).toBe(COULD_NOT_RELOAD);
+      expect((body().find('[data-test="name-input"]').element as HTMLInputElement).value).toBe(
+        'Judul saya',
+      );
+
+      // Nothing new was seen, so the old token is still used and the save is refused again.
+      await submitDialog();
+      expect(fake.pages[0]!.title).toBe('Kependudukan');
+      expect(body().find('[data-test="name-error"]').text()).toContain('baru saja diubah');
+      expect(body().find('[data-test="name-stale"]').exists()).toBe(true);
+      wrapper.unmount();
+    });
+
+    it('keeps the stale notice and the confirm button in the delete dialog, and still refuses the delete', async () => {
+      const wrapper = await mountView();
+      await wrapper.findAll('[data-test="page-select"]')[2]!.trigger('click');
+      await flushPromises();
+      await click('Hapus halaman Kesehatan');
+      fake.touchPage('kesehatan');
+      await body().find('[data-test="delete-confirm"]').trigger('click');
+      await flushPromises();
+      expect(body().find('[data-test="delete-reload"]').exists()).toBe(true);
+
+      failReload();
+      await body().find('[data-test="delete-reload"]').trigger('click');
+      await flushPromises();
+
+      expect(body().find('[data-test="delete-reload"]').exists()).toBe(true);
+      expect(body().find('[data-test="delete-error"]').text()).toBe(COULD_NOT_RELOAD);
+
+      await body().find('[data-test="delete-confirm"]').trigger('click');
+      await flushPromises();
+      expect(fake.pages.map((p) => p.slug)).toContain('kesehatan');
+      expect(body().find('[data-test="delete-error"]').text()).toContain('baru saja diubah');
+      wrapper.unmount();
+    });
+
+    it('keeps the page-level stale banner when its reload fails', async () => {
+      const wrapper = await mountView();
+      // A chapter reorder carries the page's token, so another editor's save makes it stale.
+      fake.touchPage('kependudukan');
+      await click('Turun bab Jumlah Penduduk');
+      expect(wrapper.find('[data-test="action-reload"]').exists()).toBe(true);
+
+      failReload();
+      await wrapper.find('[data-test="action-reload"]').trigger('click');
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="action-reload"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test="action-error"]').text()).toContain(COULD_NOT_RELOAD);
+      expect(wrapper.find('[data-test="status"]').text()).not.toContain('Data terbaru dimuat');
+      wrapper.unmount();
+    });
+  });
+
   describe('accessibility and wording', () => {
     it('gives every button a name, every control a label and shows no raw API text', async () => {
       const wrapper = await mountView();
