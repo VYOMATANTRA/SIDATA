@@ -83,6 +83,85 @@ describe('pages.service authoring additions', () => {
       assert.equal(db.auditRows.length, 0);
     });
 
+    it('sets a headline and byline without touching the title, and audits no personal names', async () => {
+      const result = await updatePage(
+        'kependudukan',
+        {
+          headline: '  Potret Kependudukan Manggar  ',
+          bylineAuthor: 'Tim Penyusun',
+          bylineAffiliation: 'Kelurahan Manggar',
+          expectedUpdatedAt: T0_ISO,
+        },
+        actor,
+        ctx,
+      );
+
+      assert.equal(result.title, 'Kependudukan');
+      assert.equal(result.headline, 'Potret Kependudukan Manggar');
+      assert.equal(result.bylineAuthor, 'Tim Penyusun');
+      assert.equal(result.bylineAffiliation, 'Kelurahan Manggar');
+      assert.notEqual(result.updatedAt, T0_ISO);
+      const row = db.auditRows[0]!;
+      assert.deepEqual((row.metadata as { changes: unknown }).changes, {
+        headline: { before: null, after: 'Potret Kependudukan Manggar' },
+        byline: { changed: true },
+      });
+      assert.ok(!JSON.stringify(row).includes('Tim Penyusun'));
+    });
+
+    it('a blank headline or byline clears it; a field left out is untouched', async () => {
+      await updatePage(
+        'kependudukan',
+        { headline: 'Judul', bylineAuthor: 'Penulis', expectedUpdatedAt: T0_ISO },
+        actor,
+        ctx,
+      );
+      const token = (db.page.rows[0]!.updatedAt as Date).toISOString();
+      const result = await updatePage(
+        'kependudukan',
+        { headline: '   ', expectedUpdatedAt: token },
+        actor,
+        ctx,
+      );
+      assert.equal(result.headline, null);
+      assert.equal(result.bylineAuthor, 'Penulis');
+    });
+
+    it('refuses an affiliation without an author, HTML, control characters and over-long text', async () => {
+      for (const payload of [
+        { bylineAffiliation: 'Kelurahan', expectedUpdatedAt: T0_ISO },
+        { headline: '<b>x</b>', expectedUpdatedAt: T0_ISO },
+        { bylineAuthor: 'a\u0000b', expectedUpdatedAt: T0_ISO },
+        { headline: 'x'.repeat(256), expectedUpdatedAt: T0_ISO },
+        { bylineAuthor: 'x'.repeat(121), expectedUpdatedAt: T0_ISO },
+        { bylineAuthor: 'A', bylineAffiliation: 'x'.repeat(161), expectedUpdatedAt: T0_ISO },
+        { expectedUpdatedAt: T0_ISO },
+      ]) {
+        await assert.rejects(updatePage('kependudukan', payload, actor, ctx), expectError(400));
+      }
+      assert.equal(db.page.rows[0]!.headline, null);
+      assert.equal(db.auditRows.length, 0);
+    });
+
+    it('an unchanged headline and byline write and audit nothing', async () => {
+      await updatePage(
+        'kependudukan',
+        { headline: 'Judul', bylineAuthor: 'Penulis', expectedUpdatedAt: T0_ISO },
+        actor,
+        ctx,
+      );
+      const audits = db.auditRows.length;
+      const token = (db.page.rows[0]!.updatedAt as Date).toISOString();
+      await updatePage(
+        'kependudukan',
+        { headline: 'Judul', bylineAuthor: 'Penulis', expectedUpdatedAt: token },
+        actor,
+        ctx,
+      );
+      assert.equal(db.auditRows.length, audits);
+      assert.equal((db.page.rows[0]!.updatedAt as Date).toISOString(), token);
+    });
+
     it('no-op rename writes and audits nothing', async () => {
       await updatePage(
         'kependudukan',

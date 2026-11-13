@@ -29,6 +29,9 @@ const pageRow = (slug = 'kependudukan') => ({
   id: 'page-1',
   slug,
   title: 'Kependudukan',
+  headline: null,
+  bylineAuthor: null,
+  bylineAffiliation: null,
   sortOrder: 0,
   createdAt: CREATED,
   updatedAt: UPDATED,
@@ -61,6 +64,9 @@ const expectedPageDto = (slug = 'kependudukan') => ({
   id: 'page-1',
   slug,
   title: 'Kependudukan',
+  headline: null,
+  bylineAuthor: null,
+  bylineAffiliation: null,
   sortOrder: 0,
   chapters: [
     {
@@ -231,6 +237,9 @@ describe('pages.controller', () => {
           id: 'p1',
           slug: 'kependudukan',
           title: 'Kependudukan',
+          headline: null,
+          bylineAuthor: null,
+          bylineAffiliation: null,
           sortOrder: 0,
           createdAt: CREATED,
           updatedAt: UPDATED,
@@ -337,6 +346,9 @@ describe('pages.controller', () => {
             id: 'p1',
             slug: 'kependudukan',
             title: 'Kependudukan',
+            headline: null,
+            bylineAuthor: null,
+            bylineAffiliation: null,
             sortOrder: 0,
             chapters: [
               {

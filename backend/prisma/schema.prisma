@@ -206,6 +206,11 @@ model Page {
   id        String   @id @default(uuid())
   slug      String   @unique
   title     String   @db.VarChar(255)
+  /// Optional editorial headline shown as the reader's page heading (SPEC §8). Null until approved.
+  headline          String?  @db.VarChar(255)
+  /// Optional byline under the headline. An affiliation is only meaningful with an author.
+  bylineAuthor      String?  @map("byline_author") @db.VarChar(120)
+  bylineAffiliation String?  @map("byline_affiliation") @db.VarChar(160)
   sortOrder Int      @map("sort_order")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
