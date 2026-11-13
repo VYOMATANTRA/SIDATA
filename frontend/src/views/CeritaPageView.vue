@@ -76,14 +76,28 @@ const figuresBySectionId = computed(() =>
 );
 
 // Sections whose figure ended up with no picture that loads. Reported by the figure itself, so the
-// page and chapter "empty" states do not count a figure the reader cannot see. Cleared whenever
-// the content of the stored figures changes, because a changed figure gets its pictures tried again.
+// page and chapter "empty" states do not count a figure the reader cannot see.
 const hiddenFigureSectionIds = ref<Set<string>>(new Set());
-// Compared by content: the mapped objects are rebuilt on every content-block store change, and an
-// unrelated change must not bring a removed figure (and its failing photo requests) back.
-const figuresSignature = computed(() => JSON.stringify(figuresBySectionId.value));
-watch(figuresSignature, () => {
-  hiddenFigureSectionIds.value = new Set();
+// Compared per section and by content: the mapped objects are rebuilt on every content-block store
+// change. A section whose figure content is unchanged keeps its entry (its figure does not report
+// again); one whose figure changed is forgotten, so it is tried again, and so is one whose figure
+// was removed (its component unmounts without reporting).
+const figureSignatures = computed<Record<string, string>>(() => {
+  const map: Record<string, string> = {};
+  for (const [sectionId, figure] of Object.entries(figuresBySectionId.value)) {
+    map[sectionId] = JSON.stringify(figure);
+  }
+  return map;
+});
+watch(figureSignatures, (current, previous) => {
+  if (hiddenFigureSectionIds.value.size === 0) return;
+  const kept = new Set<string>();
+  for (const sectionId of hiddenFigureSectionIds.value) {
+    if (current[sectionId] !== undefined && current[sectionId] === previous[sectionId]) {
+      kept.add(sectionId);
+    }
+  }
+  if (kept.size !== hiddenFigureSectionIds.value.size) hiddenFigureSectionIds.value = kept;
 });
 function handleFigureVisibility(sectionId: string, visible: boolean) {
   if (hiddenFigureSectionIds.value.has(sectionId) === !visible) return;

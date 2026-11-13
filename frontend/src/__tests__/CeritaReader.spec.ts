@@ -768,6 +768,75 @@ describe('Cerita reader', () => {
       expect(wrapper.find('img').attributes('src')).toBe(`/api/media/${MEDIA_B}`);
     });
 
+    describe('hidden figures when other figures change', () => {
+      async function twoSections() {
+        const page = makePage('topik-satu', 'Topik Satu', 2);
+        const [secA, secB] = page.chapters.map((c) => c.sections[0]!.id) as [string, string];
+        const figureA = figureBlock(secA, { kind: 'photo', photos: [storedPhoto(MEDIA_A, 1)] });
+        const figureB = figureBlock(secB, { kind: 'photo', photos: [storedPhoto(MEDIA_B, 2)] });
+        installApi({ pages: { 'topik-satu': page }, blocks: [figureA, figureB] });
+        const { pinia, router } = await setup('/cerita/topik-satu');
+        const wrapper = mountView(pinia, router);
+        await flushPromises();
+        const store = useContentBlocksStore(pinia);
+        const chapters = () => wrapper.findAll('[data-test="chapter-section"]');
+        // Section A's only photo fails to load.
+        await chapters()[0]!.find('img').trigger('error');
+        await flushPromises();
+        expect(chapters()[0]!.find('[data-test="chapter-empty"]').exists()).toBe(true);
+        return { store, chapters, secA, secB, figureA, wrapper };
+      }
+
+      it('keeps a hidden figure counted as hidden when another section figure changes', async () => {
+        const { store, chapters, secB } = await twoSections();
+
+        store.blocks = {
+          ...store.blocks,
+          [`fig-${secB}`]: figureBlock(secB, {
+            kind: 'photo',
+            photos: [storedPhoto(MEDIA_C, 3)],
+          }) as ContentBlock,
+        };
+        await flushPromises();
+
+        // B changed and shows its new photo; A is unchanged, still has no photo, still reads empty.
+        expect(chapters()[1]!.find('img').attributes('src')).toBe(`/api/media/${MEDIA_C}`);
+        expect(chapters()[0]!.find('img').exists()).toBe(false);
+        expect(chapters()[0]!.find('[data-test="chapter-empty"]').exists()).toBe(true);
+      });
+
+      it('tries a hidden figure again when its own content changes', async () => {
+        const { store, chapters, secA } = await twoSections();
+
+        store.blocks = {
+          ...store.blocks,
+          [`fig-${secA}`]: figureBlock(secA, {
+            kind: 'photo',
+            photos: [storedPhoto(MEDIA_C, 3)],
+          }) as ContentBlock,
+        };
+        await flushPromises();
+
+        expect(chapters()[0]!.find('img').attributes('src')).toBe(`/api/media/${MEDIA_C}`);
+        expect(chapters()[0]!.find('[data-test="chapter-empty"]').exists()).toBe(false);
+      });
+
+      it('forgets a hidden figure that was removed, so the same figure added later is tried', async () => {
+        const { store, chapters, secA, figureA } = await twoSections();
+
+        const { [`fig-${secA}`]: _removed, ...rest } = store.blocks;
+        store.blocks = rest;
+        await flushPromises();
+        expect(chapters()[0]!.find('[data-test="chapter-empty"]').exists()).toBe(true);
+
+        store.blocks = { ...store.blocks, [`fig-${secA}`]: figureA as ContentBlock };
+        await flushPromises();
+
+        expect(chapters()[0]!.find('img').attributes('src')).toBe(`/api/media/${MEDIA_A}`);
+        expect(chapters()[0]!.find('[data-test="chapter-empty"]').exists()).toBe(false);
+      });
+    });
+
     it('covers figures in the "text unavailable" notice when the content request failed', async () => {
       const page = makePage('topik-satu', 'Topik Satu');
       installApi({ pages: { 'topik-satu': page }, blocks: 'fail' });
