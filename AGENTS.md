@@ -1,23 +1,20 @@
 # AGENTS.md
 
-This file provides guidance to Claude Code, Google Antigravity, GitHub Copilot, Jetbrains AI, Junie, Codex, and other agents that support AGENTS.md when working with code in this repository. For specification, see @docs/SPEC.md
+This file provides guidance to Claude Code, Google Antigravity, GitHub Copilot, Jetbrains AI, Junie, Codex, and other agents that support AGENTS.md when working with code in this repository.
+
+- Read [`docs/SPEC.md`](docs/SPEC.md) before changing product behavior (roles, content model, data entry, schema, pages, wording rules). It is not auto-loaded.
+- Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) to find where code lives.
 
 ## Setup
 
-**Always use `npm ci` instead of `npm install`** — this ensures lockfile-locked versions.
+**Always use `npm ci` instead of `npm install`** — this ensures lockfile-locked versions. Work from `frontend/` or `backend/`. First-run steps and common errors are in the README (Quick Start, Troubleshooting).
 
-Work from the appropriate directory:
-
-- Frontend: `frontend/`
-- Backend: `backend/`
-
-Backend requires a `.env` file at the repository root — `DATABASE_URL` (MySQL, `localhost` for local dev or `mysql` under Docker Compose), `JWT_SECRET`, `JWT_REFRESH_SECRET`, `CSRF_SECRET`, `COOKIE_ENCRYPTION_KEY`, `CORS_ORIGIN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`, `GOOGLE_OAUTH_SUCCESS_REDIRECT`, `GOOGLE_OAUTH_FAILURE_REDIRECT`, `TURNSTILE_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM` (`PORT` defaults to 3000). See `.env.example`. The server validates these at boot and fails fast if any are missing.
-
-Two optional env vars control the Google OAuth cookie lifetimes: `OAUTH_STATE_TTL_SECONDS` and `OAUTH_PKCE_TTL_SECONDS` — TTL for the temporary `oauth_state`/`oauth_verifier` cookies (the OAuth handshake window), both defaulting to `300` seconds. Both values should match in practice; setting state TTL shorter than verifier TTL risks false-positive `critical` audit logs (`AUTH_OAUTH_STATE_MISMATCH`) on late callbacks.
-
-Two more env vars are optional but matter for the audit trail (see the Audit Trail subsection below): `TRUST_PROXY` (Express `trust proxy` setting — set this behind any reverse proxy, or `req.ip` on every audit log row/rate-limiter bucket/CSRF session key resolves to the proxy, not the client) and `AUDIT_ADMIN_DATABASE_URL` (a privileged DB connection used only by `backend/scripts/`, never by the running server). `AUDIT_PRUNE_SCHEDULE` (5-field cron expression, default `0 3 * * *`) sets when the opt-in `audit-pruner` Compose sidecar runs.
-
-`UPLOAD_DIR` is optional and sets where uploaded media (photos, documents, data files) lives on disk. Unset/empty means `<repo-root>/uploads`; a relative value resolves against the repository root (derived from the module location, never `process.cwd()`); an absolute value is used as-is. The server creates it at boot and proves it is writable; if that fails or its real path is inside `backend/` or `frontend/` (or contains them), it logs a loud WARNING and keeps running while media uploads/delivery answer 503 `MEDIA_STORAGE_UNAVAILABLE` (each media request retries, so a fix needs no restart). It is never exposed in an API response or public setting. Under Docker Compose it is fixed to `/var/lib/sidata/uploads` and bind-mounted from `UPLOADS_HOST_DIR` (default `./uploads`). `MEDIA_CLEANUP_GRACE_HOURS` (default `24`) is the grace period for `npm run media:cleanup`.
+- Backend env lives in the **root `.env`** (copy `.env.example`). The server validates required variables at boot and fails fast if any is missing **or empty**. `PORT` defaults to 3000.
+- The frontend reads its own `frontend/.env` (template: `frontend/.env.example`) when run outside Docker; under Compose it takes `VITE_*` values from the root `.env`.
+- The Prisma CLI reads `DATABASE_URL` from the shell or `backend/.env`, not the root `.env`: source it first (`set -a && . ../.env && set +a`). `DATABASE_URL` host is `mysql` under Compose, `localhost` otherwise.
+- Keep `OAUTH_STATE_TTL_SECONDS` and `OAUTH_PKCE_TTL_SECONDS` equal (default 300): a shorter state TTL causes false `critical` `AUTH_OAUTH_STATE_MISMATCH` audit logs.
+- Set `TRUST_PROXY` behind any reverse proxy, or `req.ip` (audit rows, rate limiters, CSRF session key) resolves to the proxy.
+- `AUDIT_ADMIN_DATABASE_URL` is a privileged connection used only by `backend/scripts/`, never by the running server.
 
 ## Database
 
@@ -25,38 +22,22 @@ DB engine is **MySQL**, full stop — but you'll correctly see @prisma/adapter-m
 
 Deploy target: Docker on a self-managed VPS (may change pending stakeholder input — this affects hosting, not the DB engine choice, which is settled independently).
 
-## Development
 
-### Frontend (Vue 3 + Vite + Tailwind)
+## Commands
 
-| Task                 | Command              | Location    |
-| -------------------- | -------------------- | ----------- |
-| Start dev server     | `npm run dev`        | `frontend/` |
-| Build for production | `npm run build`      | `frontend/` |
-| Type-check           | `npm run type-check` | `frontend/` |
-| Run unit tests       | `npm run test:unit`  | `frontend/` |
-| Lint & fix           | `npm run lint`       | `frontend/` |
-| Format code          | `npm run format`     | `frontend/` |
+| Task                    | Frontend (`frontend/`) | Backend (`backend/`)                                     |
+| ----------------------- | ---------------------- | -------------------------------------------------------- |
+| Dev server / run        | `npm run dev` (:5173)  | `npx tsx src/index.ts` (:3000)                           |
+| Unit tests              | `npm run test:unit`    | `npm test` (`npm run test:coverage` for coverage)        |
+| Lint (fix)              | `npm run lint`         | `npm run lint`                                           |
+| Format                  | `npm run format`       | `npm run format`                                         |
+| Type-check / build      | `npm run type-check` / `npm run build` | —                                        |
+| Seed dev admin          | —                      | `npm run dev:seed`                                       |
+| Seed indicators         | —                      | `npm run seed:indicator`                                 |
+| Cleanup sample RT data  | —                      | `npm run dev:cleanup-sample-rt`                          |
+| Clean stale media       | —                      | `npm run media:cleanup`                                  |
 
-Dev server runs on `http://localhost:5173` by default (Vite).
-
-### Backend (Express + Prisma)
-
-| Task                    | Command                           | Location   |
-| ----------------------- | --------------------------------- | ---------- |
-| Lint                    | `npm run lint`                    | `backend/` |
-| Run tests               | `npm test`                        | `backend/` |
-| Run tests with coverage | `npm run test:coverage`           | `backend/` |
-| Run integration tests   | `docker compose -f docker-compose.test.yml run --rm backend-integration` | repo root |
-| Format                  | `npm run format`                  | `backend/` |
-| Run server              | `npx tsx src/index.ts` or similar | `backend/` |
-| Seed dev admin          | `npm run dev:seed`                | `backend/` |
-| Cleanup sample RT data  | `npm run dev:cleanup-sample-rt`   | `backend/` |
-| Seed indicators         | `npm run seed:indicator`          | `backend/` |
-| Clean stale media       | `npm run media:cleanup`           | `backend/` |
-| Run via Docker          | `docker compose up --build`       | repo root  |
-
-Backend runs on port from `PORT` env var (default 3000). Prisma client is generated to `generated/prisma/`.
+Integration tests (need Docker): `docker compose -f docker-compose.test.yml run --rm backend-integration` from the repo root. Full stack: `docker compose up --build`. The Prisma client is generated to `backend/generated/prisma/` (do not edit; `npx prisma generate`).
 
 ## Git Conventions
 
@@ -66,7 +47,7 @@ Backend runs on port from `PORT` env var (default 3000). Prisma client is genera
 
 **Never commit or push production data** — real production data (including names, phone numbers, addresses, coordinates, user records, exports, database dumps, and credentials) must never be committed or pushed to GitHub under any circumstance unless the repository owner explicitly instructs it. Use synthetic data for development and tests; production data enters at runtime through the CMS, CSV import, or deployment environment, never through the repository.
 
-**Keep documentation in sync** — whenever a change affects setup, commands, architecture, env vars, or workflows, update the relevant docs (README.md, CONTRIBUTING.md, SECURITY.md, this file) in the same PR rather than leaving them stale.
+**Keep documentation in sync** — whenever a change affects setup, commands, architecture, env vars, or workflows, update the relevant docs (README.md, CONTRIBUTING.md, SECURITY.md, docs/ARCHITECTURE.md, this file) in the same PR rather than leaving them stale.
 
 **Keep the spec in sync** — whenever a change settles or revises a product/domain decision (page structure, content model, roles, data-entry rules, schema design intent, scope), update `docs/SPEC.md` in the same PR. Record the decision and the rule it implies, not the deliberation behind it — rationale for settled questions is context every future session pays for. Unresolved questions belong in SPEC.md §10 and nowhere else.
 
@@ -76,84 +57,31 @@ Backend runs on port from `PORT` env var (default 3000). Prisma client is genera
 
 **Frontend error messages** — operators see the backend sentence only for 400/422, filtered by `readableServerMessage` in `frontend/src/utils/userMessages.ts`. Backend sentences that name API fields must be added to `HIDDEN_API_TOKENS` there, and new backend 400 messages shown to operators should be plain Indonesian (no field names, no zod/English defaults).
 
-## Architecture
 
-### Frontend Structure
+## Architecture essentials
 
-- `src/App.vue`: Root component
-- `src/main.ts`: Entry point (Vue app initialization)
-- `src/router/`: Vue Router routes
-- `src/stores/`: Pinia state management (`auth.ts`, `settings.store.ts`, `contentBlocks.store.ts`, `indicators.store.ts`, `indicatorTables.store.ts`, `pages.store.ts`, `maps.ts`, `rtLeaders.store.ts`, `audit.store.ts`, `auditRetention.store.ts`, `comparisonTemplates.store.ts`, `weatherConfig.store.ts` — Admin-only weather settings, sends only the refresh interval)
-- `src/components/data/`: CMS forms and cards (`ScalarIndicatorForm.vue`, `TableIndicatorForm.vue`, `ContentBlockForm.vue` — a thin dispatcher to the per-block forms in `blocks/` (Hero, Sambutan, Profil, Highlights, Publikasi, Cerita prose; shared frame `BlockFormShell.vue`, row helpers in `blockFormShared.ts`, placement/kind registry in `blockMeta.ts`; no JSON editor), `PublicSettingsForm.vue`, `IndicatorCard.vue`)
-- `src/views/DataManagementView.vue`: Consolidated `/data` CMS view with tabbed management of indicators and content blocks; its Admin-only settings tab only links to `/admin/sistem/konfigurasi`
-- `src/views/AdminRukunTetanggaView.vue`: `/admin/rukun-tetangga` CMS for official roster edits, CSV preview/apply, and the explicit sample-status control
-- `src/views/AdminPetaView.vue`: `/admin/peta` map-point management (SPEC §8) — list/map split, search and type filter, create/edit/delete dialogs, coverage-problem notices. Reuses `InteractiveMap` and `LocationPicker`, reloads the maps store and RT roster after every write, and never edits Ketua RT contacts (those stay in the RT view)
-- `src/views/AdminCeritaView.vue`: `/admin/cerita` master-detail Cerita management (SPEC §8) — page list, chapters and sections of the chosen page (add, rename, button-ordered moves, delete with the dependency explanation), and a section editor dialog. Owns the dialogs, focus hand-back and the unsaved-work guard; all writes go through `stores/ceritaAdmin.store.ts`
-- `src/components/admin/cerita/`: `CeritaPageList.vue`, `CeritaStructurePanel.vue` (chapters/sections and their actions), `CeritaNameDialog.vue` / `CeritaDeleteDialog.vue` (one-line title and delete confirmation), `CeritaSectionEditor.vue` (paragraphs + figure), `CeritaParagraphList.vue` / `CeritaParagraphForm.vue`, `CeritaFigureEditor.vue` / `CeritaFigurePhotoRow.vue`, and `ceritaDomIds.ts` (element ids the view focuses). Figure draft rules and validation: `src/utils/ceritaFigureDraft.ts`; wording: `src/utils/ceritaAdminMessages.ts`; sibling-swap reorder body: `src/utils/ceritaOrder.ts`
-- `src/stores/ceritaAdmin.store.ts`, `src/services/ceritaAdmin.service.ts`, `src/services/ceritaFigure.service.ts`: the Cerita management store (reads the shared pages and content-block stores, resolves `expectedUpdatedAt` at call time, refreshes both caches after each write), the hierarchy/paragraph write calls, and every section-figure call (the one file to change if the figure contract moves). `contentBlocks.store.ts` `editableBlocks` excludes `figure` blocks
-- `src/services/media.service.ts`, `src/composables/useAuthenticatedBlobUrl.ts`, `src/components/common/MediaPhotoField.vue`: editor media upload (multipart through `apiFetch`, which leaves `Content-Type` to the browser for FormData), plain-Indonesian text for every media error code, authenticated preview as a revoked-on-change blob URL, and the reusable photo field (pick or drop, upload with a purpose, replace, remove)
-- `src/views/AdminTemplatKalimatView.vue`: Admin-only `/admin/sistem/templat-kalimat` — comparison-template list (usage count, "Terpasang" badge), add/edit dialog, and delete confirmation (SPEC §5)
-- `src/views/AdminKonfigurasiSistemView.vue`: Admin-only `/admin/sistem/konfigurasi` — four independent sections (portal identity and contact, starting map view, weather, log retention) built from `src/components/admin/config/` (`ConfigSection.vue`, `PortalSettingsSection.vue` wrapping `PublicSettingsForm.vue` with `part="identity"` or `"map"`, `WeatherConfigSection.vue`, `AuditRetentionSection.vue`). Refresh presets live in `src/utils/weatherRefresh.ts`. `/settings/audit-retention` is a router redirect to its retention section
-- `src/components/templates/`: `ComparisonTemplateForm.vue` (name, sentence and variants, debounced live preview, trend-keyword acknowledgment, save) and `TemplateSentenceBuilder.vue` (ordered text/chip parts with add/remove/move buttons — the editor never shows placeholder syntax). Chip names, segment parse/serialize, validation and generated lookup keys live in `src/utils/comparisonTemplateSegments.ts`; `ScalarIndicatorForm.vue` carries the Editor's "Templat kalimat perbandingan" selector
-- `src/views/CeritaPageView.vue` / `src/components/cerita/`: the public Cerita reader — `CeritaPageView.vue` owns the loading / not found / failed / ready state machine (per-slug outcomes from `pages.store.ts`, a load token that discards superseded loads), the chapter scroll spy and deep-link scroll; `CeritaHero`, `CeritaStatePanel`, `CeritaLoadingState` are the navy title band and state screens; `ChapterToc` is the desktop rail and the sticky mobile chapter selector; `ChapterSection` renders a chapter with its empty / partial-failure states and each section's stored figure (SPEC §8); `ArticleFigure` (with `FigureCard`, `FigurePhotoPair`, `FigureCarousel`, `FigureDiagram`) picks the figure layout, drops photos that fail to load and reports through `visible-change` when nothing is left; `utils/ceritaStoredFigure.ts` is the pure, defensive mapping from a `figure` content block's metadata to an `ArticleFigure` (public photo path `/api/media/<mediaId>`)
-- `src/components/maps/LocationPicker.vue`: shared visual location picker (Leaflet). Pin mode places/drags one point; viewport mode (`includeZoom`) edits the map centre and zoom. Click/drag, direction and zoom buttons and a labelled keyboard mode; no coordinate or zoom fields. Optional device-location draft. Used by `RtLocationPicker.vue` and `PublicSettingsForm.vue`; pure geometry helpers live in `src/utils/geoPicker.ts`
-- `src/components/maps/RtLocationPicker.vue`: Ketua RT home location, a thin pin-mode wrapper over `LocationPicker.vue` (public props/events unchanged)
-- `src/layouts/`: `AdminLayout.vue` — the admin/CMS base layout shell (sidebar, header, breadcrumb) every `/admin`, `/data`, `/users` and `/audit-logs` route is mounted inside; `PublicLayout.vue` — the public shell (skip link, `AppNavbar` + `PublicNavigationMenu`, the single `<main id="main-content">`, `AppFooter`, public-settings and page-hierarchy load) that `App.vue` wraps around every route with `meta.layout: 'public'`. Public views must not render their own `<main>`, navbar, footer or skip link; `meta.headerOverlay` (Home only) makes the header overlay the hero. `publicShell.ts` is the injection key `TentangPageLayout` (now a thin compatibility wrapper) uses to avoid doubling the shell
-- `src/components/common/AppNavbar.vue` / `PublicNavigationMenu.vue`: the public header bar (background `variant` navy/transparent is separate from `foreground`; modal sheet below `md`, anchored panel from `md`) and the menu content (Beranda, Cerita/Sumber Daya/Tentang groups, one role-aware account area). Cerita links come from the `pages` store with fallbacks in `config/publicNav.ts`
-- `src/components/admin/`: Admin shell components — `AdminSidebar.vue`, `AdminHeader.vue`, `AdminBreadcrumb.vue`; `components/admin/maps/` holds the map-management pieces: `AdminPointList.vue` (paginated list with per-row actions and problem notices), `PointEditorForm.vue` (name, type, `LocationPicker`, coverage; owns the stale-write handling) and `RtCoveragePicker.vue` (RT 1–100 radio/checkbox grid). Pure rules and wording are in `src/utils/adminMapPoints.ts`; the write calls are in `src/services/adminMaps.service.ts`
-- `src/config/publicNav.ts`: public navigation data — footer link lists, the Cerita/Sumber Daya/Tentang groups, exact-destination active matching and the Cerita fallback links
-- `src/utils/bodyScrollLock.ts`: ref-counted body scroll lock shared by `BaseModal` and the mobile menu
-- `src/config/adminNav.ts`: Single role-to-items source of truth for the admin sidebar, also read by the router guards (`src/router/index.ts`) so sidebar visibility and route access can't drift apart
-- `src/composables/`: `useAdminHeader.ts` (admin shell header title/subtitle channel), `useDrawerFocusTrap.ts` (mobile drawer focus trap, visibility filter, and Escape handling), `usePublicHeaderState.ts` (public header background state and the single `HEADER_SCROLL_THRESHOLD_PX`), `useGeolocation.ts` (session-wide, deduplicated, permission-aware visitor location for the public map; in memory only), `useIsDesktop.ts` (reactive `md` desktop breakpoint media query), `useMediaQuery.ts` (reactive `matchMedia` for a screen's own breakpoint), `useLogout.ts` (shared logout flow)
-- `src/__tests__/`: Unit tests with Vitest
-- `src/assets/`: Static assets, including `main.css` (Tailwind entry, imported in `main.ts`)
-- Styling: Tailwind CSS via Vite plugin
+The file-by-file map is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The rules below are the ones not obvious from the code.
 
-Key details:
+**Frontend**
 
-- Single-File Components (`.vue` files) with `<script setup>` pattern (Vue 3)
-- Import alias `@` → `src/` configured in Vite
-- Vue DevTools plugin enabled
-- Uses Oxlint + ESLint + Prettier for code quality
+- Vue 3 `<script setup>` SFCs; `@` aliases `src/`; Tailwind via the Vite plugin; Oxlint + ESLint + Prettier.
+- `layouts/PublicLayout.vue` owns the skip link, navbar, the single `<main id="main-content">` and the footer. Public views must not render their own. Admin routes mount inside `layouts/AdminLayout.vue`.
+- `config/adminNav.ts` is the single role-to-items source for the admin sidebar **and** the router guards; change access there, not in two places.
+- Media previews need the `Authorization` header: load them with `apiFetch` and display a blob URL, never a bare `<img src>`. `contentBlocks.store` `editableBlocks` excludes `figure` blocks (managed only in `/admin/cerita`).
 
-### Backend Structure
+**Backend**
 
-- `src/index.ts`: Entry point — starts the HTTP listener
-- `src/app.ts`: Express app setup (middleware, CORS, route mounting)
-- `src/configs/index.ts`: Typed env var access; validated at boot
-- `src/routes/`: Route definitions (`auth.routes.ts`, `health.routes.ts`, `profile.routes.ts`, `users.routes.ts`, `weather.routes.ts`, `audit.routes.ts`, `settings.routes.ts`, `maps.routes.ts`, `contentBlocks.routes.ts`, `pages.routes.ts`, `chapters.routes.ts`, `sections.routes.ts`, `indicators.routes.ts`, `indicatorTables.routes.ts`, `comparisonTemplates.routes.ts`)
-- `src/controllers/`: Decoupled route handlers (`auth.controller.ts` for local auth, `oauth.controller.ts` for Google OAuth, `otp.controller.ts` for OTP verification, `profile.controller.ts` for self-service credential changes, `users.controller.ts` for user management, `weather.controller.ts` — forecast lookup, `audit.controller.ts` — audit log list/summary/acknowledge, `settings.controller.ts` — public portal settings, audit retention config, and operational weather forecast settings, `maps.controller.ts` — spatial points and RT leader lookup (plus editor/admin write endpoints for spatial points, their RT coverage, and RT leader edits), `pages.controller.ts` — public page/chapter/section read and editor page management (create, rename, delete, reorder), `chapters.controller.ts` — chapter create/update/delete/reorder, `sections.controller.ts` — section create/update/delete/reorder, section prose block create/reorder and the section figure `PUT`/`DELETE` (all via the shared `hierarchyHandler.ts` wrapper),  `contentBlocks.controller.ts` — CMS prose/content block queries, edits and prose block delete, `indicators.controller.ts` — public indicator reads and editor/admin CRUD, `indicatorTables.controller.ts` — public matrix-table reads (slug-or-id) and editor/admin table/row CRUD, `comparisonTemplates.controller.ts` — tier-1 comparison template CRUD, the 422 keyword-acknowledgment response, and the Admin-only `POST /preview` live-preview handler)
-- `src/services/`: Business logic sitting between controllers and external/data sources (`users.service.ts` — user management & role administration, `profile.service.ts` — self-service credential updates, `weather.service.ts` — caches and transforms BMKG forecasts, `audit.service.ts` — audit log writes/reads and the `AUDIT_ACTIONS` severity table, `settings.service.ts` — public portal, audit retention, and operational weather settings, `maps.service.ts` — spatial points querying, RT leader coordinate resolution, editor/admin spatial point/coverage/RT-leader writes, CSV roster preview/apply, and the explicit sample-roster status with the shared ketua_rt 1:1 invariant enforcement (SPEC §7), and audit, `legacySampleRtCleanup.service.ts` — shared transactional seed/CLI cleanup and count-only maintenance audit, `pages.service.ts` — page → chapter → section hierarchy reads, atomic page creation, rename, deletion, and deadlock-free reordering, `chapters.service.ts` / `sections.service.ts` — chapter and section authoring (generated slugs, `expectedUpdatedAt` optimistic concurrency, parent-first locking, dependency-blocked deletes, audit in the same transaction), `hierarchyDependencies.service.ts` — content block/indicator/table dependency counts for delete safety, `hierarchyCaches.ts` — indicator cache invalidation after hierarchy removals, `contentBlocks.service.ts` — CMS prose/content block queries and edits plus section prose block create/delete/reorder, `sectionFigure.service.ts` — the single photo/photos/diagram figure per section (`figure` content block): lock section → figure block → affected media in ascending id order, `attachMedia`/`detachMedia` in the same transaction, no-op detection (an identical re-save still re-asserts the attach), audit, cache invalidation (generic content-block PATCH/DELETE refuse figure blocks with 409 `FIGURE_BLOCK_PROTECTED`), `indicators.service.ts` — scalar figure CRUD with tier-1 pairing validation, template attachment and rendered `comparison`, and audit, `indicatorTables.service.ts` — matrix-table CRUD with per-kind cell-shape validation, SQL-SUM totals, and audit, `comparisonTemplates.service.ts` — admin-authored sentence templates with warn-on-save trend-keyword acknowledgment and audit, the stateless `previewComparisonTemplate` (same `renderComparison` as the public read, synthetic examples, plain-language problems), plus the `DEFAULT_COMPARISON_TEMPLATES` seed data)
-- `src/middlewares/`: Express middleware (`auth.middleware.ts` for JWT, `csrf.middleware.ts` for CSRF protection, `role.middleware.ts` for role-based authorization, `turnstile.middleware.ts` for anti-bot, `rateLimit.middleware.ts` — per-route rate limiters)
-- `src/utils/`: `jwt.ts` (token signing), `oauth.ts` (Google OAuth PKCE & token verification), `otp.ts` (OTP hashing & expiry), `mailer.ts` (transactional email), `turnstile.ts` (Turnstile API client), `prisma.ts` (Prisma instance — wraps `audit_logs` writes in an append-only guard, see Audit Trail below), `bmkg.ts` (BMKG API fetch + response validation), `auditLogGuard.ts` (the append-only guard's pure logic), `actor.ts` / `requestContext.ts` (pull `{id, email, role}` and `{ipAddress, userAgent}` off a request for audit entries), `lockTransactionCache.ts` (versioned TTL cache and row-level lock transaction scaffold), `hierarchyAuthoring.ts` (shared Cerita authoring primitives: `HierarchyServiceError` codes, title/slug generation, `expectedUpdatedAt` checks, reorder planning), `comparator.ts` (canonicalized JSON deep equality for diffs and mutations), `sectionFigure.ts` (figure zod schema, limits and media-id helpers; pure), `keyedCache.ts` (generic bounded LRU keyed cache with recency tracking), `comparisonProse.ts` (tier-1 template structure validation and exact-decimal comparison rendering), `trendKeywords.ts` (the code-owned trend/superlative word list, matcher, and per-occurrence acknowledgment key), `rtSeedPoints.ts` (deterministic RT seed ids and deletion tombstones), `legacySampleRtFingerprints.ts` (fingerprints for recognized legacy synthetic RT records)
-- Media storage (SPEC.md §7 `media_assets`): `src/routes/media.routes.ts` + `src/controllers/media.controller.ts` (upload, editor preview, public image, public download), `src/middlewares/mediaUpload.middleware.ts` (multer disk staging into `<UPLOAD_DIR>/_staging/<uploadId>/`, one file per request), `src/services/media.service.ts` (validate, re-encode, store, audit; exports `attachMedia(tx, ids, {purpose})` / `detachMedia` for content transactions), `src/services/mediaCleanup.service.ts` + `scripts/cleanup-media.ts`, and `src/utils/`: `uploadRoot.ts` (UPLOAD_DIR resolution and boot validation), `mediaPolicy.ts` (every limit, allowed type and the purpose allowlist), `mediaSignature.ts` (magic-byte detection, OOXML inspection), `mediaCsv.ts` (streaming CSV scan: UTF-8/control-char sanity and formula-injection rejection), `mediaImage.ts` (sharp WebP re-encode, EXIF stripping, thumbnails), `mediaStorage.ts` (layout, realpath containment, display-name and header helpers)
-- `prisma/schema.prisma`: ORM schema (MySQL)
-- `prisma/seed.ts`: Seeds default roles (`user`, `admin`, `editor`), default audit retention settings (keep-forever), default public settings (`publicSeedMap`), default operational weather config, default content blocks (`DEFAULT_CONTENT_BLOCKS`), default tier-1 comparison templates (`DEFAULT_COMPARISON_TEMPLATES`), the 8 Cerita pages and their chapters (data in `prisma/ceritaPages.ts`), sample RT leaders (development/testing only, skipped when NODE_ENV=production), and spatial points; delegates legacy cleanup to `legacySampleRtCleanup.service.ts`
-- `prisma/seedRtLeaders.ts`, `src/data/rtLeadersData.ts`: create-only RT seed helpers and the development-only synthetic map/contact data
-- `backend/src/utils/rtLeadersCsv.ts`: CSV parsing and validation for the Ketua RT operational import
-- `prisma/seeder_indicator.ts`: Seeds sample scalar indicator figures across all 8 Cerita categories (`npm run seed:indicator`)
-- `generated/prisma/`: Auto-generated Prisma client (do not edit)
-- `scripts/grants/audit-logs-grants.sql`, `scripts/prune-audit-logs.ts`, `scripts/cleanup-legacy-sample-rt-leaders.ts`: audit trail operations and development sample cleanup — see Audit Trail below
-
-`GET /api/maps/rt-leaders` includes `isSampleRoster`, sourced from
-`maps.rt_leaders_sample_roster`. The Ketua RT page keeps roster rows and that flag from the same
-successful response and revalidates every 60 seconds while visible.
-
-Key details:
-
-- Express app with JSON middleware, cookie parsing, CORS, and route mounting under `/api/*`
-- CSRF protection is applied globally after `cookie-parser`/`cors`; fetch a token from `/api/auth/csrf-token` and send it in `x-csrf-token` for mutating auth requests
-- Prisma client output to custom location `../generated/prisma`
-- JWT access + refresh tokens; refresh tokens persisted in DB with `/api/auth/refresh` and `/api/auth/logout` endpoints
-- Uses `dotenv` for environment configuration
-- Unit tests under `src/__tests__/` run via Node's built-in test runner through `tsx` (`npm test`). `npm run test:coverage` runs the same suite with `--experimental-test-coverage` via `backend/scripts/coverage.mjs`, which strips `src/__tests__/**` and `generated/**` out of the printed report so the numbers reflect application code only
+- Layering: route → thin controller → service. Put non-trivial logic (external calls, caching, transforms) in `src/services/`. Mount a new resource's router in `src/app.ts`.
+- Every mutation writes its `audit_logs` row in the same transaction (see Audit Trail).
+- CSRF is global: fetch a token from `GET /api/auth/csrf-token` and send it as `x-csrf-token` on mutating requests.
+- Unit tests live in `src/__tests__/` (Node test runner via `tsx`). Integration tests under `tests/integration/` need a real MySQL.
 
 #### Audit Trail
 
 Every admin user-management action and security-relevant auth event writes an `audit_logs` row (see `docs/SPEC.md` §3 for the product-level rules — severity levels, retention policy, what must never appear in `metadata`). Two things make this more than "just another table":
 
 - **Tamper defense is two layers.** Layer 1 is app-level: the Prisma client singleton in `src/utils/prisma.ts` is `$extends`-wrapped so `auditLog.update`/`.delete`/`.deleteMany`/`.upsert` throw unless the write touches only `acknowledgedAt`/`acknowledgedById` (logic in `src/utils/auditLogGuard.ts`). This is a guardrail against careless app code, not a security boundary. Layer 2 is the one that actually holds: `backend/scripts/grants/audit-logs-grants.sql` strips the app's runtime DB user down to `SELECT`, `INSERT`, and column-scoped `UPDATE` on `audit_logs` — no `DELETE`, no unrestricted `UPDATE` — via MySQL grants. **Run that script once per environment**, or the app's DB user retains its default full rights on the table and layer 2 is absent.
-- **Retention pruning runs outside the app.** `backend/scripts/prune-audit-logs.ts` connects with `AUDIT_ADMIN_DATABASE_URL` — a separate, privileged DB connection, never the app's — because deleting rows is exactly what layer 2 just took away from the app user. Run it on a schedule: the opt-in `audit-pruner` Compose sidecar (`docker compose --profile ops up -d --build audit-pruner`, schedule via `AUDIT_PRUNE_SCHEDULE`) or a host cron entry — see the Deployment checklist in `README.md`, which also covers applying the grants script once per environment. It reads the per-severity retention settings (`GET`/`PATCH /api/settings/audit-retention`, admin-only), never prunes an unacknowledged `critical` row regardless of age, and writes its own `audit.pruned` summary row.
+- **Retention pruning runs outside the app.** `backend/scripts/prune-audit-logs.ts` connects with `AUDIT_ADMIN_DATABASE_URL` — a separate, privileged DB connection, never the app's — because deleting rows is exactly what layer 2 just took away from the app user. Run it on a schedule: the opt-in `audit-pruner` Compose sidecar (`docker compose --profile ops up -d --build audit-pruner`, schedule via `AUDIT_PRUNE_SCHEDULE`) or a host cron entry — see the Deployment checklist in `docs/DEPLOYMENT.md`, which also covers applying the grants script once per environment. It reads the per-severity retention settings (`GET`/`PATCH /api/settings/audit-retention`, admin-only), never prunes an unacknowledged `critical` row regardless of age, and writes its own `audit.pruned` summary row.
 
 #### Media Storage
 
@@ -181,41 +109,10 @@ product rules. Things to know when touching it:
   assets locked in ascending id order up front so two figures swapping shared photos cannot deadlock.
 - **New table grants**: `media_assets` is in `scripts/grants/audit-logs-grants.sql`.
 - **Cleanup removes files before the row** (a failed delete keeps the row for the next run) and re-verifies `attached_at IS NULL` before touching files; see `mediaCleanup.service.ts` for the documented residual window.
-- **Run `npm run media:cleanup` on a schedule** (see README Deployment) or abandoned uploads accumulate.
-- sharp ships prebuilt binaries for the Debian-based Node 22 image on Linux x64 and arm64. The image
-  build needs no compiler toolchain.
-
-## Tech Stack Summary
-
-| Layer    | Tech                                         |
-| -------- | -------------------------------------------- |
-| Frontend | Vue 3, Vue Router, Pinia, Tailwind CSS, Vite |
-| Backend  | Express.js, Prisma ORM                       |
-| Database | MySQL (configured in Prisma)                 |
-| Language | TypeScript (both frontend and backend)       |
-| Node     | ^22.18.0 or >=24.12.0 (frontend)             |
-| Linting  | ESLint + Prettier (both)                     |
-
-## Key Files
-
-- **Root README**: Overview of tech stack and `npm ci` requirement
-- **Frontend README**: IDE setup, Vite/TypeScript guides, build commands
-- **`package.json`** (both dirs): Scripts and dependencies—reference for available commands
-- **ESLint configs**: `frontend/eslint.config.ts`, `backend/eslint.config.js`
-- **TypeScript**: `frontend/tsconfig.json`, `backend/tsconfig.json` (with app config for frontend)
-- **Vite config**: `frontend/vite.config.ts` (Tailwind, Vue plugins, `@` alias)
-- **`docs/ACCESSIBILITY.md`**: Semantic HTML rules (MUST) and WCAG 2.1 Level A conformance target (SHOULD) for frontend markup
+- **Run `npm run media:cleanup` on a schedule** (see docs/DEPLOYMENT.md) or abandoned uploads accumulate.
 
 ## Common Workflows
 
-**Debug frontend type errors**: Use `npm run type-check` to get full TypeScript diagnostics before `npm run build`.
+**Database schema changes**: edit `backend/prisma/schema.prisma`, then run `npx prisma migrate dev` (needs a shadow database; see README Troubleshooting). If the migration adds a table, also add its `GRANT` line to `backend/scripts/grants/audit-logs-grants.sql`: that script replaces the app user's blanket db-level grant with per-table grants, so a table missing from it becomes inaccessible to the app once the script is (re-)applied.
 
-**Fix linting before commit**: Run `npm run lint` to fix ESLint and Prettier issues in one pass.
-
-**Database schema changes**: Edit `backend/prisma/schema.prisma`, then run `npx prisma migrate dev` to apply and generate client. If the migration adds a table, also add its `GRANT` line to `backend/scripts/grants/audit-logs-grants.sql` — that script replaces the app user's blanket db-level grant with per-table grants, so a table missing from it becomes inaccessible to the app once the script is (re-)applied.
-
-**Add a route**: In `frontend/src/router/index.ts`, register a new route pointing to a component. Add the component in `frontend/src/` or a subdirectory.
-
-**Add a store**: Create a new file in `frontend/src/stores/` following Pinia conventions (defineStore), then import and use in components via `useStore()`.
-
-**Backend endpoint**: Add a handler in `backend/src/controllers/`, wire it in the matching file under `backend/src/routes/`, then mount that router in `backend/src/app.ts` if it's a new resource. Middleware (JSON parsing, cookies, CORS) is already configured in `app.ts`. If the endpoint has non-trivial logic (external API calls, caching, data transforms), put that in `backend/src/services/` and keep the controller a thin pass-through.
+**Before committing**: `npm run lint` fixes ESLint and Prettier in one pass; `npm run type-check` (frontend) gives full TypeScript diagnostics before `npm run build`.
