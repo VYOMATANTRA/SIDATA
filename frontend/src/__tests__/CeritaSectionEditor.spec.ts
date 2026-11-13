@@ -840,6 +840,35 @@ describe('CeritaSectionEditor', () => {
       wrapper.unmount();
     });
 
+    it('shows a non-blocking note while a bar number could be mistaken for a decimal', async () => {
+      const wrapper = await mountEditor();
+      await wrapper.find('[data-test="kind-diagram"]').setValue();
+      await wrapper.find('[data-test="diagram-title"]').setValue('Penduduk');
+      await click(wrapper, 'Tambah batang');
+      await wrapper.find('[data-test="bar-label"]').setValue('RT 1');
+
+      expect(wrapper.find('[data-test="bar-value-note"]').exists()).toBe(false);
+      await wrapper.find('[data-test="bar-value"]').setValue('12.500');
+      const note = wrapper.find('[data-test="bar-value-note"]');
+      expect(note.text()).toContain('Dibaca 12.500.');
+      expect(note.text()).toContain('pakai koma');
+      // The note is tied to the field, so a screen reader hears it with the number.
+      const describedBy = wrapper.find('[data-test="bar-value"]').attributes('aria-describedby');
+      expect(describedBy).toContain(note.attributes('id'));
+
+      await wrapper.find('[data-test="bar-value"]').setValue('12,5');
+      expect(wrapper.find('[data-test="bar-value-note"]').exists()).toBe(false);
+
+      // It never blocks saving: 12.500 is stored as 12500.
+      await wrapper.find('[data-test="bar-value"]').setValue('12.500');
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      await flushPromises();
+      expect(fake.lastWrite()).toMatchObject({
+        body: { figure: { bars: { items: [{ label: 'RT 1', value: 12500 }] } } },
+      });
+      wrapper.unmount();
+    });
+
     it('requires a description for a diagram image', async () => {
       const wrapper = await mountEditor();
       await wrapper.find('[data-test="kind-diagram"]').setValue();

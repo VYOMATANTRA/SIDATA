@@ -17,6 +17,7 @@ import {
   draftSignature,
   emptyBar,
   emptyPhoto,
+  barValueNote as barNote,
   figureIds,
   summarizeFigure,
   validateFigureDraft,
@@ -614,10 +615,22 @@ defineExpose({ isDirty: () => dirty.value });
                 type="text"
                 inputmode="decimal"
                 :class="INPUT_CLASSES"
-                :aria-describedby="describedBy"
+                :aria-describedby="
+                  [describedBy, barNote(bar.value) ? `${ids.barValue(index)}-note` : undefined]
+                    .filter(Boolean)
+                    .join(' ') || undefined
+                "
                 :aria-invalid="invalid ? 'true' : undefined"
                 data-test="bar-value"
               />
+              <p
+                v-if="barNote(bar.value)"
+                :id="`${ids.barValue(index)}-note`"
+                class="text-text-muted mt-1.5 text-xs"
+                data-test="bar-value-note"
+              >
+                {{ barNote(bar.value) }}
+              </p>
             </FormField>
           </div>
           <CollectionRowActions

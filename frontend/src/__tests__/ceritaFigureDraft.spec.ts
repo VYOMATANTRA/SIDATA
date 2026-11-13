@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   draftFromFigure,
   draftSignature,
+  barValueNote,
   barValueProblem,
   emptyDraft,
   formatBarValue,
@@ -77,6 +78,32 @@ describe('parseBarValue (Indonesian convention: dot = thousands, comma = decimal
       bars: { items: [{ label: 'A', value: 1234.5 }] },
     });
     expect(draft.bars[0]!.value).toBe('1.234,5');
+  });
+});
+
+describe('barValueNote (a single dot and three digits is read as thousands)', () => {
+  it.each([
+    ['12.500', '12.500'],
+    ['1.234', '1.234'],
+    ['0.500', '500'],
+    ['-12.500', '-12.500'],
+    [' 3.000 ', '3.000'],
+  ])('notes how "%s" is read', (typed, shown) => {
+    const note = barValueNote(typed);
+    expect(note).toContain(`Dibaca ${shown}.`);
+    expect(note).toContain('pakai koma');
+    expect(note).toContain('12,5');
+  });
+
+  it.each(['', '125', '12,5', '12,500', '1.234,5', '1.234.567', '12.5', '1.23', '1234.567', 'abc'])(
+    'has no note for "%s"',
+    (typed) => {
+      expect(barValueNote(typed)).toBeNull();
+    },
+  );
+
+  it('does not stop the number from being read the Indonesian way', () => {
+    expect(parseBarValue('12.500')).toBe(12500);
   });
 });
 

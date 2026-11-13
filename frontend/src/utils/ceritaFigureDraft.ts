@@ -253,6 +253,22 @@ export function parseBarValue(text: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+// One dot followed by exactly three digits and no comma: valid, but easy to mean as a decimal.
+const SINGLE_DOT_THOUSANDS = /^-?\d{1,3}\.\d{3}$/;
+
+/**
+ * A non-blocking note for the one reading that surprises people: "12.500" is twelve thousand five
+ * hundred (the dot is a thousands separator), not twelve and a half. Null when there is nothing to
+ * point out.
+ */
+export function barValueNote(text: string): string | null {
+  const trimmed = text.trim();
+  if (!SINGLE_DOT_THOUSANDS.test(trimmed)) return null;
+  const value = parseBarValue(trimmed);
+  if (value === null) return null;
+  return `Dibaca ${formatBarValue(value)}. Untuk desimal, pakai koma, misalnya 12,5.`;
+}
+
 /** Plain-Indonesian reason a typed bar number cannot be used, or null when it can. */
 export function barValueProblem(text: string, where: string): string | null {
   if (parseBarValue(text) !== null) return null;
