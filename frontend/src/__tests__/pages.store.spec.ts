@@ -349,4 +349,146 @@ describe('pages store (public page by slug)', () => {
 
     expect(store.pages).toEqual([]);
   });
+
+  describe('a forced hierarchy reload while a request is already running', () => {
+    function pagesBody(title: string) {
+      return {
+        pages: [
+          {
+            id: 'p1',
+            slug: 'kependudukan',
+            title,
+            sortOrder: 0,
+            chapters: [],
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      };
+    }
+
+    function deferredFetch() {
+      const resolvers: Array<(response: Response) => void> = [];
+      const fetchMock = vi.fn<typeof fetch>(
+        () => new Promise<Response>((resolve) => resolvers.push(resolve)),
+      );
+      return {
+        fetchMock,
+        // The request starts a tick after the call (the client awaits first), so wait for it.
+        resolve: async (index: number, title: string) => {
+          await vi.waitFor(() => expect(resolvers[index]).toBeDefined());
+          resolvers[index]!(json(pagesBody(title)));
+        },
+      };
+    }
+
+    it('waits for the running request and then fetches again, so the result is newer than the save', async () => {
+      const { fetchMock, resolve } = deferredFetch();
+      vi.stubGlobal('fetch', fetchMock);
+      const store = usePagesStore();
+
+      const started = store.fetchHierarchy();
+      const forced = store.fetchHierarchy(true);
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+      await resolve(0, 'Judul lama');
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      await started;
+
+      await resolve(1, 'Judul baru');
+      await forced;
+      expect(store.pages[0]!.title).toBe('Judul baru');
+      expect(store.pagesBySlug['kependudukan']!.title).toBe('Judul baru');
+    });
+
+    it('shares one follow-up fetch between concurrent forced callers', async () => {
+      const { fetchMock, resolve } = deferredFetch();
+      vi.stubGlobal('fetch', fetchMock);
+      const store = usePagesStore();
+
+      void store.fetchHierarchy();
+      const calls = [
+        store.fetchHierarchy(true),
+        store.fetchHierarchy(true),
+        store.fetchHierarchy(true),
+      ];
+      await resolve(0, 'lama');
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      await resolve(1, 'baru');
+      await Promise.all(calls);
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(store.pages[0]!.title).toBe('baru');
+    });
+
+    it('keeps sharing the running request for a plain caller', async () => {
+      const { fetchMock, resolve } = deferredFetch();
+      vi.stubGlobal('fetch', fetchMock);
+      const store = usePagesStore();
+
+      const first = store.fetchHierarchy();
+      const second = store.fetchHierarchy();
+      await resolve(0, 'x');
+      await Promise.all([first, second]);
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    // The running request finishing and its follow-up starting are a few microtasks apart, and
+    // nothing is in flight in between. A second forced caller can land anywhere in that window, so
+    // sweep its arrival: whenever it comes, two requests must never run at once (the older answer
+    // could land last and overwrite the newer data) and the loading flag must not drop early.
+    it.each(Array.from({ length: 16 }, (_, ticks) => ticks))(
+      'never overlaps requests when a second forced caller arrives %i ticks after the first answer',
+      async (ticks) => {
+        let active = 0;
+        let maxActive = 0;
+        const resolvers: Array<(response: Response) => void> = [];
+        const fetchMock = vi.fn<typeof fetch>(
+          () =>
+            new Promise<Response>((resolve) => {
+              active += 1;
+              maxActive = Math.max(maxActive, active);
+              resolvers.push((response) => {
+                active -= 1;
+                resolve(response);
+              });
+            }),
+        );
+        vi.stubGlobal('fetch', fetchMock);
+        const store = usePagesStore();
+
+        const running = store.fetchHierarchy();
+        const queued = store.fetchHierarchy(true);
+        await vi.waitFor(() => expect(resolvers).toHaveLength(1));
+
+        resolvers[0]!(json(pagesBody('v0')));
+        for (let i = 0; i < ticks; i += 1) {
+          await Promise.resolve();
+          // The follow-up is queued the whole time, so the screen must still read as loading.
+          expect(store.isHierarchyLoading).toBe(true);
+        }
+        const late = store.fetchHierarchy(true);
+
+        // Answer every request in the order it started, until all callers are done.
+        let answered = 1;
+        const callers = Promise.all([running, queued, late]);
+        let settled = false;
+        void callers.then(() => (settled = true));
+        for (let guard = 0; guard < 50 && !settled; guard += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          while (answered < resolvers.length) {
+            resolvers[answered]!(json(pagesBody(`v${answered}`)));
+            answered += 1;
+          }
+        }
+        await callers;
+
+        expect(maxActive).toBe(1);
+        // The newest request's answer is the one that stays.
+        expect(store.pages[0]!.title).toBe(`v${fetchMock.mock.calls.length - 1}`);
+        expect(store.isHierarchyLoading).toBe(false);
+      },
+    );
+  });
 });

@@ -263,4 +263,24 @@ describe('apiClient', () => {
       message: 'Label sudah dipakai',
     });
   });
+  it('leaves the Content-Type to the browser for a FormData body and keeps JSON for the rest', async () => {
+    signIn('still-valid');
+    const contentTypes: Array<string | null> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
+        if (String(input) === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-token' });
+        contentTypes.push(new Headers(init?.headers).get('Content-Type'));
+        return json({ ok: true });
+      }),
+    );
+
+    const form = new FormData();
+    form.append('purpose', 'cerita');
+    await apiFetch('/api/media', { method: 'POST', body: form });
+    await apiFetch('/api/pages', { method: 'POST', body: '{}' });
+
+    // null means "not set by us", so the browser writes multipart/form-data with its boundary.
+    expect(contentTypes).toEqual([null, 'application/json']);
+  });
 });

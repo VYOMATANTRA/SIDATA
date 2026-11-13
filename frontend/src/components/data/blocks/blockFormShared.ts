@@ -109,6 +109,8 @@ export function useRepeatableRows<T extends object>(
   add: () => void;
   remove: (index: number) => void;
   move: (index: number, direction: -1 | 1) => void;
+  /** Replaces every row (fresh uids) without announcing or moving focus: a reset, not an edit. */
+  setRows: (next: T[]) => void;
 } {
   const rows = ref(initial.map((row) => ({ ...row, uid: nextRowUid++ }))) as Ref<KeyedRow<T>[]>;
   const announcement = ref('');
@@ -164,5 +166,9 @@ export function useRepeatableRows<T extends object>(
     focusId(id);
   }
 
-  return { rows, announcement, isFull, add, remove, move };
+  function setRows(next: T[]): void {
+    rows.value = next.map((row) => ({ ...row, uid: nextRowUid++ })) as KeyedRow<T>[];
+  }
+
+  return { rows, announcement, isFull, add, remove, move, setRows };
 }

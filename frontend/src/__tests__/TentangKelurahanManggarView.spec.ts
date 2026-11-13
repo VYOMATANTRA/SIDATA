@@ -5,6 +5,7 @@ import { createRouter, createMemoryHistory } from 'vue-router';
 import TentangKelurahanManggarView from '../views/TentangKelurahanManggarView.vue';
 import { useIndicatorsStore, type IndicatorDto } from '../stores/indicators.store';
 import { useContentBlocksStore } from '../stores/contentBlocks.store';
+import { useStubbedPagesFetch } from './publicPagesFetch';
 
 function mountView(options: { includeMapRoute?: boolean } = {}) {
   const pinia = createPinia();
@@ -25,6 +26,8 @@ function mountView(options: { includeMapRoute?: boolean } = {}) {
 
   return { pinia, router };
 }
+
+useStubbedPagesFetch();
 
 describe('TentangKelurahanManggarView accessibility and content', () => {
   it('renders required semantic landmarks, skip link, and single h1', async () => {

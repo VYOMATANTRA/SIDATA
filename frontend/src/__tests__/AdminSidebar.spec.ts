@@ -194,7 +194,7 @@ describe('AdminSidebar.vue', () => {
   it('marks links that only open a placeholder view with a "Segera hadir" badge', async () => {
     const { wrapper } = await mountSidebar('admin');
 
-    const unbuilt = ['nav-cerita', 'nav-publikasi'];
+    const unbuilt = ['nav-publikasi'];
     for (const dataTest of unbuilt) {
       const link = wrapper.find(`[data-test="${dataTest}"]`);
       expect(link.text()).toContain('Segera hadir');
@@ -203,6 +203,7 @@ describe('AdminSidebar.vue', () => {
     const built = [
       'nav-beranda',
       'nav-data',
+      'nav-cerita',
       'nav-peta',
       'nav-rukun-tetangga',
       'nav-sistem-akun-pengguna',

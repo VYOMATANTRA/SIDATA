@@ -29,6 +29,8 @@ export interface SectionSummary {
   slug: string;
   title: string | null;
   sortOrder: number;
+  /** The concurrency token for authoring. Carried by every hierarchy read. */
+  updatedAt?: string;
 }
 
 export interface ChapterDetail {
@@ -37,7 +39,77 @@ export interface ChapterDetail {
   number: string | null;
   title: string;
   sortOrder: number;
+  updatedAt?: string;
   sections: SectionSummary[];
+}
+
+/**
+ * The hierarchy as the CMS needs it: every level carries the `updatedAt` token that a rename,
+ * delete or reorder must send. Only the `?include=sections` fetch fills it, and only from pages
+ * whose every level has the token, so the admin screen never works from the public per-slug cache.
+ */
+export interface HierarchySection {
+  id: string;
+  slug: string;
+  title: string | null;
+  sortOrder: number;
+  updatedAt: string;
+}
+
+export interface HierarchyChapter {
+  id: string;
+  slug: string;
+  number: string | null;
+  title: string;
+  sortOrder: number;
+  updatedAt: string;
+  sections: HierarchySection[];
+}
+
+export interface HierarchyPage {
+  id: string;
+  slug: string;
+  title: string;
+  sortOrder: number;
+  updatedAt: string;
+  chapters: HierarchyChapter[];
+}
+
+/** Copies a page into the authoring shape, or returns null when any level lacks its token. */
+function toHierarchyPage(detail: PageDetail): HierarchyPage | null {
+  if (typeof detail.updatedAt !== 'string') return null;
+  const chapters: HierarchyChapter[] = [];
+  for (const chapter of detail.chapters ?? []) {
+    if (typeof chapter.updatedAt !== 'string') return null;
+    const sections: HierarchySection[] = [];
+    for (const section of chapter.sections ?? []) {
+      if (typeof section.updatedAt !== 'string') return null;
+      sections.push({
+        id: section.id,
+        slug: section.slug,
+        title: section.title,
+        sortOrder: section.sortOrder,
+        updatedAt: section.updatedAt,
+      });
+    }
+    chapters.push({
+      id: chapter.id,
+      slug: chapter.slug,
+      number: chapter.number,
+      title: chapter.title,
+      sortOrder: chapter.sortOrder,
+      updatedAt: chapter.updatedAt,
+      sections,
+    });
+  }
+  return {
+    id: detail.id,
+    slug: detail.slug,
+    title: detail.title,
+    sortOrder: detail.sortOrder,
+    updatedAt: detail.updatedAt,
+    chapters,
+  };
 }
 
 export interface PageDetail {
@@ -70,11 +142,17 @@ export const usePagesStore = defineStore('pages', () => {
   // --- CMS: flattened hierarchy (all pages → sections) ---
   const pages = ref<PageSummary[]>([]);
   const sections = ref<SectionOption[]>([]);
+  // The authoring copy of the tree (see `HierarchyPage`), in server order. Filled only by the
+  // `?include=sections` fetch; `hierarchyIncomplete` is true when the server sent a page without
+  // its tokens, which the admin screen must not work from (a reorder has to name every sibling).
+  const hierarchyPages = ref<HierarchyPage[]>([]);
+  const hierarchyIncomplete = ref(false);
   const isHierarchyLoading = ref(false);
   const isLoaded = ref(false);
   const hierarchyError = ref<string | null>(null);
 
   let hierarchyInFlight: Promise<void> | null = null;
+  let hierarchyFollowUp: Promise<void> | null = null;
 
   // --- Public Cerita: one page by slug ---
   const pagesBySlug = ref<Record<string, PageDetail>>({});
@@ -138,8 +216,28 @@ export const usePagesStore = defineStore('pages', () => {
 
   async function fetchHierarchy(force = false): Promise<void> {
     if (isLoaded.value && !force) return;
-    if (hierarchyInFlight) return hierarchyInFlight;
+    // "Busy" also covers a queued follow-up: between the running request finishing and its
+    // follow-up starting nothing is in flight, and a forced caller arriving then must join the
+    // follow-up rather than start a second, parallel request that could answer last.
+    if (hierarchyInFlight || hierarchyFollowUp) {
+      if (!force) return hierarchyInFlight ?? hierarchyFollowUp!;
+      // A forced reload is asked for because something was just saved, and the running request may
+      // have started before that save: wait for it and fetch once more. Forced callers that arrive
+      // meanwhile share that one follow-up.
+      if (!hierarchyFollowUp) {
+        hierarchyFollowUp = hierarchyInFlight!
+          .catch(() => undefined)
+          .then(() => {
+            hierarchyFollowUp = null;
+            return startHierarchyFetch();
+          });
+      }
+      return hierarchyFollowUp;
+    }
+    return startHierarchyFetch();
+  }
 
+  function startHierarchyFetch(): Promise<void> {
     isHierarchyLoading.value = true;
     hierarchyError.value = null;
 
@@ -181,13 +279,24 @@ export const usePagesStore = defineStore('pages', () => {
           }
         }
 
+        const stamped: HierarchyPage[] = [];
+        let incomplete = false;
+        for (const detail of details) {
+          const page = toHierarchyPage(detail);
+          if (page) stamped.push(page);
+          else incomplete = true;
+        }
+
         pages.value = summaries;
         sections.value = flattened;
+        hierarchyPages.value = stamped;
+        hierarchyIncomplete.value = incomplete;
         isLoaded.value = true;
       } catch (err) {
         hierarchyError.value = toUserMessage(err, 'memuat struktur halaman', 'GET').message;
       } finally {
-        isHierarchyLoading.value = false;
+        // A queued follow-up keeps the loading flag on: it is about to start another request.
+        if (!hierarchyFollowUp) isHierarchyLoading.value = false;
         hierarchyInFlight = null;
       }
     })();
@@ -265,6 +374,8 @@ export const usePagesStore = defineStore('pages', () => {
   return {
     pages,
     sections,
+    hierarchyPages,
+    hierarchyIncomplete,
     isHierarchyLoading,
     isLoaded,
     hierarchyError,

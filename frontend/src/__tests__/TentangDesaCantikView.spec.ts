@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import TentangDesaCantikView from '../views/TentangDesaCantikView.vue';
+import { useStubbedPagesFetch } from './publicPagesFetch';
 
 function mountView() {
   const pinia = createPinia();
@@ -19,6 +20,8 @@ function mountView() {
 
   return { pinia, router };
 }
+
+useStubbedPagesFetch();
 
 describe('TentangDesaCantikView accessibility and content', () => {
   it('renders required semantic landmarks, skip link, and single h1', async () => {

@@ -130,8 +130,13 @@ export const useContentBlocksStore = defineStore('contentBlocks', () => {
   const error = ref<string | null>(null);
 
   let inFlight: Promise<void> | null = null;
+  let followUp: Promise<void> | null = null;
 
-  const editableBlocks = computed<ContentBlock[]>(() => Object.values(serverBlocks.value));
+  // Figure blocks are managed only on /admin/cerita (the section figure endpoints), never as a
+  // card in the content-block CMS, so they stay out of this list. `serverBlocks` keeps them.
+  const editableBlocks = computed<ContentBlock[]>(() =>
+    Object.values(serverBlocks.value).filter((block) => block.type !== 'figure'),
+  );
   const hero = computed<ContentBlock>(() => blocks.value['landing-hero'] ?? DEFAULT_HERO_BLOCK);
   const sambutanLurah = computed<ContentBlock>(
     () => blocks.value['landing-sambutan-lurah'] ?? DEFAULT_SAMBUTAN_BLOCK,
@@ -148,8 +153,28 @@ export const useContentBlocksStore = defineStore('contentBlocks', () => {
 
   async function fetchBlocks(force = false): Promise<void> {
     if (isLoaded.value && !force) return;
-    if (inFlight) return inFlight;
+    // "Busy" also covers a queued follow-up: between the running request finishing and its
+    // follow-up starting nothing is in flight, and a forced caller arriving then must join the
+    // follow-up rather than start a second, parallel request that could answer last.
+    if (inFlight || followUp) {
+      if (!force) return inFlight ?? followUp!;
+      // A forced reload is asked for because something was just saved. The running request may have
+      // started before that save, so wait for it and fetch once more. Forced callers that arrive
+      // meanwhile share that one follow-up.
+      if (!followUp) {
+        followUp = inFlight!
+          .catch(() => undefined)
+          .then(() => {
+            followUp = null;
+            return startFetch();
+          });
+      }
+      return followUp;
+    }
+    return startFetch();
+  }
 
+  function startFetch(): Promise<void> {
     isLoading.value = true;
     error.value = null;
 
@@ -177,7 +202,8 @@ export const useContentBlocksStore = defineStore('contentBlocks', () => {
       } catch (err) {
         error.value = toUserMessage(err, 'memuat blok konten', 'GET').message;
       } finally {
-        isLoading.value = false;
+        // A queued follow-up keeps the loading flag on: it is about to start another request.
+        if (!followUp) isLoading.value = false;
         inFlight = null;
       }
     })();
