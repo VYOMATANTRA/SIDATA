@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useCeritaAdminStore } from '../stores/ceritaAdmin.store';
-import { usePagesStore } from '../stores/pages.store';
+import { usePagesStore, type PageDetail } from '../stores/pages.store';
 import { useAuthStore } from '../stores/auth';
 import type { SectionFigure } from '../services/ceritaFigure.service';
 import { createFakeCerita, type FakeCerita } from './ceritaFakeApi';
@@ -298,5 +298,108 @@ describe('ceritaAdmin store when the reload after a saved write fails', () => {
     expect(outcome).toMatchObject({ ok: true });
     expect(outcome).not.toHaveProperty('refreshFailed', true);
     expect(store.reloadNeeded).toBe(false);
+  });
+});
+
+describe('ceritaAdmin store and the public page cache', () => {
+  let store: ReturnType<typeof useCeritaAdminStore>;
+
+  beforeEach(async () => {
+    store = setup();
+    await store.load();
+  });
+
+  /** What the public Cerita reader can leave in the shared cache: another shape, older, no tokens. */
+  function publicCopy(slug: string, title: string): PageDetail {
+    return {
+      id: 'public-copy',
+      slug,
+      title,
+      sortOrder: 99,
+      createdAt: '2020-01-01T00:00:00.000Z',
+      updatedAt: '2020-01-01T00:00:00.000Z',
+      chapters: [
+        {
+          id: 'old-chapter',
+          slug: 'bab-lama',
+          number: null,
+          title: 'Bab lama',
+          sortOrder: 1,
+          sections: [{ id: 'old-section', slug: 'bagian-lama', title: null, sortOrder: 1 }],
+        },
+      ],
+    };
+  }
+
+  const failTreeReload = (): void =>
+    fake.failNext(
+      (r) => r.method === 'GET' && r.url === '/api/pages?include=sections',
+      fake.json({ error: 'SQL boom' }, 500),
+    );
+
+  it('never reads the public per-slug cache for its tree', async () => {
+    const pages = usePagesStore();
+    pages.pagesBySlug = { ...pages.pagesBySlug, kependudukan: publicCopy('kependudukan', 'Lama') };
+
+    expect(store.tree[0]!.title).toBe('Kependudukan');
+    const chapter = store.tree[0]!.chapters[0]!;
+    expect(chapter.id).not.toBe('old-chapter');
+    expect(typeof chapter.updatedAt).toBe('string');
+
+    // A write still carries the real token and is accepted.
+    expect(await store.renameChapter(chapter.id, 'Penduduk Total')).toMatchObject({ ok: true });
+  });
+
+  it('reorders every page even when only one page was opened on the public site', async () => {
+    const pages = usePagesStore();
+    pages.pagesBySlug = { kependudukan: publicCopy('kependudukan', 'Lama') };
+
+    const outcome = await store.movePage('pendidikan', -1);
+
+    expect(outcome).toMatchObject({ ok: true });
+    expect(store.tree.map((p) => p.slug)).toEqual(['pendidikan', 'kependudukan']);
+  });
+
+  it('drops a deleted chapter from the screen and forgets the public copy of its page', async () => {
+    const pages = usePagesStore();
+    const chapter = store.tree[0]!.chapters[1]!;
+    // Empty the chapter first (a reload that works), then delete it with a reload that fails.
+    expect(await store.removeSection(chapter.sections[0]!.id)).toMatchObject({ ok: true });
+    pages.pagesBySlug = { ...pages.pagesBySlug, kependudukan: publicCopy('kependudukan', 'Lama') };
+
+    failTreeReload();
+    expect(await store.removeChapter(chapter.id)).toMatchObject({ ok: true, refreshFailed: true });
+
+    expect(store.tree[0]!.chapters.map((c) => c.id)).not.toContain(chapter.id);
+    // The next public visit fetches the page again instead of reading a pre-delete copy.
+    expect(pages.pagesBySlug['kependudukan']).toBeUndefined();
+  });
+
+  it('refuses to work from a page the server sent without its tokens', async () => {
+    const copy = JSON.parse(JSON.stringify(store.tree)) as typeof store.tree;
+    const stamped = copy.map((page) => ({
+      ...page,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    }));
+    // The second page's chapters arrive without their `updatedAt`.
+    for (const chapter of stamped[1]!.chapters) {
+      delete (chapter as { updatedAt?: string }).updatedAt;
+    }
+    fake.failNext(
+      (r) => r.method === 'GET' && r.url === '/api/pages?include=sections',
+      fake.json({ pages: stamped }),
+    );
+
+    expect(await store.load()).toBe(false);
+
+    // No half-edited tree: a reorder has to name every sibling, so nothing is offered.
+    expect(store.tree).toEqual([]);
+    expect(store.loadError).toContain('belum lengkap');
+    expect(store.loadError).not.toMatch(/updatedAt|token/i);
+
+    // A good reload recovers.
+    expect(await store.load()).toBe(true);
+    expect(store.tree.map((p) => p.slug)).toEqual(['kependudukan', 'pendidikan']);
+    expect(store.loadError).toBeNull();
   });
 });

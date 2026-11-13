@@ -4,7 +4,12 @@ import * as api from '../services/ceritaAdmin.service';
 import * as figureApi from '../services/ceritaFigure.service';
 import { figureFromBlock, type SectionFigure } from '../services/ceritaFigure.service';
 import { useContentBlocksStore, type ContentBlock } from './contentBlocks.store';
-import { usePagesStore } from './pages.store';
+import {
+  usePagesStore,
+  type HierarchyChapter,
+  type HierarchyPage,
+  type HierarchySection,
+} from './pages.store';
 import { ceritaFailure, type FailureOptions } from '../utils/ceritaAdminMessages';
 import { swapReorderItems } from '../utils/ceritaOrder';
 
@@ -12,39 +17,21 @@ import { swapReorderItems } from '../utils/ceritaOrder';
  * State and writes behind `/admin/cerita` (SPEC §3, §8).
  *
  * It owns no copy of the data: the page → chapter → section tree is read from the shared pages
- * store and the paragraphs and figures from the shared content-block store, so a successful
- * write that refreshes them also refreshes what the public Cerita pages read next. Every write
- * resolves the `expectedUpdatedAt` token from that loaded data at call time, so a form left open
- * keeps its draft, and after a "stale" refusal the editor reloads and sends the same draft again
- * with the fresh token.
+ * store's hierarchy list (filled only by the `?include=sections` fetch, so every level carries
+ * its token; never from the public per-slug cache) and the paragraphs and figures from the
+ * shared content-block store, so a successful write that refreshes them also refreshes what the
+ * public Cerita pages read next. Every write resolves the `expectedUpdatedAt` token from that
+ * loaded data at call time, so a form left open keeps its draft, and after a "stale" refusal the
+ * editor reloads and sends the same draft again with the fresh token.
  */
 
-export interface AdminSection {
-  id: string;
-  slug: string;
-  title: string | null;
-  sortOrder: number;
-  updatedAt: string;
-}
+export type AdminSection = HierarchySection;
+export type AdminChapter = HierarchyChapter;
+export type AdminPage = HierarchyPage;
 
-export interface AdminChapter {
-  id: string;
-  slug: string;
-  number: string | null;
-  title: string;
-  sortOrder: number;
-  updatedAt: string;
-  sections: AdminSection[];
-}
-
-export interface AdminPage {
-  id: string;
-  slug: string;
-  title: string;
-  sortOrder: number;
-  updatedAt: string;
-  chapters: AdminChapter[];
-}
+/** Shown instead of a partial tree: a reorder must name every sibling, so a gap cannot be edited. */
+const INCOMPLETE_TREE_MESSAGE =
+  'Data struktur halaman dari server belum lengkap, sehingga halaman ini belum bisa dipakai untuk mengubah atau mengurutkan. Muat ulang, dan hubungi pengelola teknis bila masih terjadi.';
 
 export type WriteOutcome<T = undefined> =
   | {
@@ -83,17 +70,17 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
    */
   const sectionTokens = ref<Record<string, string>>({});
 
-  const tree = computed<AdminPage[]>(() => {
-    const result: AdminPage[] = [];
-    for (const summary of pagesStore.pages) {
-      const detail = pagesStore.pagesBySlug[summary.slug];
-      if (detail) result.push(detail as unknown as AdminPage);
-    }
-    return result;
-  });
+  const tree = computed<AdminPage[]>(() =>
+    pagesStore.hierarchyIncomplete ? [] : pagesStore.hierarchyPages,
+  );
 
   const isLoading = computed(() => pagesStore.isHierarchyLoading || blocksStore.isLoading);
-  const loadError = computed(() => pagesStore.hierarchyError ?? blocksStore.error);
+  const loadError = computed(
+    () =>
+      pagesStore.hierarchyError ??
+      (pagesStore.hierarchyIncomplete ? INCOMPLETE_TREE_MESSAGE : null) ??
+      blocksStore.error,
+  );
 
   const selectedPage = computed<AdminPage | null>(
     () => tree.value.find((page) => page.slug === selectedSlug.value) ?? tree.value[0] ?? null,
@@ -108,7 +95,10 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     await Promise.all([pagesStore.fetchHierarchy(true), blocksStore.fetchBlocks(true)]);
     hasLoaded.value = true;
     // A successful reload clears the notice; a failed one leaves it as it was.
-    const succeeded = pagesStore.hierarchyError === null && blocksStore.error === null;
+    const succeeded =
+      pagesStore.hierarchyError === null &&
+      !pagesStore.hierarchyIncomplete &&
+      blocksStore.error === null;
     if (succeeded) {
       reloadNeeded.value = false;
     }
@@ -125,7 +115,11 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
       pagesStore.fetchHierarchy(true),
       what === 'both' ? blocksStore.fetchBlocks(true) : Promise.resolve(),
     ]);
-    return pagesStore.hierarchyError === null && (what === 'tree' || blocksStore.error === null);
+    return (
+      pagesStore.hierarchyError === null &&
+      !pagesStore.hierarchyIncomplete &&
+      (what === 'tree' || blocksStore.error === null)
+    );
   }
 
   // --- Lookups ---
@@ -259,12 +253,19 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
 
   /** Drops a deleted chapter or section from the shared page cache without a reload. */
   function pruneCachedPage(slug: string, edit: (page: AdminPage) => AdminPage): void {
-    const cached = pagesStore.pagesBySlug[slug] as unknown as AdminPage | undefined;
-    if (!cached) return;
-    pagesStore.pagesBySlug = {
-      ...pagesStore.pagesBySlug,
-      [slug]: edit(cached) as unknown as (typeof pagesStore.pagesBySlug)[string],
-    };
+    pagesStore.hierarchyPages = pagesStore.hierarchyPages.map((page) =>
+      page.slug === slug ? edit(page) : page,
+    );
+    // The public reader keeps its own per-slug copy in another shape. Rather than edit it in place,
+    // forget it: the next visit to that Cerita page fetches the current page.
+    forgetPublicPage(slug);
+  }
+
+  function forgetPublicPage(slug: string): void {
+    if (!(slug in pagesStore.pagesBySlug)) return;
+    const remaining = { ...pagesStore.pagesBySlug };
+    delete remaining[slug];
+    pagesStore.pagesBySlug = remaining;
   }
 
   function missing(context: string): WriteOutcome<never> {
@@ -314,10 +315,10 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     );
     if (outcome.ok) {
       // A deleted page must not stay readable from the shared caches, whether or not the reload
-      // after the delete worked: the page itself, its summary row and its flattened sections.
-      const remaining = { ...pagesStore.pagesBySlug };
-      delete remaining[slug];
-      pagesStore.pagesBySlug = remaining;
+      // after the delete worked: the page itself, its summary row, its authoring copy and its
+      // flattened sections.
+      forgetPublicPage(slug);
+      pagesStore.hierarchyPages = pagesStore.hierarchyPages.filter((item) => item.slug !== slug);
       pagesStore.pages = pagesStore.pages.filter((item) => item.slug !== slug);
       pagesStore.sections = pagesStore.sections.filter((item) => item.pageSlug !== slug);
       if (selectedSlug.value === slug) selectedSlug.value = neighbour?.slug ?? null;
