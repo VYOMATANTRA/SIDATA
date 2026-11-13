@@ -231,4 +231,44 @@ describe('ChapterSection.vue (reader states)', () => {
     expect(classes).toContain('scroll-mt-[calc(var(--public-header-height)+4.5rem)]');
     expect(classes).toContain('lg:scroll-mt-[calc(var(--public-header-height)+1.5rem)]');
   });
+
+  describe('stored figure', () => {
+    const figure = {
+      kind: 'photo' as const,
+      photo: { id: 'p1', src: '/api/media/abc', alt: 'Foto contoh' },
+    };
+
+    it('counts a figure as content, so a figure-only section is not reported as empty', () => {
+      const wrapper = mount(ChapterSection, {
+        props: { chapter, ...baseProps, figuresBySectionId: { 'sec-1': figure } },
+      });
+      expect(wrapper.find('[data-test="figure-card"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test="section-empty"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="chapter-empty"]').exists()).toBe(false);
+    });
+
+    it('does not count a figure the view reports as hidden', () => {
+      const wrapper = mount(ChapterSection, {
+        props: {
+          chapter,
+          ...baseProps,
+          figuresBySectionId: { 'sec-1': figure },
+          hiddenFigureSectionIds: new Set(['sec-1']),
+        },
+      });
+      expect(wrapper.find('[data-test="chapter-empty"]').exists()).toBe(true);
+    });
+
+    it('reports when its figure has nothing left to show', async () => {
+      const wrapper = mount(ChapterSection, {
+        props: { chapter, ...baseProps, figuresBySectionId: { 'sec-1': figure } },
+      });
+      expect(wrapper.emitted('figure-visibility')).toEqual([['sec-1', true]]);
+      await wrapper.find('img').trigger('error');
+      expect(wrapper.emitted('figure-visibility')).toEqual([
+        ['sec-1', true],
+        ['sec-1', false],
+      ]);
+    });
+  });
 });

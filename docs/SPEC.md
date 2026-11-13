@@ -593,9 +593,25 @@ setup-password, the OAuth callback, `/dashboard` (its own `<main>`) and the admi
   - **Not found** (404): its own `<h1>` and a link back to Beranda.
   - **Failed** (any other failure, or a success without a page): an `<h1>`, the approved plain-language
     read message and a "Coba lagi" button; never a blank page.
-  - **Ready**: chapters in order, each section showing its prose blocks in `sort_order`, its scalar
-    figures with the backend-rendered comparison sentence (or hedged framing, §6) and source, and its
-    matrix tables with `—` for missing cells and no bar for them.
+  - **Ready**: chapters in order, each section showing its stored paragraphs (prose blocks in
+    `sort_order`), then its stored figure (below), its scalar figures with the backend-rendered
+    comparison sentence (or hedged framing, §6) and source, and its matrix tables with `—` for
+    missing cells and no bar for them.
+  **Stored figure.** The reader reads the section's `figure` block (§7 `content_blocks`) from the
+  same `GET /api/content-blocks` request as the paragraphs and draws it with the article figure
+  components: one photo, an offset pair for two, a swipeable row for three or more, or a diagram
+  (picture or bars, with its source). Photos are addressed as `/api/media/<mediaId>` (full size; the
+  thumbnail variant is not used because the cards are shown large). Alt text, caption and credit are
+  shown as stored. The stored data is parsed defensively (`utils/ceritaStoredFigure.ts`): a figure
+  of an unknown kind or shape, a photo without alt text or with a malformed id, and a bar without a
+  label or finite value are left out rather than raising an error; a figure block with no section,
+  or for a section not on the page, is ignored. A figure counts as content, so a section that holds
+  only a figure renders and is not reported as empty. **A photo that fails to load** (never attached,
+  deleted, unreachable) is left out, not drawn as a broken box: a pair becomes a single photo, a row
+  shrinks, and a diagram whose picture fails falls back to its bars. When nothing of a figure is left
+  it renders nothing (no frame, no orphan caption) and stops counting as content, so the section,
+  chapter and page empty notices below apply as if it had never been stored. Because figures come
+  from the shared content request, its failure alert covers them too.
   A chapter with nothing in it reads "Konten bab ini belum tersedia." (once, not per section); an empty
   section beside filled ones reads "Konten bagian ini belum tersedia."; a page with no content at all
   adds one note ("Belum ada konten yang dapat ditampilkan pada halaman ini.") so an empty seeded
@@ -640,10 +656,11 @@ buried inside a stat page. Entry points:
   pair), more than two (a swipeable row with Sebelumnya/Berikutnya buttons and a position label), or
   a diagram (title, picture or bars, source). Each chapter ends with a "Bab berikutnya" link; below
   `lg` the chapter bar sticks to the bottom of the reader and opens upward. Photos without a safe
-  address, or that fail to load, are left out with their caption. Nothing in the backend produces a
-  `CeritaArticle` yet; Wave 4 builds it from stored content. Until then the template runs only in
-  development at `/cerita/contoh`, fed mockup text (`content/ceritaArticleDummy.ts`, one page) that is
-  not sourced data and never shown to residents.
+  address, or that fail to load, are left out with their caption. The live reader (`CeritaPageView`)
+  does not go through this template, because it also shows indicators and matrix tables; it shares
+  the figure components. The template itself runs only in development at `/cerita/contoh`, fed
+  mockup text (`content/ceritaArticleDummy.ts`, one page) that is not sourced data and never shown
+  to residents.
 - Footer, under **Sumber Daya**.
 - The interactive map — tapping an RT point opens that leader's contact card.
 - Pemerintahan & Kelembagaan, chapter 2.3 (Pemerintahan Kelurahan), **links to** this page rather
@@ -866,10 +883,10 @@ latitude, longitude, zoom, a point id or a metadata field.
 
 Single register — unresolved questions live here and nowhere else.
 
-- **Cerita article content model (Wave 4):** how editors author a section's figure (photos with
-  caption, credit and alt text; diagrams), an editorial headline and a byline, and how they are
-  stored against sections. A byline names
-  authorship, so it needs an approved source before it is published.
+- **Cerita editorial headline and byline:** the article layout supports an optional editorial
+  headline and byline, but nothing stores them, so the public reader shows neither. A headline needs
+  approved wording; a byline names authorship, so it needs an approved source before it is
+  published. (Section figures and paragraphs are settled and implemented, §3, §7 and §8.)
 - **Source-version reconciliation (Google Drive: Descan Manggar 2026):** Confirm which of the two
   `Monografi Kelurahan Manggar 2026` editions is current/approved for public facts. The expanded
   edition has 14 BSU profiles; another edition has a different page count and content.

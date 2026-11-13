@@ -5,9 +5,15 @@ import { safeImageSrc } from '../../utils/ceritaFigures';
 
 /** One picture on a white card with its caption and credit underneath. */
 const props = defineProps<{ photo: ArticlePhoto }>();
+const emit = defineEmits<{ 'image-error': [] }>();
 
-// A picture that fails to load is dropped with its caption, so there is never a broken frame.
+// A picture that fails to load is dropped with its caption, so there is never a broken frame. The
+// parent hears about it, so it can re-lay out the remaining pictures or drop the whole figure.
 const failed = ref(false);
+function onImageError() {
+  failed.value = true;
+  emit('image-error');
+}
 watch(
   () => props.photo.src,
   () => {
@@ -28,7 +34,7 @@ const src = computed(() => safeImageSrc(props.photo.src));
       :alt="photo.alt"
       loading="lazy"
       class="bg-surface-muted block aspect-[4/3] w-full rounded-[inherit] object-cover"
-      @error="failed = true"
+      @error="onImageError"
     />
     <figcaption v-if="photo.caption || photo.credit" class="mt-3 space-y-0.5 leading-snug">
       <span v-if="photo.caption" class="text-brand-navy block text-base font-medium">{{
