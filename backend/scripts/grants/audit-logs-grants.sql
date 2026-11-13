@@ -180,5 +180,5 @@ DROP PROCEDURE IF EXISTS _sidata_verify_no_blanket_db_grant;
 -- script runs, `prisma migrate deploy` must use the privileged URL (prisma.config.ts reads
 -- DATABASE_URL):
 --   DATABASE_URL="$AUDIT_ADMIN_DATABASE_URL" npx prisma migrate deploy
--- (Compose: set RUN_MIGRATIONS=0 on `backend`, migrate via the audit-pruner service — see README.)
+-- (Compose: set RUN_MIGRATIONS=0 on `backend`, migrate via the audit-pruner service — see docs/DEPLOYMENT.md.)
 -- Then re-run this script if the migration added a table.

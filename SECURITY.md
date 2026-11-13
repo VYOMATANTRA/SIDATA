@@ -40,4 +40,4 @@ An in-app Prisma client extension (`backend/src/utils/prisma.ts`) enforces the s
 at the application layer, but that alone is not a security boundary — it only stops careless
 application code, not a compromised process with direct DB access. If you find a way to bypass
 either layer, or a deployment missing the grant script, please report it per the process above. The grants step and pruning schedule are part of the
-[deployment checklist](README.md#deployment).
+[deployment checklist](docs/DEPLOYMENT.md).
