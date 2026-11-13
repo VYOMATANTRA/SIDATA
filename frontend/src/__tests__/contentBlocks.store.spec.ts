@@ -193,6 +193,65 @@ describe('contentBlocks store', () => {
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
+
+    // The running request finishing and its follow-up starting are a few microtasks apart, and
+    // nothing is in flight in between. A second forced caller can land anywhere in that window, so
+    // sweep its arrival: whenever it comes, two requests must never run at once (the older answer
+    // could land last and overwrite the newer data) and the loading flag must not drop early.
+    it.each(Array.from({ length: 16 }, (_, ticks) => ticks))(
+      'never overlaps requests when a second forced caller arrives %i ticks after the first answer',
+      async (ticks) => {
+        let active = 0;
+        let maxActive = 0;
+        const resolvers: Array<(response: Response) => void> = [];
+        const fetchMock = vi.fn<typeof fetch>(
+          () =>
+            new Promise<Response>((resolve) => {
+              active += 1;
+              maxActive = Math.max(maxActive, active);
+              resolvers.push((response) => {
+                active -= 1;
+                resolve(response);
+              });
+            }),
+        );
+        globalThis.fetch = fetchMock;
+        const store = useContentBlocksStore();
+        const answer = (index: number): Response =>
+          ({ ok: true, json: async () => ({ blocks: [block(`v${index}`)] }) }) as Response;
+
+        const running = store.fetchBlocks();
+        const queued = store.fetchBlocks(true);
+        expect(resolvers).toHaveLength(1);
+
+        resolvers[0]!(answer(0));
+        for (let i = 0; i < ticks; i += 1) {
+          await Promise.resolve();
+          // The follow-up is queued the whole time, so the screen must still read as loading.
+          expect(store.isLoading).toBe(true);
+        }
+        const late = store.fetchBlocks(true);
+
+        // Answer every request in the order it started, until all callers are done.
+        let answered = 1;
+        const callers = Promise.all([running, queued, late]);
+        let settled = false;
+        void callers.then(() => (settled = true));
+        for (let guard = 0; guard < 50 && !settled; guard += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          while (answered < resolvers.length) {
+            resolvers[answered]!(answer(answered));
+            answered += 1;
+          }
+        }
+        await callers;
+
+        expect(maxActive).toBe(1);
+        // The newest request's answer is the one that stays.
+        expect(store.serverBlocks['pembuka']!.body).toBe(`v${fetchMock.mock.calls.length - 1}`);
+        expect(store.isLoading).toBe(false);
+      },
+    );
   });
 
   it('dedupes concurrent fetchBlocks calls into a single network request', async () => {

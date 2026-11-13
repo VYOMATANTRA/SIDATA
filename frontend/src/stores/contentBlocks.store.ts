@@ -153,13 +153,16 @@ export const useContentBlocksStore = defineStore('contentBlocks', () => {
 
   async function fetchBlocks(force = false): Promise<void> {
     if (isLoaded.value && !force) return;
-    if (inFlight) {
-      if (!force) return inFlight;
+    // "Busy" also covers a queued follow-up: between the running request finishing and its
+    // follow-up starting nothing is in flight, and a forced caller arriving then must join the
+    // follow-up rather than start a second, parallel request that could answer last.
+    if (inFlight || followUp) {
+      if (!force) return inFlight ?? followUp!;
       // A forced reload is asked for because something was just saved. The running request may have
       // started before that save, so wait for it and fetch once more. Forced callers that arrive
       // meanwhile share that one follow-up.
       if (!followUp) {
-        followUp = inFlight
+        followUp = inFlight!
           .catch(() => undefined)
           .then(() => {
             followUp = null;
@@ -199,7 +202,8 @@ export const useContentBlocksStore = defineStore('contentBlocks', () => {
       } catch (err) {
         error.value = toUserMessage(err, 'memuat blok konten', 'GET').message;
       } finally {
-        isLoading.value = false;
+        // A queued follow-up keeps the loading flag on: it is about to start another request.
+        if (!followUp) isLoading.value = false;
         inFlight = null;
       }
     })();

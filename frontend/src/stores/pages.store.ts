@@ -139,13 +139,16 @@ export const usePagesStore = defineStore('pages', () => {
 
   async function fetchHierarchy(force = false): Promise<void> {
     if (isLoaded.value && !force) return;
-    if (hierarchyInFlight) {
-      if (!force) return hierarchyInFlight;
+    // "Busy" also covers a queued follow-up: between the running request finishing and its
+    // follow-up starting nothing is in flight, and a forced caller arriving then must join the
+    // follow-up rather than start a second, parallel request that could answer last.
+    if (hierarchyInFlight || hierarchyFollowUp) {
+      if (!force) return hierarchyInFlight ?? hierarchyFollowUp!;
       // A forced reload is asked for because something was just saved, and the running request may
       // have started before that save: wait for it and fetch once more. Forced callers that arrive
       // meanwhile share that one follow-up.
       if (!hierarchyFollowUp) {
-        hierarchyFollowUp = hierarchyInFlight
+        hierarchyFollowUp = hierarchyInFlight!
           .catch(() => undefined)
           .then(() => {
             hierarchyFollowUp = null;
@@ -205,7 +208,8 @@ export const usePagesStore = defineStore('pages', () => {
       } catch (err) {
         hierarchyError.value = toUserMessage(err, 'memuat struktur halaman', 'GET').message;
       } finally {
-        isHierarchyLoading.value = false;
+        // A queued follow-up keeps the loading flag on: it is about to start another request.
+        if (!hierarchyFollowUp) isHierarchyLoading.value = false;
         hierarchyInFlight = null;
       }
     })();
