@@ -244,6 +244,91 @@ describe('CeritaSectionEditor', () => {
       wrapper.unmount();
     });
 
+    describe('when "Muat versi terbaru" cannot reach the server', () => {
+      const COULD_NOT_RELOAD = 'Belum bisa memuat versi terbaru. Periksa koneksi lalu coba lagi.';
+      const failReload = (): void => {
+        for (const url of ['/api/pages?include=sections', '/api/content-blocks']) {
+          fake.failNext(
+            (r) => r.method === 'GET' && r.url === url,
+            fake.json({ error: 'SQL boom' }, 500),
+          );
+        }
+      };
+      const announced = (wrapper: VueWrapper): string =>
+        wrapper
+          .findAll('[role="status"]')
+          .map((el) => el.text())
+          .join(' | ');
+
+      it('keeps the stale warning and the draft, says so plainly, and still refuses the save', async () => {
+        const block = fake.addParagraph(sectionId, 'Satu', 'asli');
+        const wrapper = await mountEditor();
+        await click(wrapper, 'Ubah');
+        await wrapper.find('[data-test="paragraph-body"]').setValue('draf saya');
+        fake.touchBlock(block.slug);
+        await wrapper.find('[data-test="paragraph-form"]').trigger('submit');
+        await flushPromises();
+        expect(wrapper.find('[data-test="paragraph-stale-notice"]').exists()).toBe(true);
+
+        failReload();
+        await wrapper.find('[data-test="paragraph-reload"]').trigger('click');
+        await flushPromises();
+
+        expect(wrapper.find('[data-test="paragraph-stale-notice"]').exists()).toBe(true);
+        expect(wrapper.find('[data-test="form-error"]').text()).toBe(COULD_NOT_RELOAD);
+        expect(announced(wrapper)).toContain(COULD_NOT_RELOAD);
+        expect(announced(wrapper)).not.toContain('Versi terbaru dimuat');
+        expect(
+          (wrapper.find('[data-test="paragraph-body"]').element as HTMLTextAreaElement).value,
+        ).toBe('draf saya');
+        expect(
+          wrapper.find('[data-test="paragraph-reload"]').attributes('disabled'),
+        ).toBeUndefined();
+
+        // Nothing new was seen, so the next save is refused again, now with a visible reason.
+        await wrapper.find('[data-test="paragraph-form"]').trigger('submit');
+        await flushPromises();
+        expect(fake.blocks[0]!.body).toBe('asli');
+        expect(wrapper.find('[data-test="paragraph-stale-notice"]').exists()).toBe(true);
+        expect(wrapper.find('[data-test="form-error"]').text()).toContain('baru saja diubah');
+        wrapper.unmount();
+      });
+
+      it('does the same for a refused reorder and a refused delete', async () => {
+        const first = fake.addParagraph(sectionId, 'Satu', 'a');
+        fake.addParagraph(sectionId, 'Dua', 'b');
+        const wrapper = await mountEditor();
+
+        fake.touchSection(sectionId);
+        await click(wrapper, 'Turun paragraf 1');
+        expect(wrapper.find('[data-test="paragraph-list-reload"]').exists()).toBe(true);
+        failReload();
+        await wrapper.find('[data-test="paragraph-list-reload"]').trigger('click');
+        await flushPromises();
+        expect(wrapper.find('[data-test="paragraph-list-reload"]').exists()).toBe(true);
+        expect(wrapper.find('[data-test="paragraph-list-error"]').text()).toContain(
+          COULD_NOT_RELOAD,
+        );
+        expect(announced(wrapper)).not.toContain('Versi terbaru dimuat');
+
+        // Reload properly, then provoke a stale delete and fail its reload too.
+        await wrapper.find('[data-test="paragraph-list-reload"]').trigger('click');
+        await flushPromises();
+        await click(wrapper, 'Hapus paragraf 1');
+        fake.touchBlock(first.slug);
+        await wrapper.find('[data-test="paragraph-delete-yes"]').trigger('click');
+        await flushPromises();
+        expect(wrapper.find('[data-test="paragraph-delete-reload"]').exists()).toBe(true);
+        failReload();
+        await wrapper.find('[data-test="paragraph-delete-reload"]').trigger('click');
+        await flushPromises();
+        expect(wrapper.find('[data-test="paragraph-delete-reload"]').exists()).toBe(true);
+        expect(wrapper.find('[data-test="paragraph-delete-error"]').text()).toBe(COULD_NOT_RELOAD);
+        expect(fake.blocks.map((b) => b.slug)).toContain(first.slug);
+        wrapper.unmount();
+      });
+    });
+
     it('moves paragraphs with buttons using the section token and keeps focus usable', async () => {
       fake.addParagraph(sectionId, 'Satu', 'a');
       fake.addParagraph(sectionId, 'Dua', 'b');

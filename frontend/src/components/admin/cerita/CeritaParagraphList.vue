@@ -132,10 +132,24 @@ async function submitForm(payload: { title: string; body: string }): Promise<voi
   formStale.value = outcome.stale;
 }
 
+const COULD_NOT_RELOAD = 'Belum bisa memuat versi terbaru. Periksa koneksi lalu coba lagi.';
+
 async function reload(): Promise<void> {
   if (reloading.value) return;
   reloading.value = true;
-  await store.load();
+  const loaded = await store.load();
+  reloading.value = false;
+
+  if (!loaded) {
+    // Nothing new was seen: keep every stale warning (and so the refusal of the next save), keep
+    // the drafts and the tokens, and say plainly why the warning is still there.
+    if (formStale.value) formError.value = COULD_NOT_RELOAD;
+    if (listStale.value) listError.value = COULD_NOT_RELOAD;
+    if (deleteStale.value) deleteError.value = COULD_NOT_RELOAD;
+    emit('announce', COULD_NOT_RELOAD);
+    return;
+  }
+
   // The explicit reload is the one path that takes the fresh tokens (the drafts stay as typed).
   const editing = openForm.value && openForm.value !== 'new' ? editingBlock.value : null;
   if (editing) editToken.value = editing.updatedAt;
@@ -143,7 +157,6 @@ async function reload(): Promise<void> {
     ? (paragraphs.value.find((item) => item.slug === deleting.value?.slug) ?? null)
     : null;
   if (confirming) deleteToken.value = confirming.updatedAt;
-  reloading.value = false;
   formStale.value = false;
   formError.value = '';
   listStale.value = false;
