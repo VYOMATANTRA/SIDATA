@@ -69,6 +69,19 @@ describe('contentBlocks authoring (section prose blocks)', () => {
       );
     });
 
+    it('never takes the slug a section figure block owns', async () => {
+      const uuid = '3f2a9c1e-4b7d-4e2a-9d1c-5a6b7c8d9e0f';
+      const result = await createProseBlock(
+        'sec-1',
+        { title: `Figure ${uuid}`, body: 'Isi.' },
+        actor,
+        ctx,
+      );
+
+      assert.notEqual(result.block.slug, `figure-${uuid}`);
+      assert.equal(result.block.slug, `figure-${uuid}-2`);
+    });
+
     it('resolves collisions globally with -2/-3, including across sections', async () => {
       db.addSection({ id: 'sec-2', chapterId: 'ch-1', slug: 'lain', sortOrder: 1 });
       db.addBlock({ id: 'b1', sectionId: 'sec-2', slug: 'pendahuluan' });

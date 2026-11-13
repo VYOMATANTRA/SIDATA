@@ -379,6 +379,15 @@ export async function attachMedia(
   }
 }
 
+export interface DetachMediaOptions {
+  /**
+   * For content that is being removed or repaired: skip the purpose check and ignore ids that are
+   * not valid asset ids, so a stored reference that no longer passes the attach-time rules can
+   * still be released. Missing and claimed assets are already tolerated.
+   */
+  lenient?: boolean;
+}
+
 /**
  * Removes the matching `(referenceType, referenceId, slot, assetId)` tuple from
  * `media_asset_references`. When an attached asset's remaining reference count reaches 0, takes
@@ -394,8 +403,10 @@ export async function detachMedia(
   assetIds: readonly string[],
   context: MediaAttachContext,
   now: Date = new Date(),
+  options: DetachMediaOptions = {},
 ): Promise<void> {
-  const ids = [...new Set(assetIds)];
+  const lenient = options.lenient === true;
+  const ids = [...new Set(assetIds)].filter((id) => !lenient || isValidAssetId(id));
   if (ids.length === 0) return;
   if (!ids.every(isValidAssetId)) {
     throw new MediaServiceError('MEDIA_NOT_FOUND', 'Media tidak ditemukan.', 400);
@@ -413,7 +424,7 @@ export async function detachMedia(
   const assets = await lockAssetsForUpdate(tx, sorted);
   if (assets.length === 0) return;
 
-  if (assets.some((a) => a.purpose !== context.purpose)) {
+  if (!lenient && assets.some((a) => a.purpose !== context.purpose)) {
     throw new MediaServiceError(
       'MEDIA_PURPOSE_MISMATCH',
       'Media tidak sesuai dengan tujuan penggunaannya.',

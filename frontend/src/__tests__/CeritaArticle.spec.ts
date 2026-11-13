@@ -106,6 +106,121 @@ describe('article figures', () => {
     expect(w.find('[data-test="figure-card"]').exists()).toBe(false);
   });
 
+  it('lays out a pair again as a single card when one of the two pictures fails', async () => {
+    const w = mount(ArticleFigure, {
+      props: { figure: { kind: 'photos', photos: [photo(1), photo(2)] } },
+    });
+    expect(w.find('[data-test="figure-pair"]').exists()).toBe(true);
+    await w.findAll('img')[1]!.trigger('error');
+    expect(w.find('[data-test="figure-pair"]').exists()).toBe(false);
+    const cards = w.findAll('[data-test="figure-card"]');
+    expect(cards).toHaveLength(1);
+    expect(cards[0]!.find('img').attributes('src')).toBe('/img/contoh-1.webp');
+  });
+
+  it('degrades a carousel to a pair and keeps its position valid when pictures fail', async () => {
+    const w = mount(ArticleFigure, {
+      props: { figure: { kind: 'photos', photos: [photo(1), photo(2), photo(3)] } },
+    });
+    await w.findAll('img')[2]!.trigger('error');
+    expect(w.find('[data-test="figure-carousel"]').exists()).toBe(false);
+    expect(w.find('[data-test="figure-pair"]').exists()).toBe(true);
+    expect(w.findAll('[data-test="figure-card"]')).toHaveLength(2);
+  });
+
+  it('renders nothing, no frame and no orphan caption, when every picture fails', async () => {
+    const w = mount(ArticleFigure, {
+      props: { figure: { kind: 'photos', photos: [photo(1), photo(2), photo(3)] } },
+    });
+    expect(w.emitted('visible-change')).toEqual([[true]]);
+    for (let i = 0; i < 3; i++) {
+      const img = w.find('img');
+      if (!img.exists()) break;
+      await img.trigger('error');
+    }
+    expect(w.findAll('img')).toHaveLength(0);
+    expect(w.text()).toBe('');
+    expect(w.find('figure').exists()).toBe(false);
+    expect(w.emitted('visible-change')).toEqual([[true], [false]]);
+  });
+
+  it('tries the pictures again when it is given a new figure', async () => {
+    const w = mount(ArticleFigure, { props: { figure: { kind: 'photo', photo: photo(1) } } });
+    await w.find('img').trigger('error');
+    expect(w.find('img').exists()).toBe(false);
+    await w.setProps({ figure: { kind: 'photo', photo: photo(2) } });
+    expect(w.find('img').attributes('src')).toBe('/img/contoh-2.webp');
+    expect(w.emitted('visible-change')).toEqual([[true], [false], [true]]);
+  });
+
+  it('falls back to the bars when a diagram picture fails, and to nothing without bars', async () => {
+    const withBars = mount(ArticleFigure, {
+      props: {
+        figure: {
+          kind: 'diagram',
+          title: 'Diagram Contoh',
+          src: '/img/plot.webp',
+          alt: 'Grafik',
+          bars: { items: [{ id: 'a', label: 'A', value: 5 }] },
+          source: 'Sumber Contoh',
+        },
+      },
+    });
+    expect(withBars.find('img').exists()).toBe(true);
+    await withBars.find('img').trigger('error');
+    expect(withBars.find('img').exists()).toBe(false);
+    expect(withBars.find('[data-test="figure-diagram"]').text()).toContain('Diagram Contoh');
+    expect(withBars.text()).toContain('Sumber: Sumber Contoh');
+    expect(withBars.emitted('visible-change')).toEqual([[true]]);
+
+    const pictureOnly = mount(ArticleFigure, {
+      props: {
+        figure: { kind: 'diagram', title: 'Hanya Gambar', src: '/img/plot.webp', alt: 'Grafik' },
+      },
+    });
+    await pictureOnly.find('img').trigger('error');
+    expect(pictureOnly.find('[data-test="figure-diagram"]').exists()).toBe(false);
+    expect(pictureOnly.text()).toBe('');
+    expect(pictureOnly.emitted('visible-change')).toEqual([[true], [false]]);
+  });
+
+  it('renders nothing at all for a picture-only diagram after the picture fails, in any kind', async () => {
+    const w = mount(ArticleFigure, {
+      props: {
+        figure: {
+          kind: 'diagram',
+          title: 'Judul Yatim',
+          src: '/img/plot.webp',
+          alt: 'Grafik',
+          source: 'Sumber Yatim',
+        },
+      },
+    });
+    await w.find('img').trigger('error');
+    expect(w.html()).not.toContain('Judul Yatim');
+    expect(w.html()).not.toContain('Sumber Yatim');
+    expect(w.find('figure').exists()).toBe(false);
+  });
+
+  it('keeps its failed pictures dropped when given a new but equal figure object', async () => {
+    const make = () => ({
+      kind: 'photos' as const,
+      photos: [photo(1), photo(2)],
+    });
+    const w = mount(ArticleFigure, { props: { figure: make() } });
+    await w.findAll('img')[1]!.trigger('error');
+    expect(w.findAll('img')).toHaveLength(1);
+
+    await w.setProps({ figure: make() });
+    expect(w.findAll('img')).toHaveLength(1);
+    expect(w.find('img').attributes('src')).toBe('/img/contoh-1.webp');
+    expect(w.emitted('visible-change')).toEqual([[true]]);
+
+    // A really different figure gets its pictures tried again.
+    await w.setProps({ figure: { kind: 'photos', photos: [photo(1), photo(3)] } });
+    expect(w.findAll('img')).toHaveLength(2);
+  });
+
   it('shows a diagram with its title and source, from bars when there is no picture', () => {
     const w = mount(ArticleFigure, {
       props: {

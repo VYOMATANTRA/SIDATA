@@ -4,7 +4,9 @@ import type { ChapterDto } from '../../stores/pages.store';
 import type { IndicatorDto } from '../../stores/indicators.store';
 import type { IndicatorTableDetailDto } from '../../stores/indicatorTables.store';
 import type { ContentBlock } from '../../stores/contentBlocks.store';
+import type { ArticleFigure as ArticleFigureData } from '../../types/ceritaArticle';
 import SectionProse from './SectionProse.vue';
+import ArticleFigure from './ArticleFigure.vue';
 import IndicatorStat from './IndicatorStat.vue';
 import MatrixTableBlock from './MatrixTableBlock.vue';
 
@@ -16,6 +18,13 @@ export interface ChapterSectionProps {
   indicatorsBySectionId: Record<string, IndicatorDto[]>;
   /** Matrix tables, keyed by sectionId. */
   tablesBySectionId: Record<string, IndicatorTableDetailDto[]>;
+  /** The stored figure of a section, keyed by sectionId. */
+  figuresBySectionId?: Record<string, ArticleFigureData>;
+  /**
+   * Sections whose figure has nothing left to show (every photo failed to load). Such a figure no
+   * longer counts as content, so a section holding only it reads as empty.
+   */
+  hiddenFigureSectionIds?: ReadonlySet<string>;
   /** Combined indicator/matrix-table fetch error for a section, keyed by sectionId. */
   sectionErrorsBySectionId: Record<string, string>;
   /**
@@ -25,11 +34,25 @@ export interface ChapterSectionProps {
   proseUnavailable?: boolean;
 }
 
-const props = withDefaults(defineProps<ChapterSectionProps>(), { proseUnavailable: false });
-const emit = defineEmits<{ 'retry-section': [sectionId: string] }>();
+const props = withDefaults(defineProps<ChapterSectionProps>(), {
+  proseUnavailable: false,
+  figuresBySectionId: () => ({}),
+  hiddenFigureSectionIds: () => new Set<string>(),
+});
+const emit = defineEmits<{
+  'retry-section': [sectionId: string];
+  'figure-visibility': [sectionId: string, visible: boolean];
+}>();
+
+function hasFigure(sectionId: string): boolean {
+  return (
+    Boolean(props.figuresBySectionId[sectionId]) && !props.hiddenFigureSectionIds.has(sectionId)
+  );
+}
 
 function hasContent(sectionId: string): boolean {
   return (
+    hasFigure(sectionId) ||
     (props.proseBySectionId[sectionId]?.length ?? 0) > 0 ||
     (props.indicatorsBySectionId[sectionId]?.length ?? 0) > 0 ||
     (props.tablesBySectionId[sectionId]?.length ?? 0) > 0
@@ -81,6 +104,12 @@ const isEmptyChapter = computed(
           v-for="block in proseBySectionId[section.id] ?? []"
           :key="block.id"
           :body="block.body"
+        />
+
+        <ArticleFigure
+          v-if="figuresBySectionId[section.id]"
+          :figure="figuresBySectionId[section.id]!"
+          @visible-change="emit('figure-visibility', section.id, $event)"
         />
 
         <div

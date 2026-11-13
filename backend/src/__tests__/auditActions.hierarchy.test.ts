@@ -16,6 +16,8 @@ describe('AUDIT_ACTIONS for Cerita authoring (SPEC §3)', () => {
     ['CONTENT_BLOCK_CREATED', 'content_block.created', 'info'],
     ['CONTENT_BLOCK_DELETED', 'content_block.deleted', 'warning'],
     ['CONTENT_BLOCK_REORDERED', 'content_block.reordered', 'info'],
+    ['SECTION_FIGURE_SAVED', 'section.figure_saved', 'info'],
+    ['SECTION_FIGURE_DELETED', 'section.figure_deleted', 'warning'],
   ];
 
   for (const [key, action, severity] of expected) {

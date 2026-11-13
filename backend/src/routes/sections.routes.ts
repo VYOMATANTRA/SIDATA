@@ -4,6 +4,8 @@ import {
   deleteSectionHandler,
   createSectionBlockHandler,
   reorderSectionBlocksHandler,
+  putSectionFigureHandler,
+  deleteSectionFigureHandler,
 } from '../controllers/sections.controller.js';
 import { verifyToken } from '../middlewares/auth.middleware.js';
 import { requireEditorOrAdmin } from '../middlewares/role.middleware.js';
@@ -51,6 +53,24 @@ router.put(
   requireEditorOrAdmin,
   contentBlocksWriteLimiter,
   reorderSectionBlocksHandler,
+);
+
+// Section figure (one per section; budgeted with the other content-block writes)
+router.put(
+  '/:id/figure',
+  apiLimiter,
+  verifyToken,
+  requireEditorOrAdmin,
+  contentBlocksWriteLimiter,
+  putSectionFigureHandler,
+);
+router.delete(
+  '/:id/figure',
+  apiLimiter,
+  verifyToken,
+  requireEditorOrAdmin,
+  contentBlocksWriteLimiter,
+  deleteSectionFigureHandler,
 );
 
 export default router;

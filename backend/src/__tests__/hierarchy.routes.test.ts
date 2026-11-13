@@ -158,6 +158,25 @@ const ENDPOINTS: Endpoint[] = [
     handler: sectionsController.reorderSectionBlocksHandler,
   },
   {
+    name: 'PUT section figure',
+    method: 'PUT',
+    url: '/api/sections/sec-1/figure',
+    invalidBody: {},
+    router: 'sections.routes',
+    path: '/:id/figure',
+    limiter: 'contentBlocksWriteLimiter',
+    handler: sectionsController.putSectionFigureHandler,
+  },
+  {
+    name: 'DELETE section figure',
+    method: 'DELETE',
+    url: '/api/sections/sec-1/figure',
+    router: 'sections.routes',
+    path: '/:id/figure',
+    limiter: 'contentBlocksWriteLimiter',
+    handler: sectionsController.deleteSectionFigureHandler,
+  },
+  {
     name: 'DELETE prose block',
     method: 'DELETE',
     url: '/api/content-blocks/pendahuluan',
@@ -393,6 +412,7 @@ describe('hierarchy authoring routes', () => {
       assert.equal(body.code, 'HAS_DEPENDENTS');
       assert.deepEqual(body.details.dependencies, {
         contentBlocks: 1,
+        figures: 0,
         indicators: 0,
         indicatorTables: 0,
       });
@@ -440,6 +460,111 @@ describe('hierarchy authoring routes', () => {
         },
       );
       assert.equal(res.status, 200);
+    });
+
+    describe('section figure', () => {
+      const MEDIA_ID = '11111111-1111-4111-8111-111111111111';
+      const figure = {
+        kind: 'photo',
+        photos: [{ mediaId: MEDIA_ID, alt: 'Balai warga contoh', caption: 'Contoh' }],
+      };
+
+      beforeEach(() => db.addMedia({ id: MEDIA_ID }));
+
+      it('PUT creates, PUT replaces and DELETE removes it, chaining the section token', async () => {
+        let res = await call(
+          { method: 'PUT', url: '/api/sections/sec-1/figure' },
+          { role: 'editor', body: { expectedUpdatedAt: T0_ISO, figure } },
+        );
+        assert.equal(res.status, 200);
+        const saved = (await res.json()) as {
+          block: { type: string; slug: string; metadata: unknown; sortOrder: number | null };
+          section: { id: string; updatedAt: string };
+        };
+        assert.equal(saved.block.type, 'figure');
+        assert.equal(saved.block.slug, 'figure-sec-1');
+        assert.equal(saved.block.sortOrder, null);
+        assert.deepEqual(saved.block.metadata, figure);
+        assert.notEqual(saved.section.updatedAt, T0_ISO);
+        assert.notEqual(db.mediaAsset.rows[0]!.attachedAt, null);
+
+        res = await call(
+          { method: 'DELETE', url: '/api/sections/sec-1/figure' },
+          {
+            role: 'admin',
+            query: `?expectedUpdatedAt=${encodeURIComponent(saved.section.updatedAt)}`,
+          },
+        );
+        assert.equal(res.status, 200);
+        const removed = (await res.json()) as { section: { id: string; updatedAt: string } };
+        assert.equal(removed.section.id, 'sec-1');
+        assert.equal(db.mediaAsset.rows[0]!.attachedAt, null);
+        assert.equal(
+          db.contentBlock.rows.some((b) => b.type === 'figure'),
+          false,
+        );
+      });
+
+      it('PUT answers 400 with a plain sentence for an invalid figure and 409 STALE_WRITE for an old token', async () => {
+        let res = await call(
+          { method: 'PUT', url: '/api/sections/sec-1/figure' },
+          {
+            role: 'editor',
+            body: {
+              expectedUpdatedAt: T0_ISO,
+              figure: { kind: 'photos', photos: [figure.photos[0]] },
+            },
+          },
+        );
+        assert.equal(res.status, 400);
+        assert.match(((await res.json()) as { error: string }).error, /minimal berisi 2 foto/);
+
+        res = await call(
+          { method: 'PUT', url: '/api/sections/sec-1/figure' },
+          { role: 'editor', body: { expectedUpdatedAt: '2026-09-30T00:00:00.000Z', figure } },
+        );
+        assert.equal(res.status, 409);
+        assert.equal(((await res.json()) as { code: string }).code, 'STALE_WRITE');
+      });
+
+      it('DELETE answers 404 FIGURE_NOT_FOUND when the section has no figure', async () => {
+        const res = await call(
+          { method: 'DELETE', url: '/api/sections/sec-1/figure' },
+          { role: 'editor', query: `?expectedUpdatedAt=${encodeURIComponent(T0_ISO)}` },
+        );
+        assert.equal(res.status, 404);
+        assert.equal(((await res.json()) as { code: string }).code, 'FIGURE_NOT_FOUND');
+      });
+
+      it('the generic content-block PATCH and DELETE refuse the figure block (409 FIGURE_BLOCK_PROTECTED)', async () => {
+        const put = await call(
+          { method: 'PUT', url: '/api/sections/sec-1/figure' },
+          { role: 'editor', body: { expectedUpdatedAt: T0_ISO, figure } },
+        );
+        const saved = (await put.json()) as { block: { slug: string; updatedAt: string } };
+
+        let res = await call(
+          { method: 'PATCH', url: `/api/content-blocks/${saved.block.slug}` },
+          { role: 'admin', body: { body: 'Disusupkan' } },
+        );
+        assert.equal(res.status, 409);
+        assert.equal(((await res.json()) as { code: string }).code, 'FIGURE_BLOCK_PROTECTED');
+
+        res = await call(
+          { method: 'DELETE', url: `/api/content-blocks/${saved.block.slug}` },
+          {
+            role: 'admin',
+            query: `?expectedUpdatedAt=${encodeURIComponent(saved.block.updatedAt)}`,
+          },
+        );
+        assert.equal(res.status, 409);
+        assert.equal(((await res.json()) as { code: string }).code, 'FIGURE_BLOCK_PROTECTED');
+        assert.equal(
+          db.contentBlock.rows.some((b) => b.type === 'figure'),
+          true,
+        );
+        assert.notEqual(db.mediaAsset.rows[0]!.attachedAt, null);
+      });
     });
 
     it('does not leak internals on an unexpected failure (500)', async () => {
