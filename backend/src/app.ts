@@ -11,6 +11,7 @@ import mapsRoutes from './routes/maps.routes.js';
 import pagesRoutes from './routes/pages.routes.js';
 import chaptersRoutes from './routes/chapters.routes.js';
 import sectionsRoutes from './routes/sections.routes.js';
+import publikasiRoutes from './routes/publikasi.routes.js';
 import auditRoutes from './routes/audit.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
 import contentBlocksRoutes from './routes/contentBlocks.routes.js';
@@ -60,6 +61,7 @@ app.use('/api/indicators', indicatorsRoutes);
 app.use('/api/comparison-templates', comparisonTemplatesRoutes);
 app.use('/api/indicator-tables', indicatorTablesRoutes);
 app.use('/api/media', mediaRoutes);
+app.use('/api/publikasi', publikasiRoutes);
 
 app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (typeof err === 'object' && err !== null && 'type' in err && err.type === 'entity.too.large') {

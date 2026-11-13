@@ -1904,10 +1904,11 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
     assert.equal(resNoHref.status, 400);
     assert.match(
       (resNoHref.body as { error: string }).error,
-      /Status ketersediaan online harus selaras dengan keberadaan tautan href/,
+      /Status ketersediaan online harus selaras dengan keberadaan tautan atau berkas/,
     );
 
-    // 3. Acceptance of valid https:// and empty string href (transformed to undefined)
+    // 3. Valid https:// metadata passes validation but the generic path no longer writes it: the
+    // catalog is saved through /api/publikasi/catalog (attach/detach bookkeeping).
     invalidateContentBlocksCache();
     const originalTransaction = prisma.$transaction;
     const existingBlock = {
@@ -1969,74 +1970,8 @@ describe('contentBlocks.controller updateContentBlockHandler', () => {
         }),
         resGood as unknown as Response,
       );
-      assert.equal(resGood.status, 200);
-    } finally {
-      prisma.$transaction = originalTransaction;
-      invalidateContentBlocksCache();
-    }
-  });
-
-  it('stores Zod-cleaned publikasi metadata (trimmed https href), not the raw input', async () => {
-    invalidateContentBlocksCache();
-    const originalTransaction = prisma.$transaction;
-    const existingBlock = {
-      id: 'uuid-pub-2',
-      sectionId: null,
-      type: 'prose',
-      slug: 'publikasi-katalog',
-      title: 'Katalog Publikasi',
-      body: 'Koleksi dokumen',
-      metadata: null,
-      sortOrder: null,
-      updatedById: null,
-      createdAt: new Date('2026-09-01'),
-      updatedAt: new Date('2026-09-01'),
-    };
-
-    let savedMetadata: unknown;
-    prisma.$transaction = (async (fn: (tx: typeof prisma) => Promise<unknown>) => {
-      const mockTx = {
-        $queryRaw: async () => [],
-        contentBlock: {
-          findUnique: async () => existingBlock,
-          update: async (args: { data: Record<string, unknown> }) => {
-            savedMetadata = args.data.metadata;
-            return { ...existingBlock, ...args.data };
-          },
-        },
-        auditLog: {
-          create: async () => ({ id: 'audit-2' }),
-        },
-      };
-      return fn(mockTx as unknown as typeof prisma);
-    }) as unknown as typeof prisma.$transaction;
-
-    try {
-      const res = fakeRes();
-      await updateContentBlockHandler(
-        makeReq({
-          params: { slug: 'publikasi-katalog' },
-          body: {
-            metadata: {
-              publications: [
-                {
-                  category: ' Infografis ',
-                  title: ' Dokumen ',
-                  description: ' Deskripsi ',
-                  href: '  https://example.com/dokumen.pdf  ',
-                  isAvailableOnline: true,
-                },
-              ],
-            },
-          },
-        }),
-        res as unknown as Response,
-      );
-      assert.equal(res.status, 200);
-      const pubs = (savedMetadata as { publications: Array<Record<string, unknown>> }).publications;
-      assert.equal(pubs[0]?.href, 'https://example.com/dokumen.pdf');
-      assert.equal(pubs[0]?.category, 'Infografis');
-      assert.equal(pubs[0]?.title, 'Dokumen');
+      assert.equal(resGood.status, 409);
+      assert.equal((resGood.body as { code: string }).code, 'PUBLIKASI_BLOCK_PROTECTED');
     } finally {
       prisma.$transaction = originalTransaction;
       invalidateContentBlocksCache();
