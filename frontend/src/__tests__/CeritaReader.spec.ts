@@ -696,6 +696,35 @@ describe('Cerita reader', () => {
       expect(wrapper.find('[data-test="figure-diagram"]').text()).toContain('Kelompok A');
     });
 
+    it('removes a picture-only diagram whose picture fails, title and source included, and calls the section empty', async () => {
+      const page = makePage('topik-satu', 'Topik Satu');
+      installApi({
+        pages: { 'topik-satu': page },
+        blocks: [
+          figureBlock(sectionId(page), {
+            kind: 'diagram',
+            title: 'Judul Yatim',
+            source: 'Sumber Yatim',
+            image: { mediaId: MEDIA_A, alt: 'Grafik' },
+          }),
+        ],
+      });
+      const { pinia, router } = await setup('/cerita/topik-satu');
+      const wrapper = mountView(pinia, router);
+      await flushPromises();
+      expect(wrapper.find('[data-test="figure-diagram"]').exists()).toBe(true);
+
+      await wrapper.find('img').trigger('error');
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="figure-diagram"]').exists()).toBe(false);
+      expect(wrapper.find('figure').exists()).toBe(false);
+      expect(wrapper.text()).not.toContain('Judul Yatim');
+      expect(wrapper.text()).not.toContain('Sumber Yatim');
+      expect(wrapper.find('[data-test="chapter-empty"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test="cerita-page-empty"]').exists()).toBe(true);
+    });
+
     it('does not bring a removed figure back, or re-request its photos, when unrelated content changes', async () => {
       const page = makePage('topik-satu', 'Topik Satu');
       installApi({

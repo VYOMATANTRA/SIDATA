@@ -62,7 +62,8 @@ watch(visible, (value) => emit('visible-change', value), { immediate: true });
 </script>
 
 <template>
-  <template v-if="diagram">
+  <template v-if="!visible" />
+  <template v-else-if="diagram">
     <FigureDiagram :figure="diagram" @image-error="diagramImageFailed = true" />
   </template>
   <template v-else>

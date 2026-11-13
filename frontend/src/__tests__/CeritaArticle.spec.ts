@@ -184,6 +184,24 @@ describe('article figures', () => {
     expect(pictureOnly.emitted('visible-change')).toEqual([[true], [false]]);
   });
 
+  it('renders nothing at all for a picture-only diagram after the picture fails, in any kind', async () => {
+    const w = mount(ArticleFigure, {
+      props: {
+        figure: {
+          kind: 'diagram',
+          title: 'Judul Yatim',
+          src: '/img/plot.webp',
+          alt: 'Grafik',
+          source: 'Sumber Yatim',
+        },
+      },
+    });
+    await w.find('img').trigger('error');
+    expect(w.html()).not.toContain('Judul Yatim');
+    expect(w.html()).not.toContain('Sumber Yatim');
+    expect(w.find('figure').exists()).toBe(false);
+  });
+
   it('keeps its failed pictures dropped when given a new but equal figure object', async () => {
     const make = () => ({
       kind: 'photos' as const,
