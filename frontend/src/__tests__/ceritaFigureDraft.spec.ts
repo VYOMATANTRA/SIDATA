@@ -332,6 +332,25 @@ describe('draftSignature ignores blank rows and kind switches without real edits
     );
   });
 
+  it('ignores the description of a diagram image that is no longer there', () => {
+    const withImage = {
+      ...emptyDraft(),
+      kind: 'diagram' as const,
+      diagramTitle: 'D',
+      diagramImageId: 'img',
+      diagramImageAlt: 'Diagram batang',
+    };
+    const removed = { ...withImage, diagramImageId: null };
+    const removedAndClean = { ...removed, diagramImageAlt: '' };
+    expect(draftSignature(removed)).toBe(draftSignature(removedAndClean));
+    // The removal itself is still a real change.
+    expect(draftSignature(removed)).not.toBe(draftSignature(withImage));
+    // And a lone leftover description does not make an otherwise empty diagram look filled in.
+    expect(draftSignature({ ...emptyDraft(), kind: 'diagram', diagramImageAlt: 'sisa' })).toBe(
+      draftSignature(emptyDraft()),
+    );
+  });
+
   it('keeps the same signature when one stored photo is viewed as a series with a blank slot', () => {
     const photo = photoDraft('photo', [{ mediaId: 'a' }]);
     const series = photoDraft('photos', [{ mediaId: 'a' }, { mediaId: null, alt: '' }]);

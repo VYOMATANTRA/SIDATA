@@ -134,11 +134,13 @@ export function draftSignature(draft: FigureDraft): string {
 
   if (draft.kind === 'diagram') {
     const bars = draft.bars.filter((bar) => !isBlankBar(bar));
+    // The description belongs to the image: once the image is gone it is not part of the draft.
+    const imageAlt = draft.diagramImageId ? draft.diagramImageAlt : '';
     const empty =
       draft.diagramTitle.trim() === '' &&
       draft.diagramSource.trim() === '' &&
       draft.diagramImageId === null &&
-      draft.diagramImageAlt.trim() === '' &&
+      imageAlt.trim() === '' &&
       draft.barUnit.trim() === '' &&
       bars.length === 0;
     if (empty) return 'none';
@@ -147,7 +149,7 @@ export function draftSignature(draft: FigureDraft): string {
       draft.diagramTitle,
       draft.diagramSource,
       draft.diagramImageId,
-      draft.diagramImageAlt,
+      imageAlt,
       draft.barUnit,
       bars.map((bar) => [bar.label, bar.value]),
     ]);

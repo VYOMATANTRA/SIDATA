@@ -955,6 +955,45 @@ describe('CeritaSectionEditor', () => {
       wrapper.unmount();
     });
 
+    it('treats removing a diagram image as one change and clears its description', async () => {
+      fake.blocks.push({
+        id: 'fig-1',
+        sectionId,
+        type: 'figure',
+        slug: `figure-${sectionId}`,
+        title: null,
+        body: '',
+        metadata: {
+          kind: 'diagram',
+          title: 'Penduduk',
+          image: { mediaId: 'media-9', alt: 'Diagram batang penduduk' },
+          bars: { items: [{ label: 'RT 1', value: 10 }] },
+        },
+        sortOrder: null,
+        updatedAt: '2026-11-13T10:00:00.000Z',
+      });
+      const wrapper = await mountEditor();
+      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([false]);
+
+      await click(wrapper, 'Hapus foto');
+      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([true]);
+      expect(wrapper.find('[data-test="diagram-image-alt"]').exists()).toBe(false);
+
+      // Adding another image starts with an empty description, not the removed image's text.
+      await upload(wrapper, 0);
+      expect(
+        (wrapper.find('[data-test="diagram-image-alt"]').element as HTMLTextAreaElement).value,
+      ).toBe('');
+
+      // Reverting brings back the stored image with its own description, and nothing is unsaved.
+      await wrapper.find('[data-test="figure-revert"]').trigger('click');
+      expect(
+        (wrapper.find('[data-test="diagram-image-alt"]').element as HTMLTextAreaElement).value,
+      ).toBe('Diagram batang penduduk');
+      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([false]);
+      wrapper.unmount();
+    });
+
     it('loads a stored figure into the form and reverts edits on request', async () => {
       fake.blocks.push({
         id: 'fig-1',

@@ -116,6 +116,10 @@ const busy = computed(() => saving.value || deleting.value);
 const uploading = computed(() => uploadingCount.value > 0);
 
 watch(busy, (value) => emit('busy', value));
+// The description belongs to the image: when the image is removed (or replaced by none) it goes too.
+watch(diagramImageId, (id) => {
+  if (id === null) diagramImageAlt.value = '';
+});
 watch(dirty, (value) => emit('dirty-change', value), { immediate: true });
 
 function applyDraft(next: FigureDraft): void {
