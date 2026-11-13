@@ -8,6 +8,7 @@ export const ceritaIds = {
   pageHeading: 'cerita-halaman-judul',
   pageSelect: (slug: string): string => `cerita-halaman-${slug}`,
   pageRename: 'cerita-halaman-ubah',
+  pageDetails: 'cerita-halaman-judul-utama',
   pageUp: 'cerita-halaman-naik',
   pageDown: 'cerita-halaman-turun',
   pageDelete: 'cerita-halaman-hapus',

@@ -70,6 +70,10 @@ export interface HierarchyPage {
   id: string;
   slug: string;
   title: string;
+  /** Optional editorial headline and byline (SPEC §8); null while not approved. */
+  headline: string | null;
+  bylineAuthor: string | null;
+  bylineAffiliation: string | null;
   sortOrder: number;
   updatedAt: string;
   chapters: HierarchyChapter[];
@@ -106,6 +110,9 @@ function toHierarchyPage(detail: PageDetail): HierarchyPage | null {
     id: detail.id,
     slug: detail.slug,
     title: detail.title,
+    headline: detail.headline ?? null,
+    bylineAuthor: detail.bylineAuthor ?? null,
+    bylineAffiliation: detail.bylineAffiliation ?? null,
     sortOrder: detail.sortOrder,
     updatedAt: detail.updatedAt,
     chapters,
@@ -116,6 +123,10 @@ export interface PageDetail {
   id: string;
   slug: string;
   title: string;
+  /** Optional editorial headline and byline; absent in older cached responses. */
+  headline?: string | null;
+  bylineAuthor?: string | null;
+  bylineAffiliation?: string | null;
   sortOrder: number;
   chapters: ChapterDetail[];
   createdAt: string;

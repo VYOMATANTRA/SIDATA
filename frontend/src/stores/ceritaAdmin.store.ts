@@ -299,6 +299,19 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     });
   }
 
+  async function updatePageDetails(
+    slug: string,
+    details: api.PageDetailsInput,
+    expectedUpdatedAt?: string,
+  ): Promise<WriteOutcome> {
+    const page = findPage(slug);
+    if (!page) return missing('menyimpan judul utama dan penulis');
+    return run('menyimpan judul utama dan penulis', 'tree', async () => {
+      await api.updatePageDetails(slug, details, expectedUpdatedAt ?? page.updatedAt);
+      return undefined;
+    });
+  }
+
   async function removePage(slug: string, expectedUpdatedAt?: string): Promise<WriteOutcome> {
     const page = findPage(slug);
     if (!page) return missing('menghapus halaman');
@@ -576,6 +589,7 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     contentCountsFor,
     addPage,
     renamePage,
+    updatePageDetails,
     removePage,
     movePage,
     addChapter,

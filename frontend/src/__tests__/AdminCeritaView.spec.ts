@@ -242,6 +242,76 @@ describe('AdminCeritaView', () => {
       wrapper.unmount();
     });
 
+    it('sets the headline and byline with the page token, keeps the title and focuses the button', async () => {
+      const wrapper = await mountView();
+      const token = fake.pages[0]!.updatedAt;
+
+      await click('Judul utama & penulis');
+      expect(body().find('[data-test="details-dialog"]').exists()).toBe(true);
+      await typeInto('[data-test="details-headline"]', '  Potret Kependudukan ');
+      await typeInto('[data-test="details-author"]', 'Tim Penyusun');
+      await typeInto('[data-test="details-affiliation"]', '');
+      await body().find('[data-test="details-dialog"]').trigger('submit');
+      await flushPromises();
+
+      expect(fake.lastWrite()).toMatchObject({
+        method: 'PATCH',
+        url: '/api/pages/kependudukan',
+        body: {
+          headline: 'Potret Kependudukan',
+          bylineAuthor: 'Tim Penyusun',
+          bylineAffiliation: null,
+          expectedUpdatedAt: token,
+        },
+      });
+      expect(fake.pages[0]!.title).toBe('Kependudukan');
+      expect(body().find('[data-test="details-dialog"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="status"]').text()).toContain('Judul utama dan penulis');
+      expect(document.activeElement).toBe(wrapper.find('[data-test="page-details"]').element);
+
+      // Reopened with the stored values.
+      await click('Judul utama & penulis');
+      expect(
+        (body().find('[data-test="details-headline"]').element as HTMLInputElement).value,
+      ).toBe('Potret Kependudukan');
+      wrapper.unmount();
+    });
+
+    it('refuses an affiliation without an author on the client and sends nothing', async () => {
+      const wrapper = await mountView();
+      await click('Judul utama & penulis');
+      await typeInto('[data-test="details-affiliation"]', 'Kelurahan Manggar');
+      await body().find('[data-test="details-dialog"]').trigger('submit');
+      await flushPromises();
+      expect(body().text()).toContain('Isi nama penulis jika afiliasi penulis diisi.');
+      expect(fake.writes()).toHaveLength(0);
+      wrapper.unmount();
+    });
+
+    it('keeps the typed headline on a stale save and saves after the dialog reload', async () => {
+      const wrapper = await mountView();
+      await click('Judul utama & penulis');
+      await typeInto('[data-test="details-headline"]', 'Judul saya');
+      fake.touchPage('kependudukan');
+
+      await body().find('[data-test="details-dialog"]').trigger('submit');
+      await flushPromises();
+      expect(body().find('[data-test="details-stale"]').exists()).toBe(true);
+      expect(
+        (body().find('[data-test="details-headline"]').element as HTMLInputElement).value,
+      ).toBe('Judul saya');
+      expect(body().find('[data-test="details-error"]').text()).not.toMatch(RAW_TERMS);
+
+      await body().find('[data-test="details-reload"]').trigger('click');
+      await flushPromises();
+      expect(body().find('[data-test="details-stale"]').exists()).toBe(false);
+      await body().find('[data-test="details-dialog"]').trigger('submit');
+      await flushPromises();
+      expect(body().find('[data-test="details-dialog"]').exists()).toBe(false);
+      expect(fake.pages[0]!.headline).toBe('Judul saya');
+      wrapper.unmount();
+    });
+
     it('keeps the draft on a stale rename, offers a reload that keeps it, then saves with the fresh token', async () => {
       const wrapper = await mountView();
       await click('Ubah judul halaman Kependudukan');

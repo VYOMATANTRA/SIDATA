@@ -27,6 +27,9 @@ export interface FakePage {
   id: string;
   slug: string;
   title: string;
+  headline: string | null;
+  bylineAuthor: string | null;
+  bylineAffiliation: string | null;
   sortOrder: number;
   updatedAt: string;
   createdAt: string;
@@ -75,6 +78,9 @@ export function createFakeCerita() {
       id: nextId('page'),
       slug: slugify(title),
       title,
+      headline: null,
+      bylineAuthor: null,
+      bylineAffiliation: null,
       sortOrder: pages.length,
       updatedAt: stamp(),
       createdAt: stamp(),
@@ -263,7 +269,10 @@ export function createFakeCerita() {
       if (!page) return notFound();
       if (method === 'PATCH') {
         if (body['expectedUpdatedAt'] !== page.updatedAt) return stale(page.updatedAt);
-        page.title = String(body['title']);
+        if (body['title'] !== undefined) page.title = String(body['title']);
+        for (const key of ['headline', 'bylineAuthor', 'bylineAffiliation'] as const) {
+          if (body[key] !== undefined) page[key] = (body[key] as string | null) ?? null;
+        }
         page.updatedAt = stamp();
         return json({ page });
       }

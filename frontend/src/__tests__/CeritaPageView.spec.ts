@@ -100,6 +100,62 @@ describe('CeritaPageView', () => {
     expect(wrapper.find('footer').exists()).toBe(true);
   });
 
+  describe('editorial headline and byline', () => {
+    async function mountWith(extra: Record<string, unknown>) {
+      const page = { ...makePage('kependudukan', 'Kependudukan'), ...extra };
+      globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input);
+        if (url.startsWith('/api/pages/')) {
+          return { ok: true, status: 200, json: async () => ({ page }) } as Response;
+        }
+        if (url.startsWith('/api/content-blocks')) {
+          return { ok: true, json: async () => ({ blocks: [] }) } as Response;
+        }
+        if (url.startsWith('/api/indicator-tables')) {
+          return { ok: true, json: async () => ({ tables: [] }) } as Response;
+        }
+        if (url.startsWith('/api/indicators')) {
+          return { ok: true, json: async () => ({ indicators: [] }) } as Response;
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
+      const { pinia, router } = await setupAndPush('kependudukan');
+      const wrapper = mountInShell(pinia, router);
+      await flushPromises();
+      return wrapper;
+    }
+
+    it('shows the stored headline as the one h1 and the byline with its affiliation', async () => {
+      const wrapper = await mountWith({
+        headline: 'Potret Kependudukan Manggar',
+        bylineAuthor: 'Tim Penyusun',
+        bylineAffiliation: 'Kelurahan Manggar',
+      });
+      expect(wrapper.findAll('h1')).toHaveLength(1);
+      expect(wrapper.find('h1').text()).toBe('Potret Kependudukan Manggar');
+      expect(wrapper.find('[data-test="cerita-hero"]').text()).toContain('Kependudukan');
+      const byline = wrapper.find('[data-test="cerita-byline"]');
+      expect(byline.text()).toContain('Oleh Tim Penyusun');
+      expect(byline.text()).toContain('Kelurahan Manggar');
+    });
+
+    it('shows neither when nothing is stored, and never a byline without an author', async () => {
+      const plain = await mountWith({
+        headline: null,
+        bylineAuthor: null,
+        bylineAffiliation: null,
+      });
+      expect(plain.find('h1').text()).toBe('Kependudukan');
+      expect(plain.find('[data-test="cerita-byline"]').exists()).toBe(false);
+
+      const orphan = await mountWith({
+        bylineAuthor: null,
+        bylineAffiliation: 'Kelurahan Manggar',
+      });
+      expect(orphan.find('[data-test="cerita-byline"]').exists()).toBe(false);
+    });
+  });
+
   it('scrolls to the #hash chapter once the chapters have rendered', async () => {
     const page = makePage('kependudukan', 'Kependudukan');
     globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
