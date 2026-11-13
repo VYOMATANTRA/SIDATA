@@ -189,8 +189,11 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
     `DELETE /api/sections/:id/figure?expectedUpdatedAt=` (`404 FIGURE_NOT_FOUND` when there is none);
     both are CSRF-protected, use the content-block write limiter, and run in one transaction with the
     section row lock, the media attach/detach and the audit row. They return the fresh section token
-    (`section: { id, updatedAt }`, plus `block` on PUT). Saving an unchanged figure writes and audits
-    nothing. The generic `PATCH`/`DELETE /api/content-blocks/:slug` refuse a figure block (`409
+    (`section: { id, updatedAt }`, plus `block` on PUT). Saving an unchanged figure writes nothing to the
+    block, audits nothing and does not bump the section token, but re-asserts the photos' attachment (the
+    same idempotent attach as a normal save), so a photo whose link was lost, e.g. unpublished by media
+    cleanup, is repaired by a plain re-save; a photo that can no longer be attached answers the same plain
+    400. The generic `PATCH`/`DELETE /api/content-blocks/:slug` refuse a figure block (`409
     FIGURE_BLOCK_PROTECTED`) so media bookkeeping cannot be bypassed. A figure is not a sibling of the
     section's prose blocks: it has no sort order, and prose create/reorder consider prose blocks only.
     - Shape: `{ kind: 'photo' | 'photos', photos: [{ mediaId, alt, caption?, credit? }] }` or

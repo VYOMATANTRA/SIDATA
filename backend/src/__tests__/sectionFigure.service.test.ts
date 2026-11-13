@@ -174,6 +174,66 @@ describe('sectionFigure.service', () => {
       assert.equal(contentBlocksCache.has(), true);
     });
 
+    describe('re-saving the identical figure re-asserts the photo attachment', () => {
+      /** Bookkeeping lost behind the figure's back (e.g. cleanup unpublished the photo). */
+      const loseBookkeeping = (n: number) => {
+        asset(n).attachedAt = null;
+        asset(n).detachedAt = T0;
+        db.mediaAssetReference.rows = db.mediaAssetReference.rows.filter(
+          (r) => r.assetId !== ID(n),
+        );
+      };
+
+      it('re-attaches an unpublished photo while writing, auditing and bumping nothing', async () => {
+        const first = await put(group(1, 2));
+        const auditCount = db.auditRows.length;
+        const blockBefore = JSON.stringify(figureRow());
+        loseBookkeeping(1);
+        contentBlocksCache.setCommitted([]);
+
+        const again = await put(group(1, 2), first.section.updatedAt);
+
+        assert.notEqual(asset(1).attachedAt, null, 'photo is published again');
+        assert.equal(asset(1).detachedAt, null);
+        assert.deepEqual(
+          refs(1).map((r) => [r.referenceType, r.referenceId, r.slot]),
+          [['content_block', figureRow()!.id, 'figure']],
+        );
+        assert.equal(refs(2).length, 1, 'the healthy photo keeps a single reference');
+        assert.equal(again.section.updatedAt, first.section.updatedAt);
+        assert.equal(again.block.id, first.block.id);
+        assert.equal(db.auditRows.length, auditCount);
+        assert.equal(JSON.stringify(figureRow()), blockBefore);
+        assert.equal(contentBlocksCache.has(), true);
+      });
+
+      it('a photo claimed for deletion answers the same plain 400 as a normal save, writing nothing', async () => {
+        const first = await put(single(1));
+        loseBookkeeping(1);
+        asset(1).cleanupClaimedAt = T0;
+        const auditCount = db.auditRows.length;
+
+        await assert.rejects(put(single(1), first.section.updatedAt), (err) => {
+          expectError(400)(err);
+          assert.match((err as Error).message, /tidak ditemukan/);
+          return true;
+        });
+        assert.equal(db.auditRows.length, auditCount);
+        assert.equal(asset(1).attachedAt, null);
+      });
+
+      it('a bars-only diagram has nothing to attach and stays a plain no-op', async () => {
+        const diagram = {
+          kind: 'diagram',
+          title: 'T',
+          bars: { items: [{ label: 'A', value: 1 }] },
+        };
+        const first = await put(diagram);
+        const again = await put(diagram, first.section.updatedAt);
+        assert.equal(again.section.updatedAt, first.section.updatedAt);
+      });
+    });
+
     it('a photo shared with another section stays attached when one figure drops it', async () => {
       db.addSection({ id: 'sec-2', slug: 'lain', sortOrder: 1 });
       const a = await put(single(1));
