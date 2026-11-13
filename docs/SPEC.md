@@ -795,12 +795,15 @@ add, edit, reorder, delete) and its one figure.
 - **The section editor** keeps one paragraph form open at a time (a draft is never silently replaced)
   and asks before closing or leaving the route with unsaved work. Figure kinds: one photo, several
   photos (2 to 12) or a diagram (an image, bars, or both). **Alt text is required for every photo and
-  every diagram image**; caption, credit, diagram source and bar unit are optional. Bar numbers accept
-  a decimal comma. Nothing is stored until "Simpan gambar"; "Hapus gambar" asks first and releases the
+  every diagram image**; caption, credit, diagram source and bar unit are optional. Bar numbers follow
+  the Indonesian convention (dot for thousands, comma for decimals): "1.234" is 1234 and "1.234,5" is
+  1234.5, a dot that is not a valid thousands grouping ("12.5") is refused with a hint to use a comma,
+  and a value like "12.500" is accepted as 12500 with a note under the field saying how it was read. Removing a
+  diagram image also drops its description. Nothing is stored until "Simpan gambar"; "Hapus gambar" asks first and releases the
   photos.
 - **Photo upload field (`MediaPhotoField`).** Used wherever a photo is chosen. It picks by file button
-  or drag-and-drop (the button is the real, focusable path), checks type (JPEG, PNG, WebP) and size
-  (5 MB) before sending, uploads with a purpose (`cerita` here), and previews the stored file through
+  or drag-and-drop (the button is the real, focusable path), checks type (JPEG, PNG, WebP; a missing or generic reported type falls back to the file extension and the
+  server checks the content) and size (5 MB) before sending, uploads with a purpose (`cerita` here), and previews the stored file through
   the authenticated client as a blob URL (the preview route needs the `Authorization` header, so a
   bare `<img src>` is never used; the URL is revoked on change and unmount). A failed upload leaves the
   previous photo in place and states the reason in plain Indonesian for every media error code. Removing

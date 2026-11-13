@@ -89,10 +89,10 @@ function extensionOf(name: string): string {
  * server repeats the check by file signature, which is the one that decides.
  */
 export function validatePhotoFile(file: File): string | null {
-  const typeKnown = file.type !== '';
-  const typeOk = typeKnown
-    ? PHOTO_MIME_TYPES.has(file.type)
-    : PHOTO_EXTENSIONS.has(extensionOf(file.name));
+  // Some browsers and platforms report no type or a generic one (`application/octet-stream`) for a
+  // real photo, so whenever the reported type is not an allowed photo type the extension decides.
+  // The server then checks the actual content.
+  const typeOk = PHOTO_MIME_TYPES.has(file.type) || PHOTO_EXTENSIONS.has(extensionOf(file.name));
   if (!typeOk) return PHOTO_WRONG_TYPE_MESSAGE;
   if (file.size === 0) return PHOTO_EMPTY_MESSAGE;
   if (file.size > PHOTO_MAX_BYTES) return PHOTO_TOO_LARGE_MESSAGE;

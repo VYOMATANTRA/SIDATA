@@ -33,6 +33,29 @@ describe('validatePhotoFile', () => {
     expect(validatePhotoFile(file('a.webp', 'image/webp', PHOTO_MAX_BYTES))).toBeNull();
   });
 
+  it('falls back to the extension whenever the reported type is not an allowed photo type', () => {
+    // Some browsers and platforms report a generic type for a real photo; the server checks the content.
+    expect(validatePhotoFile(file('foto.jpg', 'application/octet-stream'))).toBeNull();
+    expect(validatePhotoFile(file('foto.JPEG', 'application/octet-stream'))).toBeNull();
+    expect(validatePhotoFile(file('foto.png', 'application/octet-stream'))).toBeNull();
+    expect(validatePhotoFile(file('foto.webp', 'application/octet-stream'))).toBeNull();
+    expect(validatePhotoFile(file('foto.jpg', 'binary/octet-stream'))).toBeNull();
+    // A generic type with a non-photo extension is still refused.
+    expect(validatePhotoFile(file('dokumen.pdf', 'application/octet-stream'))).toContain(
+      'JPEG, PNG, atau WebP',
+    );
+    expect(validatePhotoFile(file('foto.heic', 'application/octet-stream'))).not.toBeNull();
+    expect(validatePhotoFile(file('foto.exe', 'application/octet-stream'))).not.toBeNull();
+    expect(validatePhotoFile(file('tanpa-ekstensi', 'application/octet-stream'))).not.toBeNull();
+    // The size and emptiness checks still apply after the type check.
+    expect(
+      validatePhotoFile(file('besar.jpg', 'application/octet-stream', PHOTO_MAX_BYTES + 1)),
+    ).toContain('5 MB');
+    expect(validatePhotoFile(file('kosong.png', 'application/octet-stream', 0))).toContain(
+      'kosong',
+    );
+  });
+
   it('treats the non-standard image/jpg type as JPEG but still refuses HEIC and other non-images', () => {
     expect(validatePhotoFile(file('a.jpg', 'image/jpg'))).toBeNull();
     expect(validatePhotoFile(file('a.heic', 'image/heic'))).toContain('JPEG, PNG, atau WebP');
