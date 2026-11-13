@@ -173,8 +173,8 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
   - **Locking.** Locks are taken parent-first (page → chapter → section → block) and children in ascending id
     order, so concurrent authoring cannot deadlock. A no-op reorder, and a retitle to the same title, write
     nothing and audit nothing.
-  - **Deletion safety.** A page, chapter or section that still holds content blocks, indicators or indicator
-    tables is not deleted: `409` with code `HAS_DEPENDENTS` and `details.dependencies` giving
+  - **Deletion safety.** A page, chapter or section that still holds content blocks, section figures,
+    indicators or indicator tables is not deleted: `409` with code `HAS_DEPENDENTS` and `details.dependencies` giving
     `{ contentBlocks, figures, indicators, indicatorTables }` (summed over the sections beneath a page or
     chapter). `figures` counts section figure blocks (below) and `contentBlocks` excludes them; the message
     names each ("blok konten: N, gambar: N, …"). A figure blocks deletion like any other dependent, so a
@@ -189,8 +189,11 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
     `DELETE /api/sections/:id/figure?expectedUpdatedAt=` (`404 FIGURE_NOT_FOUND` when there is none);
     both are CSRF-protected, use the content-block write limiter, and run in one transaction with the
     section row lock, the media attach/detach and the audit row. They return the fresh section token
-    (`section: { id, updatedAt }`, plus `block` on PUT). Saving an unchanged figure writes and audits
-    nothing. The generic `PATCH`/`DELETE /api/content-blocks/:slug` refuse a figure block (`409
+    (`section: { id, updatedAt }`, plus `block` on PUT). Saving an unchanged figure writes nothing to the
+    block, audits nothing and does not bump the section token, but re-asserts the photos' attachment (the
+    same idempotent attach as a normal save), so a photo whose link was lost, e.g. unpublished by media
+    cleanup, is repaired by a plain re-save; a photo that can no longer be attached answers the same plain
+    400. The generic `PATCH`/`DELETE /api/content-blocks/:slug` refuse a figure block (`409
     FIGURE_BLOCK_PROTECTED`) so media bookkeeping cannot be bypassed. A figure is not a sibling of the
     section's prose blocks: it has no sort order, and prose create/reorder consider prose blocks only.
     - Shape: `{ kind: 'photo' | 'photos', photos: [{ mediaId, alt, caption?, credit? }] }` or

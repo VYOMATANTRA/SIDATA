@@ -160,6 +160,51 @@ describe('section figure against real MySQL', () => {
       assert.equal(JSON.stringify(a.metadata).includes('Foto sintetis'), false);
   });
 
+  it('re-saving the identical figure re-attaches a photo whose bookkeeping was lost, changing nothing else', async () => {
+    await seedPhotos(1, 2);
+    const section = await seedSection();
+    const created = await save(section.id, section.updatedAt, group(1, 2));
+    const auditCount = await prisma.auditLog.count();
+    const blockBefore = await prisma.contentBlock.findUniqueOrThrow({
+      where: { id: created.block.id },
+    });
+
+    // Cleanup-style loss: photo 1 unpublished and its reference gone.
+    await prisma.mediaAssetReference.deleteMany({ where: { assetId: ID(1) } });
+    await prisma.mediaAsset.update({
+      where: { id: ID(1) },
+      data: { attachedAt: null, detachedAt: new Date() },
+    });
+
+    const again = await save(section.id, created.section.updatedAt, group(1, 2));
+
+    const repaired = await asset(1);
+    assert.notEqual(repaired.attachedAt, null);
+    assert.equal(repaired.detachedAt, null);
+    assert.equal(await refCount(1), 1);
+    assert.equal(await refCount(2), 1);
+    assert.equal(again.section.updatedAt, created.section.updatedAt);
+    assert.equal(await prisma.auditLog.count(), auditCount);
+    const blockAfter = await prisma.contentBlock.findUniqueOrThrow({
+      where: { id: created.block.id },
+    });
+    assert.equal(blockAfter.updatedAt.getTime(), blockBefore.updatedAt.getTime());
+    const sectionAfter = await prisma.section.findUniqueOrThrow({ where: { id: section.id } });
+    assert.equal(sectionAfter.updatedAt.toISOString(), created.section.updatedAt);
+
+    // A photo claimed for deletion is refused with the same plain 400 as a normal save.
+    await prisma.mediaAssetReference.deleteMany({ where: { assetId: ID(2) } });
+    await prisma.mediaAsset.update({
+      where: { id: ID(2) },
+      data: { attachedAt: null, cleanupClaimedAt: new Date() },
+    });
+    await assert.rejects(save(section.id, created.section.updatedAt, group(1, 2)), (err) => {
+      assert.equal(statusOf(err), 400);
+      return true;
+    });
+    assert.equal(await prisma.auditLog.count(), auditCount);
+  });
+
   it('the public content-block list reflects each write (cache invalidation)', async () => {
     await seedPhotos(1);
     const section = await seedSection();

@@ -184,8 +184,16 @@ export const putSectionFigure = async (
           );
         }
 
-        // Same figure again: nothing to write, audit or invalidate; the token stays as it was.
+        // Same figure again: nothing is written to the block, audited, invalidated or bumped, but
+        // the photos' attachment is re-asserted (idempotent) so a link lost behind our back, e.g.
+        // a photo cleanup unpublished, is repaired by a plain re-save.
         if (existing && !hasFieldChanged(existing.metadata, figure)) {
+          try {
+            await lockAffectedAssets(tx, newIds);
+            await attachMedia(asMediaTx(tx), newIds, mediaReference(existing.id));
+          } catch (err) {
+            throw toFigureMediaError(err);
+          }
           return withChangeResult(
             { block: formatContentBlock(existing), section: toToken(section) },
             false,
