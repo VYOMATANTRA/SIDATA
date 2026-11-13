@@ -77,9 +77,12 @@ const figuresBySectionId = computed(() =>
 
 // Sections whose figure ended up with no picture that loads. Reported by the figure itself, so the
 // page and chapter "empty" states do not count a figure the reader cannot see. Cleared whenever
-// the stored figures change, because a new figure gets its pictures tried again.
+// the content of the stored figures changes, because a changed figure gets its pictures tried again.
 const hiddenFigureSectionIds = ref<Set<string>>(new Set());
-watch(figuresBySectionId, () => {
+// Compared by content: the mapped objects are rebuilt on every content-block store change, and an
+// unrelated change must not bring a removed figure (and its failing photo requests) back.
+const figuresSignature = computed(() => JSON.stringify(figuresBySectionId.value));
+watch(figuresSignature, () => {
   hiddenFigureSectionIds.value = new Set();
 });
 function handleFigureVisibility(sectionId: string, visible: boolean) {

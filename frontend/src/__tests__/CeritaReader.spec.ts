@@ -6,6 +6,7 @@ import { h, type Component } from 'vue';
 import type { Pinia } from 'pinia';
 import CeritaPageView from '../views/CeritaPageView.vue';
 import PublicLayout from '../layouts/PublicLayout.vue';
+import { useContentBlocksStore, type ContentBlock } from '../stores/contentBlocks.store';
 
 /**
  * The Cerita reader's states and layout contract, with synthetic fixtures only. Browser behaviour
@@ -693,6 +694,49 @@ describe('Cerita reader', () => {
       await wrapper.find('img').trigger('error');
       expect(wrapper.find('img').exists()).toBe(false);
       expect(wrapper.find('[data-test="figure-diagram"]').text()).toContain('Kelompok A');
+    });
+
+    it('does not bring a removed figure back, or re-request its photos, when unrelated content changes', async () => {
+      const page = makePage('topik-satu', 'Topik Satu');
+      installApi({
+        pages: { 'topik-satu': page },
+        blocks: [
+          figureBlock(sectionId(page), {
+            kind: 'photo',
+            photos: [storedPhoto(MEDIA_A, 1, { caption: 'Keterangan Yatim' })],
+          }),
+        ],
+      });
+      const { pinia, router } = await setup('/cerita/topik-satu');
+      const wrapper = mountView(pinia, router);
+      await flushPromises();
+      await wrapper.find('img').trigger('error');
+      await flushPromises();
+      expect(wrapper.find('img').exists()).toBe(false);
+      expect(wrapper.find('[data-test="chapter-empty"]').exists()).toBe(true);
+
+      // Any content-block store change rebuilds the mapped figure objects, with equal content.
+      const store = useContentBlocksStore(pinia);
+      store.blocks = {
+        ...store.blocks,
+        'blok-lain': prose('sec-lain', 'blok-lain', 'Teks di tempat lain.', 1),
+      };
+      await flushPromises();
+
+      expect(wrapper.find('img').exists()).toBe(false);
+      expect(wrapper.text()).not.toContain('Keterangan Yatim');
+      expect(wrapper.find('[data-test="chapter-empty"]').exists()).toBe(true);
+
+      // A figure that really changed (an editor replaced the photo) is tried again.
+      store.blocks = {
+        ...store.blocks,
+        [`fig-${sectionId(page)}`]: figureBlock(sectionId(page), {
+          kind: 'photo',
+          photos: [storedPhoto(MEDIA_B, 2)],
+        }) as ContentBlock,
+      };
+      await flushPromises();
+      expect(wrapper.find('img').attributes('src')).toBe(`/api/media/${MEDIA_B}`);
     });
 
     it('covers figures in the "text unavailable" notice when the content request failed', async () => {

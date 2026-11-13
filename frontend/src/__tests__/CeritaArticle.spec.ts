@@ -184,6 +184,25 @@ describe('article figures', () => {
     expect(pictureOnly.emitted('visible-change')).toEqual([[true], [false]]);
   });
 
+  it('keeps its failed pictures dropped when given a new but equal figure object', async () => {
+    const make = () => ({
+      kind: 'photos' as const,
+      photos: [photo(1), photo(2)],
+    });
+    const w = mount(ArticleFigure, { props: { figure: make() } });
+    await w.findAll('img')[1]!.trigger('error');
+    expect(w.findAll('img')).toHaveLength(1);
+
+    await w.setProps({ figure: make() });
+    expect(w.findAll('img')).toHaveLength(1);
+    expect(w.find('img').attributes('src')).toBe('/img/contoh-1.webp');
+    expect(w.emitted('visible-change')).toEqual([[true]]);
+
+    // A really different figure gets its pictures tried again.
+    await w.setProps({ figure: { kind: 'photos', photos: [photo(1), photo(3)] } });
+    expect(w.findAll('img')).toHaveLength(2);
+  });
+
   it('shows a diagram with its title and source, from bars when there is no picture', () => {
     const w = mount(ArticleFigure, {
       props: {

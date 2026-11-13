@@ -20,14 +20,14 @@ const emit = defineEmits<{ 'visible-change': [visible: boolean] }>();
 const failedPhotoIds = ref<Set<string>>(new Set());
 const diagramImageFailed = ref(false);
 
-// A new figure (the content was saved or refetched) gets its pictures tried again.
-watch(
-  () => props.figure,
-  () => {
-    failedPhotoIds.value = new Set();
-    diagramImageFailed.value = false;
-  },
-);
+// A figure whose content changed (it was saved) gets its pictures tried again. The reader rebuilds
+// equal figure objects on every unrelated content refresh, so this compares content, not identity;
+// otherwise a photo that already failed would be requested and shown again each time.
+const signature = computed(() => JSON.stringify(props.figure));
+watch(signature, () => {
+  failedPhotoIds.value = new Set();
+  diagramImageFailed.value = false;
+});
 
 function markFailed(photo: ArticlePhoto) {
   failedPhotoIds.value = new Set(failedPhotoIds.value).add(photo.id);
