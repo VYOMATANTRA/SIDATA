@@ -137,7 +137,7 @@ export function figuresBySectionId(
   const result: Record<string, ArticleFigure> = {};
   const ordered = blocks
     .filter((block) => block.type === FIGURE_BLOCK_TYPE && block.sectionId)
-    .sort((a, b) => a.id.localeCompare(b.id));
+    .sort((a, b) => Number(a.id) - Number(b.id) || a.id.localeCompare(b.id));
   for (const block of ordered) {
     const sectionId = block.sectionId as string;
     if (result[sectionId]) continue;

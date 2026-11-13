@@ -252,6 +252,16 @@ describe('figuresBySectionId', () => {
     expect(result['sec-1']?.kind === 'photo' && result['sec-1'].photo.alt).toBe('Foto');
   });
 
+  it('compares numeric ids as numbers: 9 comes before 10', () => {
+    const nine = { kind: 'photo', photos: [{ mediaId: A, alt: 'Sembilan' }] };
+    const ten = { kind: 'photo', photos: [{ mediaId: B, alt: 'Sepuluh' }] };
+    const result = figuresBySectionId([
+      { id: '10', type: 'figure', sectionId: 'sec-1', metadata: ten },
+      { id: '9', type: 'figure', sectionId: 'sec-1', metadata: nine },
+    ]);
+    expect(result['sec-1']?.kind === 'photo' && result['sec-1'].photo.alt).toBe('Sembilan');
+  });
+
   it('does not mutate its input order', () => {
     const blocks = [
       { id: 'b', type: 'figure', sectionId: 's', metadata: photo },
