@@ -52,12 +52,17 @@ async function render(file: File): Promise<File | null> {
 
 /** Page 1 of `file` as a JPEG, or null when it cannot be rendered. Never throws. */
 export async function renderPdfFirstPage(file: File): Promise<File | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
       render(file),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), TIMEOUT_MS)),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), TIMEOUT_MS);
+      }),
     ]);
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }

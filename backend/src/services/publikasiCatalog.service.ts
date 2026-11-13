@@ -141,13 +141,43 @@ const documentRef = (blockId: string) => ({
 const coverRef = (blockId: string) =>
   reference(blockId, PUBLIKASI_COVER_SLOT, PUBLIKASI_COVER_PURPOSE);
 
-/** The audit summary: counts and ids only, never titles' bodies, filenames or paths. */
+/** The audit summary: counts only, never file names, paths or ids. */
 function auditSummary(items: readonly PublikasiItem[]): Record<string, unknown> {
   return {
     publications: items.length,
     withDocument: items.filter((i) => i.documentAssetId).length,
     withCover: items.filter((i) => i.coverAssetId).length,
   };
+}
+
+/**
+ * Which publications an edit touched, by title (SPEC §3: audit rows hold titles and counts).
+ * Rows are matched by their stored id; a row without one counts as removed and added.
+ */
+function auditItemDiff(
+  before: readonly PublikasiItem[],
+  after: readonly PublikasiItem[],
+): { added: string[]; removed: string[]; changed: string[]; reordered: boolean } {
+  const byId = new Map(before.filter((i) => i.id).map((i) => [i.id!, i]));
+  const keptIds = new Set<string>();
+  const added: string[] = [];
+  const changed: string[] = [];
+  for (const item of after) {
+    const old = item.id ? byId.get(item.id) : undefined;
+    if (!old) {
+      added.push(item.title);
+      continue;
+    }
+    keptIds.add(old.id!);
+    if (hasFieldChanged(old, item)) changed.push(item.title);
+  }
+  const removed = before.filter((i) => !i.id || !keptIds.has(i.id)).map((i) => i.title);
+  const orderOf = (list: readonly PublikasiItem[]) =>
+    list
+      .filter((i) => i.id && keptIds.has(i.id))
+      .map((i) => i.id)
+      .join();
+  return { added, removed, changed, reordered: orderOf(before) !== orderOf(after) };
 }
 
 export const putPublikasiCatalog = async (
@@ -214,12 +244,18 @@ export const putPublikasiCatalog = async (
         return next;
       });
 
-      const metadata = JSON.parse(JSON.stringify({ publications })) as Record<string, unknown>;
+      // Keep any other stored key: this endpoint owns `publications` only.
+      const metadata = JSON.parse(
+        JSON.stringify({
+          ...((existing.metadata as Record<string, unknown> | null) ?? {}),
+          publications,
+        }),
+      ) as Record<string, unknown>;
       const title = input.title;
       const body = input.body;
 
       const metadataChanged = hasFieldChanged(existing.metadata, metadata);
-      const changes: Record<string, { before: unknown; after: unknown }> = {};
+      const changes: Record<string, { before: unknown; after: unknown; items?: unknown }> = {};
       if (hasFieldChanged(existing.title, title)) {
         changes.title = { before: existing.title, after: title };
       }
@@ -227,12 +263,12 @@ export const putPublikasiCatalog = async (
         changes.body = { before: existing.body, after: body };
       }
       if (metadataChanged) {
+        const oldItems = ((existing.metadata as { publications?: PublikasiItem[] } | null)
+          ?.publications ?? []) as PublikasiItem[];
         changes.metadata = {
-          before: auditSummary(
-            ((existing.metadata as { publications?: PublikasiItem[] } | null)?.publications ??
-              []) as PublikasiItem[],
-          ),
+          before: auditSummary(oldItems),
           after: auditSummary(publications),
+          items: auditItemDiff(oldItems, publications),
         };
       }
 

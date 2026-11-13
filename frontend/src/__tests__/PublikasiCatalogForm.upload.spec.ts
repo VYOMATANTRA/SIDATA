@@ -142,6 +142,38 @@ describe('PublikasiCatalogForm uploads', () => {
     expect(payloadOf(wrapper)).toMatchObject({ coverAssetId: COVER_ID, coverIsAuto: true });
   });
 
+  it('drops an automatic cover when the document is replaced by a DOCX or removed', async () => {
+    mocks.uploadMedia.mockResolvedValueOnce({ id: DOC_ID, byteSize: 10, originalName: 'a.docx' });
+    const wrapper = await mountRow({
+      ...BASE,
+      documentAssetId: DOC_ID,
+      coverAssetId: COVER_ID,
+      coverIsAuto: true,
+      isAvailableOnline: true,
+    });
+    pick(
+      wrapper,
+      DOC,
+      'a.docx',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    await flushPromises();
+    await submit(wrapper);
+    expect('coverAssetId' in payloadOf(wrapper)).toBe(false);
+
+    const second = await mountRow({
+      ...BASE,
+      documentAssetId: DOC_ID,
+      coverAssetId: COVER_ID,
+      coverIsAuto: true,
+      isAvailableOnline: true,
+    });
+    await second.find('[data-test="document-remove"]').trigger('click');
+    await second.find('select#block-pub-mode-0').setValue('none');
+    await submit(second);
+    expect('coverAssetId' in payloadOf(second)).toBe(false);
+  });
+
   it('makes no automatic cover for a DOCX', async () => {
     mocks.uploadMedia.mockResolvedValueOnce({ id: DOC_ID, byteSize: 10, originalName: 'a.docx' });
     const wrapper = await mountRow();

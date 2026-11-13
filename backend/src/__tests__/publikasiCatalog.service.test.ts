@@ -107,6 +107,32 @@ describe('publikasiCatalog.service', () => {
     assert.equal(asset(2).attachedAt, null);
   });
 
+  it('audits which publications were added, changed, removed or reordered, by title', async () => {
+    await put([item({ title: 'Satu' }), item({ title: 'Dua' })]);
+    const [one, two] = stored();
+    await put(
+      [{ ...two!, title: 'Dua (revisi)' }, { ...one! }, item({ title: 'Tiga' })],
+      block().updatedAt.toISOString(),
+    );
+    const metadata = (
+      db.auditRows.at(-1)!.metadata as {
+        changes: { metadata: { items: Record<string, unknown> } };
+      }
+    ).changes.metadata;
+    assert.deepEqual(metadata.items, {
+      added: ['Tiga'],
+      removed: [],
+      changed: ['Dua (revisi)'],
+      reordered: true,
+    });
+  });
+
+  it('keeps other stored metadata keys when saving the catalog', async () => {
+    block().metadata = { publications: [], catatan: 'dipertahankan' };
+    await put([item()]);
+    assert.equal((block().metadata as Record<string, unknown>).catatan, 'dipertahankan');
+  });
+
   it('audits counts only, never file names or ids', async () => {
     await put([withDoc(1, { coverAssetId: ID(3) })]);
     assert.equal(db.auditRows.length, 1);

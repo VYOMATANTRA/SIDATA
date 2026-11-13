@@ -336,6 +336,13 @@ async function onDocumentUploaded(
 function onDocumentChanged(row: PublicationDraft, value: string | null): void {
   row.documentAssetId = value;
   if (value === null) row.documentLabel = '';
+  // An automatic cover is page 1 of the previous file, so it never outlives it: a new PDF gets a
+  // fresh one right after the upload, and a DOCX or a failed render leaves the row without one.
+  // A cover chosen by hand stays.
+  if (row.coverIsAuto) {
+    row.coverAssetId = null;
+    row.coverIsAuto = false;
+  }
 }
 
 function onCoverChanged(row: PublicationDraft, value: string | null): void {
