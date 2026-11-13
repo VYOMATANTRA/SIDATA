@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mount } from '@vue/test-utils';
-import PublikasiBlockForm from '../components/data/blocks/PublikasiBlockForm.vue';
+import PublikasiCatalogForm from '../components/admin/publikasi/PublikasiCatalogForm.vue';
 import type { ContentBlock } from '../stores/contentBlocks.store';
 import { PUBLICATIONS } from '../content/publikasi';
 
@@ -38,7 +38,7 @@ function block(publications: Pub[] | undefined): ContentBlock {
 }
 
 function mountForm(publications?: Pub[]) {
-  return mount(PublikasiBlockForm, { props: { block: block(publications) } });
+  return mount(PublikasiCatalogForm, { props: { block: block(publications) } });
 }
 
 function payloadOf(wrapper: ReturnType<typeof mountForm>) {
@@ -47,11 +47,15 @@ function payloadOf(wrapper: ReturnType<typeof mountForm>) {
   };
 }
 
+async function useLink(wrapper: ReturnType<typeof mountForm>, index = 0) {
+  await wrapper.find(`select#block-pub-mode-${index}`).setValue('link');
+}
+
 async function submit(wrapper: ReturnType<typeof mountForm>) {
   await wrapper.find('form').trigger('submit.prevent');
 }
 
-describe('PublikasiBlockForm', () => {
+describe('PublikasiCatalogForm', () => {
   it('round-trips every stored field unchanged, including source and exact byte size', async () => {
     const wrapper = mountForm([AVAILABLE, PENDING]);
     await submit(wrapper);
@@ -62,6 +66,7 @@ describe('PublikasiBlockForm', () => {
     const wrapper = mountForm([PENDING]);
     expect(wrapper.find('[data-test="pub-status"]').text()).toContain('Segera hadir');
 
+    await useLink(wrapper);
     await wrapper.find('input#block-pub-href-0').setValue('  https://example.com/b.pdf ');
     expect(wrapper.find('[data-test="pub-status"]').text()).toContain('Tersedia untuk diunduh');
     await submit(wrapper);
@@ -80,6 +85,7 @@ describe('PublikasiBlockForm', () => {
 
   it('rejects a link that is not https and blocks the save', async () => {
     const wrapper = mountForm([PENDING]);
+    await useLink(wrapper);
     await wrapper.find('input#block-pub-href-0').setValue('http://example.com/b.pdf');
     await submit(wrapper);
     expect(wrapper.emitted('submit')).toBeFalsy();
@@ -119,14 +125,16 @@ describe('PublikasiBlockForm', () => {
 
   it('converts a typed size to whole bytes and keeps an untouched size exact', async () => {
     const wrapper = mountForm([{ ...PENDING }]);
+    await useLink(wrapper);
     await wrapper.find('input#block-pub-size-0').setValue('2,5');
-    await wrapper.find('select').setValue('MB');
+    await wrapper.find('select[aria-label^="Satuan"]').setValue('MB');
     await submit(wrapper);
     expect(payloadOf(wrapper).metadata.publications[0]!.fileSizeBytes).toBe(2621440);
 
     const kb = mountForm([{ ...PENDING }]);
+    await useLink(kb);
     await kb.find('input#block-pub-size-0').setValue('300');
-    await kb.find('select').setValue('KB');
+    await kb.find('select[aria-label^="Satuan"]').setValue('KB');
     await submit(kb);
     expect(payloadOf(kb).metadata.publications[0]!.fileSizeBytes).toBe(307200);
 
@@ -141,6 +149,7 @@ describe('PublikasiBlockForm', () => {
 
   it('rejects a size that is not a positive number', async () => {
     const wrapper = mountForm([PENDING]);
+    await useLink(wrapper);
     for (const bad of ['abc', '0', '-3', '1e3']) {
       await wrapper.find('input#block-pub-size-0').setValue(bad);
       await submit(wrapper);

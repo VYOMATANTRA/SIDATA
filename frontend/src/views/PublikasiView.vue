@@ -7,6 +7,8 @@ import {
   PUBLICATIONS,
   isDownloadable,
   formatFileSize,
+  publicationCoverSrc,
+  publicationDownloadHref,
   type PublicationItem,
 } from '../content/publikasi';
 import { useContentBlocksStore } from '../stores/contentBlocks.store';
@@ -57,30 +59,30 @@ const hasPendingPublication = computed(() =>
 
     <section aria-labelledby="daftar-publikasi" class="bg-white px-4 py-8 sm:px-6 sm:py-10">
       <div class="mx-auto max-w-5xl">
-        <div class="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-4">
+        <div class="border-border flex flex-wrap items-end justify-between gap-3 border-b pb-4">
           <div>
-            <p class="text-sm text-text-muted">Koleksi publikasi</p>
+            <p class="text-text-muted text-sm">Koleksi publikasi</p>
             <h2 id="daftar-publikasi" class="text-brand-navy mt-1 text-xl font-bold">
               Sumber daya untuk warga
             </h2>
           </div>
-          <p class="text-sm text-text-muted">
+          <p class="text-text-muted text-sm">
             {{ publikasiCatalog.length }} {{ isExplicitlyEmpty ? 'publikasi' : 'kategori' }}
           </p>
         </div>
 
         <div
           v-if="publikasiCatalog.length === 0"
-          class="rounded-card mt-6 border border-dashed border-border bg-white px-6 py-12 text-center"
+          class="rounded-card border-border mt-6 border border-dashed bg-white px-6 py-12 text-center"
           data-test="empty-publication-catalog"
         >
-          <p class="text-base font-semibold text-brand-navy">Belum ada publikasi</p>
-          <p class="mx-auto mt-2 max-w-md text-sm text-text-muted">
+          <p class="text-brand-navy text-base font-semibold">Belum ada publikasi</p>
+          <p class="text-text-muted mx-auto mt-2 max-w-md text-sm">
             Koleksi publikasi, infografis, dan dokumen resmi belum tersedia saat ini.
           </p>
         </div>
 
-        <ul v-else class="mt-2 divide-y divide-border" data-test="publication-list">
+        <ul v-else class="divide-border mt-2 divide-y" data-test="publication-list">
           <li
             v-for="(publication, index) in publikasiCatalog"
             :key="`${publication.category}-${publication.title}-${index}`"
@@ -88,23 +90,33 @@ const hasPendingPublication = computed(() =>
             <article
               class="grid gap-3 py-6 sm:grid-cols-[3rem_minmax(0,1fr)_auto] sm:items-center sm:gap-5"
             >
-              <span aria-hidden="true" class="font-mono text-sm text-text-muted tabular-nums">
+              <span aria-hidden="true" class="text-text-muted font-mono text-sm tabular-nums">
                 {{ String(index + 1).padStart(2, '0') }}
               </span>
 
               <div class="min-w-0">
+                <img
+                  v-if="publicationCoverSrc(publication)"
+                  :src="publicationCoverSrc(publication)!"
+                  alt=""
+                  loading="lazy"
+                  width="226"
+                  height="320"
+                  class="rounded-btn border-border mb-3 h-40 w-auto border object-cover"
+                  data-test="publication-cover"
+                />
                 <p class="text-brand-navy text-xs font-semibold tracking-wide">
                   {{ publication.category }}
                 </p>
                 <h3 class="text-brand-navy mt-1 text-lg leading-snug font-semibold">
                   {{ publication.title }}
                 </h3>
-                <p class="mt-1 max-w-2xl text-sm leading-relaxed text-text-muted sm:text-base">
+                <p class="text-text-muted mt-1 max-w-2xl text-sm leading-relaxed sm:text-base">
                   {{ publication.description }}
                 </p>
                 <p
                   v-if="publication.source"
-                  class="mt-1 text-xs text-text-muted italic"
+                  class="text-text-muted mt-1 text-xs italic"
                   data-test="publication-source"
                 >
                   Sumber: {{ publication.source }}
@@ -116,7 +128,7 @@ const hasPendingPublication = computed(() =>
                 class="flex flex-col items-start gap-1 sm:items-end"
               >
                 <a
-                  :href="publication.href"
+                  :href="publicationDownloadHref(publication) ?? undefined"
                   target="_blank"
                   rel="noopener noreferrer"
                   class="rounded-btn border-brand-navy bg-brand-navy hover:bg-brand-navy-deep inline-flex w-fit items-center border px-3 py-2 text-sm font-medium text-white"
@@ -126,7 +138,7 @@ const hasPendingPublication = computed(() =>
                 </a>
                 <span
                   v-if="publication.fileType || publication.fileSizeBytes"
-                  class="font-mono text-xs text-text-muted"
+                  class="text-text-muted font-mono text-xs"
                   data-test="publication-file-info"
                 >
                   <template v-if="publication.fileType">{{ publication.fileType }}</template>
@@ -140,7 +152,7 @@ const hasPendingPublication = computed(() =>
               </div>
               <span
                 v-else
-                class="rounded-btn inline-flex w-fit items-center border border-border px-3 py-2 text-sm font-medium text-text-muted"
+                class="rounded-btn border-border text-text-muted inline-flex w-fit items-center border px-3 py-2 text-sm font-medium"
                 data-test="publication-status"
               >
                 Segera hadir
@@ -151,7 +163,7 @@ const hasPendingPublication = computed(() =>
 
         <p
           v-if="!isExplicitlyEmpty && hasPendingPublication"
-          class="border-brand-navy mt-5 max-w-3xl border-l-4 pl-4 text-sm leading-relaxed text-text-muted"
+          class="border-brand-navy text-text-muted mt-5 max-w-3xl border-l-4 pl-4 text-sm leading-relaxed"
         >
           Publikasi sedang disiapkan. Tautan unduhan akan ditampilkan setelah dokumen resmi
           tersedia.

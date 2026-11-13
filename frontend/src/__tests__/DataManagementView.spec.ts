@@ -491,7 +491,7 @@ describe('DataManagementView.vue', () => {
     expect(byTitle('Profil Kelurahan Manggar')?.text()).toContain(
       'Tampil di: halaman Tentang Kelurahan Manggar',
     );
-    expect(byTitle('Katalog Publikasi Uji')?.text()).toContain('Tampil di: halaman Publikasi');
+    expect(byTitle('Katalog Publikasi Uji')).toBeUndefined();
 
     const highlights = byTitle('Potensi Unggulan Wilayah');
     expect(highlights?.text()).toContain('Tidak ditampilkan di situs');
@@ -631,7 +631,7 @@ describe('DataManagementView.vue', () => {
     wrapper.unmount();
   });
 
-  it('saves highlight rows and an emptied publication catalog through the block endpoint', async () => {
+  it('saves highlight rows through the block endpoint and sends the publication catalog to its own page', async () => {
     const wrapper = mountAttached();
     await flushPromises();
     await openBlockTab(wrapper);
@@ -653,12 +653,9 @@ describe('DataManagementView.vue', () => {
       ],
     });
 
-    await openBlock(wrapper, 'Katalog Publikasi Uji');
-    await body().find('#block-pub-remove-0').trigger('click');
-    await body().find('[role="dialog"] form').trigger('submit');
-    await flushPromises();
-    expect(patchedBlocks[1]?.slug).toBe('publikasi-katalog');
-    expect(patchedBlocks[1]?.body.metadata).toEqual({ publications: [] });
+    // The catalog is not a card here: it is managed on /admin/publikasi.
+    expect(wrapper.text()).not.toContain('Katalog Publikasi Uji');
+    expect(wrapper.find('[data-test="publikasi-moved"]').exists()).toBe(true);
 
     wrapper.unmount();
   });

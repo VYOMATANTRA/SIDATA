@@ -274,3 +274,50 @@ describe('PublikasiView', () => {
     expect(wrapper.text()).toContain('0 publikasi');
   });
 });
+
+describe('PublikasiView uploaded files and covers', () => {
+  const DOC = '11111111-1111-4111-8111-111111111111';
+  const COVER = '22222222-2222-4222-8222-222222222222';
+
+  it('links an uploaded document to the public download route and shows its cover', async () => {
+    const { router, wrapper } = mountPublikasiView();
+    await router.push('/publikasi');
+    await router.isReady();
+
+    const { useContentBlocksStore } = await import('../stores/contentBlocks.store');
+    const store = useContentBlocksStore();
+    store.blocks['publikasi-katalog'] = {
+      id: 'block-pub',
+      sectionId: null,
+      type: 'prose',
+      slug: 'publikasi-katalog',
+      title: 'Katalog',
+      body: 'Deskripsi',
+      metadata: {
+        publications: [
+          {
+            category: 'Statistik',
+            title: 'Laporan Tahunan',
+            description: 'Siap diunduh',
+            documentAssetId: DOC,
+            coverAssetId: COVER,
+            fileType: 'PDF',
+            fileSizeBytes: 2097152,
+            isAvailableOnline: true,
+          },
+        ],
+      },
+      sortOrder: null,
+      updatedAt: '2026-09-01T00:00:00.000Z',
+    };
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('[data-test="publication-link"]').attributes('href')).toBe(
+      `/api/media/${DOC}/download`,
+    );
+    const cover = wrapper.find('[data-test="publication-cover"]');
+    expect(cover.attributes('src')).toBe(`/api/media/${COVER}?variant=thumbnail`);
+    expect(cover.attributes('alt')).toBe('');
+    expect(wrapper.find('[data-test="publication-file-info"]').text()).toContain('PDF');
+  });
+});

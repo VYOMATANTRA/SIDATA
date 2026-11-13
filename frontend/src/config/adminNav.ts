@@ -87,7 +87,6 @@ export const ADMIN_NAV: (AdminNavLink | AdminNavGroup)[] = [
     icon: PresentationChartBarIcon,
     roles: ['editor', 'admin'],
     dataTest: 'nav-publikasi',
-    badge: 'Segera hadir',
   },
   {
     label: 'Rukun Tetangga',

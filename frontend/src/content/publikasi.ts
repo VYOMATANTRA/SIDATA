@@ -14,6 +14,10 @@ export interface PublicationItem {
   fileType?: string;
   /** Optional file size in bytes */
   fileSizeBytes?: number;
+  /** An uploaded PDF/DOCX (media purpose `publikasi-document`); served by `/api/media/<id>/download`. */
+  documentAssetId?: string;
+  /** Cover photo (media purpose `publikasi-cover`); shown from its thumbnail. */
+  coverAssetId?: string;
 }
 
 /**
@@ -59,16 +63,33 @@ export const PUBLICATIONS: PublicationItem[] = [
   },
 ];
 
+const MEDIA_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function mediaId(value: unknown): string | null {
+  return typeof value === 'string' && MEDIA_ID.test(value) ? value.toLowerCase() : null;
+}
+
 /**
- * A publication is downloadable only when CMS marks it available online and the
- * href is an https URL (defense in depth with the contentBlocks schema).
+ * Where a resident downloads the publication: the uploaded file, else an https link, else null.
+ * Only an item the CMS marks available online has one (defense in depth with the contentBlocks
+ * schema); a malformed file id never reaches a URL.
  */
+export function publicationDownloadHref(item: PublicationItem): string | null {
+  if (item.isAvailableOnline !== true) return null;
+  const documentId = mediaId(item.documentAssetId);
+  if (documentId) return `/api/media/${documentId}/download`;
+  if (typeof item.href === 'string' && item.href.startsWith('https://')) return item.href;
+  return null;
+}
+
+/** Thumbnail address of the cover photo, or null. */
+export function publicationCoverSrc(item: PublicationItem): string | null {
+  const id = mediaId(item.coverAssetId);
+  return id ? `/api/media/${id}?variant=thumbnail` : null;
+}
+
 export function isDownloadable(item: PublicationItem): boolean {
-  return (
-    item.isAvailableOnline === true &&
-    typeof item.href === 'string' &&
-    item.href.startsWith('https://')
-  );
+  return publicationDownloadHref(item) !== null;
 }
 
 export function hasPublicPublication(list: PublicationItem[] = PUBLICATIONS): boolean {

@@ -206,3 +206,24 @@ describe('uploadMedia and previews', () => {
     expect(mediaPreviewPath('m-1')).toBe('/api/media/m-1/preview');
   });
 });
+
+import { validateDocumentFile } from '../services/media.service';
+
+describe('validateDocumentFile', () => {
+  const file = (name: string, size = 100) => {
+    const f = new File(['x'], name);
+    Object.defineProperty(f, 'size', { value: size });
+    return f;
+  };
+
+  it('accepts a PDF or DOCX within 20 MB', () => {
+    expect(validateDocumentFile(file('a.pdf'))).toBeNull();
+    expect(validateDocumentFile(file('B.DOCX'))).toBeNull();
+  });
+
+  it('refuses other types, empty files and files over 20 MB in plain Indonesian', () => {
+    expect(validateDocumentFile(file('a.exe'))).toContain('PDF atau DOCX');
+    expect(validateDocumentFile(file('a.pdf', 0))).toContain('kosong');
+    expect(validateDocumentFile(file('a.pdf', 21 * 1024 * 1024))).toContain('20 MB');
+  });
+});
