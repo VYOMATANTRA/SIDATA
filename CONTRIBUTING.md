@@ -19,6 +19,12 @@ Backend requires a `.env` file at the repository root (`DATABASE_URL`, `JWT_SECR
 fails fast if any are missing. Mutating auth requests must include an `x-csrf-token` header
 obtained from `GET /api/auth/csrf-token`.
 
+For step-by-step first-run instructions (Docker, mixed, or fully local) and common errors, see
+the README's [Quick Start](README.md#quick-start) and [Troubleshooting](README.md#troubleshooting).
+When the frontend runs on your machine, Vite reads `frontend/.env` (copy `frontend/.env.example`),
+not the root `.env`. The Prisma CLI does not read the root `.env` either — load it into your shell
+first (`set -a && . ../.env && set +a` from `backend/`).
+
 Two optional env vars control the Google OAuth cookie lifetimes: `OAUTH_STATE_TTL_SECONDS` and `OAUTH_PKCE_TTL_SECONDS` — TTL for the temporary `oauth_state`/`oauth_verifier` cookies (the OAuth handshake window), both defaulting to `300` seconds. Keep these two values identical to prevent asymmetric expiration triggering state-mismatch critical security audit alerts.
 
 ## Database
@@ -53,7 +59,7 @@ Run `npm run type-check` before `npm run build` to catch TypeScript issues early
 After editing `backend/prisma/schema.prisma`, run `npx prisma migrate dev` to apply the change
 and regenerate the Prisma client. If the migration adds a table, also add its `GRANT` line to
 `backend/scripts/grants/audit-logs-grants.sql`, or the app loses access to it once that script is
-applied. See the [deployment checklist](README.md#deployment) for the grants and pruning steps.
+applied. See the [deployment checklist](docs/DEPLOYMENT.md) for the grants and pruning steps.
 
 ## CI
 
@@ -80,7 +86,7 @@ opening a PR to catch issues early.
 
 - TypeScript throughout; avoid `any` where a real type is available.
 - Follow existing patterns: Vue 3 `<script setup>` SFCs on the frontend, Express
-  routes/controllers/middlewares layering on the backend (see `CLAUDE.md` for the full
+  routes/controllers/middlewares layering on the backend (see `docs/ARCHITECTURE.md` for the full
   architecture breakdown).
 - ESLint + Prettier (and Oxlint on the frontend) are the source of truth for style — run
   `npm run lint` rather than hand-formatting.

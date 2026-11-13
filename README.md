@@ -26,207 +26,197 @@ Full-stack TypeScript web application with a Vue 3 frontend and an Express + Pri
 
 ## Prerequisites
 
-- Node.js `^22.18.0` or `>=24.12.0`
-- MySQL `8.4` (or use the provided Docker service)
-- Docker + Docker Compose (optional, for containerized setup)
+- Git
+- **Docker + Docker Compose** — for option A and B below
+- **Node.js** `^22.18.0` or `>=24.12.0` — only for options B and C (running the apps on your machine)
+- **MySQL** `8.4` — only for option C (options A and B use the Compose `mysql` service)
 
-## Getting Started
+> **Always use `npm ci`, not `npm install`** — this installs the exact lockfile versions CI uses.
 
-> **Always use `npm ci`, not `npm install`** — this ensures lockfile-locked versions.
-
-### 1. Clone and install
+## Quick Start
 
 ```bash
 git clone git@github.com:VYOMATANTRA/SIDATA.git
 cd SIDATA
-```
-
-### 2. Backend setup
-
-Copy `.env.example` to `.env` at the root of the repository:
-
-```bash
 cp .env.example .env
 ```
 
-> **Note for local (non-Docker) runs**: `.env.example` defaults `DATABASE_URL` to host `mysql` for Docker Compose. When running MySQL directly on your machine or connecting to a local instance, update `DATABASE_URL` in `.env` to use `localhost` (e.g. `mysql://sidata:changeme@localhost:3306/sidata` or with your local MySQL credentials).
+`.env.example` works as-is for local development: it ships placeholder secrets, Cloudflare's
+always-pass Turnstile test keys and placeholder Google credentials. Pick **one** way to run:
 
-Install backend dependencies:
+| Option | Backend + frontend | MySQL           | Use when                              |
+| ------ | ------------------ | --------------- | ------------------------------------- |
+| **A**  | Docker             | Docker          | You just want it running (recommended) |
+| **B**  | Your machine       | Docker          | Day-to-day coding with fast reloads   |
+| **C**  | Your machine       | Your own MySQL  | You cannot use Docker                 |
+
+Default ports: frontend `5173`, backend `3000`, MySQL `3306`. Stop anything already using them
+(for example a local MySQL) or change `FRONTEND_PORT` / `BACKEND_PORT` in `.env`.
+
+### A. Everything in Docker
 
 ```bash
-cd backend
-npm ci
+docker compose up --build
 ```
 
-Fill in `.env` with at least:
+The first start takes a few minutes. The backend container installs dependencies, generates the
+Prisma client, applies migrations and seeds default data before serving; wait for the log line
+saying the server is listening. Then open <http://localhost:5173>.
+
+Create a login (see [Logging in locally](#logging-in-locally)):
+
+```bash
+docker compose exec backend npm run dev:seed
+```
+
+Source code is bind-mounted, so edits reload automatically. Dependencies live in named Docker
+volumes: after pulling a change to a `package-lock.json`, restart with `docker compose up --build`,
+and see [Troubleshooting](#troubleshooting) if modules still look stale.
+
+### B. MySQL in Docker, apps on your machine
+
+1. Start only the database and point `.env` at it. In `.env`, change the host in `DATABASE_URL`
+   from `mysql` to `localhost`:
+
+   ```bash
+   docker compose up -d mysql
+   # .env: DATABASE_URL=mysql://sidata:changeme@localhost:3306/sidata
+   ```
+
+2. Backend (terminal 1). The Prisma CLI does not read the root `.env` by itself, so load it into
+   your shell first (once per terminal):
+
+   ```bash
+   cd backend
+   npm ci
+   set -a && . ../.env && set +a
+   npx prisma generate
+   npx prisma migrate deploy
+   npx prisma db seed
+   npm run dev:seed
+   npx tsx watch src/index.ts
+   ```
+
+3. Frontend (terminal 2). Vite reads `frontend/.env`, not the root one:
+
+   ```bash
+   cd frontend
+   cp .env.example .env
+   npm ci
+   npm run dev
+   ```
+
+Open <http://localhost:5173>. The Vite dev server proxies `/api` to the backend.
+
+### C. Everything on your machine
+
+Same as B, but create the database yourself instead of `docker compose up -d mysql`:
+
+```sql
+CREATE DATABASE sidata CHARACTER SET utf8mb4;
+CREATE USER 'sidata'@'localhost' IDENTIFIED BY 'changeme';
+GRANT ALL PRIVILEGES ON sidata.* TO 'sidata'@'localhost';
+```
+
+Then set `DATABASE_URL` in `.env` to match (for example
+`mysql://sidata:changeme@localhost:3306/sidata`) and follow steps 2 and 3 of option B.
+
+## Logging in locally
+
+- **Dev admin (use this).** `npm run dev:seed` (from `backend/`; in Docker,
+  `docker compose exec backend npm run dev:seed`) creates a verified admin:
+  `dev-admin@example.com` / `DevPassword123!`. It refuses to run with `NODE_ENV=production`.
+- **Registering a new account** needs an emailed OTP. The placeholder `RESEND_API_KEY` sends nothing,
+  so no code will arrive. Use a real Resend key if you need to test registration.
+- **Google sign-in** only works with real `GOOGLE_*` credentials (callback
+  `http://localhost:3000/api/auth/google/callback`).
+- **Turnstile** passes automatically with the test keys from the examples. If login says the
+  anti-bot check failed, see [Troubleshooting](#troubleshooting).
+
+## Environment Variables
+
+Two files, read by different programs:
+
+| File            | Read by                                         | Template                |
+| --------------- | ----------------------------------------------- | ----------------------- |
+| `.env` (root)   | Backend (via dotenv), Docker Compose            | `.env.example`          |
+| `frontend/.env` | Vite when run on your machine (options B and C) | `frontend/.env.example` |
+
+Under Docker (option A) the frontend container takes `VITE_API_URL_DOCKER` and
+`VITE_TURNSTILE_SITE_KEY` from the root `.env`; `frontend/.env` is not used.
+
+The backend validates required variables at boot and exits with `Missing required environment
+variable: NAME` if one is missing **or empty**. Required in the root `.env`:
 
 | Variable                        | Description                                                                                                                   |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                  | MySQL connection string, e.g. `mysql://root:password@localhost:3306/sidata` (swap host `mysql` to `localhost` for local runs) |
+| `DATABASE_URL`                  | MySQL connection string. Host `mysql` under Docker Compose, `localhost` otherwise. Keep it in sync with the `MYSQL_*` values by hand — Compose does not expand variables inside `.env`. |
 | `JWT_SECRET`                    | Secret used to sign access tokens                                                                                             |
 | `JWT_REFRESH_SECRET`            | Secret used to sign refresh tokens                                                                                            |
 | `CSRF_SECRET`                   | Secret used to sign CSRF tokens and cookies                                                                                   |
 | `COOKIE_ENCRYPTION_KEY`         | Secret used to encrypt temporary OAuth state and verifier cookies                                                             |
 | `CORS_ORIGIN`                   | Frontend origin allowed to make credentialed requests, e.g. `http://localhost:5173`                                           |
-| `GOOGLE_CLIENT_ID`              | Google OAuth2 Client ID                                                                                                       |
-| `GOOGLE_CLIENT_SECRET`          | Google OAuth2 Client Secret                                                                                                   |
-| `GOOGLE_CALLBACK_URL`           | Google OAuth2 Callback URL, e.g. `http://localhost:3000/api/auth/google/callback`                                             |
+| `GOOGLE_CLIENT_ID`              | Google OAuth2 Client ID (placeholder is fine unless testing Google sign-in)                                                   |
+| `GOOGLE_CLIENT_SECRET`          | Google OAuth2 Client Secret (same)                                                                                            |
+| `GOOGLE_CALLBACK_URL`           | e.g. `http://localhost:3000/api/auth/google/callback`                                                                         |
 | `GOOGLE_OAUTH_SUCCESS_REDIRECT` | Frontend URL for successful OAuth redirect, e.g. `http://localhost:5173/auth/callback`                                        |
 | `GOOGLE_OAUTH_FAILURE_REDIRECT` | Frontend URL for failed OAuth redirect, e.g. `http://localhost:5173/login?error=oauth_failed`                                 |
-| `OAUTH_STATE_TTL_SECONDS`       | _(optional)_ TTL for the temporary `oauth_state` cookie, defaults to `300`                                                    |
-| `OAUTH_PKCE_TTL_SECONDS`        | _(optional)_ TTL for the temporary `oauth_verifier` cookie, defaults to `300`                                                 |
-| `TURNSTILE_SECRET`              | Cloudflare Turnstile anti-bot secret key (`1x0000000000000000000000000000000AA` for local testing)                            |
-| `RESEND_API_KEY`                | Resend API key for transactional emails                                                                                       |
-| `EMAIL_FROM`                    | Sender identity for transactional emails, e.g. `"SIDATA Kelurahan Manggar <onboarding@resend.dev>"`                           |
-| `PORT`                          | _(optional)_ Backend port, defaults to `3000`                                                                                 |
+| `TURNSTILE_SECRET`              | Cloudflare Turnstile secret (`1x0000000000000000000000000000000AA` always passes, for local testing)                          |
+| `RESEND_API_KEY`                | Resend API key for transactional emails (placeholder boots but sends nothing)                                                 |
+| `EMAIL_FROM`                    | Sender identity, e.g. `"SIDATA Kelurahan Manggar <onboarding@resend.dev>"`                                                    |
 
-The server validates required variables at boot and fails fast if any are missing. Optional variables fall back to documented defaults.
+Optional: `PORT` (backend, default `3000`), `OAUTH_STATE_TTL_SECONDS` / `OAUTH_PKCE_TTL_SECONDS`
+(default `300`), `TRUST_PROXY`, `UPLOAD_DIR` / `UPLOADS_HOST_DIR`, `AUDIT_ADMIN_DATABASE_URL`,
+`AUDIT_PRUNE_SCHEDULE`, `RUN_MIGRATIONS`, `MEDIA_CLEANUP_GRACE_HOURS`, `MEDIA_IMAGE_CONCURRENCY`.
+They are documented inline in `.env.example`.
 
-In non-production environments, `npx prisma db seed` loads synthetic RT leaders and delegates
-recognized legacy-sample cleanup to the same transactional service used by the maintenance CLI.
-The cleanup is fingerprint-limited, preserves edited rows, and writes a count-only warning audit
-record in the same transaction when it changes data. For a manual cleanup, run
-`npm run dev:cleanup-sample-rt` from `backend/`; production requires the explicit `--force` flag.
-The public Ketua RT page refreshes its roster and `isSampleRoster` notice every 60 seconds while
-visible, keeping the last successful roster displayed if a refresh fails.
+Frontend (`frontend/.env`): `VITE_API_URL` (backend URL the dev proxy targets) and
+`VITE_TURNSTILE_SITE_KEY` (`1x00000000000000000000AA` always passes; must pair with
+`TURNSTILE_SECRET`).
 
-The auth API issues CSRF tokens from `GET /api/auth/csrf-token`. Include the returned token in the `x-csrf-token` header on mutating auth requests.
+## Troubleshooting
 
-Apply the Prisma schema and seed default roles:
-
-```bash
-npx prisma migrate dev
-npx prisma db seed
-```
-
-Run the backend:
-
-```bash
-npx tsx src/index.ts
-```
-
-### 3. Frontend setup
-
-```bash
-cd frontend
-npm ci
-npm run dev
-```
-
-The dev server runs on `http://localhost:5173` by default.
-
-### Docker (alternative)
-
-From the repo root, with a `.env` copied from `.env.example` and filled in (Compose passes the
-MySQL credentials, backend env vars, and `VITE_API_URL_DOCKER`/`VITE_TURNSTILE_SITE_KEY` through
-to the containers — see `docker-compose.yml`):
-
-```bash
-cp .env.example .env
-docker compose up --build
-```
-
-The frontend and backend use Node 22 on Debian Bookworm and install their lockfiles with `npm ci`.
-The backend uses the full Bookworm image for Prisma's OpenSSL dependency. The opt-in `audit-pruner`
-build target adds BusyBox for scheduled pruning.
-
-If an install fails, the Docker build prints npm's version, fetch failures and error details. To
-isolate a frontend build failure, build that service with plain output and check whether a Docker
-container can reach the npm registry:
+| Symptom                                                                    | Cause and fix                                                                                                                                                                                       |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `EBADENGINE` warnings, or odd syntax/module errors on your machine         | Wrong Node version. Check `node -v`: it must be `^22.18.0` or `>=24.12.0` (Node 20 is not supported). Switch with `nvm install 22 && nvm use 22`, then re-run `npm ci`.                            |
+| `Missing required environment variable: X`                                 | `X` is absent or empty in the root `.env`. Re-copy from `.env.example`.                                                                                                                              |
+| `Can't reach database server` / `ECONNREFUSED` / `getaddrinfo ENOTFOUND mysql` | Wrong host in `DATABASE_URL`: `mysql` only resolves inside Compose; use `localhost` when the backend runs on your machine. Also wait for MySQL's healthcheck (`docker compose ps`).       |
+| Prisma CLI: `Cannot read properties of undefined` / empty datasource URL   | The CLI reads `DATABASE_URL` from the shell or `backend/.env`, not the root `.env`. Run `set -a && . ../.env && set +a` in `backend/` first.                                                        |
+| `Cannot find module '…/generated/prisma'`                                  | The Prisma client is generated, not committed. Run `npx prisma generate` in `backend/` (also after pulling schema changes).                                                                          |
+| `prisma migrate dev` fails with P3014 / "permission denied to create database" | `migrate dev` needs a shadow database, which the app user cannot create. Use `npx prisma migrate deploy` to just apply migrations. When authoring a new migration, run `migrate dev` with a `DATABASE_URL` for `root` (password `MYSQL_ROOT_PASSWORD`). |
+| Login/register says the anti-bot check failed                              | Turnstile keys must be the Cloudflare test pair: `TURNSTILE_SECRET=1x0000000000000000000000000000000AA` in `.env` and `VITE_TURNSTILE_SITE_KEY=1x00000000000000000000AA` in the file Vite reads. Restart Vite after editing. |
+| Frontend loads but every API call fails                                    | Backend not running or wrong `VITE_API_URL` in `frontend/.env` (host runs: `http://localhost:3000`). Credentialed requests also need `CORS_ORIGIN` to equal the exact frontend URL.                   |
+| `port is already allocated` / `EADDRINUSE`                                 | Another process holds 3306, 3000 or 5173 (often a local MySQL). Stop it or change `BACKEND_PORT` / `FRONTEND_PORT` in `.env`; for 3306 edit the `ports` mapping of the `mysql` service.            |
+| Docker frontend/backend cannot find a package after a dependency change    | `node_modules` live in named volumes. Run `docker compose down`, then `docker volume rm sidata_frontend_node_modules_glibc` (frontend) or `sidata_backend_node_modules` (backend), then `docker compose up --build`. `docker compose down -v` removes **all** volumes, including the database. |
+| Changed `MYSQL_*` but the database still uses old credentials              | MySQL only applies them on first creation of its volume. Update `DATABASE_URL` to match, and either recreate the user by hand or `docker compose down -v` (wipes local data).                        |
+| `npm ci` fails during a Docker build                                       | Network or registry issue. Build with plain output and test registry access (below).                                                                                                                 |
 
 ```bash
 docker compose --progress plain build frontend
 docker run --rm node:22-bookworm-slim npm ping --fetch-retries=0 --fetch-timeout=10000
 ```
 
-Uploaded media is bind-mounted from `UPLOADS_HOST_DIR` (default `./uploads`, git-ignored) into the
-backend container at `/var/lib/sidata/uploads` (`UPLOAD_DIR`), so it survives rebuilds. Outside Docker,
-`UPLOAD_DIR` is optional and defaults to `<repo-root>/uploads`.
+## Daily Development
 
-## Deployment
-
-Checklist for a new environment (Docker on a VPS). Background: [`AGENTS.md`](AGENTS.md) "Audit Trail",
-[`SECURITY.md`](SECURITY.md).
-
-1. Create a second, privileged MySQL user (full rights on the database) and set
-   `AUDIT_ADMIN_DATABASE_URL` to it. This is separate from `DATABASE_URL`, the app's runtime user.
-2. Run migrations as the privileged user. Under Compose:
-   `docker compose --profile ops run --rm --build audit-pruner npx prisma migrate deploy`; outside Compose:
-   `DATABASE_URL="$AUDIT_ADMIN_DATABASE_URL" npx prisma migrate deploy` (from `backend/`).
-   Also set `RUN_MIGRATIONS=0` for the `backend` service from here on — it runs `migrate deploy` at
-   start by default, which the restricted app user can no longer do after step 3.
-3. **Apply the audit-log grants once per environment.** Substitute `<APP_DB_USER>`, `<APP_DB_HOST>`
-   and `<DB_NAME>` in `backend/scripts/grants/audit-logs-grants.sql`, run it as a MySQL user with
-   `GRANT` privileges (e.g. root) with no database preselected (the script runs its own
-   ``USE `<DB_NAME>` ``; e.g. `mysql -u root -p < grants.sql` on the substituted copy), then run the
-   verification queries at the bottom of the file. It revokes the db-level grant by exact name
-   (and GRANT OPTION). Wildcard grants such as `sidata%`.* and server-wide grants such as
-   `DELETE ON *.*` (or an extra table-level grant on `audit_logs`) are a different scope the
-   script does not touch: it ends with a check that stops with an error naming any such grant
-   still held by the app user — revoke that one manually and re-run.
-   Skipping this leaves the app user with full rights on `audit_logs` (no tamper defense layer 2).
-   Re-apply it after any migration that adds a table.
-4. Schedule retention pruning, using either:
-   - the Compose sidecar (it has no bind mount, so pass `--build` after every `git pull` or it runs the
-     previously built image): `docker compose --profile ops up -d --build audit-pruner` (schedule from
-     `AUDIT_PRUNE_SCHEDULE`, default daily at 03:00), or
-   - host cron, from `backend/`:
-     `0 3 * * * cd /path/to/SIDATA/backend && npx tsx scripts/prune-audit-logs.ts >> /var/log/sidata-prune.log 2>&1`
-     (needs `AUDIT_ADMIN_DATABASE_URL` and the other required backend variables in the root `.env`, and `npx` on cron's `PATH`).
-5. If behind a reverse proxy, set `TRUST_PROXY`.
-6. **Media uploads (`media_assets` + `UPLOAD_DIR`).**
-   - Apply the grants script (step 3) again after the migration that adds `media_assets`; it already
-     contains that table's line. The later `add_media_assets_detached_at` migration only adds a column,
-     so it needs no grants change.
-   - Create the host directory for the bind mount (`UPLOADS_HOST_DIR`, default `./uploads`) and make it
-     writable by the user the backend runs as (the dev image runs as root). The server creates the
-     `_staging/`, `photos/`, `documents/` and `derivatives/` subdirectories itself and checks `UPLOAD_DIR` at boot. If it is unwritable or inside `backend/` or `frontend/`, the server
-     still starts but logs a loud `WARNING: media storage is NOT usable` block; uploads and media delivery
-     answer 503 `MEDIA_STORAGE_UNAVAILABLE` (no path in the body) while everything else keeps serving, and
-     media recovers on its own (no restart) once the directory is fixed. Watch the boot log for that warning.
-   - The editor preview route (`/api/media/<id>/preview`) needs the `Authorization` header; the CMS loads it
-     with the authenticated API client and a blob URL, so the proxy must pass that header through.
-   - **Back up the uploads directory and the `media_assets` table together**, from the same point in
-     time. Either one alone is unrecoverable: rows without files serve 404, files without rows are never
-     reachable and are not cleaned up.
-   - The reverse proxy must route `/api/media` to the backend like the rest of `/api`, allow request
-     bodies of at least 21 MiB there (nginx: `client_max_body_size 21m;` on that location; the default
-     1 MiB would reject every real upload), and must not serve the uploads directory itself: the API
-     is the only reader, because it enforces the attached/private rule.
-   - Uploaded CSV files are scanned across comma, semicolon, and tab delimiters for spreadsheet
-     formula injection (rejecting cells starting with `=`, `+`, `-`, `@`, tab, or CR unless the cell
-     is a plain number).
-   - Photo processing (re-encoding to WebP and thumbnail creation) is bound by a concurrency
-     semaphore (`MEDIA_IMAGE_CONCURRENCY`, default 2, range 1–8) with a bounded queue of 20.
-     When the queue is full, uploads answer 503 `MEDIA_PROCESSING_BUSY` with a `Retry-After: 5` header.
-   - Schedule `npm run media:cleanup` (daily is plenty). It removes `_staging/` directories and
-     unattached uploads whose grace period (24 h, `MEDIA_CLEANUP_GRACE_HOURS` or
-     `--grace-hours=N`) has passed, counted from the moment content detached them (`detached_at`), or from
-     the upload for assets that were never attached and writes a count-only `media.cleanup` audit row (including files that failed to delete: those rows are kept and retried on the next run, and the script exits 1 so cron notices). It uses the app's normal DB
-     user (no privileged connection needed). Under Compose (primary), from the host's cron:
-     `30 3 * * * cd /path/to/SIDATA && docker compose exec -T backend npm run media:cleanup >> /var/log/sidata-media-cleanup.log 2>&1`;
-     or without Docker, from `backend/`:
-     `30 3 * * * cd /path/to/SIDATA/backend && npm run media:cleanup >> /var/log/sidata-media-cleanup.log 2>&1`. Add
-     `-- --dry-run` first to see what it would remove.
-   - **Moving `UPLOAD_DIR` to a new location:** (1) pause writes (stop the backend, or block `POST
-     /api/media` at the proxy); (2) copy the whole tree preserving structure, e.g.
-     `rsync -a old/ new/`; (3) verify, e.g. `diff -r old new` or matching file counts and sizes, and
-     spot-check a few `/api/media/<id>` URLs after the switch; (4) point `UPLOAD_DIR` (or
-     `UPLOADS_HOST_DIR`) at the new location and restart; (5) keep the old copy until verified. Storage
-     keys in the database are relative, so no rows change.
-7. **Database initialization vs. upgrade runbook:**
-   - **Fresh installation:** Run `npx prisma db seed` with `NODE_ENV=production`. In production, seeding initializes 100 empty RT slots (`rtNumber` 1–100 with blank names/contacts and no spatial points) and initializes `maps.rt_leaders_sample_roster` to `false`. Real leader names, contacts, and coordinates must be entered through the CMS manual editor or imported via CSV.
-   - **Upgrading an existing database previously seeded with sample/dev data:** Because seeding uses `update: {}` to prevent overwriting existing rows, previously seeded synthetic records or points will survive a re-seed. Before public release, operators must verify whether recognized legacy synthetic records remain. If present, run the maintenance cleanup command from `backend/` during an authorized maintenance window with production configuration:
-     ```bash
-     npm run dev:cleanup-sample-rt -- --force
-     ```
-     This cleanup is fingerprint-limited: it resets recognized synthetic placeholder rows, removes synthetic RT points, preserves editor-modified rows, and writes a count-only audit log in the same transaction. Synthetic data that does not match narrow legacy fingerprints will not be automatically cleared; operators must verify and toggle the appropriate `maps.rt_leaders_sample_roster` flag via the Admin CMS (/admin/rukun-tetangga) or `PATCH /api/maps/rt-leaders/sample-status` once verified.
-
-## Public Content Sources
-
-For factual website content, use the [Descan Manggar 2026 source guide](docs/CONTENT_SOURCES.md),
-which points to the canonical Google Drive folder and records source periods, citations, and
-verification rules.
+- **Schema changes**: edit `backend/prisma/schema.prisma`, run `npx prisma migrate dev` (see the P3014
+  note above), and commit the migration. If it adds a table, also add its `GRANT` line to
+  `backend/scripts/grants/audit-logs-grants.sql`.
+- **Seed data**: `npx prisma db seed` loads default roles, settings, content blocks and the Cerita
+  pages. In non-production it also loads synthetic RT leaders and delegates recognized legacy-sample
+  cleanup to the same transactional service used by the maintenance CLI. The cleanup is
+  fingerprint-limited, preserves edited rows, and writes a count-only warning audit record in the
+  same transaction when it changes data. For a manual cleanup, run `npm run dev:cleanup-sample-rt`
+  from `backend/`; production requires the explicit `--force` flag.
+- **Ketua RT page**: the public page refreshes its roster and `isSampleRoster` notice every 60
+  seconds while visible, keeping the last successful roster displayed if a refresh fails.
+- **Auth API**: CSRF tokens come from `GET /api/auth/csrf-token`. Send the returned token in the
+  `x-csrf-token` header on mutating auth requests.
+- **Uploaded media** lives in `UPLOADS_HOST_DIR` (default `./uploads`, git-ignored) on the host.
+  Under Docker it is bind-mounted into the backend at `/var/lib/sidata/uploads` (`UPLOAD_DIR`), so it
+  survives rebuilds. Outside Docker, `UPLOAD_DIR` is optional and defaults to `<repo-root>/uploads`.
+- Docker notes: frontend and backend use Node 22 on Debian Bookworm and install their lockfiles with
+  `npm ci`. The backend uses the full Bookworm image for Prisma's OpenSSL dependency. The opt-in
+  `audit-pruner` build target adds BusyBox for scheduled pruning.
 
 ## Available Scripts
 
@@ -243,15 +233,17 @@ verification rules.
 
 ### Backend (`backend/`)
 
-| Task                    | Command                                                                 |
-| ----------------------- | ----------------------------------------------------------------------- |
-| Run unit tests          | `npm test`                                                              |
-| Run integration tests   | `docker compose -f docker-compose.test.yml run --rm backend-integration` |
-| Lint                    | `npm run lint`                                                          |
-| Format code             | `npm run format`                                                        |
-| Clean stale media       | `npm run media:cleanup` (`-- --dry-run`, `-- --grace-hours=N`)          |
-| Run server              | `npx tsx src/index.ts`                                                  |
-| Run via Docker          | `docker compose up --build` (repo root)                                 |
+| Task                    | Command                                                                  |
+| ----------------------- | ------------------------------------------------------------------------ |
+| Run server              | `npx tsx src/index.ts` (or `npx tsx watch src/index.ts` to reload)       |
+| Run unit tests          | `npm test`                                                               |
+| Run integration tests   | `docker compose -f docker-compose.test.yml run --rm backend-integration` (repo root) |
+| Lint                    | `npm run lint`                                                           |
+| Format code             | `npm run format`                                                         |
+| Create local dev admin  | `npm run dev:seed`                                                       |
+| Seed sample indicators  | `npm run seed:indicator`                                                 |
+| Clean sample RT data    | `npm run dev:cleanup-sample-rt`                                          |
+| Clean stale media       | `npm run media:cleanup` (`-- --dry-run`, `-- --grace-hours=N`)           |
 
 Integration tests (`backend/tests/integration/`) need a real MySQL because they assert
 concurrency behaviour that a mocked client cannot reproduce: no InnoDB deadlocks under
@@ -264,6 +256,17 @@ They are intentionally excluded from `npm test` and CI: they require Docker, and
 to a live database. Run them locally before touching the RT import, spatial write paths, or
 `prisma/seed.ts`.
 
+## Deployment
+
+Production setup (privileged DB user, audit-log grants, pruning, reverse proxy, media uploads,
+seeding) is in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). Not needed for local development.
+
+## Public Content Sources
+
+For factual website content, use the [Descan Manggar 2026 source guide](docs/CONTENT_SOURCES.md),
+which points to the canonical Google Drive folder and records source periods, citations, and
+verification rules.
+
 ## Project Structure
 
 ```
@@ -273,7 +276,7 @@ SIDATA/
 └── docker-compose.yml
 ```
 
-See `CLAUDE.md` for a detailed architecture breakdown of both apps.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for a map of both apps.
 
 ## Contributing
 
