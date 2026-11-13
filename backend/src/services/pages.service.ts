@@ -532,11 +532,12 @@ export const updatePage = async (
         include: { _count: { select: { chapters: true } } },
       });
 
-      // Audit rows hold titles, slugs and flags only (SPEC §3): the headline is title-like text,
-      // but a byline names a person, so only the fact that it changed is recorded.
+      // Audit rows hold titles, slugs and flags only (SPEC §3). A headline is free editorial copy
+      // and a byline names a person, and the table is append-only, so only the fact that either
+      // changed is recorded, never the text.
       const changes: Record<string, unknown> = {};
       if (changed.title) changes.title = { before: existing.title, after: next.title };
-      if (changed.headline) changes.headline = { before: existing.headline, after: next.headline };
+      if (changed.headline) changes.headline = { changed: true };
       if (changed.byline) changes.byline = { changed: true };
 
       await buildAuditLog(

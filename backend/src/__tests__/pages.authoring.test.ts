@@ -103,10 +103,11 @@ describe('pages.service authoring additions', () => {
       assert.notEqual(result.updatedAt, T0_ISO);
       const row = db.auditRows[0]!;
       assert.deepEqual((row.metadata as { changes: unknown }).changes, {
-        headline: { before: null, after: 'Potret Kependudukan Manggar' },
+        headline: { changed: true },
         byline: { changed: true },
       });
       assert.ok(!JSON.stringify(row).includes('Tim Penyusun'));
+      assert.ok(!JSON.stringify(row).includes('Potret Kependudukan'));
     });
 
     it('a blank headline or byline clears it; a field left out is untouched', async () => {
@@ -141,6 +142,27 @@ describe('pages.service authoring additions', () => {
       }
       assert.equal(db.page.rows[0]!.headline, null);
       assert.equal(db.auditRows.length, 0);
+    });
+
+    it('accepts null alone as a clear request, and rejects a stale or empty one', async () => {
+      await updatePage(
+        'kependudukan',
+        { headline: 'Judul', expectedUpdatedAt: T0_ISO },
+        actor,
+        ctx,
+      );
+      const token = (db.page.rows[0]!.updatedAt as Date).toISOString();
+      await assert.rejects(
+        updatePage('kependudukan', { headline: null, expectedUpdatedAt: STALE }, actor, ctx),
+        expectError(409, 'STALE_WRITE'),
+      );
+      const result = await updatePage(
+        'kependudukan',
+        { headline: null, expectedUpdatedAt: token },
+        actor,
+        ctx,
+      );
+      assert.equal(result.headline, null);
     });
 
     it('an unchanged headline and byline write and audit nothing', async () => {

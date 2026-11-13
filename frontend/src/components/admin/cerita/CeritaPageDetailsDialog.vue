@@ -128,7 +128,7 @@ function handleSubmit(): void {
       <FormField
         :id="ids.headline"
         label="Judul utama (opsional)"
-        hint="Tampil sebagai judul besar di halaman. Judul halaman tetap tampil di atasnya."
+        hint="Tampil sebagai judul besar di halaman. Judul halaman tampil sebagai label kecil di atasnya."
         :error="submitted ? problems.headline : undefined"
         v-slot="{ describedBy, invalid }"
       >
