@@ -52,6 +52,21 @@ export async function renamePage(
   await patch(`/api/pages/${enc(slug)}`, { title, expectedUpdatedAt });
 }
 
+/** The optional headline and byline of a page; blank or null clears a field. */
+export interface PageDetailsInput {
+  headline: string | null;
+  bylineAuthor: string | null;
+  bylineAffiliation: string | null;
+}
+
+export async function updatePageDetails(
+  slug: string,
+  details: PageDetailsInput,
+  expectedUpdatedAt: string,
+): Promise<void> {
+  await patch(`/api/pages/${enc(slug)}`, { ...details, expectedUpdatedAt });
+}
+
 export async function deletePage(slug: string, expectedUpdatedAt: string): Promise<void> {
   await remove(`/api/pages/${enc(slug)}${tokenQuery(expectedUpdatedAt)}`);
 }

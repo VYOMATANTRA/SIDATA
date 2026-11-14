@@ -78,6 +78,9 @@ const detailRow = (overrides: Record<string, unknown> = {}) => ({
   id: 'page-1',
   slug: 'kependudukan',
   title: 'Kependudukan',
+  headline: null,
+  bylineAuthor: null,
+  bylineAffiliation: null,
   sortOrder: 0,
   createdAt: FIXED_CREATED,
   updatedAt: FIXED_UPDATED,
@@ -365,6 +368,9 @@ describe('pages.service', () => {
         id: 'page-1',
         slug: 'kependudukan',
         title: 'Kependudukan',
+        headline: null,
+        bylineAuthor: null,
+        bylineAffiliation: null,
         sortOrder: 0,
         chapters: [
           {
@@ -441,6 +447,9 @@ describe('pages.service', () => {
           id: 'page-6',
           slug: 'pemerintahan-dan-kelembagaan',
           title: 'Pemerintahan & Kelembagaan',
+          headline: 'Tata Kelola Kelurahan',
+          bylineAuthor: 'Tim Penyusun',
+          bylineAffiliation: null,
           sortOrder: 5,
           chapters: [
             chapterRow({
@@ -477,6 +486,9 @@ describe('pages.service', () => {
         id: 'page-6',
         slug: 'pemerintahan-dan-kelembagaan',
         title: 'Pemerintahan & Kelembagaan',
+        headline: 'Tata Kelola Kelurahan',
+        bylineAuthor: 'Tim Penyusun',
+        bylineAffiliation: null,
         sortOrder: 5,
         chapters: [
           {
@@ -526,8 +538,11 @@ describe('pages.service', () => {
       assert.ok(result);
 
       assert.deepStrictEqual(Object.keys(result).sort(), [
+        'bylineAffiliation',
+        'bylineAuthor',
         'chapters',
         'createdAt',
+        'headline',
         'id',
         'slug',
         'sortOrder',

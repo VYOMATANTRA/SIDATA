@@ -19,6 +19,7 @@ import { onBeforeRouteLeave } from 'vue-router';
 import BaseButton from '../components/common/BaseButton.vue';
 import BaseModal from '../components/common/BaseModal.vue';
 import CeritaDeleteDialog from '../components/admin/cerita/CeritaDeleteDialog.vue';
+import CeritaPageDetailsDialog from '../components/admin/cerita/CeritaPageDetailsDialog.vue';
 import CeritaNameDialog from '../components/admin/cerita/CeritaNameDialog.vue';
 import CeritaReloadNotice from '../components/admin/cerita/CeritaReloadNotice.vue';
 import CeritaPageList from '../components/admin/cerita/CeritaPageList.vue';
@@ -26,6 +27,7 @@ import CeritaSectionEditor from '../components/admin/cerita/CeritaSectionEditor.
 import CeritaStructurePanel from '../components/admin/cerita/CeritaStructurePanel.vue';
 import { ceritaIds } from '../components/admin/cerita/ceritaDomIds';
 import { dependentsMessage } from '../utils/ceritaAdminMessages';
+import type { PageDetailsInput } from '../services/ceritaAdmin.service';
 import {
   useCeritaAdminStore,
   type AdminChapter,
@@ -64,6 +66,16 @@ const nameBusy = ref(false);
 const nameError = ref('');
 const nameStale = ref(false);
 
+// Headline and byline of the chosen page. `token` follows the name dialog's rule: the first save
+// carries the `updatedAt` seen when the dialog opened; only its reload button moves it forward.
+const detailsTarget = ref<{ slug: string; token: string } | null>(null);
+const detailsBusy = ref(false);
+const detailsError = ref('');
+const detailsStale = ref(false);
+const detailsPage = computed(() =>
+  detailsTarget.value ? (store.findPage(detailsTarget.value.slug) ?? null) : null,
+);
+
 const deleteTarget = ref<DeleteTarget | null>(null);
 const deleteBusy = ref(false);
 const deleteError = ref('');
@@ -79,7 +91,9 @@ const keepEditingButton = ref<InstanceType<typeof BaseButton> | null>(null);
 const pages = computed(() => store.tree);
 const page = computed(() => store.selectedPage);
 const pageIndex = computed(() => pages.value.findIndex((item) => item.slug === page.value?.slug));
-const structureBusy = computed(() => moving.value || nameBusy.value || deleteBusy.value);
+const structureBusy = computed(
+  () => moving.value || nameBusy.value || deleteBusy.value || detailsBusy.value,
+);
 const showInitialLoading = computed(() => !store.hasLoaded && store.isLoading);
 
 onMounted(() => {
@@ -260,6 +274,52 @@ async function submitName(title: string): Promise<void> {
   }
   nameError.value = outcome.message;
   nameStale.value = outcome.stale;
+}
+
+function openDetails(slug: string, token: string): void {
+  detailsError.value = '';
+  detailsStale.value = false;
+  detailsTarget.value = { slug, token };
+}
+
+function closeDetails(): void {
+  if (detailsBusy.value) return;
+  detailsTarget.value = null;
+  detailsError.value = '';
+  detailsStale.value = false;
+}
+
+async function submitDetails(details: PageDetailsInput): Promise<void> {
+  const target = detailsTarget.value;
+  if (!target || detailsBusy.value) return;
+  detailsBusy.value = true;
+  detailsError.value = '';
+  detailsStale.value = false;
+  const outcome = await store.updatePageDetails(target.slug, details, target.token);
+  detailsBusy.value = false;
+
+  if (outcome.ok) {
+    detailsTarget.value = null;
+    announce('Judul utama dan penulis halaman disimpan.');
+    await nextTick();
+    focusId(ceritaIds.pageDetails);
+    return;
+  }
+  detailsError.value = outcome.message;
+  detailsStale.value = outcome.stale;
+}
+
+async function reloadFromDetails(): Promise<void> {
+  const loaded = await store.load();
+  if (!loaded) {
+    detailsError.value = COULD_NOT_RELOAD;
+    return;
+  }
+  const target = detailsTarget.value;
+  const token = target ? store.findPage(target.slug)?.updatedAt : undefined;
+  if (target && token) detailsTarget.value = { ...target, token };
+  detailsStale.value = false;
+  detailsError.value = '';
 }
 
 async function reloadFromName(): Promise<void> {
@@ -776,6 +836,7 @@ onUnmounted(() => {
             token: page.updatedAt,
           })
         "
+        @edit-page-details="openDetails(page.slug, page.updatedAt)"
         @move-page="movePage"
         @delete-page="openDeletePage"
         @add-chapter="openName({ kind: 'chapter-add', pageSlug: page.slug })"
@@ -824,6 +885,20 @@ onUnmounted(() => {
       @submit="submitName"
       @close="closeName"
       @reload="reloadFromName"
+    />
+
+    <CeritaPageDetailsDialog
+      :open="detailsTarget !== null"
+      :page-title="detailsPage?.title ?? ''"
+      :headline="detailsPage?.headline ?? null"
+      :byline-author="detailsPage?.bylineAuthor ?? null"
+      :byline-affiliation="detailsPage?.bylineAffiliation ?? null"
+      :busy="detailsBusy"
+      :error="detailsError"
+      :stale="detailsStale"
+      @submit="submitDetails"
+      @close="closeDetails"
+      @reload="reloadFromDetails"
     />
 
     <CeritaDeleteDialog

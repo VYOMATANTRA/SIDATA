@@ -146,7 +146,20 @@ export const toPageSummary = (page: PageWithChapterCount): PageSummaryDTO => ({
   chapterCount: page._count.chapters,
 });
 
-export interface PageDetailDTO {
+/** Optional editorial headline and byline of a page (SPEC §8); null while not approved. */
+export interface PageEditorialDTO {
+  headline: string | null;
+  bylineAuthor: string | null;
+  bylineAffiliation: string | null;
+}
+
+const toEditorial = (page: PageEditorialDTO): PageEditorialDTO => ({
+  headline: page.headline ?? null,
+  bylineAuthor: page.bylineAuthor ?? null,
+  bylineAffiliation: page.bylineAffiliation ?? null,
+});
+
+export interface PageDetailDTO extends PageEditorialDTO {
   id: string;
   slug: string;
   title: string;
@@ -156,7 +169,7 @@ export interface PageDetailDTO {
   updatedAt: string;
 }
 
-interface PageRowWithChapters {
+interface PageRowWithChapters extends PageEditorialDTO {
   id: string;
   slug: string;
   title: string;
@@ -184,6 +197,7 @@ const toPageDetail = (page: PageRowWithChapters): PageDetailDTO => ({
   id: page.id,
   slug: page.slug,
   title: page.title,
+  ...toEditorial(page),
   sortOrder: page.sortOrder,
   chapters: page.chapters.map((chapter) => ({
     id: chapter.id,
@@ -394,26 +408,62 @@ export const createPage = async (
   }
 };
 
-export interface PageAuthoringDTO extends PageSummaryDTO {
+export interface PageAuthoringDTO extends PageSummaryDTO, PageEditorialDTO {
   /** Optimistic-concurrency token for the next page edit/delete or chapter reorder. */
   updatedAt: string;
 }
 
-const toPageAuthoring = (page: PageWithChapterCount & { updatedAt: Date }): PageAuthoringDTO => ({
+const toPageAuthoring = (
+  page: PageWithChapterCount & PageEditorialDTO & { updatedAt: Date },
+): PageAuthoringDTO => ({
   ...toPageSummary(page),
+  ...toEditorial(page),
   updatedAt: page.updatedAt.toISOString(),
 });
 
+/**
+ * An optional line of editorial text: trimmed, blank becomes null (clears it), and the same
+ * content rules as a title (no control characters, no HTML).
+ */
+const optionalTextSchema = (label: string, max: number) =>
+  z
+    .string({ error: `${label} harus berupa string` })
+    .trim()
+    .max(max, `${label} maksimal ${max} karakter`)
+    .refine(
+      (v) => !hasControlCharacters(v),
+      `${label} mengandung karakter kontrol yang tidak valid`,
+    )
+    .refine((v) => !/<[a-z!/]/i.test(v), `${label} tidak boleh mengandung tag HTML`)
+    .transform((v) => (v === '' ? null : v))
+    .nullable();
+
+export const HEADLINE_MAX = 255;
+export const BYLINE_AUTHOR_MAX = 120;
+export const BYLINE_AFFILIATION_MAX = 160;
+
 export const updatePageSchema = z
   .object({
-    title: titleSchema('Judul halaman'),
+    title: titleSchema('Judul halaman').optional(),
+    headline: optionalTextSchema('Judul utama', HEADLINE_MAX).optional(),
+    bylineAuthor: optionalTextSchema('Nama penulis', BYLINE_AUTHOR_MAX).optional(),
+    bylineAffiliation: optionalTextSchema('Afiliasi penulis', BYLINE_AFFILIATION_MAX).optional(),
     expectedUpdatedAt: expectedUpdatedAtSchema,
   })
-  .strict();
+  .strict()
+  .refine(
+    (data) =>
+      data.title !== undefined ||
+      data.headline !== undefined ||
+      data.bylineAuthor !== undefined ||
+      data.bylineAffiliation !== undefined,
+    { message: 'Setidaknya satu bidang halaman harus diisi untuk diperbarui' },
+  );
 
 /**
- * Renames a page. The slug is deliberately immutable so shared links keep working; the page
- * has no description column, so `title` is the only editable field.
+ * Updates a page's title and its optional editorial headline and byline. The slug is
+ * deliberately immutable so shared links keep working. A field left out is untouched; a blank or
+ * null headline/byline field clears it. A byline affiliation needs an author.
  */
 export const updatePage = async (
   rawSlug: string,
@@ -445,25 +495,57 @@ export const updatePage = async (
       }
       assertFresh(existing.updatedAt, input.expectedUpdatedAt, 'Halaman');
 
-      if (existing.title === input.title) {
+      const next = {
+        title: input.title ?? existing.title,
+        headline: input.headline !== undefined ? input.headline : existing.headline,
+        bylineAuthor: input.bylineAuthor !== undefined ? input.bylineAuthor : existing.bylineAuthor,
+        bylineAffiliation:
+          input.bylineAffiliation !== undefined
+            ? input.bylineAffiliation
+            : existing.bylineAffiliation,
+      };
+
+      if (next.bylineAffiliation && !next.bylineAuthor) {
+        throw new PageServiceError('Isi nama penulis jika afiliasi penulis diisi.', 400);
+      }
+
+      const changed = {
+        title: next.title !== existing.title,
+        headline: next.headline !== existing.headline,
+        byline:
+          next.bylineAuthor !== existing.bylineAuthor ||
+          next.bylineAffiliation !== existing.bylineAffiliation,
+      };
+
+      if (!changed.title && !changed.headline && !changed.byline) {
         return withChangeResult(toPageAuthoring(existing), false);
       }
 
       const updated = await tx.page.update({
         where: { id: existing.id },
-        data: { title: input.title },
+        data: {
+          title: next.title,
+          headline: next.headline,
+          bylineAuthor: next.bylineAuthor,
+          bylineAffiliation: next.bylineAffiliation,
+        },
         include: { _count: { select: { chapters: true } } },
       });
+
+      // Audit rows hold titles, slugs and flags only (SPEC §3). A headline is free editorial copy
+      // and a byline names a person, and the table is append-only, so only the fact that either
+      // changed is recorded, never the text.
+      const changes: Record<string, unknown> = {};
+      if (changed.title) changes.title = { before: existing.title, after: next.title };
+      if (changed.headline) changes.headline = { changed: true };
+      if (changed.byline) changes.byline = { changed: true };
 
       await buildAuditLog(
         {
           action: AUDIT_ACTIONS.PAGE_UPDATED,
           actor,
-          target: { type: 'page', id: existing.id, label: input.title },
-          metadata: {
-            slug: existing.slug,
-            changes: { title: { before: existing.title, after: input.title } },
-          },
+          target: { type: 'page', id: existing.id, label: next.title },
+          metadata: { slug: existing.slug, changes },
           context: reqContext,
         },
         tx,

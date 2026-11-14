@@ -409,7 +409,19 @@ defineExpose({ retryLoad, loadPage });
     </CeritaStatePanel>
 
     <template v-else-if="page">
-      <CeritaHero :title="page.title" :chapter-count="page.chapters.length" />
+      <CeritaHero
+        :title="page.title"
+        :chapter-count="page.chapters.length"
+        :headline="page.headline || undefined"
+        :byline="
+          page.bylineAuthor
+            ? {
+                author: page.bylineAuthor,
+                ...(page.bylineAffiliation ? { affiliation: page.bylineAffiliation } : {}),
+              }
+            : undefined
+        "
+      />
 
       <div v-if="proseUnavailable || showPageEmptyNotice" :class="[READER_GRID, 'pt-8']">
         <div :class="READER_MAIN">
