@@ -456,8 +456,13 @@ export const LOGIN_REASON_MESSAGES: Readonly<Record<string, string>> = {
   callback_error: GOOGLE_LOGIN_FAILED_MESSAGE,
 };
 
-/** Message for a `?reason=` value, or null when it is unknown. */
+/**
+ * Message for a `?reason=` value. An unknown non-empty string (the Google callback forwards the
+ * provider's own error code) gets the generic Google sentence; the raw value is never printed.
+ */
 export function loginReasonMessage(reason: unknown): string | null {
-  if (typeof reason !== 'string') return null;
-  return Object.prototype.hasOwnProperty.call(LOGIN_REASON_MESSAGES, reason) ? LOGIN_REASON_MESSAGES[reason]! : null;
+  if (typeof reason !== 'string' || reason === '') return null;
+  return Object.prototype.hasOwnProperty.call(LOGIN_REASON_MESSAGES, reason)
+    ? LOGIN_REASON_MESSAGES[reason]!
+    : GOOGLE_LOGIN_FAILED_MESSAGE;
 }

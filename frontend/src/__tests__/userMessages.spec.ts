@@ -691,9 +691,15 @@ describe('loginReasonMessage', () => {
     expect(loginReasonMessage('invalid_state')).toBe('Gagal masuk dengan Google. Silakan coba lagi.');
   });
 
-  it('ignores unknown, inherited and non-string reasons', () => {
-    expect(loginReasonMessage('<b>x</b>')).toBeNull();
-    expect(loginReasonMessage('constructor')).toBeNull();
+  it('maps unknown or inherited string reasons to the generic Google sentence', () => {
+    const generic = 'Gagal masuk dengan Google. Silakan coba lagi.';
+    expect(loginReasonMessage('<b>x</b>')).toBe(generic);
+    expect(loginReasonMessage('server_error')).toBe(generic);
+    expect(loginReasonMessage('constructor')).toBe(generic);
+  });
+
+  it('ignores empty and non-string reasons', () => {
+    expect(loginReasonMessage('')).toBeNull();
     expect(loginReasonMessage(['setup_required'])).toBeNull();
     expect(loginReasonMessage(undefined)).toBeNull();
   });

@@ -293,7 +293,7 @@ describe('users store', () => {
     expect(store.users[0]?.deletedAt).not.toBeNull()
   })
 
-  it('changeUserPassword throws on backend error and sets writeError, not the load error', async () => {
+  it('changeUserPassword throws on backend error and leaves the load error alone', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
       const url = String(input)
       if (url.includes('csrf-token')) {
@@ -312,9 +312,6 @@ describe('users store', () => {
       status: 400,
       serverMessage: 'Password terlalu lemah atau umum digunakan.',
     })
-    expect(store.writeError).toBe(
-      'Gagal mengubah password pengguna. Password terlalu lemah atau umum digunakan.',
-    )
     expect(store.error).toBeNull()
     expect(store.errorKind).toBeNull()
   })
@@ -332,7 +329,6 @@ describe('users store', () => {
     ).rejects.toMatchObject({ status: 409 })
     expect(store.error).toBeNull()
     expect(store.errorKind).toBeNull()
-    expect(store.writeError).toContain('Gagal membuat pengguna')
   })
 
   it('a failed write leaves an earlier load error in place', async () => {

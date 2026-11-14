@@ -119,9 +119,9 @@ describe('LoginView reason query', () => {
     expect(wrapper.text()).not.toContain('invalid_state')
   })
 
-  it('ignores an unknown reason and never prints it', async () => {
+  it('shows the generic Google sentence for an unknown reason and never prints it', async () => {
     const wrapper = await mountWith('/login?reason=zzz_made_up')
     expect(wrapper.text()).not.toContain('zzz_made_up')
-    expect(wrapper.text()).not.toContain('Gagal masuk dengan Google')
+    expect(wrapper.text()).toContain('Gagal masuk dengan Google. Silakan coba lagi.')
   })
 })

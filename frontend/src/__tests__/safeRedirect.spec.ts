@@ -18,8 +18,20 @@ describe('safeRedirect', () => {
     '',
     '/\t/evil.com',
     '/a\nb',
+    '/login',
+    '/login?redirect=/admin',
+    '/register',
+    '/setup-password',
+    '/setup-password?x=1',
+    '/auth/callback',
+    '/auth/callback#frag',
+    '/LOGIN',
   ])('rejects %j', (value) => {
     expect(safeRedirect(value)).toBeUndefined();
+  });
+
+  it('still accepts paths that merely start with an auth word', () => {
+    expect(safeRedirect('/login-help')).toBe('/login-help');
   });
 
   it('rejects non-strings', () => {

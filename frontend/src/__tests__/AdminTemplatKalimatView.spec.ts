@@ -180,20 +180,28 @@ describe('AdminTemplatKalimatView', () => {
   });
 
   it.each([
-    [403, true, false],
-    [401, false, false],
-  ])('list load failure with status %i: banner %s, retry %s', async (status, banner, retry) => {
-    globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL) => {
-      if (String(input) === '/api/auth/csrf-token') return json({ csrfToken: 'c' });
-      return json({ error: 'x' }, status);
-    }) as typeof fetch;
+    [403, true, false, false],
+    [401, true, false, false],
+    [401, false, false, true],
+  ])(
+    'list load failure with status %i: banner %s, retry %s (session ended %s)',
+    async (status, banner, retry, ended) => {
+      globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL) => {
+        if (String(input) === '/api/auth/csrf-token') return json({ csrfToken: 'c' });
+        return json({ error: 'x' }, status);
+      }) as typeof fetch;
 
-    const wrapper = await mountView();
+      const wrapper = await mountView();
+      if (ended) {
+        useAuthStore().sessionEnded = true;
+        await flushPromises();
+      }
 
-    expect(wrapper.find('[data-test="list-error"]').exists()).toBe(banner);
-    expect(wrapper.find('[data-test="alert-banner-retry"]').exists()).toBe(retry);
-    wrapper.unmount();
-  });
+      expect(wrapper.find('[data-test="list-error"]').exists()).toBe(banner);
+      expect(wrapper.find('[data-test="alert-banner-retry"]').exists()).toBe(retry);
+      wrapper.unmount();
+    },
+  );
 
   describe('delete', () => {
     it('confirms by naming the template, then deletes it', async () => {

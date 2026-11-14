@@ -1,9 +1,11 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { authFetch } from '../utils/authFetch';
-import { getCsrfToken } from '../utils/csrf';
-import { apiErrorFromBody } from '../utils/apiClient';
-import { RETENTION_UNREADABLE_MESSAGE, toUserMessage, type FailureKind } from '../utils/userMessages';
+import { apiErrorFromBody, apiFetch } from '../utils/apiClient';
+import {
+  RETENTION_UNREADABLE_MESSAGE,
+  toUserMessage,
+  type FailureKind,
+} from '../utils/userMessages';
 
 export interface AuditRetentionPolicy {
   info: number;
@@ -142,7 +144,7 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
     successMessage.value = null;
 
     try {
-      const res = await authFetch('/api/settings/audit-retention', {
+      const res = await apiFetch('/api/settings/audit-retention', {
         method: 'GET',
         headers: { Accept: 'application/json' },
       });
@@ -193,13 +195,11 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
     successMessage.value = null;
 
     try {
-      const csrfToken = await getCsrfToken();
-      const res = await authFetch('/api/settings/audit-retention', {
+      const res = await apiFetch('/api/settings/audit-retention', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
-          'x-csrf-token': csrfToken,
         },
         body: JSON.stringify(policy),
       });

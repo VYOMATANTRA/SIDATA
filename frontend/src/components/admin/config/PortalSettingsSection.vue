@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import { useAuthStore } from '../../../stores/auth';
 import AlertBanner from '../../common/AlertBanner.vue';
 import PublicSettingsForm from '../../data/PublicSettingsForm.vue';
 import { useSettingsStore, type PublicSettings } from '../../../stores/settings.store';
@@ -26,6 +27,13 @@ const props = withDefaults(
 const emit = defineEmits<{ (e: 'dirty-change', dirty: boolean): void }>();
 
 const store = useSettingsStore();
+const authStore = useAuthStore();
+
+// The first instance hides its banner when the session ended (the global notice covers it), so
+// the second instance must not point at a banner that is not there.
+const loadErrorHiddenElsewhere = computed(
+  () => store.errorKind === 'session' && authStore.sessionEnded,
+);
 
 const formKey = ref(0);
 const busy = ref(false);
@@ -96,7 +104,7 @@ function discard(): void {
     />
 
     <p
-      v-else-if="!store.isLoaded"
+      v-else-if="!store.isLoaded && !loadErrorHiddenElsewhere"
       class="text-text-muted text-sm"
       data-test="portal-load-elsewhere"
     >

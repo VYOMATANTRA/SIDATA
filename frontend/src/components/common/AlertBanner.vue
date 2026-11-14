@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, getCurrentInstance } from 'vue';
 import BaseButton from './BaseButton.vue';
+import { useAuthStore } from '../../stores/auth';
 import { isRetryable, type FailureKind } from '../../utils/userMessages.js';
 
 export interface AlertBannerProps {
@@ -26,7 +27,10 @@ const emit = defineEmits<{ (e: 'retry'): void }>();
 const instance = getCurrentInstance();
 const hasRetryListener = computed(() => Boolean(instance?.vnode.props?.onRetry));
 
-const hidden = computed(() => props.kind === 'session');
+// A dead session is announced once by the global notice, so the banner steps aside only then.
+// Otherwise (e.g. a 401 outside AdminLayout) the message still has to be visible.
+const authStore = useAuthStore();
+const hidden = computed(() => props.kind === 'session' && authStore.sessionEnded);
 const showRetry = computed(
   () => hasRetryListener.value && (props.kind === undefined || isRetryable(props.kind)),
 );

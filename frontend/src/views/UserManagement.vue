@@ -121,6 +121,16 @@ function openRoleModal(user: UserItem) {
   isRoleModalOpen.value = true
 }
 
+function closeRoleModal() {
+  isRoleModalOpen.value = false
+  actionError.value = ''
+}
+
+function closeConfirmModal() {
+  isConfirmModalOpen.value = false
+  actionError.value = ''
+}
+
 function openPasswordModal(user: UserItem) {
   if (passwordCloseTimer) {
     clearTimeout(passwordCloseTimer)
@@ -551,7 +561,7 @@ async function handleConfirmAction() {
       title="Ubah Role Pengguna"
       :description="`Pilih role baru untuk ${selectedUser?.email ?? ''}.`"
       :busy="isSubmitting"
-      @close="isRoleModalOpen = false"
+      @close="closeRoleModal"
     >
       <AlertBanner
         v-if="actionError"
@@ -580,7 +590,7 @@ async function handleConfirmAction() {
           type="button"
           variant="secondary"
           :disabled="isSubmitting"
-          @click="isRoleModalOpen = false"
+          @click="closeRoleModal"
         >
           Batal
         </BaseButton>
@@ -677,7 +687,7 @@ async function handleConfirmAction() {
       :title="confirmTitle"
       :description="confirmDescription"
       :busy="isSubmitting"
-      @close="isConfirmModalOpen = false"
+      @close="closeConfirmModal"
     >
       <AlertBanner
         v-if="actionError"
@@ -690,7 +700,7 @@ async function handleConfirmAction() {
           type="button"
           variant="secondary"
           :disabled="isSubmitting"
-          @click="isConfirmModalOpen = false"
+          @click="closeConfirmModal"
         >
           Batal
         </BaseButton>
