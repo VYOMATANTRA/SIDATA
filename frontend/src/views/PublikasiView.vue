@@ -7,6 +7,8 @@ import {
   PUBLICATIONS,
   isDownloadable,
   formatFileSize,
+  publicationCoverSrc,
+  publicationDownloadHref,
   type PublicationItem,
 } from '../content/publikasi';
 import { useContentBlocksStore } from '../stores/contentBlocks.store';
@@ -93,6 +95,16 @@ const hasPendingPublication = computed(() =>
               </span>
 
               <div class="min-w-0">
+                <img
+                  v-if="publicationCoverSrc(publication)"
+                  :src="publicationCoverSrc(publication)!"
+                  alt=""
+                  loading="lazy"
+                  width="226"
+                  height="320"
+                  class="rounded-btn mb-3 h-40 w-auto border border-border object-cover"
+                  data-test="publication-cover"
+                />
                 <p class="text-brand-navy text-xs font-semibold tracking-wide">
                   {{ publication.category }}
                 </p>
@@ -116,7 +128,7 @@ const hasPendingPublication = computed(() =>
                 class="flex flex-col items-start gap-1 sm:items-end"
               >
                 <a
-                  :href="publication.href"
+                  :href="publicationDownloadHref(publication) ?? undefined"
                   target="_blank"
                   rel="noopener noreferrer"
                   class="rounded-btn border-brand-navy bg-brand-navy hover:bg-brand-navy-deep inline-flex w-fit items-center border px-3 py-2 text-sm font-medium text-white"

@@ -243,6 +243,26 @@ export const useContentBlocksStore = defineStore('contentBlocks', () => {
     return data.block;
   }
 
+  /**
+   * Saves the publication catalog (title, body and `publications`) through its own endpoint, which
+   * also attaches/detaches the uploaded documents and covers. `expectedUpdatedAt` is the block's
+   * token as the editor last saw it.
+   */
+  async function savePublikasiCatalog(payload: {
+    title: string;
+    body: string;
+    publications: Array<Record<string, unknown>>;
+    expectedUpdatedAt: string;
+  }): Promise<ContentBlock> {
+    const data = await apiRequestJson<{ block: ContentBlock }>('/api/publikasi/catalog', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+    blocks.value = { ...blocks.value, [data.block.slug]: data.block };
+    serverBlocks.value = { ...serverBlocks.value, [data.block.slug]: data.block };
+    return data.block;
+  }
+
   return {
     blocks,
     serverBlocks,
@@ -257,5 +277,6 @@ export const useContentBlocksStore = defineStore('contentBlocks', () => {
     publikasiKatalog,
     fetchBlocks,
     updateBlock,
+    savePublikasiCatalog,
   };
 });

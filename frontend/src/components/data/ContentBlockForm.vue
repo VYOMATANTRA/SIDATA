@@ -6,7 +6,6 @@ import HeroBlockForm from './blocks/HeroBlockForm.vue';
 import SambutanBlockForm from './blocks/SambutanBlockForm.vue';
 import ProfilBlockForm from './blocks/ProfilBlockForm.vue';
 import HighlightsBlockForm from './blocks/HighlightsBlockForm.vue';
-import PublikasiBlockForm from './blocks/PublikasiBlockForm.vue';
 import CeritaProseBlockForm from './blocks/CeritaProseBlockForm.vue';
 import {
   UNKNOWN_BLOCK_MESSAGE,
@@ -47,17 +46,18 @@ const emit = defineEmits<{
   (e: 'reload'): void;
 }>();
 
-const FORMS: Readonly<Record<Exclude<BlockKind, 'unknown'>, Component>> = {
+// The publication catalog (`publikasi`) has no form here: it is edited on /admin/publikasi, which
+// also owns its document and cover uploads.
+const FORMS: Readonly<Partial<Record<BlockKind, Component>>> = {
   hero: HeroBlockForm,
   sambutan: SambutanBlockForm,
   profil: ProfilBlockForm,
   highlights: HighlightsBlockForm,
-  publikasi: PublikasiBlockForm,
   cerita: CeritaProseBlockForm,
 };
 
 const kind = computed(() => resolveBlockKind(props.block));
-const formComponent = computed(() => (kind.value === 'unknown' ? null : FORMS[kind.value]));
+const formComponent = computed(() => FORMS[kind.value] ?? null);
 const placement = computed(() => blockPlacement(props.block, props.sectionLabel));
 const shownOnSite = computed(() => isBlockShownOnSite(props.block));
 </script>

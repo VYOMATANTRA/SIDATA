@@ -99,6 +99,23 @@ export function validatePhotoFile(file: File): string | null {
   return null;
 }
 
+export const DOCUMENT_MAX_BYTES = 20 * MIB;
+export const DOCUMENT_ACCEPT =
+  'application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.pdf,.docx';
+const DOCUMENT_EXTENSIONS: ReadonlySet<string> = new Set(['pdf', 'docx']);
+export const DOCUMENT_WRONG_TYPE_MESSAGE = 'Jenis berkas tidak didukung. Gunakan PDF atau DOCX.';
+export const DOCUMENT_TOO_LARGE_MESSAGE =
+  'Ukuran berkas melebihi 20 MB. Perkecil berkas lalu coba lagi.';
+export const DOCUMENT_EMPTY_MESSAGE = 'Berkas ini kosong. Pilih berkas lain.';
+
+/** Same early check as `validatePhotoFile`, for a PDF or DOCX publication. */
+export function validateDocumentFile(file: File): string | null {
+  if (!DOCUMENT_EXTENSIONS.has(extensionOf(file.name))) return DOCUMENT_WRONG_TYPE_MESSAGE;
+  if (file.size === 0) return DOCUMENT_EMPTY_MESSAGE;
+  if (file.size > DOCUMENT_MAX_BYTES) return DOCUMENT_TOO_LARGE_MESSAGE;
+  return null;
+}
+
 const NOUN: Readonly<Record<MediaKind, string>> = {
   photo: 'foto',
   document: 'dokumen',

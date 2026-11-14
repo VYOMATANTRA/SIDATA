@@ -188,26 +188,30 @@ const cards = computed<IndicatorCardModel[]>(() => {
   }));
 
   if (activeTab.value === 'konten') {
-    return contentBlocksStore.editableBlocks
-      .map((block) => ({
-        id: block.slug,
-        type: 'konten' as const,
-        title: blockDisplayName(block),
-        kicker: 'Blok Konten',
-        sectionLabel: placementFor(block),
-        stats: [
-          {
-            label: 'Terakhir diperbarui',
-            value: formatBlockUpdated(block.updatedAt),
-          },
-        ],
-        source: null,
-        hedgeNote: isBlockShownOnSite(block)
-          ? null
-          : 'Isian tersimpan, tetapi belum muncul di halaman mana pun.',
-        isStale: false,
-      }))
-      .sort(compareCards);
+    return (
+      contentBlocksStore.editableBlocks
+        // The publication catalog is managed on /admin/publikasi (uploads and covers live there).
+        .filter((block) => block.slug !== 'publikasi-katalog')
+        .map((block) => ({
+          id: block.slug,
+          type: 'konten' as const,
+          title: blockDisplayName(block),
+          kicker: 'Blok Konten',
+          sectionLabel: placementFor(block),
+          stats: [
+            {
+              label: 'Terakhir diperbarui',
+              value: formatBlockUpdated(block.updatedAt),
+            },
+          ],
+          source: null,
+          hedgeNote: isBlockShownOnSite(block)
+            ? null
+            : 'Isian tersimpan, tetapi belum muncul di halaman mana pun.',
+          isStale: false,
+        }))
+        .sort(compareCards)
+    );
   }
 
   if (activeTab.value === 'pengaturan') {
@@ -613,6 +617,19 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
       </div>
 
       <template v-if="activeTab === tab.id && tab.id !== 'pengaturan'">
+        <p
+          v-if="tab.id === 'konten'"
+          class="text-text-muted mt-6 text-sm"
+          data-test="publikasi-moved"
+        >
+          Katalog publikasi dikelola di halaman
+          <router-link
+            to="/admin/publikasi"
+            class="text-brand-navy focus-visible:outline-focus-ring rounded-xs font-semibold underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2"
+            data-test="publikasi-moved-link"
+            >Publikasi</router-link
+          >, bersama unggahan berkas dan sampulnya.
+        </p>
         <div class="mt-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <form
             role="search"

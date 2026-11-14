@@ -27,6 +27,7 @@ const props = withDefaults(
     shownOnSite?: boolean;
     stale?: boolean;
     titleHint?: string;
+    titleRequired?: boolean;
     bodyLabel?: string;
     bodyHint?: string;
     bodyRows?: number;
@@ -40,6 +41,7 @@ const props = withDefaults(
     shownOnSite: true,
     stale: false,
     titleHint: 'Judul utama yang ditampilkan di atas konten (opsional).',
+    titleRequired: false,
     bodyLabel: 'Isi Konten',
     bodyHint: 'Narasi atau paragraf utama untuk blok konten ini.',
     bodyRows: 5,
@@ -105,6 +107,7 @@ function fieldId(name: string): string {
       :id="fieldId('title')"
       label="Judul Blok"
       :hint="titleHint"
+      :required="titleRequired"
       :error="submitted ? titleError : undefined"
       v-slot="{ describedBy, invalid }"
     >

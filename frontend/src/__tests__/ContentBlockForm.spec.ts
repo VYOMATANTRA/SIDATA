@@ -131,7 +131,7 @@ describe('ContentBlockForm.vue', () => {
     expect(wrapper.emitted('cancel')).toBeTruthy();
   });
 
-  it('shows the named collection form for publikasi-katalog and never a JSON editor', async () => {
+  it('gives the publication catalog no form here: it is edited on /admin/publikasi', () => {
     const publikasiBlock: ContentBlock = {
       id: 'block-3',
       sectionId: null,
@@ -139,33 +139,14 @@ describe('ContentBlockForm.vue', () => {
       slug: 'publikasi-katalog',
       title: 'Katalog',
       body: 'Deskripsi',
-      metadata: {
-        publications: [
-          {
-            category: 'A',
-            title: 'B',
-            description: 'C',
-            isAvailableOnline: false,
-          },
-        ],
-      },
+      metadata: { publications: [] },
       sortOrder: null,
       updatedAt: '2026-09-01T00:00:00.000Z',
     };
-
     const wrapper = mount(ContentBlockForm, { props: { block: publikasiBlock } });
-
+    expect(wrapper.find('form').exists()).toBe(false);
+    expect(wrapper.text()).toContain('Blok ini belum bisa diubah dari sini');
     expect(wrapper.find('textarea#block-metadata').exists()).toBe(false);
-    expect(wrapper.find('input#block-pub-title-0').exists()).toBe(true);
-
-    await wrapper.find('form').trigger('submit.prevent');
-    const emitted = wrapper.emitted('submit');
-    expect(emitted).toBeTruthy();
-    expect(emitted?.[0]?.[0]).toMatchObject({
-      metadata: {
-        publications: [{ category: 'A', title: 'B', description: 'C', isAvailableOnline: false }],
-      },
-    });
   });
 
   it('shows the highlights collection form for landing-highlights', () => {
@@ -211,7 +192,6 @@ describe('ContentBlockForm.vue', () => {
       mockProfilBlock,
       highlightsBlock,
       { ...mockHeroBlock, slug: 'landing-sambutan-lurah', type: 'sambutan_lurah' },
-      { ...mockHeroBlock, slug: 'publikasi-katalog', type: 'prose' },
       { ...mockHeroBlock, slug: 'bab-uji', type: 'prose', sectionId: 'sec-1' },
     ];
     for (const block of blocks) {
@@ -231,10 +211,6 @@ describe('ContentBlockForm.vue', () => {
         'Tampil di: Beranda, bagian Sambutan Lurah',
       ],
       [mockProfilBlock, 'Tampil di: halaman Tentang Kelurahan Manggar'],
-      [
-        { ...mockHeroBlock, slug: 'publikasi-katalog', type: 'prose' },
-        'Tampil di: halaman Publikasi',
-      ],
     ];
     for (const [block, expected] of cases) {
       const wrapper = mount(ContentBlockForm, { props: { block } });
