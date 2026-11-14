@@ -727,7 +727,7 @@ Implemented frontend routes:
 Provides three tabbed operational interfaces:
 
 1. **Indikator & Tabel**: Searchable and filterable list of all scalar indicators and matrix tables with modal editing forms (`ScalarIndicatorForm` and `TableIndicatorForm`).
-2. **Blok Konten & Profil**: Direct editing of narrative content blocks (`landing-hero`, `landing-sambutan-lurah`, `landing-highlights`, `tentang-kelurahan-profil`, `publikasi-katalog`) through named forms (§4): collections are edited as repeatable rows, never as raw JSON, and each card states where residents see the block. `landing-highlights` stays editable but is labelled "Tidak ditampilkan di situs" because no public page reads it.
+2. **Blok Konten & Profil**: Direct editing of narrative content blocks (`landing-hero`, `landing-sambutan-lurah`, `landing-highlights`, `tentang-kelurahan-profil`) through named forms (§4); `publikasi-katalog` is edited only at `/admin/publikasi`: collections are edited as repeatable rows, never as raw JSON, and each card states where residents see the block. `landing-highlights` stays editable but is labelled "Tidak ditampilkan di situs" because no public page reads it.
 3. **Pengaturan Publik Portal** (admin only): a note and a link to Konfigurasi sistem (`/admin/sistem/konfigurasi`); no settings card, form or dialog. Editors do not see this tab.
 
 **Konfigurasi sistem (`/admin/sistem/konfigurasi`).** The single Admin destination for system

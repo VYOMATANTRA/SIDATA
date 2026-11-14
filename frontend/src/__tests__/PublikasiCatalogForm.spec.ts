@@ -56,6 +56,13 @@ async function submit(wrapper: ReturnType<typeof mountForm>) {
 }
 
 describe('PublikasiCatalogForm', () => {
+  it('marks the catalog title as required instead of optional', () => {
+    const wrapper = mountForm([AVAILABLE]);
+    const label = wrapper.find('label[for$="-title"]');
+    expect(label.text()).toContain('wajib');
+    expect(wrapper.text()).not.toContain('ditampilkan di atas konten (opsional)');
+  });
+
   it('round-trips every stored field unchanged, including source and exact byte size', async () => {
     const wrapper = mountForm([AVAILABLE, PENDING]);
     await submit(wrapper);

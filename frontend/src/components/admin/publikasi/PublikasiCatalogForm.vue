@@ -385,6 +385,8 @@ function onCoverChanged(row: PublicationDraft, value: string | null): void {
     :server-error="serverError"
     :submitted="submitted"
     :errors="errorEntries"
+    title-required
+    title-hint="Judul katalog yang ditampilkan di atas daftar publikasi."
     :title-error="titleBodyErrors.title"
     :body-error="titleBodyErrors.body"
     :placement="placement"
