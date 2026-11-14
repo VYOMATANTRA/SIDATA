@@ -585,4 +585,34 @@ describe('AdminLayout.vue — mobile sidebar drawer', () => {
     const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
     expect(wrapper.classes()).toContain('h-dvh');
   });
+
+  it('shows no session notice while the session is alive', async () => {
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
+    expect(wrapper.find('[data-test="session-ended-banner"]').exists()).toBe(false);
+  });
+
+  it('shows one polite session notice inside <main> with a login link back to the current page', async () => {
+    const router = createTestRouter();
+    await router.push('/admin/cerita?tab=2');
+    await router.isReady();
+    useAuthStore().markSessionEnded();
+
+    const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
+
+    const banners = wrapper.findAll('[data-test="session-ended-banner"]');
+    expect(banners.length).toBe(1);
+    expect(wrapper.find('main').find('[data-test="session-ended-banner"]').exists()).toBe(true);
+    expect(banners[0]!.attributes('role')).toBe('status');
+    expect(banners[0]!.text()).toContain('Sesi Anda telah berakhir');
+
+    const link = wrapper.find('[data-test="session-ended-login"]');
+    expect(link.text()).toContain('Masuk kembali');
+    const href = new URL(link.attributes('href') ?? '', 'http://localhost');
+    expect(href.pathname).toBe('/login');
+    expect(href.searchParams.get('redirect')).toBe('/admin/cerita?tab=2');
+  });
 });

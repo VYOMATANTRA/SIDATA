@@ -1,13 +1,22 @@
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import AdminSidebar from '../components/admin/AdminSidebar.vue';
 import AdminHeader from '../components/admin/AdminHeader.vue';
+import AlertBanner from '../components/common/AlertBanner.vue';
+import BaseLink from '../components/common/BaseLink.vue';
+import { useAuthStore } from '../stores/auth';
 import AdminBreadcrumb from '../components/admin/AdminBreadcrumb.vue';
 import { setAdminHeader } from '../composables/useAdminHeader';
 import { useIsDesktop } from '../composables/useIsDesktop';
 
 const route = useRoute();
+const authStore = useAuthStore();
+
+const loginLocation = computed(() => ({
+  path: '/login',
+  query: { redirect: route.fullPath },
+}));
 
 const isMobileSidebarOpen = ref(false);
 const mainRef = ref<HTMLElement | null>(null);
@@ -95,6 +104,24 @@ watch(
         class="flex-1 px-6 py-6 focus:outline-none md:px-10 md:py-8"
         tabindex="-1"
       >
+        <AlertBanner
+          v-if="authStore.sessionEnded"
+          class="mb-4"
+          tone="warning"
+          live="polite"
+          message="Sesi Anda telah berakhir. Masuk kembali untuk melanjutkan; isian yang belum disimpan tetap ada di halaman ini."
+          data-test="session-ended-banner"
+        >
+          <template #action>
+            <BaseLink
+              :to="loginLocation"
+              label="Masuk kembali"
+              size="md"
+              :with-arrow="false"
+              data-test="session-ended-login"
+            />
+          </template>
+        </AlertBanner>
         <div class="rounded-card border border-slate-200 bg-white p-6 shadow-sm md:p-8">
           <AdminBreadcrumb class="mb-6" />
           <RouterView />
