@@ -4,7 +4,6 @@ import {
   STEP_PIXELS,
   clampZoom,
   directionOffset,
-  moveLocation,
   normalizeLocation,
   sameLocation,
 } from '../utils/geoPicker';
@@ -54,34 +53,6 @@ describe('geoPicker helpers', () => {
     expect(sameLocation({ latitude: 1, longitude: 2 }, { latitude: 1.001, longitude: 2 })).toBe(
       false,
     );
-  });
-
-  it('moves the same screen distance at every zoom, so lower zoom means a larger step', () => {
-    const from = { latitude: -1.2251, longitude: 116.9438 };
-    const near = moveLocation(from, 'east', 17);
-    const far = moveLocation(from, 'east', 12);
-    expect(near.longitude).toBeGreaterThan(from.longitude);
-    expect(near.latitude).toBe(from.latitude);
-    // 5 zoom levels apart = 32x the distance per pixel.
-    expect((far.longitude - from.longitude) / (near.longitude - from.longitude)).toBeCloseTo(32, 0);
-  });
-
-  it('moves in the four compass directions and larger with the modifier', () => {
-    const from = { latitude: -1.2251, longitude: 116.9438 };
-    expect(moveLocation(from, 'north', 15).latitude).toBeGreaterThan(from.latitude);
-    expect(moveLocation(from, 'south', 15).latitude).toBeLessThan(from.latitude);
-    expect(moveLocation(from, 'east', 15).longitude).toBeGreaterThan(from.longitude);
-    expect(moveLocation(from, 'west', 15).longitude).toBeLessThan(from.longitude);
-    const small = moveLocation(from, 'east', 15).longitude - from.longitude;
-    const large = moveLocation(from, 'east', 15, true).longitude - from.longitude;
-    expect(large / small).toBeCloseTo(LARGE_STEP_PIXELS / STEP_PIXELS, 1);
-  });
-
-  it('never leaves the valid world range', () => {
-    expect(moveLocation({ latitude: 90, longitude: 0 }, 'north', 1, true).latitude).toBe(90);
-    const wrapped = moveLocation({ latitude: 0, longitude: 180 }, 'east', 1, true).longitude;
-    expect(wrapped).toBeGreaterThanOrEqual(-180);
-    expect(wrapped).toBeLessThan(0);
   });
 
   describe('directionOffset', () => {

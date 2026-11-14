@@ -163,27 +163,40 @@ async function handleLogout() {
     id="admin-sidebar"
     ref="sidebarRef"
     aria-label="Navigasi Admin"
-    class="bg-brand-navy fixed inset-y-0 left-0 z-40 flex h-full w-72 flex-col border-r border-white/10 text-white transition-all duration-200 md:visible md:static md:translate-x-0"
+    class="bg-brand-navy fixed inset-y-0 left-0 z-40 flex h-full w-72 flex-col border-r border-white/10 text-white transition-all duration-200 md:visible md:relative md:translate-x-0"
     :class="[
       mobileOpen ? 'visible translate-x-0' : 'invisible -translate-x-full',
       isCollapsed ? 'md:w-20' : 'md:w-72',
     ]"
     data-test="admin-sidebar"
   >
-    <div class="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-5">
+    <div
+      class="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-5"
+      :class="isCollapsed ? 'md:flex-col md:justify-center md:gap-3 md:px-2' : ''"
+      data-test="sidebar-header"
+    >
       <RouterLink
         to="/admin"
         class="focus-visible:ring-brand-cyan rounded-btn flex min-w-0 items-center gap-3 focus-visible:ring-2 focus-visible:outline-none"
+        :class="isCollapsed ? 'md:flex-col md:gap-1' : ''"
         @click="closeMobileOnSamePage('/admin')"
       >
         <img
           :src="balikpapanLogo"
           alt="Logo Kota Balikpapan"
           class="h-9 w-auto shrink-0 object-contain"
+          :class="isCollapsed ? 'md:h-10 md:max-w-full' : ''"
         />
-        <span :class="labelClass(isCollapsed, 'min-w-0 text-left')">
-          <span class="block truncate text-base leading-tight font-bold text-white">SIDATA</span>
-          <span class="block truncate text-xs leading-tight text-white/60">
+        <span class="min-w-0 text-left" :class="isCollapsed ? 'md:w-full md:text-center' : ''">
+          <span
+            class="block truncate text-base leading-tight font-bold text-white"
+            :class="isCollapsed ? 'md:text-sm' : ''"
+            data-test="sidebar-brand-name"
+            >SIDATA</span
+          >
+          <span
+            :class="labelClass(isCollapsed, 'block truncate text-xs leading-tight text-white/60')"
+          >
             Sistem Informasi Data Terpadu Kelurahan
           </span>
         </span>
@@ -207,7 +220,7 @@ async function handleLogout() {
         :inert="mobileOpen ? true : undefined"
         :aria-expanded="!isCollapsed"
         aria-controls="admin-sidebar-nav-list"
-        aria-label="Ciutkan sidebar"
+        :aria-label="isCollapsed ? 'Bentangkan sidebar' : 'Ciutkan sidebar'"
         data-test="sidebar-collapse-toggle"
         @click="toggleCollapse"
       >
@@ -219,7 +232,7 @@ async function handleLogout() {
       </button>
     </div>
 
-    <ul id="admin-sidebar-nav-list" class="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+    <ul id="admin-sidebar-nav-list" class="relative flex-1 space-y-1 overflow-y-auto px-3 py-4">
       <li v-for="entry in visibleNav" :key="entry.label">
         <RouterLink
           v-if="!isAdminNavGroup(entry)"

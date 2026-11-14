@@ -82,12 +82,42 @@ describe('LocationPicker', () => {
       expect(leafletState.markerOptions).toMatchObject({ draggable: true, keyboard: false });
     });
 
+    it('pans the basemap by whole pixels on arrow keys and keeps the pin at its screen position', async () => {
+      const wrapper = await mountPicker({ modelValue: PIN });
+      leafletState.center = { lat: PIN.latitude, lng: PIN.longitude };
+      await click(wrapper, 'location-picker-keyboard');
+      const region = wrapper.get('[data-test="location-picker-region"]');
+      await region.trigger('keydown', { key: 'ArrowRight' });
+      expect(leafletMap.panBy).toHaveBeenLastCalledWith([16, 0], { animate: false });
+      await region.trigger('keydown', { key: 'ArrowUp', shiftKey: true });
+      expect(leafletMap.panBy).toHaveBeenLastCalledWith([0, -80], { animate: false });
+      const moved = lastEmitted(wrapper)!;
+      expect(moved.longitude).toBeGreaterThan(PIN.longitude);
+      expect(moved.latitude).toBeGreaterThan(PIN.latitude);
+    });
+
+    it('brings an off-screen pin into view before panning the basemap', async () => {
+      const wrapper = await mountPicker({ modelValue: PIN });
+      leafletState.inBounds = false;
+      leafletMap.panTo.mockClear();
+      leafletMap.panBy.mockClear();
+      await click(wrapper, 'location-picker-east');
+      expect(leafletMap.panTo).toHaveBeenCalledWith([PIN.latitude, PIN.longitude], {
+        animate: false,
+      });
+      expect(leafletMap.panTo.mock.invocationCallOrder[0]).toBeLessThan(
+        leafletMap.panBy.mock.invocationCallOrder[0]!,
+      );
+      expect(lastEmitted(wrapper)!.longitude).toBeGreaterThan(PIN.longitude);
+    });
+
     it('moves the pin with the direction buttons', async () => {
       const wrapper = await mountPicker({ modelValue: PIN });
       await click(wrapper, 'location-picker-north');
       const north = lastEmitted(wrapper)!;
       expect(north.latitude).toBeGreaterThan(PIN.latitude);
-      expect(north.longitude).toBe(PIN.longitude);
+      // Leaflet rounds to whole pixels, so the orthogonal axis can shift by up to half a pixel.
+      expect(north.longitude).toBeCloseTo(PIN.longitude, 5);
       await click(wrapper, 'location-picker-south');
       await click(wrapper, 'location-picker-south');
       expect(lastEmitted(wrapper)!.latitude).toBeLessThan(PIN.latitude);
@@ -1254,7 +1284,9 @@ describe('LocationPicker', () => {
     it('cancels in-flight geolocation and ignores late result when parent replaces modelValue', async () => {
       const wrapper = await mountPicker({ detectable: true });
       await click(wrapper, 'location-picker-detect');
-      expect(wrapper.get('[data-test="location-picker-detect"]').text()).toContain('Mencari lokasi');
+      expect(wrapper.get('[data-test="location-picker-detect"]').text()).toContain(
+        'Mencari lokasi',
+      );
       await wrapper.setProps({ modelValue: { latitude: -1.3, longitude: 116.9 } });
       await flushPromises();
       expect(wrapper.find('[data-test="location-picker-accuracy"]').exists()).toBe(false);
@@ -1464,7 +1496,8 @@ describe('LocationPicker', () => {
       const modal = mount(BaseModal, {
         props: { open: true, title: 'Uji modal' },
         slots: {
-          default: () => h(LocationPicker, { label: 'Uji lokasi', modelValue: PIN, clearable: true }),
+          default: () =>
+            h(LocationPicker, { label: 'Uji lokasi', modelValue: PIN, clearable: true }),
         },
         attrs: { onClose },
         attachTo: document.body,
@@ -1479,7 +1512,11 @@ describe('LocationPicker', () => {
       expect(toggle.getAttribute('aria-pressed')).toBe('true');
 
       toggle.focus();
-      const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      const event = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      });
       toggle.dispatchEvent(event);
       await nextTick();
 
@@ -1494,7 +1531,8 @@ describe('LocationPicker', () => {
       const modal = mount(BaseModal, {
         props: { open: true, title: 'Uji modal' },
         slots: {
-          default: () => h(LocationPicker, { label: 'Uji lokasi', modelValue: PIN, clearable: true }),
+          default: () =>
+            h(LocationPicker, { label: 'Uji lokasi', modelValue: PIN, clearable: true }),
         },
         attrs: { onClose },
         attachTo: document.body,
@@ -1511,7 +1549,11 @@ describe('LocationPicker', () => {
       const zoomIn = document.querySelector<HTMLButtonElement>(
         '[data-test="location-picker-zoom-in"]',
       )!;
-      const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      const event = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      });
       zoomIn.dispatchEvent(event);
       await nextTick();
 
@@ -1545,7 +1587,11 @@ describe('LocationPicker', () => {
 
       const outsideBtn = document.querySelector<HTMLButtonElement>('#outside-btn')!;
       outsideBtn.focus();
-      const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      const event = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      });
       outsideBtn.dispatchEvent(event);
       await nextTick();
 

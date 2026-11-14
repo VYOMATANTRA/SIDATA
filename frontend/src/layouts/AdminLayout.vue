@@ -18,6 +18,11 @@ const loginLocation = computed(() => ({
   query: { redirect: route.fullPath },
 }));
 
+// The root is `relative overflow-clip` and the content shell below is `relative`: the shell scrolls,
+// so absolutely positioned content (`sr-only` labels, live regions) must be contained in them.
+// Otherwise it resolves against the viewport, grows the document and lets the window scroll into
+// blank space. `overflow-clip` (not `hidden`) so nothing can scroll the root programmatically.
+
 const isMobileSidebarOpen = ref(false);
 const mainRef = ref<HTMLElement | null>(null);
 // The admin shell is `h-dvh` and scrolls this inner container, so the router's window-level
@@ -72,7 +77,7 @@ watch(
 </script>
 
 <template>
-  <div class="flex h-dvh bg-slate-50">
+  <div class="relative flex h-dvh overflow-clip bg-slate-50">
     <a
       href="#admin-main-content"
       class="focus:ring-brand-indigo focus:rounded-btn sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-slate-900 focus:ring-2 focus:outline-none"
@@ -92,7 +97,7 @@ watch(
 
     <div
       ref="contentShellRef"
-      class="flex min-w-0 flex-1 flex-col overflow-y-auto"
+      class="relative flex min-w-0 flex-1 flex-col overflow-y-auto"
       :inert="isMobileSidebarOpen ? true : undefined"
       data-test="admin-content-shell"
     >

@@ -615,4 +615,15 @@ describe('AdminLayout.vue — mobile sidebar drawer', () => {
     expect(href.pathname).toBe('/login');
     expect(href.searchParams.get('redirect')).toBe('/admin/cerita?tab=2');
   });
+
+  it('keeps absolutely positioned content (sr-only) inside the inner scroller so the window never scrolls', async () => {
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
+    expect(wrapper.classes()).toEqual(expect.arrayContaining(['relative', 'overflow-clip']));
+    const shell = wrapper.find('[data-test="admin-content-shell"]');
+    expect(shell.classes()).toEqual(expect.arrayContaining(['relative', 'overflow-y-auto']));
+  });
 });

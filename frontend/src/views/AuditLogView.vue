@@ -303,7 +303,7 @@ onMounted(async () => {
 
       <!-- Table -->
       <div class="rounded-card overflow-hidden border border-slate-200 bg-white shadow-xs">
-        <div class="overflow-x-auto">
+        <div class="relative overflow-x-auto">
           <table class="w-full border-collapse text-left text-sm">
             <caption class="sr-only">
               Daftar log sistem dan audit trail, diurutkan dari yang terbaru. Setiap baris memuat
