@@ -166,7 +166,7 @@ describe('TentangKelurahanManggarView accessibility and content', () => {
 
     const retryBtn = wrapper.find('[data-test="population-error"] button');
     expect(retryBtn.exists()).toBe(true);
-    expect(retryBtn.text()).toContain('Coba Lagi');
+    expect(retryBtn.text()).toContain('Coba lagi');
     await retryBtn.trigger('click');
     expect(fetchSpy).toHaveBeenCalledWith('jumlah-penduduk', true);
   });

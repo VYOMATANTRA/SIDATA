@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import { authFetch } from '../utils/authFetch';
 import { getCsrfToken } from '../utils/csrf';
 import { apiErrorFromBody } from '../utils/apiClient';
-import { toUserMessage, type FailureKind } from '../utils/userMessages';
+import { RETENTION_UNREADABLE_MESSAGE, toUserMessage, type FailureKind } from '../utils/userMessages';
 
 export interface AuditRetentionPolicy {
   info: number;
@@ -116,7 +116,7 @@ export function formatDurationLabel(days: number | unknown): string {
 /** The server answered 200 with a retention payload this client cannot read. Our own text. */
 class RetentionFormatError extends Error {
   constructor() {
-    super('Masa simpan log dari server tidak dapat dibaca. Coba muat ulang halaman.');
+    super(RETENTION_UNREADABLE_MESSAGE);
     this.name = 'RetentionFormatError';
   }
 }

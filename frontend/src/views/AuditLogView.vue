@@ -173,7 +173,7 @@ async function handleAcknowledge(log: AuditLogItem) {
   try {
     await auditStore.acknowledgeLog(log.id)
   } catch (err: unknown) {
-    acknowledgeError.value = toUserMessage(err, 'meng-acknowledge audit log').message
+    acknowledgeError.value = toUserMessage(err, 'menandai log telah dibaca').message
   } finally {
     acknowledgingId.value = null
   }

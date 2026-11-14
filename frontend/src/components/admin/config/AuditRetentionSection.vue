@@ -3,6 +3,10 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import BaseButton from '../../common/BaseButton.vue';
 import AlertBanner from '../../common/AlertBanner.vue';
 import {
+  RETENTION_LOAD_FALLBACK_MESSAGE,
+  withDraftKept,
+} from '../../../utils/userMessages';
+import {
   MAX_RETENTION_DAYS,
   SEVERITY_LABELS,
   formatDurationLabel,
@@ -144,7 +148,7 @@ function durationLabel(key: Key): string {
 
     <AlertBanner
       v-else-if="!isLoaded"
-      :message="store.error ?? 'Masa simpan log belum dapat dimuat.'"
+      :message="store.error ?? RETENTION_LOAD_FALLBACK_MESSAGE"
       :kind="store.errorKind ?? undefined"
       data-test="retention-load-error"
       @retry="load"
@@ -231,7 +235,7 @@ function durationLabel(key: Key): string {
 
       <AlertBanner
         v-if="store.error"
-        :message="`${store.error} Isian Anda masih ada di formulir.`"
+        :message="withDraftKept(store.error, store.errorKind)"
         :kind="store.errorKind ?? undefined"
         data-test="retention-save-error"
       />

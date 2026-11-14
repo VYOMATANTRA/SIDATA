@@ -2,6 +2,10 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  CHOICE_KEPT_SUFFIX,
+  LOGIN_REASON_MESSAGES,
+  loginReasonMessage,
+  withDraftKept,
   CSRF_INVALID_MESSAGE,
   classifyFailure,
   CSV_FORMAT_MESSAGE,
@@ -665,4 +669,32 @@ describe('isRetryable', () => {
   ] as FailureKind[])('does not allow retry for %s', (kind) =>
     expect(isRetryable(kind)).toBe(false),
   );
+});
+
+describe('withDraftKept', () => {
+  it('appends the suffix for ordinary failures', () => {
+    expect(withDraftKept('Gagal.', 'server')).toBe('Gagal. Isian Anda masih ada di formulir.');
+    expect(withDraftKept('Gagal.', null, CHOICE_KEPT_SUFFIX)).toBe(
+      'Gagal. Pilihan Anda masih ada di formulir.',
+    );
+  });
+
+  it('leaves the stale text alone because it already says the draft is kept', () => {
+    expect(withDraftKept(USER_MESSAGES.stale, 'stale')).toBe(USER_MESSAGES.stale);
+  });
+});
+
+describe('loginReasonMessage', () => {
+  it('maps known reasons to approved Indonesian text', () => {
+    expect(loginReasonMessage('setup_required')).toBe(LOGIN_REASON_MESSAGES.setup_required);
+    expect(loginReasonMessage('account_deactivated')).toContain('tidak aktif');
+    expect(loginReasonMessage('invalid_state')).toBe('Gagal masuk dengan Google. Silakan coba lagi.');
+  });
+
+  it('ignores unknown, inherited and non-string reasons', () => {
+    expect(loginReasonMessage('<b>x</b>')).toBeNull();
+    expect(loginReasonMessage('constructor')).toBeNull();
+    expect(loginReasonMessage(['setup_required'])).toBeNull();
+    expect(loginReasonMessage(undefined)).toBeNull();
+  });
 });

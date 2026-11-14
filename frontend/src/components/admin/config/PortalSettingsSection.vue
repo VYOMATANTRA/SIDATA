@@ -3,7 +3,10 @@ import { onMounted, ref } from 'vue';
 import AlertBanner from '../../common/AlertBanner.vue';
 import PublicSettingsForm from '../../data/PublicSettingsForm.vue';
 import { useSettingsStore, type PublicSettings } from '../../../stores/settings.store';
-import { toUserMessage } from '../../../utils/userMessages';
+import {
+  PORTAL_SETTINGS_LOAD_FALLBACK_MESSAGE,
+  toUserMessage,
+} from '../../../utils/userMessages';
 
 /**
  * Saves one part of the public portal settings (SPEC §4, §8): the identity and contact fields,
@@ -85,7 +88,7 @@ function discard(): void {
 
     <AlertBanner
       v-else-if="!store.isLoaded && showLoadError"
-      :message="store.error ?? 'Pengaturan belum dapat dimuat.'"
+      :message="store.error ?? PORTAL_SETTINGS_LOAD_FALLBACK_MESSAGE"
       :kind="store.errorKind ?? undefined"
       :busy="loading"
       data-test="portal-load-error"

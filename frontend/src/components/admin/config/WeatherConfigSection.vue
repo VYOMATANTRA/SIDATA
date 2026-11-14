@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import BaseButton from '../../common/BaseButton.vue';
 import AlertBanner from '../../common/AlertBanner.vue';
+import { CHOICE_KEPT_SUFFIX, withDraftKept } from '../../../utils/userMessages';
 import { useWeatherConfigStore } from '../../../stores/weatherConfig.store';
 import { useWeatherStore } from '../../../stores/weather.store';
 import {
@@ -265,7 +266,7 @@ const loading = computed(() => !config.isLoaded && !config.error);
 
       <AlertBanner
         v-if="config.saveError"
-        :message="`${config.saveError} Pilihan Anda masih ada di formulir.`"
+        :message="withDraftKept(config.saveError, config.saveErrorKind, CHOICE_KEPT_SUFFIX)"
         data-test="weather-save-error"
       />
 

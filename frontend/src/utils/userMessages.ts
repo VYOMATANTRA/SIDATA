@@ -409,3 +409,55 @@ export function toUserMessage(error: unknown, context?: string, method?: string)
 
   return { message, kind, status, fieldErrors };
 }
+
+/** Fallback when a load failed but the store holds no sentence (audit retention screen). */
+export const RETENTION_LOAD_FALLBACK_MESSAGE = 'Masa simpan log belum dapat dimuat.';
+/** The server answered 200 with a retention payload this client cannot read. */
+export const RETENTION_UNREADABLE_MESSAGE =
+  'Masa simpan log dari server tidak dapat dibaca. Coba muat ulang halaman.';
+/** Fallback when a load failed but the store holds no sentence (portal settings screen). */
+export const PORTAL_SETTINGS_LOAD_FALLBACK_MESSAGE = 'Pengaturan belum dapat dimuat.';
+/** The server answered 200 with a weather config payload this client cannot read. */
+export const WEATHER_CONFIG_UNREADABLE_MESSAGE =
+  'Pengaturan cuaca dari server tidak dapat dibaca. Coba muat ulang halaman.';
+
+/** Suffix for a failed save on a form that keeps the operator's input. */
+export const DRAFT_KEPT_SUFFIX = 'Isian Anda masih ada di formulir.';
+/** Same, for forms whose input is a choice rather than typed text. */
+export const CHOICE_KEPT_SUFFIX = 'Pilihan Anda masih ada di formulir.';
+
+/**
+ * Appends the "your input is still in the form" suffix to a failed-save message, except for the
+ * `stale` kind whose approved text already says so.
+ */
+export function withDraftKept(
+  message: string,
+  kind: FailureKind | null | undefined,
+  suffix: string = DRAFT_KEPT_SUFFIX,
+): string {
+  return kind === 'stale' ? message : `${message} ${suffix}`;
+}
+
+/**
+ * Login page text for the `?reason=` query. Only the reasons the router, the setup screen and
+ * the Google callback set are listed; anything else is ignored and never printed.
+ */
+const GOOGLE_LOGIN_FAILED_MESSAGE = 'Gagal masuk dengan Google. Silakan coba lagi.';
+export const LOGIN_REASON_MESSAGES: Readonly<Record<string, string>> = {
+  setup_required:
+    'Sesi penyiapan kata sandi tidak ditemukan atau telah kedaluwarsa. Silakan masuk kembali untuk melanjutkan.',
+  account_deactivated: 'Akun Anda tidak aktif. Hubungi Admin untuk bantuan.',
+  init_error: GOOGLE_LOGIN_FAILED_MESSAGE,
+  access_denied: GOOGLE_LOGIN_FAILED_MESSAGE,
+  invalid_state: GOOGLE_LOGIN_FAILED_MESSAGE,
+  missing_code_or_verifier: GOOGLE_LOGIN_FAILED_MESSAGE,
+  missing_id_token: GOOGLE_LOGIN_FAILED_MESSAGE,
+  default_role_not_found: GOOGLE_LOGIN_FAILED_MESSAGE,
+  callback_error: GOOGLE_LOGIN_FAILED_MESSAGE,
+};
+
+/** Message for a `?reason=` value, or null when it is unknown. */
+export function loginReasonMessage(reason: unknown): string | null {
+  if (typeof reason !== 'string') return null;
+  return Object.prototype.hasOwnProperty.call(LOGIN_REASON_MESSAGES, reason) ? LOGIN_REASON_MESSAGES[reason]! : null;
+}

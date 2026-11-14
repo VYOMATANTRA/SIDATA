@@ -97,3 +97,31 @@ describe('LoginView redirect after login', () => {
     await vi.waitUntil(() => router.currentRoute.value.path === '/', { timeout: 3000 })
     expect(router.currentRoute.value.fullPath).toBe('/')  })
 })
+
+describe('LoginView reason query', () => {
+  async function mountWith(path: string) {
+    const { pinia, router } = mountLoginView()
+    await router.push(path)
+    await router.isReady()
+    const wrapper = mount(LoginView, { global: { plugins: [pinia, router] } })
+    await wrapper.vm.$nextTick()
+    return wrapper
+  }
+
+  it('shows approved text for setup_required', async () => {
+    const wrapper = await mountWith('/login?reason=setup_required')
+    expect(wrapper.text()).toContain('Sesi penyiapan kata sandi tidak ditemukan')
+  })
+
+  it('shows generic Google text for a callback reason without printing the code', async () => {
+    const wrapper = await mountWith('/login?reason=invalid_state')
+    expect(wrapper.text()).toContain('Gagal masuk dengan Google. Silakan coba lagi.')
+    expect(wrapper.text()).not.toContain('invalid_state')
+  })
+
+  it('ignores an unknown reason and never prints it', async () => {
+    const wrapper = await mountWith('/login?reason=zzz_made_up')
+    expect(wrapper.text()).not.toContain('zzz_made_up')
+    expect(wrapper.text()).not.toContain('Gagal masuk dengan Google')
+  })
+})
