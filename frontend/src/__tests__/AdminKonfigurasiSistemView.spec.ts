@@ -211,6 +211,51 @@ describe('AdminKonfigurasiSistemView', () => {
     });
   });
 
+  describe('load failures', () => {
+    function failSettings(status: number): void {
+      const original = globalThis.fetch;
+      globalThis.fetch = vi.fn<typeof fetch>(async (input, init) => {
+        const url = String(input);
+        if (
+          (url === '/api/settings/public' || url === '/api/settings/audit-retention') &&
+          (init?.method ?? 'GET') === 'GET'
+        ) {
+          return json({ error: 'x' }, status);
+        }
+        return original(input, init);
+      }) as typeof fetch;
+    }
+
+    it('shows a forbidden load failure without a retry button', async () => {
+      failSettings(403);
+      const wrapper = await mountPage();
+
+      expect(q('#identitas [data-test="portal-load-error"]')).not.toBeNull();
+      expect(q('#identitas [data-test="alert-banner-retry"]')).toBeNull();
+      expect(q('#retensi-log [data-test="retention-load-error"]')).not.toBeNull();
+      expect(q('#retensi-log [data-test="alert-banner-retry"]')).toBeNull();
+      wrapper.unmount();
+    });
+
+    it('shows a retry for a server failure', async () => {
+      failSettings(500);
+      const wrapper = await mountPage();
+
+      expect(q('#identitas [data-test="alert-banner-retry"]')).not.toBeNull();
+      expect(q('#retensi-log [data-test="alert-banner-retry"]')).not.toBeNull();
+      wrapper.unmount();
+    });
+
+    it('leaves the session-ended notice to the layout: no banner in the sections', async () => {
+      failSettings(401);
+      const wrapper = await mountPage();
+
+      expect(q('[data-test="portal-load-error"]')).toBeNull();
+      expect(q('[data-test="retention-load-error"]')).toBeNull();
+      wrapper.unmount();
+    });
+  });
+
   describe('starting map view', () => {
     it('opens on the stored view and saves only the new view', async () => {
       const wrapper = await mountPage();
@@ -243,7 +288,10 @@ describe('AdminKonfigurasiSistemView', () => {
       const wrapper = await mountPage();
 
       expect(q('#identitas [data-test="portal-load-error"]')).not.toBeNull();
-      expect(q('#peta [data-test="portal-load-error"]')).not.toBeNull();
+      // The shared failure is explained once; the map section only points to it.
+      expect(q('#peta [data-test="portal-load-error"]')).toBeNull();
+      expect(q('#peta [data-test="portal-load-elsewhere"]')).not.toBeNull();
+      expect(document.querySelectorAll('[data-test="portal-load-error"]')).toHaveLength(1);
       expect(q('#identitas-appName')).toBeNull();
       wrapper.unmount();
     });
@@ -454,7 +502,7 @@ describe('AdminKonfigurasiSistemView', () => {
       expect(q('[data-test="retention-load-error"]')?.textContent).toContain(
         'Gagal memuat masa simpan log',
       );
-      expect(q('[data-test="retention-retry"]')).not.toBeNull();
+      expect(q('[data-test="alert-banner-retry"]')).not.toBeNull();
       expect(q('#retensi-info-hari')).toBeNull();
       wrapper.unmount();
     });

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { apiErrorFromResponse, apiRequestJson } from '../utils/apiClient';
-import { toUserMessage } from '../utils/userMessages';
+import { toUserMessage, type FailureKind } from '../utils/userMessages';
 
 /**
  * The four fixed-shape matrix tables (SPEC §7): normalized rows, one row per logical group.
@@ -131,6 +131,8 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
   const isLoading = ref(false);
   const isLoaded = ref(false);
   const error = ref<string | null>(null);
+  /** Failure class of `error`, for AlertBanner; null while `error` is null. */
+  const errorKind = ref<FailureKind | null>(null);
 
   let inFlight: Promise<void> | null = null;
 
@@ -177,6 +179,7 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
 
     isLoading.value = true;
     error.value = null;
+    errorKind.value = null;
 
     inFlight = (async () => {
       try {
@@ -187,7 +190,9 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
         total.value = typeof data.total === 'number' ? data.total : tables.value.length;
         isLoaded.value = true;
       } catch (err) {
-        error.value = toUserMessage(err, 'memuat daftar tabel indikator', 'GET').message;
+        const mapped = toUserMessage(err, 'memuat daftar tabel indikator', 'GET');
+        error.value = mapped.message;
+        errorKind.value = mapped.kind;
       } finally {
         isLoading.value = false;
         inFlight = null;
@@ -311,6 +316,7 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
     isLoading,
     isLoaded,
     error,
+    errorKind,
     bySectionId,
     loadingBySectionId,
     errorsBySectionId,

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import BaseButton from '../../common/BaseButton.vue';
+import AlertBanner from '../../common/AlertBanner.vue';
+import { CHOICE_KEPT_SUFFIX, withDraftKept } from '../../../utils/userMessages';
 import { useWeatherConfigStore } from '../../../stores/weatherConfig.store';
 import { useWeatherStore } from '../../../stores/weather.store';
 import {
@@ -184,23 +186,14 @@ const loading = computed(() => !config.isLoaded && !config.error);
 
     <p v-if="loading" class="text-text-muted text-sm" role="status">Memuat pengaturan cuaca…</p>
 
-    <div
+    <AlertBanner
       v-else-if="config.error && !config.isLoaded"
-      role="alert"
-      class="rounded-card border-status-error-border bg-status-error-surface border p-4"
+      :message="config.error"
+      :kind="config.errorKind ?? undefined"
+      :busy="config.isLoading"
       data-test="weather-config-error"
-    >
-      <p class="text-status-error text-sm font-semibold">{{ config.error }}</p>
-      <BaseButton
-        variant="secondary"
-        size="md"
-        class="mt-3 min-h-11"
-        :disabled="config.isLoading"
-        @click="load"
-      >
-        Coba lagi
-      </BaseButton>
-    </div>
+      @retry="load"
+    />
 
     <form v-else-if="config.isLoaded" class="space-y-4" novalidate @submit.prevent="save">
       <fieldset class="space-y-3">
@@ -271,14 +264,11 @@ const loading = computed(() => !config.isLoaded && !config.error);
         </p>
       </div>
 
-      <p
+      <AlertBanner
         v-if="config.saveError"
-        role="alert"
-        class="rounded-card border-status-error-border bg-status-error-surface text-status-error border px-4 py-3 text-sm font-semibold"
+        :message="withDraftKept(config.saveError, config.saveErrorKind, CHOICE_KEPT_SUFFIX)"
         data-test="weather-save-error"
-      >
-        {{ config.saveError }} Pilihan Anda masih ada di formulir.
-      </p>
+      />
 
       <div class="border-border flex flex-wrap items-center justify-end gap-3 border-t pt-3">
         <BaseButton

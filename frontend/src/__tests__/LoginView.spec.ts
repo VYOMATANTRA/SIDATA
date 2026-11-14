@@ -57,3 +57,71 @@ describe('LoginView turnstile reset on failure', () => {
     expect(window.turnstile?.reset).toHaveBeenCalledWith('widget-1')
   })
 })
+
+describe('LoginView redirect after login', () => {
+  async function loginWith(redirect: string) {
+    const { pinia, router } = mountLoginView()
+    router.addRoute({ path: '/admin/cerita', component: { template: '<div>cerita</div>' } })
+    await router.push({ path: '/login', query: { redirect } })
+    await router.isReady()
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      if (String(input).includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          user: { id: '1', email: 'user@example.com', role: 'admin' },
+          accessToken: 'tok',
+        }),
+      } as Response
+    })
+
+    const wrapper = mount(LoginView, { global: { plugins: [pinia, router] } })
+    await wrapper.find('input[type="email"]').setValue('user@example.com')
+    await wrapper.find('input[type="password"]').setValue('secret')
+    await wrapper.find('form').trigger('submit.prevent')
+    return router
+  }
+
+  it('returns to a safe redirect path after login', async () => {
+    const router = await loginWith('/admin/cerita')
+    await vi.waitUntil(() => router.currentRoute.value.path === '/admin/cerita', { timeout: 3000 })
+    expect(router.currentRoute.value.path).toBe('/admin/cerita')
+  })
+
+  it('ignores an unsafe redirect and goes to the default destination', async () => {
+    const router = await loginWith('//evil.com')
+    await vi.waitUntil(() => router.currentRoute.value.path === '/', { timeout: 3000 })
+    expect(router.currentRoute.value.fullPath).toBe('/')  })
+})
+
+describe('LoginView reason query', () => {
+  async function mountWith(path: string) {
+    const { pinia, router } = mountLoginView()
+    await router.push(path)
+    await router.isReady()
+    const wrapper = mount(LoginView, { global: { plugins: [pinia, router] } })
+    await wrapper.vm.$nextTick()
+    return wrapper
+  }
+
+  it('shows approved text for setup_required', async () => {
+    const wrapper = await mountWith('/login?reason=setup_required')
+    expect(wrapper.text()).toContain('Sesi penyiapan kata sandi tidak ditemukan')
+  })
+
+  it('shows generic Google text for a callback reason without printing the code', async () => {
+    const wrapper = await mountWith('/login?reason=invalid_state')
+    expect(wrapper.text()).toContain('Gagal masuk dengan Google. Silakan coba lagi.')
+    expect(wrapper.text()).not.toContain('invalid_state')
+  })
+
+  it('shows the generic Google sentence for an unknown reason and never prints it', async () => {
+    const wrapper = await mountWith('/login?reason=zzz_made_up')
+    expect(wrapper.text()).not.toContain('zzz_made_up')
+    expect(wrapper.text()).toContain('Gagal masuk dengan Google. Silakan coba lagi.')
+  })
+})

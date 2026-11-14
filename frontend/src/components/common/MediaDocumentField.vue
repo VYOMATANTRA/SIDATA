@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
+import AlertBanner from './AlertBanner.vue';
 import BaseButton from './BaseButton.vue';
 import {
   DOCUMENT_ACCEPT,
@@ -149,14 +150,11 @@ function remove(): void {
     <p class="sr-only" role="status" aria-live="polite" data-test="document-status">
       {{ statusText }}
     </p>
-    <p
+    <AlertBanner
       v-if="shownError"
       :id="errorId"
-      role="alert"
-      class="text-status-error text-xs font-medium"
+      :message="shownError"
       data-test="document-error"
-    >
-      {{ shownError }}
-    </p>
+    />
   </div>
 </template>

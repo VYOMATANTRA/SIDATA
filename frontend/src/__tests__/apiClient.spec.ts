@@ -131,6 +131,31 @@ describe('apiClient', () => {
     expect(dataCalls).toBe(1);
     expect(store.accessToken).toBeNull();
     expect(store.isAuthenticated).toBe(false);
+    expect(store.sessionEnded).toBe(true);
+  });
+
+  it('flags the session as ended when a concurrent request already cleared the token', async () => {
+    const store = signIn('expired-token');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async () => {
+        store.clearAuth();
+        return json({ error: 'Token tidak valid' }, 401);
+      }),
+    );
+
+    await apiFetch('/api/indicators');
+
+    expect(store.sessionEnded).toBe(true);
+  });
+
+  it('does not flag a session that was never signed in', async () => {
+    const store = useAuthStore();
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(json({}, 401)));
+
+    await apiFetch('/api/indicators');
+
+    expect(store.sessionEnded).toBe(false);
   });
 
   it('never refreshes a request that was sent without a token', async () => {

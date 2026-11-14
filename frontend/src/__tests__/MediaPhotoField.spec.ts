@@ -285,7 +285,7 @@ describe('MediaPhotoField', () => {
     );
 
     previewStatus = 200;
-    await wrapper.find('[data-test="photo-preview-retry"]').trigger('click');
+    await wrapper.find('[data-test="alert-banner-retry"]').trigger('click');
     await flushPromises();
     expect(wrapper.find('[data-test="photo-preview-image"]').exists()).toBe(true);
     wrapper.unmount();

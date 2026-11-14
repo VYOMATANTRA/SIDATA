@@ -6,12 +6,19 @@ import TurnstileWidget from '../components/auth/TurnstileWidget.vue'
 import OtpVerificationModal from '../components/auth/OtpVerificationModal.vue'
 import { getCsrfToken } from '../utils/csrf'
 import { useAuthStore } from '../stores/auth'
+import { safeRedirect } from '../utils/safeRedirect'
+import { loginReasonMessage } from '../utils/userMessages'
 import bgImage from '../assets/img/background_laman_depan_kelurahan.webp'
 import logoBalikpapan from '../assets/img/logo_balikpapan.webp'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+
+// Where to go after sign-in: the page the user was on when the session ended, if it is safe.
+function postLoginDestination(): string {
+  return safeRedirect(route.query.redirect) ?? '/'
+}
 
 const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
 
@@ -67,16 +74,13 @@ function resetTurnstile() {
 }
 
 onMounted(() => {
-  if (route.query.reason === 'setup_required') {
-    errorMessage.value =
-      'Sesi penyiapan kata sandi tidak ditemukan atau telah kedaluwarsa. Silakan masuk kembali untuk melanjutkan.'
+  const reasonMessage = loginReasonMessage(route.query.reason)
+  if (reasonMessage) {
+    errorMessage.value = reasonMessage
     return
   }
-  if (route.query.error === 'oauth_failed' || route.query.reason) {
-    const reason = route.query.reason ? String(route.query.reason) : ''
-    errorMessage.value = reason
-      ? `Gagal masuk dengan Google (${reason}). Silakan coba lagi.`
-      : 'Gagal masuk dengan Google. Silakan coba lagi.'
+  if (route.query.error === 'oauth_failed') {
+    errorMessage.value = 'Gagal masuk dengan Google. Silakan coba lagi.'
   }
 })
 
@@ -148,7 +152,7 @@ async function handleLogin() {
 
     successMessage.value = 'Login berhasil! Mengalihkan ke aplikasi...'
     setTimeout(() => {
-      router.push('/')
+      router.push(postLoginDestination())
     }, 800)
   } catch {
     errorMessage.value = 'Terjadi kesalahan jaringan. Silakan coba lagi.'
@@ -168,7 +172,7 @@ function onOtpVerified(data?: unknown) {
   }
   successMessage.value = 'Email terverifikasi & login berhasil! Mengalihkan...'
   setTimeout(() => {
-    router.push('/')
+    router.push(postLoginDestination())
   }, 800)
 }
 </script>

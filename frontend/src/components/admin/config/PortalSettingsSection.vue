@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import BaseButton from '../../common/BaseButton.vue';
+import { computed, onMounted, ref } from 'vue';
+import { useAuthStore } from '../../../stores/auth';
+import AlertBanner from '../../common/AlertBanner.vue';
 import PublicSettingsForm from '../../data/PublicSettingsForm.vue';
 import { useSettingsStore, type PublicSettings } from '../../../stores/settings.store';
-import { toUserMessage } from '../../../utils/userMessages';
+import {
+  PORTAL_SETTINGS_LOAD_FALLBACK_MESSAGE,
+  toUserMessage,
+} from '../../../utils/userMessages';
 
 /**
  * Saves one part of the public portal settings (SPEC §4, §8): the identity and contact fields,
@@ -11,11 +15,25 @@ import { toUserMessage } from '../../../utils/userMessages';
  * failed map save never costs the contact edits (and vice versa). The form is shown only once
  * the stored values have actually loaded, so the built-in defaults can never be saved over them.
  */
-const props = defineProps<{ part: 'identity' | 'map' }>();
+const props = withDefaults(
+  defineProps<{
+    part: 'identity' | 'map';
+    /** The page mounts this section twice; only one instance shows the shared load failure. */
+    showLoadError?: boolean;
+  }>(),
+  { showLoadError: true },
+);
 
 const emit = defineEmits<{ (e: 'dirty-change', dirty: boolean): void }>();
 
 const store = useSettingsStore();
+const authStore = useAuthStore();
+
+// The first instance hides its banner when the session ended (the global notice covers it), so
+// the second instance must not point at a banner that is not there.
+const loadErrorHiddenElsewhere = computed(
+  () => store.errorKind === 'session' && authStore.sessionEnded,
+);
 
 const formKey = ref(0);
 const busy = ref(false);
@@ -76,19 +94,22 @@ function discard(): void {
       Memuat pengaturan…
     </p>
 
-    <div
-      v-else-if="!store.isLoaded"
-      role="alert"
-      class="rounded-card border-status-error-border bg-status-error-surface border p-4"
+    <AlertBanner
+      v-else-if="!store.isLoaded && showLoadError"
+      :message="store.error ?? PORTAL_SETTINGS_LOAD_FALLBACK_MESSAGE"
+      :kind="store.errorKind ?? undefined"
+      :busy="loading"
       data-test="portal-load-error"
+      @retry="load"
+    />
+
+    <p
+      v-else-if="!store.isLoaded && !loadErrorHiddenElsewhere"
+      class="text-text-muted text-sm"
+      data-test="portal-load-elsewhere"
     >
-      <p class="text-status-error text-sm font-semibold">
-        {{ store.error ?? 'Pengaturan belum dapat dimuat.' }}
-      </p>
-      <BaseButton variant="secondary" size="md" class="mt-3 min-h-11" @click="load">
-        Coba lagi
-      </BaseButton>
-    </div>
+      Pengaturan belum dapat dimuat. Lihat keterangan di bagian Identitas dan kontak portal.
+    </p>
 
     <template v-else>
       <div role="status" aria-live="polite">

@@ -1,7 +1,11 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { ApiError, apiRequestJson } from '../utils/apiClient';
-import { toUserMessage, USER_MESSAGES } from '../utils/userMessages';
+import {
+  toUserMessage,
+  USER_MESSAGES,
+  type FailureKind,
+} from '../utils/userMessages';
 import { uniqueSlug } from '../utils/comparisonTemplateSegments';
 
 /**
@@ -86,6 +90,14 @@ export const TEMPLATE_VALIDATION_FALLBACK =
  * field-level errors fall back to template-specific guidance.
  */
 export function describeTemplateFailure(error: unknown, context: string, method?: string): string {
+  return mapTemplateFailure(error, context, method).message;
+}
+
+function mapTemplateFailure(
+  error: unknown,
+  context: string,
+  method?: string,
+): { message: string; kind: FailureKind } {
   const source =
     typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : {};
   const serverMsg =
@@ -114,11 +126,14 @@ export function describeTemplateFailure(error: unknown, context: string, method?
   const hasFieldErrors = userMsg.fieldErrors && Object.keys(userMsg.fieldErrors).length > 0;
   if (userMsg.kind === 'validation' && !hasFieldErrors) {
     if (userMsg.message.endsWith(USER_MESSAGES.validation)) {
-      return userMsg.message.replace(USER_MESSAGES.validation, TEMPLATE_VALIDATION_FALLBACK);
+      return {
+        message: userMsg.message.replace(USER_MESSAGES.validation, TEMPLATE_VALIDATION_FALLBACK),
+        kind: userMsg.kind,
+      };
     }
   }
 
-  return userMsg.message;
+  return { message: userMsg.message, kind: userMsg.kind };
 }
 
 export function inUseMessage(label: string, usageCount: number): string {
@@ -154,6 +169,8 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
   const isLoading = ref(false);
   const isLoaded = ref(false);
   const error = ref<string | null>(null);
+  /** Failure class of `error`, for AlertBanner; null while `error` is null. */
+  const errorKind = ref<FailureKind | null>(null);
   const selectorError = ref<string | null>(null);
 
   interface ActiveFetch {
@@ -206,6 +223,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
       }
       if (forAdmin) {
         error.value = null;
+        errorKind.value = null;
         activeFetch.forAdmin = true;
       }
       return activeFetch.promise;
@@ -216,6 +234,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
     }
     if (forAdmin) {
       error.value = null;
+      errorKind.value = null;
     }
 
     isLoading.value = true;
@@ -247,6 +266,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
           }
           if (request.forAdmin) {
             error.value = null;
+            errorKind.value = null;
           }
           return true;
         }
@@ -257,16 +277,19 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
         }
         if (request.forAdmin) {
           error.value = null;
+          errorKind.value = null;
         }
         return isLoaded.value;
       } catch (err) {
         // A failed refetch keeps the rows already on screen rather than blanking the list.
-        const failureMessage = describeTemplateFailure(err, 'memuat daftar templat kalimat', 'GET');
+        const failure = mapTemplateFailure(err, 'memuat daftar templat kalimat', 'GET');
+        const failureMessage = failure.message;
         if (request.forSelector) {
           selectorError.value = failureMessage;
         }
         if (request.forAdmin) {
           error.value = failureMessage;
+          errorKind.value = failure.kind;
         }
         return false;
       } finally {
@@ -441,6 +464,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
     isLoading,
     isLoaded,
     error,
+    errorKind,
     selectorError,
     fetchTemplates,
     createTemplate,

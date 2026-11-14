@@ -2,9 +2,15 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  CHOICE_KEPT_SUFFIX,
+  LOGIN_REASON_MESSAGES,
+  loginReasonMessage,
+  withDraftKept,
   CSRF_INVALID_MESSAGE,
   classifyFailure,
   CSV_FORMAT_MESSAGE,
+  isRetryable,
+  type FailureKind,
   HIDDEN_API_TOKENS,
   INPUT_MISMATCH_MESSAGE,
   NETWORK_ERROR_CODE,
@@ -82,6 +88,15 @@ describe('toUserMessage mappings', () => {
   it('maps 403 to the permission wording', () => {
     expect(toUserMessage(httpFailure(403)).message).toBe(
       'Anda tidak memiliki izin untuk tindakan ini.',
+    );
+  });
+
+  it('uses read-specific wording for a 403 on GET', () => {
+    expect(toUserMessage(httpFailure(403), undefined, 'GET').message).toBe(
+      'Akun Anda tidak memiliki akses ke bagian ini.',
+    );
+    expect(toUserMessage(Object.assign(httpFailure(403), { method: 'HEAD' })).message).toBe(
+      'Akun Anda tidak memiliki akses ke bagian ini.',
     );
   });
 
@@ -634,5 +649,58 @@ describe('classifyFailure', () => {
 
   it('reports a null status when none was attached', () => {
     expect(classifyFailure(new Error('no status'))).toEqual({ kind: 'unknown', status: null });
+  });
+});
+
+describe('isRetryable', () => {
+  it.each(['network', 'server', 'unknown', 'rate_limited'] as FailureKind[])(
+    'allows retry for %s',
+    (kind) => expect(isRetryable(kind)).toBe(true),
+  );
+
+  it.each([
+    'session',
+    'forbidden',
+    'not_found',
+    'validation',
+    'conflict',
+    'stale',
+    'payload_too_large',
+  ] as FailureKind[])('does not allow retry for %s', (kind) =>
+    expect(isRetryable(kind)).toBe(false),
+  );
+});
+
+describe('withDraftKept', () => {
+  it('appends the suffix for ordinary failures', () => {
+    expect(withDraftKept('Gagal.', 'server')).toBe('Gagal. Isian Anda masih ada di formulir.');
+    expect(withDraftKept('Gagal.', null, CHOICE_KEPT_SUFFIX)).toBe(
+      'Gagal. Pilihan Anda masih ada di formulir.',
+    );
+  });
+
+  it('leaves the stale text alone because it already says the draft is kept', () => {
+    expect(withDraftKept(USER_MESSAGES.stale, 'stale')).toBe(USER_MESSAGES.stale);
+  });
+});
+
+describe('loginReasonMessage', () => {
+  it('maps known reasons to approved Indonesian text', () => {
+    expect(loginReasonMessage('setup_required')).toBe(LOGIN_REASON_MESSAGES.setup_required);
+    expect(loginReasonMessage('account_deactivated')).toContain('tidak aktif');
+    expect(loginReasonMessage('invalid_state')).toBe('Gagal masuk dengan Google. Silakan coba lagi.');
+  });
+
+  it('maps unknown or inherited string reasons to the generic Google sentence', () => {
+    const generic = 'Gagal masuk dengan Google. Silakan coba lagi.';
+    expect(loginReasonMessage('<b>x</b>')).toBe(generic);
+    expect(loginReasonMessage('server_error')).toBe(generic);
+    expect(loginReasonMessage('constructor')).toBe(generic);
+  });
+
+  it('ignores empty and non-string reasons', () => {
+    expect(loginReasonMessage('')).toBeNull();
+    expect(loginReasonMessage(['setup_required'])).toBeNull();
+    expect(loginReasonMessage(undefined)).toBeNull();
   });
 });

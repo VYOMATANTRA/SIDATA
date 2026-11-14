@@ -363,4 +363,67 @@ describe('UserManagement.vue — role, password, and deactivate/activate flows',
     expect(wrapper.text()).toContain('Aktifkan Pengguna?');
     expect(wrapper.text()).toContain(DEACTIVATED_USER.email);
   });
+
+  it('shows a role-change failure inline instead of a native alert, and clears it on the next attempt', async () => {
+    const alertSpy = vi.fn<(message?: string) => void>();
+    vi.stubGlobal('alert', alertSpy);
+    let fail = true;
+    installFetchMock({
+      onRequest: (url, init) => {
+        if (url === `/api/users/${PLAIN_USER.id}/role` && init?.method === 'PATCH') {
+          return fail
+            ? jsonResponse({ error: 'Gagal.' }, false, 500)
+            : jsonResponse({ user: { role: { id: 'role-admin', name: 'admin' } } });
+        }
+        return undefined;
+      },
+    });
+
+    const wrapper = await mountReadyUserManagement();
+    const plainRow = wrapper.findAll('tbody tr').find((r) => r.text().includes(PLAIN_USER.email));
+    await plainRow!
+      .findAll('button')
+      .find((b) => b.text() === 'Ubah Role')!
+      .trigger('click');
+    await wrapper.find('select').setValue('role-admin');
+    const save = () => wrapper.findAll('button').find((b) => b.text() === 'Simpan Perubahan')!;
+    await save().trigger('click');
+    await flushPromises();
+
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-test="user-action-error"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="user-action-error"]').attributes('role')).toBe('alert');
+
+    fail = false;
+    await save().trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[data-test="user-action-error"]').exists()).toBe(false);
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('UserManagement.vue — load error banner', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.restoreAllMocks();
+  });
+
+  it('offers retry for a server failure but not for a 403', async () => {
+    installFetchMock({
+      onRequest: (url) =>
+        url === '/api/users' ? jsonResponse({ error: 'x' }, false, 500) : undefined,
+    });
+    let wrapper = await mountReadyUserManagement();
+    expect(wrapper.find('[data-test="users-load-error"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="alert-banner-retry"]').exists()).toBe(true);
+
+    setActivePinia(createPinia());
+    installFetchMock({
+      onRequest: (url) =>
+        url === '/api/users' ? jsonResponse({ error: 'x' }, false, 403) : undefined,
+    });
+    wrapper = await mountReadyUserManagement();
+    expect(wrapper.find('[data-test="users-load-error"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="alert-banner-retry"]').exists()).toBe(false);
+  });
 });

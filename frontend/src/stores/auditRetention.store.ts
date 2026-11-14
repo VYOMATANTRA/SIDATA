@@ -1,9 +1,11 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { authFetch } from '../utils/authFetch';
-import { getCsrfToken } from '../utils/csrf';
-import { apiErrorFromBody } from '../utils/apiClient';
-import { toUserMessage } from '../utils/userMessages';
+import { apiErrorFromBody, apiFetch } from '../utils/apiClient';
+import {
+  RETENTION_UNREADABLE_MESSAGE,
+  toUserMessage,
+  type FailureKind,
+} from '../utils/userMessages';
 
 export interface AuditRetentionPolicy {
   info: number;
@@ -116,7 +118,7 @@ export function formatDurationLabel(days: number | unknown): string {
 /** The server answered 200 with a retention payload this client cannot read. Our own text. */
 class RetentionFormatError extends Error {
   constructor() {
-    super('Masa simpan log dari server tidak dapat dibaca. Coba muat ulang halaman.');
+    super(RETENTION_UNREADABLE_MESSAGE);
     this.name = 'RetentionFormatError';
   }
 }
@@ -131,15 +133,18 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
   const isLoading = ref(false);
   const isSaving = ref(false);
   const error = ref<string | null>(null);
+  /** Failure class of `error` (load or save), for AlertBanner; null while `error` is null. */
+  const errorKind = ref<FailureKind | null>(null);
   const successMessage = ref<string | null>(null);
 
   async function fetchRetention(): Promise<boolean> {
     isLoading.value = true;
     error.value = null;
+    errorKind.value = null;
     successMessage.value = null;
 
     try {
-      const res = await authFetch('/api/settings/audit-retention', {
+      const res = await apiFetch('/api/settings/audit-retention', {
         method: 'GET',
         headers: { Accept: 'application/json' },
       });
@@ -162,10 +167,14 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
       retention.value = parsed;
       return true;
     } catch (err) {
-      error.value =
-        err instanceof RetentionFormatError
-          ? err.message
-          : toUserMessage(err, 'memuat masa simpan log', 'GET').message;
+      if (err instanceof RetentionFormatError) {
+        error.value = err.message;
+        errorKind.value = 'unknown';
+      } else {
+        const mapped = toUserMessage(err, 'memuat masa simpan log', 'GET');
+        error.value = mapped.message;
+        errorKind.value = mapped.kind;
+      }
       return false;
     } finally {
       isLoading.value = false;
@@ -176,21 +185,21 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
     const validationError = validateRetentionPolicy(policy);
     if (validationError) {
       error.value = validationError;
+      errorKind.value = 'validation';
       return false;
     }
 
     isSaving.value = true;
     error.value = null;
+    errorKind.value = null;
     successMessage.value = null;
 
     try {
-      const csrfToken = await getCsrfToken();
-      const res = await authFetch('/api/settings/audit-retention', {
+      const res = await apiFetch('/api/settings/audit-retention', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
-          'x-csrf-token': csrfToken,
         },
         body: JSON.stringify(policy),
       });
@@ -221,8 +230,10 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
     } catch (err) {
       if (err instanceof RetentionFormatError) {
         error.value = err.message;
+        errorKind.value = 'unknown';
       } else {
         const mapped = toUserMessage(err, 'menyimpan masa simpan log');
+        errorKind.value = mapped.kind;
         error.value =
           mapped.kind === 'validation' ? RETENTION_SAVE_REFUSED_MESSAGE : mapped.message;
       }
@@ -234,6 +245,7 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
 
   function clearMessages() {
     error.value = null;
+    errorKind.value = null;
     successMessage.value = null;
   }
 
@@ -242,6 +254,7 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
     isLoading,
     isSaving,
     error,
+    errorKind,
     successMessage,
     fetchRetention,
     updateRetention,

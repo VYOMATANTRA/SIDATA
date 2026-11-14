@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue';
+import AlertBanner from '../components/common/AlertBanner.vue';
 import BaseButton from '../components/common/BaseButton.vue';
 import BaseModal from '../components/common/BaseModal.vue';
 import IndicatorCard, { type IndicatorCardModel } from '../components/data/IndicatorCard.vue';
@@ -131,6 +132,13 @@ const loadError = computed(() => {
   // The settings tab only links to the configuration page; it loads nothing of its own.
   if (activeTab.value === 'pengaturan') return null;
   return indicatorsStore.error || tablesStore.error;
+});
+
+const loadErrorKind = computed(() => {
+  if (activeTab.value === 'konten') return contentBlocksStore.errorKind ?? undefined;
+  if (activeTab.value === 'pengaturan') return undefined;
+  if (indicatorsStore.error) return indicatorsStore.errorKind ?? undefined;
+  return tablesStore.errorKind ?? undefined;
 });
 
 function compareCards(a: IndicatorCardModel, b: IndicatorCardModel): number {
@@ -562,25 +570,23 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
       </button>
     </div>
 
-    <div
+    <AlertBanner
       v-if="loadError"
-      role="alert"
-      class="rounded-card mt-6 border border-rose-300 bg-rose-50 px-4 py-3"
-    >
-      <p class="text-sm font-medium text-rose-900">{{ loadError }}</p>
-      <BaseButton variant="secondary" size="sm" class="mt-3" @click="loadAll">
-        Coba muat ulang
-      </BaseButton>
-    </div>
+      :message="loadError"
+      :kind="loadErrorKind"
+      :busy="isLoading"
+      class="mt-6"
+      data-test="load-error"
+      @retry="loadAll"
+    />
 
-    <p
+    <AlertBanner
       v-if="serverError && !isEditorOpen && serverError !== loadError"
-      role="alert"
-      class="rounded-card mt-4 border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+      :message="serverError"
+      tone="warning"
+      class="mt-4"
       data-test="page-message"
-    >
-      {{ serverError }}
-    </p>
+    />
 
     <p
       v-if="pagesStore.hierarchyError"
@@ -801,9 +807,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
         @dirty-change="settingsFormDirty = $event"
       />
 
-      <p v-else-if="serverError" role="alert" class="text-sm text-rose-700">
-        {{ serverError }}
-      </p>
+      <AlertBanner v-else-if="serverError" :message="serverError" />
 
       <div
         v-if="isEditingSettings && settingsDiscardPromptOpen"

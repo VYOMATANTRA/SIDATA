@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { apiRequestJson } from '../utils/apiClient';
-import { toUserMessage } from '../utils/userMessages';
+import { WEATHER_CONFIG_UNREADABLE_MESSAGE, toUserMessage, type FailureKind } from '../utils/userMessages';
 
 /**
  * Admin-only operational weather settings (SPEC §7). The API carries four values; the Admin
@@ -36,7 +36,10 @@ export const useWeatherConfigStore = defineStore('weatherConfig', () => {
   const isLoading = ref(false);
   const isSaving = ref(false);
   const error = ref<string | null>(null);
+  /** Failure class of the last load error, for AlertBanner; null while `error` is null. */
+  const errorKind = ref<FailureKind | null>(null);
   const saveError = ref<string | null>(null);
+  const saveErrorKind = ref<FailureKind | null>(null);
 
   const isLoaded = computed(() => config.value !== null);
   const cacheTtlMs = computed(() => config.value?.cacheTtlMs ?? null);
@@ -44,6 +47,7 @@ export const useWeatherConfigStore = defineStore('weatherConfig', () => {
   async function fetchConfig(): Promise<boolean> {
     isLoading.value = true;
     error.value = null;
+    errorKind.value = null;
     try {
       const data = await apiRequestJson<{ settings?: unknown }>('/api/settings/weather-config', {
         method: 'GET',
@@ -51,13 +55,16 @@ export const useWeatherConfigStore = defineStore('weatherConfig', () => {
       });
       const parsed = parseConfig(data?.settings);
       if (!parsed) {
-        error.value = 'Pengaturan cuaca dari server tidak dapat dibaca. Coba muat ulang halaman.';
+        error.value = WEATHER_CONFIG_UNREADABLE_MESSAGE;
+        errorKind.value = 'unknown';
         return false;
       }
       config.value = parsed;
       return true;
     } catch (err) {
-      error.value = toUserMessage(err, 'memuat pengaturan cuaca', 'GET').message;
+      const mapped = toUserMessage(err, 'memuat pengaturan cuaca', 'GET');
+      error.value = mapped.message;
+      errorKind.value = mapped.kind;
       return false;
     } finally {
       isLoading.value = false;
@@ -71,6 +78,7 @@ export const useWeatherConfigStore = defineStore('weatherConfig', () => {
   async function saveRefreshInterval(nextCacheTtlMs: number): Promise<boolean> {
     isSaving.value = true;
     saveError.value = null;
+    saveErrorKind.value = null;
     try {
       const data = await apiRequestJson<{ settings?: unknown }>('/api/settings/weather-config', {
         method: 'PATCH',
@@ -85,6 +93,7 @@ export const useWeatherConfigStore = defineStore('weatherConfig', () => {
       return true;
     } catch (err) {
       const mapped = toUserMessage(err, 'menyimpan pengaturan cuaca');
+      saveErrorKind.value = mapped.kind;
       saveError.value =
         mapped.kind === 'validation' ? WEATHER_SAVE_REFUSED_MESSAGE : mapped.message;
       return false;
@@ -95,6 +104,7 @@ export const useWeatherConfigStore = defineStore('weatherConfig', () => {
 
   function clearSaveError(): void {
     saveError.value = null;
+    saveErrorKind.value = null;
   }
 
   return {
@@ -103,7 +113,9 @@ export const useWeatherConfigStore = defineStore('weatherConfig', () => {
     isSaving,
     isLoaded,
     error,
+    errorKind,
     saveError,
+    saveErrorKind,
     cacheTtlMs,
     fetchConfig,
     saveRefreshInterval,

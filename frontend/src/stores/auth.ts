@@ -58,6 +58,12 @@ export const useAuthStore = defineStore('auth', () => {
   // and silent refresh must keep retrying on the next navigation (see router/index.ts).
   const refreshDenied = ref(false)
 
+  // True once a signed-in session is found dead (the refresh was denied while a token was in
+  // use). AdminLayout shows one global notice for it. Never set by a user-initiated logout:
+  // `userLoggedOut` also blocks a request that was still in flight when the user signed out.
+  const sessionEnded = ref(false)
+  let userLoggedOut = false
+
   // Shares one in-flight request across concurrent initAuth() callers (e.g. router guards
   // firing on rapid navigations) instead of each firing its own csrf-token + refresh pair.
   let inFlight: Promise<RefreshOutcome> | null = null
@@ -81,9 +87,16 @@ export const useAuthStore = defineStore('auth', () => {
     accessToken.value = token
     isInitialized.value = true
     refreshDenied.value = false
+    sessionEnded.value = false
+    userLoggedOut = false
     setupToken.value = null
     mustChangePassword.value = false
     removeStoredSetupToken()
+  }
+
+  /** Flags that a signed-in session is over, unless the user ended it themselves. */
+  function markSessionEnded() {
+    if (!userLoggedOut) sessionEnded.value = true
   }
 
   function setSetupAuth(token: string) {
@@ -273,6 +286,8 @@ export const useAuthStore = defineStore('auth', () => {
 
       clearAuth()
       refreshDenied.value = true
+      userLoggedOut = true
+      sessionEnded.value = false
       return { success: true }
     } catch {
       return {
@@ -293,7 +308,9 @@ export const useAuthStore = defineStore('auth', () => {
     setupToken,
     mustChangePassword,
     refreshDenied,
+    sessionEnded,
     setAuth,
+    markSessionEnded,
     setSetupAuth,
     clearAuth,
     initAuth,

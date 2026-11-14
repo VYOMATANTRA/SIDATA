@@ -206,7 +206,7 @@ const wilayahStats = computed<StatItem[]>(() => [
             class="border-brand-navy text-brand-navy hover:bg-brand-navy shrink-0 rounded border px-3 py-1.5 text-xs font-semibold hover:text-white"
             @click="retryPopulation"
           >
-            Coba Lagi
+            Coba lagi
           </button>
         </div>
       </section>
@@ -236,7 +236,7 @@ const wilayahStats = computed<StatItem[]>(() => [
             class="bg-brand-navy hover:bg-brand-navy/90 mt-3 inline-flex items-center rounded px-3 py-1.5 text-xs font-semibold text-white"
             @click="retryPopulation"
           >
-            Coba Lagi
+            Coba lagi
           </button>
         </div>
       </div>

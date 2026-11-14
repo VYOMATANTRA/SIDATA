@@ -232,7 +232,7 @@ describe('AdminPetaView', () => {
       expect(wrapper().find('[data-test="peta-empty"]').exists()).toBe(false);
 
       listFails = false;
-      await wrapper().find('[data-test="peta-retry"]').trigger('click');
+      await wrapper().find('[data-test="alert-banner-retry"]').trigger('click');
       await flushPromises();
       expect(wrapper().find('[data-test="peta-load-error"]').exists()).toBe(false);
       expect(wrapper().findAll('[data-test^="point-row-"]')).toHaveLength(4);

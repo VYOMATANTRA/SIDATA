@@ -62,6 +62,11 @@ export const verifyToken = async (
     next();
   } catch (error) {
     console.error('Error saat verifikasi token:', error);
-    return res.status(403).json({ error: 'Token tidak valid atau sudah kedaluwarsa.' });
+    // Only a bad or expired token is the client's problem (401, so the client can refresh). Any
+    // other failure here, such as the user lookup, is ours and must not read as a dead session.
+    if (error instanceof jwt.JsonWebTokenError) {
+      return res.status(401).json({ error: 'Token tidak valid atau sudah kedaluwarsa.' });
+    }
+    return res.status(500).json({ error: 'Terjadi kesalahan pada server.' });
   }
 };

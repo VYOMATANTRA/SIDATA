@@ -33,6 +33,38 @@ describe('auth store', () => {
     expect(store.isInitialized).toBe(true)
   })
 
+  it('sessionEnded starts false, is set by markSessionEnded and reset by setAuth', () => {
+    const store = useAuthStore()
+    expect(store.sessionEnded).toBe(false)
+    store.markSessionEnded()
+    expect(store.sessionEnded).toBe(true)
+    store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'access-token')
+    expect(store.sessionEnded).toBe(false)
+  })
+
+  it('a user-initiated logout never leaves the session notice on, even for a late 401', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        if (String(input).includes('csrf-token')) {
+          return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+        }
+        return { ok: true, status: 200, json: async () => ({}) } as Response
+      }),
+    )
+    const store = useAuthStore()
+    store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'access-token')
+    expect((await store.logout()).success).toBe(true)
+    expect(store.sessionEnded).toBe(false)
+
+    store.markSessionEnded()
+    expect(store.sessionEnded).toBe(false)
+
+    store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'again')
+    store.markSessionEnded()
+    expect(store.sessionEnded).toBe(true)
+  })
+
   it('initAuth sends credentials so the httpOnly refresh cookie is attached cross-origin', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
       const url = String(input)

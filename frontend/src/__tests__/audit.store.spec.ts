@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useAuditStore } from '../stores/audit.store';
 import { useAuthStore } from '../stores/auth';
-import { READ_USER_MESSAGES, USER_MESSAGES } from '../utils/userMessages';
+import { READ_USER_MESSAGES } from '../utils/userMessages';
 
 const AUDIT_LOG = {
   id: 'log-1',
@@ -288,7 +288,7 @@ describe('audit store', () => {
     expect(store.summary?.openCritical).toBe(0);
   });
 
-  it('acknowledgeLog throws on backend error and sets the error ref', async () => {
+  it('acknowledgeLog throws on backend error without touching the load error', async () => {
     mockFetchWith({
       acknowledge: () =>
         ({
@@ -302,8 +302,9 @@ describe('audit store', () => {
     store.logs = [{ ...AUDIT_LOG }];
 
     await expect(store.acknowledgeLog('log-1')).rejects.toMatchObject({ status: 409 });
-    expect(store.error).toBe(`Gagal meng-acknowledge audit log. ${USER_MESSAGES.conflict}`);
-    expect(store.error).not.toContain('sudah di-acknowledge');
+    // The view shows this failure in its own acknowledgeError; the list banner stays clear.
+    expect(store.error).toBeNull();
+    expect(store.errorKind).toBeNull();
     // Row left untouched on failure
     expect(store.logs[0]?.acknowledgedAt).toBeNull();
   });
@@ -318,7 +319,32 @@ describe('audit store', () => {
     await store.fetchLogs();
 
     expect(store.logs).toHaveLength(0);
-    expect(store.error).toBe(`Gagal memuat audit log. ${USER_MESSAGES.forbidden}`);
+    expect(store.error).toBe(`Gagal memuat audit log. ${READ_USER_MESSAGES.forbidden}`);
+    expect(store.errorKind).toBe('forbidden');
+  });
+
+  it('fetchLogs sets errorKind for network and 500 failures and resets it on success', async () => {
+    const store = useAuditStore();
+    mockFetchWith({
+      list: () => {
+        throw new TypeError('Failed to fetch');
+      },
+    });
+    await store.fetchLogs();
+    expect(store.errorKind).toBe('network');
+
+    mockFetchWith({
+      list: () => ({ ok: false, status: 500, json: async () => ({}) }) as Response,
+    });
+    await store.fetchLogs();
+    expect(store.errorKind).toBe('server');
+
+    mockFetchWith({
+      list: () => ({ ok: true, json: async () => ({ logs: [], total: 0 }) }) as Response,
+    });
+    await store.fetchLogs();
+    expect(store.error).toBeNull();
+    expect(store.errorKind).toBeNull();
   });
 
   it('discards a stale fetchLogs response that resolves after a newer one', async () => {
@@ -446,6 +472,8 @@ describe('audit store', () => {
 
     // Both failures surface independently instead of one overwriting the other.
     expect(store.error).toBe(`Gagal memuat audit log. ${READ_USER_MESSAGES.server}`);
-    expect(store.summaryError).toBe(`Gagal memuat ringkasan audit log. ${USER_MESSAGES.forbidden}`);
+    expect(store.summaryError).toBe(
+      `Gagal memuat ringkasan audit log. ${READ_USER_MESSAGES.forbidden}`,
+    );
   });
 });

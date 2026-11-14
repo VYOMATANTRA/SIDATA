@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
+import AlertBanner from './AlertBanner.vue';
 import BaseButton from './BaseButton.vue';
 import { useAuthenticatedBlobUrl } from '../../composables/useAuthenticatedBlobUrl';
 import {
@@ -179,21 +180,13 @@ function remove(): void {
         class="rounded-btn max-h-56 w-auto max-w-full object-contain"
         data-test="photo-preview-image"
       />
-      <p
+      <AlertBanner
         v-else-if="preview.status.value === 'error'"
-        class="text-text-muted p-3 text-center text-sm"
+        message="Pratinjau foto tidak dapat dimuat."
+        class="w-full"
         data-test="photo-preview-error"
-      >
-        Pratinjau foto tidak dapat dimuat.
-        <button
-          type="button"
-          class="text-brand-navy focus-visible:outline-focus-ring ml-1 min-h-11 rounded-xs px-2 font-semibold underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2"
-          data-test="photo-preview-retry"
-          @click="preview.retry()"
-        >
-          Coba lagi
-        </button>
-      </p>
+        @retry="preview.retry()"
+      />
       <p v-else class="text-text-muted p-3 text-sm" data-test="photo-preview-loading">
         Memuat pratinjau…
       </p>
@@ -256,14 +249,6 @@ function remove(): void {
     <p :id="statusId" class="sr-only" role="status" aria-live="polite" data-test="photo-status">
       {{ statusText }}
     </p>
-    <p
-      v-if="shownError"
-      :id="errorId"
-      role="alert"
-      class="text-status-error text-xs font-medium"
-      data-test="photo-error"
-    >
-      {{ shownError }}
-    </p>
+    <AlertBanner v-if="shownError" :id="errorId" :message="shownError" data-test="photo-error" />
   </div>
 </template>

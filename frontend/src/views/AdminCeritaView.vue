@@ -17,6 +17,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import BaseButton from '../components/common/BaseButton.vue';
+import AlertBanner from '../components/common/AlertBanner.vue';
 import BaseModal from '../components/common/BaseModal.vue';
 import CeritaDeleteDialog from '../components/admin/cerita/CeritaDeleteDialog.vue';
 import CeritaPageDetailsDialog from '../components/admin/cerita/CeritaPageDetailsDialog.vue';
@@ -767,44 +768,29 @@ onUnmounted(() => {
 
     <CeritaReloadNotice />
 
-    <div
+    <AlertBanner
       v-if="store.loadError && !store.reloadNeeded"
-      role="alert"
-      class="rounded-card border-status-error-border bg-status-error-surface border p-4"
+      :message="store.loadError"
+      :kind="store.loadErrorKind ?? undefined"
+      :busy="store.isLoading"
       data-test="load-error"
-    >
-      <p class="text-status-error text-sm font-semibold">{{ store.loadError }}</p>
-      <BaseButton
-        variant="secondary"
-        size="md"
-        class="mt-3 min-h-11"
-        :disabled="store.isLoading"
-        data-test="load-retry"
-        @click="store.load()"
-      >
-        {{ store.isLoading ? 'Memuat ulang…' : 'Coba lagi' }}
-      </BaseButton>
-    </div>
+      @retry="store.load()"
+    />
 
-    <div
-      v-if="actionError"
-      role="alert"
-      class="rounded-card border-status-error-border bg-status-error-surface space-y-3 border p-4"
-      data-test="action-error"
-    >
-      <p class="text-status-error text-sm font-semibold">{{ actionError }}</p>
-      <BaseButton
-        v-if="actionStale"
-        variant="secondary"
-        size="md"
-        class="min-h-11"
-        :disabled="reloading"
-        data-test="action-reload"
-        @click="reload"
-      >
-        {{ reloading ? 'Memuat…' : 'Muat ulang' }}
-      </BaseButton>
-    </div>
+    <AlertBanner v-if="actionError" :message="actionError" data-test="action-error">
+      <template v-if="actionStale" #action>
+        <BaseButton
+          variant="secondary"
+          size="md"
+          class="min-h-11"
+          :disabled="reloading"
+          data-test="action-reload"
+          @click="reload"
+        >
+          {{ reloading ? 'Memuat…' : 'Muat ulang' }}
+        </BaseButton>
+      </template>
+    </AlertBanner>
 
     <p v-if="showInitialLoading" class="text-text-muted text-sm" role="status" data-test="loading">
       Memuat halaman Cerita…

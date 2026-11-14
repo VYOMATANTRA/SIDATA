@@ -162,11 +162,13 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
       });
     }
     if (outcome === 'denied') {
+      authStore.markSessionEnded();
       return response;
     }
   } else if (!authStore.accessToken) {
     // A concurrent request already refreshed and the session is gone; replaying would just send
-    // another tokenless request.
+    // another tokenless request. A token was in use, so the session did end.
+    authStore.markSessionEnded();
     return response;
   }
 

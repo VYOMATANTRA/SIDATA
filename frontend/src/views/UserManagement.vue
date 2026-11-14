@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { ClockIcon, MagnifyingGlassIcon, PlusIcon } from '@heroicons/vue/24/outline'
 import { useUsersStore, type UserItem } from '../stores/users.store'
 import { useAuthStore } from '../stores/auth'
+import AlertBanner from '../components/common/AlertBanner.vue'
 import BaseButton from '../components/common/BaseButton.vue'
 import BaseModal from '../components/common/BaseModal.vue'
 import { INPUT_CLASSES } from '../utils/formStyles'
@@ -13,6 +14,7 @@ const authStore = useAuthStore()
 
 const searchQuery = ref('')
 const isCreateModalOpen = ref(false)
+const actionError = ref('')
 const isRoleModalOpen = ref(false)
 const isPasswordModalOpen = ref(false)
 const isConfirmModalOpen = ref(false)
@@ -115,7 +117,18 @@ function openCreateModal() {
 function openRoleModal(user: UserItem) {
   selectedUser.value = user
   newRoleSelection.value = user.roleId
+  actionError.value = ''
   isRoleModalOpen.value = true
+}
+
+function closeRoleModal() {
+  isRoleModalOpen.value = false
+  actionError.value = ''
+}
+
+function closeConfirmModal() {
+  isConfirmModalOpen.value = false
+  actionError.value = ''
 }
 
 function openPasswordModal(user: UserItem) {
@@ -134,6 +147,7 @@ function openPasswordModal(user: UserItem) {
 function openConfirmModal(user: UserItem, action: 'deactivate' | 'activate') {
   selectedUser.value = user
   confirmActionType.value = action
+  actionError.value = ''
   isConfirmModalOpen.value = true
 }
 
@@ -185,11 +199,12 @@ async function handleCreateUser() {
 async function handleUpdateRole() {
   if (!selectedUser.value || !newRoleSelection.value) return
   isSubmitting.value = true
+  actionError.value = ''
   try {
     await usersStore.updateUserRole(selectedUser.value.id, newRoleSelection.value)
     isRoleModalOpen.value = false
   } catch (err: unknown) {
-    alert(toUserMessage(err, 'memperbarui role').message)
+    actionError.value = toUserMessage(err, 'memperbarui role').message
   } finally {
     isSubmitting.value = false
   }
@@ -219,6 +234,7 @@ async function handleChangePassword() {
 async function handleConfirmAction() {
   if (!selectedUser.value) return
   isSubmitting.value = true
+  actionError.value = ''
   try {
     if (confirmActionType.value === 'activate') {
       await usersStore.reactivateUser(selectedUser.value.id)
@@ -227,12 +243,10 @@ async function handleConfirmAction() {
     }
     isConfirmModalOpen.value = false
   } catch (err: unknown) {
-    alert(
-      toUserMessage(
+    actionError.value = toUserMessage(
         err,
         confirmActionType.value === 'activate' ? 'mengaktifkan pengguna' : 'menonaktifkan pengguna',
-      ).message,
-    )
+    ).message
   } finally {
     isSubmitting.value = false
   }
@@ -285,13 +299,14 @@ async function handleConfirmAction() {
     </div>
 
     <!-- Error State -->
-    <div
+    <AlertBanner
       v-if="usersStore.error"
-      role="alert"
-      class="rounded-card border border-rose-300 bg-rose-50 px-4 py-3"
-    >
-      <p class="text-sm font-medium text-rose-900">{{ usersStore.error }}</p>
-    </div>
+      :message="usersStore.error"
+      :kind="usersStore.errorKind ?? undefined"
+      :busy="usersStore.loading"
+      data-test="users-load-error"
+      @retry="usersStore.fetchUsers()"
+    />
 
     <!-- Table -->
     <div class="rounded-card overflow-hidden border border-slate-200 bg-white shadow-xs">
@@ -546,8 +561,14 @@ async function handleConfirmAction() {
       title="Ubah Role Pengguna"
       :description="`Pilih role baru untuk ${selectedUser?.email ?? ''}.`"
       :busy="isSubmitting"
-      @close="isRoleModalOpen = false"
+      @close="closeRoleModal"
     >
+      <AlertBanner
+        v-if="actionError"
+        :message="actionError"
+        class="mb-4"
+        data-test="user-action-error"
+      />
       <div
         v-if="!usersStore.roles.length"
         class="rounded-card mb-4 border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900"
@@ -569,7 +590,7 @@ async function handleConfirmAction() {
           type="button"
           variant="secondary"
           :disabled="isSubmitting"
-          @click="isRoleModalOpen = false"
+          @click="closeRoleModal"
         >
           Batal
         </BaseButton>
@@ -666,14 +687,20 @@ async function handleConfirmAction() {
       :title="confirmTitle"
       :description="confirmDescription"
       :busy="isSubmitting"
-      @close="isConfirmModalOpen = false"
+      @close="closeConfirmModal"
     >
+      <AlertBanner
+        v-if="actionError"
+        :message="actionError"
+        class="mb-4"
+        data-test="user-action-error"
+      />
       <div class="flex justify-end gap-3">
         <BaseButton
           type="button"
           variant="secondary"
           :disabled="isSubmitting"
-          @click="isConfirmModalOpen = false"
+          @click="closeConfirmModal"
         >
           Batal
         </BaseButton>

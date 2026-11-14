@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import BaseButton from '../../common/BaseButton.vue';
+import AlertBanner from '../../common/AlertBanner.vue';
+import {
+  RETENTION_LOAD_FALLBACK_MESSAGE,
+  withDraftKept,
+} from '../../../utils/userMessages';
 import {
   MAX_RETENTION_DAYS,
   SEVERITY_LABELS,
@@ -141,25 +146,13 @@ function durationLabel(key: Key): string {
       Memuat masa simpan log…
     </p>
 
-    <div
+    <AlertBanner
       v-else-if="!isLoaded"
-      role="alert"
-      class="rounded-card border-status-error-border bg-status-error-surface border p-4"
+      :message="store.error ?? RETENTION_LOAD_FALLBACK_MESSAGE"
+      :kind="store.errorKind ?? undefined"
       data-test="retention-load-error"
-    >
-      <p class="text-status-error text-sm font-semibold">
-        {{ store.error ?? 'Masa simpan log belum dapat dimuat.' }}
-      </p>
-      <BaseButton
-        variant="secondary"
-        size="md"
-        class="mt-3 min-h-11"
-        data-test="retention-retry"
-        @click="load"
-      >
-        Coba lagi
-      </BaseButton>
-    </div>
+      @retry="load"
+    />
 
     <form v-else class="space-y-5" novalidate @submit.prevent="save">
       <fieldset
@@ -224,14 +217,11 @@ function durationLabel(key: Key): string {
         </div>
       </fieldset>
 
-      <p
+      <AlertBanner
         v-if="validationError"
-        role="alert"
-        class="rounded-card border-status-error-border bg-status-error-surface text-status-error border px-4 py-3 text-sm font-semibold"
+        :message="validationError"
         data-test="retention-validation"
-      >
-        {{ validationError }}
-      </p>
+      />
 
       <div role="status" aria-live="polite">
         <p
@@ -243,14 +233,12 @@ function durationLabel(key: Key): string {
         </p>
       </div>
 
-      <p
+      <AlertBanner
         v-if="store.error"
-        role="alert"
-        class="rounded-card border-status-error-border bg-status-error-surface text-status-error border px-4 py-3 text-sm font-semibold"
+        :message="withDraftKept(store.error, store.errorKind)"
+        :kind="store.errorKind ?? undefined"
         data-test="retention-save-error"
-      >
-        {{ store.error }} Isian Anda masih ada di formulir.
-      </p>
+      />
 
       <div class="border-border flex flex-wrap items-center justify-end gap-3 border-t pt-3">
         <BaseButton
