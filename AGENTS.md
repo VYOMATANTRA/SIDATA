@@ -57,6 +57,8 @@ Integration tests (need Docker): `docker compose -f docker-compose.test.yml run 
 
 **Frontend error messages** — operators see the backend sentence only for 400/422, filtered by `readableServerMessage` in `frontend/src/utils/userMessages.ts`. Backend sentences that name API fields must be added to `HIDDEN_API_TOKENS` there, and new backend 400 messages shown to operators should be plain Indonesian (no field names, no zod/English defaults).
 
+**Admin error banners** — render load/save failures with `components/common/AlertBanner.vue` and pass the store's `errorKind` as `kind`; never hand-roll a banner or use `window.alert`. Expired tokens are `401` on the backend (never `403`) so `apiFetch` can refresh silently.
+
 
 ## Architecture essentials
 

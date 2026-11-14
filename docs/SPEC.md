@@ -860,6 +860,18 @@ author is stored; with nothing stored it shows the page title alone.
 - **A refused write never clears a draft** (offline, stale, duplicate title, server error). Messages
   are plain Indonesian from `ceritaAdminMessages.ts` / `userMessages.ts`: no status code, field name
   or server sentence is shown.
+- **Admin error banners follow one set of rules** (`AlertBanner`, any admin screen):
+  - An expired access token is answered `401` (never `403`), so the shared API client refreshes
+    silently and replays the request; "no permission" wording is reserved for a real `403`.
+  - When the refresh is denied the session is over: the admin shell shows one "Sesi Anda telah
+    berakhir" notice with "Masuk kembali" (back to the same page after sign-in) and per-section
+    banners stay silent. A user-initiated sign-out never shows it.
+  - "Coba lagi" appears only when repeating the request can help (network, server, rate limit,
+    unknown); never for permission, not-found, validation, conflict or stale failures.
+  - One cause, one banner: a shared load failure is shown once per screen, and a write failure is
+    not repeated in the page's load banner.
+  - Failures of secondary data (summaries) are polite status notes, not alerts. No error is shown
+    through a browser dialog (`alert`).
 - **Deleting** asks first. A page or chapter delete says that its empty chapters and sections go with
   it. A page, chapter or section that still holds paragraphs, a figure, indicators or tables is
   refused (`HAS_DEPENDENTS`): the loaded data is checked first so the dialog already names what holds
