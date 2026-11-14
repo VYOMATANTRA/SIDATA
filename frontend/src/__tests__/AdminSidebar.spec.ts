@@ -156,6 +156,18 @@ describe('AdminSidebar.vue', () => {
     expect(auditWrapper.find('[data-test="nav-sistem"]').attributes('aria-expanded')).toBe('true');
   });
 
+  it('stacks the logo above the collapse toggle and keeps the SIDATA name visible when collapsed', async () => {
+    const { wrapper } = await mountSidebar('admin');
+    await wrapper.find('[data-test="sidebar-collapse-toggle"]').trigger('click');
+
+    expect(wrapper.find('[data-test="sidebar-header"]').classes()).toContain('md:flex-col');
+    const logo = wrapper.find('img');
+    expect(logo.classes()).toContain('shrink-0');
+    expect(logo.classes()).toContain('md:h-10');
+    expect(wrapper.find('[data-test="sidebar-brand-name"]').classes()).not.toContain('md:sr-only');
+    expect(wrapper.text()).toContain('SIDATA');
+  });
+
   it('scopes the Sistem group chevron hiding and indentation reset to md: when collapsed so the mobile drawer keeps both', async () => {
     const { wrapper } = await mountSidebar('admin');
     await wrapper.find('[data-test="sidebar-collapse-toggle"]').trigger('click');

@@ -170,20 +170,31 @@ async function handleLogout() {
     ]"
     data-test="admin-sidebar"
   >
-    <div class="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-5">
+    <div
+      class="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-5"
+      :class="isCollapsed ? 'md:flex-col md:justify-center md:gap-3 md:px-2' : ''"
+      data-test="sidebar-header"
+    >
       <RouterLink
         to="/admin"
         class="focus-visible:ring-brand-cyan rounded-btn flex min-w-0 items-center gap-3 focus-visible:ring-2 focus-visible:outline-none"
+        :class="isCollapsed ? 'md:flex-col md:gap-1' : ''"
         @click="closeMobileOnSamePage('/admin')"
       >
         <img
           :src="balikpapanLogo"
           alt="Logo Kota Balikpapan"
           class="h-9 w-auto shrink-0 object-contain"
+          :class="isCollapsed ? 'md:h-10' : ''"
         />
-        <span :class="labelClass(isCollapsed, 'min-w-0 text-left')">
-          <span class="block truncate text-base leading-tight font-bold text-white">SIDATA</span>
-          <span class="block truncate text-xs leading-tight text-white/60">
+        <span class="min-w-0 text-left" :class="isCollapsed ? 'md:text-center' : ''">
+          <span
+            class="block truncate text-base leading-tight font-bold text-white"
+            :class="isCollapsed ? 'md:text-xs' : ''"
+            data-test="sidebar-brand-name"
+            >SIDATA</span
+          >
+          <span :class="labelClass(isCollapsed, 'block truncate text-xs leading-tight text-white/60')">
             Sistem Informasi Data Terpadu Kelurahan
           </span>
         </span>
