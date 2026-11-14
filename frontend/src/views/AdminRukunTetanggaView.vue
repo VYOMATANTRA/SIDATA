@@ -504,7 +504,7 @@ async function setSampleStatus(isSample: boolean) {
         <p class="text-sm text-slate-600">{{ filtered.length }} RT</p>
       </div>
 
-      <div class="mt-4 overflow-x-auto rounded border border-slate-200">
+      <div class="relative mt-4 overflow-x-auto rounded border border-slate-200">
         <table class="w-full text-left text-sm">
           <thead class="bg-slate-50 text-slate-700">
             <tr>

@@ -392,7 +392,7 @@ function handleSubmit(): void {
         ada data, bukan nol.
       </p>
 
-      <div class="mt-3 overflow-x-auto rounded-card border border-slate-200">
+      <div class="relative mt-3 overflow-x-auto rounded-card border border-slate-200">
         <table class="w-full min-w-[34rem] border-collapse text-sm">
           <caption class="sr-only">
             Baris data
