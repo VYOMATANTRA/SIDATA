@@ -156,6 +156,42 @@ describe('AdminSidebar.vue', () => {
     expect(auditWrapper.find('[data-test="nav-sistem"]').attributes('aria-expanded')).toBe('true');
   });
 
+  it('stacks the logo above the collapse toggle and keeps the SIDATA name visible when collapsed', async () => {
+    const { wrapper } = await mountSidebar('admin');
+    await wrapper.find('[data-test="sidebar-collapse-toggle"]').trigger('click');
+
+    expect(wrapper.find('[data-test="sidebar-header"]').classes()).toContain('md:flex-col');
+    const logo = wrapper.find('img');
+    expect(logo.classes()).toContain('shrink-0');
+    expect(logo.classes()).toContain('md:h-10');
+    const brandName = wrapper.find('[data-test="sidebar-brand-name"]');
+    expect(brandName.classes()).not.toContain('md:sr-only');
+    expect(brandName.element.parentElement?.classList.contains('md:sr-only')).toBe(false);
+    const subtitle = brandName.element.nextElementSibling;
+    expect(subtitle?.classList.contains('md:sr-only')).toBe(true);
+    expect(wrapper.text()).toContain('SIDATA');
+  });
+
+  it('keeps the mobile drawer header expanded when the desktop rail preference is collapsed', async () => {
+    window.localStorage.setItem('sidata_admin_sidebar_collapsed', '1');
+    setActivePinia(createPinia());
+    const authStore = useAuthStore();
+    authStore.user = { id: 'u1', email: 'u@example.com', role: 'admin' };
+    authStore.accessToken = 'token';
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+    const wrapper = mount(AdminSidebar, {
+      props: { mobileOpen: true },
+      global: { plugins: [router] },
+    });
+
+    const subtitle = wrapper.find('[data-test="sidebar-brand-name"]').element.nextElementSibling;
+    // Only md:-prefixed hiding: a bare `sr-only` would hide the label in the drawer too.
+    expect(subtitle?.classList.contains('sr-only')).toBe(false);
+    expect(wrapper.find('[data-test="sidebar-collapse-toggle"]').attributes('inert')).toBeDefined();
+  });
+
   it('scopes the Sistem group chevron hiding and indentation reset to md: when collapsed so the mobile drawer keeps both', async () => {
     const { wrapper } = await mountSidebar('admin');
     await wrapper.find('[data-test="sidebar-collapse-toggle"]').trigger('click');
@@ -170,7 +206,7 @@ describe('AdminSidebar.vue', () => {
     expect(sistemButtonIcons[1]?.classes()).toContain('md:hidden');
   });
 
-  it('toggles collapse state via the collapse button with aria-expanded and a constant aria-label', async () => {
+  it('toggles collapse state with aria-expanded and a label that matches the state, and back again', async () => {
     const { wrapper } = await mountSidebar('admin');
 
     const toggle = wrapper.find('[data-test="sidebar-collapse-toggle"]');
@@ -180,7 +216,15 @@ describe('AdminSidebar.vue', () => {
 
     await toggle.trigger('click');
     expect(toggle.attributes('aria-expanded')).toBe('false');
+    expect(toggle.attributes('aria-label')).toBe('Bentangkan sidebar');
+    expect(wrapper.find('nav').classes()).toContain('md:w-20');
+    expect(window.localStorage.getItem('sidata_admin_sidebar_collapsed')).toBe('1');
+
+    await toggle.trigger('click');
+    expect(toggle.attributes('aria-expanded')).toBe('true');
     expect(toggle.attributes('aria-label')).toBe('Ciutkan sidebar');
+    expect(wrapper.find('nav').classes()).toContain('md:w-72');
+    expect(window.localStorage.getItem('sidata_admin_sidebar_collapsed')).toBe('0');
   });
 
   it('renders as a labelled nav landmark', async () => {

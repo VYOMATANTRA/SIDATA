@@ -11,8 +11,10 @@
  * feedback-loop guard is actually exercised.
  *
  * Mock limitations:
+ * - `latLngToContainerPoint` / `containerPointToLatLng` use a flat per-pixel scale measured from the
+ *   map centre (origin = centre) and round to whole pixels like Leaflet, enough for a pan-then-read-back round trip.
  * - `panBy` does not perform pixel snapping against real browser display scaling.
- * - `panTo` ignores the `animate` option and immediately updates center.
+ * - `panTo` ignores the `animate` option and immediately updates center and fires `moveend`.
  * - Pin mode touch and pointer interactions (such as pointer-cancel) require real-browser verification.
  */
 import { vi } from 'vitest';
@@ -68,6 +70,9 @@ export const leafletMap = {
   panBy: vi.fn<(offset: [number, number], options?: unknown) => unknown>(),
   panTo: vi.fn<(center: [number, number], options?: unknown) => unknown>(),
   getCenter: vi.fn<() => { lat: number; lng: number }>(),
+  latLngToContainerPoint: vi.fn<(latLng: [number, number]) => { x: number; y: number }>(),
+  containerPointToLatLng:
+    vi.fn<(point: { x: number; y: number }) => { lat: number; lng: number }>(),
   getZoom: vi.fn<() => number>(),
   getBounds: vi.fn<() => { contains: (point: unknown) => boolean }>(),
   on: vi.fn<(name: string, handler: Handler) => unknown>(),
@@ -115,8 +120,8 @@ function wire(): void {
   });
   leafletMap.panTo.mockImplementation((center) => {
     leafletState.center = { lat: center[0], lng: center[1] };
-    // Real Leaflet fires `moveend` once the pan finishes, i.e. after the call has returned.
-    queueMicrotask(() => leafletState.handlers.moveend?.());
+    // Real Leaflet fires `moveend` synchronously for a non-animated `panTo` (the only mode used).
+    leafletState.handlers.moveend?.();
     return leafletMap;
   });
   leafletMap.invalidateSize.mockImplementation(() => {
@@ -124,6 +129,17 @@ function wire(): void {
     leafletState.handlers.moveend?.();
     return leafletMap;
   });
+  const perPixelDegrees = () => 360 / (256 * 2 ** leafletState.zoom);
+  const centerCos = () => Math.cos((leafletState.center.lat * Math.PI) / 180);
+  leafletMap.latLngToContainerPoint.mockImplementation((latLng) => ({
+    // Real Leaflet rounds container points to whole pixels (`latLngToLayerPoint` -> `_round()`).
+    x: Math.round((latLng[1] - leafletState.center.lng) / perPixelDegrees()),
+    y: Math.round((leafletState.center.lat - latLng[0]) / (perPixelDegrees() * centerCos())),
+  }));
+  leafletMap.containerPointToLatLng.mockImplementation((point) => ({
+    lat: leafletState.center.lat - point.y * perPixelDegrees() * centerCos(),
+    lng: leafletState.center.lng + point.x * perPixelDegrees(),
+  }));
   leafletMap.getCenter.mockImplementation(() => ({ ...leafletState.center }));
   leafletMap.getZoom.mockImplementation(() => leafletState.zoom);
   leafletMap.getBounds.mockImplementation(() => ({ contains: () => leafletState.inBounds }));
