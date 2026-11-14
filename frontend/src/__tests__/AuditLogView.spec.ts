@@ -247,4 +247,32 @@ describe('AuditLogView', () => {
     expect(footer.text()).toContain('data');
     expect(footer.text()).toContain('Selanjutnya');
   });
+
+  it.each([
+    [500, true],
+    [403, false],
+  ])('load error (HTTP %i) shows retry button: %s', async (status, retry) => {
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'c' }) } as Response;
+      }
+      if (url.includes('/summary')) {
+        return { ok: true, json: async () => ({ counts: {}, openCritical: 0 }) } as Response;
+      }
+      return { ok: false, status, json: async () => ({ error: 'x' }) } as Response;
+    });
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    useAuthStore().setAuth({ id: 'a', email: 'a@example.com', role: 'admin' }, 'mock-token');
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/audit-logs', component: AuditLogView }],
+    });
+    await router.push('/audit-logs');
+    await router.isReady();
+    const wrapper = mount(AuditLogView, { global: { plugins: [pinia, router] } });
+    await vi.waitFor(() => expect(wrapper.find('[data-test="audit-load-error"]').exists()).toBe(true));
+    expect(wrapper.find('[data-test="alert-banner-retry"]').exists()).toBe(retry);
+  });
 });

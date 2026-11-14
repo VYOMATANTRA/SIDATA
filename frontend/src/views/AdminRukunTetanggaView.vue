@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import AlertBanner from '../components/common/AlertBanner.vue';
 import BaseButton from '../components/common/BaseButton.vue';
 import BaseModal from '../components/common/BaseModal.vue';
 import RtLocationPicker, { type PickedLocation } from '../components/maps/RtLocationPicker.vue';
@@ -485,7 +486,14 @@ async function setSampleStatus(isSample: boolean) {
       <p v-if="statusMessage" class="mt-3 text-sm text-emerald-800" role="status">
         {{ statusMessage }}
       </p>
-      <p v-if="loadError" class="mt-3 text-sm text-rose-700" role="alert">{{ loadError }}</p>
+      <AlertBanner
+        v-if="loadError"
+        :message="loadError"
+        :busy="isLoading"
+        class="mt-3"
+        data-test="rt-load-error"
+        @retry="loadLeaders"
+      />
 
       <div class="mt-4 flex flex-wrap items-end gap-3">
         <div class="w-full sm:w-72">
@@ -613,7 +621,12 @@ async function setSampleStatus(isSample: boolean) {
           Terapkan impor
         </BaseButton>
       </div>
-      <p v-if="importError" class="mt-3 text-sm text-rose-700" role="alert">{{ importError }}</p>
+      <AlertBanner
+        v-if="importError"
+        :message="importError"
+        class="mt-3"
+        data-test="rt-import-error"
+      />
       <p v-if="importResult" class="mt-3 text-sm text-emerald-800" role="status">
         {{ importResult }}
       </p>
@@ -714,15 +727,19 @@ async function setSampleStatus(isSample: boolean) {
           v-model="draft.location"
           :disabled="isSaving"
         />
-        <p v-if="saveError" class="text-sm text-rose-700" role="alert">{{ saveError }}</p>
-        <BaseButton
-          v-if="locationConflict"
-          type="button"
-          variant="secondary"
-          :disabled="isLoading"
-          @click="reloadEditor"
-          >Muat ulang data RT</BaseButton
-        >
+        <AlertBanner v-if="saveError" :message="saveError" data-test="rt-save-error">
+          <template v-if="locationConflict" #action>
+            <BaseButton
+              type="button"
+              variant="secondary"
+              class="min-h-11"
+              :disabled="isLoading"
+              @click="reloadEditor"
+            >
+              Muat ulang data RT
+            </BaseButton>
+          </template>
+        </AlertBanner>
         <div class="flex justify-end gap-3">
           <BaseButton variant="secondary" size="md" :disabled="isSaving" @click="closeEditor">
             Batal

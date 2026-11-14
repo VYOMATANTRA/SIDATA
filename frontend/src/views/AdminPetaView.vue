@@ -15,6 +15,7 @@
  */
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
+import AlertBanner from '../components/common/AlertBanner.vue';
 import BaseButton from '../components/common/BaseButton.vue';
 import BaseModal from '../components/common/BaseModal.vue';
 import AdminPointList from '../components/admin/maps/AdminPointList.vue';
@@ -369,33 +370,21 @@ async function reloadAll(): Promise<void> {
         </BaseButton>
       </div>
 
-      <div
+      <AlertBanner
         v-if="mapsStore.error"
-        role="alert"
-        class="border-status-error-border bg-status-error-surface text-status-error flex flex-wrap items-center justify-between gap-3 rounded-card border px-4 py-3 text-sm"
+        :message="mapsStore.error"
+        :kind="mapsStore.errorKind ?? undefined"
+        :busy="mapsStore.isLoading"
         data-test="peta-load-error"
-      >
-        <p>{{ mapsStore.error }}</p>
-        <BaseButton
-          variant="secondary"
-          size="md"
-          class="min-h-11"
-          :disabled="mapsStore.isLoading"
-          data-test="peta-retry"
-          @click="reloadAll"
-        >
-          Coba lagi
-        </BaseButton>
-      </div>
+        @retry="reloadAll"
+      />
 
-      <div
+      <AlertBanner
         v-if="pageError"
-        role="alert"
-        class="border-status-warning-border bg-status-warning-surface text-status-warning rounded-card border px-4 py-3 text-sm"
+        :message="pageError"
+        tone="warning"
         data-test="peta-page-error"
-      >
-        {{ pageError }}
-      </div>
+      />
 
       <p v-if="points.length > 0" class="text-brand-navy text-sm" data-test="peta-counts">
         {{ points.length }} titik: {{ counts.ketua_rt }} Ketua RT, {{ counts.bank_sampah }} Bank

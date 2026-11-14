@@ -9,6 +9,7 @@
  * Header title and subtitle live in route `meta` (router/index.ts), so this view starts at <h2>.
  */
 import { onMounted, ref } from 'vue';
+import AlertBanner from '../components/common/AlertBanner.vue';
 import PublikasiCatalogForm from '../components/admin/publikasi/PublikasiCatalogForm.vue';
 import type { BlockSavePayload } from '../components/data/blocks/blockFormShared';
 import { useContentBlocksStore, type ContentBlock } from '../stores/contentBlocks.store';
@@ -30,6 +31,11 @@ const formVersion = ref(0);
  * a save or "Muat versi terbaru" replaces it.
  */
 const block = ref<ContentBlock | null>(null);
+
+async function reloadCatalog() {
+  await store.fetchBlocks(true);
+  block.value = store.serverBlocks[BLOCK_SLUG] ?? null;
+}
 
 onMounted(async () => {
   await store.fetchBlocks(true);
@@ -91,12 +97,20 @@ function handleCancel(): void {
     <p v-if="store.isLoading && !block" class="text-text-muted text-sm" role="status">
       Memuat katalog publikasi…
     </p>
+    <AlertBanner
+      v-else-if="!block && store.error"
+      :message="store.error"
+      :kind="store.errorKind ?? undefined"
+      :busy="store.isLoading"
+      data-test="publikasi-unavailable"
+      @retry="reloadCatalog"
+    />
     <p
       v-else-if="!block"
       class="rounded-card border-border bg-surface-muted text-text-muted border px-4 py-3 text-sm"
       data-test="publikasi-unavailable"
     >
-      {{ store.error || 'Katalog publikasi belum tersedia untuk lingkungan ini.' }}
+      Katalog publikasi belum tersedia untuk lingkungan ini.
     </p>
 
     <PublikasiCatalogForm

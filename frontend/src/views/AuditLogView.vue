@@ -10,6 +10,7 @@ import {
   ChevronRightIcon,
 } from '@heroicons/vue/24/outline'
 import { useAuditStore, type AuditLogItem } from '../stores/audit.store'
+import AlertBanner from '../components/common/AlertBanner.vue'
 import { toUserMessage } from '../utils/userMessages'
 
 const auditStore = useAuditStore()
@@ -279,27 +280,26 @@ onMounted(async () => {
       </fieldset>
 
       <!-- Error States -->
-      <div
+      <AlertBanner
         v-if="auditStore.error"
-        class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
-        role="alert"
-      >
-        {{ auditStore.error }}
-      </div>
-      <div
+        :message="auditStore.error"
+        :kind="auditStore.errorKind ?? undefined"
+        :busy="auditStore.loading"
+        data-test="audit-load-error"
+        @retry="auditStore.fetchLogs()"
+      />
+      <AlertBanner
         v-if="auditStore.summaryError"
-        class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
-        role="alert"
-      >
-        Ringkasan tidak tersedia: {{ auditStore.summaryError }}
-      </div>
-      <div
+        :message="`Ringkasan tidak tersedia: ${auditStore.summaryError}`"
+        tone="warning"
+        live="polite"
+        data-test="audit-summary-error"
+      />
+      <AlertBanner
         v-if="acknowledgeError"
-        class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
-        role="alert"
-      >
-        {{ acknowledgeError }}
-      </div>
+        :message="acknowledgeError"
+        data-test="audit-acknowledge-error"
+      />
 
       <!-- Table -->
       <div class="rounded-card overflow-hidden border border-slate-200 bg-white shadow-xs">
