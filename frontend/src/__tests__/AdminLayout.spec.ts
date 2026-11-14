@@ -592,7 +592,7 @@ describe('AdminLayout.vue — mobile sidebar drawer', () => {
     await router.isReady();
 
     const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
-    expect(wrapper.classes()).toContain('overflow-hidden');
+    expect(wrapper.classes()).toEqual(expect.arrayContaining(['relative', 'overflow-clip']));
     const shell = wrapper.find('[data-test="admin-content-shell"]');
     expect(shell.classes()).toEqual(expect.arrayContaining(['relative', 'overflow-y-auto']));
   });

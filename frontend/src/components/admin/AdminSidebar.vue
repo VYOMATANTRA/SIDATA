@@ -163,7 +163,7 @@ async function handleLogout() {
     id="admin-sidebar"
     ref="sidebarRef"
     aria-label="Navigasi Admin"
-    class="bg-brand-navy fixed inset-y-0 left-0 z-40 flex h-full w-72 flex-col border-r border-white/10 text-white transition-all duration-200 md:visible md:static md:translate-x-0"
+    class="bg-brand-navy fixed inset-y-0 left-0 z-40 flex h-full w-72 flex-col border-r border-white/10 text-white transition-all duration-200 md:visible md:relative md:translate-x-0"
     :class="[
       mobileOpen ? 'visible translate-x-0' : 'invisible -translate-x-full',
       isCollapsed ? 'md:w-20' : 'md:w-72',
@@ -219,7 +219,7 @@ async function handleLogout() {
       </button>
     </div>
 
-    <ul id="admin-sidebar-nav-list" class="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+    <ul id="admin-sidebar-nav-list" class="relative flex-1 space-y-1 overflow-y-auto px-3 py-4">
       <li v-for="entry in visibleNav" :key="entry.label">
         <RouterLink
           v-if="!isAdminNavGroup(entry)"
