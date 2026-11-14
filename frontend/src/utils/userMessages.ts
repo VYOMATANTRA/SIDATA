@@ -91,9 +91,22 @@ export const USER_MESSAGES: Readonly<Record<FailureKind, string>> = {
 export const READ_USER_MESSAGES: Readonly<Partial<Record<FailureKind, string>>> = {
   network: 'Tidak dapat terhubung ke server. Periksa koneksi lalu coba lagi.',
   session: SESSION_EXPIRED_NEUTRAL_MESSAGE,
+  forbidden: 'Akun Anda tidak memiliki akses ke bagian ini.',
   server: 'Terjadi kendala di server. Coba lagi beberapa saat lagi.',
   unknown: 'Terjadi kendala di server. Coba lagi beberapa saat lagi.',
 };
+
+const RETRYABLE_KINDS: ReadonlySet<FailureKind> = new Set([
+  'network',
+  'server',
+  'unknown',
+  'rate_limited',
+]);
+
+/** True when repeating the same request can plausibly succeed. */
+export function isRetryable(kind: FailureKind): boolean {
+  return RETRYABLE_KINDS.has(kind);
+}
 
 /** True for HTTP methods that never change data. An unknown method counts as a write. */
 export function isReadMethod(method: unknown): boolean {

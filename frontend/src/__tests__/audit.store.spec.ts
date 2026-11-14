@@ -318,7 +318,7 @@ describe('audit store', () => {
     await store.fetchLogs();
 
     expect(store.logs).toHaveLength(0);
-    expect(store.error).toBe(`Gagal memuat audit log. ${USER_MESSAGES.forbidden}`);
+    expect(store.error).toBe(`Gagal memuat audit log. ${READ_USER_MESSAGES.forbidden}`);
   });
 
   it('discards a stale fetchLogs response that resolves after a newer one', async () => {
@@ -446,6 +446,8 @@ describe('audit store', () => {
 
     // Both failures surface independently instead of one overwriting the other.
     expect(store.error).toBe(`Gagal memuat audit log. ${READ_USER_MESSAGES.server}`);
-    expect(store.summaryError).toBe(`Gagal memuat ringkasan audit log. ${USER_MESSAGES.forbidden}`);
+    expect(store.summaryError).toBe(
+      `Gagal memuat ringkasan audit log. ${READ_USER_MESSAGES.forbidden}`,
+    );
   });
 });
