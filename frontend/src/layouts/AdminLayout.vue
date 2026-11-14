@@ -63,7 +63,7 @@ watch(
 </script>
 
 <template>
-  <div class="flex h-dvh bg-slate-50">
+  <div class="flex h-dvh overflow-hidden bg-slate-50">
     <a
       href="#admin-main-content"
       class="focus:ring-brand-indigo focus:rounded-btn sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-slate-900 focus:ring-2 focus:outline-none"
@@ -83,7 +83,7 @@ watch(
 
     <div
       ref="contentShellRef"
-      class="flex min-w-0 flex-1 flex-col overflow-y-auto"
+      class="relative flex min-w-0 flex-1 flex-col overflow-y-auto"
       :inert="isMobileSidebarOpen ? true : undefined"
       data-test="admin-content-shell"
     >

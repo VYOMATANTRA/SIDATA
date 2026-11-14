@@ -585,4 +585,15 @@ describe('AdminLayout.vue — mobile sidebar drawer', () => {
     const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
     expect(wrapper.classes()).toContain('h-dvh');
   });
+
+  it('keeps absolutely positioned content (sr-only) inside the inner scroller so the window never scrolls', async () => {
+    const router = createTestRouter();
+    await router.push('/admin');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
+    expect(wrapper.classes()).toContain('overflow-hidden');
+    const shell = wrapper.find('[data-test="admin-content-shell"]');
+    expect(shell.classes()).toEqual(expect.arrayContaining(['relative', 'overflow-y-auto']));
+  });
 });
