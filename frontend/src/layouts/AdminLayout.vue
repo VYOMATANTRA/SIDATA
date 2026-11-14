@@ -118,6 +118,7 @@ watch(
               label="Masuk kembali"
               size="md"
               :with-arrow="false"
+              class="font-semibold underline underline-offset-2"
               data-test="session-ended-login"
             />
           </template>
