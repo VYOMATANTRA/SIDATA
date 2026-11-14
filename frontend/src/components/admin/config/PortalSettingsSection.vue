@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import BaseButton from '../../common/BaseButton.vue';
+import AlertBanner from '../../common/AlertBanner.vue';
 import PublicSettingsForm from '../../data/PublicSettingsForm.vue';
 import { useSettingsStore, type PublicSettings } from '../../../stores/settings.store';
 import { toUserMessage } from '../../../utils/userMessages';
@@ -11,7 +11,14 @@ import { toUserMessage } from '../../../utils/userMessages';
  * failed map save never costs the contact edits (and vice versa). The form is shown only once
  * the stored values have actually loaded, so the built-in defaults can never be saved over them.
  */
-const props = defineProps<{ part: 'identity' | 'map' }>();
+const props = withDefaults(
+  defineProps<{
+    part: 'identity' | 'map';
+    /** The page mounts this section twice; only one instance shows the shared load failure. */
+    showLoadError?: boolean;
+  }>(),
+  { showLoadError: true },
+);
 
 const emit = defineEmits<{ (e: 'dirty-change', dirty: boolean): void }>();
 
@@ -76,19 +83,22 @@ function discard(): void {
       Memuat pengaturan…
     </p>
 
-    <div
-      v-else-if="!store.isLoaded"
-      role="alert"
-      class="rounded-card border-status-error-border bg-status-error-surface border p-4"
+    <AlertBanner
+      v-else-if="!store.isLoaded && showLoadError"
+      :message="store.error ?? 'Pengaturan belum dapat dimuat.'"
+      :kind="store.errorKind ?? undefined"
+      :busy="loading"
       data-test="portal-load-error"
+      @retry="load"
+    />
+
+    <p
+      v-else-if="!store.isLoaded"
+      class="text-text-muted text-sm"
+      data-test="portal-load-elsewhere"
     >
-      <p class="text-status-error text-sm font-semibold">
-        {{ store.error ?? 'Pengaturan belum dapat dimuat.' }}
-      </p>
-      <BaseButton variant="secondary" size="md" class="mt-3 min-h-11" @click="load">
-        Coba lagi
-      </BaseButton>
-    </div>
+      Pengaturan belum dapat dimuat. Lihat keterangan di bagian Identitas dan kontak portal.
+    </p>
 
     <template v-else>
       <div role="status" aria-live="polite">

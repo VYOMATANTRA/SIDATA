@@ -147,6 +147,15 @@ describe('AdminCeritaView', () => {
       wrapper.unmount();
     });
 
+    it('shows a forbidden load failure without a retry button', async () => {
+      fake.failNext((r) => r.url === '/api/pages?include=sections', fake.json({ error: 'x' }, 403));
+      const wrapper = await mountView();
+
+      expect(wrapper.find('[data-test="load-error"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test="alert-banner-retry"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
     it('shows a retry for a failed load and loads once it works', async () => {
       fake.failNext(
         (r) => r.url === '/api/pages?include=sections',
@@ -159,7 +168,7 @@ describe('AdminCeritaView', () => {
       expect(error.text()).not.toMatch(RAW_TERMS);
       expect(error.text()).not.toContain('SQL');
 
-      await wrapper.find('[data-test="load-retry"]').trigger('click');
+      await wrapper.find('[data-test="alert-banner-retry"]').trigger('click');
       await flushPromises();
       expect(wrapper.find('[data-test="load-error"]').exists()).toBe(false);
       expect(pageTitles(wrapper)).toContain('Kependudukan');

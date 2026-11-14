@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import BaseButton from '../components/common/BaseButton.vue';
+import AlertBanner from '../components/common/AlertBanner.vue';
 import BaseModal from '../components/common/BaseModal.vue';
 import ComparisonTemplateForm from '../components/templates/ComparisonTemplateForm.vue';
 import {
@@ -233,23 +234,14 @@ function retry(): void {
 
     <p class="sr-only" role="status" aria-live="polite">{{ statusMessage }}</p>
 
-    <div
+    <AlertBanner
       v-if="store.error"
-      role="alert"
-      class="rounded-card border-status-error-border bg-status-error-surface border p-4"
+      :message="store.error"
+      :kind="store.errorKind ?? undefined"
+      :busy="store.isLoading"
       data-test="list-error"
-    >
-      <p class="text-status-error text-sm font-semibold">{{ store.error }}</p>
-      <BaseButton
-        variant="secondary"
-        size="md"
-        class="mt-3 min-h-11"
-        :disabled="store.isLoading"
-        @click="retry"
-      >
-        {{ store.isLoading ? 'Memuat ulang…' : 'Coba lagi' }}
-      </BaseButton>
-    </div>
+      @retry="retry"
+    />
 
     <p
       v-if="store.isLoading && !store.isLoaded"
@@ -381,7 +373,7 @@ function retry(): void {
           <button
             ref="keepEditingButton"
             type="button"
-            class="bg-brand-navy hover:bg-brand-navy/90 focus-visible:outline-focus-ring min-h-11 rounded-btn px-5 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+            class="bg-brand-navy hover:bg-brand-navy/90 focus-visible:outline-focus-ring rounded-btn min-h-11 px-5 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2"
             data-test="discard-keep"
             @click="keepEditing"
           >
