@@ -54,29 +54,6 @@ export function sameLocation(a: GeoPoint | null, b: GeoPoint | null): boolean {
   );
 }
 
-/**
- * Moves a location by a number of screen pixels at the given zoom level (Web Mercator, 256 px
- * tiles), so one key press covers the same distance on screen whether the map is zoomed in on a
- * street or out on the whole city.
- */
-export function moveLocation(
-  from: GeoPoint,
-  direction: PickerDirection,
-  zoom: number,
-  large = false,
-): GeoPoint {
-  const pixels = large ? LARGE_STEP_PIXELS : STEP_PIXELS;
-  const degreesPerPixelLongitude = 360 / (256 * 2 ** zoom);
-  const degreesPerPixelLatitude =
-    degreesPerPixelLongitude * Math.cos((from.latitude * Math.PI) / 180);
-  const moved: GeoPoint = { ...from };
-  if (direction === 'north') moved.latitude += pixels * degreesPerPixelLatitude;
-  if (direction === 'south') moved.latitude -= pixels * degreesPerPixelLatitude;
-  if (direction === 'east') moved.longitude += pixels * degreesPerPixelLongitude;
-  if (direction === 'west') moved.longitude -= pixels * degreesPerPixelLongitude;
-  return normalizeLocation(moved) ?? from;
-}
-
 /** Screen offset `[x, y]` in pixels for one step (y grows downwards, so north is negative). */
 export function directionOffset(direction: PickerDirection, large = false): [number, number] {
   const pixels = large ? LARGE_STEP_PIXELS : STEP_PIXELS;

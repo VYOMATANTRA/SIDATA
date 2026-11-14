@@ -82,6 +82,20 @@ describe('LocationPicker', () => {
       expect(leafletState.markerOptions).toMatchObject({ draggable: true, keyboard: false });
     });
 
+    it('pans the basemap by whole pixels on arrow keys and keeps the pin at its screen position', async () => {
+      const wrapper = await mountPicker({ modelValue: PIN });
+      leafletState.center = { lat: PIN.latitude, lng: PIN.longitude };
+      await click(wrapper, 'location-picker-keyboard');
+      const region = wrapper.get('[data-test="location-picker-region"]');
+      await region.trigger('keydown', { key: 'ArrowRight' });
+      expect(leafletMap.panBy).toHaveBeenLastCalledWith([16, 0], { animate: false });
+      await region.trigger('keydown', { key: 'ArrowUp', shiftKey: true });
+      expect(leafletMap.panBy).toHaveBeenLastCalledWith([0, -80], { animate: false });
+      const moved = lastEmitted(wrapper)!;
+      expect(moved.longitude).toBeGreaterThan(PIN.longitude);
+      expect(moved.latitude).toBeGreaterThan(PIN.latitude);
+    });
+
     it('moves the pin with the direction buttons', async () => {
       const wrapper = await mountPicker({ modelValue: PIN });
       await click(wrapper, 'location-picker-north');

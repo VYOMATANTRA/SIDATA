@@ -14,7 +14,9 @@
  *
  * Every action also has a non-pointer path: direction buttons, zoom buttons, a labelled keyboard
  * mode (arrow keys, Shift for a larger step, + and - to zoom, Esc to leave) and, for pin mode,
- * a button that drops the pin at the map centre.
+ * a button that drops the pin at the map centre. In both modes the arrows and direction buttons
+ * pan the basemap by whole screen pixels; in pin mode the pin keeps its place on screen, so its
+ * coordinates shift in the pressed direction.
  *
  * The picker only ever emits a draft through `update:modelValue`; saving is the parent form's
  * job. "Use my device location" is a draft change like any other, never an automatic save.
@@ -32,7 +34,6 @@ import {
   DIRECTION_LABELS,
   clampZoom,
   directionOffset,
-  moveLocation,
   normalizeLocation,
   sameLocation,
   type GeoPoint,
@@ -553,12 +554,21 @@ function nudge(direction: PickerDirection, large = false, viaKeyboard = false): 
     else announce(message);
     return;
   }
-  const moved = moveLocation(base, direction, viewZoom.value, large);
+  // Same as viewport mode: the map slides under the pin by whole screen pixels, so the pin keeps
+  // its place on screen and the editor sees the basemap move, not the marker.
+  if (!map.getBounds().contains([base.latitude, base.longitude])) {
+    runSilently(() => map?.panTo([base.latitude, base.longitude], { animate: false }));
+  }
+  const screenPoint = map.latLngToContainerPoint([base.latitude, base.longitude]);
+  const [dx, dy] = directionOffset(direction, large);
+  runSilently(() => map?.panBy([dx, dy], { animate: false }));
+  const moved = normalizeLocation({
+    latitude: map.containerPointToLatLng(screenPoint).lat,
+    longitude: map.containerPointToLatLng(screenPoint).lng,
+  });
+  if (!moved) return;
   placeMarker(moved);
   emitValue(moved);
-  if (!map.getBounds().contains([moved.latitude, moved.longitude])) {
-    runSilently(() => map?.panTo([moved.latitude, moved.longitude], { animate: false }));
-  }
   const message = `Pin digeser ke ${DIRECTION_LABELS[direction]}.`;
   if (viaKeyboard) announceNudge(message);
   else announce(message);
