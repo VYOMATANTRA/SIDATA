@@ -349,8 +349,8 @@ export const publikasiItemSchema = z
       path: ['isAvailableOnline'],
     },
   )
-  .refine((item) => !item.coverIsAuto || Boolean(item.coverAssetId), {
-    message: 'Sampul otomatis memerlukan berkas sampul',
+  .refine((item) => !item.coverIsAuto || Boolean(item.coverAssetId && item.documentAssetId), {
+    message: 'Sampul otomatis memerlukan berkas dokumen dan berkas sampul',
     path: ['coverIsAuto'],
   })
   .strip();

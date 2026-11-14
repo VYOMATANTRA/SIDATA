@@ -828,7 +828,7 @@ rujukan) with Naik / Turun / Hapus (never drag-only) and Tambah publikasi.
   `{ title, body, publications, expectedUpdatedAt }`. In one transaction it locks the block, checks the
   token (`STALE_WRITE`), attaches/detaches the files with `attachMedia`/`detachMedia` (references
   `('content_block', <block id>, 'publikasi-document' | 'publikasi-cover')`; one asset belongs to one
-  row), writes `content_block.updated` with counts only (no file names or ids) and invalidates the
+  row), writes `content_block.updated` with counts and the titles of added, changed and removed rows (no file names or ids) and invalidates the
   content-block caches. The generic `PATCH /api/content-blocks/publikasi-katalog` refuses metadata
   changes (409 `PUBLIKASI_BLOCK_PROTECTED`). A failed save keeps every field as typed; a stale write
   shows "Muat versi terbaru", which replaces the draft only when the editor asks.

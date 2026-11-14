@@ -174,6 +174,94 @@ describe('PublikasiCatalogForm uploads', () => {
     expect('coverAssetId' in payloadOf(second)).toBe(false);
   });
 
+  it('ignores a slow cover render when the document was swapped meanwhile', async () => {
+    const OTHER_ID = '44444444-4444-4444-8444-444444444444';
+    let finishRender: (file: File | null) => void = () => undefined;
+    mocks.render.mockImplementation(
+      () => new Promise<File | null>((resolve) => (finishRender = resolve)),
+    );
+    mocks.uploadMedia
+      .mockResolvedValueOnce({ id: DOC_ID, byteSize: 10, originalName: 'a.pdf' })
+      .mockResolvedValueOnce({ id: OTHER_ID, byteSize: 10, originalName: 'b.docx' });
+
+    const wrapper = await mountRow();
+    pick(wrapper, DOC, 'a.pdf', 'application/pdf');
+    await flushPromises();
+    // While page 1 of A is still rendering, the editor replaces A with a DOCX.
+    pick(
+      wrapper,
+      DOC,
+      'b.docx',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    await flushPromises();
+    finishRender(new File(['j'], 'a.jpg', { type: 'image/jpeg' }));
+    await flushPromises();
+
+    // The late cover of A was neither uploaded nor attached to the row that now holds B.
+    expect(mocks.uploadMedia).toHaveBeenCalledTimes(2);
+    await submit(wrapper);
+    const saved = payloadOf(wrapper);
+    expect(saved.documentAssetId).toBe(OTHER_ID);
+    expect('coverAssetId' in saved).toBe(false);
+  });
+
+  it('ignores a cover that finishes uploading after the document was removed', async () => {
+    let finishCover: (value: unknown) => void = () => undefined;
+    mocks.render.mockResolvedValue(new File(['j'], 'a.jpg', { type: 'image/jpeg' }));
+    mocks.uploadMedia
+      .mockResolvedValueOnce({ id: DOC_ID, byteSize: 10, originalName: 'a.pdf' })
+      .mockImplementationOnce(() => new Promise((resolve) => (finishCover = resolve)));
+
+    const wrapper = await mountRow();
+    pick(wrapper, DOC, 'a.pdf', 'application/pdf');
+    await flushPromises();
+    await wrapper.find('[data-test="document-remove"]').trigger('click');
+    finishCover({ id: COVER_ID, byteSize: 10, originalName: 'a.jpg' });
+    await flushPromises();
+    await wrapper.find('select#block-pub-mode-0').setValue('none');
+    await submit(wrapper);
+    expect('coverAssetId' in payloadOf(wrapper)).toBe(false);
+  });
+
+  it('drops an automatic cover when the source is switched away from a file', async () => {
+    const wrapper = await mountRow({
+      ...BASE,
+      documentAssetId: DOC_ID,
+      coverAssetId: COVER_ID,
+      coverIsAuto: true,
+      isAvailableOnline: true,
+    });
+    await wrapper.find('select#block-pub-mode-0').setValue('link');
+    await wrapper.find('input#block-pub-href-0').setValue('https://example.com/a.pdf');
+    await submit(wrapper);
+    const saved = payloadOf(wrapper);
+    expect('coverAssetId' in saved).toBe(false);
+    expect('coverIsAuto' in saved).toBe(false);
+  });
+
+  it('keeps a hand-picked cover when the source is switched, without the auto flag', async () => {
+    const wrapper = await mountRow({
+      ...BASE,
+      documentAssetId: DOC_ID,
+      coverAssetId: HAND_ID,
+      isAvailableOnline: true,
+    });
+    await wrapper.find('select#block-pub-mode-0').setValue('none');
+    await submit(wrapper);
+    const saved = payloadOf(wrapper);
+    expect(saved.coverAssetId).toBe(HAND_ID);
+    expect('coverIsAuto' in saved).toBe(false);
+  });
+
+  it('requires the catalog title instead of reusing the stored one', async () => {
+    const wrapper = mount(PublikasiCatalogForm, { props: { block: block([BASE]) } });
+    await wrapper.find('input#block-title').setValue('   ');
+    await submit(wrapper);
+    expect(wrapper.emitted('submit')).toBeFalsy();
+    expect(wrapper.text()).toContain('Judul katalog wajib diisi.');
+  });
+
   it('makes no automatic cover for a DOCX', async () => {
     mocks.uploadMedia.mockResolvedValueOnce({ id: DOC_ID, byteSize: 10, originalName: 'a.docx' });
     const wrapper = await mountRow();

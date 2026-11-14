@@ -45,7 +45,7 @@ async function handleSubmit(payload: BlockSavePayload): Promise<void> {
   try {
     const publications = (payload.metadata?.publications ?? []) as Array<Record<string, unknown>>;
     const saved = await store.savePublikasiCatalog({
-      title: payload.title ?? target.title ?? '',
+      title: payload.title ?? '',
       body: payload.body,
       publications,
       expectedUpdatedAt: target.updatedAt,

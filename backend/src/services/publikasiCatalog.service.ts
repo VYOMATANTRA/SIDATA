@@ -128,18 +128,20 @@ async function lockAssets(
   );
 }
 
-const reference = (blockId: string, slot: string, purpose: typeof PUBLIKASI_COVER_PURPOSE) => ({
+const mediaRef = (
+  blockId: string,
+  slot: string,
+  purpose: typeof PUBLIKASI_DOCUMENT_PURPOSE | typeof PUBLIKASI_COVER_PURPOSE,
+) => ({
   purpose,
   reference: { type: 'content_block', id: blockId, slot },
 });
 
-const documentRef = (blockId: string) => ({
-  purpose: PUBLIKASI_DOCUMENT_PURPOSE,
-  reference: { type: 'content_block', id: blockId, slot: PUBLIKASI_DOCUMENT_SLOT },
-});
+const documentRef = (blockId: string) =>
+  mediaRef(blockId, PUBLIKASI_DOCUMENT_SLOT, PUBLIKASI_DOCUMENT_PURPOSE);
 
 const coverRef = (blockId: string) =>
-  reference(blockId, PUBLIKASI_COVER_SLOT, PUBLIKASI_COVER_PURPOSE);
+  mediaRef(blockId, PUBLIKASI_COVER_SLOT, PUBLIKASI_COVER_PURPOSE);
 
 /** The audit summary: counts only, never file names, paths or ids. */
 function auditSummary(items: readonly PublikasiItem[]): Record<string, unknown> {

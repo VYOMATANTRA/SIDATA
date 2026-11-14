@@ -15,7 +15,10 @@ function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
   );
 }
 
-async function render(file: File): Promise<File | null> {
+async function render(
+  file: File,
+  onTask: (task: { destroy: () => unknown }) => void,
+): Promise<File | null> {
   const [pdfjs, worker] = await Promise.all([
     import('pdfjs-dist'),
     import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
@@ -24,6 +27,7 @@ async function render(file: File): Promise<File | null> {
 
   const data = new Uint8Array(await file.arrayBuffer());
   const task = pdfjs.getDocument({ data });
+  onTask(task);
   try {
     const pdf = await task.promise;
     const page = await pdf.getPage(1);
@@ -53,11 +57,18 @@ async function render(file: File): Promise<File | null> {
 /** Page 1 of `file` as a JPEG, or null when it cannot be rendered. Never throws. */
 export async function renderPdfFirstPage(file: File): Promise<File | null> {
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let task: { destroy: () => unknown } | undefined;
   try {
     return await Promise.race([
-      render(file),
+      render(file, (created) => {
+        task = created;
+      }),
       new Promise<null>((resolve) => {
-        timer = setTimeout(() => resolve(null), TIMEOUT_MS);
+        timer = setTimeout(() => {
+          // Stop the worker too: a damaged PDF can leave the render pending for good.
+          void task?.destroy();
+          resolve(null);
+        }, TIMEOUT_MS);
       }),
     ]);
   } catch {

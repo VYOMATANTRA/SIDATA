@@ -192,6 +192,22 @@ describe('publikasiCatalog.service', () => {
     await assert.rejects(() => put([item({ documentAssetId: ID(1) })]), expectError(400));
   });
 
+  it('rejects an automatic-cover flag without a document, or without a cover', async () => {
+    await assert.rejects(
+      () =>
+        put([
+          item({
+            href: 'https://example.com/a.pdf',
+            isAvailableOnline: true,
+            coverAssetId: ID(3),
+            coverIsAuto: true,
+          }),
+        ]),
+      expectError(400),
+    );
+    await assert.rejects(() => put([withDoc(1, { coverIsAuto: true })]), expectError(400));
+  });
+
   it('rejects one asset shared by two items', async () => {
     await assert.rejects(() => put([withDoc(1), withDoc(1)]), expectError(400));
   });

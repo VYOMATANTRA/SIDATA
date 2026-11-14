@@ -160,7 +160,13 @@ const { rows, announcement, isFull, add, remove, move } = useRepeatableRows<Publ
   },
 );
 
-const titleBodyErrors = computed(() => validateTitleBody(title.value, body.value));
+// The catalog title is required by the server (unlike other blocks), so ask for it here instead of
+// letting a blank one be quietly replaced.
+const titleBodyErrors = computed(() => {
+  const errors = validateTitleBody(title.value, body.value);
+  if (!title.value.trim()) errors.title = 'Judul katalog wajib diisi.';
+  return errors;
+});
 
 /** Parses the size input; undefined means "no size", null means "not a valid size". */
 function parseSizeBytes(row: PublicationDraft): number | undefined | null {
@@ -271,7 +277,11 @@ function handleSubmit(): void {
       ...(href ? { href } : {}),
       ...(documentAssetId ? { documentAssetId } : {}),
       ...(row.coverAssetId
-        ? { coverAssetId: row.coverAssetId, ...(row.coverIsAuto ? { coverIsAuto: true } : {}) }
+        ? {
+            coverAssetId: row.coverAssetId,
+            // The flag only means something while the row still has the document it came from.
+            ...(row.coverIsAuto && documentAssetId ? { coverIsAuto: true } : {}),
+          }
         : {}),
       ...(fileType ? { fileType } : {}),
       ...(typeof size === 'number' ? { fileSizeBytes: size } : {}),
@@ -307,11 +317,16 @@ async function onDocumentUploaded(
   if (!isPdf(file)) return;
   if (row.coverAssetId && !row.coverIsAuto) return; // a cover chosen by hand stays
 
+  // The row still owns this upload: the editor may have swapped or removed the document, or
+  // switched the source, while page 1 was rendering or the cover was uploading.
+  const ownsUpload = (candidate: { mode: SourceMode; documentAssetId: string | null }): boolean =>
+    candidate.mode === 'file' && candidate.documentAssetId === result.id;
+
   trackBusy(true);
   try {
     const cover = await renderPdfFirstPage(file);
     const target = findRow(uid);
-    if (!target) return;
+    if (!target || !ownsUpload(target)) return;
     if (!cover) {
       target.coverNotice = COVER_NOTICE;
       return;
@@ -319,14 +334,14 @@ async function onDocumentUploaded(
     try {
       const uploaded = await uploadMedia(cover, 'publikasi-cover');
       const still = findRow(uid);
-      if (!still) return;
-      // The editor may have picked a cover by hand while this one was rendering.
+      if (!still || !ownsUpload(still)) return;
+      // The editor may have picked a cover by hand while this one was uploading.
       if (still.coverAssetId && !still.coverIsAuto) return;
       still.coverAssetId = uploaded.id;
       still.coverIsAuto = true;
     } catch {
       const still = findRow(uid);
-      if (still) still.coverNotice = COVER_NOTICE;
+      if (still && ownsUpload(still)) still.coverNotice = COVER_NOTICE;
     }
   } finally {
     trackBusy(false);
@@ -340,6 +355,14 @@ function onDocumentChanged(row: PublicationDraft, value: string | null): void {
   // fresh one right after the upload, and a DOCX or a failed render leaves the row without one.
   // A cover chosen by hand stays.
   if (row.coverIsAuto) {
+    row.coverAssetId = null;
+    row.coverIsAuto = false;
+  }
+}
+
+/** Leaving "Unggah berkas" drops the document, so an automatic cover (its page 1) goes too. */
+function onModeChanged(row: PublicationDraft): void {
+  if (row.mode !== 'file' && row.coverIsAuto) {
     row.coverAssetId = null;
     row.coverIsAuto = false;
   }
@@ -481,6 +504,7 @@ function onCoverChanged(row: PublicationDraft, value: string | null): void {
             <select
               :id="fieldId(`pub-mode-${index}`)"
               v-model="row.mode"
+              @change="onModeChanged(row)"
               :class="INPUT_CLASSES"
               :aria-describedby="describedBy"
               :aria-invalid="invalid ? 'true' : undefined"

@@ -131,6 +131,15 @@ describe('AdminPublikasiView', () => {
     expect(wrapper.find('[data-test="block-stale-notice"]').exists()).toBe(false);
   });
 
+  it('does not save a cleared title and does not fall back to the stored one', async () => {
+    const wrapper = await mountView();
+    await wrapper.find('input#publikasi-title').setValue('');
+    await wrapper.find('form').trigger('submit.prevent');
+    await flushPromises();
+    expect(putBodies).toHaveLength(0);
+    expect(wrapper.text()).toContain('Judul katalog wajib diisi.');
+  });
+
   it('keeps every field when the save fails for another reason', async () => {
     const wrapper = await mountView();
     putResponse = () => json({ error: 'Terjadi kesalahan internal server' }, 500);
