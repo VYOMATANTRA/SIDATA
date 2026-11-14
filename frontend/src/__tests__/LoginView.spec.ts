@@ -57,3 +57,43 @@ describe('LoginView turnstile reset on failure', () => {
     expect(window.turnstile?.reset).toHaveBeenCalledWith('widget-1')
   })
 })
+
+describe('LoginView redirect after login', () => {
+  async function loginWith(redirect: string) {
+    const { pinia, router } = mountLoginView()
+    router.addRoute({ path: '/admin/cerita', component: { template: '<div>cerita</div>' } })
+    await router.push({ path: '/login', query: { redirect } })
+    await router.isReady()
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      if (String(input).includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          user: { id: '1', email: 'user@example.com', role: 'admin' },
+          accessToken: 'tok',
+        }),
+      } as Response
+    })
+
+    const wrapper = mount(LoginView, { global: { plugins: [pinia, router] } })
+    await wrapper.find('input[type="email"]').setValue('user@example.com')
+    await wrapper.find('input[type="password"]').setValue('secret')
+    await wrapper.find('form').trigger('submit.prevent')
+    return router
+  }
+
+  it('returns to a safe redirect path after login', async () => {
+    const router = await loginWith('/admin/cerita')
+    await vi.waitUntil(() => router.currentRoute.value.path === '/admin/cerita', { timeout: 3000 })
+    expect(router.currentRoute.value.path).toBe('/admin/cerita')
+  })
+
+  it('ignores an unsafe redirect and goes to the default destination', async () => {
+    const router = await loginWith('//evil.com')
+    await vi.waitUntil(() => router.currentRoute.value.path === '/', { timeout: 3000 })
+    expect(router.currentRoute.value.fullPath).toBe('/')  })
+})
