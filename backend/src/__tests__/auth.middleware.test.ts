@@ -59,7 +59,7 @@ describe('auth.middleware verifyToken', () => {
 
     await verifyToken(req({ authorization: `Bearer ${badToken}` }), res, next);
 
-    assert.equal(res.status, 403);
+    assert.equal(res.status, 401);
     assert.deepEqual(res.body, { error: 'Token tidak valid atau sudah kedaluwarsa.' });
     assert.equal(spy.calls, 0);
   });
@@ -71,7 +71,7 @@ describe('auth.middleware verifyToken', () => {
 
     await verifyToken(req({ authorization: `Bearer ${expiredToken}` }), res, next);
 
-    assert.equal(res.status, 403);
+    assert.equal(res.status, 401);
     assert.deepEqual(res.body, { error: 'Token tidak valid atau sudah kedaluwarsa.' });
     assert.equal(spy.calls, 0);
   });
