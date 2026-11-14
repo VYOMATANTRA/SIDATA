@@ -1,7 +1,12 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { ApiError, apiRequestJson } from '../utils/apiClient';
-import { toUserMessage, USER_MESSAGES } from '../utils/userMessages';
+import {
+  classifyFailure,
+  toUserMessage,
+  USER_MESSAGES,
+  type FailureKind,
+} from '../utils/userMessages';
 import { uniqueSlug } from '../utils/comparisonTemplateSegments';
 
 /**
@@ -154,6 +159,8 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
   const isLoading = ref(false);
   const isLoaded = ref(false);
   const error = ref<string | null>(null);
+  /** Failure class of `error`, for AlertBanner; null while `error` is null. */
+  const errorKind = ref<FailureKind | null>(null);
   const selectorError = ref<string | null>(null);
 
   interface ActiveFetch {
@@ -206,6 +213,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
       }
       if (forAdmin) {
         error.value = null;
+        errorKind.value = null;
         activeFetch.forAdmin = true;
       }
       return activeFetch.promise;
@@ -216,6 +224,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
     }
     if (forAdmin) {
       error.value = null;
+      errorKind.value = null;
     }
 
     isLoading.value = true;
@@ -247,6 +256,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
           }
           if (request.forAdmin) {
             error.value = null;
+            errorKind.value = null;
           }
           return true;
         }
@@ -257,6 +267,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
         }
         if (request.forAdmin) {
           error.value = null;
+          errorKind.value = null;
         }
         return isLoaded.value;
       } catch (err) {
@@ -267,6 +278,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
         }
         if (request.forAdmin) {
           error.value = failureMessage;
+          errorKind.value = classifyFailure(err).kind;
         }
         return false;
       } finally {
@@ -441,6 +453,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
     isLoading,
     isLoaded,
     error,
+    errorKind,
     selectorError,
     fetchTemplates,
     createTemplate,

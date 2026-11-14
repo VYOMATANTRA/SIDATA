@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useAuthStore } from './auth'
 import { getCsrfToken } from '../utils/csrf'
 import { apiErrorFromBody } from '../utils/apiClient'
-import { toUserMessage } from '../utils/userMessages'
+import { toUserMessage, type FailureKind } from '../utils/userMessages'
 
 export interface UserRole {
   id: string
@@ -27,7 +27,12 @@ export const useUsersStore = defineStore('users', () => {
   const users = ref<UserItem[]>([])
   const roles = ref<UserRole[]>([])
   const loading = ref(false)
+  /** Load error (user list, role list) shown in the page banner. Write failures never land here. */
   const error = ref<string | null>(null)
+  /** Failure class of `error`, for AlertBanner; null while `error` is null. */
+  const errorKind = ref<FailureKind | null>(null)
+  /** Last write failure (create, role, password, activate, deactivate); the caller also gets the throw. */
+  const writeError = ref<string | null>(null)
 
   async function getAuthHeaders(): Promise<Record<string, string>> {
     const csrfToken = await getCsrfToken()
@@ -44,6 +49,7 @@ export const useUsersStore = defineStore('users', () => {
   async function fetchUsers() {
     loading.value = true
     error.value = null
+    errorKind.value = null
     try {
       const headers = await getAuthHeaders()
       const res = await fetch('/api/users', {
@@ -56,7 +62,9 @@ export const useUsersStore = defineStore('users', () => {
       }
       users.value = data.users || []
     } catch (err: unknown) {
-      error.value = toUserMessage(err, 'memuat daftar pengguna', 'GET').message
+      const mapped = toUserMessage(err, 'memuat daftar pengguna', 'GET')
+      error.value = mapped.message
+      errorKind.value = mapped.kind
     } finally {
       loading.value = false
     }
@@ -75,14 +83,16 @@ export const useUsersStore = defineStore('users', () => {
       }
       roles.value = data.roles || []
     } catch (err: unknown) {
-      error.value = toUserMessage(err, 'memuat daftar role', 'GET').message
+      const mapped = toUserMessage(err, 'memuat daftar role', 'GET')
+      error.value = mapped.message
+      errorKind.value = mapped.kind
       console.error('Error fetching roles:', err)
     }
   }
 
   async function createUser(payload: { email: string; roleId: string; password: string }) {
     loading.value = true
-    error.value = null
+    writeError.value = null
     try {
       const headers = await getAuthHeaders()
       const res = await fetch('/api/users', {
@@ -100,7 +110,7 @@ export const useUsersStore = defineStore('users', () => {
       }
       return data
     } catch (err: unknown) {
-      error.value = toUserMessage(err, 'membuat pengguna').message
+      writeError.value = toUserMessage(err, 'membuat pengguna').message
       throw err
     } finally {
       loading.value = false
@@ -109,7 +119,7 @@ export const useUsersStore = defineStore('users', () => {
 
   async function reactivateUser(userId: string) {
     loading.value = true
-    error.value = null
+    writeError.value = null
     try {
       const headers = await getAuthHeaders()
       const res = await fetch(`/api/users/${userId}/reactivate`, {
@@ -130,7 +140,7 @@ export const useUsersStore = defineStore('users', () => {
       }
       return data
     } catch (err: unknown) {
-      error.value = toUserMessage(err, 'mengaktifkan kembali pengguna').message
+      writeError.value = toUserMessage(err, 'mengaktifkan kembali pengguna').message
       throw err
     } finally {
       loading.value = false
@@ -139,7 +149,7 @@ export const useUsersStore = defineStore('users', () => {
 
   async function changeUserPassword(userId: string, password: string) {
     loading.value = true
-    error.value = null
+    writeError.value = null
     try {
       const headers = await getAuthHeaders()
       const res = await fetch(`/api/users/${userId}/password`, {
@@ -159,7 +169,7 @@ export const useUsersStore = defineStore('users', () => {
       }
       return data
     } catch (err: unknown) {
-      error.value = toUserMessage(err, 'mengubah password pengguna').message
+      writeError.value = toUserMessage(err, 'mengubah password pengguna').message
       throw err
     } finally {
       loading.value = false
@@ -168,7 +178,7 @@ export const useUsersStore = defineStore('users', () => {
 
   async function updateUserRole(userId: string, roleId: string) {
     loading.value = true
-    error.value = null
+    writeError.value = null
     try {
       const headers = await getAuthHeaders()
       const res = await fetch(`/api/users/${userId}/role`, {
@@ -196,7 +206,7 @@ export const useUsersStore = defineStore('users', () => {
       }
       return data
     } catch (err: unknown) {
-      error.value = toUserMessage(err, 'mengubah role pengguna').message
+      writeError.value = toUserMessage(err, 'mengubah role pengguna').message
       throw err
     } finally {
       loading.value = false
@@ -205,7 +215,7 @@ export const useUsersStore = defineStore('users', () => {
 
   async function deleteUser(userId: string) {
     loading.value = true
-    error.value = null
+    writeError.value = null
     try {
       const headers = await getAuthHeaders()
       const res = await fetch(`/api/users/${userId}`, {
@@ -223,7 +233,7 @@ export const useUsersStore = defineStore('users', () => {
       }
       return data
     } catch (err: unknown) {
-      error.value = toUserMessage(err, 'menonaktifkan pengguna').message
+      writeError.value = toUserMessage(err, 'menonaktifkan pengguna').message
       throw err
     } finally {
       loading.value = false
@@ -235,6 +245,8 @@ export const useUsersStore = defineStore('users', () => {
     roles,
     loading,
     error,
+    errorKind,
+    writeError,
     fetchUsers,
     fetchRoles,
     createUser,

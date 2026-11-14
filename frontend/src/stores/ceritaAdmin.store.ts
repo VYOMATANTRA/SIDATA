@@ -11,6 +11,7 @@ import {
   type HierarchySection,
 } from './pages.store';
 import { ceritaFailure, type FailureOptions } from '../utils/ceritaAdminMessages';
+import type { FailureKind } from '../utils/userMessages';
 import { swapReorderItems } from '../utils/ceritaOrder';
 
 /**
@@ -81,6 +82,13 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
       (pagesStore.hierarchyIncomplete ? INCOMPLETE_TREE_MESSAGE : null) ??
       blocksStore.error,
   );
+
+  /** Failure class matching `loadError`, for AlertBanner; null while `loadError` is null. */
+  const loadErrorKind = computed<FailureKind | null>(() => {
+    if (pagesStore.hierarchyError !== null) return pagesStore.hierarchyErrorKind ?? 'unknown';
+    if (pagesStore.hierarchyIncomplete) return 'unknown';
+    return blocksStore.error !== null ? (blocksStore.errorKind ?? 'unknown') : null;
+  });
 
   const selectedPage = computed<AdminPage | null>(
     () => tree.value.find((page) => page.slug === selectedSlug.value) ?? tree.value[0] ?? null,
@@ -577,6 +585,7 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     tree,
     isLoading,
     loadError,
+    loadErrorKind,
     selectedPage,
     selectPage,
     load,

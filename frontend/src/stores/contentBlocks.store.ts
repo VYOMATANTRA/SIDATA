@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { apiErrorFromResponse, apiRequestJson } from '../utils/apiClient';
-import { toUserMessage } from '../utils/userMessages';
+import { toUserMessage, type FailureKind } from '../utils/userMessages';
 import { PUBLICATIONS } from '../content/publikasi';
 import { SOTK_MEMBERS } from '../content/tentang';
 
@@ -128,6 +128,8 @@ export const useContentBlocksStore = defineStore('contentBlocks', () => {
   const isLoading = ref(false);
   const isLoaded = ref(false);
   const error = ref<string | null>(null);
+  /** Failure class of `error`, for AlertBanner; null while `error` is null. */
+  const errorKind = ref<FailureKind | null>(null);
 
   let inFlight: Promise<void> | null = null;
   let followUp: Promise<void> | null = null;
@@ -177,6 +179,7 @@ export const useContentBlocksStore = defineStore('contentBlocks', () => {
   function startFetch(): Promise<void> {
     isLoading.value = true;
     error.value = null;
+    errorKind.value = null;
 
     inFlight = (async () => {
       try {
@@ -200,7 +203,9 @@ export const useContentBlocksStore = defineStore('contentBlocks', () => {
           isLoaded.value = true;
         }
       } catch (err) {
-        error.value = toUserMessage(err, 'memuat blok konten', 'GET').message;
+        const mapped = toUserMessage(err, 'memuat blok konten', 'GET');
+        error.value = mapped.message;
+        errorKind.value = mapped.kind;
       } finally {
         // A queued follow-up keeps the loading flag on: it is about to start another request.
         if (!followUp) isLoading.value = false;
@@ -270,6 +275,7 @@ export const useContentBlocksStore = defineStore('contentBlocks', () => {
     isLoading,
     isLoaded,
     error,
+    errorKind,
     hero,
     sambutanLurah,
     highlights,

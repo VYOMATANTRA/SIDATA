@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useAuthStore } from './auth'
 import { getCsrfToken } from '../utils/csrf'
 import { apiErrorFromBody } from '../utils/apiClient'
-import { toUserMessage } from '../utils/userMessages'
+import { toUserMessage, type FailureKind } from '../utils/userMessages'
 
 export type AuditSeverity = 'info' | 'warning' | 'critical'
 export type AuditOutcome = 'success' | 'failure'
@@ -69,6 +69,8 @@ export const useAuditStore = defineStore('audit', () => {
   const adminActionCount = ref(0)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  /** Failure class of `error`, for AlertBanner; null while `error` is null. */
+  const errorKind = ref<FailureKind | null>(null)
   const summaryError = ref<string | null>(null)
   const filters = ref<AuditLogFilters>({ ...EMPTY_FILTERS })
 
@@ -113,6 +115,7 @@ export const useAuditStore = defineStore('audit', () => {
     const requestId = ++listRequestId
     loading.value = true
     error.value = null
+    errorKind.value = null
     try {
       const headers = await getAuthHeaders()
       const res = await fetch(`/api/audit-logs?${buildListQuery()}`, {
@@ -133,7 +136,9 @@ export const useAuditStore = defineStore('audit', () => {
     } catch (err: unknown) {
       // Stale failures stay silent too: the newer request owns the error state.
       if (requestId !== listRequestId) return
-      error.value = toUserMessage(err, 'memuat audit log', 'GET').message
+      const mapped = toUserMessage(err, 'memuat audit log', 'GET')
+      error.value = mapped.message
+      errorKind.value = mapped.kind
     } finally {
       if (requestId === listRequestId) loading.value = false
     }
@@ -210,38 +215,36 @@ export const useAuditStore = defineStore('audit', () => {
   }
 
   async function acknowledgeLog(id: string) {
-    try {
-      const headers = await getAuthHeaders()
-      const res = await fetch(`/api/audit-logs/${id}/acknowledge`, {
-        method: 'PATCH',
-        headers,
-        credentials: 'include',
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        throw apiErrorFromBody(res.status, data, 'PATCH')
-      }
-      if (summary.value && summary.value.openCritical > 0) {
-        summary.value.openCritical -= 1
-      }
-      // With the "open only" filter active, the row just acknowledged no longer belongs
-      // in the result set — refetch the current page so the list and its total stop
-      // contradicting the filter. Without that filter the row stays visible (its status
-      // simply flips), so the in-place update below avoids a pointless refetch.
-      if (filters.value.acknowledged === false) {
-        await fetchLogs()
-        return data
-      }
-      const target = logs.value.find((l) => l.id === id)
-      if (target) {
-        target.acknowledgedAt = data.log?.acknowledgedAt || new Date().toISOString()
-        target.acknowledgedById = data.log?.acknowledgedById || authStore.user?.id || null
-      }
-      return data
-    } catch (err: unknown) {
-      error.value = toUserMessage(err, 'meng-acknowledge audit log').message
-      throw err
+    // Failures propagate to the caller, which shows them itself (AuditLogView
+    // `acknowledgeError`). Writing them to the load `error` too would render the same
+    // failure in two banners.
+    const headers = await getAuthHeaders()
+    const res = await fetch(`/api/audit-logs/${id}/acknowledge`, {
+      method: 'PATCH',
+      headers,
+      credentials: 'include',
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      throw apiErrorFromBody(res.status, data, 'PATCH')
     }
+    if (summary.value && summary.value.openCritical > 0) {
+      summary.value.openCritical -= 1
+    }
+    // With the "open only" filter active, the row just acknowledged no longer belongs
+    // in the result set — refetch the current page so the list and its total stop
+    // contradicting the filter. Without that filter the row stays visible (its status
+    // simply flips), so the in-place update below avoids a pointless refetch.
+    if (filters.value.acknowledged === false) {
+      await fetchLogs()
+      return data
+    }
+    const target = logs.value.find((l) => l.id === id)
+    if (target) {
+      target.acknowledgedAt = data.log?.acknowledgedAt || new Date().toISOString()
+      target.acknowledgedById = data.log?.acknowledgedById || authStore.user?.id || null
+    }
+    return data
   }
 
   return {
@@ -253,6 +256,7 @@ export const useAuditStore = defineStore('audit', () => {
     adminActionCount,
     loading,
     error,
+    errorKind,
     summaryError,
     filters,
     fetchLogs,

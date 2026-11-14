@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import type { StatItem } from '../components/common/StatCard.vue';
 import { apiErrorFromResponse, apiFetch, apiRequestJson } from '../utils/apiClient';
-import { toUserMessage } from '../utils/userMessages';
+import { toUserMessage, type FailureKind } from '../utils/userMessages';
 
 /**
  * Scalar indicator figures (SPEC §7). Read is public; writes need an editor/admin token.
@@ -161,6 +161,8 @@ export const useIndicatorsStore = defineStore('indicators', () => {
   const isLoading = ref(false);
   const isLoaded = ref(false);
   const error = ref<string | null>(null);
+  /** Failure class of `error`, for AlertBanner; null while `error` is null. */
+  const errorKind = ref<FailureKind | null>(null);
 
   let inFlight: Promise<void> | null = null;
 
@@ -293,6 +295,7 @@ export const useIndicatorsStore = defineStore('indicators', () => {
 
     isLoading.value = true;
     error.value = null;
+    errorKind.value = null;
 
     inFlight = (async () => {
       try {
@@ -304,7 +307,9 @@ export const useIndicatorsStore = defineStore('indicators', () => {
         isLoaded.value = true;
       } catch (err) {
         // Do NOT treat 404 as loaded or empty — report error and keep existing data on failed refetch
-        error.value = toUserMessage(err, 'memuat daftar indikator', 'GET').message;
+        const mapped = toUserMessage(err, 'memuat daftar indikator', 'GET');
+        error.value = mapped.message;
+        errorKind.value = mapped.kind;
       } finally {
         isLoading.value = false;
         inFlight = null;
@@ -506,6 +511,7 @@ export const useIndicatorsStore = defineStore('indicators', () => {
     isLoading,
     isLoaded,
     error,
+    errorKind,
     staleCount,
     fetchIndicators,
     getStatsForPage,

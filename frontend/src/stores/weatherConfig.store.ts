@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { apiRequestJson } from '../utils/apiClient';
-import { toUserMessage } from '../utils/userMessages';
+import { toUserMessage, type FailureKind } from '../utils/userMessages';
 
 /**
  * Admin-only operational weather settings (SPEC §7). The API carries four values; the Admin
@@ -36,6 +36,8 @@ export const useWeatherConfigStore = defineStore('weatherConfig', () => {
   const isLoading = ref(false);
   const isSaving = ref(false);
   const error = ref<string | null>(null);
+  /** Failure class of the last load error, for AlertBanner; null while `error` is null. */
+  const errorKind = ref<FailureKind | null>(null);
   const saveError = ref<string | null>(null);
 
   const isLoaded = computed(() => config.value !== null);
@@ -44,6 +46,7 @@ export const useWeatherConfigStore = defineStore('weatherConfig', () => {
   async function fetchConfig(): Promise<boolean> {
     isLoading.value = true;
     error.value = null;
+    errorKind.value = null;
     try {
       const data = await apiRequestJson<{ settings?: unknown }>('/api/settings/weather-config', {
         method: 'GET',
@@ -52,12 +55,15 @@ export const useWeatherConfigStore = defineStore('weatherConfig', () => {
       const parsed = parseConfig(data?.settings);
       if (!parsed) {
         error.value = 'Pengaturan cuaca dari server tidak dapat dibaca. Coba muat ulang halaman.';
+        errorKind.value = 'unknown';
         return false;
       }
       config.value = parsed;
       return true;
     } catch (err) {
-      error.value = toUserMessage(err, 'memuat pengaturan cuaca', 'GET').message;
+      const mapped = toUserMessage(err, 'memuat pengaturan cuaca', 'GET');
+      error.value = mapped.message;
+      errorKind.value = mapped.kind;
       return false;
     } finally {
       isLoading.value = false;
@@ -103,6 +109,7 @@ export const useWeatherConfigStore = defineStore('weatherConfig', () => {
     isSaving,
     isLoaded,
     error,
+    errorKind,
     saveError,
     cacheTtlMs,
     fetchConfig,

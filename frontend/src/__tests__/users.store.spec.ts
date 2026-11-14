@@ -293,7 +293,7 @@ describe('users store', () => {
     expect(store.users[0]?.deletedAt).not.toBeNull()
   })
 
-  it('changeUserPassword throws on backend error and sets error ref', async () => {
+  it('changeUserPassword throws on backend error and sets writeError, not the load error', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
       const url = String(input)
       if (url.includes('csrf-token')) {
@@ -312,8 +312,74 @@ describe('users store', () => {
       status: 400,
       serverMessage: 'Password terlalu lemah atau umum digunakan.',
     })
-    expect(store.error).toBe(
+    expect(store.writeError).toBe(
       'Gagal mengubah password pengguna. Password terlalu lemah atau umum digunakan.',
     )
+    expect(store.error).toBeNull()
+    expect(store.errorKind).toBeNull()
+  })
+
+  it('a failed createUser does not set the page load error', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      if (String(input).includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'mock-csrf' }) } as Response
+      }
+      return { ok: false, status: 409, json: async () => ({ error: 'Email sudah ada.' }) } as Response
+    })
+    const store = useUsersStore()
+    await expect(
+      store.createUser({ email: 'a@b.id', roleId: 'r-1', password: 'Password123!' }),
+    ).rejects.toMatchObject({ status: 409 })
+    expect(store.error).toBeNull()
+    expect(store.errorKind).toBeNull()
+    expect(store.writeError).toContain('Gagal membuat pengguna')
+  })
+
+  it('a failed write leaves an earlier load error in place', async () => {
+    const fail = (status: number) =>
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        if (String(input).includes('csrf-token')) {
+          return { ok: true, json: async () => ({ csrfToken: 'mock-csrf' }) } as Response
+        }
+        return { ok: false, status, json: async () => ({}) } as Response
+      })
+    const store = useUsersStore()
+    globalThis.fetch = fail(500)
+    await store.fetchUsers()
+    const loadError = store.error
+    expect(loadError).toBeTruthy()
+    await expect(store.deleteUser('u-1')).rejects.toBeTruthy()
+    expect(store.error).toBe(loadError)
+    expect(store.errorKind).toBe('server')
+  })
+
+  it('fetchUsers sets errorKind on 403, network and 500, and resets it on success', async () => {
+    const respond = (status: number | 'network') =>
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        if (String(input).includes('csrf-token')) {
+          return { ok: true, json: async () => ({ csrfToken: 'mock-csrf' }) } as Response
+        }
+        if (status === 'network') throw new TypeError('Failed to fetch')
+        return { ok: false, status, json: async () => ({}) } as Response
+      })
+    const store = useUsersStore()
+    globalThis.fetch = respond(403)
+    await store.fetchUsers()
+    expect(store.errorKind).toBe('forbidden')
+    globalThis.fetch = respond('network')
+    await store.fetchUsers()
+    expect(store.errorKind).toBe('network')
+    globalThis.fetch = respond(500)
+    await store.fetchUsers()
+    expect(store.errorKind).toBe('server')
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      if (String(input).includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'mock-csrf' }) } as Response
+      }
+      return { ok: true, json: async () => ({ users: [] }) } as Response
+    })
+    await store.fetchUsers()
+    expect(store.error).toBeNull()
+    expect(store.errorKind).toBeNull()
   })
 })

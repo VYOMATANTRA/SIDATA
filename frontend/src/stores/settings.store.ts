@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { apiErrorFromResponse, apiRequestJson } from '../utils/apiClient';
-import { toUserMessage } from '../utils/userMessages';
+import { toUserMessage, type FailureKind } from '../utils/userMessages';
 
 export interface CoordinatesSetting {
   lat: number;
@@ -48,6 +48,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const isLoading = ref(false);
   const isLoaded = ref(false);
   const error = ref<string | null>(null);
+  /** Failure class of `error`, for AlertBanner; null while `error` is null. */
+  const errorKind = ref<FailureKind | null>(null);
   const lastPageTitle = ref<string | undefined>(undefined);
 
   let inFlight: Promise<PublicSettings> | null = null;
@@ -90,6 +92,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
     isLoading.value = true;
     error.value = null;
+    errorKind.value = null;
 
     inFlight = (async () => {
       try {
@@ -168,7 +171,9 @@ export const useSettingsStore = defineStore('settings', () => {
         }
         return settings.value;
       } catch (err) {
-        error.value = toUserMessage(err, 'memuat pengaturan publik', 'GET').message;
+        const mapped = toUserMessage(err, 'memuat pengaturan publik', 'GET');
+        error.value = mapped.message;
+        errorKind.value = mapped.kind;
         // Non-blocking fallback: retain defaults
         return settings.value;
       } finally {
@@ -219,6 +224,7 @@ export const useSettingsStore = defineStore('settings', () => {
     isLoading,
     isLoaded,
     error,
+    errorKind,
     appName,
     institutionName,
     tagline,
