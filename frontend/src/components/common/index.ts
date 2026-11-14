@@ -24,3 +24,5 @@ export { default as FormField } from './FormField.vue';
 export type { FormFieldProps } from './FormField.vue';
 export { default as FormErrorSummary } from './FormErrorSummary.vue';
 export type { FormErrorSummaryProps } from './FormErrorSummary.vue';
+export { default as AlertBanner } from './AlertBanner.vue';
+export type { AlertBannerProps } from './AlertBanner.vue';
