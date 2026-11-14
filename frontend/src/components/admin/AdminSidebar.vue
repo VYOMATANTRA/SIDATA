@@ -185,16 +185,18 @@ async function handleLogout() {
           :src="balikpapanLogo"
           alt="Logo Kota Balikpapan"
           class="h-9 w-auto shrink-0 object-contain"
-          :class="isCollapsed ? 'md:h-10' : ''"
+          :class="isCollapsed ? 'md:h-10 md:max-w-full' : ''"
         />
-        <span class="min-w-0 text-left" :class="isCollapsed ? 'md:text-center' : ''">
+        <span class="min-w-0 text-left" :class="isCollapsed ? 'md:w-full md:text-center' : ''">
           <span
             class="block truncate text-base leading-tight font-bold text-white"
-            :class="isCollapsed ? 'md:text-xs' : ''"
+            :class="isCollapsed ? 'md:text-sm' : ''"
             data-test="sidebar-brand-name"
             >SIDATA</span
           >
-          <span :class="labelClass(isCollapsed, 'block truncate text-xs leading-tight text-white/60')">
+          <span
+            :class="labelClass(isCollapsed, 'block truncate text-xs leading-tight text-white/60')"
+          >
             Sistem Informasi Data Terpadu Kelurahan
           </span>
         </span>
@@ -218,7 +220,7 @@ async function handleLogout() {
         :inert="mobileOpen ? true : undefined"
         :aria-expanded="!isCollapsed"
         aria-controls="admin-sidebar-nav-list"
-        aria-label="Ciutkan sidebar"
+        :aria-label="isCollapsed ? 'Bentangkan sidebar' : 'Ciutkan sidebar'"
         data-test="sidebar-collapse-toggle"
         @click="toggleCollapse"
       >

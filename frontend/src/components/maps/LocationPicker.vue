@@ -542,36 +542,34 @@ function nudge(direction: PickerDirection, large = false, viaKeyboard = false): 
     placePinAtCenter();
     return;
   }
+  // Both modes pan the basemap by whole screen pixels: re-centring on a computed coordinate makes
+  // Leaflet truncate the fractional pixel of every step (`_tryAnimatedPan`), so six presses
+  // covered 91px, not 96.
+  const [dx, dy] = directionOffset(direction, large);
+  const announceStep = (message: string): void => {
+    if (viaKeyboard) announceNudge(message);
+    else announce(message);
+  };
   if (viewport.value) {
-    // Pan by whole screen pixels: re-centring on a computed coordinate makes Leaflet truncate the
-    // fractional pixel of every step (`_tryAnimatedPan`), so six presses covered 91px, not 96.
-    const [dx, dy] = directionOffset(direction, large);
     runSilently(() => map?.panBy([dx, dy], { animate: false }));
     const center = viewCenter();
     if (center) emitValue(center, viewZoom.value);
-    const message = `Peta digeser ke ${DIRECTION_LABELS[direction]}.`;
-    if (viaKeyboard) announceNudge(message);
-    else announce(message);
+    announceStep(`Peta digeser ke ${DIRECTION_LABELS[direction]}.`);
     return;
   }
-  // Same as viewport mode: the map slides under the pin by whole screen pixels, so the pin keeps
-  // its place on screen and the editor sees the basemap move, not the marker.
+  // Pin mode: the map slides under the pin, so the pin keeps its place on screen and the editor
+  // sees the basemap move, not the marker. A pin outside the view is brought into it first.
   if (!map.getBounds().contains([base.latitude, base.longitude])) {
     runSilently(() => map?.panTo([base.latitude, base.longitude], { animate: false }));
   }
   const screenPoint = map.latLngToContainerPoint([base.latitude, base.longitude]);
-  const [dx, dy] = directionOffset(direction, large);
   runSilently(() => map?.panBy([dx, dy], { animate: false }));
-  const moved = normalizeLocation({
-    latitude: map.containerPointToLatLng(screenPoint).lat,
-    longitude: map.containerPointToLatLng(screenPoint).lng,
-  });
+  const nextLatLng = map.containerPointToLatLng(screenPoint);
+  const moved = normalizeLocation({ latitude: nextLatLng.lat, longitude: nextLatLng.lng });
   if (!moved) return;
   placeMarker(moved);
   emitValue(moved);
-  const message = `Pin digeser ke ${DIRECTION_LABELS[direction]}.`;
-  if (viaKeyboard) announceNudge(message);
-  else announce(message);
+  announceStep(`Pin digeser ke ${DIRECTION_LABELS[direction]}.`);
 }
 
 function placePinAtCenter(): void {

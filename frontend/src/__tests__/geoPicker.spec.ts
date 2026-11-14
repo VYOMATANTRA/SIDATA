@@ -55,7 +55,6 @@ describe('geoPicker helpers', () => {
     );
   });
 
-
   describe('directionOffset', () => {
     it.each([
       ['north', [0, -STEP_PIXELS]],
