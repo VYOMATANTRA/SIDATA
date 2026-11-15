@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
-import PublikasiCatalogForm from '../components/admin/publikasi/PublikasiCatalogForm.vue';
-import type { ContentBlock } from '../stores/contentBlocks.store';
+import PublikasiItemForm from '../components/admin/publikasi/PublikasiItemForm.vue';
 
 const mocks = vi.hoisted(() => ({
   uploadMedia: vi.fn<(file: File, purpose: string) => Promise<unknown>>(),
@@ -29,20 +28,6 @@ const BASE = {
   isAvailableOnline: false,
 };
 
-function block(publications: Array<Record<string, unknown>>): ContentBlock {
-  return {
-    id: 'b-p',
-    sectionId: null,
-    type: 'prose',
-    slug: 'publikasi-katalog',
-    title: 'Katalog Uji',
-    body: 'Narasi uji.',
-    metadata: { publications },
-    sortOrder: null,
-    updatedAt: '2026-09-01T00:00:00.000Z',
-  };
-}
-
 function pick(wrapper: VueWrapper, selector: string, name: string, type: string): void {
   const input = wrapper.find(selector).element as HTMLInputElement;
   const file = new File(['x'], name, { type });
@@ -54,17 +39,16 @@ const DOC = '[data-test="document-input"]';
 const PHOTO = '[data-test="photo-input"]';
 
 function payloadOf(wrapper: VueWrapper): Record<string, unknown> {
-  const emitted = wrapper.emitted('submit')?.[0]?.[0] as
-    { metadata: { publications: Array<Record<string, unknown>> } } | undefined;
+  const emitted = wrapper.emitted('submit')?.[0]?.[0] as Record<string, unknown> | undefined;
   if (!emitted) throw new Error('the form did not submit');
-  return emitted.metadata.publications[0]!;
+  return emitted;
 }
 
 async function submit(wrapper: VueWrapper) {
   await wrapper.find('form').trigger('submit.prevent');
 }
 
-describe('PublikasiCatalogForm uploads', () => {
+describe('PublikasiItemForm uploads', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     mocks.uploadMedia.mockReset();
@@ -75,8 +59,8 @@ describe('PublikasiCatalogForm uploads', () => {
   afterEach(() => vi.restoreAllMocks());
 
   async function mountRow(row: Record<string, unknown> = BASE) {
-    const wrapper = mount(PublikasiCatalogForm, { props: { block: block([row]) } });
-    await wrapper.find('select#block-pub-mode-0').setValue('file');
+    const wrapper = mount(PublikasiItemForm, { props: { publication: row } });
+    await wrapper.find('select#publikasi-item-mode').setValue('file');
     return wrapper;
   }
 
@@ -171,7 +155,7 @@ describe('PublikasiCatalogForm uploads', () => {
       isAvailableOnline: true,
     });
     await second.find('[data-test="document-remove"]').trigger('click');
-    await second.find('select#block-pub-mode-0').setValue('none');
+    await second.find('select#publikasi-item-mode').setValue('none');
     await submit(second);
     expect('coverAssetId' in payloadOf(second)).toBe(false);
   });
@@ -221,7 +205,7 @@ describe('PublikasiCatalogForm uploads', () => {
     await wrapper.find('[data-test="document-remove"]').trigger('click');
     finishCover({ id: COVER_ID, byteSize: 10, originalName: 'a.jpg' });
     await flushPromises();
-    await wrapper.find('select#block-pub-mode-0').setValue('none');
+    await wrapper.find('select#publikasi-item-mode').setValue('none');
     await submit(wrapper);
     expect('coverAssetId' in payloadOf(wrapper)).toBe(false);
   });
@@ -234,8 +218,8 @@ describe('PublikasiCatalogForm uploads', () => {
       coverIsAuto: true,
       isAvailableOnline: true,
     });
-    await wrapper.find('select#block-pub-mode-0').setValue('link');
-    await wrapper.find('input#block-pub-href-0').setValue('https://example.com/a.pdf');
+    await wrapper.find('select#publikasi-item-mode').setValue('link');
+    await wrapper.find('input#publikasi-item-href').setValue('https://example.com/a.pdf');
     await submit(wrapper);
     const saved = payloadOf(wrapper);
     expect('coverAssetId' in saved).toBe(false);
@@ -249,19 +233,11 @@ describe('PublikasiCatalogForm uploads', () => {
       coverAssetId: HAND_ID,
       isAvailableOnline: true,
     });
-    await wrapper.find('select#block-pub-mode-0').setValue('none');
+    await wrapper.find('select#publikasi-item-mode').setValue('none');
     await submit(wrapper);
     const saved = payloadOf(wrapper);
     expect(saved.coverAssetId).toBe(HAND_ID);
     expect('coverIsAuto' in saved).toBe(false);
-  });
-
-  it('requires the catalog title instead of reusing the stored one', async () => {
-    const wrapper = mount(PublikasiCatalogForm, { props: { block: block([BASE]) } });
-    await wrapper.find('input#block-title').setValue('   ');
-    await submit(wrapper);
-    expect(wrapper.emitted('submit')).toBeFalsy();
-    expect(wrapper.text()).toContain('Judul katalog wajib diisi.');
   });
 
   it('makes no automatic cover for a DOCX', async () => {
@@ -285,7 +261,7 @@ describe('PublikasiCatalogForm uploads', () => {
     await flushPromises();
     // file mode needs a document before the save is allowed
     expect(wrapper.find('[data-test="cover-auto-note"]').exists()).toBe(false);
-    await wrapper.find('select#block-pub-mode-0').setValue('none');
+    await wrapper.find('select#publikasi-item-mode').setValue('none');
     await submit(wrapper);
     expect(payloadOf(wrapper)).toMatchObject({ coverAssetId: HAND_ID });
     expect(payloadOf(wrapper).coverIsAuto).toBeUndefined();
@@ -295,7 +271,7 @@ describe('PublikasiCatalogForm uploads', () => {
     const wrapper = await mountRow();
     await submit(wrapper);
     expect(wrapper.emitted('submit')).toBeFalsy();
-    expect(wrapper.find('#block-pub-mode-0-error').text()).toContain('pilih berkas');
+    expect(wrapper.find('#publikasi-item-mode-error').text()).toContain('Pilih berkas');
   });
 
   it('rejects a file that is not a PDF or DOCX before uploading', async () => {
@@ -315,7 +291,7 @@ describe('PublikasiCatalogForm uploads', () => {
       isAvailableOnline: true,
     });
     await wrapper.find('[data-test="document-remove"]').trigger('click');
-    await wrapper.find('select#block-pub-mode-0').setValue('none');
+    await wrapper.find('select#publikasi-item-mode').setValue('none');
     await submit(wrapper);
     const saved = payloadOf(wrapper);
     expect('documentAssetId' in saved).toBe(false);
@@ -323,17 +299,15 @@ describe('PublikasiCatalogForm uploads', () => {
   });
 
   it('does not send the stored format or size of an uploaded file (the server derives them)', async () => {
-    const wrapper = mount(PublikasiCatalogForm, {
+    const wrapper = mount(PublikasiItemForm, {
       props: {
-        block: block([
-          {
+        publication: {
             ...BASE,
             documentAssetId: DOC_ID,
             fileType: 'PDF',
             fileSizeBytes: 2048,
             isAvailableOnline: true,
-          },
-        ]),
+        },
       },
     });
     await submit(wrapper);
