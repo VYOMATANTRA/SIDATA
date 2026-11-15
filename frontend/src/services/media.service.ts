@@ -15,6 +15,7 @@ export type MediaPurpose =
   | 'portal-hero'
   | 'sambutan-lurah'
   | 'cerita'
+  | 'cerita-cover'
   | 'tentang'
   | 'publikasi-cover'
   | 'publikasi-document'
@@ -27,6 +28,7 @@ const PURPOSE_KIND: Readonly<Record<MediaPurpose, MediaKind>> = {
   'portal-hero': 'photo',
   'sambutan-lurah': 'photo',
   cerita: 'photo',
+  'cerita-cover': 'photo',
   tentang: 'photo',
   'publikasi-cover': 'photo',
   'publikasi-document': 'document',

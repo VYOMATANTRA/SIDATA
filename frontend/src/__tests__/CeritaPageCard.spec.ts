@@ -7,6 +7,7 @@ const page: AdminPage = {
   id: 'p1',
   slug: 'kependudukan',
   title: 'Kependudukan',
+  coverAssetId: null,
   headline: null,
   bylineAuthor: null,
   bylineAffiliation: null,

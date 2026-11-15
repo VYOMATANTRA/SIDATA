@@ -117,6 +117,47 @@ describe('pages store (CMS hierarchy)', () => {
     expect(store.hierarchyPages[0]?.updatedAt).toBe('2026-02-01T00:00:00.000Z');
   });
 
+  it('preserves coverAssetId on pages (PageSummary) and hierarchyPages (HierarchyPage)', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url === '/api/pages?include=sections') {
+        return json({
+          pages: [
+            {
+              id: 'p1',
+              slug: 'kependudukan',
+              title: 'Kependudukan',
+              coverAssetId: 'asset-cover-1',
+              sortOrder: 0,
+              chapters: [],
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+            {
+              id: 'p2',
+              slug: 'pendidikan',
+              title: 'Pendidikan',
+              coverAssetId: null,
+              sortOrder: 1,
+              chapters: [],
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+        });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    const store = usePagesStore();
+    await store.fetchHierarchy();
+
+    expect(store.pages[0]?.coverAssetId).toBe('asset-cover-1');
+    expect(store.pages[1]?.coverAssetId).toBeNull();
+    expect(store.hierarchyPages[0]?.coverAssetId).toBe('asset-cover-1');
+    expect(store.hierarchyPages[1]?.coverAssetId).toBeNull();
+  });
+
   it('omits a null section title from the breadcrumb', async () => {
     globalThis.fetch = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
@@ -329,6 +370,7 @@ describe('pages store (public page by slug)', () => {
         id: 'page-1',
         slug: 'kependudukan',
         title: 'Judul Lama',
+        coverAssetId: null,
         sortOrder: 1,
         chapterCount: 1,
       },
@@ -336,6 +378,7 @@ describe('pages store (public page by slug)', () => {
         id: 'page-2',
         slug: 'pendidikan',
         title: 'Pendidikan',
+        coverAssetId: null,
         sortOrder: 2,
         chapterCount: 3,
       },
@@ -368,11 +411,39 @@ describe('pages store (public page by slug)', () => {
       id: 'page-1',
       slug: 'kependudukan',
       title: 'Judul Baru Kependudukan',
+      coverAssetId: null,
       sortOrder: 5,
       chapterCount: 2,
     });
     // Other pages remain untouched
     expect(store.pages.find((p) => p.slug === 'pendidikan')?.title).toBe('Pendidikan');
+  });
+
+  it('synchronizes coverAssetId into summary list on fetchPageBySlug when loaded', async () => {
+    const store = usePagesStore();
+    store.pages = [
+      {
+        id: 'page-1',
+        slug: 'kependudukan',
+        title: 'Kependudukan',
+        coverAssetId: null,
+        sortOrder: 1,
+        chapterCount: 1,
+      },
+    ];
+    store.isLoaded = true;
+
+    const updatedPage = {
+      ...samplePage,
+      coverAssetId: 'asset-cover-new',
+    };
+
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue(json({ page: updatedPage }));
+
+    await store.fetchPageBySlug('kependudukan', true);
+
+    const summary = store.pages.find((p) => p.slug === 'kependudukan');
+    expect(summary?.coverAssetId).toBe('asset-cover-new');
   });
 
   it('does not touch pages when isLoaded is false', async () => {

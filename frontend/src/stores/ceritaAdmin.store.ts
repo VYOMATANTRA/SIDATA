@@ -320,6 +320,28 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     });
   }
 
+  async function updatePageCover(
+    slug: string,
+    coverAssetId: string,
+    expectedUpdatedAt?: string,
+  ): Promise<WriteOutcome> {
+    const page = findPage(slug);
+    if (!page) return missing('menyimpan foto sampul');
+    return run('menyimpan foto sampul', 'tree', async () => {
+      await api.putPageCover(slug, coverAssetId, expectedUpdatedAt ?? page.updatedAt);
+      return undefined;
+    });
+  }
+
+  async function deletePageCover(slug: string, expectedUpdatedAt?: string): Promise<WriteOutcome> {
+    const page = findPage(slug);
+    if (!page) return missing('menghapus foto sampul');
+    return run('menghapus foto sampul', 'tree', async () => {
+      await api.deletePageCover(slug, expectedUpdatedAt ?? page.updatedAt);
+      return undefined;
+    });
+  }
+
   async function removePage(slug: string, expectedUpdatedAt?: string): Promise<WriteOutcome> {
     const page = findPage(slug);
     if (!page) return missing('menghapus halaman');
@@ -611,6 +633,8 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     addPage,
     renamePage,
     updatePageDetails,
+    updatePageCover,
+    deletePageCover,
     removePage,
     movePage,
     placePage,

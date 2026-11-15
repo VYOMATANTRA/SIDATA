@@ -20,6 +20,7 @@ export interface PageSummary {
   id: string;
   slug: string;
   title: string;
+  coverAssetId: string | null;
   sortOrder: number;
   chapterCount: number;
 }
@@ -70,6 +71,7 @@ export interface HierarchyPage {
   id: string;
   slug: string;
   title: string;
+  coverAssetId: string | null;
   /** Optional editorial headline and byline (SPEC §8); null while not approved. */
   headline: string | null;
   bylineAuthor: string | null;
@@ -112,6 +114,7 @@ function toHierarchyPage(detail: PageDetail): HierarchyPage | null {
     id: detail.id,
     slug: detail.slug,
     title: detail.title,
+    coverAssetId: detail.coverAssetId ?? null,
     headline: detail.headline ?? null,
     bylineAuthor: detail.bylineAuthor ?? null,
     bylineAffiliation: detail.bylineAffiliation ?? null,
@@ -126,6 +129,8 @@ export interface PageDetail {
   id: string;
   slug: string;
   title: string;
+  /** Optional thumbnail cover asset id; absent in older cached responses. */
+  coverAssetId?: string | null;
   /** Optional editorial headline and byline; absent in older cached responses. */
   headline?: string | null;
   bylineAuthor?: string | null;
@@ -276,6 +281,7 @@ export const usePagesStore = defineStore('pages', () => {
             id: detail.id,
             slug: detail.slug,
             title: detail.title,
+            coverAssetId: detail.coverAssetId ?? null,
             sortOrder: detail.sortOrder,
             chapterCount: detail.chapters?.length ?? 0,
           });
@@ -355,16 +361,19 @@ export const usePagesStore = defineStore('pages', () => {
           const existing = pages.value.find((p) => p.slug === slug);
           if (existing) {
             const nextChapterCount = data.page.chapters?.length ?? 0;
+            const nextCoverAssetId = data.page.coverAssetId ?? null;
             if (
               existing.title !== data.page.title ||
               existing.sortOrder !== data.page.sortOrder ||
-              existing.chapterCount !== nextChapterCount
+              existing.chapterCount !== nextChapterCount ||
+              existing.coverAssetId !== nextCoverAssetId
             ) {
               pages.value = pages.value.map((p) =>
                 p.slug === slug
                   ? {
                       ...p,
                       title: data.page.title,
+                      coverAssetId: nextCoverAssetId,
                       sortOrder: data.page.sortOrder,
                       chapterCount: nextChapterCount,
                     }

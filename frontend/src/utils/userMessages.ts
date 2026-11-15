@@ -278,6 +278,7 @@ export const HIDDEN_API_TOKENS: readonly string[] = [
   'acknowledgedById',
   'mediaId',
   'assetId',
+  'coverAssetId',
   'blockId',
   'phoneIsWhatsapp',
   'bmkgBaseUrl',

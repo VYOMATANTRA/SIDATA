@@ -27,6 +27,7 @@ export interface FakePage {
   id: string;
   slug: string;
   title: string;
+  coverAssetId: string | null;
   headline: string | null;
   bylineAuthor: string | null;
   bylineAffiliation: string | null;
@@ -78,6 +79,7 @@ export function createFakeCerita() {
       id: nextId('page'),
       slug: slugify(title),
       title,
+      coverAssetId: null,
       headline: null,
       bylineAuthor: null,
       bylineAffiliation: null,
@@ -263,6 +265,22 @@ export function createFakeCerita() {
       page.chapters.push(chapter);
       page.updatedAt = stamp();
       return json({ chapter, page: { id: page.id, updatedAt: page.updatedAt } }, 201);
+    }
+    if ((m = path.match(/^\/api\/pages\/([^/]+)\/cover$/))) {
+      const page = pages.find((p) => p.slug === m![1]);
+      if (!page) return notFound();
+      if (method === 'PUT') {
+        if (body['expectedUpdatedAt'] !== page.updatedAt) return stale(page.updatedAt);
+        page.coverAssetId = String(body['coverAssetId']);
+        page.updatedAt = stamp();
+        return json({ message: 'Thumbnail halaman berhasil disimpan', page });
+      }
+      if (method === 'DELETE') {
+        if (token !== page.updatedAt) return stale(page.updatedAt);
+        page.coverAssetId = null;
+        page.updatedAt = stamp();
+        return json({ message: 'Thumbnail halaman berhasil dihapus', page });
+      }
     }
     if ((m = path.match(/^\/api\/pages\/([^/]+)$/))) {
       const page = pages.find((p) => p.slug === m![1]);

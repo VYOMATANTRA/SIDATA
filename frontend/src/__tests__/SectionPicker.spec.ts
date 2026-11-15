@@ -13,10 +13,12 @@ function hierarchy(): HierarchyPage[] {
       id: 'page-1',
       slug: 'kependudukan',
       title: 'Kependudukan',
+      coverAssetId: null,
       headline: null,
       bylineAuthor: null,
       bylineAffiliation: null,
       sortOrder: 0,
+      createdAt: null,
       updatedAt: UPDATED,
       chapters: [
         {

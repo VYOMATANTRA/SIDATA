@@ -55,6 +55,42 @@ describe('ceritaAdmin store', () => {
     expect(text).not.toMatch(/Slug|409/);
   });
 
+  it('updates page cover with coverAssetId and expectedUpdatedAt and refreshes hierarchy', async () => {
+    const page = store.tree[0]!;
+    const outcome = await store.updatePageCover(page.slug, 'asset-cover-123', page.updatedAt);
+
+    expect(outcome.ok).toBe(true);
+    expect(fake.lastWrite()).toMatchObject({
+      method: 'PUT',
+      url: `/api/pages/${page.slug}/cover`,
+      body: { coverAssetId: 'asset-cover-123', expectedUpdatedAt: page.updatedAt },
+    });
+    expect(store.tree[0]!.coverAssetId).toBe('asset-cover-123');
+  });
+
+  it('deletes page cover with expectedUpdatedAt query and refreshes hierarchy, reporting stale on 409 STALE_WRITE', async () => {
+    const page = store.tree[0]!;
+    await store.updatePageCover(page.slug, 'asset-cover-123', page.updatedAt);
+    expect(store.tree[0]!.coverAssetId).toBe('asset-cover-123');
+
+    // Test stale write
+    const currentToken = store.tree[0]!.updatedAt;
+    fake.touchPage(page.slug);
+    const staleOutcome = await store.deletePageCover(page.slug, currentToken);
+    expect(staleOutcome).toMatchObject({ ok: false, stale: true });
+
+    // Reload and delete with fresh token
+    await store.load();
+    const freshToken = store.tree[0]!.updatedAt;
+    const outcome = await store.deletePageCover(page.slug, freshToken);
+    expect(outcome.ok).toBe(true);
+    expect(fake.lastWrite()).toMatchObject({
+      method: 'DELETE',
+      url: `/api/pages/${page.slug}/cover?expectedUpdatedAt=${encodeURIComponent(freshToken)}`,
+    });
+    expect(store.tree[0]!.coverAssetId).toBeNull();
+  });
+
   it('renames a chapter with the chapter token it loaded', async () => {
     const chapter = store.tree[0]!.chapters[0]!;
     const outcome = await store.renameChapter(chapter.id, 'Penduduk Total');

@@ -67,6 +67,18 @@ export async function updatePageDetails(
   await patch(`/api/pages/${enc(slug)}`, { ...details, expectedUpdatedAt });
 }
 
+export async function putPageCover(
+  slug: string,
+  coverAssetId: string,
+  expectedUpdatedAt: string,
+): Promise<void> {
+  await put(`/api/pages/${enc(slug)}/cover`, { coverAssetId, expectedUpdatedAt });
+}
+
+export async function deletePageCover(slug: string, expectedUpdatedAt: string): Promise<void> {
+  await remove(`/api/pages/${enc(slug)}/cover${tokenQuery(expectedUpdatedAt)}`);
+}
+
 export async function deletePage(slug: string, expectedUpdatedAt: string): Promise<void> {
   await remove(`/api/pages/${enc(slug)}${tokenQuery(expectedUpdatedAt)}`);
 }

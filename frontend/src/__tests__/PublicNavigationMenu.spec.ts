@@ -165,8 +165,22 @@ describe('PublicNavigationMenu', () => {
       const { wrapper, pinia } = await setup();
       const pagesStore = usePagesStore(pinia);
       pagesStore.pages = [
-        { id: '2', slug: 'topik-b', title: 'Topik B', sortOrder: 2, chapterCount: 0 },
-        { id: '1', slug: 'topik-a', title: 'Topik A', sortOrder: 1, chapterCount: 0 },
+        {
+          id: '2',
+          slug: 'topik-b',
+          title: 'Topik B',
+          coverAssetId: null,
+          sortOrder: 2,
+          chapterCount: 0,
+        },
+        {
+          id: '1',
+          slug: 'topik-a',
+          title: 'Topik A',
+          coverAssetId: null,
+          sortOrder: 1,
+          chapterCount: 0,
+        },
       ];
       pagesStore.isLoaded = true;
       await flushPromises();
