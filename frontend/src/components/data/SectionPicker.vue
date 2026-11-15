@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { usePagesStore } from '../../stores/pages.store';
 import { INPUT_CLASSES } from '../../utils/formStyles';
 
@@ -37,6 +37,37 @@ const chapterId = ref('');
 
 const fieldId = (name: string): string => `${props.idPrefix}-${name}`;
 
+/** The page and chapter that contain a section, or null when the section is not in the hierarchy. */
+function locate(sectionId: string): { pageId: string; chapterId: string } | null {
+  for (const page of pagesStore.hierarchyPages) {
+    for (const chapter of page.chapters) {
+      if (chapter.sections.some((section) => section.id === sectionId)) {
+        return { pageId: page.id, chapterId: chapter.id };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * A section id that arrives from outside (a preset, or a draft restored by the parent) must show
+ * its own page and chapter, otherwise Bagian stays disabled with a value it cannot display. Runs
+ * again when the hierarchy loads, since a preset can arrive before the pages do.
+ */
+function syncFromModel(): void {
+  if (!props.modelValue) return;
+  const found = locate(props.modelValue);
+  if (!found) return;
+  pageId.value = found.pageId;
+  chapterId.value = found.chapterId;
+}
+
+watch(
+  () => [props.modelValue, pagesStore.hierarchyPages] as const,
+  () => syncFromModel(),
+  { immediate: true },
+);
+
 const pages = computed(() => pagesStore.hierarchyPages);
 
 const chapters = computed(() => {
@@ -53,8 +84,12 @@ function chapterLabel(number: string | null, title: string): string {
   return number ? `${number}. ${title}` : title;
 }
 
-function sectionLabel(title: string | null): string {
-  return title && title.trim() !== '' ? title : 'Bagian tanpa judul';
+/**
+ * An untitled section is named by its position in the chapter ("Bagian 1", "Bagian 2"), so two
+ * untitled sections in one chapter never look identical in the list.
+ */
+function sectionLabel(title: string | null, position: number): string {
+  return title && title.trim() !== '' ? title : `Bagian ${position + 1}`;
 }
 
 function onPageChange(event: Event): void {
@@ -139,8 +174,8 @@ const errorId = computed(() => fieldId('error'));
           @change="onSectionChange"
         >
           <option value="">{{ chapterId === '' ? 'Pilih bab dulu' : 'Pilih bagian' }}</option>
-          <option v-for="section in sections" :key="section.id" :value="section.id">
-            {{ sectionLabel(section.title) }}
+          <option v-for="(section, position) in sections" :key="section.id" :value="section.id">
+            {{ sectionLabel(section.title, position) }}
           </option>
         </select>
       </div>
