@@ -321,3 +321,55 @@ describe('PublikasiView uploaded files and covers', () => {
     expect(wrapper.find('[data-test="publication-file-info"]').text()).toContain('PDF');
   });
 });
+
+describe('PublikasiView page count and publication date', () => {
+  async function mountWithPublications(publications: Array<Record<string, unknown>>) {
+    const { router, wrapper } = mountPublikasiView();
+    await router.push('/publikasi');
+    await router.isReady();
+
+    const { useContentBlocksStore } = await import('../stores/contentBlocks.store');
+    const store = useContentBlocksStore();
+    store.blocks['publikasi-katalog'] = {
+      id: 'block-pub',
+      sectionId: null,
+      type: 'prose',
+      slug: 'publikasi-katalog',
+      title: 'Katalog',
+      body: 'Deskripsi',
+      metadata: { publications },
+      sortOrder: null,
+      updatedAt: '2026-09-01T00:00:00.000Z',
+    };
+    await wrapper.vm.$nextTick();
+    return wrapper;
+  }
+
+  it('shows "N Halaman, Diterbitkan <Bulan YYYY>" when both values are stored', async () => {
+    const wrapper = await mountWithPublications([
+      {
+        category: 'Statistik',
+        title: 'Manggar dalam Angka',
+        description: 'Ringkasan',
+        isAvailableOnline: false,
+        pageCount: 120,
+        publishedAt: '2026-03-15',
+      },
+    ]);
+    expect(wrapper.find('[data-test="publication-meta"]').text()).toBe(
+      '120 Halaman, Diterbitkan Maret 2026',
+    );
+  });
+
+  it('leaves out the line when neither value is stored', async () => {
+    const wrapper = await mountWithPublications([
+      {
+        category: 'Statistik',
+        title: 'Tanpa Keterangan',
+        description: 'Ringkasan',
+        isAvailableOnline: false,
+      },
+    ]);
+    expect(wrapper.find('[data-test="publication-meta"]').exists()).toBe(false);
+  });
+});

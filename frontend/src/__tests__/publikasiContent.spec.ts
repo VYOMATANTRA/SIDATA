@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatPageCount,
+  formatPublishedAt,
   isDownloadable,
+  isValidPublishedAt,
   publicationCoverSrc,
   publicationDownloadHref,
+  publicationMetaLine,
   type PublicationItem,
 } from '../content/publikasi';
 
@@ -43,5 +47,47 @@ describe('publication download and cover addresses', () => {
     );
     expect(publicationCoverSrc({ ...base, coverAssetId: 'x?y' })).toBeNull();
     expect(publicationCoverSrc(base)).toBeNull();
+  });
+});
+
+describe('publication page count and publication date', () => {
+  it('formats a page count only within 1 to 100000 whole pages', () => {
+    expect(formatPageCount(12)).toBe('12 Halaman');
+    expect(formatPageCount(1)).toBe('1 Halaman');
+    expect(formatPageCount(100000)).toBe('100000 Halaman');
+    expect(formatPageCount(0)).toBeNull();
+    expect(formatPageCount(100001)).toBeNull();
+    expect(formatPageCount(2.5)).toBeNull();
+    expect(formatPageCount(undefined)).toBeNull();
+  });
+
+  it('shows only the month and year, for both accepted formats', () => {
+    expect(formatPublishedAt('2026-03')).toBe('Maret 2026');
+    expect(formatPublishedAt('2026-03-15')).toBe('Maret 2026');
+    expect(formatPublishedAt('2025-12-01')).toBe('Desember 2025');
+    expect(formatPublishedAt(' 2026-01 ')).toBe('Januari 2026');
+  });
+
+  it('returns null for a date that is not YYYY-MM or YYYY-MM-DD', () => {
+    for (const bad of ['2026', '2026-13', '2026-00', '2026-03-32', '03-2026', '']) {
+      expect(formatPublishedAt(bad)).toBeNull();
+      expect(isValidPublishedAt(bad)).toBe(false);
+    }
+    expect(isValidPublishedAt('2026-02-28')).toBe(true);
+  });
+
+  it('builds the meta line from whichever parts are present', () => {
+    expect(
+      publicationMetaLine({
+        ...base,
+        pageCount: 40,
+        publishedAt: '2026-11',
+      }),
+    ).toBe('40 Halaman, Diterbitkan November 2026');
+    expect(publicationMetaLine({ ...base, pageCount: 40 })).toBe('40 Halaman');
+    expect(publicationMetaLine({ ...base, publishedAt: '2026-11-02' })).toBe(
+      'Diterbitkan November 2026',
+    );
+    expect(publicationMetaLine(base)).toBe('');
   });
 });

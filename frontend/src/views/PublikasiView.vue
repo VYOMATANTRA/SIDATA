@@ -8,6 +8,7 @@ import {
   isDownloadable,
   formatFileSize,
   publicationCoverSrc,
+  publicationMetaLine,
   publicationDownloadHref,
   type PublicationItem,
 } from '../content/publikasi';
@@ -111,6 +112,13 @@ const hasPendingPublication = computed(() =>
                 <h3 class="text-brand-navy mt-1 text-lg leading-snug font-semibold">
                   {{ publication.title }}
                 </h3>
+                <p
+                  v-if="publicationMetaLine(publication)"
+                  class="text-sm text-text-muted"
+                  data-test="publication-meta"
+                >
+                  {{ publicationMetaLine(publication) }}
+                </p>
                 <p class="mt-1 max-w-2xl text-sm leading-relaxed text-text-muted sm:text-base">
                   {{ publication.description }}
                 </p>

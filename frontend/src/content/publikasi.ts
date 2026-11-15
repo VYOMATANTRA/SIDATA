@@ -14,6 +14,10 @@ export interface PublicationItem {
   fileType?: string;
   /** Optional file size in bytes */
   fileSizeBytes?: number;
+  /** Optional number of pages (1–100000), shown as "N Halaman". */
+  pageCount?: number;
+  /** Optional publication date, `YYYY-MM` or `YYYY-MM-DD`; only the month and year are shown. */
+  publishedAt?: string;
   /** An uploaded PDF/DOCX (media purpose `publikasi-document`); served by `/api/media/<id>/download`. */
   documentAssetId?: string;
   /** Cover photo (media purpose `publikasi-cover`); shown from its thumbnail. */
@@ -94,6 +98,52 @@ export function isDownloadable(item: PublicationItem): boolean {
 
 export function hasPublicPublication(list: PublicationItem[] = PUBLICATIONS): boolean {
   return list.some(isDownloadable);
+}
+
+const MONTHS_ID = [
+  'Januari',
+  'Februari',
+  'Maret',
+  'April',
+  'Mei',
+  'Juni',
+  'Juli',
+  'Agustus',
+  'September',
+  'Oktober',
+  'November',
+  'Desember',
+] as const;
+
+const PUBLISHED_AT = /^(\d{4})-(0[1-9]|1[0-2])(?:-(0[1-9]|[12]\d|3[01]))?$/;
+
+/** True for `YYYY-MM` or `YYYY-MM-DD`, the same rule the backend applies to `publishedAt`. */
+export function isValidPublishedAt(value: string): boolean {
+  return PUBLISHED_AT.test(value);
+}
+
+/** "12 Halaman", or null when the stored count is absent or outside 1–100000. */
+export function formatPageCount(pageCount?: number): string | null {
+  if (typeof pageCount !== 'number' || !Number.isInteger(pageCount)) return null;
+  if (pageCount < 1 || pageCount > 100000) return null;
+  return `${pageCount} Halaman`;
+}
+
+/** "Maret 2026" from `YYYY-MM` or `YYYY-MM-DD` (the day is not shown), or null when invalid. */
+export function formatPublishedAt(publishedAt?: string): string | null {
+  const match = typeof publishedAt === 'string' ? PUBLISHED_AT.exec(publishedAt.trim()) : null;
+  if (!match) return null;
+  return `${MONTHS_ID[Number(match[2]) - 1]} ${match[1]}`;
+}
+
+/** "12 Halaman, Diterbitkan Maret 2026"; a missing part is left out, and no part gives "". */
+export function publicationMetaLine(item: PublicationItem): string {
+  const parts: string[] = [];
+  const pages = formatPageCount(item.pageCount);
+  if (pages) parts.push(pages);
+  const published = formatPublishedAt(item.publishedAt);
+  if (published) parts.push(`Diterbitkan ${published}`);
+  return parts.join(', ');
 }
 
 export function formatFileSize(bytes?: number): string {
