@@ -211,6 +211,8 @@ model Page {
   /// Optional byline under the headline. An affiliation is only meaningful with an author.
   bylineAuthor      String?  @map("byline_author") @db.VarChar(120)
   bylineAffiliation String?  @map("byline_affiliation") @db.VarChar(160)
+  /// Optional cover photo asset ID for the public Cerita hero card (SPEC §7/§8).
+  coverAssetId      String?  @map("cover_asset_id")
   sortOrder         Int      @map("sort_order")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
@@ -218,6 +220,7 @@ model Page {
   chapters Chapter[]
 
   @@index([sortOrder])
+  @@index([coverAssetId])
   @@map("pages")
 }
 

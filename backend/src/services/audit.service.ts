@@ -58,6 +58,8 @@ export const AUDIT_ACTIONS = {
   PAGE_DELETED: defineAction('page.deleted', 'warning'),
   PAGE_REORDERED: defineAction('page.reordered', 'info'),
   PAGE_UPDATED: defineAction('page.updated', 'info'),
+  PAGE_COVER_UPDATED: defineAction('page.cover_updated', 'info'),
+  PAGE_COVER_DELETED: defineAction('page.cover_deleted', 'warning'),
   // SPEC §3 Cerita authoring: chapters, sections and section prose blocks. Deletions are
   // warning (content leaves the hierarchy); metadata holds ids, titles and counts only.
   CHAPTER_CREATED: defineAction('chapter.created', 'info'),

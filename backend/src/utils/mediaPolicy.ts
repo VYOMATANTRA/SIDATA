@@ -124,6 +124,7 @@ export const MEDIA_PURPOSES = {
   'portal-hero': { kinds: ['photo'], owner: { type: 'fixed', value: 'hero' } },
   'sambutan-lurah': { kinds: ['photo'], owner: { type: 'fixed', value: 'lurah' } },
   cerita: { kinds: ['photo'], owner: { type: 'uploader' } },
+  'cerita-cover': { kinds: ['photo'], owner: { type: 'uploader' } },
   tentang: { kinds: ['photo'], owner: { type: 'uploader' } },
   'publikasi-cover': { kinds: ['photo'], owner: { type: 'uploader' } },
   'publikasi-document': { kinds: ['document'], owner: { type: 'uploader' } },
