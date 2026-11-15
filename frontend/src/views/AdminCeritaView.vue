@@ -913,7 +913,10 @@ function placeDragged(dragged: string, toIndex: number): void {
       const index = pages.value.findIndex((item) => item.slug === dragged);
       announce(`Halaman “${title}” dipindah ke urutan ${index + 1} dari ${pages.value.length}.`);
       // Naik / Turun exist only in Urutkan mode, so a drop (any mode) keeps focus on the card's Edit.
-      focusId(ceritaIds.cardEdit(dragged));
+      // Pointer drop: the moved card's Edit button, without scrolling the list.
+      void nextTick(() =>
+        document.getElementById(ceritaIds.cardEdit(dragged))?.focus({ preventScroll: true }),
+      );
     },
   );
 }
