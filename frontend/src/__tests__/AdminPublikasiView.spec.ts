@@ -184,7 +184,7 @@ describe('AdminPublikasiView', () => {
       await wrapper.find(RETRY).trigger('click');
       await flushPromises();
 
-      expect(wrapper.find('[data-test="publication-grid"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test="publication-list"]').exists()).toBe(true);
       expect(wrapper.find('[data-test="publikasi-unavailable"]').exists()).toBe(false);
     });
 
@@ -192,7 +192,7 @@ describe('AdminPublikasiView', () => {
       stored = catalogBlock({ slug: 'lain' });
       const wrapper = await mountView();
       expect(wrapper.find('[data-test="publikasi-unavailable"]').exists()).toBe(true);
-      expect(wrapper.find('[data-test="publication-grid"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="publication-list"]').exists()).toBe(false);
     });
   });
 
@@ -204,11 +204,10 @@ describe('AdminPublikasiView', () => {
         },
       });
       const wrapper = await mountView();
-      const cards = wrapper.findAll('[data-test="publication-grid"] > li');
+      const cards = wrapper.findAll('[data-test="publication-list"] > li');
       expect(cards).toHaveLength(1);
-      expect(wrapper.find('[data-test="card-meta"]').text()).toBe(
-        '12 Halaman, Diterbitkan Maret 2026',
-      );
+      expect(wrapper.find('[data-test="card-pages"]').text()).toBe('12');
+      expect(wrapper.find('[data-test="card-published"]').text()).toBe('Maret 2026');
       expect(wrapper.find('h2').text()).toBe('Katalog Uji');
     });
 
@@ -216,7 +215,7 @@ describe('AdminPublikasiView', () => {
       stored = catalogBlock({ metadata: { publications: [] } });
       const wrapper = await mountView();
       expect(wrapper.find('[data-test="publications-empty"]').exists()).toBe(true);
-      expect(wrapper.find('[data-test="publication-grid"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="publication-list"]').exists()).toBe(false);
     });
 
     it('searches title, category and description', async () => {
@@ -229,13 +228,13 @@ describe('AdminPublikasiView', () => {
         },
       });
       const wrapper = await mountView();
-      const search = wrapper.find('input#publikasi-search');
+      const search = wrapper.find('input#publikasi-cari');
       await search.setValue('infografis');
-      expect(wrapper.find('[data-test="result-count"]').text()).toBe(
+      expect(wrapper.find('[data-test="search-count"]').text()).toContain(
         'Menampilkan 1 dari 2 publikasi',
       );
       await search.setValue('batas rt');
-      expect(wrapper.findAll('[data-test="publication-grid"] > li')).toHaveLength(1);
+      expect(wrapper.findAll('[data-test="publication-list"] > li')).toHaveLength(1);
       await search.setValue('tidak ada');
       expect(wrapper.find('[data-test="publications-no-match"]').exists()).toBe(true);
     });
@@ -251,11 +250,11 @@ describe('AdminPublikasiView', () => {
         },
       });
       const wrapper = await mountView();
-      const options = wrapper.findAll('select#publikasi-category option').map((o) => o.text());
+      const options = wrapper.findAll('select#publikasi-kategori option').map((o) => o.text());
       expect(options).toEqual(['Semua Kategori', 'Infografis', 'Statistik']);
 
-      await wrapper.find('select#publikasi-category').setValue('Statistik');
-      expect(wrapper.findAll('[data-test="publication-grid"] > li')).toHaveLength(2);
+      await wrapper.find('select#publikasi-kategori').setValue('Statistik');
+      expect(wrapper.findAll('[data-test="publication-list"] > li')).toHaveLength(2);
     });
 
     it('turns reordering off while a search or filter hides rows', async () => {
@@ -263,9 +262,10 @@ describe('AdminPublikasiView', () => {
         metadata: { publications: [pub({ title: 'Satu' }), pub({ title: 'Dua' })] },
       });
       const wrapper = await mountView();
+      await clickPage(wrapper, '[data-test="sort-toggle"]');
       expect(wrapper.find('[data-test="card-move-down"]').attributes('disabled')).toBeUndefined();
 
-      await wrapper.find('input#publikasi-search').setValue('dua');
+      await wrapper.find('input#publikasi-cari').setValue('dua');
       expect(wrapper.find('[data-test="card-move-down"]').attributes('disabled')).toBeDefined();
     });
 
@@ -315,7 +315,7 @@ describe('AdminPublikasiView', () => {
         },
       });
       const wrapper = await mountView();
-      await clickPage(wrapper, '#publikasi-card-1-edit');
+      await clickPage(wrapper, '#publikasi-card-1-ubah');
       expect(dialogRoot()?.querySelector('h2')?.textContent).toBe('Ubah publikasi');
       expect(field('#publikasi-item-pageCount').value).toBe('7');
 
@@ -333,12 +333,12 @@ describe('AdminPublikasiView', () => {
       });
       const wrapper = await mountView();
 
-      await clickPage(wrapper, '#publikasi-card-0-delete');
+      await clickPage(wrapper, '#publikasi-card-0-hapus');
       expect(dialogRoot()?.querySelector('h2')?.textContent).toBe('Hapus publikasi?');
       await clickDialogButton('Batal');
       expect(putBodies).toHaveLength(0);
 
-      await clickPage(wrapper, '#publikasi-card-0-delete');
+      await clickPage(wrapper, '#publikasi-card-0-hapus');
       await clickDialogButton('Hapus “Satu”');
       expect(putBodies).toHaveLength(1);
       expect(sentList().map((p) => p.title)).toEqual(['Dua']);
@@ -352,6 +352,7 @@ describe('AdminPublikasiView', () => {
         metadata: { publications: [pub({ title: 'Satu' }), pub({ title: 'Dua' })] },
       });
       const wrapper = await mountView();
+      await clickPage(wrapper, '[data-test="sort-toggle"]');
       await clickPage(wrapper, '#publikasi-card-0-down');
 
       expect(sentList().map((p) => p.title)).toEqual(['Dua', 'Satu']);
@@ -367,7 +368,7 @@ describe('AdminPublikasiView', () => {
           { error: 'Katalog publikasi telah diubah oleh pengguna lain.', code: 'STALE_WRITE' },
           409,
         );
-      await clickPage(wrapper, '#publikasi-card-0-edit');
+      await clickPage(wrapper, '#publikasi-card-0-ubah');
       await typeInto('#publikasi-item-title', 'Judul draf');
       await submitDialogForm();
 
@@ -390,7 +391,7 @@ describe('AdminPublikasiView', () => {
     it('keeps every field when the save fails for another reason', async () => {
       const wrapper = await mountView();
       putResponse = () => json({ error: 'Terjadi kesalahan internal server' }, 500);
-      await clickPage(wrapper, '#publikasi-card-0-edit');
+      await clickPage(wrapper, '#publikasi-card-0-ubah');
       await typeInto('#publikasi-item-title', 'Judul draf');
       await submitDialogForm();
 
@@ -405,6 +406,7 @@ describe('AdminPublikasiView', () => {
       });
       const wrapper = await mountView();
       putResponse = () => json({ error: 'Terjadi kesalahan internal server' }, 500);
+      await clickPage(wrapper, '[data-test="sort-toggle"]');
       await clickPage(wrapper, '#publikasi-card-0-down');
 
       expect(wrapper.find('[data-test="page-error"]').exists()).toBe(true);
@@ -437,6 +439,131 @@ describe('AdminPublikasiView', () => {
       expect(putBodies).toHaveLength(0);
       expect(dialogRoot()?.textContent).toContain('Judul katalog wajib diisi.');
       expect(wrapper.find('h2').text()).toBe('Katalog Uji');
+    });
+  });
+
+  describe('selection, bulk delete and drag reorder', () => {
+    function threeStored(): ContentBlock {
+      return catalogBlock({
+        metadata: {
+          publications: [
+            pub({ title: 'Satu', category: 'Statistik' }),
+            pub({ title: 'Dua', category: 'Infografis' }),
+            pub({ title: 'Tiga', category: 'Statistik' }),
+          ],
+        },
+      });
+    }
+
+    async function tickCheckbox(wrapper: VueWrapper, index: number): Promise<void> {
+      await wrapper.findAll('[data-test="publication-checkbox"]')[index]!.setValue(true);
+    }
+
+    it('select-all is a tri-state button and acts on the visible cards only', async () => {
+      stored = threeStored();
+      const wrapper = await mountView();
+      const selectAll = () => wrapper.find('[data-test="select-all"]');
+      expect(selectAll().attributes('aria-checked')).toBe('false');
+      expect(selectAll().text()).toBe('Pilih semua');
+
+      await tickCheckbox(wrapper, 1);
+      expect(selectAll().attributes('aria-checked')).toBe('mixed');
+      expect(selectAll().text()).toBe('Pilih semua');
+      expect(wrapper.find('[data-test="selected-count"]').text()).toBe('1 dipilih');
+      expect(wrapper.find('[data-test="publikasi-add"]').classes()).toContain('invisible');
+
+      // The search hides "Dua", which was selected: a hidden card is dropped from the selection.
+      await wrapper.find('input#publikasi-cari').setValue('statistik');
+      expect(wrapper.find('[data-test="selected-count"]').exists()).toBe(false);
+      await selectAll().trigger('click');
+      expect(wrapper.find('[data-test="selected-count"]').text()).toBe('2 dipilih');
+      expect(selectAll().attributes('aria-checked')).toBe('true');
+      expect(selectAll().text()).toBe('Batal pilih semua');
+
+      await selectAll().trigger('click');
+      expect(wrapper.find('[data-test="selected-count"]').exists()).toBe(false);
+      expect(selectAll().attributes('aria-checked')).toBe('false');
+    });
+
+    it('bulk delete lists the selection, asks first and saves the rest in one save', async () => {
+      stored = threeStored();
+      const wrapper = await mountView();
+      await tickCheckbox(wrapper, 0);
+      await tickCheckbox(wrapper, 2);
+      await wrapper.find('[data-test="bulk-delete"]').trigger('click');
+      await flushPromises();
+
+      expect(dialogRoot()?.querySelector('h2')?.textContent).toBe('Hapus 2 publikasi?');
+      expect(putBodies).toHaveLength(0);
+      expect(dialogRoot()?.textContent).toContain('dalam satu penyimpanan katalog');
+
+      await clickDialogButton('Hapus 2 publikasi');
+      expect(putBodies).toHaveLength(1);
+      expect(sentList().map((p) => p.title)).toEqual(['Dua']);
+      expect(dialogRoot()?.querySelector('[data-test="bulk-summary"]')?.textContent).toBe(
+        '2 publikasi dihapus.',
+      );
+    });
+
+    it('a failed bulk save removes nothing and reports every publication as not deleted', async () => {
+      stored = threeStored();
+      const wrapper = await mountView();
+      putResponse = () => json({ error: 'Terjadi kesalahan internal server' }, 500);
+      await tickCheckbox(wrapper, 0);
+      await tickCheckbox(wrapper, 1);
+      await wrapper.find('[data-test="bulk-delete"]').trigger('click');
+      await clickDialogButton('Hapus 2 publikasi');
+
+      expect(dialogRoot()?.querySelector('[data-test="bulk-summary"]')?.textContent).toBe(
+        '0 publikasi dihapus, 2 tidak dapat dihapus.',
+      );
+      const rows = dialogRoot()?.querySelectorAll('[data-test="bulk-results"] > li') ?? [];
+      expect(rows).toHaveLength(2);
+      for (const row of rows) expect(row.textContent).toContain('Tidak dapat dihapus.');
+      expect(wrapper.findAll('[data-test="publication-card"]')).toHaveLength(3);
+    });
+
+    it('a stale bulk save offers a reload that shows the latest catalog', async () => {
+      stored = threeStored();
+      const wrapper = await mountView();
+      putResponse = () =>
+        json({ error: 'Katalog publikasi telah diubah oleh pengguna lain.', code: 'STALE_WRITE' }, 409);
+      await tickCheckbox(wrapper, 0);
+      await wrapper.find('[data-test="bulk-delete"]').trigger('click');
+      await clickDialogButton('Hapus 1 publikasi');
+      expect(dialogRoot()?.querySelector('[data-test="bulk-stale"]')).not.toBeNull();
+
+      stored = catalogBlock({
+        updatedAt: '2026-09-03T00:00:00.000Z',
+        metadata: { publications: [pub({ title: 'Baru' })] },
+      });
+      await clickDialogButton('Muat ulang');
+      expect(dialogRoot()).toBeNull();
+      expect(wrapper.find('h3').text()).toBe('Baru');
+    });
+
+    it('dragging a card onto the end zone saves the new order', async () => {
+      stored = threeStored();
+      const wrapper = await mountView();
+      await wrapper.findAll('[data-test="grip"]')[0]!.trigger('dragstart');
+      await wrapper.find('[data-test="drop-end"]').trigger('dragover');
+      await wrapper.find('[data-test="drop-end"]').trigger('drop');
+      await flushPromises();
+
+      expect(sentList().map((p) => p.title)).toEqual(['Dua', 'Tiga', 'Satu']);
+      expect(wrapper.find('[data-test="publikasi-status"]').text()).toBe(
+        'Publikasi “Satu” dipindah ke posisi 3.',
+      );
+    });
+
+    it('dragging is off while a search or category filter is active', async () => {
+      stored = threeStored();
+      const wrapper = await mountView();
+      await wrapper.find('input#publikasi-cari').setValue('dua');
+      await wrapper.findAll('[data-test="grip"]')[0]!.trigger('dragstart');
+      expect(wrapper.find('[data-test="drop-end"]').exists()).toBe(false);
+      expect(wrapper.findAll('[data-test="grip"]')[0]!.attributes('draggable')).toBe('false');
+      expect(putBodies).toHaveLength(0);
     });
   });
 });
