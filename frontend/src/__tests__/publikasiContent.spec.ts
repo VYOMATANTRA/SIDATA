@@ -91,3 +91,15 @@ describe('publication page count and publication date', () => {
     expect(publicationMetaLine(base)).toBe('');
   });
 });
+
+describe('publishedAt calendar rule (same as the backend)', () => {
+  it('accepts a real day and a month, and refuses days the month does not have', () => {
+    for (const ok of ['2024-02-29', '2026-02-28', '2026-12-31', '2026-04-30', '2026-11']) {
+      expect(isValidPublishedAt(ok)).toBe(true);
+    }
+    for (const bad of ['2026-02-30', '2025-02-29', '2026-02-31', '2026-04-31', '2026-13', '2026-00-10']) {
+      expect(isValidPublishedAt(bad)).toBe(false);
+      expect(formatPublishedAt(bad)).toBeNull();
+    }
+  });
+});

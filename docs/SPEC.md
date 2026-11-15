@@ -843,7 +843,7 @@ move or bulk delete saves the whole list at once; the page keeps no unsaved list
 is not built.
 
 - **Page count and publication date** (both optional, per publication): `pageCount` is a whole number
-  from 1 to 100000; `publishedAt` is `YYYY-MM` or `YYYY-MM-DD` (anything else is refused). The card and the
+  from 1 to 100000; `publishedAt` is `YYYY-MM` or `YYYY-MM-DD` naming a real date (2026-02-30 and 2025-02-29 are refused, 2024-02-29 is accepted; anything else is refused). The card and the
   public page show the month and year only ("Diterbitkan Maret 2026"), and the public line reads "N
   Halaman, Diterbitkan Bulan YYYY" with a part left out when it is not stored; the day is kept but not
   shown.

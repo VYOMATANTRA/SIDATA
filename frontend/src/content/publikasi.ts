@@ -117,9 +117,19 @@ const MONTHS_ID = [
 
 const PUBLISHED_AT = /^(\d{4})-(0[1-9]|1[0-2])(?:-(0[1-9]|[12]\d|3[01]))?$/;
 
-/** True for `YYYY-MM` or `YYYY-MM-DD`, the same rule the backend applies to `publishedAt`. */
+/**
+ * `YYYY-MM` or `YYYY-MM-DD` that names a real date: the day must exist in that month. Identical to the
+ * backend rule (`isValidPublishedAt` in backend/src/services/contentBlocks.service.ts).
+ */
 export function isValidPublishedAt(value: string): boolean {
-  return PUBLISHED_AT.test(value);
+  const match = PUBLISHED_AT.exec(value);
+  if (!match) return false;
+  if (match[3] === undefined) return true;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  // Day 0 of the following month (passed as a 1-based month) is the last day of this month.
+  return day <= new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
 /** The stored page count as a number, or null when absent or outside 1–100000. */
@@ -137,7 +147,8 @@ export function formatPageCount(pageCount?: number): string | null {
 
 /** "Maret 2026" from `YYYY-MM` or `YYYY-MM-DD` (the day is not shown), or null when invalid. */
 export function formatPublishedAt(publishedAt?: string): string | null {
-  const match = typeof publishedAt === 'string' ? PUBLISHED_AT.exec(publishedAt.trim()) : null;
+  if (typeof publishedAt !== 'string' || !isValidPublishedAt(publishedAt.trim())) return null;
+  const match = PUBLISHED_AT.exec(publishedAt.trim());
   if (!match) return null;
   return `${MONTHS_ID[Number(match[2]) - 1]} ${match[1]}`;
 }

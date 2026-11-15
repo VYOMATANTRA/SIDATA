@@ -117,4 +117,21 @@ describe('content block metadata schema stripping', () => {
       );
     }
   });
+
+  it('accepts only real calendar dates for publishedAt', () => {
+    const base = { category: 'Statistik', title: 'Judul', description: 'Deskripsi' };
+    const accepted = ['2024-02-29', '2026-02-28', '2026-12-31', '2026-04-30', '2026-11'];
+    for (const publishedAt of accepted) {
+      assert.doesNotThrow(() =>
+        validateBlockMetadata('publikasi-katalog', { publications: [{ ...base, publishedAt }] }),
+      );
+    }
+    const refused = ['2026-02-30', '2025-02-29', '2026-02-31', '2026-04-31', '2026-13', '2026-00-10'];
+    for (const publishedAt of refused) {
+      assert.throws(
+        () => validateBlockMetadata('publikasi-katalog', { publications: [{ ...base, publishedAt }] }),
+        `${publishedAt} must be refused`,
+      );
+    }
+  });
 });
