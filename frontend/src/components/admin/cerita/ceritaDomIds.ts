@@ -1,12 +1,21 @@
 /**
  * Element ids on the Cerita management screen that other code has to find again: to hand
- * keyboard focus back after a move, an add or a dialog. Kept in one place so the panel that
- * renders them and the view that focuses them cannot drift apart.
+ * keyboard focus back after a move, an add, a dialog or a return to the list. Kept in one place so
+ * the components that render them and the view that focuses them cannot drift apart.
  */
 export const ceritaIds = {
+  search: 'cerita-cari',
+  sortToggle: 'cerita-urutkan',
+  selectToggle: 'cerita-pilih',
+  bulkDelete: 'cerita-hapus-terpilih',
   addPage: 'cerita-tambah-halaman',
+  cardEdit: (slug: string): string => `cerita-kartu-${slug}-ubah`,
+  cardDelete: (slug: string): string => `cerita-kartu-${slug}-hapus`,
+  cardUp: (slug: string): string => `cerita-kartu-${slug}-naik`,
+  cardDown: (slug: string): string => `cerita-kartu-${slug}-turun`,
+  cardCheckbox: (slug: string): string => `cerita-kartu-${slug}-pilih`,
+  backToList: 'cerita-kembali-ke-daftar',
   pageHeading: 'cerita-halaman-judul',
-  pageSelect: (slug: string): string => `cerita-halaman-${slug}`,
   pageRename: 'cerita-halaman-ubah',
   pageDetails: 'cerita-halaman-judul-utama',
   pageUp: 'cerita-halaman-naik',
