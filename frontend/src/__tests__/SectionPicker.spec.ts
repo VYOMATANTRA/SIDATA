@@ -89,10 +89,14 @@ describe('SectionPicker', () => {
     await wrapper.get('#pick-page').setValue('page-1');
     await wrapper.get('#pick-chapter').setValue('chap-1');
     await wrapper.get('#pick-section').setValue('sec-1');
-    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['sec-1']);
+    const lastEmit = (): unknown[] | undefined => {
+      const emits = wrapper.emitted('update:modelValue') ?? [];
+      return emits[emits.length - 1];
+    };
+    expect(lastEmit()).toEqual(['sec-1']);
 
     await wrapper.get('#pick-chapter').setValue('chap-2');
-    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['']);
+    expect(lastEmit()).toEqual(['']);
     wrapper.unmount();
   });
 
