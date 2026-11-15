@@ -4,9 +4,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import DataManagementView from '../views/DataManagementView.vue';
 import type { Indicator } from '../stores/indicators.store';
 import type { IndicatorTable } from '../stores/indicatorTables.store';
-import { useAuthStore } from '../stores/auth';
 import { useComparisonTemplatesStore } from '../stores/comparisonTemplates.store';
-import { DEFAULT_PUBLIC_SETTINGS } from '../stores/settings.store';
 import { USER_MESSAGES } from '../utils/userMessages';
 import { resetLeafletMock } from './leafletMock';
 
@@ -61,8 +59,6 @@ interface FetchOverrides {
   tablePatch?: (body: Record<string, unknown>) => Response;
   /** Answers `GET /api/comparison-templates`; defaults to empty templates array. */
   templatesResponse?: () => Response;
-  /** Answers `GET /api/settings/public`. */
-  settingsGet?: () => Promise<Response> | Response;
   /** Answers `GET /api/content-blocks`; defaults to `contentBlocks()`. */
   contentBlocks?: () => Array<Record<string, unknown>>;
   /** Answers `PATCH /api/content-blocks/:slug`; the default echoes the saved block. */
@@ -138,11 +134,6 @@ function installFetchMock(overrides: FetchOverrides = {}) {
 
     if (url === '/api/auth/csrf-token') {
       return json({ csrfToken: 'csrf-token' });
-    }
-
-    if (url === '/api/settings/public') {
-      if (overrides.settingsGet) return overrides.settingsGet();
-      return json({ settings: DEFAULT_PUBLIC_SETTINGS });
     }
 
     if (url === '/api/pages?include=sections') {
@@ -670,52 +661,13 @@ describe('DataManagementView.vue', () => {
     wrapper.unmount();
   });
 
-  it('hides public settings tab from non-admin editors', async () => {
-    const pinia = createPinia();
-    setActivePinia(pinia);
-    const authStore = useAuthStore();
-    authStore.setAuth({ id: '2', email: 'editor@example.com', role: 'editor' }, 'token');
-
-    const wrapper = mount(DataManagementView, {
-      global: {
-        plugins: [pinia],
-        stubs: { RouterLink: true, teleport: true },
-      },
-    });
+  it('lists only the two CMS tabs, with no portal settings tab', async () => {
+    const wrapper = mountView();
     await flushPromises();
 
+    const tabs = wrapper.findAll('[role="tab"]');
+    expect(tabs.map((tab) => tab.text())).toEqual(['Indikator & Tabel', 'Blok Konten & Profil']);
     expect(wrapper.find('[data-test="tab-pengaturan"]').exists()).toBe(false);
-    wrapper.unmount();
-  });
-
-  it('shows only a link to the configuration page on the settings tab, with no settings form or card', async () => {
-    const pinia = createPinia();
-    setActivePinia(pinia);
-    const authStore = useAuthStore();
-    authStore.setAuth({ id: '1', email: 'admin@example.com', role: 'admin' }, 'token');
-
-    const wrapper = mount(DataManagementView, {
-      global: {
-        plugins: [pinia],
-        stubs: { RouterLink: true, teleport: true },
-      },
-    });
-    await flushPromises();
-
-    await wrapper.find('[data-test="tab-pengaturan"]').trigger('click');
-    await flushPromises();
-
-    const moved = wrapper.find('[data-test="settings-moved"]');
-    expect(moved.exists()).toBe(true);
-    expect(moved.text()).toContain('Konfigurasi sistem');
-    const link = wrapper.find('[data-test="settings-moved-link"]');
-    expect(link.attributes('to')).toBe('/admin/sistem/konfigurasi');
-    // No card list, search or edit button for settings any more.
-    expect(wrapper.find('[data-test="result-count"]').exists()).toBe(false);
-    expect(wrapper.find('#data-search').exists()).toBe(false);
-    expect(wrapper.findAll('button').some((b) => b.text().includes('Edit'))).toBe(false);
-    expect(wrapper.findComponent({ name: 'PublicSettingsForm' }).exists()).toBe(false);
-
     wrapper.unmount();
   });
 
@@ -806,23 +758,6 @@ describe('DataManagementView.vue', () => {
 
     expect(wrapper.find('[data-test="load-error"]').exists()).toBe(true);
     expect(wrapper.find('[data-test="alert-banner-retry"]').exists()).toBe(false);
-    wrapper.unmount();
-  });
-
-  it('does not show a settings load error on the link-only settings tab', async () => {
-    installFetchMock({ settingsGet: () => Promise.reject(new Error('Network failure')) });
-    const pinia = createPinia();
-    setActivePinia(pinia);
-    useAuthStore().setAuth({ id: '1', email: 'admin@example.com', role: 'admin' }, 'token');
-    const wrapper = mount(DataManagementView, {
-      global: { plugins: [pinia], stubs: { RouterLink: true, teleport: true } },
-    });
-    await flushPromises();
-    await wrapper.find('[data-test="tab-pengaturan"]').trigger('click');
-    await flushPromises();
-
-    expect(wrapper.find('[data-test="settings-moved"]').exists()).toBe(true);
-    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
     wrapper.unmount();
   });
 });
