@@ -3,23 +3,24 @@ import { computed, nextTick, ref, watch } from 'vue';
 import AlertBanner from '../../common/AlertBanner.vue';
 import BaseButton from '../../common/BaseButton.vue';
 import BaseModal from '../../common/BaseModal.vue';
+import type { BulkResult } from './cardTypes';
 
 /**
- * Bulk delete for the selected Cerita pages (Pilih mode). Before the run it lists the pages; the
- * view then deletes them one after another and passes back one result per page. A page that still
- * holds content is refused by the server and reported as blocked; the others are reported as
- * deleted. Closing after a run is the only exit, so nobody re-runs a delete by accident.
+ * Bulk delete for the selected cards. Before the run it lists the items (the `intro` slot says how
+ * the run behaves); the view then deletes and passes back one result per item. Each result line says
+ * "Dihapus." or "Tidak dapat dihapus." with the reason. Closing after a run is the only exit, so
+ * nobody re-runs a delete by accident. `noun` is the Indonesian noun for the items ("halaman",
+ * "publikasi") used in every sentence.
  */
-type BulkStatus = 'deleted' | 'blocked' | 'failed';
-
 const props = defineProps<{
   open: boolean;
-  /** The selected pages, in list order, before the run. */
-  items: readonly { slug: string; title: string }[];
+  noun: string;
+  /** The selected items, in list order, before the run. */
+  items: readonly { key: string; title: string }[];
   busy?: boolean;
-  /** Null until the run has finished; then one entry per page that was attempted. */
-  results: readonly { slug: string; title: string; status: BulkStatus; message?: string }[] | null;
-  /** A page changed since the dialog opened; offer a reload before choosing again. */
+  /** Null until the run has finished; then one entry per item that was attempted. */
+  results: readonly BulkResult[] | null;
+  /** An item changed since the dialog opened; offer a reload before choosing again. */
   stale?: boolean;
   /** Approved text when the reload after a run failed. */
   error?: string;
@@ -44,14 +45,16 @@ watch(
 
 const count = computed(() => props.items.length);
 const heading = computed(() =>
-  props.results === null ? `Hapus ${count.value} halaman?` : 'Hasil penghapusan halaman',
+  props.results === null ? `Hapus ${count.value} ${props.noun}?` : `Hasil penghapusan ${props.noun}`,
 );
 const kept = computed(() => (props.results ?? []).filter((item) => item.status !== 'deleted'));
 const deletedCount = computed(() => (props.results ?? []).length - kept.value.length);
 const summary = computed(() => {
   if (props.results === null) return '';
-  const removed = `${deletedCount.value} halaman dihapus`;
-  return kept.value.length === 0 ? `${removed}.` : `${removed}, ${kept.value.length} tidak dapat dihapus.`;
+  const removed = `${deletedCount.value} ${props.noun} dihapus`;
+  return kept.value.length === 0
+    ? `${removed}.`
+    : `${removed}, ${kept.value.length} tidak dapat dihapus.`;
 });
 </script>
 
@@ -61,15 +64,9 @@ const summary = computed(() => {
       <AlertBanner v-if="error" :message="error" data-test="bulk-error" />
 
       <template v-if="results === null">
-        <p class="text-brand-navy text-sm">
-          Halaman berikut akan dihapus satu per satu. Tindakan ini tidak bisa dibatalkan.
-        </p>
-        <p class="text-text-muted text-sm">
-          Halaman yang masih berisi paragraf, gambar, angka, atau tabel akan dilewati. Setelah selesai,
-          halaman itu ditampilkan sebagai “tidak dapat dihapus” dalam daftar hasil, beserta alasannya.
-        </p>
+        <slot name="intro" />
         <ul class="text-brand-navy list-disc space-y-1 pl-5 text-sm" data-test="bulk-items">
-          <li v-for="item in items" :key="item.slug">{{ item.title }}</li>
+          <li v-for="item in items" :key="item.key">{{ item.title }}</li>
         </ul>
       </template>
 
@@ -80,14 +77,14 @@ const summary = computed(() => {
         <AlertBanner
           v-if="kept.length > 0"
           tone="warning"
-          :message="`${kept.length} halaman belum dihapus. Lihat alasannya di bawah.`"
+          :message="`${kept.length} ${noun} belum dihapus. Lihat alasannya di bawah.`"
           live="polite"
           data-test="bulk-banner"
         />
         <ul class="space-y-2 text-sm" data-test="bulk-results">
           <li
             v-for="item in results"
-            :key="item.slug"
+            :key="item.key"
             class="rounded-card border-border border p-3"
             :data-status="item.status"
           >
@@ -98,8 +95,7 @@ const summary = computed(() => {
           </li>
         </ul>
         <p v-if="stale" class="text-text-muted text-sm" data-test="bulk-stale">
-          Ada halaman yang berubah sejak dibuka. Muat ulang, lalu pilih lagi halaman yang ingin
-          dihapus.
+          Ada {{ noun }} yang berubah sejak dibuka. Muat ulang, lalu pilih lagi yang ingin dihapus.
         </p>
       </template>
 
@@ -125,7 +121,7 @@ const summary = computed(() => {
             data-test="bulk-confirm"
             @click="emit('confirm')"
           >
-            {{ busy ? 'Menghapus…' : `Hapus ${count} halaman` }}
+            {{ busy ? 'Menghapus…' : `Hapus ${count} ${noun}` }}
           </BaseButton>
         </template>
         <template v-else>

@@ -122,11 +122,17 @@ export function isValidPublishedAt(value: string): boolean {
   return PUBLISHED_AT.test(value);
 }
 
-/** "12 Halaman", or null when the stored count is absent or outside 1–100000. */
-export function formatPageCount(pageCount?: number): string | null {
+/** The stored page count as a number, or null when absent or outside 1–100000. */
+export function pageCountValue(pageCount?: number): number | null {
   if (typeof pageCount !== 'number' || !Number.isInteger(pageCount)) return null;
   if (pageCount < 1 || pageCount > 100000) return null;
-  return `${pageCount} Halaman`;
+  return pageCount;
+}
+
+/** "12 Halaman", or null when the stored count is absent or outside 1–100000. */
+export function formatPageCount(pageCount?: number): string | null {
+  const value = pageCountValue(pageCount);
+  return value === null ? null : `${value} Halaman`;
 }
 
 /** "Maret 2026" from `YYYY-MM` or `YYYY-MM-DD` (the day is not shown), or null when invalid. */

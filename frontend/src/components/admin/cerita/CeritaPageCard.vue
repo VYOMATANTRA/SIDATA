@@ -2,7 +2,11 @@
 import { computed, ref } from 'vue';
 import { BookOpenIcon } from '@heroicons/vue/24/outline';
 import BaseButton from '../../common/BaseButton.vue';
+import CardDragGrip from '../cards/CardDragGrip.vue';
+import CardDropIndicator from '../cards/CardDropIndicator.vue';
+import CardSelectCheckbox from '../cards/CardSelectCheckbox.vue';
 import type { AdminPage } from '../../../stores/ceritaAdmin.store';
+import { edgeAt, type DragBlock } from '../../../composables/useCardDragReorder';
 import { ceritaIds } from './ceritaDomIds';
 import { ceritaCoverFor } from '../../../content/ceritaCovers';
 
@@ -13,14 +17,15 @@ import { ceritaCoverFor } from '../../../content/ceritaCovers';
  * right: the category's bundled photo (`content/ceritaCovers`), or a neutral placeholder. The grip can be dragged at any time
  * unless a search filter is active or a save is in flight; Naik / Turun in Urutkan mode are the
  * keyboard and touch route to the same reorder. The card only reports what was asked; the view runs
- * the save, the dialogs and the focus.
+ * the save, the dialogs and the focus. The grip, checkbox and drop line are the shared card parts in
+ * `components/admin/cards`.
  */
 const props = defineProps<{
   page: AdminPage;
   /** Urutkan mode: the Naik / Turun buttons show. */
   sorting?: boolean;
   /** Why the grip cannot be dragged right now, or null when it can (any time, Urutkan or not). */
-  dragBlock?: 'search' | 'busy' | null;
+  dragBlock?: DragBlock;
   selected?: boolean;
   /** This card is being dragged. */
   dragging?: boolean;
@@ -55,27 +60,6 @@ function formatDate(value: string | null): string {
 // A page without one gets the neutral placeholder.
 const coverSrc = computed(() => ceritaCoverFor(props.page.slug));
 
-/** Upper half of the card means "before it", lower half "after it". */
-function edgeAt(event: DragEvent): 'before' | 'after' {
-  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  return event.clientY < box.top + box.height / 2 ? 'before' : 'after';
-}
-
-function onGripDragStart(event: DragEvent): void {
-  // Firefox starts a drag only when some data is set.
-  event.dataTransfer?.setData('text/plain', props.page.slug);
-  event.dataTransfer?.setDragImage?.(cardElement.value ?? (event.target as Element), 24, 24);
-  emit('drag-start');
-}
-
-const gripTitle = computed(() => {
-  if (props.dragBlock === 'search') {
-    return 'Seret dinonaktifkan selama pencarian aktif. Kosongkan kotak pencarian untuk mengubah urutan.';
-  }
-  if (props.dragBlock === 'busy') return 'Seret dinonaktifkan sementara urutan sedang disimpan.';
-  return 'Seret untuk mengubah urutan. Naik dan Turun di Urutkan Cerita juga bisa dipakai.';
-});
-
 function onDragOver(event: DragEvent): void {
   if (props.dragBlock) return;
   event.preventDefault();
@@ -104,54 +88,25 @@ function onDrop(event: DragEvent): void {
     @dragover="onDragOver"
     @drop="onDrop"
   >
-    <!-- A bold insertion line with a dot at its start, on the side the card will land. -->
-    <span
-      v-if="dropEdge"
-      aria-hidden="true"
-      class="pointer-events-none absolute inset-x-0 z-10 flex items-center"
-      :class="dropEdge === 'before' ? '-top-2' : '-bottom-2'"
-      data-test="drop-indicator"
-      :data-edge="dropEdge"
-    >
-      <span class="bg-brand-navy -ml-1.5 size-3 shrink-0 rounded-full" />
-      <span class="bg-brand-navy h-1.5 flex-1 rounded-full" />
-    </span>
+    <CardDropIndicator v-if="dropEdge" :edge="dropEdge" />
 
-    <span
-      :draggable="dragBlock ? 'false' : 'true'"
-      aria-hidden="true"
-      :title="gripTitle"
-      class="bg-surface-muted border-border rounded-l-card flex w-8 shrink-0 items-center justify-center border-r"
-      :class="dragBlock ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'"
-      data-test="grip"
-      @dragstart="onGripDragStart"
-      @dragend="emit('drag-end')"
-    >
-      <svg viewBox="0 0 12 18" class="text-text-muted h-4 w-3" focusable="false">
-        <circle cx="3" cy="3" r="1.5" fill="currentColor" />
-        <circle cx="9" cy="3" r="1.5" fill="currentColor" />
-        <circle cx="3" cy="9" r="1.5" fill="currentColor" />
-        <circle cx="9" cy="9" r="1.5" fill="currentColor" />
-        <circle cx="3" cy="15" r="1.5" fill="currentColor" />
-        <circle cx="9" cy="15" r="1.5" fill="currentColor" />
-      </svg>
-    </span>
+    <CardDragGrip
+      :blocked="dragBlock ?? null"
+      :data-text="page.slug"
+      :drag-image="cardElement"
+      sort-label="Urutkan Cerita"
+      @drag-start="emit('drag-start')"
+      @drag-end="emit('drag-end')"
+    />
 
     <div class="flex min-w-0 flex-1 items-center gap-3 p-4">
-      <div class="flex shrink-0">
-        <input
-          :id="ceritaIds.cardCheckbox(page.slug)"
-          type="checkbox"
-          class="focus-visible:outline-focus-ring accent-brand-navy h-5 w-5 focus-visible:outline-2 focus-visible:outline-offset-2"
-          :checked="selected"
-          :disabled="busy"
-          data-test="page-checkbox"
-          @change="emit('toggle')"
-        />
-        <label :for="ceritaIds.cardCheckbox(page.slug)" class="sr-only">
-          Pilih halaman {{ page.title }}
-        </label>
-      </div>
+      <CardSelectCheckbox
+        :id="ceritaIds.cardCheckbox(page.slug)"
+        :checked="selected ?? false"
+        :disabled="busy"
+        :label="`Pilih halaman ${page.title}`"
+        @toggle="emit('toggle')"
+      />
 
       <div class="min-w-0 flex-1 space-y-3">
         <h3 class="text-brand-navy text-lg font-semibold break-words" data-test="card-title">
