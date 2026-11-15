@@ -167,13 +167,20 @@ const fieldOrder = computed(() =>
     : ['sectionId', 'kind', 'title', 'period', 'source'],
 );
 
-/** The section error is announced against the last select of SectionPicker (Bagian). */
-const sectionSelectId = (): string => `${fieldId('lokasi')}-section`;
+/**
+ * The section error points at the first select of SectionPicker (Halaman). Bagian is disabled
+ * until a chapter is chosen, and a disabled control cannot take focus, so the summary link must
+ * not target it.
+ */
+const sectionSelectId = (): string => `${fieldId('lokasi')}-page`;
+
+/** camelCase field name to the kebab-case id the input carries (valueCurrent → value-current). */
+const kebab = (name: string): string => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 
 const errorEntries = computed(() =>
   fieldOrder.value
     .map((name) => ({
-      fieldId: name === 'sectionId' ? sectionSelectId() : fieldId(name),
+      fieldId: name === 'sectionId' ? sectionSelectId() : fieldId(kebab(name)),
       message: fieldErrors.value[name],
     }))
     .filter((entry): entry is { fieldId: string; message: string } => Boolean(entry.message)),

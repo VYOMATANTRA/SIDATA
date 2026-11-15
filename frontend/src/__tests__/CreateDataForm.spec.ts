@@ -118,6 +118,47 @@ describe('CreateDataForm', () => {
     wrapper.unmount();
   });
 
+  it('focuses the input each error-summary link names, for every scalar field', async () => {
+    const wrapper = mountForm();
+    await wrapper.get('#create-data-comparison-enabled').setValue(true);
+    await wrapper.get('form').trigger('submit');
+
+    const links = wrapper.findAll('[role="alert"] a');
+    const targets = links.map((link) => link.attributes('href')?.replace(/^#/, ''));
+    // Section, label, both values and both periods are all missing here.
+    expect(targets).toEqual(
+      expect.arrayContaining([
+        'create-data-lokasi-page',
+        'create-data-label',
+        'create-data-value-current',
+        'create-data-period-current',
+        'create-data-value-previous',
+        'create-data-period-previous',
+      ]),
+    );
+    for (const link of links) {
+      const targetId = link.attributes('href')?.replace(/^#/, '') ?? '';
+      expect(document.getElementById(targetId)).not.toBeNull();
+      await link.trigger('click');
+      expect(document.activeElement?.id).toBe(targetId);
+    }
+    wrapper.unmount();
+  });
+
+  it('focuses the matching input for every matrix error-summary link', async () => {
+    const wrapper = mountForm();
+    await wrapper.get('#create-data-type-matriks').setValue(true);
+    await wrapper.get('form').trigger('submit');
+
+    for (const link of wrapper.findAll('[role="alert"] a')) {
+      const targetId = link.attributes('href')?.replace(/^#/, '') ?? '';
+      expect(document.getElementById(targetId)).not.toBeNull();
+      await link.trigger('click');
+      expect(document.activeElement?.id).toBe(targetId);
+    }
+    wrapper.unmount();
+  });
+
   it('rejects a decimal written with a comma before sending', async () => {
     const wrapper = mountForm();
     await fillScalar(wrapper);
