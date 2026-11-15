@@ -288,9 +288,13 @@ The frontend surface is the `/data` view (`DataManagementView`, editor/admin onl
 the admin base layout shell from §8), organized into two accessible tabbed categories:
 
 1. **Indikator & Tabel (default):** A searchable, type-filterable card list of every scalar indicator
-   and matrix table, each opening an accessible edit dialog. It is edit-only — an indicator or table
-   must attach to a `section`, and no section-management surface exists, so create/delete are not in
-   the UI rather than shipped as forms that cannot submit. "Import From" from the wireframe is not
+   and matrix table, each opening an accessible edit dialog. **Tambah Data** creates one scalar
+   indicator or one empty matrix table. The editor chooses the type and a section (Halaman › Bab ›
+   Bagian from the page hierarchy), and a section is always required because an indicator or table
+   must attach to one. The slug is derived from the label or title and made unique automatically;
+   the editor never types it. A matrix table is created with no rows and its table editor opens
+   at once; adding rows to a new matrix is not yet available in the UI. Delete is not in the UI,
+   so a created item can be edited here but not removed. "Import From" from the wireframe is not
    built, consistent with the scope above. The previous-year pair is edited independently of
    `is_computed_comparison`: a pair alone does not promote an indicator into the tier-1 computed set
    (§5), so the flag is preserved as stored and is only cleared when the pair is cleared, since the
