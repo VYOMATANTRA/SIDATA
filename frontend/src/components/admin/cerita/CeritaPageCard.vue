@@ -98,11 +98,9 @@ const customCoverPath = computed(() => {
 });
 const customCover = useAuthenticatedBlobUrl(customCoverPath);
 
-// When a custom cover is set, display its authenticated blob URL; otherwise fall back to the
-// category's bundled photo (or the neutral placeholder).
-const coverSrc = computed(() =>
-  props.page.coverAssetId ? customCover.url.value : ceritaCoverFor(props.page.slug),
-);
+// When a custom cover blob is ready, display it; otherwise fall back to the category's bundled
+// photo (or the neutral placeholder).
+const coverSrc = computed(() => customCover.url.value ?? ceritaCoverFor(props.page.slug));
 
 // Only a card drag of this list is handled. A file or text dragged in from outside is left alone, so
 // the browser's own behaviour applies and nothing is prevented or reported as a move.

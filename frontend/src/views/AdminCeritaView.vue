@@ -423,13 +423,14 @@ function openThumbnail(slug: string, triggerId: string): void {
   thumbnailTarget.value = { slug, token: targetPage.updatedAt, triggerId };
 }
 
-function closeThumbnail(): void {
+async function closeThumbnail(): Promise<void> {
   const target = thumbnailTarget.value;
   if (thumbnailBusy.value || !target) return;
   thumbnailTarget.value = null;
   thumbnailError.value = '';
   thumbnailErrorKind.value = null;
   thumbnailStale.value = false;
+  await nextTick();
   focusId(target.triggerId);
 }
 

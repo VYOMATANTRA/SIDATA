@@ -92,10 +92,10 @@ async function handleSave(file: File): Promise<void> {
   uploading.value = true;
   try {
     const result = await uploadMedia(file, 'cerita-cover');
-    if (unmounted) return;
+    if (unmounted || !props.open) return;
     emit('submit', result.id);
   } catch (error) {
-    if (unmounted) return;
+    if (unmounted || !props.open) return;
     if (error instanceof MediaUploadError) {
       uploadError.value = error.message;
       uploadErrorKind.value = error.status === 401 ? 'session' : undefined;

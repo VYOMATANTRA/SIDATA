@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import CeritaPageCard from '../components/admin/cerita/CeritaPageCard.vue';
+import { ceritaCoverFor } from '../content/ceritaCovers';
 import { fetchMediaPreviewBlob } from '../services/media.service';
 import type { AdminPage } from '../stores/ceritaAdmin.store';
 
@@ -119,6 +120,9 @@ describe('CeritaPageCard thumbnail', () => {
       await flushPromises();
       expect(observe).toHaveBeenCalledTimes(1);
       expect(fetchMediaPreviewBlob).not.toHaveBeenCalled();
+      expect(wrapper.find('[data-test="thumbnail-image"]').attributes('src')).toBe(
+        ceritaCoverFor('kependudukan'),
+      );
 
       onIntersect(
         [{ isIntersecting: true } as IntersectionObserverEntry],
@@ -135,5 +139,28 @@ describe('CeritaPageCard thumbnail', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it('shows bundled ceritaCoverFor while custom blob fetch is pending and switches once resolved', async () => {
+    let resolveBlob!: (blob: Blob) => void;
+    vi.mocked(fetchMediaPreviewBlob).mockImplementationOnce(
+      () =>
+        new Promise<Blob>((resolve) => {
+          resolveBlob = resolve;
+        }),
+    );
+
+    const wrapper = mount(CeritaPageCard, {
+      props: { page: { ...page, coverAssetId: 'asset-1' } },
+    });
+    await flushPromises();
+    expect(wrapper.find('[data-test="thumbnail-image"]').attributes('src')).toBe(
+      ceritaCoverFor('kependudukan'),
+    );
+
+    resolveBlob(new Blob(['x'], { type: 'image/webp' }));
+    await flushPromises();
+    expect(wrapper.find('[data-test="thumbnail-image"]').attributes('src')).toBe('blob:cover-thumb');
+    wrapper.unmount();
   });
 });
