@@ -17,7 +17,7 @@
  *   to the list.
  */
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router';
 import {
   ArrowLeftIcon,
   BookOpenIcon,
@@ -150,6 +150,9 @@ watch(
   detailSlug,
   (slug, previous) => {
     store.selectPage(slug);
+    // An editor belongs to one page's structure: moving to another page or the list closes it. (An
+    // unsaved draft was already confirmed by the route-update guard before this point.)
+    if (editingSectionId.value) closeEditor();
     if (slug === null && previous) focusId(ceritaIds.cardEdit(previous));
   },
   { immediate: true },
@@ -529,7 +532,8 @@ async function confirmDelete(): Promise<void> {
     case 'page':
       outcome = await store.removePage(target.slug, target.token);
       message = `Halaman “${target.title}” dihapus.`;
-      focus = ceritaIds.addPage;
+      // "Tambah Cerita" is hidden while cards are selected; then focus goes to select-all instead.
+      focus = selectedSlugs.value.length > 0 ? ceritaIds.selectAll : ceritaIds.addPage;
       break;
     case 'chapter':
       outcome = await store.removeChapter(target.id, target.token);
@@ -746,7 +750,7 @@ function moveSection(chapter: AdminChapter, section: AdminSection, direction: Di
 const query = ref('');
 /** Urutkan mode: Naik / Turun buttons show on each card (drag works either way). */
 const sorting = ref(false);
-const bulkTarget = ref<{ items: { key: string; title: string; token: string }[] } | null>(null);
+const bulkTarget = ref<{ items: { key: string; title: string }[] } | null>(null);
 const bulkRunning = ref(false);
 const bulkResults = ref<BulkResult[] | null>(null);
 const bulkStale = ref(false);
@@ -802,6 +806,12 @@ watch(
 
 /** Select-all acts on the cards the list shows (after the search), never on hidden ones. */
 function toggleSelectAll(): void {
+  // With no match there is nothing to select, so nothing is announced as selected (the button is
+  // disabled too).
+  if (visibleSlugs.value.length === 0) {
+    announce('Tidak ada Cerita yang cocok dengan pencarian ini.');
+    return;
+  }
   const result = selection.toggleSelectAll();
   if (result === 'cleared') {
     announce('Pilihan Cerita dibatalkan.');
@@ -832,20 +842,14 @@ const dropEnd = drag.dropEnd;
 function placeDragged(dragged: string, toIndex: number): void {
   const from = pages.value.findIndex((item) => item.slug === dragged);
   if (from < 0 || toIndex === from) return;
-  const direction: Direction = toIndex > from ? 1 : -1;
   const title = pages.value[from]?.title ?? '';
   void runMove(
     () => store.placePage(dragged, toIndex),
     () => {
       const index = pages.value.findIndex((item) => item.slug === dragged);
       announce(`Halaman “${title}” dipindah ke urutan ${index + 1} dari ${pages.value.length}.`);
-      focusAfterMove(
-        ceritaIds.cardUp(dragged),
-        ceritaIds.cardDown(dragged),
-        index,
-        pages.value.length,
-        direction,
-      );
+      // Naik / Turun exist only in Urutkan mode, so a drop (any mode) keeps focus on the card's Edit.
+      focusId(ceritaIds.cardEdit(dragged));
     },
   );
 }
@@ -861,7 +865,7 @@ function openDeleteFromList(slug: string): void {
 function openBulkDelete(): void {
   const items = pages.value
     .filter((item) => selectedSlugs.value.includes(item.slug))
-    .map((item) => ({ key: item.slug, title: item.title, token: item.updatedAt }));
+    .map((item) => ({ key: item.slug, title: item.title }));
   if (items.length === 0) return;
   bulkResults.value = null;
   bulkStale.value = false;
@@ -894,7 +898,8 @@ async function confirmBulkDelete(): Promise<void> {
   bulkError.value = '';
   const results: BulkResult[] = [];
   for (const item of target.items) {
-    const outcome = await store.removePage(item.key, item.token);
+    // The store holds each page's current token (a previous delete reloads the tree), so none is sent.
+    const outcome = await store.removePage(item.key);
     if (outcome.ok) {
       results.push({ key: item.key, title: item.title, status: 'deleted' });
       selectedSlugs.value = selectedSlugs.value.filter((slug) => slug !== item.key);
@@ -1024,6 +1029,21 @@ onBeforeRouteLeave(() => {
   });
 });
 
+// Back and Forward between the list and a page (or between two pages) change only the query, so
+// the component stays mounted and the leave guard above does not run. Ask the same way here, so an
+// unsaved section draft is never dropped silently. "Tetap di sini" cancels the navigation.
+onBeforeRouteUpdate((to, from) => {
+  if (to.query['halaman'] === from.query['halaman']) return true;
+  if (editorBusy.value) return false;
+  if (!editingSectionId.value || !editorDirty.value) return true;
+  discardPromptOpen.value = true;
+  void nextTick(() => (keepEditingButton.value?.$el as HTMLElement | undefined)?.focus());
+  return new Promise<boolean>((resolve) => {
+    pendingRouteLeave?.(false);
+    pendingRouteLeave = resolve;
+  });
+});
+
 onUnmounted(() => {
   removeBeforeUnload();
   pendingRouteLeave?.(false);
@@ -1108,8 +1128,9 @@ onUnmounted(() => {
             <SelectAllButton
               :id="ceritaIds.selectAll"
               :state="selectAllState"
-              :primary="selectedSlugs.length > 0"
-              :disabled="listBusy || pages.length === 0"
+              :filled="selectedSlugs.length > 0"
+              :disabled="listBusy || filteredPages.length === 0"
+              data-test="select-all"
               @click="toggleSelectAll"
             />
           </template>

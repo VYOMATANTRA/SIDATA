@@ -463,11 +463,12 @@ describe('AdminPublikasiView', () => {
       stored = threeStored();
       const wrapper = await mountView();
       const selectAll = () => wrapper.find('[data-test="select-all"]');
-      expect(selectAll().attributes('aria-checked')).toBe('false');
+      expect(selectAll().attributes('aria-describedby')).toBeUndefined();
       expect(selectAll().text()).toBe('Pilih semua');
 
       await tickCheckbox(wrapper, 1);
-      expect(selectAll().attributes('aria-checked')).toBe('mixed');
+      expect(selectAll().attributes('aria-describedby')).toBeDefined();
+      expect(wrapper.find('#' + selectAll().attributes('aria-describedby')!).text()).toBe('sebagian dipilih');
       expect(selectAll().text()).toBe('Pilih semua');
       expect(wrapper.find('[data-test="selected-count"]').text()).toBe('1 dipilih');
       expect(wrapper.find('[data-test="publikasi-add"]').classes()).toContain('invisible');
@@ -477,12 +478,12 @@ describe('AdminPublikasiView', () => {
       expect(wrapper.find('[data-test="selected-count"]').exists()).toBe(false);
       await selectAll().trigger('click');
       expect(wrapper.find('[data-test="selected-count"]').text()).toBe('2 dipilih');
-      expect(selectAll().attributes('aria-checked')).toBe('true');
+      expect(wrapper.find('#' + selectAll().attributes('aria-describedby')!).text()).toBe('semua dipilih');
       expect(selectAll().text()).toBe('Batal pilih semua');
 
       await selectAll().trigger('click');
       expect(wrapper.find('[data-test="selected-count"]').exists()).toBe(false);
-      expect(selectAll().attributes('aria-checked')).toBe('false');
+      expect(selectAll().attributes('aria-describedby')).toBeUndefined();
     });
 
     it('bulk delete lists the selection, asks first and saves the rest in one save', async () => {

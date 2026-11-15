@@ -581,8 +581,9 @@ async function reloadFromBulk(): Promise<void> {
           <SelectAllButton
             :id="ids.selectAll"
             :state="selectAllState"
-            :primary="selected.length > 0"
-            :disabled="listBusy || items.length === 0"
+            :filled="selected.length > 0"
+            :disabled="listBusy || visibleRows.length === 0"
+            data-test="select-all"
             @click="toggleSelectAll"
           />
         </template>
