@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mount } from '@vue/test-utils';
-import { PencilSquareIcon } from '@heroicons/vue/24/outline';
+import { ArrowDownTrayIcon, PencilSquareIcon } from '@heroicons/vue/24/outline';
 import CardActionButton from '../components/admin/cards/CardActionButton.vue';
 
 describe('CardActionButton', () => {
@@ -44,5 +44,25 @@ describe('CardActionButton', () => {
     });
     expect(wrapper.attributes('id')).toBe('card-edit-x');
     expect(wrapper.attributes('data-test')).toBe('card-edit');
+  });
+});
+
+describe('CardActionButton link variant', () => {
+  it('renders an anchor with the address, the target and a safe rel, named by label and title', () => {
+    const wrapper = mount(CardActionButton, {
+      props: {
+        icon: ArrowDownTrayIcon,
+        label: 'Unduh',
+        srText: 'publikasi Laporan',
+        href: '/api/media/abc/download',
+        target: '_blank',
+      },
+    });
+    const link = wrapper.find('a');
+    expect(link.exists()).toBe(true);
+    expect(link.attributes('href')).toBe('/api/media/abc/download');
+    expect(link.attributes('target')).toBe('_blank');
+    expect(link.attributes('rel')).toContain('noopener');
+    expect(link.text().replace(/\s+/g, ' ').trim()).toBe('Unduh publikasi Laporan');
   });
 });

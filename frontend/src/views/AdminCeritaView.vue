@@ -20,21 +20,25 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router';
 import {
   ArrowLeftIcon,
-  ArrowsUpDownIcon,
   BookOpenIcon,
-  MagnifyingGlassIcon,
   PlusIcon,
-  XMarkIcon,
 } from '@heroicons/vue/24/outline';
 import BaseButton from '../components/common/BaseButton.vue';
 import AlertBanner from '../components/common/AlertBanner.vue';
 import BaseModal from '../components/common/BaseModal.vue';
-import CeritaBulkDeleteDialog from '../components/admin/cerita/CeritaBulkDeleteDialog.vue';
+import BulkDeleteDialog from '../components/admin/cards/BulkDeleteDialog.vue';
+import CardListToolbar from '../components/admin/cards/CardListToolbar.vue';
+import CardSearchField from '../components/admin/cards/CardSearchField.vue';
+import CardSelectionBar from '../components/admin/cards/CardSelectionBar.vue';
+import SelectAllButton from '../components/admin/cards/SelectAllButton.vue';
+import SortToggleButton from '../components/admin/cards/SortToggleButton.vue';
+import type { BulkResult } from '../components/admin/cards/cardTypes';
+import { useCardDragReorder } from '../composables/useCardDragReorder';
+import { useCardSelection } from '../composables/useCardSelection';
 import CeritaDeleteDialog from '../components/admin/cerita/CeritaDeleteDialog.vue';
 import CeritaPageDetailsDialog from '../components/admin/cerita/CeritaPageDetailsDialog.vue';
 import CeritaNameDialog from '../components/admin/cerita/CeritaNameDialog.vue';
 import CeritaPageCardList from '../components/admin/cerita/CeritaPageCardList.vue';
-import SelectAllButton from '../components/admin/cards/SelectAllButton.vue';
 import CeritaReloadNotice from '../components/admin/cerita/CeritaReloadNotice.vue';
 import CeritaSectionEditor from '../components/admin/cerita/CeritaSectionEditor.vue';
 import CeritaStructurePanel from '../components/admin/cerita/CeritaStructurePanel.vue';
@@ -58,13 +62,6 @@ const router = useRouter();
 
 type Direction = -1 | 1;
 
-/** One line of the bulk-delete report: what happened to one selected page. */
-interface BulkResult {
-  slug: string;
-  title: string;
-  status: 'deleted' | 'blocked' | 'failed';
-  message?: string;
-}
 
 type NameTarget =
   | { kind: 'page-add' }
@@ -696,9 +693,7 @@ function movePageBySlug(slug: string, direction: Direction, upId: string, downId
     () => store.movePage(slug, direction),
     () => {
       const index = pages.value.findIndex((item) => item.slug === slug);
-      announce(
-        `Halaman “${target.title}” dipindah ke urutan ${index + 1} dari ${pages.value.length}.`,
-      );
+      announce(`Halaman “${target.title}” dipindah ke urutan ${index + 1} dari ${pages.value.length}.`);
       focusAfterMove(upId, downId, index, pages.value.length, direction);
     },
   );
@@ -755,14 +750,7 @@ function moveSection(chapter: AdminChapter, section: AdminSection, direction: Di
 const query = ref('');
 /** Urutkan mode: Naik / Turun buttons show on each card (drag works either way). */
 const sorting = ref(false);
-/** Checked cards. Checkboxes are always shown; only cards the list shows are ever selected. */
-const selectedSlugs = ref<string[]>([]);
-/** Card being dragged (Urutkan mode) and the card it hovers, with the side the drop would land. */
-const dragSlug = ref<string | null>(null);
-const dropTarget = ref<{ slug: string; edge: 'before' | 'after' } | null>(null);
-/** The drag hovers the zone after the last card (drop there = the end of the list). */
-const dropAtEnd = ref(false);
-const bulkTarget = ref<{ items: { slug: string; title: string }[] } | null>(null);
+const bulkTarget = ref<{ items: { key: string; title: string }[] } | null>(null);
 const bulkRunning = ref(false);
 const bulkResults = ref<BulkResult[] | null>(null);
 const bulkStale = ref(false);
@@ -785,23 +773,21 @@ const dragBlock = computed<'search' | 'busy' | null>(() => {
   return null;
 });
 
-// A selection only ever covers pages the list shows: a page hidden by the search, or removed
-// elsewhere, is dropped so "Hapus terpilih" cannot touch what the editor cannot see.
-watch([query, pages], () => {
-  const visible = new Set(filteredPages.value.map((item) => item.slug));
-  const kept = selectedSlugs.value.filter((slug) => visible.has(slug));
-  if (kept.length !== selectedSlugs.value.length) selectedSlugs.value = kept;
-});
+/** The cards the list shows, in order; selection and select-all act on these only. */
+const visibleSlugs = computed(() => filteredPages.value.map((item) => item.slug));
+// A selection only ever covers pages the list shows: `useCardSelection` drops a page that is hidden by
+// the search or removed elsewhere, so "Hapus semua" cannot touch what the editor cannot see.
+const selection = useCardSelection(visibleSlugs);
+const selectedSlugs = selection.selected;
+const selectAllState = selection.selectAllState;
 
 function toggleSorting(): void {
   sorting.value = !sorting.value;
-  clearDrag();
+  drag.clearDrag();
 }
 
 function toggleSelected(slug: string): void {
-  selectedSlugs.value = selectedSlugs.value.includes(slug)
-    ? selectedSlugs.value.filter((item) => item !== slug)
-    : [...selectedSlugs.value, slug];
+  selection.toggle(slug);
 }
 
 // While something is selected, "Tambah Cerita" is hidden with `invisible`: its slot keeps the
@@ -818,89 +804,39 @@ watch(
   },
 );
 
-const selectedVisibleCount = computed(
-  () => filteredPages.value.filter((item) => selectedSlugs.value.includes(item.slug)).length,
-);
-/** none / some / all, for the tri-state select-all button. */
-const selectAllState = computed<'none' | 'some' | 'all'>(() => {
-  const visible = filteredPages.value.length;
-  if (selectedVisibleCount.value === 0) return 'none';
-  return selectedVisibleCount.value === visible ? 'all' : 'some';
-});
-
-/**
- * Select-all acts on the cards the list shows (after the search), never on hidden ones. With no
- * match there is nothing to select, so nothing is announced as selected (the button is disabled too).
- */
+/** Select-all acts on the cards the list shows (after the search), never on hidden ones. */
 function toggleSelectAll(): void {
-  const visible = filteredPages.value.map((item) => item.slug);
-  if (visible.length === 0) {
+  // With no match there is nothing to select, so nothing is announced as selected (the button is
+  // disabled too).
+  if (visibleSlugs.value.length === 0) {
     announce('Tidak ada Cerita yang cocok dengan pencarian ini.');
     return;
   }
-  if (selectAllState.value === 'all') {
-    selectedSlugs.value = selectedSlugs.value.filter((slug) => !visible.includes(slug));
+  const result = selection.toggleSelectAll();
+  if (result === 'cleared') {
     announce('Pilihan Cerita dibatalkan.');
     return;
   }
-  selectedSlugs.value = [...new Set([...selectedSlugs.value, ...visible])];
-  announce(`${visible.length} Cerita dipilih.`);
+  announce(`${filteredPages.value.length} Cerita dipilih.`);
 }
 
 // --- Drag and drop: the grip works at any time except during a search or a save (`dragBlock`).
-// Naik / Turun in Urutkan mode do the same reorder from the keyboard and on touch. ---
-
-function clearDrag(): void {
-  dragSlug.value = null;
-  dropTarget.value = null;
-  dropAtEnd.value = false;
-}
-
-function startDrag(slug: string): void {
-  if (dragBlock.value) return;
-  dragSlug.value = slug;
-  dropTarget.value = null;
-}
-
-function hoverDrop(slug: string, edge: 'before' | 'after'): void {
-  dropAtEnd.value = false;
-  if (!dragSlug.value || dragSlug.value === slug) {
-    dropTarget.value = null;
-    return;
-  }
-  dropTarget.value = { slug, edge };
-}
-
-function hoverEnd(): void {
-  dropTarget.value = null;
-  dropAtEnd.value = dragSlug.value !== null;
-}
-
-/** Drop after the last card: the dragged card becomes the last one. */
-function dropEnd(): void {
-  const dragged = dragSlug.value;
-  clearDrag();
-  if (!dragged) return;
-  const last = pages.value[pages.value.length - 1]?.slug;
-  if (!last || last === dragged) return;
-  placeDragged(dragged, pages.value.length - 1);
-}
-
-/**
- * Saves the drop: the dragged card goes before or after the card it was dropped on. Positions are
- * taken from the full order, so a search filter cannot shift the result.
- */
-function dropOn(slug: string, edge: 'before' | 'after'): void {
-  const dragged = dragSlug.value;
-  clearDrag();
-  if (!dragged || dragged === slug) return;
-  const from = pages.value.findIndex((item) => item.slug === dragged);
-  const anchor = pages.value.findIndex((item) => item.slug === slug);
-  if (from < 0 || anchor < 0) return;
-  let toIndex = edge === 'before' ? anchor : anchor + 1;
-  if (from < toIndex) toIndex -= 1;
-  placeDragged(dragged, toIndex);
-}
+// Naik / Turun in Urutkan mode do the same reorder from the keyboard and on touch. The state and
+// the index maths are in `useCardDragReorder`; this view saves the move.
+const drag = useCardDragReorder({
+  order: computed(() => pages.value.map((item) => item.slug)),
+  blocked: dragBlock,
+  onMove: (slug, toIndex) => placeDragged(slug, toIndex),
+});
+const dragSlug = drag.dragKey;
+const dropTarget = drag.dropTarget;
+const dropAtEnd = drag.dropAtEnd;
+const clearDrag = drag.clearDrag;
+const startDrag = drag.startDrag;
+const hoverDrop = drag.hoverDrop;
+const hoverEnd = drag.hoverEnd;
+const dropOn = drag.dropOn;
+const dropEnd = drag.dropEnd;
 
 /** Saves a drop at `toIndex` (0-based, full order) and announces and focuses the result. */
 function placeDragged(dragged: string, toIndex: number): void {
@@ -932,7 +868,7 @@ function openDeleteFromList(slug: string): void {
 function openBulkDelete(): void {
   const items = pages.value
     .filter((item) => selectedSlugs.value.includes(item.slug))
-    .map((item) => ({ slug: item.slug, title: item.title }));
+    .map((item) => ({ key: item.slug, title: item.title }));
   if (items.length === 0) return;
   bulkResults.value = null;
   bulkStale.value = false;
@@ -953,11 +889,9 @@ function closeBulk(): void {
 }
 
 /**
- * Deletes the selected pages one after another. Each delete takes the page's token as the store
- * holds it at that moment (the previous delete reloads the tree, so a token another delete moved on
- * is current again). A page that still holds content is refused by the server and reported as
- * blocked; a page changed by someone else since the last load is reported as stale. Every page gets
- * one line in the report.
+ * Deletes the selected pages one after another, each with the token it had when the dialog
+ * opened. A page that still holds content is refused by the server and reported as blocked; a
+ * page that changed since is reported as stale. Every page gets one line in the report.
  */
 async function confirmBulkDelete(): Promise<void> {
   const target = bulkTarget.value;
@@ -967,13 +901,14 @@ async function confirmBulkDelete(): Promise<void> {
   bulkError.value = '';
   const results: BulkResult[] = [];
   for (const item of target.items) {
-    const outcome = await store.removePage(item.slug);
+    // The store holds each page's current token (a previous delete reloads the tree), so none is sent.
+    const outcome = await store.removePage(item.key);
     if (outcome.ok) {
-      results.push({ slug: item.slug, title: item.title, status: 'deleted' });
-      selectedSlugs.value = selectedSlugs.value.filter((slug) => slug !== item.slug);
+      results.push({ key: item.key, title: item.title, status: 'deleted' });
+      selectedSlugs.value = selectedSlugs.value.filter((slug) => slug !== item.key);
     } else {
       results.push({
-        slug: item.slug,
+        key: item.key,
         title: item.title,
         status: outcome.blocked ? 'blocked' : 'failed',
         message: outcome.message,
@@ -1174,103 +1109,67 @@ onUnmounted(() => {
         </h2>
 
         <!-- Phones: every control full width in one column; from md: one row, right-aligned. -->
-        <div
-          class="flex w-full flex-col gap-2 md:w-auto md:flex-row md:flex-wrap md:items-center md:justify-end"
-          data-test="toolbar"
-        >
-          <div class="relative w-full md:w-auto">
-            <label :for="ceritaIds.search" class="sr-only">Cari Cerita</label>
-            <MagnifyingGlassIcon
-              class="text-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
-              aria-hidden="true"
-              data-test="search-icon"
-            />
-            <input
-              :id="ceritaIds.search"
+        <CardListToolbar :hide-add="selectedSlugs.length > 0">
+          <template #search>
+            <CardSearchField
               v-model="query"
-              type="search"
+              :id="ceritaIds.search"
+              label="Cari Cerita"
               placeholder="Cari Cerita"
-              autocomplete="off"
-              class="rounded-btn border-border-strong text-brand-navy placeholder:text-text-muted focus-visible:outline-focus-ring bg-surface min-h-11 w-full border py-2 pr-3 pl-9 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 md:w-56"
-              data-test="search"
             />
-          </div>
-          <BaseButton
-            :id="ceritaIds.sortToggle"
-            type="button"
-            variant="secondary"
-            size="md"
-            class="min-h-11 w-full md:w-auto"
-            :aria-pressed="sorting ? 'true' : 'false'"
-            :disabled="listBusy"
-            data-test="sort-toggle"
-            @click="toggleSorting"
-          >
-            <template #leftIcon>
-              <ArrowsUpDownIcon class="h-4 w-4" aria-hidden="true" />
-            </template>
-            Urutkan Cerita
-          </BaseButton>
-          <SelectAllButton
-            :id="ceritaIds.selectAll"
-            :state="selectAllState"
-            :filled="selectedSlugs.length > 0"
-            :disabled="listBusy || filteredPages.length === 0"
-            data-test="select-all"
-            @click="toggleSelectAll"
-          />
-          <BaseButton
-            :id="ceritaIds.addPage"
-            type="button"
-            size="md"
-            class="min-h-11 w-full md:w-auto"
-            :class="selectedSlugs.length > 0 ? 'invisible' : ''"
-            :disabled="listBusy"
-            data-test="add-page"
-            @click="openName({ kind: 'page-add' })"
-          >
-            <template #leftIcon>
-              <PlusIcon class="h-4 w-4" aria-hidden="true" />
-            </template>
-            Tambah Cerita
-          </BaseButton>
-        </div>
+          </template>
+          <template #sort>
+            <SortToggleButton
+              :id="ceritaIds.sortToggle"
+              :pressed="sorting"
+              label="Urutkan Cerita"
+              :disabled="listBusy"
+              @click="toggleSorting"
+            />
+          </template>
+          <template #select-all>
+            <SelectAllButton
+              :id="ceritaIds.selectAll"
+              :state="selectAllState"
+              :filled="selectedSlugs.length > 0"
+              :disabled="listBusy || filteredPages.length === 0"
+              data-test="select-all"
+              @click="toggleSelectAll"
+            />
+          </template>
+          <template #add="{ hiddenClass }">
+            <BaseButton
+              :id="ceritaIds.addPage"
+              type="button"
+              size="md"
+              class="min-h-11 w-full md:w-auto"
+              :class="hiddenClass"
+              :disabled="listBusy"
+              data-test="add-page"
+              @click="openName({ kind: 'page-add' })"
+            >
+              <template #leftIcon>
+                <PlusIcon class="h-4 w-4" aria-hidden="true" />
+              </template>
+              Tambah Cerita
+            </BaseButton>
+          </template>
+        </CardListToolbar>
       </div>
 
       <!--
         A fixed-height row: the search count and the bulk actions come and go here, so nothing
         above or below it moves. The bulk group exists only while at least one card is selected.
       -->
-      <div class="flex min-h-11 items-center gap-3" data-test="selection-bar">
-        <p
-          v-if="query.trim() !== ''"
-          class="text-text-muted text-sm"
-          role="status"
-          data-test="search-count"
-        >
-          Menampilkan {{ filteredPages.length }} dari {{ pages.length }} Cerita.
-        </p>
-        <div v-if="selectedSlugs.length > 0" class="ml-auto flex items-center gap-3">
-          <span class="text-brand-navy text-sm font-semibold" data-test="selected-count">
-            {{ selectedSlugs.length }} dipilih
-          </span>
-          <BaseButton
-            :id="ceritaIds.bulkDelete"
-            type="button"
-            variant="secondary"
-            size="md"
-            class="min-h-11"
-            :disabled="listBusy"
-            data-test="bulk-delete"
-            @click="openBulkDelete"
-          >
-            <template #leftIcon>
-              <XMarkIcon class="h-4 w-4" aria-hidden="true" />
-            </template>
-            Hapus semua
-          </BaseButton>
-        </div>
-      </div>
+      <CardSelectionBar
+        :selected-count="selectedSlugs.length"
+        :search-count="
+          query.trim() !== '' ? `Menampilkan ${filteredPages.length} dari ${pages.length} Cerita.` : null
+        "
+        :busy="listBusy"
+        :bulk-id="ceritaIds.bulkDelete"
+        @bulk-delete="openBulkDelete"
+      />
 
       <CeritaPageCardList
         :pages="filteredPages"
@@ -1430,8 +1329,9 @@ onUnmounted(() => {
       @reload="reloadFromDelete"
     />
 
-    <CeritaBulkDeleteDialog
+    <BulkDeleteDialog
       :open="bulkTarget !== null"
+      noun="halaman"
       :items="bulkTarget?.items ?? []"
       :busy="bulkRunning"
       :results="bulkResults"
@@ -1440,7 +1340,17 @@ onUnmounted(() => {
       @confirm="confirmBulkDelete"
       @close="closeBulk"
       @reload="reloadBulk"
-    />
+    >
+      <template #intro>
+        <p class="text-brand-navy text-sm">
+          Halaman berikut akan dihapus satu per satu. Tindakan ini tidak bisa dibatalkan.
+        </p>
+        <p class="text-text-muted text-sm">
+          Halaman yang masih berisi paragraf, gambar, angka, atau tabel akan dilewati. Setelah selesai,
+          halaman itu ditampilkan sebagai “tidak dapat dihapus” dalam daftar hasil, beserta alasannya.
+        </p>
+      </template>
+    </BulkDeleteDialog>
 
     <BaseModal
       :open="editingSectionId !== null"

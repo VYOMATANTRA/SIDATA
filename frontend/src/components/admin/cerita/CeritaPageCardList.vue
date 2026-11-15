@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { AdminPage } from '../../../stores/ceritaAdmin.store';
+import type { DragBlock } from '../../../composables/useCardDragReorder';
 import CeritaPageCard from './CeritaPageCard.vue';
+import CardDropIndicator from '../cards/CardDropIndicator.vue';
 
 /**
  * The list of Cerita page cards on `/admin/cerita`, in server order. `pages` is the list after the
@@ -16,10 +18,10 @@ defineProps<{
   firstSlug: string | null;
   lastSlug: string | null;
   sorting?: boolean;
-  dragBlock?: 'search' | 'busy' | null;
+  dragBlock?: DragBlock;
   selectedSlugs?: readonly string[];
   dragSlug?: string | null;
-  dropTarget?: { slug: string; edge: 'before' | 'after' } | null;
+  dropTarget?: { key: string; edge: 'before' | 'after' } | null;
   dropAtEnd?: boolean;
   busy?: boolean;
 }>();
@@ -66,7 +68,7 @@ const emit = defineEmits<{
         :drag-active="dragSlug !== null && dragSlug !== undefined"
         :selected="selectedSlugs?.includes(page.slug) ?? false"
         :dragging="dragSlug === page.slug"
-        :drop-edge="dropTarget?.slug === page.slug ? dropTarget.edge : null"
+        :drop-edge="dropTarget?.key === page.slug ? dropTarget.edge : null"
         :is-first="page.slug === firstSlug"
         :is-last="page.slug === lastSlug"
         :busy="busy"
@@ -88,15 +90,7 @@ const emit = defineEmits<{
         @dragover.prevent="emit('drag-over-end')"
         @drop.prevent="emit('drop-end')"
       >
-        <span
-          v-if="dropAtEnd"
-          class="pointer-events-none absolute inset-x-0 top-1/2 z-10 flex -translate-y-1/2 items-center"
-          data-test="drop-indicator"
-          data-edge="end"
-        >
-          <span class="bg-brand-navy -ml-1.5 size-3 shrink-0 rounded-full" />
-          <span class="bg-brand-navy h-1.5 flex-1 rounded-full" />
-        </span>
+        <CardDropIndicator v-if="dropAtEnd" edge="end" />
       </li>
     </ol>
   </div>

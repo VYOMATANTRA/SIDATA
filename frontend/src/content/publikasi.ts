@@ -14,6 +14,10 @@ export interface PublicationItem {
   fileType?: string;
   /** Optional file size in bytes */
   fileSizeBytes?: number;
+  /** Optional number of pages (1–100000), shown as "N Halaman". */
+  pageCount?: number;
+  /** Optional publication date, `YYYY-MM` or `YYYY-MM-DD`; only the month and year are shown. */
+  publishedAt?: string;
   /** An uploaded PDF/DOCX (media purpose `publikasi-document`); served by `/api/media/<id>/download`. */
   documentAssetId?: string;
   /** Cover photo (media purpose `publikasi-cover`); shown from its thumbnail. */
@@ -94,6 +98,69 @@ export function isDownloadable(item: PublicationItem): boolean {
 
 export function hasPublicPublication(list: PublicationItem[] = PUBLICATIONS): boolean {
   return list.some(isDownloadable);
+}
+
+const MONTHS_ID = [
+  'Januari',
+  'Februari',
+  'Maret',
+  'April',
+  'Mei',
+  'Juni',
+  'Juli',
+  'Agustus',
+  'September',
+  'Oktober',
+  'November',
+  'Desember',
+] as const;
+
+const PUBLISHED_AT = /^(\d{4})-(0[1-9]|1[0-2])(?:-(0[1-9]|[12]\d|3[01]))?$/;
+
+/**
+ * `YYYY-MM` or `YYYY-MM-DD` that names a real date: the day must exist in that month. Identical to the
+ * backend rule (`isValidPublishedAt` in backend/src/services/contentBlocks.service.ts).
+ */
+export function isValidPublishedAt(value: string): boolean {
+  const match = PUBLISHED_AT.exec(value);
+  if (!match) return false;
+  if (match[3] === undefined) return true;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  // Day 0 of the following month (passed as a 1-based month) is the last day of this month.
+  return day <= new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/** The stored page count as a number, or null when absent or outside 1–100000. */
+export function pageCountValue(pageCount?: number): number | null {
+  if (typeof pageCount !== 'number' || !Number.isInteger(pageCount)) return null;
+  if (pageCount < 1 || pageCount > 100000) return null;
+  return pageCount;
+}
+
+/** "12 Halaman", or null when the stored count is absent or outside 1–100000. */
+export function formatPageCount(pageCount?: number): string | null {
+  const value = pageCountValue(pageCount);
+  return value === null ? null : `${value} Halaman`;
+}
+
+/** "Maret 2026" from `YYYY-MM` or `YYYY-MM-DD` (the day is not shown), or null when invalid. */
+export function formatPublishedAt(publishedAt?: string): string | null {
+  if (typeof publishedAt !== 'string' || !isValidPublishedAt(publishedAt.trim())) return null;
+  const match = PUBLISHED_AT.exec(publishedAt.trim());
+  if (!match) return null;
+  return `${MONTHS_ID[Number(match[2]) - 1]} ${match[1]}`;
+}
+
+/** "12 Halaman, Diterbitkan Maret 2026"; a missing part is left out, and no part gives "". */
+export function publicationMetaLine(item: PublicationItem): string {
+  const parts: string[] = [];
+  const pages = formatPageCount(item.pageCount);
+  if (pages) parts.push(pages);
+  const published = formatPublishedAt(item.publishedAt);
+  if (published) parts.push(`Diterbitkan ${published}`);
+  return parts.join(', ');
 }
 
 export function formatFileSize(bytes?: number): string {
