@@ -359,9 +359,7 @@ describe('pages store (public page by slug)', () => {
       ],
     };
 
-    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue(
-      json({ page: updatedPage }),
-    );
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue(json({ page: updatedPage }));
 
     await store.fetchPageBySlug('kependudukan', true);
 
@@ -382,9 +380,7 @@ describe('pages store (public page by slug)', () => {
     store.pages = [];
     store.isLoaded = false;
 
-    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue(
-      json({ page: samplePage }),
-    );
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue(json({ page: samplePage }));
 
     await store.fetchPageBySlug('kependudukan', true);
 

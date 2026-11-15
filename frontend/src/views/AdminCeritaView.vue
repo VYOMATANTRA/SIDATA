@@ -34,6 +34,7 @@ import CeritaDeleteDialog from '../components/admin/cerita/CeritaDeleteDialog.vu
 import CeritaPageDetailsDialog from '../components/admin/cerita/CeritaPageDetailsDialog.vue';
 import CeritaNameDialog from '../components/admin/cerita/CeritaNameDialog.vue';
 import CeritaPageCardList from '../components/admin/cerita/CeritaPageCardList.vue';
+import SelectAllButton from '../components/admin/cards/SelectAllButton.vue';
 import CeritaReloadNotice from '../components/admin/cerita/CeritaReloadNotice.vue';
 import CeritaSectionEditor from '../components/admin/cerita/CeritaSectionEditor.vue';
 import CeritaStructurePanel from '../components/admin/cerita/CeritaStructurePanel.vue';
@@ -534,7 +535,8 @@ async function confirmDelete(): Promise<void> {
     case 'page':
       outcome = await store.removePage(target.slug, target.token);
       message = `Halaman “${target.title}” dihapus.`;
-      focus = ceritaIds.addPage;
+      // "Tambah Cerita" is hidden while cards are selected; then focus goes to select-all instead.
+      focus = selectedSlugs.value.length > 0 ? ceritaIds.selectAll : ceritaIds.addPage;
       break;
     case 'chapter':
       outcome = await store.removeChapter(target.id, target.token);
@@ -694,7 +696,9 @@ function movePageBySlug(slug: string, direction: Direction, upId: string, downId
     () => store.movePage(slug, direction),
     () => {
       const index = pages.value.findIndex((item) => item.slug === slug);
-      announce(`Halaman “${target.title}” dipindah ke urutan ${index + 1} dari ${pages.value.length}.`);
+      announce(
+        `Halaman “${target.title}” dipindah ke urutan ${index + 1} dari ${pages.value.length}.`,
+      );
       focusAfterMove(upId, downId, index, pages.value.length, direction);
     },
   );
@@ -800,7 +804,6 @@ function toggleSelected(slug: string): void {
     : [...selectedSlugs.value, slug];
 }
 
-/** Select-all acts on the cards the list shows (after the search), never on hidden ones. */
 // While something is selected, "Tambah Cerita" is hidden with `invisible`: its slot keeps the
 // toolbar still, and a hidden control leaves the focus order and the accessibility tree. If the
 // focused control is one that disappears (Tambah or Hapus semua), focus moves to select-all.
@@ -825,8 +828,16 @@ const selectAllState = computed<'none' | 'some' | 'all'>(() => {
   return selectedVisibleCount.value === visible ? 'all' : 'some';
 });
 
+/**
+ * Select-all acts on the cards the list shows (after the search), never on hidden ones. With no
+ * match there is nothing to select, so nothing is announced as selected (the button is disabled too).
+ */
 function toggleSelectAll(): void {
   const visible = filteredPages.value.map((item) => item.slug);
+  if (visible.length === 0) {
+    announce('Tidak ada Cerita yang cocok dengan pencarian ini.');
+    return;
+  }
   if (selectAllState.value === 'all') {
     selectedSlugs.value = selectedSlugs.value.filter((slug) => !visible.includes(slug));
     announce('Pilihan Cerita dibatalkan.');
@@ -1177,7 +1188,7 @@ onUnmounted(() => {
               type="search"
               placeholder="Cari Cerita"
               autocomplete="off"
-              class="rounded-btn border-border-strong text-brand-navy placeholder:text-text-muted focus-visible:outline-focus-ring min-h-11 w-full border bg-surface py-2 pr-3 pl-9 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 md:w-56"
+              class="rounded-btn border-border-strong text-brand-navy placeholder:text-text-muted focus-visible:outline-focus-ring bg-surface min-h-11 w-full border py-2 pr-3 pl-9 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 md:w-56"
               data-test="search"
             />
           </div>
@@ -1197,27 +1208,14 @@ onUnmounted(() => {
             </template>
             Urutkan Cerita
           </BaseButton>
-          <BaseButton
+          <SelectAllButton
             :id="ceritaIds.selectAll"
-            type="button"
-            role="checkbox"
-            :variant="selectedSlugs.length > 0 ? 'primary' : 'secondary'"
-            size="md"
-            class="min-h-11 w-full min-w-[12.5rem] md:w-auto"
-            :aria-checked="selectAllState === 'some' ? 'mixed' : selectAllState === 'all' ? 'true' : 'false'"
-            :disabled="listBusy || pages.length === 0"
+            :state="selectAllState"
+            :filled="selectedSlugs.length > 0"
+            :disabled="listBusy || filteredPages.length === 0"
             data-test="select-all"
             @click="toggleSelectAll"
-          >
-            <template #leftIcon>
-              <svg viewBox="0 0 20 20" class="h-4 w-4" aria-hidden="true" focusable="false">
-                <rect x="3" y="3" width="14" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="1.6" />
-                <path v-if="selectAllState === 'all'" d="M6.5 10.5l2.4 2.4 4.6-4.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-                <path v-else-if="selectAllState === 'some'" d="M6.5 10h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-              </svg>
-            </template>
-            {{ selectAllState === 'all' ? 'Batal pilih semua' : 'Pilih semua' }}
-          </BaseButton>
+          />
           <BaseButton
             :id="ceritaIds.addPage"
             type="button"

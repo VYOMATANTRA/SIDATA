@@ -846,8 +846,10 @@ Dibuat and Terakhir Diedit, with Edit and Hapus; a search box filters the cards 
 "Tambah Cerita" (icon and label on one row) adds a page and opens it. Every card has a checkbox, always
 visible; a checked card gets a tinted fill and a stronger border as well as the checked box. The toolbar
 has one select-all button with three states, all acting on the cards the search currently shows: none
-checked reads "Pilih semua" (empty box); some checked reads "Pilih semua" with a dash, `aria-checked="mixed"`;
-all checked reads "Batal pilih semua" (checked box). While at least one card is checked, select-all takes the
+checked reads "Pilih semua" (empty box); some checked reads "Pilih semua" with a dash; all checked reads
+"Batal pilih semua" (checked box). It is a plain button named by its visible label; the partial and full
+states are spoken through a described-by note ("sebagian dipilih", "semua dipilih"), not a checkbox role.
+With no card in the search results it is disabled. While at least one card is checked, select-all takes the
 primary (filled) style and "Tambah Cerita" is hidden in place (`invisible`: its slot stays, so nothing moves,
 and it leaves the focus order and the accessibility tree); with nothing checked, select-all is the outlined
 style and "Tambah Cerita" shows. Focus stays on select-all if the focused Tambah or Hapus semua goes away.
