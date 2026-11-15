@@ -23,6 +23,7 @@ import CardListToolbar from '../components/admin/cards/CardListToolbar.vue';
 import CardSearchField from '../components/admin/cards/CardSearchField.vue';
 import CardSelectionBar from '../components/admin/cards/CardSelectionBar.vue';
 import SelectAllButton from '../components/admin/cards/SelectAllButton.vue';
+import SortToggleButton from '../components/admin/cards/SortToggleButton.vue';
 import type { BulkResult } from '../components/admin/cards/cardTypes';
 import PublikasiCardList, { type PublikasiRow } from '../components/admin/publikasi/PublikasiCardList.vue';
 import PublikasiCatalogInfoForm from '../components/admin/publikasi/PublikasiCatalogInfoForm.vue';
@@ -568,19 +569,13 @@ async function reloadFromBulk(): Promise<void> {
           </div>
         </template>
         <template #sort>
-          <BaseButton
+          <SortToggleButton
             :id="ids.sortToggle"
-            type="button"
-            variant="secondary"
-            size="md"
-            class="min-h-11 w-full md:w-auto"
-            :aria-pressed="sorting ? 'true' : 'false'"
+            :pressed="sorting"
+            label="Urutkan Publikasi"
             :disabled="listBusy"
-            data-test="sort-toggle"
             @click="toggleSorting"
-          >
-            Urutkan Publikasi
-          </BaseButton>
+          />
         </template>
         <template #select-all>
           <SelectAllButton

@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { ArrowRightIcon, DocumentTextIcon } from '@heroicons/vue/24/outline';
+import {
+  ArrowDownIcon,
+  ArrowDownTrayIcon,
+  ArrowUpIcon,
+  DocumentTextIcon,
+  PencilSquareIcon,
+  XMarkIcon,
+} from '@heroicons/vue/24/outline';
+import CardActionButton from '../cards/CardActionButton.vue';
 import CardDragGrip from '../cards/CardDragGrip.vue';
 import CardDropIndicator from '../cards/CardDropIndicator.vue';
 import CardSelectCheckbox from '../cards/CardSelectCheckbox.vue';
@@ -122,8 +130,6 @@ function onDrop(event: DragEvent): void {
   emit('drop', edgeAt(event));
 }
 
-const linkClass =
-  'text-brand-navy rounded-btn focus-visible:outline-focus-ring inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:text-text-muted disabled:no-underline';
 </script>
 
 <template>
@@ -233,64 +239,54 @@ const linkClass =
           </dl>
         </div>
 
-        <div class="border-border flex flex-wrap items-center gap-x-5 gap-y-1 border-t pt-3" data-test="card-actions">
-          <a
+        <div class="border-border flex flex-wrap items-center gap-2 border-t pt-3" data-test="card-actions">
+          <CardActionButton
             v-if="downloadHref"
             :id="`${idPrefix}-unduh`"
+            :icon="ArrowDownTrayIcon"
+            label="Unduh"
+            :sr-text="`publikasi ${title}`"
             :href="downloadHref"
             target="_blank"
-            rel="noopener noreferrer"
-            :class="linkClass"
             data-test="card-download"
-          >
-            Unduh <span class="sr-only">publikasi {{ title }}</span>
-            <ArrowRightIcon class="h-4 w-4" aria-hidden="true" />
-          </a>
-          <button
+          />
+          <CardActionButton
             :id="`${idPrefix}-ubah`"
-            type="button"
-            :class="linkClass"
+            :icon="PencilSquareIcon"
+            label="Ubah"
+            :sr-text="`publikasi ${title}`"
             :disabled="busy"
             data-test="card-edit"
             @click="emit('edit')"
-          >
-            Ubah <span class="sr-only">publikasi {{ title }}</span>
-            <ArrowRightIcon class="h-4 w-4" aria-hidden="true" />
-          </button>
-          <button
+          />
+          <CardActionButton
             :id="`${idPrefix}-hapus`"
-            type="button"
-            :class="linkClass"
+            :icon="XMarkIcon"
+            label="Hapus"
+            :sr-text="`publikasi ${title}`"
             :disabled="busy"
             data-test="card-delete"
             @click="emit('delete')"
-          >
-            Hapus <span class="sr-only">publikasi {{ title }}</span>
-            <ArrowRightIcon class="h-4 w-4" aria-hidden="true" />
-          </button>
+          />
           <template v-if="sorting">
-            <button
+            <CardActionButton
               :id="`${idPrefix}-up`"
-              type="button"
-              :class="linkClass"
+              :icon="ArrowUpIcon"
+              label="Naik"
+              :sr-text="`publikasi ${title}`"
               :disabled="busy || !canMoveUp"
               data-test="card-move-up"
               @click="emit('move', -1)"
-            >
-              Naik <span class="sr-only">publikasi {{ title }}</span>
-              <ArrowRightIcon class="h-4 w-4 -rotate-90" aria-hidden="true" />
-            </button>
-            <button
+            />
+            <CardActionButton
               :id="`${idPrefix}-down`"
-              type="button"
-              :class="linkClass"
+              :icon="ArrowDownIcon"
+              label="Turun"
+              :sr-text="`publikasi ${title}`"
               :disabled="busy || !canMoveDown"
               data-test="card-move-down"
               @click="emit('move', 1)"
-            >
-              Turun <span class="sr-only">publikasi {{ title }}</span>
-              <ArrowRightIcon class="h-4 w-4 rotate-90" aria-hidden="true" />
-            </button>
+            />
           </template>
         </div>
       </div>
