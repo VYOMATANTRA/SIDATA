@@ -1474,6 +1474,61 @@ describe('AdminCeritaView', () => {
       wrapper.unmount();
     });
 
+    it('shows the category photo as a decorative thumbnail, and a placeholder for a page without one', async () => {
+      fake.addPage('Halaman Baru', []);
+      const wrapper = await mountList();
+
+      const kependudukan = wrapper.find('[data-slug="kependudukan"]');
+      const thumb = kependudukan.find('[data-test="thumbnail-image"]');
+      expect(thumb.exists()).toBe(true);
+      expect(thumb.attributes('alt')).toBe('');
+      expect(thumb.attributes('loading')).toBe('lazy');
+      expect(thumb.attributes('decoding')).toBe('async');
+      expect(kependudukan.find('[data-test="thumbnail-placeholder"]').exists()).toBe(false);
+
+      const fresh = wrapper.find('[data-slug="halaman-baru"]');
+      expect(fresh.find('[data-test="thumbnail-image"]').exists()).toBe(false);
+      expect(fresh.find('[data-test="thumbnail-placeholder"]').attributes('aria-hidden')).toBe(
+        'true',
+      );
+      wrapper.unmount();
+    });
+
+    it('drops a card on the zone after the last card, which shows a line while hovered', async () => {
+      const wrapper = await mountList();
+      expect(wrapper.find('[data-test="drop-end"]').exists()).toBe(false);
+
+      await wrapper.findAll('[data-test="grip"]')[0]!.trigger('dragstart');
+      const zone = wrapper.find('[data-test="drop-end"]');
+      expect(zone.exists()).toBe(true);
+      await zone.trigger('dragover');
+      await flushPromises();
+      expect(wrapper.find('[data-test="drop-indicator"][data-edge="end"]').exists()).toBe(true);
+
+      await zone.trigger('drop');
+      await flushPromises();
+
+      expect(fake.lastWrite()).toMatchObject({ method: 'PUT', url: '/api/pages/reorder' });
+      expect(pageTitles(wrapper)).toEqual(['Pendidikan', 'Kesehatan', 'Kependudukan']);
+      expect(wrapper.find('[data-test="drop-end"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('gives the toolbar full-width stacked controls on phones and one row from md', async () => {
+      const wrapper = await mountList();
+      const toolbar = wrapper.find('[data-test="toolbar"]').classes();
+
+      expect(toolbar).toContain('w-full');
+      expect(toolbar).toContain('flex-col');
+      expect(toolbar).toContain('md:flex-row');
+      for (const selector of ['sort-toggle', 'select-all', 'add-page']) {
+        expect(wrapper.find(`[data-test="${selector}"]`).classes()).toEqual(
+          expect.arrayContaining(['w-full', 'md:w-auto']),
+        );
+      }
+      wrapper.unmount();
+    });
+
     it('deletes one page from its card through the same confirmation as the structure view', async () => {
       const wrapper = await mountList();
 

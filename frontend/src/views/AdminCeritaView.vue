@@ -751,6 +751,8 @@ const selectedSlugs = ref<string[]>([]);
 /** Card being dragged (Urutkan mode) and the card it hovers, with the side the drop would land. */
 const dragSlug = ref<string | null>(null);
 const dropTarget = ref<{ slug: string; edge: 'before' | 'after' } | null>(null);
+/** The drag hovers the zone after the last card (drop there = the end of the list). */
+const dropAtEnd = ref(false);
 const bulkTarget = ref<{ items: { slug: string; title: string; token: string }[] } | null>(null);
 const bulkRunning = ref(false);
 const bulkResults = ref<BulkResult[] | null>(null);
@@ -835,6 +837,7 @@ function toggleSelectAll(): void {
 function clearDrag(): void {
   dragSlug.value = null;
   dropTarget.value = null;
+  dropAtEnd.value = false;
 }
 
 function startDrag(slug: string): void {
@@ -844,11 +847,27 @@ function startDrag(slug: string): void {
 }
 
 function hoverDrop(slug: string, edge: 'before' | 'after'): void {
+  dropAtEnd.value = false;
   if (!dragSlug.value || dragSlug.value === slug) {
     dropTarget.value = null;
     return;
   }
   dropTarget.value = { slug, edge };
+}
+
+function hoverEnd(): void {
+  dropTarget.value = null;
+  dropAtEnd.value = dragSlug.value !== null;
+}
+
+/** Drop after the last card: the dragged card becomes the last one. */
+function dropEnd(): void {
+  const dragged = dragSlug.value;
+  clearDrag();
+  if (!dragged) return;
+  const last = pages.value[pages.value.length - 1]?.slug;
+  if (!last || last === dragged) return;
+  placeDragged(dragged, pages.value.length - 1);
 }
 
 /**
@@ -864,7 +883,13 @@ function dropOn(slug: string, edge: 'before' | 'after'): void {
   if (from < 0 || anchor < 0) return;
   let toIndex = edge === 'before' ? anchor : anchor + 1;
   if (from < toIndex) toIndex -= 1;
-  if (toIndex === from) return;
+  placeDragged(dragged, toIndex);
+}
+
+/** Saves a drop at `toIndex` (0-based, full order) and announces and focuses the result. */
+function placeDragged(dragged: string, toIndex: number): void {
+  const from = pages.value.findIndex((item) => item.slug === dragged);
+  if (from < 0 || toIndex === from) return;
   const direction: Direction = toIndex > from ? 1 : -1;
   const title = pages.value[from]?.title ?? '';
   void runMove(
@@ -1118,8 +1143,12 @@ onUnmounted(() => {
           Cerita
         </h2>
 
-        <div class="flex flex-wrap items-center justify-end gap-2" data-test="toolbar">
-          <div class="relative">
+        <!-- Phones: every control full width in one column; from md: one row, right-aligned. -->
+        <div
+          class="flex w-full flex-col gap-2 md:w-auto md:flex-row md:flex-wrap md:items-center md:justify-end"
+          data-test="toolbar"
+        >
+          <div class="relative w-full md:w-auto">
             <label :for="ceritaIds.search" class="sr-only">Cari Cerita</label>
             <MagnifyingGlassIcon
               class="text-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
@@ -1132,7 +1161,7 @@ onUnmounted(() => {
               type="search"
               placeholder="Cari Cerita"
               autocomplete="off"
-              class="rounded-btn border-border-strong text-brand-navy placeholder:text-text-muted focus-visible:outline-focus-ring min-h-11 w-56 border bg-surface py-2 pr-3 pl-9 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
+              class="rounded-btn border-border-strong text-brand-navy placeholder:text-text-muted focus-visible:outline-focus-ring min-h-11 w-full border bg-surface py-2 pr-3 pl-9 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 md:w-56"
               data-test="search"
             />
           </div>
@@ -1141,7 +1170,7 @@ onUnmounted(() => {
             type="button"
             variant="secondary"
             size="md"
-            class="min-h-11"
+            class="min-h-11 w-full md:w-auto"
             :aria-pressed="sorting ? 'true' : 'false'"
             :disabled="listBusy"
             data-test="sort-toggle"
@@ -1155,7 +1184,7 @@ onUnmounted(() => {
             role="checkbox"
             :variant="selectedSlugs.length > 0 ? 'primary' : 'secondary'"
             size="md"
-            class="min-h-11 min-w-[12.5rem]"
+            class="min-h-11 w-full min-w-[12.5rem] md:w-auto"
             :aria-checked="selectAllState === 'some' ? 'mixed' : selectAllState === 'all' ? 'true' : 'false'"
             :disabled="listBusy || pages.length === 0"
             data-test="select-all"
@@ -1174,7 +1203,7 @@ onUnmounted(() => {
             :id="ceritaIds.addPage"
             type="button"
             size="md"
-            class="min-h-11"
+            class="min-h-11 w-full md:w-auto"
             :class="selectedSlugs.length > 0 ? 'invisible' : ''"
             :disabled="listBusy"
             data-test="add-page"
@@ -1238,7 +1267,10 @@ onUnmounted(() => {
         @drag-start="startDrag"
         @drag-end="clearDrag"
         @drag-over="hoverDrop"
+        :drop-at-end="dropAtEnd"
         @drop="dropOn"
+        @drag-over-end="hoverEnd"
+        @drop-end="dropEnd"
       />
     </section>
 

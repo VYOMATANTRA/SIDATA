@@ -6,7 +6,8 @@ import CeritaPageCard from './CeritaPageCard.vue';
  * The list of Cerita page cards on `/admin/cerita`, in server order. `pages` is the list after the
  * search filter; `firstSlug` / `lastSlug` name the ends of the full order, so Naik / Turun are
  * disabled by the real position rather than by what the filter happens to show. Drag state comes
- * from the view: `dragSlug` is the card in flight, `dropTarget` the card it hovers and the side.
+ * from the view: `dragSlug` is the card in flight, `dropTarget` the card it hovers and the side, and
+ * `dropAtEnd` says it hovers the zone after the last card.
  */
 defineProps<{
   pages: readonly AdminPage[];
@@ -19,6 +20,7 @@ defineProps<{
   selectedSlugs?: readonly string[];
   dragSlug?: string | null;
   dropTarget?: { slug: string; edge: 'before' | 'after' } | null;
+  dropAtEnd?: boolean;
   busy?: boolean;
 }>();
 
@@ -31,6 +33,8 @@ const emit = defineEmits<{
   (e: 'drag-end'): void;
   (e: 'drag-over', slug: string, edge: 'before' | 'after'): void;
   (e: 'drop', slug: string, edge: 'before' | 'after'): void;
+  (e: 'drag-over-end'): void;
+  (e: 'drop-end'): void;
 }>();
 </script>
 
@@ -74,6 +78,25 @@ const emit = defineEmits<{
         @drag-over="(edge) => emit('drag-over', page.slug, edge)"
         @drop="(edge) => emit('drop', page.slug, edge)"
       />
+      <!-- The zone after the last card: dropping here moves the card to the end of the list. -->
+      <li
+        v-if="dragSlug"
+        aria-hidden="true"
+        class="relative h-4"
+        data-test="drop-end"
+        @dragover.prevent="emit('drag-over-end')"
+        @drop.prevent="emit('drop-end')"
+      >
+        <span
+          v-if="dropAtEnd"
+          class="pointer-events-none absolute inset-x-0 top-1/2 z-10 flex -translate-y-1/2 items-center"
+          data-test="drop-indicator"
+          data-edge="end"
+        >
+          <span class="bg-brand-navy -ml-1.5 size-3 shrink-0 rounded-full" />
+          <span class="bg-brand-navy h-1.5 flex-1 rounded-full" />
+        </span>
+      </li>
     </ol>
   </div>
 </template>

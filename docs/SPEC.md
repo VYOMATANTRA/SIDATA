@@ -857,7 +857,13 @@ the count ("N dipilih") and "Hapus semua" appear there, so selecting or searchin
 toolbar, the search box or the cards. The list shows no explanatory hints. "Hapus semua" deletes the
 selected pages one at a time and lists each page as deleted or, when it still holds paragraphs, a
 figure, indicators or tables, as "tidak dapat dihapus" with the reason; that page is skipped and stays
-selected. There is no shared "Edit semua": cards have no common editable
+selected. Layout: below `md` the toolbar's controls stack full width in one column, and each card's
+actions sit under its text on the title's left edge, with the checkbox centred on the card; from `md` the
+controls share one right-aligned row and a 16:9 thumbnail sits at the card's right. The thumbnail is the
+Cerita category's bundled photo, the one the home page shows (`content/ceritaCovers.ts`, keyed by page
+slug); a page without one gets a neutral placeholder. It is a static asset: the list makes no media
+request. A drag shows a bold insertion line with a dot on the side the card will land (above or below the
+hovered card, or in the zone after the last card), and the dragged card is dimmed. There is no shared "Edit semua": cards have no common editable
 field. The grip on each card can be dragged at any time (HTML5 drag and drop, Urutkan on or off; a line
 marks the drop place). It is disabled, with the reason in its title, while a search filter is active
 (the order is only shown in full) and while a save is in flight. A drop saves the whole order through
