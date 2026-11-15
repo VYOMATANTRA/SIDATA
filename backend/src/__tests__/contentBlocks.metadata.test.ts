@@ -126,10 +126,18 @@ describe('content block metadata schema stripping', () => {
         validateBlockMetadata('publikasi-katalog', { publications: [{ ...base, publishedAt }] }),
       );
     }
-    const refused = ['2026-02-30', '2025-02-29', '2026-02-31', '2026-04-31', '2026-13', '2026-00-10'];
+    const refused = [
+      '2026-02-30',
+      '2025-02-29',
+      '2026-02-31',
+      '2026-04-31',
+      '2026-13',
+      '2026-00-10',
+    ];
     for (const publishedAt of refused) {
       assert.throws(
-        () => validateBlockMetadata('publikasi-katalog', { publications: [{ ...base, publishedAt }] }),
+        () =>
+          validateBlockMetadata('publikasi-katalog', { publications: [{ ...base, publishedAt }] }),
         `${publishedAt} must be refused`,
       );
     }
