@@ -840,10 +840,16 @@ rujukan) with Naik / Turun / Hapus (never drag-only) and Tambah publikasi.
   shows "Muat versi terbaru", which replaces the draft only when the editor asks.
 
 **Cerita management (`/admin/cerita`).** Editor and Admin manage the page → chapter → section
-hierarchy and what a section holds, on the authoring APIs of §2, §3 and §7. One master-detail screen:
-the page list (add, rename, reorder, delete) beside the chosen page's chapters and sections (add,
-rename, reorder, delete), and a section editor dialog for the section's paragraphs (prose blocks:
-add, edit, reorder, delete) and its one figure. "Judul utama & penulis" on the chosen page opens a
+hierarchy and what a section holds, on the authoring APIs of §2, §3 and §7. The screen has two views.
+The default is the **Cerita list**: one white card per page showing its title, Penulis, Tanggal
+Dibuat and Terakhir Diedit, with Edit and Hapus; a search box filters the cards by title, and
+"Tambah Cerita" adds a page and opens it. **Urutkan Cerita** shows Naik / Turun on each card (buttons
+only, never drag). **Pilih Cerita** adds a checkbox per card and "Hapus terpilih (n)", which deletes
+the selected pages one at a time and reports each page as deleted or refused; a page that still holds
+paragraphs, a figure, indicators or tables is refused and stays selected. **Edit** opens the page's
+structure at `?halaman=<slug>` (browser Back and "Kembali ke daftar" return to the list): its chapters
+and sections (add, rename, reorder, delete), and a section editor dialog for the section's paragraphs
+(prose blocks: add, edit, reorder, delete) and its one figure. "Judul utama & penulis" on the chosen page opens a
 dialog for its optional headline, byline author and byline affiliation (all may stay empty; same
 token, stale-write and keep-the-draft behavior as rename). The reader shows the headline as the page
 `<h1>` (the page title moves into the eyebrow) and "Oleh <author>" with the affiliation only when an
