@@ -739,7 +739,7 @@ function moveSection(chapter: AdminChapter, section: AdminSection, direction: Di
 // --- Cerita list (the default view) ---
 
 const query = ref('');
-/** Urutkan mode: the grip can be dragged, and Naik / Turun buttons show on each card. */
+/** Urutkan mode: Naik / Turun buttons show on each card (drag works either way). */
 const sorting = ref(false);
 /** Checked cards. Checkboxes are always shown; only cards the list shows are ever selected. */
 const selectedSlugs = ref<string[]>([]);
@@ -759,6 +759,15 @@ const filteredPages = computed(() => {
 const firstSlug = computed(() => pages.value[0]?.slug ?? null);
 const lastSlug = computed(() => pages.value[pages.value.length - 1]?.slug ?? null);
 const listBusy = computed(() => moving.value || deleteBusy.value || bulkRunning.value);
+/**
+ * Why dragging is off right now: a search filter hides part of the order, and a save in flight
+ * would race the next drop. Null means the grip can be dragged, in Urutkan mode or not.
+ */
+const dragBlock = computed<'search' | 'busy' | null>(() => {
+  if (query.value.trim() !== '') return 'search';
+  if (listBusy.value) return 'busy';
+  return null;
+});
 
 // A selection only ever covers pages the list shows: a page hidden by the search, or removed
 // elsewhere, is dropped so "Hapus terpilih" cannot touch what the editor cannot see.
@@ -801,7 +810,8 @@ function toggleSelectAll(): void {
   announce(`${visible.length} Cerita dipilih.`);
 }
 
-// --- Drag and drop (Urutkan mode). Naik / Turun do the same from the keyboard. ---
+// --- Drag and drop: the grip works at any time except during a search or a save (`dragBlock`).
+// Naik / Turun in Urutkan mode do the same reorder from the keyboard and on touch. ---
 
 function clearDrag(): void {
   dragSlug.value = null;
@@ -809,7 +819,7 @@ function clearDrag(): void {
 }
 
 function startDrag(slug: string): void {
-  if (!sorting.value || listBusy.value) return;
+  if (dragBlock.value) return;
   dragSlug.value = slug;
   dropTarget.value = null;
 }
@@ -1193,6 +1203,7 @@ onUnmounted(() => {
         :first-slug="firstSlug"
         :last-slug="lastSlug"
         :sorting="sorting"
+        :drag-block="dragBlock"
         :selected-slugs="selectedSlugs"
         :drag-slug="dragSlug"
         :drop-target="dropTarget"

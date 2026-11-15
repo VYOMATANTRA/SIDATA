@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import BaseButton from '../../common/BaseButton.vue';
 import type { AdminPage } from '../../../stores/ceritaAdmin.store';
 import { ceritaIds } from './ceritaDomIds';
@@ -7,14 +7,17 @@ import { ceritaIds } from './ceritaDomIds';
 /**
  * One Cerita page as a card on `/admin/cerita`: the grip handle, the selection checkbox (always
  * shown), the big title, the Penulis / Tanggal Dibuat / Terakhir Diedit columns and the actions.
- * In Urutkan mode the grip can be dragged to a new place (HTML5 drag and drop, no dependency) and
- * Naik / Turun buttons do the same thing from the keyboard. The card only reports what was asked;
- * the view runs the save, the dialogs and the focus.
+ * The grip can be dragged to a new place at any time (HTML5 drag and drop, no dependency) unless a
+ * search filter is active or a save is in flight; Naik / Turun buttons in Urutkan mode are the
+ * keyboard and touch route to the same reorder. The card only reports what was asked; the view
+ * runs the save, the dialogs and the focus.
  */
 const props = defineProps<{
   page: AdminPage;
-  /** Urutkan mode: the grip is draggable and the Naik / Turun buttons show. */
+  /** Urutkan mode: the Naik / Turun buttons show. */
   sorting?: boolean;
+  /** Why the grip cannot be dragged right now, or null when it can (any time, Urutkan or not). */
+  dragBlock?: 'search' | 'busy' | null;
   selected?: boolean;
   /** This card is being dragged. */
   dragging?: boolean;
@@ -58,15 +61,23 @@ function onGripDragStart(event: DragEvent): void {
   emit('drag-start');
 }
 
+const gripTitle = computed(() => {
+  if (props.dragBlock === 'search') {
+    return 'Seret dinonaktifkan selama pencarian aktif. Kosongkan kotak pencarian untuk mengubah urutan.';
+  }
+  if (props.dragBlock === 'busy') return 'Seret dinonaktifkan sementara urutan sedang disimpan.';
+  return 'Seret untuk mengubah urutan. Naik dan Turun di Urutkan Cerita juga bisa dipakai.';
+});
+
 function onDragOver(event: DragEvent): void {
-  if (!props.sorting) return;
+  if (props.dragBlock) return;
   event.preventDefault();
   if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
   emit('drag-over', edgeAt(event));
 }
 
 function onDrop(event: DragEvent): void {
-  if (!props.sorting) return;
+  if (props.dragBlock) return;
   event.preventDefault();
   emit('drop', edgeAt(event));
 }
@@ -102,10 +113,11 @@ function onDrop(event: DragEvent): void {
     />
 
     <span
-      :draggable="sorting ? 'true' : 'false'"
+      :draggable="dragBlock ? 'false' : 'true'"
       aria-hidden="true"
+      :title="gripTitle"
       class="bg-surface-muted border-border flex w-8 shrink-0 items-center justify-center border-r"
-      :class="sorting ? 'cursor-grab active:cursor-grabbing' : ''"
+      :class="dragBlock ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'"
       data-test="grip"
       @dragstart="onGripDragStart"
       @dragend="emit('drag-end')"

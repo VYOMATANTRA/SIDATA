@@ -15,6 +15,7 @@ defineProps<{
   firstSlug: string | null;
   lastSlug: string | null;
   sorting?: boolean;
+  dragBlock?: 'search' | 'busy' | null;
   selectedSlugs?: readonly string[];
   dragSlug?: string | null;
   dropTarget?: { slug: string; edge: 'before' | 'after' } | null;
@@ -57,6 +58,7 @@ const emit = defineEmits<{
         :key="page.id"
         :page="page"
         :sorting="sorting"
+        :drag-block="dragBlock"
         :selected="selectedSlugs?.includes(page.slug) ?? false"
         :dragging="dragSlug === page.slug"
         :drop-edge="dropTarget?.slug === page.slug ? dropTarget.edge : null"

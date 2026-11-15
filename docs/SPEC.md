@@ -851,10 +851,12 @@ all checked reads "Batal pilih semua" (checked box). Once at least one card is c
 ("N dipilih") and "Hapus semua" appear; "Hapus semua" deletes the selected pages one at a time and
 reports each page as deleted or refused; a page that still holds paragraphs, a figure, indicators or
 tables is refused and stays selected. There is no shared "Edit semua": cards have no common editable
-field. **Urutkan Cerita** makes the grip on each card draggable (HTML5 drag and drop; a line marks the
-drop place) and shows Naik / Turun buttons, which are the keyboard route to the same reorder; a drop
-saves the whole order through the reorder API and announces the new position, and a refused or failed
-save is shown in the same banner as the buttons. Touch devices without drag support use Naik / Turun. **Edit** opens the page's
+field. The grip on each card can be dragged at any time (HTML5 drag and drop, Urutkan on or off; a line
+marks the drop place). It is disabled, with the reason in its title, while a search filter is active
+(the order is only shown in full) and while a save is in flight. A drop saves the whole order through
+the reorder API and announces the new position; a refused or failed save is shown in the same banner
+as the buttons. **Urutkan Cerita** shows Naik / Turun buttons on each card: the keyboard and touch
+route to the same reorder, since drag does not work on touch devices. **Edit** opens the page's
 structure at `?halaman=<slug>` (browser Back and "Kembali ke daftar" return to the list): its chapters
 and sections (add, rename, reorder, delete), and a section editor dialog for the section's paragraphs
 (prose blocks: add, edit, reorder, delete) and its one figure. "Judul utama & penulis" on the chosen page opens a

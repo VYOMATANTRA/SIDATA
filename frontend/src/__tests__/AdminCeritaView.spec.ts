@@ -1359,13 +1359,12 @@ describe('AdminCeritaView', () => {
       wrapper.unmount();
     });
 
-    it('drags a card by its grip only in Urutkan mode, shows a drop line and saves the new order', async () => {
+    it('drags a card by its grip with Urutkan off, shows a drop line and saves the new order', async () => {
       const wrapper = await mountList();
       const grip = () => wrapper.findAll('[data-test="grip"]')[0]!;
-      expect(grip().attributes('draggable')).toBe('false');
-
-      await wrapper.find('[data-test="sort-toggle"]').trigger('click');
+      expect(wrapper.find('[data-test="sort-toggle"]').attributes('aria-pressed')).toBe('false');
       expect(grip().attributes('draggable')).toBe('true');
+      expect(grip().attributes('title')).toContain('Seret untuk mengubah urutan');
 
       await grip().trigger('dragstart');
       const target = wrapper.find('[data-slug="kesehatan"]');
@@ -1383,9 +1382,27 @@ describe('AdminCeritaView', () => {
       wrapper.unmount();
     });
 
+    it('disables the grip while a search filter is active, with the reason in its title', async () => {
+      const wrapper = await mountList();
+      await typeInto('[data-test="search"]', 'Pendidikan');
+      const grip = wrapper.findAll('[data-test="grip"]')[0]!;
+
+      expect(grip.attributes('draggable')).toBe('false');
+      expect(grip.attributes('title')).toContain('pencarian aktif');
+
+      // A drop while the filter is on is refused: nothing is sent.
+      const before = fake.writes().length;
+      await wrapper.find('[data-slug="pendidikan"]').trigger('drop', { clientY: 0 });
+      await flushPromises();
+      expect(fake.writes()).toHaveLength(before);
+
+      await typeInto('[data-test="search"]', '');
+      expect(wrapper.findAll('[data-test="grip"]')[0]!.attributes('draggable')).toBe('true');
+      wrapper.unmount();
+    });
+
     it('ignores a drop on the same card and sends nothing', async () => {
       const wrapper = await mountList();
-      await wrapper.find('[data-test="sort-toggle"]').trigger('click');
       const before = fake.writes().length;
 
       await wrapper.findAll('[data-test="grip"]')[1]!.trigger('dragstart');
