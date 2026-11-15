@@ -327,6 +327,19 @@ export const publikasiItemSchema = z
       .positive('Ukuran berkas harus positif')
       .max(Number.MAX_SAFE_INTEGER, 'Ukuran berkas melebihi batas maksimum')
       .optional(),
+    /** Number of pages of the document, shown on the card and the public list. */
+    pageCount: z
+      .number()
+      .int('Jumlah halaman harus bilangan bulat')
+      .min(1, 'Jumlah halaman minimal 1')
+      .max(100000, 'Jumlah halaman maksimal 100000')
+      .optional(),
+    /** Publication date as `YYYY-MM` or `YYYY-MM-DD`. */
+    publishedAt: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?$/, 'Tanggal terbit tidak valid')
+      .optional(),
     /** Uploaded file (media purpose `publikasi-document`); exclusive with `href`. */
     documentAssetId: assetIdSchema.optional(),
     /** Cover photo (media purpose `publikasi-cover`). */

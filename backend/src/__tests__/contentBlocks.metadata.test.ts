@@ -91,4 +91,30 @@ describe('content block metadata schema stripping', () => {
       });
     });
   });
+  it('accepts pageCount and publishedAt and rejects invalid values', () => {
+    const base = { category: 'Statistik', title: 'Judul', description: 'Deskripsi' };
+    const ok = validateBlockMetadata('publikasi-katalog', {
+      publications: [
+        { ...base, pageCount: 120, publishedAt: '2026-08' },
+        { ...base, pageCount: 1, publishedAt: '2026-08-21' },
+      ],
+    });
+    assert.deepEqual(ok, {
+      publications: [
+        { ...base, pageCount: 120, publishedAt: '2026-08', isAvailableOnline: false },
+        { ...base, pageCount: 1, publishedAt: '2026-08-21', isAvailableOnline: false },
+      ],
+    });
+
+    for (const bad of [
+      { pageCount: 0 },
+      { pageCount: 1.5 },
+      { publishedAt: '2026-13' },
+      { publishedAt: 'Agustus 2026' },
+    ]) {
+      assert.throws(() =>
+        validateBlockMetadata('publikasi-katalog', { publications: [{ ...base, ...bad }] }),
+      );
+    }
+  });
 });
