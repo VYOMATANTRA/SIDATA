@@ -509,6 +509,34 @@ describe('auth store', () => {
     expect(store.user).toEqual({ id: '', email: '', role: '' })
   })
 
+  it('a 200 refresh without accessToken is a denial: auth is cleared and the refresh latched', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      if (String(input).includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ user: { id: '1', email: 'user@example.com', role: 'user' } }),
+      } as Response
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const store = useAuthStore()
+    store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'access-token')
+
+    expect(await store.refreshSession()).toBe('denied')
+    expect(store.accessToken).toBeNull()
+    expect(store.user).toBeNull()
+    expect(store.isAuthenticated).toBe(false)
+    expect(store.refreshDenied).toBe(true)
+
+    // The latch stops a dead session from being retried on every navigation.
+    const callsAfterFirst = fetchMock.mock.calls.length
+    expect(await store.refreshSession()).toBe('denied')
+    expect(fetchMock.mock.calls.length).toBe(callsAfterFirst)
+  })
+
   describe('in-flight initAuth race condition & logout', () => {
     it('does not re-authenticate user if clearAuth occurs while initAuth is in-flight', async () => {
       let resolveRefresh: (res: Response) => void

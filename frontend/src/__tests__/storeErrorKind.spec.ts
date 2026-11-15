@@ -171,8 +171,11 @@ describe('errorKind for non-HTTP failures', () => {
     await s.fetchRetention();
     expect(s.errorKind).toBe('unknown');
     await s.updateRetention({ info: 60, warning: 30, critical: 90 });
-    expect(s.errorKind).toBe('validation');
+    // A save failure is reported on the save channel, so the load error stays what it was.
+    expect(s.saveErrorKind).toBe('validation');
+    expect(s.errorKind).toBe('unknown');
     s.clearMessages();
     expect(s.errorKind).toBeNull();
+    expect(s.saveErrorKind).toBeNull();
   });
 });

@@ -191,8 +191,9 @@ describe('useAuditRetentionStore', () => {
     const success = await store.updateRetention(badPolicy);
     expect(success).toBe(false);
     // Refused on the client before any request; plain wording with no internal severity names.
-    expect(store.error).toBe(RETENTION_ORDER_MESSAGE);
-    expect(store.error).not.toMatch(/critical|warning|>=/);
+    expect(store.saveError).toBe(RETENTION_ORDER_MESSAGE);
+    expect(store.saveErrorKind).toBe('validation');
+    expect(store.saveError).not.toMatch(/critical|warning|>=/);
     expect(store.isSaving).toBe(false);
   });
 
@@ -215,8 +216,8 @@ describe('useAuditRetentionStore', () => {
     const success = await store.updateRetention({ info: 30, warning: 60, critical: 90 });
 
     expect(success).toBe(false);
-    expect(store.error).toBe(RETENTION_SAVE_REFUSED_MESSAGE);
-    expect(store.error).not.toMatch(/critical|warning|>=/);
+    expect(store.saveError).toBe(RETENTION_SAVE_REFUSED_MESSAGE);
+    expect(store.saveError).not.toMatch(/critical|warning|>=/);
   });
 
   it('successfully fetches and updates retention settings (happy path)', async () => {
@@ -348,7 +349,9 @@ describe('useAuditRetentionStore', () => {
     const success = await store.updateRetention(policy);
 
     expect(success).toBe(false);
-    expect(store.error).toMatch(/tidak dapat dibaca/i);
+    expect(store.saveError).toMatch(/tidak dapat dibaca/i);
+    expect(store.saveErrorKind).toBe('unknown');
+    expect(store.error).toBeNull();
     expect(store.retention).toEqual({ info: 10, warning: 20, critical: 30 });
     expect(store.isSaving).toBe(false);
   });
@@ -418,5 +421,129 @@ describe('formatDurationLabel helper', () => {
     expect(formatDurationLabel(1)).toBe('1 Hari');
     expect(formatDurationLabel(15)).toBe('15 Hari');
     expect(formatDurationLabel(45)).toBe('45 Hari');
+  });
+});
+
+describe('useAuditRetentionStore save and load state', () => {
+  const VALID: AuditRetentionPolicy = { info: 30, warning: 60, critical: 90 };
+
+  function csrfOk(): Response {
+    return { ok: true, json: async () => ({ csrfToken: 'fake-csrf-token' }) } as Response;
+  }
+
+  function saveOk(): Response {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ message: 'ok', retention: VALID }),
+    } as Response;
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    const authStore = useAuthStore();
+    authStore.setAuth({ id: 'admin-1', email: 'admin@example.com', role: 'admin' }, 'valid-token');
+  });
+
+  it('a failed save lands in saveError and leaves the load error alone', async () => {
+    const store = useAuditRetentionStore();
+    store.error = 'Gagal memuat masa simpan log. Coba lagi.';
+    store.errorKind = 'server';
+    globalThis.fetch = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(csrfOk())
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => ({ error: 'Gagal memperbarui di server' }),
+      } as Response);
+
+    expect(await store.updateRetention(VALID)).toBe(false);
+
+    expect(store.saveError).toMatch(/^Gagal menyimpan masa simpan log\./);
+    expect(store.saveError).not.toMatch(/Gagal memperbarui di server/);
+    expect(store.saveErrorKind).toBe('server');
+    expect(store.error).toBe('Gagal memuat masa simpan log. Coba lagi.');
+    expect(store.errorKind).toBe('server');
+  });
+
+  it('a client validation failure sets saveErrorKind to validation and not the load error', async () => {
+    const store = useAuditRetentionStore();
+    globalThis.fetch = vi.fn<typeof fetch>();
+
+    expect(await store.updateRetention({ info: 60, warning: 30, critical: 90 })).toBe(false);
+
+    expect(store.saveError).toBe(RETENTION_ORDER_MESSAGE);
+    expect(store.saveErrorKind).toBe('validation');
+    expect(store.error).toBeNull();
+    expect(store.errorKind).toBeNull();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('an invalid submit after a saved one clears the "saved" message before showing the error', async () => {
+    const store = useAuditRetentionStore();
+    globalThis.fetch = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(csrfOk())
+      .mockResolvedValueOnce(saveOk());
+    expect(await store.updateRetention(VALID)).toBe(true);
+    expect(store.successMessage).toBe('Masa simpan log berhasil disimpan.');
+
+    expect(await store.updateRetention({ info: 60, warning: 30, critical: 90 })).toBe(false);
+
+    expect(store.successMessage).toBeNull();
+    expect(store.saveError).toBe(RETENTION_ORDER_MESSAGE);
+  });
+
+  it('starting a new save clears the previous save error', async () => {
+    const store = useAuditRetentionStore();
+    store.saveError = 'Pesan lama';
+    store.saveErrorKind = 'server';
+    globalThis.fetch = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(csrfOk())
+      .mockResolvedValueOnce(saveOk());
+
+    expect(await store.updateRetention(VALID)).toBe(true);
+
+    expect(store.saveError).toBeNull();
+    expect(store.saveErrorKind).toBeNull();
+  });
+
+  it('a failed load does not write the save error, and a save does not clear the load error', async () => {
+    const store = useAuditRetentionStore();
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      json: async () => ({}),
+    } as Response);
+    await store.fetchRetention();
+    expect(store.errorKind).toBe('forbidden');
+    expect(store.saveError).toBeNull();
+
+    globalThis.fetch = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(csrfOk())
+      .mockResolvedValueOnce(saveOk());
+    expect(await store.updateRetention(VALID)).toBe(true);
+    expect(store.error).toBe(`Gagal memuat masa simpan log. ${READ_USER_MESSAGES.forbidden}`);
+    expect(store.errorKind).toBe('forbidden');
+  });
+
+  it('clearMessages clears load, save and success state together', async () => {
+    const store = useAuditRetentionStore();
+    store.error = 'load';
+    store.errorKind = 'server';
+    store.saveError = 'save';
+    store.saveErrorKind = 'validation';
+    store.successMessage = 'ok';
+
+    store.clearMessages();
+
+    expect(store.error).toBeNull();
+    expect(store.errorKind).toBeNull();
+    expect(store.saveError).toBeNull();
+    expect(store.saveErrorKind).toBeNull();
+    expect(store.successMessage).toBeNull();
   });
 });

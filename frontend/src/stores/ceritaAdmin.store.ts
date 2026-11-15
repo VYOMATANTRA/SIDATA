@@ -41,7 +41,7 @@ export type WriteOutcome<T = undefined> =
       /** The change is saved, but the lists could not be reloaded afterwards. */
       refreshFailed?: boolean;
     }
-  | { ok: false; message: string; stale: boolean; blocked: boolean };
+  | { ok: false; message: string; kind: FailureKind; stale: boolean; blocked: boolean };
 
 export interface SectionFigureEntry {
   block: ContentBlock;

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { useAuthStore } from './auth';
-import { apiErrorFromBody, apiFetch } from '../utils/apiClient';
+import { apiRequestJson } from '../utils/apiClient';
 import { toUserMessage, type FailureKind } from '../utils/userMessages';
 
 export type AuditSeverity = 'info' | 'warning' | 'critical';
@@ -47,6 +47,18 @@ export interface AuditLogFilters {
   to: string;
 }
 
+interface AuditLogListResponse {
+  logs?: AuditLogItem[];
+  total?: number;
+  page?: number;
+  pageSize?: number;
+}
+
+interface AcknowledgeLogResponse {
+  message?: string;
+  log?: { acknowledgedAt?: string | null; acknowledgedById?: string | null };
+}
+
 export const DEFAULT_PAGE_SIZE = 50;
 
 const EMPTY_FILTERS: AuditLogFilters = {
@@ -71,6 +83,8 @@ export const useAuditStore = defineStore('audit', () => {
   /** Failure class of `error`, for AlertBanner; null while `error` is null. */
   const errorKind = ref<FailureKind | null>(null);
   const summaryError = ref<string | null>(null);
+  /** Failure class of `summaryError`, for AlertBanner; null while `summaryError` is null. */
+  const summaryErrorKind = ref<FailureKind | null>(null);
   const filters = ref<AuditLogFilters>({ ...EMPTY_FILTERS });
 
   // Monotonic id for list fetches. Page controls and filters stay interactive while a
@@ -104,11 +118,9 @@ export const useAuditStore = defineStore('audit', () => {
     error.value = null;
     errorKind.value = null;
     try {
-      const res = await apiFetch(`/api/audit-logs?${buildListQuery()}`, {});
-      const data = await res.json();
-      if (!res.ok) {
-        throw apiErrorFromBody(res.status, data, 'GET');
-      }
+      const data = await apiRequestJson<AuditLogListResponse>(
+        `/api/audit-logs?${buildListQuery()}`,
+      );
       // A newer fetch superseded this one while it was in flight — discard, or a slow
       // stale response would overwrite fresher logs/total/page.
       if (requestId !== listRequestId) return;
@@ -129,20 +141,18 @@ export const useAuditStore = defineStore('audit', () => {
 
   async function fetchSummary(sinceIso?: string) {
     summaryError.value = null;
+    summaryErrorKind.value = null;
     try {
       const url = sinceIso
         ? `/api/audit-logs/summary?since=${encodeURIComponent(sinceIso)}`
         : '/api/audit-logs/summary';
-      const res = await apiFetch(url, {});
-      const data = await res.json();
-      if (!res.ok) {
-        throw apiErrorFromBody(res.status, data, 'GET');
-      }
-      summary.value = data;
+      summary.value = await apiRequestJson<AuditSummary>(url);
     } catch (err: unknown) {
       // Own error ref, not `error`: fetchLogs and fetchSummary run concurrently at mount
       // and one failure must not mask or clear the other's.
-      summaryError.value = toUserMessage(err, 'memuat ringkasan audit log', 'GET').message;
+      const mapped = toUserMessage(err, 'memuat ringkasan audit log', 'GET');
+      summaryError.value = mapped.message;
+      summaryErrorKind.value = mapped.kind;
     }
   }
 
@@ -157,14 +167,9 @@ export const useAuditStore = defineStore('audit', () => {
   async function fetchAdminActionCount(hours = 24) {
     try {
       const from = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-      const res = await apiFetch(
+      const data = await apiRequestJson<AuditLogListResponse>(
         `/api/audit-logs?from=${encodeURIComponent(from)}&pageSize=200`,
-        {},
       );
-      const data = await res.json();
-      if (!res.ok) {
-        throw apiErrorFromBody(res.status, data, 'GET');
-      }
       const logs: AuditLogItem[] = data.logs || [];
       adminActionCount.value = logs.filter((l) => l.actorRole?.toLowerCase() === 'admin').length;
     } catch (err: unknown) {
@@ -196,13 +201,9 @@ export const useAuditStore = defineStore('audit', () => {
     // Failures propagate to the caller, which shows them itself (AuditLogView
     // `acknowledgeError`). Writing them to the load `error` too would render the same
     // failure in two banners.
-    const res = await apiFetch(`/api/audit-logs/${id}/acknowledge`, {
+    const data = await apiRequestJson<AcknowledgeLogResponse>(`/api/audit-logs/${id}/acknowledge`, {
       method: 'PATCH',
     });
-    const data = await res.json();
-    if (!res.ok) {
-      throw apiErrorFromBody(res.status, data, 'PATCH');
-    }
     if (summary.value && summary.value.openCritical > 0) {
       summary.value.openCritical -= 1;
     }
@@ -233,6 +234,7 @@ export const useAuditStore = defineStore('audit', () => {
     error,
     errorKind,
     summaryError,
+    summaryErrorKind,
     filters,
     fetchLogs,
     fetchSummary,

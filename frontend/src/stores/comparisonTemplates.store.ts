@@ -162,6 +162,11 @@ const MAX_STALE_FETCH_RETRIES = 2;
 export interface FetchTemplatesOptions {
   force?: boolean;
   forSelector?: boolean;
+  /**
+   * A background refresh made after a mutation already failed (409). Its own failure stays out of
+   * `error`/`errorKind`/`selectorError`, so the failure is not shown twice. The mutation reports it.
+   */
+  silent?: boolean;
 }
 
 export const useComparisonTemplatesStore = defineStore('comparisonTemplates', () => {
@@ -208,7 +213,9 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
   ): Promise<boolean> {
     const force = typeof options === 'boolean' ? options : Boolean(options.force);
     const forSelector = typeof options === 'object' && Boolean(options.forSelector);
-    const forAdmin = !forSelector;
+    const silent = typeof options === 'object' && Boolean(options.silent);
+    // A silent refresh owns no banner at all: it neither clears nor sets error/selectorError.
+    const forAdmin = !forSelector && !silent;
 
     if (isLoaded.value && !force) return true;
 
@@ -362,7 +369,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
           err.code === 'SLUG_TAKEN' &&
           attempt < MAX_SLUG_RETRIES
         ) {
-          const fetched = await fetchTemplates(true);
+          const fetched = await fetchTemplates({ force: true, silent: true });
           if (!fetched) {
             return failureToOutcome(err, 'menyimpan templat kalimat');
           }
@@ -424,7 +431,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         // The count on screen may be stale; refresh it so the message and badge stay honest.
-        const fetched = await fetchTemplates(true);
+        const fetched = await fetchTemplates({ force: true, silent: true });
         const fresh = fetched ? templates.value.find((item) => item.id === template.id) : undefined;
         if (err.code === 'TEMPLATE_IN_USE' || (fresh?.usageCount ?? 0) > 0) {
           return {

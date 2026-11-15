@@ -132,9 +132,14 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
 
   const isLoading = ref(false);
   const isSaving = ref(false);
+  /** Load failure (fetchRetention) for the section banner. Save failures never land here. */
   const error = ref<string | null>(null);
-  /** Failure class of `error` (load or save), for AlertBanner; null while `error` is null. */
+  /** Failure class of `error`, for AlertBanner; null while `error` is null. */
   const errorKind = ref<FailureKind | null>(null);
+  /** Save failure (updateRetention, incl. client validation) for the form banner. */
+  const saveError = ref<string | null>(null);
+  /** Failure class of `saveError`, for AlertBanner; null while `saveError` is null. */
+  const saveErrorKind = ref<FailureKind | null>(null);
   const successMessage = ref<string | null>(null);
 
   async function fetchRetention(): Promise<boolean> {
@@ -182,17 +187,20 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
   }
 
   async function updateRetention(policy: AuditRetentionPolicy): Promise<boolean> {
+    // Cleared before the validation return: an invalid submit after a saved one must not leave
+    // "saved" visible next to the new error.
+    successMessage.value = null;
+    saveError.value = null;
+    saveErrorKind.value = null;
+
     const validationError = validateRetentionPolicy(policy);
     if (validationError) {
-      error.value = validationError;
-      errorKind.value = 'validation';
+      saveError.value = validationError;
+      saveErrorKind.value = 'validation';
       return false;
     }
 
     isSaving.value = true;
-    error.value = null;
-    errorKind.value = null;
-    successMessage.value = null;
 
     try {
       const res = await apiFetch('/api/settings/audit-retention', {
@@ -229,12 +237,12 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
       return true;
     } catch (err) {
       if (err instanceof RetentionFormatError) {
-        error.value = err.message;
-        errorKind.value = 'unknown';
+        saveError.value = err.message;
+        saveErrorKind.value = 'unknown';
       } else {
         const mapped = toUserMessage(err, 'menyimpan masa simpan log');
-        errorKind.value = mapped.kind;
-        error.value =
+        saveErrorKind.value = mapped.kind;
+        saveError.value =
           mapped.kind === 'validation' ? RETENTION_SAVE_REFUSED_MESSAGE : mapped.message;
       }
       return false;
@@ -246,6 +254,8 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
   function clearMessages() {
     error.value = null;
     errorKind.value = null;
+    saveError.value = null;
+    saveErrorKind.value = null;
     successMessage.value = null;
   }
 
@@ -255,6 +265,8 @@ export const useAuditRetentionStore = defineStore('auditRetention', () => {
     isSaving,
     error,
     errorKind,
+    saveError,
+    saveErrorKind,
     successMessage,
     fetchRetention,
     updateRetention,
