@@ -65,6 +65,7 @@ const emit = defineEmits<{
         :page="page"
         :sorting="sorting"
         :drag-block="dragBlock"
+        :drag-active="dragSlug !== null && dragSlug !== undefined"
         :selected="selectedSlugs?.includes(page.slug) ?? false"
         :dragging="dragSlug === page.slug"
         :drop-edge="dropTarget?.key === page.slug ? dropTarget.edge : null"

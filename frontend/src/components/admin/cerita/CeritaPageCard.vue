@@ -32,6 +32,8 @@ const props = defineProps<{
   sorting?: boolean;
   /** Why the grip cannot be dragged right now, or null when it can (any time, Urutkan or not). */
   dragBlock?: DragBlock;
+  /** A card of this list is being dragged; only then does the card take part in a drop. */
+  dragActive?: boolean;
   selected?: boolean;
   /** This card is being dragged. */
   dragging?: boolean;
@@ -66,15 +68,17 @@ function formatDate(value: string | null): string {
 // A page without one gets the neutral placeholder.
 const coverSrc = computed(() => ceritaCoverFor(props.page.slug));
 
+// Only a card drag of this list is handled. A file or text dragged in from outside is left alone, so
+// the browser's own behaviour applies and nothing is prevented or reported as a move.
 function onDragOver(event: DragEvent): void {
-  if (props.dragBlock) return;
+  if (props.dragBlock || !props.dragActive) return;
   event.preventDefault();
   if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
   emit('drag-over', edgeAt(event));
 }
 
 function onDrop(event: DragEvent): void {
-  if (props.dragBlock) return;
+  if (props.dragBlock || !props.dragActive) return;
   event.preventDefault();
   emit('drop', edgeAt(event));
 }
