@@ -9,6 +9,7 @@ import TableIndicatorForm, {
   type TableSavePayload,
 } from '../components/data/TableIndicatorForm.vue';
 import ContentBlockForm from '../components/data/ContentBlockForm.vue';
+import CreateDataForm, { type CreateDataPayload } from '../components/data/CreateDataForm.vue';
 import {
   INDICATOR_TABLE_KIND_META,
   useIndicatorTablesStore,
@@ -25,7 +26,9 @@ import { usePagesStore } from '../stores/pages.store';
 import { useContentBlocksStore, type ContentBlock } from '../stores/contentBlocks.store';
 import { formatDecimalId } from '../utils/formatNumber';
 import { INPUT_CLASSES } from '../utils/formStyles';
+import { slugifyLabel, uniqueSlug } from '../utils/slug';
 import {
+  SLUG_TAKEN_MESSAGE,
   classifyFailure,
   isRetryable,
   toUserMessage,
@@ -45,6 +48,7 @@ import type { BlockSavePayload } from '../components/data/blocks/blockFormShared
  * - Scalar indicators (ScalarIndicatorForm)
  * - Matrix tables (TableIndicatorForm)
  * - Content blocks (ContentBlockForm)
+ * - Creating a scalar indicator or an empty matrix table from "Tambah Data" (CreateDataForm)
  *
  * Portal settings live on /admin/sistem/konfigurasi, not here.
  */
@@ -95,6 +99,8 @@ const activeTable = ref<IndicatorTableDetail | null>(null);
 const activeContentBlock = ref<ContentBlock | null>(null);
 /** Set when a content-block save was refused because someone else saved it first. */
 const contentBlockStale = ref(false);
+/** "Tambah Data" dialog open (indicator tab only). */
+const isCreateOpen = ref(false);
 
 const isTableDetailLoading = ref(false);
 const saving = ref(false);
@@ -105,6 +111,7 @@ const statusMessage = ref('');
 
 const isEditorOpen = computed(
   () =>
+    isCreateOpen.value ||
     activeScalar.value !== null ||
     activeTableId.value !== null ||
     activeContentBlock.value !== null,
@@ -230,17 +237,22 @@ const filteredCards = computed(() => {
 });
 
 const modalTitle = computed(() => {
+  if (isCreateOpen.value) return 'Tambah Data';
   if (activeContentBlock.value) {
     return `Edit Blok Konten: ${blockDisplayName(activeContentBlock.value)}`;
   }
   return activeTableId.value ? 'Edit Tabel Matriks' : 'Edit Angka Indikator Skalar';
 });
 
-const modalSize = computed<'md' | 'xl'>(() =>
-  activeTableId.value || activeContentBlock.value ? 'xl' : 'md',
-);
+const modalSize = computed<'md' | 'lg' | 'xl'>(() => {
+  if (isCreateOpen.value) return 'lg';
+  return activeTableId.value || activeContentBlock.value ? 'xl' : 'md';
+});
 
 const modalDescription = computed(() => {
+  if (isCreateOpen.value) {
+    return 'Pilih jenis data dan bagian halaman tempat data ini tampil.';
+  }
   // A content block's own form opens with the "Tampil di: …" line, so the dialog adds none.
   if (activeContentBlock.value) return undefined;
   const sectionId = activeScalar.value?.sectionId ?? activeTable.value?.sectionId;
@@ -351,7 +363,17 @@ async function openTable(table: IndicatorTable): Promise<void> {
   }
 }
 
+function openCreate(): void {
+  setServerError('');
+  activeScalar.value = null;
+  activeTableId.value = null;
+  activeTable.value = null;
+  activeContentBlock.value = null;
+  isCreateOpen.value = true;
+}
+
 function resetEditor(): void {
+  isCreateOpen.value = false;
   activeScalar.value = null;
   activeTableId.value = null;
   activeTable.value = null;
@@ -404,6 +426,51 @@ async function handleContentBlockReload(): Promise<void> {
   contentBlockStale.value = false;
   activeContentBlock.value = fresh;
   announce('Versi terbaru blok konten dimuat.');
+}
+
+/**
+ * Saves a new indicator or an empty matrix table. The slug is derived from the label/title and
+ * made unique against the lists already loaded. On success the dialog closes; a matrix table then
+ * opens its row editor. On failure the dialog stays open and `CreateDataForm` keeps every field.
+ */
+async function handleCreateSubmit(payload: CreateDataPayload): Promise<void> {
+  saving.value = true;
+  setServerError('');
+  try {
+    if (payload.type === 'skalar') {
+      const taken = new Set(indicatorsStore.indicators.map((item) => item.slug));
+      const slug = uniqueSlug(slugifyLabel(payload.input.label, 'indikator'), taken);
+      const created = await indicatorsStore.createIndicator({
+        ...payload.input,
+        sectionId: payload.sectionId,
+        slug,
+      });
+      resetEditor();
+      announce(`Indikator “${created.label}” ditambahkan.`);
+      return;
+    }
+
+    const taken = new Set(tablesStore.tables.map((item) => item.slug));
+    const slug = uniqueSlug(slugifyLabel(payload.input.title, 'tabel'), taken);
+    const created = await tablesStore.createTable({
+      ...payload.input,
+      sectionId: payload.sectionId,
+      slug,
+    });
+    resetEditor();
+    announce(`Tabel “${created.title}” dibuat. Formulir tabel terbuka.`);
+    await openTable(created);
+  } catch (error) {
+    if (classifyFailure(error).status === 409) {
+      // Someone else took the generated address. Reload both lists so the next save picks a free one.
+      void Promise.allSettled([indicatorsStore.fetchIndicators(true), tablesStore.fetchTables(true)]);
+      setServerError(`Gagal menyimpan data baru. ${SLUG_TAKEN_MESSAGE}`, 'conflict');
+    } else {
+      setServerFailure(error, 'menyimpan data baru');
+    }
+  } finally {
+    saving.value = false;
+  }
 }
 
 async function handleScalarSubmit(patch: IndicatorPatch): Promise<void> {
@@ -557,13 +624,24 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
             </div>
           </form>
 
-          <p
-            class="text-xs text-slate-600 md:text-right"
-            aria-live="polite"
-            data-test="result-count"
-          >
-            Menampilkan {{ filteredCards.length }} dari {{ cards.length }} data
-          </p>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center md:justify-end">
+            <p
+              class="text-xs text-slate-600 md:text-right"
+              aria-live="polite"
+              data-test="result-count"
+            >
+              Menampilkan {{ filteredCards.length }} dari {{ cards.length }} data
+            </p>
+            <BaseButton
+              v-if="activeTab === 'indikator'"
+              size="md"
+              class="w-full sm:w-auto"
+              data-test="data-create-open"
+              @click="openCreate"
+            >
+              Tambah Data
+            </BaseButton>
+          </div>
         </div>
 
         <p
@@ -637,7 +715,16 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
       :busy="saving"
       @close="resetEditor"
     >
-      <p v-if="isTableDetailLoading" class="text-sm text-slate-600" aria-live="polite">
+      <CreateDataForm
+        v-if="isCreateOpen"
+        :busy="saving"
+        :server-error="serverError"
+        :server-error-kind="serverErrorKind"
+        @submit="handleCreateSubmit"
+        @cancel="resetEditor"
+      />
+
+      <p v-else-if="isTableDetailLoading" class="text-sm text-slate-600" aria-live="polite">
         Memuat rincian tabel…
       </p>
 
