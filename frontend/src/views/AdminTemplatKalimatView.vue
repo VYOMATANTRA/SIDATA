@@ -11,6 +11,7 @@ import {
   type ComparisonTemplate,
 } from '../stores/comparisonTemplates.store';
 import { describeBody } from '../utils/comparisonTemplateSegments';
+import type { FailureKind } from '../utils/userMessages';
 
 /**
  * Admin authoring of tier-1 comparison templates (SPEC §5, §8). Static header title and
@@ -31,6 +32,8 @@ const deleting = ref<ComparisonTemplate | null>(null);
 const deleteBusy = ref(false);
 const isDeleting = ref(false);
 const deleteError = ref('');
+/** Failure class of `deleteError`, for AlertBanner. */
+const deleteErrorKind = ref<FailureKind | null>(null);
 const statusMessage = ref('');
 const addButton = ref<InstanceType<typeof BaseButton> | null>(null);
 
@@ -163,6 +166,7 @@ function handleSaved(template: ComparisonTemplate): void {
 
 async function openDelete(template: ComparisonTemplate): Promise<void> {
   deleteError.value = '';
+  deleteErrorKind.value = null;
   deleting.value = template;
   deleteBusy.value = true;
   try {
@@ -184,6 +188,7 @@ function closeDelete(): void {
   if (deleteBusy.value) return;
   deleting.value = null;
   deleteError.value = '';
+  deleteErrorKind.value = null;
 }
 
 const deleteBlockedMessage = computed(() => {
@@ -198,6 +203,7 @@ async function confirmDelete(): Promise<void> {
   deleteBusy.value = true;
   isDeleting.value = true;
   deleteError.value = '';
+  deleteErrorKind.value = null;
   try {
     const outcome = await store.deleteTemplate(target);
     if (outcome.ok) {
@@ -208,6 +214,7 @@ async function confirmDelete(): Promise<void> {
       return;
     }
     deleteError.value = outcome.message;
+    deleteErrorKind.value = outcome.failure;
   } finally {
     deleteBusy.value = false;
     isDeleting.value = false;
@@ -410,14 +417,12 @@ function retry(): void {
           </p>
         </template>
 
-        <p
+        <AlertBanner
           v-if="deleteError"
-          role="alert"
-          class="rounded-btn border-status-error-border bg-status-error-surface text-status-error border px-3 py-2 text-sm"
+          :message="deleteError"
+          :kind="deleteErrorKind ?? undefined"
           data-test="delete-error"
-        >
-          {{ deleteError }}
-        </p>
+        />
 
         <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <BaseButton

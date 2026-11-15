@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { takePostLoginRedirect } from '../utils/postLoginRedirect'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -14,6 +15,8 @@ const errorMessage = ref('')
 // params. This view is only ever reached via the success redirect, so it just needs to
 // finish the same silent-refresh flow the app already runs on every boot.
 onMounted(async () => {
+  // Read once and cleared before the refresh, so a reload of this page cannot reuse it.
+  const destination = takePostLoginRedirect() ?? '/'
   const success = await authStore.initAuth()
 
   if (!success) {
@@ -23,7 +26,7 @@ onMounted(async () => {
 
   statusMessage.value = 'Login berhasil! Mengalihkan...'
   setTimeout(() => {
-    router.push('/')
+    router.push(destination)
   }, 600)
 })
 </script>

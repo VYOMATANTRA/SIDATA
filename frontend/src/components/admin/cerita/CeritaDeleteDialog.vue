@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import AlertBanner from '../../common/AlertBanner.vue';
 import BaseButton from '../../common/BaseButton.vue';
 import BaseModal from '../../common/BaseModal.vue';
+import type { FailureKind } from '../../../utils/userMessages';
 
 /**
  * Delete confirmation for a page, chapter or section. When the server refuses because the record
@@ -18,6 +20,8 @@ defineProps<{
   busy?: boolean;
   /** Approved failure text; for `blocked` it is the dependency sentence. */
   error?: string;
+  /** Failure class of `error`, for AlertBanner. */
+  errorKind?: FailureKind;
   blocked?: boolean;
   stale?: boolean;
   /** Plain next step shown with a refusal (what to remove first, and where). */
@@ -48,14 +52,12 @@ const emit = defineEmits<{
         {{ consequence }}
       </p>
 
-      <p
+      <AlertBanner
         v-if="error"
-        role="alert"
-        class="rounded-btn border-status-error-border bg-status-error-surface text-status-error border px-3 py-2 text-sm"
+        :message="error"
+        :kind="errorKind"
         data-test="delete-error"
-      >
-        {{ error }}
-      </p>
+      />
 
       <p v-if="blocked && hint" class="text-text-muted text-sm" data-test="delete-hint">
         {{ hint }}

@@ -76,10 +76,11 @@ export type SaveOutcome =
   | { ok: false; kind: 'stale'; message: string }
   | { ok: false; kind: 'error'; message: string };
 
+/** `failure` is the failure class of `message`, for AlertBanner. */
 export type DeleteOutcome =
   | { ok: true }
-  | { ok: false; kind: 'in_use'; message: string }
-  | { ok: false; kind: 'error'; message: string };
+  | { ok: false; kind: 'in_use'; message: string; failure: FailureKind }
+  | { ok: false; kind: 'error'; message: string; failure: FailureKind };
 
 export const TEMPLATE_VALIDATION_FALLBACK =
   'Templat belum bisa disimpan. Periksa nama dan kalimatnya.';
@@ -438,14 +439,12 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
             ok: false,
             kind: 'in_use',
             message: inUseMessage(template.label, fresh?.usageCount ?? template.usageCount),
+            failure: 'conflict',
           };
         }
       }
-      return {
-        ok: false,
-        kind: 'error',
-        message: describeTemplateFailure(err, 'menghapus templat kalimat'),
-      };
+      const failure = mapTemplateFailure(err, 'menghapus templat kalimat');
+      return { ok: false, kind: 'error', message: failure.message, failure: failure.kind };
     }
   }
 

@@ -34,6 +34,28 @@ describe('safeRedirect', () => {
     expect(safeRedirect('/login-help')).toBe('/login-help');
   });
 
+  it.each([
+    '/admin/../login',
+    '/admin/%2e%2e/login',
+    '/admin/..%2flogin',
+    '/%6cogin',
+    '/log%69n?x=1',
+    '/LOGIN/../login',
+    '/setup%2Dpassword',
+    '/x\u0085y',
+    '/\u009f',
+    '/%0a/evil',
+    '/%E0%A4%A',
+    '/admin%3Fx',
+  ])('rejects the encoded or normalised auth route %j', (value) => {
+    expect(safeRedirect(value)).toBeUndefined();
+  });
+
+  it('resolves dot segments and keeps the query and hash', () => {
+    expect(safeRedirect('/admin/../admin/cerita?tab=2#x')).toBe('/admin/cerita?tab=2#x');
+    expect(safeRedirect('/admin/cerita with space')).toBe('/admin/cerita%20with%20space');
+  });
+
   it('rejects non-strings', () => {
     expect(safeRedirect(undefined)).toBeUndefined();
     expect(safeRedirect(null)).toBeUndefined();

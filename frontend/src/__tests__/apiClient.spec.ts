@@ -370,4 +370,50 @@ describe('apiClient', () => {
     // null means "not set by us", so the browser writes multipart/form-data with its boundary.
     expect(contentTypes).toEqual([null, 'application/json']);
   });
+
+  it('replays a FormData body intact after a 401 refresh, with the browser multipart type', async () => {
+    const store = signIn('expired-token');
+    const form = new FormData();
+    form.append('purpose', 'cerita');
+    form.append('file', new Blob(['isi berkas'], { type: 'image/png' }), 'foto.png');
+
+    const attempts: Array<{ body: unknown; contentType: string | null; auth: string | null }> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-token' });
+        if (url === '/api/auth/refresh') return refreshOk('fresh-token');
+
+        const headers = new Headers(init?.headers);
+        attempts.push({
+          body: init?.body,
+          contentType: headers.get('Content-Type'),
+          auth: headers.get('Authorization'),
+        });
+        return attempts.length === 1
+          ? json({ error: 'Token kedaluwarsa' }, 401)
+          : json({ media: { id: 'media-1' } });
+      }),
+    );
+
+    const response = await apiFetch('/api/media', { method: 'POST', body: form });
+
+    expect(response.status).toBe(200);
+    expect(attempts).toHaveLength(2);
+    // The same FormData object is sent again: nothing was serialised to JSON or consumed.
+    expect(attempts[0]!.body).toBe(form);
+    expect(attempts[1]!.body).toBe(form);
+    expect(attempts.map((attempt) => attempt.auth)).toEqual([
+      'Bearer expired-token',
+      'Bearer fresh-token',
+    ]);
+    // Neither attempt forces a JSON type, so the browser writes the multipart boundary.
+    expect(attempts.map((attempt) => attempt.contentType)).toEqual([null, null]);
+    expect(store.accessToken).toBe('fresh-token');
+
+    const replayed = attempts[1]!.body as FormData;
+    expect(replayed.get('purpose')).toBe('cerita');
+    expect((replayed.get('file') as File).name).toBe('foto.png');
+  });
 });

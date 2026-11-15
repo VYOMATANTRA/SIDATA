@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
+import AlertBanner from '../components/common/AlertBanner.vue';
 import { useAuthStore } from '../stores/auth';
 
 const router = useRouter();
@@ -82,13 +83,12 @@ async function handleLogout() {
       </div>
 
       <!-- Logout Error Banner -->
-      <div
+      <!-- authStore.logout() returns its own approved sentence, so no failure kind is passed. -->
+      <AlertBanner
         v-if="logoutError"
-        class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-medium text-rose-600 sm:text-sm"
-        role="alert"
-      >
-        {{ logoutError }}
-      </div>
+        :message="logoutError"
+        data-test="logout-error"
+      />
 
       <!-- Actions -->
       <div class="flex flex-col gap-3 pt-2">

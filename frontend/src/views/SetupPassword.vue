@@ -1,18 +1,29 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import TurnstileWidget from '../components/auth/TurnstileWidget.vue'
 import { getCsrfToken } from '../utils/csrf'
 import { useAuthStore } from '../stores/auth'
+import { safeRedirect } from '../utils/safeRedirect'
 import bgImage from '../assets/img/background_laman_depan_kelurahan.webp'
 import logoBalikpapan from '../assets/img/logo_balikpapan.webp'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
+
+// Where the user was headed before the password step; validated, so an unsafe value is ignored.
+const redirectTarget = computed(() => safeRedirect(route.query.redirect))
 
 onMounted(() => {
   if (!authStore.setupToken && !authStore.mustChangePassword) {
-    router.replace({ name: 'login', query: { reason: 'setup_required' } })
+    router.replace({
+      name: 'login',
+      query: {
+        reason: 'setup_required',
+        ...(redirectTarget.value ? { redirect: redirectTarget.value } : {}),
+      },
+    })
   }
 })
 
@@ -145,8 +156,9 @@ async function handleSetupPassword() {
     }
 
     successMessage.value = 'Kata sandi berhasil disiapkan! Mengalihkan ke portal...'
+    const destination = redirectTarget.value ?? '/'
     setTimeout(() => {
-      router.push('/')
+      router.push(destination)
     }, 1000)
   } catch {
     errorMessage.value = 'Terjadi kesalahan jaringan. Silakan coba lagi.'

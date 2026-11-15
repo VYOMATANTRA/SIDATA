@@ -15,9 +15,20 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 
+// The page the user was on when they were sent here, if it is safe. Validated once and reused for
+// the post-login destination, the setup-password hop and the Google sign-in button.
+const redirectTarget = computed(() => safeRedirect(route.query.redirect))
+
 // Where to go after sign-in: the page the user was on when the session ended, if it is safe.
 function postLoginDestination(): string {
-  return safeRedirect(route.query.redirect) ?? '/'
+  return redirectTarget.value ?? '/'
+}
+
+// The first-login password screen keeps the same return address until the password is set.
+function setupPasswordLocation() {
+  return redirectTarget.value
+    ? { name: 'setup-password', query: { redirect: redirectTarget.value } }
+    : { name: 'setup-password' }
 }
 
 const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
@@ -128,7 +139,7 @@ async function handleLogin() {
       authStore.setSetupAuth(data.setupToken)
       successMessage.value = 'Login berhasil! Silakan atur kata sandi baru Anda...'
       setTimeout(() => {
-        router.push('/setup-password')
+        router.push(setupPasswordLocation())
       }, 600)
       return
     }
@@ -285,7 +296,7 @@ function onOtpVerified(data?: unknown) {
 
       <!-- Google OAuth Button -->
       <div class="mb-6 max-w-[598px] mx-auto">
-        <GoogleLoginButton />
+        <GoogleLoginButton :redirect="redirectTarget" />
       </div>
 
       <div class="mt-8 text-center text-sm text-slate-600 font-medium">

@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import SetupPassword from '../views/SetupPassword.vue'
+import TurnstileWidget from '../components/auth/TurnstileWidget.vue'
 import { useAuthStore } from '../stores/auth'
 
 function mountSetupPassword() {
@@ -120,5 +121,90 @@ describe('SetupPassword.vue', () => {
 
     expect(router.currentRoute.value.name).toBe('login')
     expect(router.currentRoute.value.query.reason).toBe('setup_required')
+  })
+})
+
+describe('SetupPassword return address', () => {
+  beforeEach(() => {
+    sessionStorage.clear()
+    vi.useFakeTimers()
+    vi.stubGlobal('turnstile', {
+      render: vi.fn<() => string>().mockReturnValue('widget-1'),
+      remove: vi.fn<() => void>(),
+      reset: vi.fn<() => void>(),
+    })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  function createSetupRouter() {
+    return createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/setup-password', name: 'setup-password', component: SetupPassword },
+        { path: '/login', name: 'login', component: { template: '<div>login</div>' } },
+        { path: '/', name: 'home', component: { template: '<div>home</div>' } },
+        { path: '/admin/cerita', component: { template: '<div>cerita</div>' } },
+      ],
+    })
+  }
+
+  it('bounces a visitor without a setup token to login with the same return address', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useAuthStore(pinia).clearAuth()
+    const router = createSetupRouter()
+    await router.push('/setup-password?redirect=/admin/cerita')
+    await router.isReady()
+
+    mount(SetupPassword, { global: { plugins: [pinia, router] } })
+
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('login'))
+    expect(router.currentRoute.value.query).toMatchObject({
+      reason: 'setup_required',
+      redirect: '/admin/cerita',
+    })
+  })
+
+  it.each([
+    ['/admin/cerita', '/admin/cerita'],
+    ['/', '//evil.com'],
+  ])('after the password is set, goes to %j when the redirect is %j', async (expected, redirect) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        if (String(input).includes('csrf-token')) {
+          return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            user: { id: '1', email: 'user@example.com', role: 'admin' },
+            accessToken: 'tok',
+          }),
+        } as Response
+      }),
+    )
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useAuthStore(pinia).setSetupAuth('setup-token')
+    const router = createSetupRouter()
+    await router.push({ path: '/setup-password', query: { redirect } })
+    await router.isReady()
+
+    const wrapper = mount(SetupPassword, { global: { plugins: [pinia, router] } })
+    const passwords = wrapper.findAll('input[type="password"]')
+    await passwords[0]!.setValue('Rahasia-Kuat-2026')
+    await passwords[1]!.setValue('Rahasia-Kuat-2026')
+    await wrapper.findComponent(TurnstileWidget).vm.$emit('verify', 'turnstile-token')
+    await wrapper.find('form').trigger('submit.prevent')
+
+    await vi.advanceTimersByTimeAsync(1000)
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe(expected))
   })
 })

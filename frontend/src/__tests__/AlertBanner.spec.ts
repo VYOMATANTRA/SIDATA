@@ -59,12 +59,25 @@ describe('AlertBanner', () => {
     expect(retryBtn(w).exists()).toBe(false);
   });
 
-  it('supports a custom label and busy state', () => {
-    const w = mount(AlertBanner, {
+  it('keeps the retry label when idle and shows the busy label while busy', () => {
+    const idle = mount(AlertBanner, {
+      props: { message: 'x', retryLabel: 'Muat ulang', onRetry: noop },
+    });
+    expect(retryBtn(idle).text()).toBe('Muat ulang');
+    expect(retryBtn(idle).attributes('disabled')).toBeUndefined();
+
+    const busy = mount(AlertBanner, {
       props: { message: 'x', retryLabel: 'Muat ulang', busy: true, onRetry: noop },
     });
-    expect(retryBtn(w).text()).toBe('Muat ulang');
-    expect(retryBtn(w).attributes('disabled')).toBeDefined();
+    expect(retryBtn(busy).text()).toBe('Memuat ulang…');
+    expect(retryBtn(busy).attributes('disabled')).toBeDefined();
+  });
+
+  it('shows a custom busy label on the retry button while busy', () => {
+    const w = mount(AlertBanner, {
+      props: { message: 'x', busy: true, busyLabel: 'Mencoba lagi…', onRetry: noop },
+    });
+    expect(retryBtn(w).text()).toBe('Mencoba lagi…');
   });
 
   it('renders the message for session kind while the session has not ended', () => {

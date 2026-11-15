@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import AlertBanner from '../../common/AlertBanner.vue';
 import BaseButton from '../../common/BaseButton.vue';
 import BaseModal from '../../common/BaseModal.vue';
 import FormField from '../../common/FormField.vue';
 import { INPUT_CLASSES } from '../../../utils/formStyles';
 import { titleTextProblem } from '../../../utils/titleTextRules';
+import type { FailureKind } from '../../../utils/userMessages';
 
 /**
  * One-line title dialog shared by "add" and "rename" for pages, chapters and sections. The field
@@ -21,10 +23,12 @@ const props = withDefaults(
     submitLabel: string;
     busy?: boolean;
     error?: string;
+    /** Failure class of `error`, for AlertBanner. */
+    errorKind?: FailureKind;
     stale?: boolean;
     hint?: string;
   }>(),
-  { initial: '', busy: false, error: '', stale: false, hint: undefined },
+  { initial: '', busy: false, error: '', errorKind: undefined, stale: false, hint: undefined },
 );
 
 const emit = defineEmits<{
@@ -100,14 +104,12 @@ function handleSubmit(): void {
         />
       </FormField>
 
-      <p
+      <AlertBanner
         v-if="error"
-        role="alert"
-        class="rounded-btn border-status-error-border bg-status-error-surface text-status-error border px-3 py-2 text-sm"
+        :message="error"
+        :kind="errorKind"
         data-test="name-error"
-      >
-        {{ error }}
-      </p>
+      />
 
       <div
         v-if="stale"

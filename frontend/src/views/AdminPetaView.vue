@@ -273,16 +273,20 @@ async function handleReload(): Promise<void> {
 const deleting = ref<SpatialPointDTO | null>(null);
 const deleteBusy = ref(false);
 const deleteError = ref('');
+/** Failure class of `deleteError`, for AlertBanner. */
+const deleteErrorKind = ref<FailureKind | null>(null);
 
 function openDelete(point: SpatialPointDTO): void {
   deleting.value = point;
   deleteError.value = '';
+  deleteErrorKind.value = null;
 }
 
 function closeDelete(): void {
   if (deleteBusy.value) return;
   deleting.value = null;
   deleteError.value = '';
+  deleteErrorKind.value = null;
 }
 
 const deleteExplanation = computed(() => {
@@ -301,6 +305,7 @@ async function confirmDelete(): Promise<void> {
   if (!point || deleteBusy.value) return;
   deleteBusy.value = true;
   deleteError.value = '';
+  deleteErrorKind.value = null;
   try {
     await deletePoint(point.id, ownedRtNumber(point));
     deleteBusy.value = false;
@@ -328,7 +333,9 @@ async function confirmDelete(): Promise<void> {
       pageErrorKind.value = kind;
       await refreshAll();
     } else {
-      deleteError.value = toUserMessage(error, 'menghapus titik').message;
+      const mapped = toUserMessage(error, 'menghapus titik');
+      deleteError.value = mapped.message;
+      deleteErrorKind.value = mapped.kind;
     }
   }
 }
@@ -696,14 +703,12 @@ async function reloadAll(): Promise<void> {
         </p>
         <p class="text-text-muted text-sm">{{ deleteExplanation }}</p>
 
-        <p
+        <AlertBanner
           v-if="deleteError"
-          role="alert"
-          class="rounded-btn border-status-error-border bg-status-error-surface text-status-error border px-3 py-2 text-sm"
+          :message="deleteError"
+          :kind="deleteErrorKind ?? undefined"
           data-test="delete-error"
-        >
-          {{ deleteError }}
-        </p>
+        />
 
         <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <BaseButton

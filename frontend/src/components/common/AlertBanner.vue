@@ -10,6 +10,8 @@ export interface AlertBannerProps {
   tone?: 'error' | 'warning' | 'info';
   live?: 'assertive' | 'polite';
   retryLabel?: string;
+  /** Retry button label while `busy`, so the wait is visible on the control itself. */
+  busyLabel?: string;
   busy?: boolean;
 }
 
@@ -18,6 +20,7 @@ const props = withDefaults(defineProps<AlertBannerProps>(), {
   tone: 'error',
   live: 'assertive',
   retryLabel: 'Coba lagi',
+  busyLabel: 'Memuat ulang…',
   busy: false,
 });
 
@@ -61,7 +64,7 @@ const toneClasses = computed(() => {
         data-test="alert-banner-retry"
         @click="emit('retry')"
       >
-        {{ retryLabel }}
+        {{ busy ? busyLabel : retryLabel }}
       </BaseButton>
       <slot name="action" />
     </div>

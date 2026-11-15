@@ -227,6 +227,23 @@ describe('toUserMessage mappings', () => {
     }
   });
 
+  it('hides the media, block, weather and auth field names in any spelling', () => {
+    const sentences = [
+      'Berkas dengan media_id itu tidak ditemukan.',
+      'Nilai blockId harus berupa teks.',
+      'Kolom turnstile-token tidak valid.',
+      'Atur cache_ttl_ms ke angka positif.',
+      'Nilai weatherAdm4 wajib diisi.',
+      'Permintaan dengan setupToken tidak sah.',
+      'Kolom phoneIsWhatsapp harus berupa boolean.',
+      'Tautan bmkgBaseUrl tidak dapat dijangkau.',
+    ];
+    for (const serverMessage of sentences) {
+      const error = Object.assign(httpFailure(400), { serverMessage });
+      expect(toUserMessage(error).message).toBe('Periksa kembali isian yang ditandai.');
+    }
+  });
+
   it('shows a ketua_rt sentence with friendly terms', () => {
     const error = Object.assign(httpFailure(400), {
       serverMessage: 'Titik ketua_rt "A" harus mencakup tepat satu RT.',

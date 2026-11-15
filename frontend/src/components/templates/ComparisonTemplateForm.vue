@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { ExclamationTriangleIcon } from '@heroicons/vue/24/outline';
+import AlertBanner from '../common/AlertBanner.vue';
 import BaseButton from '../common/BaseButton.vue';
 import FormErrorSummary from '../common/FormErrorSummary.vue';
 import FormField from '../common/FormField.vue';
@@ -71,6 +72,11 @@ watch(formBusy, (value) => emit('busy', value));
 const serverError = ref('');
 const isStale = ref(false);
 const staleMessage = ref('');
+/**
+ * The latest version fetched while the draft has unsaved edits. It replaces the draft only after
+ * the in-page confirmation; null while nothing awaits a decision.
+ */
+const pendingReload = ref<ComparisonTemplate | null>(null);
 const touched = ref<Set<string>>(new Set());
 
 const fieldId = (name: string): string => `${props.idPrefix}-${name}`;
@@ -270,6 +276,7 @@ function syncFromTemplate(fresh: ComparisonTemplate | null): void {
   submitted.value = false;
   isStale.value = false;
   staleMessage.value = '';
+  pendingReload.value = null;
   serverError.value = '';
   pendingWarnings.value = [];
   confirmed.value = {};
@@ -311,14 +318,25 @@ async function handleReloadLatest(): Promise<void> {
     return;
   }
 
-  if (isDirty() && typeof window !== 'undefined' && typeof window.confirm === 'function') {
-    const ok = window.confirm(
-      'Perubahan yang belum disimpan akan digantikan dengan versi terbaru. Lanjutkan?',
-    );
-    if (!ok) return;
+  // Unsaved edits would be lost: ask in the page first (see confirmReload / cancelReload).
+  if (isDirty()) {
+    pendingReload.value = fresh;
+    return;
   }
 
   syncFromTemplate(fresh);
+}
+
+function confirmReload(): void {
+  const fresh = pendingReload.value;
+  pendingReload.value = null;
+  if (fresh && props.template?.id === fresh.id) {
+    syncFromTemplate(fresh);
+  }
+}
+
+function cancelReload(): void {
+  pendingReload.value = null;
 }
 
 // --- Live preview -------------------------------------------------------------------------
@@ -462,6 +480,37 @@ const usageNote = computed(() => {
         </div>
       </div>
     </div>
+
+    <AlertBanner
+      v-if="pendingReload"
+      tone="warning"
+      live="polite"
+      message="Perubahan yang belum disimpan akan digantikan dengan versi terbaru. Lanjutkan?"
+      data-test="reload-confirm"
+    >
+      <template #action>
+        <BaseButton
+          type="button"
+          variant="primary"
+          size="sm"
+          class="min-h-11"
+          data-test="reload-confirm-yes"
+          @click="confirmReload"
+        >
+          Ganti dengan versi terbaru
+        </BaseButton>
+        <BaseButton
+          type="button"
+          variant="secondary"
+          size="sm"
+          class="min-h-11"
+          data-test="reload-confirm-no"
+          @click="cancelReload"
+        >
+          Batal
+        </BaseButton>
+      </template>
+    </AlertBanner>
 
     <p
       v-if="usageNote"

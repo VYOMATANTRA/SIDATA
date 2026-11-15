@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, watch } from 'vue';
+import AlertBanner from '../../common/AlertBanner.vue';
 import BaseButton from '../../common/BaseButton.vue';
 import CollectionRowActions from '../../data/blocks/CollectionRowActions.vue';
 import CeritaParagraphForm from './CeritaParagraphForm.vue';
 import { useCeritaAdminStore } from '../../../stores/ceritaAdmin.store';
 import type { ContentBlock } from '../../../stores/contentBlocks.store';
+import type { FailureKind } from '../../../utils/userMessages';
 
 /**
  * The paragraphs of one Cerita section: add, edit, move and delete. One paragraph form is open
@@ -39,10 +41,14 @@ const formError = ref('');
 const formStale = ref(false);
 const rowBusy = ref(false);
 const listError = ref('');
+/** Failure class of `listError`, for AlertBanner. */
+const listErrorKind = ref<FailureKind | null>(null);
 const listStale = ref(false);
 const reloading = ref(false);
 const deleting = ref<ContentBlock | null>(null);
 const deleteError = ref('');
+/** Failure class of `deleteError`, for AlertBanner. */
+const deleteErrorKind = ref<FailureKind | null>(null);
 const deleteStale = ref(false);
 
 const editingBlock = computed(() =>
@@ -144,8 +150,14 @@ async function reload(): Promise<void> {
     // Nothing new was seen: keep every stale warning (and so the refusal of the next save), keep
     // the drafts and the tokens, and say plainly why the warning is still there.
     if (formStale.value) formError.value = COULD_NOT_RELOAD;
-    if (listStale.value) listError.value = COULD_NOT_RELOAD;
-    if (deleteStale.value) deleteError.value = COULD_NOT_RELOAD;
+    if (listStale.value) {
+      listError.value = COULD_NOT_RELOAD;
+      listErrorKind.value = null;
+    }
+    if (deleteStale.value) {
+      deleteError.value = COULD_NOT_RELOAD;
+      deleteErrorKind.value = null;
+    }
     emit('announce', COULD_NOT_RELOAD);
     return;
   }
@@ -161,8 +173,10 @@ async function reload(): Promise<void> {
   formError.value = '';
   listStale.value = false;
   listError.value = '';
+  listErrorKind.value = null;
   deleteStale.value = false;
   deleteError.value = '';
+  deleteErrorKind.value = null;
   emit('announce', 'Versi terbaru dimuat. Isian Anda masih ada.');
 }
 
@@ -170,11 +184,13 @@ async function move(block: ContentBlock, index: number, direction: -1 | 1): Prom
   if (rowBusy.value) return;
   rowBusy.value = true;
   listError.value = '';
+  listErrorKind.value = null;
   listStale.value = false;
   const outcome = await store.moveParagraph(props.sectionId, block.id, direction);
   rowBusy.value = false;
   if (!outcome.ok) {
     listError.value = outcome.message;
+    listErrorKind.value = outcome.kind;
     listStale.value = outcome.stale;
     return;
   }
@@ -197,6 +213,7 @@ async function move(block: ContentBlock, index: number, direction: -1 | 1): Prom
 
 function askDelete(block: ContentBlock): void {
   deleteError.value = '';
+  deleteErrorKind.value = null;
   deleteStale.value = false;
   deleteToken.value = block.updatedAt;
   deleting.value = block;
@@ -206,6 +223,7 @@ function cancelDelete(): void {
   const block = deleting.value;
   deleting.value = null;
   deleteError.value = '';
+  deleteErrorKind.value = null;
   if (block) focusId(ids(block).remove);
 }
 
@@ -214,6 +232,7 @@ async function confirmDelete(): Promise<void> {
   if (!block || rowBusy.value) return;
   rowBusy.value = true;
   deleteError.value = '';
+  deleteErrorKind.value = null;
   const outcome = await store.removeParagraph(block, deleteToken.value ?? undefined);
   rowBusy.value = false;
   if (outcome.ok) {
@@ -224,32 +243,33 @@ async function confirmDelete(): Promise<void> {
     return;
   }
   deleteError.value = outcome.message;
+  deleteErrorKind.value = outcome.kind;
   deleteStale.value = outcome.stale;
 }
 </script>
 
 <template>
   <div class="space-y-4" data-test="paragraph-list">
-    <div
+    <AlertBanner
       v-if="listError"
-      role="alert"
-      class="rounded-card border-status-error-border bg-status-error-surface space-y-3 border p-4"
+      :message="listError"
+      :kind="listErrorKind ?? undefined"
       data-test="paragraph-list-error"
     >
-      <p class="text-status-error text-sm font-semibold">{{ listError }}</p>
-      <BaseButton
-        v-if="listStale"
-        type="button"
-        variant="secondary"
-        size="sm"
-        class="min-h-11"
-        :disabled="reloading"
-        data-test="paragraph-list-reload"
-        @click="reload"
-      >
-        {{ reloading ? 'Memuat…' : 'Muat ulang' }}
-      </BaseButton>
-    </div>
+      <template v-if="listStale" #action>
+        <BaseButton
+          type="button"
+          variant="secondary"
+          size="sm"
+          class="min-h-11"
+          :disabled="reloading"
+          data-test="paragraph-list-reload"
+          @click="reload"
+        >
+          {{ reloading ? 'Memuat…' : 'Muat ulang' }}
+        </BaseButton>
+      </template>
+    </AlertBanner>
 
     <p
       v-if="paragraphs.length === 0 && openForm !== 'new'"
@@ -301,14 +321,12 @@ async function confirmDelete(): Promise<void> {
               }}<template v-if="block.title"> “{{ block.title }}”</template>? Tindakan ini tidak
               bisa dibatalkan.
             </p>
-            <p
+            <AlertBanner
               v-if="deleteError"
-              role="alert"
-              class="text-status-error text-sm font-medium"
+              :message="deleteError"
+              :kind="deleteErrorKind ?? undefined"
               data-test="paragraph-delete-error"
-            >
-              {{ deleteError }}
-            </p>
+            />
             <BaseButton
               v-if="deleteStale"
               type="button"

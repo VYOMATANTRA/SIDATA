@@ -618,13 +618,16 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
       data-test="page-message"
     />
 
-    <p
+    <!-- A notice, not a blocking failure: the page list still works without the hierarchy. -->
+    <AlertBanner
       v-if="pagesStore.hierarchyError"
-      class="rounded-card mt-4 border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900"
-    >
-      Struktur halaman tidak dapat dimuat, jadi asal halaman tiap data tidak ditampilkan. Daftar
-      data tetap dapat diedit.
-    </p>
+      tone="warning"
+      live="polite"
+      class="mt-4"
+      message="Struktur halaman tidak dapat dimuat, jadi asal halaman tiap data tidak ditampilkan. Daftar data tetap dapat diedit."
+      :kind="pagesStore.hierarchyErrorKind ?? undefined"
+      data-test="hierarchy-error"
+    />
 
     <div
       v-for="tab in availableTabs"

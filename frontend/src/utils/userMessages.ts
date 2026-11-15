@@ -276,6 +276,17 @@ export const HIDDEN_API_TOKENS: readonly string[] = [
   'audit_logs',
   'acknowledgedAt',
   'acknowledgedById',
+  'mediaId',
+  'assetId',
+  'blockId',
+  'phoneIsWhatsapp',
+  'bmkgBaseUrl',
+  'cacheTtlMs',
+  'staleRetryMs',
+  'fetchTimeoutMs',
+  'weatherAdm4',
+  'setupToken',
+  'turnstileToken',
 ];
 
 /** Camel-case API name to its lower-case concatenated, snake_case and kebab-case spellings. */

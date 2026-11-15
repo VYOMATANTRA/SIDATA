@@ -70,6 +70,8 @@ const moving = ref(false);
 const nameTarget = ref<NameTarget | null>(null);
 const nameBusy = ref(false);
 const nameError = ref('');
+/** Failure class of `nameError`, for AlertBanner. */
+const nameErrorKind = ref<FailureKind | null>(null);
 const nameStale = ref(false);
 
 // Headline and byline of the chosen page. `token` follows the name dialog's rule: the first save
@@ -77,6 +79,8 @@ const nameStale = ref(false);
 const detailsTarget = ref<{ slug: string; token: string } | null>(null);
 const detailsBusy = ref(false);
 const detailsError = ref('');
+/** Failure class of `detailsError`, for AlertBanner. */
+const detailsErrorKind = ref<FailureKind | null>(null);
 const detailsStale = ref(false);
 const detailsPage = computed(() =>
   detailsTarget.value ? (store.findPage(detailsTarget.value.slug) ?? null) : null,
@@ -85,6 +89,8 @@ const detailsPage = computed(() =>
 const deleteTarget = ref<DeleteTarget | null>(null);
 const deleteBusy = ref(false);
 const deleteError = ref('');
+/** Failure class of `deleteError`, for AlertBanner. */
+const deleteErrorKind = ref<FailureKind | null>(null);
 const deleteBlocked = ref(false);
 const deleteStale = ref(false);
 
@@ -286,6 +292,7 @@ async function submitName(title: string): Promise<void> {
     return;
   }
   nameError.value = outcome.message;
+  nameErrorKind.value = outcome.kind;
   nameStale.value = outcome.stale;
 }
 
@@ -319,6 +326,7 @@ async function submitDetails(details: PageDetailsInput): Promise<void> {
     return;
   }
   detailsError.value = outcome.message;
+  detailsErrorKind.value = outcome.kind;
   detailsStale.value = outcome.stale;
 }
 
@@ -326,6 +334,7 @@ async function reloadFromDetails(): Promise<void> {
   const loaded = await store.load();
   if (!loaded) {
     detailsError.value = COULD_NOT_RELOAD;
+    detailsErrorKind.value = null;
     return;
   }
   const target = detailsTarget.value;
@@ -340,6 +349,7 @@ async function reloadFromName(): Promise<void> {
   if (!loaded) {
     // The stale notice stays, the token is not advanced and the typed title is untouched.
     nameError.value = COULD_NOT_RELOAD;
+    nameErrorKind.value = null;
     return;
   }
   const target = nameTarget.value;
@@ -491,6 +501,7 @@ async function confirmDelete(): Promise<void> {
     return;
   }
   deleteError.value = outcome.message;
+  deleteErrorKind.value = outcome.kind;
   deleteBlocked.value = outcome.blocked;
   deleteStale.value = outcome.stale;
 }
@@ -499,6 +510,7 @@ async function reloadFromDelete(): Promise<void> {
   const loaded = await store.load();
   if (!loaded) {
     deleteError.value = COULD_NOT_RELOAD;
+    deleteErrorKind.value = null;
     return;
   }
   const target = deleteTarget.value;
@@ -560,6 +572,10 @@ const SECTION_HINT =
 
 const deleteShownBlocked = computed(() => deleteBlocked.value || deleteLocalBlock.value !== null);
 const deleteShownError = computed(() => deleteError.value || deleteLocalBlock.value?.message || '');
+// The local "still holds content" notice has no failure kind of its own; only a server refusal does.
+const deleteShownErrorKind = computed(() =>
+  deleteError.value ? (deleteErrorKind.value ?? undefined) : undefined,
+);
 const deleteHint = computed(() => {
   if (!deleteShownBlocked.value) return undefined;
   const target = deleteTarget.value;
@@ -885,6 +901,7 @@ onUnmounted(() => {
       :hint="nameDialog.hint"
       :busy="nameBusy"
       :error="nameError"
+      :error-kind="nameErrorKind ?? undefined"
       :stale="nameStale"
       @submit="submitName"
       @close="closeName"
@@ -899,6 +916,7 @@ onUnmounted(() => {
       :byline-affiliation="detailsPage?.bylineAffiliation ?? null"
       :busy="detailsBusy"
       :error="detailsError"
+      :error-kind="detailsErrorKind ?? undefined"
       :stale="detailsStale"
       @submit="submitDetails"
       @close="closeDetails"
@@ -913,6 +931,7 @@ onUnmounted(() => {
       :confirm-label="deleteDialog.confirm"
       :busy="deleteBusy"
       :error="deleteShownError"
+      :error-kind="deleteShownErrorKind"
       :blocked="deleteShownBlocked"
       :stale="deleteStale"
       :hint="deleteHint"
