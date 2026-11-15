@@ -315,7 +315,7 @@ the admin base layout shell from §8), organized into three accessible tabbed ca
      (up to 500), at most 10, saved as `metadata.items[]`. Decision D1: no public page reads this block, so it
      stays editable but is labelled "Tidak ditampilkan di situs", and the form says so; it is not described as
      changing the landing page.
-   - **Katalog Publikasi** has no form here. Its card is replaced by a link to `/admin/publikasi` (below).
+   - **Katalog Publikasi** has no form here. Its card is replaced by a link to `/admin/publikasi` (below), where each publication takes an optional page count and publication date (§8).
    - **Cerita section blocks**: title and body only; the save sends no metadata, so stored metadata is untouched.
    - Any other block opens no editor, only "Blok ini belum bisa diubah dari sini. Hubungi pengelola teknis."
      (no data is shown). **No JSON or code editor exists in any role or state.**
@@ -763,7 +763,7 @@ section behind the same Admin guards, so old bookmarks and links keep working.
 - **`AppFooter`**: Dynamically reflects verified public contact numbers (`contactPhone`) and office address lines (`contactAddress`) from `settingsStore` when loaded, falling back gracefully to static defaults. The `/publikasi` link in the "Sumber Daya" navigation is always included to provide public access to municipal reports and booklets.
 - **`InteractiveMap` & `PetaView`**: `PetaView` resolves `settingsStore.defaultCoordinates` once and passes the initial centre/zoom to `InteractiveMap`; the map applies a late settings change only before point framing or user interaction. The shared Manggar constant is only an offline fallback for the distance origin and the initial view. Behaviour of the page, including the location states, is in "Peta page" below.
 - **`TentangKelurahanManggarView`**: Dynamically renders profile metrics (RT count, kecamatan, kota), administrative boundaries, and SOTK officials from the `tentang-kelurahan-profil` content block, falling back to verified constants in `content/tentang.ts`.
-- **`PublikasiView`**: Dynamically renders publication entries from the `publikasi-katalog` content block, falling back to `content/publikasi.ts` when metadata is absent or uninitialized. An explicitly saved empty array (`publications: []`) renders an empty catalog state rather than restoring the defaults (settled D2). Each item optionally carries short `fileType` (e.g. PDF, XLSX) and `fileSizeBytes` metadata rendered alongside verified direct download actions, while unreleased items display the honest "Segera hadir" status. An uploaded file downloads from `/api/media/<id>/download`, a link only when it is `https://`; an optional cover shows its thumbnail (`/api/media/<id>?variant=thumbnail`, decorative, lazy-loaded).
+- **`PublikasiView`**: Dynamically renders publication entries from the `publikasi-katalog` content block, falling back to `content/publikasi.ts` when metadata is absent or uninitialized. An explicitly saved empty array (`publications: []`) renders an empty catalog state rather than restoring the defaults (settled D2). Each item optionally carries short `fileType` (e.g. PDF, XLSX) and `fileSizeBytes` metadata rendered alongside verified direct download actions, while unreleased items display the honest "Segera hadir" status. An uploaded file downloads from `/api/media/<id>/download`, a link only when it is `https://`; an optional cover shows its thumbnail (`/api/media/<id>?variant=thumbnail`, decorative, lazy-loaded). Each entry with a stored page count or publication date shows "N Halaman, Diterbitkan Bulan YYYY" (§8).
 
 **Peta page (`/peta`).**
 
@@ -816,9 +816,22 @@ merely disabled. Cerita, Rukun Tetangga, Konfigurasi sistem (above), Templat kal
 Peta (below) and Publikasi (below) open their real management views.
 
 **Publikasi management (`/admin/publikasi`).** Editor and Admin manage the publication catalog, the
-`publikasi-katalog` content block (`metadata.publications[]`, at most 25 rows). One form: block title
-and body, then one repeatable row per publication (kategori, judul, deskripsi, optional sumber
-rujukan) with Naik / Turun / Hapus (never drag-only) and Tambah publikasi.
+`publikasi-katalog` content block (`metadata.publications[]`, at most 25 publications). The page is a
+card grid (one column on a phone, two from `sm`, three from `xl`). Each card shows the category, the
+title, "N Halaman, Diterbitkan Bulan YYYY" when stored, the description, the file type and size, and
+the actions Ubah, Hapus, Unduh (only when the publication is downloadable), Naik and Turun. Every
+action is a button (Unduh a link), and Naik / Turun are the reorder controls (never drag-only).
+A search field (judul, kategori, deskripsi) and a category select ("Semua Kategori" plus each
+category in use) narrow the grid. Naik and Turun are off while either is set, because order only
+means something for the full catalog. "Tambah Publikasi" and Ubah open one dialog holding one
+publication's fields; Hapus asks for confirmation first. "Ubah judul & pengantar" edits the catalog's
+title (required) and intro in a small dialog. Each add, edit, removal or move saves the whole list at
+once; the page keeps no unsaved list of its own. "Import From" is not built.
+
+- **Page count and publication date** (both optional, per publication): `pageCount` is a whole number
+  from 1 to 100000; `publishedAt` is `YYYY-MM` or `YYYY-MM-DD` (anything else is refused). The public
+  page shows only "N Halaman, Diterbitkan Bulan YYYY", leaving out a part that is not stored; the day
+  is kept but not shown.
 
 - **One download source per row**, chosen from a select: *Segera hadir* (none), *Unggah berkas*
   (PDF or DOCX, up to 20 MB, purpose `publikasi-document`) or *Tautan https*. Availability is derived
