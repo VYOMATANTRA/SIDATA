@@ -912,7 +912,13 @@ export const deletePage = async (
       return await executeLockedTransaction({
         client,
         isolationLevel: 'ReadCommitted',
-        lockQuery: (tx) => lockAssetsForUpdate(tx, [coverAssetId]),
+        // Lock Page before MediaAsset (same order as putPageCover/deletePageCover) to prevent AB-BA deadlocks.
+        lockQuery: async (tx) => {
+          await tx.$queryRaw(
+            Prisma.sql`SELECT id FROM pages WHERE id = ${existingPage.id} FOR UPDATE`,
+          );
+          await lockAssetsForUpdate(tx, [coverAssetId]);
+        },
         execute: (tx) => runDeleteTransaction(tx),
       });
     }

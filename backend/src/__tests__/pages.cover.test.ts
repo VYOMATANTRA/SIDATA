@@ -493,10 +493,8 @@ describe('pages cover service', () => {
       assert.equal(deleted.slug, 'kependudukan');
       assert.equal(db.page.rows.length, 0);
       assert.deepStrictEqual(db.transactionOptions, [{ isolationLevel: 'ReadCommitted' }]);
-      assert.ok(
-        db.lockLog.some((q) => /FROM media_assets WHERE id IN .* ORDER BY id FOR UPDATE/.test(q)),
-        'expected lockAssetsForUpdate on coverAssetId',
-      );
+      assert.match(db.lockLog[0]!, /FROM pages WHERE id = \? FOR UPDATE/);
+      assert.match(db.lockLog[1]!, /FROM media_assets WHERE id IN .* ORDER BY id FOR UPDATE/);
       assert.equal(asset(1).attachedAt, null);
       assert.notEqual(asset(1).detachedAt, null);
       assert.equal(refs(1).length, 0);
