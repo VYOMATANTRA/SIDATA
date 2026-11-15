@@ -7,6 +7,7 @@ import { useSettingsStore, type PublicSettings } from '../../../stores/settings.
 import {
   PORTAL_SETTINGS_LOAD_FALLBACK_MESSAGE,
   toUserMessage,
+  type FailureKind,
 } from '../../../utils/userMessages';
 
 /**
@@ -38,6 +39,12 @@ const loadErrorHiddenElsewhere = computed(
 const formKey = ref(0);
 const busy = ref(false);
 const serverError = ref('');
+/** Failure class of `serverError`; a session failure is hidden when the global notice covers it. */
+const serverErrorKind = ref<FailureKind | null>(null);
+/** The form's server error, or nothing when the session ended and AdminLayout already says so. */
+const visibleServerError = computed(() =>
+  serverErrorKind.value === 'session' && authStore.sessionEnded ? '' : serverError.value,
+);
 const statusMessage = ref('');
 const dirty = ref(false);
 
@@ -46,13 +53,20 @@ const SAVED_MESSAGE: Record<'identity' | 'map', string> = {
   map: 'Tampilan awal peta berhasil disimpan.',
 };
 
-/** True from the first paint until the first load has answered (no error flash before it). */
+/** True while a load (first or retry) is in flight; drives the banner's busy state. */
 const loading = ref(true);
+/**
+ * True once a load has failed and stays true through a retry, so the banner and its focused
+ * "Coba lagi" button are not unmounted while the retry runs (the store clears `error` when a
+ * fetch starts). Before the first answer the "Memuat" line is shown instead.
+ */
+const hasFailedLoad = ref(false);
 
 async function load(): Promise<void> {
   loading.value = true;
   try {
     await store.fetchPublicSettings(true);
+    hasFailedLoad.value = !store.isLoaded;
   } finally {
     loading.value = false;
   }
@@ -69,12 +83,15 @@ function onDirtyChange(value: boolean): void {
 async function handleSubmit(patch: Partial<PublicSettings>): Promise<void> {
   busy.value = true;
   serverError.value = '';
+  serverErrorKind.value = null;
   statusMessage.value = '';
   try {
     await store.updatePublicSettings(patch);
     statusMessage.value = SAVED_MESSAGE[props.part];
   } catch (error) {
-    serverError.value = toUserMessage(error, 'menyimpan pengaturan portal').message;
+    const mapped = toUserMessage(error, 'menyimpan pengaturan portal');
+    serverError.value = mapped.message;
+    serverErrorKind.value = mapped.kind;
   } finally {
     busy.value = false;
   }
@@ -83,6 +100,7 @@ async function handleSubmit(patch: Partial<PublicSettings>): Promise<void> {
 /** "Batalkan perubahan": back to the stored values, errors cleared. */
 function discard(): void {
   serverError.value = '';
+  serverErrorKind.value = null;
   statusMessage.value = '';
   formKey.value += 1;
 }
@@ -90,7 +108,7 @@ function discard(): void {
 
 <template>
   <div>
-    <p v-if="loading && !store.isLoaded" class="text-text-muted text-sm" role="status">
+    <p v-if="!store.isLoaded && !hasFailedLoad" class="text-text-muted text-sm" role="status">
       Memuat pengaturan…
     </p>
 
@@ -127,7 +145,7 @@ function discard(): void {
         :part="part"
         :id-prefix="part === 'identity' ? 'identitas' : 'peta'"
         :busy="busy"
-        :server-error="serverError"
+        :server-error="visibleServerError"
         cancel-label="Batalkan perubahan"
         require-changes
         @submit="handleSubmit"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ClockIcon, MagnifyingGlassIcon, PlusIcon } from '@heroicons/vue/24/outline'
 import { useUsersStore, type UserItem } from '../stores/users.store'
 import { useAuthStore } from '../stores/auth'
@@ -7,7 +7,7 @@ import AlertBanner from '../components/common/AlertBanner.vue'
 import BaseButton from '../components/common/BaseButton.vue'
 import BaseModal from '../components/common/BaseModal.vue'
 import { INPUT_CLASSES } from '../utils/formStyles'
-import { toUserMessage } from '../utils/userMessages'
+import { toUserMessage, type FailureKind } from '../utils/userMessages'
 
 const usersStore = useUsersStore()
 const authStore = useAuthStore()
@@ -15,6 +15,8 @@ const authStore = useAuthStore()
 const searchQuery = ref('')
 const isCreateModalOpen = ref(false)
 const actionError = ref('')
+/** Failure class of `actionError`, for AlertBanner. */
+const actionErrorKind = ref<FailureKind | null>(null)
 const isRoleModalOpen = ref(false)
 const isPasswordModalOpen = ref(false)
 const isConfirmModalOpen = ref(false)
@@ -30,6 +32,7 @@ const createForm = ref({
   password: '',
 })
 const createError = ref('')
+const createErrorKind = ref<FailureKind | null>(null)
 const createSuccess = ref('')
 const isSubmitting = ref(false)
 let createCloseTimer: ReturnType<typeof setTimeout> | null = null
@@ -38,6 +41,7 @@ let createCloseTimer: ReturnType<typeof setTimeout> | null = null
 const newPassword = ref('')
 const isNewPasswordTouched = ref(false)
 const passwordError = ref('')
+const passwordErrorKind = ref<FailureKind | null>(null)
 const passwordSuccess = ref('')
 let passwordCloseTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -92,8 +96,38 @@ const filteredUsers = computed(() => {
   )
 })
 
-onMounted(async () => {
-  await Promise.all([usersStore.fetchUsers(), usersStore.fetchRoles()])
+/** Both lists load together, so the page's retry reloads both. */
+function retryLoad() {
+  return Promise.all([usersStore.fetchUsers(), usersStore.fetchRoles()])
+}
+
+onMounted(retryLoad)
+
+function clearActionError() {
+  actionError.value = ''
+  actionErrorKind.value = null
+}
+
+function closeCreateModal() {
+  if (createCloseTimer) {
+    clearTimeout(createCloseTimer)
+    createCloseTimer = null
+  }
+  isCreateModalOpen.value = false
+}
+
+function closePasswordModal() {
+  if (passwordCloseTimer) {
+    clearTimeout(passwordCloseTimer)
+    passwordCloseTimer = null
+  }
+  isPasswordModalOpen.value = false
+}
+
+// A success message closes its dialog after 1.2 s; the timer must not outlive the page.
+onBeforeUnmount(() => {
+  if (createCloseTimer) clearTimeout(createCloseTimer)
+  if (passwordCloseTimer) clearTimeout(passwordCloseTimer)
 })
 
 function openCreateModal() {
@@ -117,18 +151,18 @@ function openCreateModal() {
 function openRoleModal(user: UserItem) {
   selectedUser.value = user
   newRoleSelection.value = user.roleId
-  actionError.value = ''
+  clearActionError()
   isRoleModalOpen.value = true
 }
 
 function closeRoleModal() {
   isRoleModalOpen.value = false
-  actionError.value = ''
+  clearActionError()
 }
 
 function closeConfirmModal() {
   isConfirmModalOpen.value = false
-  actionError.value = ''
+  clearActionError()
 }
 
 function openPasswordModal(user: UserItem) {
@@ -147,7 +181,7 @@ function openPasswordModal(user: UserItem) {
 function openConfirmModal(user: UserItem, action: 'deactivate' | 'activate') {
   selectedUser.value = user
   confirmActionType.value = action
-  actionError.value = ''
+  clearActionError()
   isConfirmModalOpen.value = true
 }
 
@@ -175,6 +209,7 @@ function generateRandomPassword() {
 
 async function handleCreateUser() {
   createError.value = ''
+  createErrorKind.value = null
   createSuccess.value = ''
   if (!createForm.value.email || !createForm.value.roleId || !createForm.value.password) {
     createError.value = 'Semua field wajib diisi.'
@@ -190,7 +225,9 @@ async function handleCreateUser() {
       createCloseTimer = null
     }, 1200)
   } catch (err: unknown) {
-    createError.value = toUserMessage(err, 'membuat pengguna').message
+    const failure = toUserMessage(err, 'membuat pengguna')
+    createError.value = failure.message
+    createErrorKind.value = failure.kind
   } finally {
     isSubmitting.value = false
   }
@@ -199,12 +236,14 @@ async function handleCreateUser() {
 async function handleUpdateRole() {
   if (!selectedUser.value || !newRoleSelection.value) return
   isSubmitting.value = true
-  actionError.value = ''
+  clearActionError()
   try {
     await usersStore.updateUserRole(selectedUser.value.id, newRoleSelection.value)
     isRoleModalOpen.value = false
   } catch (err: unknown) {
-    actionError.value = toUserMessage(err, 'memperbarui role').message
+    const failure = toUserMessage(err, 'memperbarui role')
+    actionError.value = failure.message
+    actionErrorKind.value = failure.kind
   } finally {
     isSubmitting.value = false
   }
@@ -216,6 +255,7 @@ async function handleChangePassword() {
 
   isSubmitting.value = true
   passwordError.value = ''
+  passwordErrorKind.value = null
   passwordSuccess.value = ''
   try {
     const res = await usersStore.changeUserPassword(selectedUser.value.id, newPassword.value)
@@ -225,7 +265,9 @@ async function handleChangePassword() {
       passwordCloseTimer = null
     }, 1200)
   } catch (err: unknown) {
-    passwordError.value = toUserMessage(err, 'mengubah password pengguna').message
+    const failure = toUserMessage(err, 'mengubah password pengguna')
+    passwordError.value = failure.message
+    passwordErrorKind.value = failure.kind
   } finally {
     isSubmitting.value = false
   }
@@ -234,7 +276,7 @@ async function handleChangePassword() {
 async function handleConfirmAction() {
   if (!selectedUser.value) return
   isSubmitting.value = true
-  actionError.value = ''
+  clearActionError()
   try {
     if (confirmActionType.value === 'activate') {
       await usersStore.reactivateUser(selectedUser.value.id)
@@ -243,10 +285,12 @@ async function handleConfirmAction() {
     }
     isConfirmModalOpen.value = false
   } catch (err: unknown) {
-    actionError.value = toUserMessage(
-        err,
-        confirmActionType.value === 'activate' ? 'mengaktifkan pengguna' : 'menonaktifkan pengguna',
-    ).message
+    const failure = toUserMessage(
+      err,
+      confirmActionType.value === 'activate' ? 'mengaktifkan pengguna' : 'menonaktifkan pengguna',
+    )
+    actionError.value = failure.message
+    actionErrorKind.value = failure.kind
   } finally {
     isSubmitting.value = false
   }
@@ -305,7 +349,14 @@ async function handleConfirmAction() {
       :kind="usersStore.errorKind ?? undefined"
       :busy="usersStore.loading"
       data-test="users-load-error"
-      @retry="usersStore.fetchUsers()"
+      @retry="retryLoad"
+    />
+    <AlertBanner
+      v-if="usersStore.rolesError"
+      :message="usersStore.rolesError"
+      :kind="usersStore.rolesErrorKind ?? undefined"
+      data-test="roles-load-error"
+      @retry="usersStore.fetchRoles()"
     />
 
     <!-- Table -->
@@ -469,15 +520,15 @@ async function handleConfirmAction() {
       title="Tambah Pengguna Baru"
       description="Pengguna yang dibuat oleh Admin langsung terverifikasi dan diwajibkan membuat kata sandi saat pertama kali masuk."
       :busy="isSubmitting"
-      @close="isCreateModalOpen = false"
+      @close="closeCreateModal"
     >
-      <div
+      <AlertBanner
         v-if="createError"
-        role="alert"
-        class="rounded-card mb-4 border border-rose-300 bg-rose-50 px-4 py-3 text-xs text-rose-900"
-      >
-        {{ createError }}
-      </div>
+        :message="createError"
+        :kind="createErrorKind ?? undefined"
+        class="mb-4"
+        data-test="create-user-error"
+      />
       <div
         v-if="createSuccess"
         role="status"
@@ -485,12 +536,22 @@ async function handleConfirmAction() {
       >
         {{ createSuccess }}
       </div>
-      <div
-        v-if="!usersStore.roles.length"
-        class="rounded-card mb-4 border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900"
-      >
-        {{ usersStore.error || 'Daftar role tidak tersedia. Silakan muat ulang halaman.' }}
-      </div>
+      <template v-if="!usersStore.roles.length">
+        <AlertBanner
+          v-if="usersStore.rolesError"
+          :message="usersStore.rolesError"
+          :kind="usersStore.rolesErrorKind ?? undefined"
+          class="mb-4"
+          data-test="create-roles-error"
+          @retry="usersStore.fetchRoles()"
+        />
+        <div
+          v-else
+          class="rounded-card mb-4 border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900"
+        >
+          Daftar role tidak tersedia. Silakan muat ulang halaman.
+        </div>
+      </template>
 
       <form @submit.prevent="handleCreateUser" class="space-y-4">
         <div>
@@ -546,7 +607,7 @@ async function handleConfirmAction() {
             type="button"
             variant="secondary"
             :disabled="isSubmitting"
-            @click="isCreateModalOpen = false"
+            @click="closeCreateModal"
           >
             Batal
           </BaseButton>
@@ -566,15 +627,26 @@ async function handleConfirmAction() {
       <AlertBanner
         v-if="actionError"
         :message="actionError"
+        :kind="actionErrorKind ?? undefined"
         class="mb-4"
         data-test="user-action-error"
       />
-      <div
-        v-if="!usersStore.roles.length"
-        class="rounded-card mb-4 border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900"
-      >
-        {{ usersStore.error || 'Daftar role tidak tersedia.' }}
-      </div>
+      <template v-if="!usersStore.roles.length">
+        <AlertBanner
+          v-if="usersStore.rolesError"
+          :message="usersStore.rolesError"
+          :kind="usersStore.rolesErrorKind ?? undefined"
+          class="mb-4"
+          data-test="role-roles-error"
+          @retry="usersStore.fetchRoles()"
+        />
+        <div
+          v-else
+          class="rounded-card mb-4 border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900"
+        >
+          Daftar role tidak tersedia.
+        </div>
+      </template>
 
       <label for="update-role-select" class="mb-1 block text-xs font-medium text-slate-600">
         Role baru
@@ -606,15 +678,15 @@ async function handleConfirmAction() {
       title="Ganti Kata Sandi Pengguna"
       :description="`Atur kata sandi baru untuk ${selectedUser?.email ?? ''}. Pengguna akan diwajibkan mengganti kata sandi saat pertama kali masuk kembali.`"
       :busy="isSubmitting"
-      @close="isPasswordModalOpen = false"
+      @close="closePasswordModal"
     >
-      <div
+      <AlertBanner
         v-if="passwordError"
-        role="alert"
-        class="rounded-card mb-4 border border-rose-300 bg-rose-50 px-4 py-3 text-xs text-rose-900"
-      >
-        {{ passwordError }}
-      </div>
+        :message="passwordError"
+        :kind="passwordErrorKind ?? undefined"
+        class="mb-4"
+        data-test="password-error"
+      />
       <div
         v-if="passwordSuccess"
         role="status"
@@ -665,7 +737,7 @@ async function handleConfirmAction() {
             type="button"
             variant="secondary"
             :disabled="isSubmitting"
-            @click="isPasswordModalOpen = false"
+            @click="closePasswordModal"
           >
             Batal
           </BaseButton>
@@ -692,6 +764,7 @@ async function handleConfirmAction() {
       <AlertBanner
         v-if="actionError"
         :message="actionError"
+        :kind="actionErrorKind ?? undefined"
         class="mb-4"
         data-test="user-action-error"
       />

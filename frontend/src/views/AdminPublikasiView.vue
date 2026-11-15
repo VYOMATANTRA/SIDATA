@@ -13,7 +13,7 @@ import AlertBanner from '../components/common/AlertBanner.vue';
 import PublikasiCatalogForm from '../components/admin/publikasi/PublikasiCatalogForm.vue';
 import type { BlockSavePayload } from '../components/data/blocks/blockFormShared';
 import { useContentBlocksStore, type ContentBlock } from '../stores/contentBlocks.store';
-import { classifyFailure, toUserMessage } from '../utils/userMessages';
+import { classifyFailure, toUserMessage, type FailureKind } from '../utils/userMessages';
 
 const store = useContentBlocksStore();
 
@@ -32,15 +32,23 @@ const formVersion = ref(0);
  */
 const block = ref<ContentBlock | null>(null);
 
-async function reloadCatalog() {
+/**
+ * Failure of the last catalog load, or null. Kept as a snapshot because the store clears its
+ * `error` when a retry starts; keeping the banner mounted lets its focused "Coba lagi" button
+ * stay put and show `busy` while the retry runs.
+ */
+const loadFailure = ref<{ message: string; kind: FailureKind } | null>(null);
+
+async function loadCatalog() {
   await store.fetchBlocks(true);
   block.value = store.serverBlocks[BLOCK_SLUG] ?? null;
+  loadFailure.value =
+    block.value === null && store.error !== null
+      ? { message: store.error, kind: store.errorKind ?? 'unknown' }
+      : null;
 }
 
-onMounted(async () => {
-  await store.fetchBlocks(true);
-  block.value = store.serverBlocks[BLOCK_SLUG] ?? null;
-});
+onMounted(loadCatalog);
 
 async function handleSubmit(payload: BlockSavePayload): Promise<void> {
   const target = block.value;
@@ -94,16 +102,20 @@ function handleCancel(): void {
       setelah katalog disimpan.
     </p>
 
-    <p v-if="store.isLoading && !block" class="text-text-muted text-sm" role="status">
+    <p
+      v-if="store.isLoading && !block && !loadFailure"
+      class="text-text-muted text-sm"
+      role="status"
+    >
       Memuat katalog publikasi…
     </p>
     <AlertBanner
-      v-else-if="!block && store.error"
-      :message="store.error"
-      :kind="store.errorKind ?? undefined"
+      v-else-if="!block && loadFailure"
+      :message="loadFailure.message"
+      :kind="loadFailure.kind"
       :busy="store.isLoading"
       data-test="publikasi-unavailable"
-      @retry="reloadCatalog"
+      @retry="loadCatalog"
     />
     <p
       v-else-if="!block"

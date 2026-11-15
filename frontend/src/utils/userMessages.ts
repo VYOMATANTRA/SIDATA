@@ -417,6 +417,8 @@ export const RETENTION_UNREADABLE_MESSAGE =
   'Masa simpan log dari server tidak dapat dibaca. Coba muat ulang halaman.';
 /** Fallback when a load failed but the store holds no sentence (portal settings screen). */
 export const PORTAL_SETTINGS_LOAD_FALLBACK_MESSAGE = 'Pengaturan belum dapat dimuat.';
+/** Fallback when a load failed but the store holds no sentence (weather settings screen). */
+export const WEATHER_CONFIG_LOAD_FALLBACK_MESSAGE = 'Pengaturan cuaca belum dapat dimuat.';
 /** The server answered 200 with a weather config payload this client cannot read. */
 export const WEATHER_CONFIG_UNREADABLE_MESSAGE =
   'Pengaturan cuaca dari server tidak dapat dibaca. Coba muat ulang halaman.';

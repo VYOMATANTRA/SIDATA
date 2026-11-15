@@ -1,4 +1,4 @@
-import { classifyFailure, toUserMessage } from './userMessages';
+import { classifyFailure, toUserMessage, type FailureKind } from './userMessages';
 
 /**
  * Plain-Indonesian wording for the failures of the Cerita management screen (SPEC §3, §8).
@@ -74,6 +74,8 @@ export function dependentsMessage(
 
 export interface CeritaFailure {
   message: string;
+  /** Failure class of `message`, for AlertBanner. */
+  kind: FailureKind;
   /** Someone else saved the record first: the draft stays and the screen offers a reload. */
   stale: boolean;
   /** A delete was refused because the record still holds content. */
@@ -104,15 +106,17 @@ export function ceritaFailure(
   if (code === HAS_DEPENDENTS_CODE) {
     return {
       message: dependentsMessage(options.subject ?? 'Bagian', dependencyCountsOf(error)),
+      kind,
       stale: false,
       blocked: true,
     };
   }
   if (kind === 'conflict' && options.conflictMessage) {
-    return { message: options.conflictMessage, stale: false, blocked: false };
+    return { message: options.conflictMessage, kind, stale: false, blocked: false };
   }
   return {
     message: toUserMessage(error, context).message,
+    kind,
     stale: kind === 'stale',
     blocked: false,
   };

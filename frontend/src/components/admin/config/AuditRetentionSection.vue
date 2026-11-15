@@ -2,10 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import BaseButton from '../../common/BaseButton.vue';
 import AlertBanner from '../../common/AlertBanner.vue';
-import {
-  RETENTION_LOAD_FALLBACK_MESSAGE,
-  withDraftKept,
-} from '../../../utils/userMessages';
+import { RETENTION_LOAD_FALLBACK_MESSAGE, withDraftKept } from '../../../utils/userMessages';
 import {
   MAX_RETENTION_DAYS,
   SEVERITY_LABELS,
@@ -53,8 +50,12 @@ const rows = reactive<Record<Key, Row>>({
 });
 
 const isLoaded = ref(false);
-/** True from the first paint until the first load has answered (no error flash before it). */
-const loadingInitial = ref(true);
+/**
+ * True once a load has failed and stays true through a retry, so the banner (and its focused
+ * "Coba lagi" button) is never unmounted while the retry runs. Before the first answer the
+ * "Memuat" line is shown instead, so no error flashes on first paint.
+ */
+const hasFailedLoad = ref(false);
 
 function syncFromStore(): void {
   for (const key of KEYS) {
@@ -89,11 +90,10 @@ const canSave = computed(
 );
 
 async function load(): Promise<void> {
-  loadingInitial.value = true;
   const ok = await store.fetchRetention();
   isLoaded.value = ok;
+  hasFailedLoad.value = !ok;
   if (ok) syncFromStore();
-  loadingInitial.value = false;
 }
 
 onMounted(load);
@@ -142,7 +142,7 @@ function durationLabel(key: Key): string {
       </li>
     </ul>
 
-    <p v-if="loadingInitial" class="text-text-muted text-sm" role="status">
+    <p v-if="!isLoaded && !hasFailedLoad" class="text-text-muted text-sm" role="status">
       Memuat masa simpan log…
     </p>
 
@@ -150,6 +150,7 @@ function durationLabel(key: Key): string {
       v-else-if="!isLoaded"
       :message="store.error ?? RETENTION_LOAD_FALLBACK_MESSAGE"
       :kind="store.errorKind ?? undefined"
+      :busy="store.isLoading"
       data-test="retention-load-error"
       @retry="load"
     />
@@ -220,6 +221,7 @@ function durationLabel(key: Key): string {
       <AlertBanner
         v-if="validationError"
         :message="validationError"
+        live="polite"
         data-test="retention-validation"
       />
 
@@ -234,9 +236,9 @@ function durationLabel(key: Key): string {
       </div>
 
       <AlertBanner
-        v-if="store.error"
-        :message="withDraftKept(store.error, store.errorKind)"
-        :kind="store.errorKind ?? undefined"
+        v-if="store.saveError"
+        :message="withDraftKept(store.saveError, store.saveErrorKind)"
+        :kind="store.saveErrorKind ?? undefined"
         data-test="retention-save-error"
       />
 

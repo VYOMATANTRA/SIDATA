@@ -77,6 +77,15 @@ describe('dependencyCountsOf', () => {
 });
 
 describe('ceritaFailure', () => {
+  it('carries the failure class of the message for AlertBanner', () => {
+    const forbidden = new ApiError('x', 403, { method: 'PUT' });
+    expect(ceritaFailure(forbidden, 'mengurutkan bab').kind).toBe('forbidden');
+    const stale = new ApiError('x', 409, { code: 'STALE_WRITE', method: 'PUT' });
+    expect(ceritaFailure(stale, 'mengurutkan bab').kind).toBe('stale');
+    const unreachable = new TypeError('Failed to fetch');
+    expect(ceritaFailure(unreachable, 'mengurutkan bab').kind).toBe('network');
+  });
+
   it('turns HAS_DEPENDENTS into the dependency sentence and marks it blocked', () => {
     const error = new ApiError('Halaman tidak dapat dihapus (blok konten: 2)', 409, {
       code: 'HAS_DEPENDENTS',

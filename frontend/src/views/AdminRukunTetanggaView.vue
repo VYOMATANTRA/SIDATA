@@ -7,7 +7,7 @@ import RtLocationPicker, { type PickedLocation } from '../components/maps/RtLoca
 import { ApiError, apiRequestJson } from '../utils/apiClient';
 import { useAuthStore } from '../stores/auth';
 import { INPUT_CLASSES } from '../utils/formStyles';
-import { toUserMessage } from '../utils/userMessages';
+import { toUserMessage, type FailureKind } from '../utils/userMessages';
 
 interface LeaderRow {
   rtNumber: number;
@@ -54,6 +54,7 @@ const leaders = ref<LeaderRow[]>([]);
 const isSampleRoster = ref(false);
 const isLoading = ref(false);
 const loadError = ref('');
+const loadErrorKind = ref<FailureKind | null>(null);
 const statusMessage = ref('');
 
 const search = ref('');
@@ -108,6 +109,7 @@ const draft = ref({
 });
 const isSaving = ref(false);
 const saveError = ref('');
+const saveErrorKind = ref<FailureKind | null>(null);
 const locationConflict = ref(false);
 
 const csvText = ref('');
@@ -118,20 +120,31 @@ let fileReadToken = 0;
 
 const acceptedPreview = ref<AcceptedCsvPreview | null>(null);
 const importError = ref('');
+const importErrorKind = ref<FailureKind | null>(null);
 const importBusy = ref(false);
+
+/** Sets the import banner text; a message without a failure class (local checks) passes no kind. */
+function setImportError(message: string, kind: FailureKind | null = null): void {
+  importError.value = message;
+  importErrorKind.value = message ? kind : null;
+}
 const importResult = ref('');
 
+/** The load error stays on screen until a retry succeeds, so its "Coba lagi" button is never unmounted. */
 async function loadLeaders() {
   isLoading.value = true;
-  loadError.value = '';
   try {
     const data = await apiRequestJson<{ leaders: LeaderRow[]; isSampleRoster: boolean }>(
       '/api/maps/rt-leaders?limit=100',
     );
     leaders.value = data.leaders;
     isSampleRoster.value = data.isSampleRoster === true;
+    loadError.value = '';
+    loadErrorKind.value = null;
   } catch (error) {
-    loadError.value = toUserMessage(error, 'memuat daftar Ketua RT', 'GET').message;
+    const failure = toUserMessage(error, 'memuat daftar Ketua RT', 'GET');
+    loadError.value = failure.message;
+    loadErrorKind.value = failure.kind;
   } finally {
     isLoading.value = false;
   }
@@ -142,6 +155,7 @@ onMounted(loadLeaders);
 function openEditor(row: LeaderRow) {
   editing.value = row;
   saveError.value = '';
+  saveErrorKind.value = null;
   locationConflict.value = false;
   baseline.value = {
     rtNumber: row.rtNumber,
@@ -168,6 +182,7 @@ function closeEditor() {
   editing.value = null;
   baseline.value = null;
   saveError.value = '';
+  saveErrorKind.value = null;
 }
 
 async function saveLeader() {
@@ -188,6 +203,8 @@ async function saveLeader() {
   };
 
   saveError.value = '';
+
+  saveErrorKind.value = null;
 
   // 2. Compute contact patch (only send changed fields; omit unchanged empty name on fresh slot)
   const contactPatch: Record<string, unknown> = {};
@@ -305,12 +322,17 @@ async function saveLeader() {
           ? 'Data kontak berhasil disimpan. '
           : '';
       saveError.value = `${contactNotice}Lokasi telah berubah atau dihapus. Muat ulang data RT sebelum menyimpan.`;
+      saveErrorKind.value = toUserMessage(error).kind;
       await loadLeaders();
     } else if (contactSuccess && Object.keys(contactPatch).length > 0 && locationOp !== 'none') {
-      saveError.value = `Data kontak berhasil disimpan, namun lokasi gagal diperbarui: ${toUserMessage(error).message}`;
+      const failure = toUserMessage(error);
+      saveError.value = `Data kontak berhasil disimpan, namun lokasi gagal diperbarui: ${failure.message}`;
+      saveErrorKind.value = failure.kind;
       void loadLeaders();
     } else {
-      saveError.value = toUserMessage(error, 'menyimpan data RT').message;
+      const failure = toUserMessage(error, 'menyimpan data RT');
+      saveError.value = failure.message;
+      saveErrorKind.value = failure.kind;
     }
   } finally {
     isSaving.value = false;
@@ -329,7 +351,7 @@ function onCsvTextChange() {
   inputRevision.value += 1;
   acceptedPreview.value = null;
   importResult.value = '';
-  importError.value = '';
+  setImportError('');
 }
 
 async function onCsvFile(event: Event) {
@@ -341,7 +363,7 @@ async function onCsvFile(event: Event) {
   inputRevision.value += 1;
   acceptedPreview.value = null;
   importResult.value = '';
-  importError.value = '';
+  setImportError('');
   try {
     const text = await file.text();
     if (token !== fileReadToken) return;
@@ -349,10 +371,10 @@ async function onCsvFile(event: Event) {
     inputRevision.value += 1;
     acceptedPreview.value = null;
     importResult.value = '';
-    importError.value = '';
+    setImportError('');
   } catch {
     if (token === fileReadToken) {
-      importError.value = 'Gagal membaca berkas CSV.';
+      setImportError('Gagal membaca berkas CSV.');
     }
   } finally {
     if (token === fileReadToken) {
@@ -365,14 +387,14 @@ async function previewImport() {
   if (importBusy.value || isReadingCsv.value) return;
   const currentText = csvText.value;
   if (!currentText.trim()) {
-    importError.value = 'Pilih berkas CSV atau tempel isinya terlebih dahulu.';
+    setImportError('Pilih berkas CSV atau tempel isinya terlebih dahulu.');
     return;
   }
   const currentRevision = inputRevision.value;
   const seq = ++previewSequence;
 
   importBusy.value = true;
-  importError.value = '';
+  setImportError('');
   importResult.value = '';
   acceptedPreview.value = null;
 
@@ -391,7 +413,8 @@ async function previewImport() {
   } catch (error) {
     if (seq === previewSequence && currentRevision === inputRevision.value) {
       acceptedPreview.value = null;
-      importError.value = toUserMessage(error, 'memeriksa CSV').message;
+      const failure = toUserMessage(error, 'memeriksa CSV');
+      setImportError(failure.message, failure.kind);
     }
   } finally {
     if (seq === previewSequence) {
@@ -413,7 +436,7 @@ async function applyImport() {
   const snapshotToApply = acceptedPreview.value;
 
   importBusy.value = true;
-  importError.value = '';
+  setImportError('');
   try {
     const result = await apiRequestJson<{ summary: ImportPreview['summary'] }>(
       '/api/maps/rt-leaders/import',
@@ -425,7 +448,8 @@ async function applyImport() {
     await loadLeaders();
   } catch (error) {
     acceptedPreview.value = null;
-    importError.value = toUserMessage(error, 'menerapkan CSV').message;
+    const failure = toUserMessage(error, 'menerapkan CSV');
+    setImportError(failure.message, failure.kind);
   } finally {
     importBusy.value = false;
   }
@@ -445,7 +469,7 @@ function downloadTemplate() {
 
 async function setSampleStatus(isSample: boolean) {
   importBusy.value = true;
-  importError.value = '';
+  setImportError('');
   try {
     const result = await apiRequestJson<{ isSampleRoster: boolean }>(
       '/api/maps/rt-leaders/sample-status',
@@ -456,7 +480,8 @@ async function setSampleStatus(isSample: boolean) {
       ? 'Daftar ditandai sebagai data contoh.'
       : 'Daftar ditandai sebagai data resmi.';
   } catch (error) {
-    importError.value = toUserMessage(error, 'mengubah status daftar').message;
+    const failure = toUserMessage(error, 'mengubah status daftar');
+    setImportError(failure.message, failure.kind);
   } finally {
     importBusy.value = false;
   }
@@ -489,6 +514,7 @@ async function setSampleStatus(isSample: boolean) {
       <AlertBanner
         v-if="loadError"
         :message="loadError"
+        :kind="loadErrorKind ?? undefined"
         :busy="isLoading"
         class="mt-3"
         data-test="rt-load-error"
@@ -624,6 +650,7 @@ async function setSampleStatus(isSample: boolean) {
       <AlertBanner
         v-if="importError"
         :message="importError"
+        :kind="importErrorKind ?? undefined"
         class="mt-3"
         data-test="rt-import-error"
       />
@@ -727,7 +754,12 @@ async function setSampleStatus(isSample: boolean) {
           v-model="draft.location"
           :disabled="isSaving"
         />
-        <AlertBanner v-if="saveError" :message="saveError" data-test="rt-save-error">
+        <AlertBanner
+          v-if="saveError"
+          :message="saveError"
+          :kind="saveErrorKind ?? undefined"
+          data-test="rt-save-error"
+        >
           <template v-if="locationConflict" #action>
             <BaseButton
               type="button"

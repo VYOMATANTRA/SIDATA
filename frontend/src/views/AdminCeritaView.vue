@@ -28,7 +28,9 @@ import CeritaSectionEditor from '../components/admin/cerita/CeritaSectionEditor.
 import CeritaStructurePanel from '../components/admin/cerita/CeritaStructurePanel.vue';
 import { ceritaIds } from '../components/admin/cerita/ceritaDomIds';
 import { dependentsMessage } from '../utils/ceritaAdminMessages';
+import type { FailureKind } from '../utils/userMessages';
 import type { PageDetailsInput } from '../services/ceritaAdmin.service';
+import { useAuthStore } from '../stores/auth';
 import {
   useCeritaAdminStore,
   type AdminChapter,
@@ -37,6 +39,7 @@ import {
 } from '../stores/ceritaAdmin.store';
 
 const store = useCeritaAdminStore();
+const authStore = useAuthStore();
 
 type Direction = -1 | 1;
 
@@ -58,6 +61,8 @@ type DeleteTarget =
 
 const statusMessage = ref('');
 const actionError = ref('');
+/** Failure class of `actionError`, for AlertBanner. */
+const actionErrorKind = ref<FailureKind | null>(null);
 const actionStale = ref(false);
 const reloading = ref(false);
 const moving = ref(false);
@@ -96,6 +101,8 @@ const structureBusy = computed(
   () => moving.value || nameBusy.value || deleteBusy.value || detailsBusy.value,
 );
 const showInitialLoading = computed(() => !store.hasLoaded && store.isLoading);
+/** Mirrors the load-error banner's `v-if` in the template. */
+const loadErrorShowing = computed(() => store.loadError !== null && !store.reloadNeeded);
 
 onMounted(() => {
   void store.load();
@@ -115,6 +122,7 @@ function focusId(id: string): void {
 
 function clearActionError(): void {
   actionError.value = '';
+  actionErrorKind.value = null;
   actionStale.value = false;
 }
 
@@ -126,8 +134,12 @@ async function reload(): Promise<void> {
   const loaded = await store.load();
   reloading.value = false;
   if (!loaded) {
-    // Nothing new was seen: leave the warning (and its reload button) up and say why.
-    actionError.value = COULD_NOT_RELOAD;
+    // Nothing new was seen: leave the warning (and its reload button) up and say why. When the
+    // load-error banner already shows the failure, a second banner would repeat it, so only announce.
+    if (!loadErrorShowing.value) {
+      actionError.value = COULD_NOT_RELOAD;
+      actionErrorKind.value = 'network';
+    }
     announce(COULD_NOT_RELOAD);
     return;
   }
@@ -591,6 +603,7 @@ async function runMove(action: () => Promise<WriteOutcome>, onDone: () => void):
   moving.value = false;
   if (!outcome.ok) {
     actionError.value = outcome.message;
+    actionErrorKind.value = outcome.kind;
     actionStale.value = outcome.stale;
     return;
   }
@@ -766,7 +779,7 @@ onUnmounted(() => {
 
     <p class="sr-only" role="status" aria-live="polite" data-test="status">{{ statusMessage }}</p>
 
-    <CeritaReloadNotice />
+    <CeritaReloadNotice v-if="!authStore.sessionEnded" />
 
     <AlertBanner
       v-if="store.loadError && !store.reloadNeeded"
@@ -777,7 +790,12 @@ onUnmounted(() => {
       @retry="store.load()"
     />
 
-    <AlertBanner v-if="actionError" :message="actionError" data-test="action-error">
+    <AlertBanner
+      v-if="actionError"
+      :message="actionError"
+      :kind="actionErrorKind ?? undefined"
+      data-test="action-error"
+    >
       <template v-if="actionStale" #action>
         <BaseButton
           variant="secondary"

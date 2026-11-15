@@ -36,7 +36,7 @@ import {
   typeLabel,
 } from '../utils/adminMapPoints';
 import { INPUT_CLASSES } from '../utils/formStyles';
-import { classifyFailure, toUserMessage } from '../utils/userMessages';
+import { classifyFailure, toUserMessage, type FailureKind } from '../utils/userMessages';
 
 /** Below this width the list and the map take turns instead of sitting side by side. */
 const SPLIT_LAYOUT_QUERY = '(min-width: 1280px)';
@@ -115,6 +115,8 @@ const searchInput = ref<HTMLInputElement | null>(null);
 
 const statusMessage = ref('');
 const pageError = ref('');
+/** Failure class of `pageError`, for AlertBanner. */
+const pageErrorKind = ref<FailureKind | null>(null);
 
 function announce(message: string): void {
   // Clearing first makes an identical repeat message announce again.
@@ -243,6 +245,7 @@ async function handleSaved(point: SpatialPointDTO, created: boolean): Promise<vo
       : `Perubahan titik “${point.name}” disimpan.`,
   );
   pageError.value = '';
+  pageErrorKind.value = null;
   await refreshAll();
   selectPoint(point, true);
 }
@@ -304,6 +307,7 @@ async function confirmDelete(): Promise<void> {
     deleting.value = null;
     if (selectedId.value === point.id) selectedId.value = null;
     pageError.value = '';
+    pageErrorKind.value = null;
     announce(`Titik “${point.name}” dihapus.`);
     await refreshAll();
     await nextTick();
@@ -321,6 +325,7 @@ async function confirmDelete(): Promise<void> {
       // reload, and let the editor open Hapus again from the fresh data.
       deleting.value = null;
       pageError.value = `Titik “${point.name}” baru saja diubah oleh orang lain, jadi belum dihapus. Periksa titik itu lagi, lalu hapus bila masih perlu.`;
+      pageErrorKind.value = kind;
       await refreshAll();
     } else {
       deleteError.value = toUserMessage(error, 'menghapus titik').message;
@@ -382,6 +387,7 @@ async function reloadAll(): Promise<void> {
       <AlertBanner
         v-if="pageError"
         :message="pageError"
+        :kind="pageErrorKind ?? undefined"
         tone="warning"
         data-test="peta-page-error"
       />

@@ -11,7 +11,7 @@ import {
 } from '@heroicons/vue/24/outline'
 import { useAuditStore, type AuditLogItem } from '../stores/audit.store'
 import AlertBanner from '../components/common/AlertBanner.vue'
-import { toUserMessage } from '../utils/userMessages'
+import { toUserMessage, type FailureKind } from '../utils/userMessages'
 
 const auditStore = useAuditStore()
 
@@ -19,6 +19,7 @@ const searchQuery = ref('')
 const severityFilter = ref<'' | 'info' | 'warning' | 'critical'>('')
 const acknowledgingId = ref<string | null>(null)
 const acknowledgeError = ref<string | null>(null)
+const acknowledgeErrorKind = ref<FailureKind | null>(null)
 
 /**
  * Indonesian labels for every action code audit.service.ts can emit, so the "Kejadian"
@@ -170,10 +171,13 @@ function applySeverity() {
 async function handleAcknowledge(log: AuditLogItem) {
   acknowledgingId.value = log.id
   acknowledgeError.value = null
+  acknowledgeErrorKind.value = null
   try {
     await auditStore.acknowledgeLog(log.id)
   } catch (err: unknown) {
-    acknowledgeError.value = toUserMessage(err, 'menandai log telah dibaca').message
+    const failure = toUserMessage(err, 'menandai log telah dibaca')
+    acknowledgeError.value = failure.message
+    acknowledgeErrorKind.value = failure.kind
   } finally {
     acknowledgingId.value = null
   }
@@ -290,7 +294,8 @@ onMounted(async () => {
       />
       <AlertBanner
         v-if="auditStore.summaryError"
-        :message="`Ringkasan tidak tersedia: ${auditStore.summaryError}`"
+        :message="auditStore.summaryError"
+        :kind="auditStore.summaryErrorKind ?? undefined"
         tone="warning"
         live="polite"
         data-test="audit-summary-error"
@@ -298,6 +303,7 @@ onMounted(async () => {
       <AlertBanner
         v-if="acknowledgeError"
         :message="acknowledgeError"
+        :kind="acknowledgeErrorKind ?? undefined"
         data-test="audit-acknowledge-error"
       />
 
@@ -434,9 +440,8 @@ onMounted(async () => {
         </p>
         <div class="flex items-center gap-2">
           <button
-            v-if="auditStore.page > 1"
             type="button"
-            :disabled="auditStore.loading"
+            :disabled="auditStore.page <= 1 || auditStore.loading"
             @click="auditStore.goToPage(auditStore.page - 1)"
             class="rounded-btn text-brand-navy border-brand-navy hover:bg-brand-navy inline-flex items-center gap-1.5 border bg-white px-4 py-2 text-xs font-medium transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
           >

@@ -2,7 +2,11 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import BaseButton from '../../common/BaseButton.vue';
 import AlertBanner from '../../common/AlertBanner.vue';
-import { CHOICE_KEPT_SUFFIX, withDraftKept } from '../../../utils/userMessages';
+import {
+  CHOICE_KEPT_SUFFIX,
+  WEATHER_CONFIG_LOAD_FALLBACK_MESSAGE,
+  withDraftKept,
+} from '../../../utils/userMessages';
 import { useWeatherConfigStore } from '../../../stores/weatherConfig.store';
 import { useWeatherStore } from '../../../stores/weather.store';
 import {
@@ -54,8 +58,19 @@ async function checkStatus(): Promise<void> {
   }
 }
 
+/**
+ * True once the settings load has failed and stays true through a retry, so the banner and its
+ * focused "Coba lagi" button are not unmounted while the retry runs (the store clears `error`
+ * when a fetch starts).
+ */
+const hasFailedLoad = ref(false);
+
+async function loadConfig(): Promise<void> {
+  hasFailedLoad.value = !(await config.fetchConfig());
+}
+
 function load(): void {
-  void config.fetchConfig();
+  void loadConfig();
   void checkStatus();
 }
 
@@ -134,7 +149,7 @@ const serviceStatus = computed<{ tone: 'ok' | 'warning' | 'error' | 'loading'; t
   },
 );
 
-const loading = computed(() => !config.isLoaded && !config.error);
+const loading = computed(() => !config.isLoaded && !hasFailedLoad.value);
 </script>
 
 <template>
@@ -187,8 +202,8 @@ const loading = computed(() => !config.isLoaded && !config.error);
     <p v-if="loading" class="text-text-muted text-sm" role="status">Memuat pengaturan cuaca…</p>
 
     <AlertBanner
-      v-else-if="config.error && !config.isLoaded"
-      :message="config.error"
+      v-else-if="!config.isLoaded"
+      :message="config.error ?? WEATHER_CONFIG_LOAD_FALLBACK_MESSAGE"
       :kind="config.errorKind ?? undefined"
       :busy="config.isLoading"
       data-test="weather-config-error"
@@ -267,6 +282,7 @@ const loading = computed(() => !config.isLoaded && !config.error);
       <AlertBanner
         v-if="config.saveError"
         :message="withDraftKept(config.saveError, config.saveErrorKind, CHOICE_KEPT_SUFFIX)"
+        :kind="config.saveErrorKind ?? undefined"
         data-test="weather-save-error"
       />
 

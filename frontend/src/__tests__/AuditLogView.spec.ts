@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import AuditLogView from '../views/AuditLogView.vue';
 import { useAuthStore } from '../stores/auth';
+import { useAuditStore } from '../stores/audit.store';
 
 const CRITICAL_OPEN_LOG = {
   id: 'log-critical-open',
@@ -272,7 +273,84 @@ describe('AuditLogView', () => {
     await router.push('/audit-logs');
     await router.isReady();
     const wrapper = mount(AuditLogView, { global: { plugins: [pinia, router] } });
-    await vi.waitFor(() => expect(wrapper.find('[data-test="audit-load-error"]').exists()).toBe(true));
+    await vi.waitFor(() =>
+      expect(wrapper.find('[data-test="audit-load-error"]').exists()).toBe(true),
+    );
     expect(wrapper.find('[data-test="alert-banner-retry"]').exists()).toBe(retry);
+  });
+
+  describe('failure banners and pagination', () => {
+    const previousButton = (wrapper: VueWrapper) =>
+      wrapper.findAll('nav button').find((b) => b.text().includes('Sebelumnya'));
+
+    /** Mock where the named endpoint fails with `status`; everything else answers normally. */
+    function failing(endpoint: 'summary' | 'acknowledge', status: number) {
+      // A fresh copy: the acknowledge test above mutates the shared fixture in place.
+      const base = mockBackend([
+        { ...CRITICAL_OPEN_LOG, acknowledgedAt: null, acknowledgedById: null },
+      ]);
+      const ok = base.getMockImplementation()!;
+      base.mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (endpoint === 'summary' && url.includes('/summary')) {
+          return { ok: false, status, json: async () => ({ error: 'x' }) } as Response;
+        }
+        if (endpoint === 'acknowledge' && url.includes('/acknowledge')) {
+          return { ok: false, status, json: async () => ({ error: 'x' }) } as Response;
+        }
+        return ok(input, init);
+      });
+      return base;
+    }
+
+    it('shows the summary failure in its own words, without a prefix, with its kind', async () => {
+      failing('summary', 500);
+      const wrapper = await mountView();
+
+      const banner = wrapper.find('[data-test="audit-summary-error"]');
+      expect(banner.exists()).toBe(true);
+      expect(banner.text()).toContain('Gagal memuat ringkasan audit log.');
+      expect(banner.text()).not.toContain('Ringkasan tidak tersedia');
+    });
+
+    it('shows an acknowledge failure in plain words with no retry for a forbidden answer', async () => {
+      failing('acknowledge', 403);
+      const wrapper = await mountView();
+
+      await wrapper.find('tbody tr button').trigger('click');
+
+      await vi.waitFor(() =>
+        expect(wrapper.find('[data-test="audit-acknowledge-error"]').exists()).toBe(true),
+      );
+      const banner = wrapper.find('[data-test="audit-acknowledge-error"]');
+      expect(banner.text()).toContain('Gagal menandai log telah dibaca.');
+      expect(banner.find('[data-test="alert-banner-retry"]').exists()).toBe(false);
+    });
+
+    it('keeps "Sebelumnya" mounted and disabled on the first page, enabled after it', async () => {
+      mockBackend([CRITICAL_OPEN_LOG, INFO_LOG]);
+      const wrapper = await mountView();
+      expect(previousButton(wrapper)).toBeDefined();
+      expect(previousButton(wrapper)!.attributes('disabled')).toBeDefined();
+
+      useAuditStore().page = 2;
+      await vi.waitFor(() =>
+        expect(previousButton(wrapper)!.attributes('disabled')).toBeUndefined(),
+      );
+    });
+
+    it('keeps the "Sebelumnya" button in place when returning to the first page', async () => {
+      mockBackend([CRITICAL_OPEN_LOG, INFO_LOG]);
+      const wrapper = await mountView();
+      useAuditStore().page = 2;
+      await vi.waitFor(() =>
+        expect(previousButton(wrapper)!.attributes('disabled')).toBeUndefined(),
+      );
+      const before = previousButton(wrapper)!.element;
+
+      useAuditStore().page = 1;
+      await vi.waitFor(() => expect(previousButton(wrapper)!.attributes('disabled')).toBeDefined());
+      expect(previousButton(wrapper)!.element).toBe(before);
+    });
   });
 });
