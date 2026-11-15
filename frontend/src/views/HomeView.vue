@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { CERITA_COVERS } from '@/content/ceritaCovers';
-import { onMounted } from 'vue';
+import { CERITA_COVERS, ceritaCoverFor } from '@/content/ceritaCovers';
+import { computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useContentBlocksStore } from '../stores/contentBlocks.store';
 import { useIndicatorsStore } from '../stores/indicators.store';
+import { usePagesStore } from '../stores/pages.store';
 import { isRouteAvailable as checkRouteAvailable } from '@/config/publicNav';
 import SectionHero from '../components/landing/SectionHero.vue';
 import SectionSambutanLurah from '../components/landing/SectionSambutanLurah.vue';
@@ -108,6 +109,21 @@ const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
 const router = useRouter();
 const contentBlocksStore = useContentBlocksStore();
 const indicatorsStore = useIndicatorsStore();
+const pagesStore = usePagesStore();
+
+const ceritaCategories = computed(() => {
+  const pageMap = new Map(pagesStore.pages.map((p) => [p.slug, p]));
+  return CERITA_CATEGORIES.map((category) => {
+    const page = pageMap.get(category.slug);
+    const customCover = page?.coverAssetId
+      ? `/api/media/${encodeURIComponent(page.coverAssetId)}`
+      : null;
+    return {
+      ...category,
+      bgImage: customCover ?? ceritaCoverFor(category.slug) ?? category.bgImage,
+    };
+  });
+});
 
 function isRouteAvailable(path: string): boolean {
   return checkRouteAvailable(router, path);
@@ -140,7 +156,7 @@ onMounted(async () => {
       <slot name="cerita-preview">
         <div class="flex w-full flex-col divide-y divide-white/10">
           <StatOverview
-            v-for="category in CERITA_CATEGORIES"
+            v-for="category in ceritaCategories"
             :key="category.slug"
             :title="category.title"
             :description="category.description"

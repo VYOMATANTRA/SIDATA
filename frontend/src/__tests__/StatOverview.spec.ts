@@ -257,4 +257,26 @@ describe('StatOverview.vue', () => {
     expect(statCard.attributes('aria-label')).toBe('Custom Card Landmark');
     expect(statCard.find('h2.sr-only').text()).toBe('Custom Card Landmark');
   });
+
+  it('renders background image with url("...") quotes, cover size, and center position', () => {
+    const wrapper = mount(StatOverview, {
+      props: {
+        title: 'Background Test',
+        bgImage: '/api/media/cover-uuid-1',
+      },
+      global: {
+        stubs: { RouterLink: true },
+      },
+    });
+
+    const vm = wrapper.vm as unknown as { containerStyle: Record<string, string> };
+    expect(vm.containerStyle.backgroundImage).toContain('url("/api/media/cover-uuid-1")');
+    expect(vm.containerStyle.backgroundSize).toBe('cover');
+    expect(vm.containerStyle.backgroundPosition).toBe('center');
+
+    const section = wrapper.find('[data-test="stat-overview"]');
+    expect(section.attributes('style')).toContain('url("/api/media/cover-uuid-1")');
+    expect(section.attributes('style')).toContain('background-size: cover');
+    expect(section.attributes('style')).toContain('background-position: center');
+  });
 });

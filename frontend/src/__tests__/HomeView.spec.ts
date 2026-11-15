@@ -5,6 +5,9 @@ import { createPinia, setActivePinia, type Pinia } from 'pinia';
 import { createRouter, createMemoryHistory, type Router } from 'vue-router';
 import HomeView from '../views/HomeView.vue';
 import PublicLayout from '../layouts/PublicLayout.vue';
+import StatOverview from '../components/common/StatOverview.vue';
+import { usePagesStore } from '../stores/pages.store';
+import { CERITA_COVERS } from '../content/ceritaCovers';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -510,6 +513,72 @@ describe('HomeView Phase 2 Assembly & Accessibility (TDD: Edge Cases First, Happ
       .map(([input]) => String(input))
       .filter((u) => u.includes('/api/pages?include=sections'));
     expect(hierarchyCalls).toHaveLength(1);
+    wrapper.unmount();
+  });
+
+  it('updates StatOverview bgImage dynamically when pagesStore has coverAssetId and falls back to CERITA_COVERS', async () => {
+    const { pinia, router } = setupHomeView();
+    const pagesStore = usePagesStore();
+
+    pagesStore.pages = [
+      {
+        id: 'p-1',
+        slug: 'kependudukan',
+        title: 'Kependudukan',
+        coverAssetId: 'cover-uuid-1',
+        sortOrder: 1,
+        chapterCount: 0,
+      },
+      {
+        id: 'p-2',
+        slug: 'pendidikan',
+        title: 'Pendidikan',
+        coverAssetId: null,
+        sortOrder: 2,
+        chapterCount: 0,
+      },
+    ];
+
+    await router.push('/');
+    await router.isReady();
+
+    const wrapper = mountHome(pinia, router);
+
+    const statOverviews = wrapper.findAllComponents(StatOverview);
+    expect(statOverviews.length).toBe(8);
+
+    const kependudukanOverview = statOverviews.find(
+      (w) => w.props('to') === '/cerita/kependudukan',
+    );
+    expect(kependudukanOverview).toBeDefined();
+    expect(kependudukanOverview!.props('bgImage')).toBe('/api/media/cover-uuid-1');
+
+    const pendidikanOverview = statOverviews.find(
+      (w) => w.props('to') === '/cerita/pendidikan',
+    );
+    expect(pendidikanOverview).toBeDefined();
+    expect(pendidikanOverview!.props('bgImage')).toBe(CERITA_COVERS['pendidikan']);
+
+    const kesehatanOverview = statOverviews.find(
+      (w) => w.props('to') === '/cerita/kesehatan',
+    );
+    expect(kesehatanOverview).toBeDefined();
+    expect(kesehatanOverview!.props('bgImage')).toBe(CERITA_COVERS['kesehatan']);
+
+    // Reactivity check
+    pagesStore.pages = [
+      ...pagesStore.pages,
+      {
+        id: 'p-3',
+        slug: 'kesehatan',
+        title: 'Kesehatan',
+        coverAssetId: 'cover-uuid-3',
+        sortOrder: 3,
+        chapterCount: 0,
+      },
+    ];
+    await nextTick();
+    expect(kesehatanOverview!.props('bgImage')).toBe('/api/media/cover-uuid-3');
     wrapper.unmount();
   });
 });
