@@ -796,7 +796,12 @@ describe('DataManagementView.vue', () => {
       globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         if (url === '/api/pages?include=sections') return hierarchyResponse();
-        if (init?.method === 'POST' && (url === '/api/indicators' || url === '/api/indicator-tables')) {
+        if (
+          init?.method === 'POST' &&
+          (url === '/api/indicators' ||
+            url === '/api/indicator-tables' ||
+            url.endsWith('/rows'))
+        ) {
           return onPost(url, JSON.parse(String(init.body)) as Record<string, unknown>);
         }
         const custom = extra?.(url);
@@ -911,6 +916,73 @@ describe('DataManagementView.vue', () => {
       expect((document.getElementById('create-data-value-current') as HTMLInputElement).value).toBe(
         '4200',
       );
+      wrapper.unmount();
+    });
+
+    it('adds a row to an open matrix table and shows it in the table after the refetch', async () => {
+      const posted: Array<{ url: string; body: Record<string, unknown> }> = [];
+      let rowAdded = false;
+      const withNewRow = () => ({
+        ...tableDetail(),
+        rows: [
+          ...tableDetail().rows,
+          {
+            id: 'row-2',
+            tableId: 'tbl-1',
+            rowKey: '75-tahun-ke-atas',
+            label: '75 tahun ke atas',
+            male: 5,
+            female: 4,
+            total: 9,
+            sortOrder: 1,
+            createdAt: CREATED,
+            updatedAt: CREATED,
+          },
+        ],
+        totals: { rowCount: 2, male: 105, female: 94, total: 199 },
+      });
+      installCreateMock(
+        (url, requestBody) => {
+          posted.push({ url, body: requestBody });
+          rowAdded = true;
+          return json({ message: 'Baris tabel berhasil dibuat', row: {} }, true, 201);
+        },
+        // Before the add the shared mock answers; after it, the detail carries the new row.
+        (url) =>
+          url === '/api/indicator-tables/tbl-1' && rowAdded
+            ? json({ table: withNewRow() })
+            : undefined,
+      );
+
+      const wrapper = mountAttached();
+      await flushPromises();
+      const card = wrapper.findAll('button').find((b) => b.text().includes('Piramida Usia'));
+      await card?.trigger('click');
+      await flushPromises();
+
+      expect(body().text()).toContain('Edit Tabel Matriks');
+      await body().get('#table-row-add-label').setValue('75 tahun ke atas');
+      await body().get('#table-row-add-male').setValue('5');
+      await body().get('#table-row-add-female').setValue('4');
+      await new DOMWrapper(
+        body().get('[data-test="table-row-add"]').element as HTMLElement,
+      ).trigger('submit');
+      await flushPromises();
+
+      expect(posted).toEqual([
+        {
+          url: '/api/indicator-tables/tbl-1/rows',
+          body: {
+            rowKey: '75-tahun-ke-atas',
+            label: '75 tahun ke atas',
+            male: 5,
+            female: 4,
+            total: null,
+          },
+        },
+      ]);
+      expect(body().text()).toContain('75 tahun ke atas');
+      expect((document.getElementById('table-row-add-label') as HTMLInputElement).value).toBe('');
       wrapper.unmount();
     });
 

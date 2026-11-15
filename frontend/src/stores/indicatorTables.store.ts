@@ -113,6 +113,18 @@ export interface IndicatorTableCreateInput {
   source?: string | null;
 }
 
+/**
+ * Body of `POST /api/indicator-tables/:id/rows` (`createTableRowSchema`, strict). The cell shape
+ * follows the table kind: sex-split kinds take `male`/`female`, the others take `total`.
+ */
+export interface IndicatorTableRowCreateInput {
+  rowKey: string;
+  label: string;
+  male?: number | null;
+  female?: number | null;
+  total?: number | null;
+}
+
 /** Table-level fields the CMS may change; `kind` is immutable once rows exist. */
 export interface IndicatorTablePatch {
   title?: string;
@@ -267,6 +279,23 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
     return data.table;
   }
 
+  /**
+   * Adds one row to an existing table, then refetches the detail: the server recomputes the
+   * totals, and the list payload carries no rows. Returns the refreshed detail.
+   */
+  async function createTableRow(
+    tableId: string,
+    input: IndicatorTableRowCreateInput,
+  ): Promise<IndicatorTableDetail> {
+    await apiRequestJson<{ row: IndicatorTableRow }>(
+      `/api/indicator-tables/${encodeURIComponent(tableId)}/rows`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+    const detail = await fetchTableDetail(tableId);
+    invalidateSectionCache(detail.sectionId);
+    return detail;
+  }
+
   async function updateTable(
     id: string,
     patch: IndicatorTablePatch,
@@ -349,6 +378,7 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
     fetchTables,
     fetchTableDetail,
     createTable,
+    createTableRow,
     saveTableDetail,
     updateTable,
     replaceTable,

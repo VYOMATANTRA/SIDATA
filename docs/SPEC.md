@@ -293,7 +293,10 @@ the admin base layout shell from §8), organized into two accessible tabbed cate
    Bagian from the page hierarchy), and a section is always required because an indicator or table
    must attach to one. The slug is derived from the label or title and made unique automatically;
    the editor never types it. A matrix table is created with no rows and its table editor opens
-   at once; adding rows to a new matrix is not yet available in the UI. Delete is not in the UI,
+   at once. Rows are added there with "Tambah baris": the editor types the label and the cells for
+   the table's kind (male and female for the sex-split kinds, total for the others). The row key is
+   derived from the label and made unique within the table, and a table holds at most 500 rows.
+   Delete is not in the UI,
    so a created item can be edited here but not removed. "Import From" from the wireframe is not
    built, consistent with the scope above. The previous-year pair is edited independently of
    `is_computed_comparison`: a pair alone does not promote an indicator into the tier-1 computed set
