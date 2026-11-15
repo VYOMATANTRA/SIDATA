@@ -66,7 +66,7 @@ describe('AdminRukunTetanggaView.vue', () => {
       if (url.includes('/api/maps/rt-leaders?limit=100')) {
         return {
           ok: true,
-          json: async () => ({ leaders: mockLeaders, isSampleRoster: true }),
+          json: async () => ({ leaders: mockLeaders }),
         } as Response;
       }
       return { ok: true, json: async () => ({}) } as Response;

@@ -199,5 +199,4 @@ The cleanup:
 - writes a count-only audit log in the same transaction.
 
 Synthetic data that does not match its narrow legacy fingerprints is **not** cleared automatically.
-Verify it by hand, then set the `maps.rt_leaders_sample_roster` flag in the Admin CMS
-(`/admin/rukun-tetangga`) or with `PATCH /api/maps/rt-leaders/sample-status`.
+Verify it by hand, then set the `maps.rt_leaders_sample_roster` flag with `PATCH /api/maps/rt-leaders/sample-status`.
