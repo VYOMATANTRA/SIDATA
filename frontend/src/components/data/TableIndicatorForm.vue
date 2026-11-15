@@ -69,6 +69,15 @@ const submitted = ref(false);
 const sexSplit = computed(() => isSexSplitKind(props.table.kind));
 const kindMeta = computed(() => INDICATOR_TABLE_KIND_META[props.table.kind]);
 
+function draftForRow(row: IndicatorTableRow): RowDraft {
+  return {
+    label: row.label,
+    male: row.male === null ? '' : String(row.male),
+    female: row.female === null ? '' : String(row.female),
+    total: row.total === null ? '' : String(row.total),
+  };
+}
+
 function resetDrafts(table: IndicatorTableDetail): void {
   tableDraft.value = {
     title: table.title,
@@ -77,16 +86,25 @@ function resetDrafts(table: IndicatorTableDetail): void {
   };
   const next: Record<string, RowDraft> = {};
   for (const row of table.rows) {
-    next[row.id] = {
-      label: row.label,
-      male: row.male === null ? '' : String(row.male),
-      female: row.female === null ? '' : String(row.female),
-      total: row.total === null ? '' : String(row.total),
-    };
+    next[row.id] = draftForRow(row);
   }
   rowDrafts.value = next;
   submitted.value = false;
 }
+
+// A row added with "Tambah baris" reaches this form as a refreshed `table` prop with the same id,
+// so the watcher above does not run. Give only the rows that have no draft yet one; every
+// existing draft, including unsaved edits, is left as typed.
+watch(
+  () => props.table.rows,
+  (rows) => {
+    const missing = rows.filter((row) => !rowDrafts.value[row.id]);
+    if (missing.length === 0) return;
+    const next = { ...rowDrafts.value };
+    for (const row of missing) next[row.id] = draftForRow(row);
+    rowDrafts.value = next;
+  },
+);
 
 // Drafts belong to a table, not to a snapshot of it. Keying the watcher on the id means a
 // refetch of the same table (a retry, a background refresh) cannot wipe unsaved edits, while

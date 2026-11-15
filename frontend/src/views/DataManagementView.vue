@@ -9,6 +9,8 @@ import TableIndicatorForm, {
   type TableSavePayload,
 } from '../components/data/TableIndicatorForm.vue';
 import ContentBlockForm from '../components/data/ContentBlockForm.vue';
+import CreateDataForm, { type CreateDataPayload } from '../components/data/CreateDataForm.vue';
+import TableRowAddForm, { type TableRowAddPayload } from '../components/data/TableRowAddForm.vue';
 import {
   INDICATOR_TABLE_KIND_META,
   useIndicatorTablesStore,
@@ -25,7 +27,10 @@ import { usePagesStore } from '../stores/pages.store';
 import { useContentBlocksStore, type ContentBlock } from '../stores/contentBlocks.store';
 import { formatDecimalId } from '../utils/formatNumber';
 import { INPUT_CLASSES } from '../utils/formStyles';
+import { slugifyLabel, uniqueSlug } from '../utils/slug';
 import {
+  ROW_ADD_CONFLICT_MESSAGE,
+  SLUG_TAKEN_MESSAGE,
   classifyFailure,
   isRetryable,
   toUserMessage,
@@ -45,6 +50,7 @@ import type { BlockSavePayload } from '../components/data/blocks/blockFormShared
  * - Scalar indicators (ScalarIndicatorForm)
  * - Matrix tables (TableIndicatorForm)
  * - Content blocks (ContentBlockForm)
+ * - Creating a scalar indicator or an empty matrix table from "Tambah Data" (CreateDataForm)
  *
  * Portal settings live on /admin/sistem/konfigurasi, not here.
  */
@@ -95,6 +101,14 @@ const activeTable = ref<IndicatorTableDetail | null>(null);
 const activeContentBlock = ref<ContentBlock | null>(null);
 /** Set when a content-block save was refused because someone else saved it first. */
 const contentBlockStale = ref(false);
+/** "Tambah Data" dialog open (indicator tab only). */
+const isCreateOpen = ref(false);
+/** Failure of the "Tambah baris" form, kept apart from the table form's own error. */
+const rowError = ref('');
+const rowErrorKind = ref<FailureKind | null>(null);
+const addingRow = ref(false);
+/** The "Tambah baris" form, to clear its draft and move focus after a successful add. */
+const rowAddForm = ref<{ reset: () => void; focusLabel: () => void } | null>(null);
 
 const isTableDetailLoading = ref(false);
 const saving = ref(false);
@@ -105,6 +119,7 @@ const statusMessage = ref('');
 
 const isEditorOpen = computed(
   () =>
+    isCreateOpen.value ||
     activeScalar.value !== null ||
     activeTableId.value !== null ||
     activeContentBlock.value !== null,
@@ -230,17 +245,22 @@ const filteredCards = computed(() => {
 });
 
 const modalTitle = computed(() => {
+  if (isCreateOpen.value) return 'Tambah Data';
   if (activeContentBlock.value) {
     return `Edit Blok Konten: ${blockDisplayName(activeContentBlock.value)}`;
   }
   return activeTableId.value ? 'Edit Tabel Matriks' : 'Edit Angka Indikator Skalar';
 });
 
-const modalSize = computed<'md' | 'xl'>(() =>
-  activeTableId.value || activeContentBlock.value ? 'xl' : 'md',
-);
+const modalSize = computed<'md' | 'lg' | 'xl'>(() => {
+  if (isCreateOpen.value) return 'lg';
+  return activeTableId.value || activeContentBlock.value ? 'xl' : 'md';
+});
 
 const modalDescription = computed(() => {
+  if (isCreateOpen.value) {
+    return 'Pilih jenis data dan bagian halaman tempat data ini tampil.';
+  }
   // A content block's own form opens with the "Tampil di: …" line, so the dialog adds none.
   if (activeContentBlock.value) return undefined;
   const sectionId = activeScalar.value?.sectionId ?? activeTable.value?.sectionId;
@@ -337,6 +357,8 @@ function handleEdit(card: IndicatorCardModel): void {
 
 async function openTable(table: IndicatorTable): Promise<void> {
   setServerError('');
+  rowError.value = '';
+  rowErrorKind.value = null;
   activeScalar.value = null;
   activeTable.value = null;
   activeContentBlock.value = null;
@@ -351,7 +373,20 @@ async function openTable(table: IndicatorTable): Promise<void> {
   }
 }
 
+function openCreate(): void {
+  setServerError('');
+  activeScalar.value = null;
+  activeTableId.value = null;
+  activeTable.value = null;
+  activeContentBlock.value = null;
+  isCreateOpen.value = true;
+}
+
 function resetEditor(): void {
+  isCreateOpen.value = false;
+  rowError.value = '';
+  rowErrorKind.value = null;
+  addingRow.value = false;
   activeScalar.value = null;
   activeTableId.value = null;
   activeTable.value = null;
@@ -404,6 +439,136 @@ async function handleContentBlockReload(): Promise<void> {
   contentBlockStale.value = false;
   activeContentBlock.value = fresh;
   announce('Versi terbaru blok konten dimuat.');
+}
+
+/**
+ * Saves a new indicator or an empty matrix table. The slug is derived from the label/title and
+ * made unique against the lists already loaded. On success the dialog closes; a matrix table then
+ * opens its row editor. On failure the dialog stays open and `CreateDataForm` keeps every field.
+ */
+/** Attempts per save: the first try plus retries after a slug clash. */
+const MAX_CREATE_ATTEMPTS = 4;
+
+/** Reloads both lists and waits, so the next candidate is judged against the newest data. */
+async function reloadCreateLists(): Promise<void> {
+  await Promise.allSettled([indicatorsStore.fetchIndicators(true), tablesStore.fetchTables(true)]);
+}
+
+/** Opens the row editor on the table the server just returned; no refetch is needed. */
+function showTableEditor(table: IndicatorTableDetail): void {
+  activeScalar.value = null;
+  activeContentBlock.value = null;
+  activeTableId.value = table.id;
+  activeTable.value = table;
+  isTableDetailLoading.value = false;
+}
+
+/**
+ * Saves a new indicator or an empty matrix table. The slug starts from the label or title, made
+ * unique against the loaded list. The loaded list may hold only the first page, so a clash can be
+ * invisible here: a 409 then reloads the lists (awaited) and retries with the next free suffix,
+ * up to MAX_CREATE_ATTEMPTS. Only when every attempt clashes does the operator see a message.
+ */
+async function handleCreateSubmit(payload: CreateDataPayload): Promise<void> {
+  saving.value = true;
+  setServerError('');
+  const isScalar = payload.type === 'skalar';
+  const base = isScalar
+    ? slugifyLabel(payload.input.label, 'indikator')
+    : slugifyLabel(payload.input.title, 'tabel');
+  const rejected = new Set<string>();
+  try {
+    for (let attempt = 1; attempt <= MAX_CREATE_ATTEMPTS; attempt += 1) {
+      const taken = new Set(
+        isScalar
+          ? indicatorsStore.indicators.map((item) => item.slug)
+          : tablesStore.tables.map((item) => item.slug),
+      );
+      const slug = uniqueSlug(base, taken, rejected);
+      try {
+        if (payload.type === 'skalar') {
+          const created = await indicatorsStore.createIndicator({
+            ...payload.input,
+            sectionId: payload.sectionId,
+            slug,
+          });
+          resetEditor();
+          announce(`Indikator “${created.label}” ditambahkan.`);
+        } else {
+          const created = await tablesStore.createTable({
+            ...payload.input,
+            sectionId: payload.sectionId,
+            slug,
+          });
+          resetEditor();
+          showTableEditor(created);
+          announce(`Tabel “${created.title}” dibuat. Formulir tabel terbuka.`);
+        }
+        return;
+      } catch (error) {
+        if (classifyFailure(error).status !== 409) throw error;
+        rejected.add(slug);
+        await reloadCreateLists();
+      }
+    }
+    setServerError(`Gagal menyimpan data baru. ${SLUG_TAKEN_MESSAGE}`, 'conflict');
+  } catch (error) {
+    setServerFailure(error, 'menyimpan data baru');
+  } finally {
+    saving.value = false;
+  }
+}
+
+/**
+ * "Tambah baris" on an open matrix table. The row key is derived from the label and made unique
+ * within the table. The table detail is refetched, so totals and the row list come from the
+ * server. On failure the row draft stays as typed and the table form's drafts are untouched.
+ */
+async function handleRowAdd(payload: TableRowAddPayload): Promise<void> {
+  const target = activeTable.value;
+  if (!target) return;
+
+  // Every result is applied only while the same table is still open: the editor may have closed,
+  // or another table opened, while the request was in flight.
+  const stillOpen = (): boolean => activeTableId.value === target.id;
+
+  addingRow.value = true;
+  rowError.value = '';
+  rowErrorKind.value = null;
+  try {
+    const taken = new Set(target.rows.map((row) => row.rowKey));
+    // rowKey is capped at 64 characters by the backend; keep room for a collision suffix.
+    const base = slugifyLabel(payload.label, 'baris').slice(0, 60).replace(/-+$/, '');
+    const rowKey = uniqueSlug(base, taken);
+    const detail = await tablesStore.createTableRow(target.id, { rowKey, ...payload });
+    if (!stillOpen()) return;
+    activeTable.value = detail;
+    announce(`Baris “${payload.label}” ditambahkan.`);
+    rowAddForm.value?.reset();
+    // The inputs are disabled while a save is in flight; clear that before moving focus into them.
+    addingRow.value = false;
+    await nextTick();
+    rowAddForm.value?.focusLabel();
+  } catch (error) {
+    if (!stillOpen()) return;
+    if (classifyFailure(error).status === 409) {
+      try {
+        const refreshed = await tablesStore.fetchTableDetail(target.id);
+        if (stillOpen()) activeTable.value = refreshed;
+      } catch {
+        // The reload failed too; the banner below still explains what to do.
+      }
+      if (!stillOpen()) return;
+      rowError.value = `Gagal menambah baris. ${ROW_ADD_CONFLICT_MESSAGE}`;
+      rowErrorKind.value = 'conflict';
+    } else {
+      const failure = toUserMessage(error, 'menambah baris', 'POST');
+      rowError.value = failure.message;
+      rowErrorKind.value = failure.kind;
+    }
+  } finally {
+    addingRow.value = false;
+  }
 }
 
 async function handleScalarSubmit(patch: IndicatorPatch): Promise<void> {
@@ -557,13 +722,24 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
             </div>
           </form>
 
-          <p
-            class="text-xs text-slate-600 md:text-right"
-            aria-live="polite"
-            data-test="result-count"
-          >
-            Menampilkan {{ filteredCards.length }} dari {{ cards.length }} data
-          </p>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center md:justify-end">
+            <p
+              class="text-xs text-slate-600 md:text-right"
+              aria-live="polite"
+              data-test="result-count"
+            >
+              Menampilkan {{ filteredCards.length }} dari {{ cards.length }} data
+            </p>
+            <BaseButton
+              v-if="activeTab === 'indikator'"
+              size="md"
+              class="w-full sm:w-auto"
+              data-test="data-create-open"
+              @click="openCreate"
+            >
+              Tambah Data
+            </BaseButton>
+          </div>
         </div>
 
         <p
@@ -634,10 +810,19 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
       :title="modalTitle"
       :description="modalDescription"
       :size="modalSize"
-      :busy="saving"
+      :busy="saving || addingRow"
       @close="resetEditor"
     >
-      <p v-if="isTableDetailLoading" class="text-sm text-slate-600" aria-live="polite">
+      <CreateDataForm
+        v-if="isCreateOpen"
+        :busy="saving"
+        :server-error="serverError"
+        :server-error-kind="serverErrorKind"
+        @submit="handleCreateSubmit"
+        @cancel="resetEditor"
+      />
+
+      <p v-else-if="isTableDetailLoading" class="text-sm text-slate-600" aria-live="polite">
         Memuat rincian tabel…
       </p>
 
@@ -652,14 +837,26 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
         @cancel="resetEditor"
       />
 
-      <TableIndicatorForm
-        v-else-if="activeTable"
-        :table="activeTable"
-        :busy="saving"
-        :server-error="serverError"
-        @submit="handleTableSubmit"
-        @cancel="resetEditor"
-      />
+      <div v-else-if="activeTable" class="space-y-8">
+        <TableIndicatorForm
+          :table="activeTable"
+          :busy="saving"
+          :server-error="serverError"
+          @submit="handleTableSubmit"
+          @cancel="resetEditor"
+        />
+
+        <div class="border-t border-slate-200 pt-6">
+          <TableRowAddForm
+            ref="rowAddForm"
+            :kind="activeTable.kind"
+            :busy="saving || addingRow"
+            :server-error="rowError"
+            :server-error-kind="rowErrorKind"
+            @submit="handleRowAdd"
+          />
+        </div>
+      </div>
 
       <ContentBlockForm
         v-else-if="activeContentBlock"

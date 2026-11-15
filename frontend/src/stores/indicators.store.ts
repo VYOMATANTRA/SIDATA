@@ -25,6 +25,24 @@ export interface RenderedComparison {
   text: string;
 }
 
+/**
+ * Body of `POST /api/indicators` (`createIndicatorSchema`, strict). The optional previous-year
+ * pair must be sent together or not at all; the form enforces that before the request.
+ */
+export interface IndicatorCreateInput {
+  sectionId: string;
+  slug: string;
+  label: string;
+  unit?: string | null;
+  valueCurrent: string;
+  periodCurrent: string;
+  valuePrevious?: string | null;
+  periodPrevious?: string | null;
+  source?: string | null;
+  hedgeNote?: string | null;
+  isComputedComparison?: boolean;
+}
+
 export interface Indicator {
   id: string;
   sectionId: string;
@@ -343,6 +361,19 @@ export const useIndicatorsStore = defineStore('indicators', () => {
       }));
   }
 
+  /**
+   * Creates a scalar indicator under a section. The new row joins the CMS list at once, and the
+   * Cerita read for its section is dropped so the next visit shows it.
+   */
+  async function createIndicator(input: IndicatorCreateInput): Promise<Indicator> {
+    const data = await apiRequestJson<{ indicator: Indicator }>('/api/indicators', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+    replaceIndicator(data.indicator);
+    return data.indicator;
+  }
+
   async function updateIndicator(id: string, patch: IndicatorPatch): Promise<Indicator> {
     const previousSectionId = indicators.value.find((item) => item.id === id)?.sectionId;
     const data = await apiRequestJson<{ indicator: Indicator }>(
@@ -515,6 +546,7 @@ export const useIndicatorsStore = defineStore('indicators', () => {
     staleCount,
     fetchIndicators,
     getStatsForPage,
+    createIndicator,
     updateIndicator,
     deleteIndicator,
     replaceIndicator,

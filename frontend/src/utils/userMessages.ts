@@ -327,6 +327,20 @@ export const PREVIOUS_PAIR_MESSAGE = 'Nilai dan periode sebelumnya harus diisi b
 export const PREVIOUS_REQUIRED_MESSAGE =
   'Nilai dan periode sebelumnya harus diisi untuk indikator perbandingan.';
 
+/**
+ * A create was refused with 409: another entry already has the generated address (slug). The
+ * lists are reloaded behind the form, so the next save picks a free one.
+ */
+export const SLUG_TAKEN_MESSAGE =
+  'Data dengan nama yang sama sudah ada. Daftar sudah dimuat ulang; coba simpan lagi.';
+
+/**
+ * A row add was refused with 409: the generated row name is already used in the table, or the
+ * table is full (500 rows). The table is reloaded behind the form.
+ */
+export const ROW_ADD_CONFLICT_MESSAGE =
+  'Nama baris sudah dipakai, atau tabel sudah penuh (maksimal 500 baris). Daftar baris sudah dimuat ulang; coba lagi.';
+
 export const UNKNOWN_FIELD_MESSAGE =
   'Ada isian yang tidak dikenali. Muat ulang halaman lalu coba lagi.';
 export const INPUT_MISMATCH_MESSAGE = 'Isian belum sesuai. Periksa kembali isian yang ditandai.';

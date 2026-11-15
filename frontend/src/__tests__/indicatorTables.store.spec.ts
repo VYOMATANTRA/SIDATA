@@ -6,6 +6,7 @@ import {
   type IndicatorTable,
   type IndicatorTableDetail,
 } from '../stores/indicatorTables.store';
+import { useAuthStore } from '../stores/auth';
 import { READ_USER_MESSAGES } from '../utils/userMessages';
 
 const CREATED = '2026-01-01T00:00:00.000Z';
@@ -361,5 +362,130 @@ describe('indicator tables store (public per-section reads)', () => {
     expect(store.bySectionId['sec-ok']).toEqual([tableDetail]);
     expect(store.loadingBySectionId['sec-fail']).toBe(false);
     expect(store.loadingBySectionId['sec-ok']).toBe(false);
+  });
+});
+
+describe('indicatorTables store (add row)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.restoreAllMocks();
+  });
+
+  it('POSTs one row, then refetches the detail so totals come from the server', async () => {
+    let postInit: RequestInit | undefined;
+    const before = makeDetail();
+    const after: IndicatorTableDetail = {
+      ...before,
+      rows: [
+        ...before.rows,
+        {
+          ...before.rows[0]!,
+          id: 'row-2',
+          rowKey: '5-9',
+          label: '5-9 tahun',
+          male: 10,
+          female: 12,
+          total: 22,
+          sortOrder: 1,
+        },
+      ],
+      totals: { rowCount: 2, male: 110, female: 102, total: 212 },
+    };
+    let detailReads = 0;
+
+    globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
+      if (url === '/api/indicator-tables/tbl-1/rows') {
+        postInit = init;
+        return json({ message: 'Baris tabel berhasil dibuat', row: after.rows[1] }, true, 201);
+      }
+      if (url === '/api/indicator-tables/tbl-1') {
+        // The only read happens after the POST, so the server already reports the new row.
+        detailReads += 1;
+        return json({ table: after });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    useAuthStore().accessToken = 'token-1';
+    const store = useIndicatorTablesStore();
+    const result = await store.createTableRow('tbl-1', {
+      rowKey: '5-9',
+      label: '5-9 tahun',
+      male: 10,
+      female: 12,
+      total: null,
+    });
+
+    expect(postInit?.method).toBe('POST');
+    const headers = new Headers(postInit?.headers);
+    expect(headers.get('x-csrf-token')).toBe('csrf-1');
+    expect(headers.get('Authorization')).toBe('Bearer token-1');
+    expect(JSON.parse(String(postInit?.body))).toEqual({
+      rowKey: '5-9',
+      label: '5-9 tahun',
+      male: 10,
+      female: 12,
+      total: null,
+    });
+    expect(result.rows).toHaveLength(2);
+    expect(result.totals.total).toBe(212);
+    expect(store.detailById('tbl-1')?.rows).toHaveLength(2);
+  });
+});
+
+describe('indicatorTables store (create)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.restoreAllMocks();
+  });
+
+  it('POSTs the new table without rows, then adds it to the list and detail cache', async () => {
+    let postInit: RequestInit | undefined;
+    let postedBody: unknown;
+    const created: IndicatorTableDetail = {
+      ...makeTable({ id: 'tbl-2', slug: 'agama-menurut-jenis-kelamin', kind: 'religion_by_sex' }),
+      rows: [],
+      totals: { rowCount: 0, male: null, female: null, total: null },
+    };
+
+    globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
+      if (url === '/api/indicator-tables?pageSize=200') {
+        return json({ tables: [tableSummary], total: 1 });
+      }
+      if (url === '/api/indicator-tables') {
+        postInit = init;
+        postedBody = JSON.parse(String(init?.body));
+        return json({ message: 'Tabel indikator berhasil dibuat', table: created }, true, 201);
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    useAuthStore().accessToken = 'token-1';
+    const store = useIndicatorTablesStore();
+    await store.fetchTables();
+
+    const input = {
+      sectionId: 'sec-1',
+      slug: 'agama-menurut-jenis-kelamin',
+      title: 'Agama menurut Jenis Kelamin',
+      kind: 'religion_by_sex' as const,
+      period: 'Juni 2024',
+      source: null,
+    };
+    const result = await store.createTable(input);
+
+    expect(result.id).toBe('tbl-2');
+    expect(store.tables.map((item) => item.id)).toEqual(['tbl-1', 'tbl-2']);
+    expect(store.total).toBe(2);
+    expect(store.detailById('tbl-2')?.rows).toEqual([]);
+    expect(postInit?.method).toBe('POST');
+    const headers = new Headers(postInit?.headers);
+    expect(headers.get('Authorization')).toBe('Bearer token-1');
+    expect(headers.get('x-csrf-token')).toBe('csrf-1');
+    expect(postedBody).toEqual(input);
   });
 });

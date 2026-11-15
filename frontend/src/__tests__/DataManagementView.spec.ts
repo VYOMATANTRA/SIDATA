@@ -769,6 +769,311 @@ describe('DataManagementView.vue', () => {
     wrapper.unmount();
   });
 
+  describe('Tambah Data', () => {
+    /** Pages with the authoring tokens the hierarchy needs; the shared mock omits them. */
+    function hierarchyResponse() {
+      return json({
+        pages: [
+          {
+            id: 'p1',
+            slug: 'kependudukan',
+            title: 'Kependudukan',
+            sortOrder: 0,
+            chapters: [
+              {
+                id: 'c1',
+                slug: 'jumlah-penduduk',
+                number: null,
+                title: 'Jumlah Penduduk',
+                sortOrder: 0,
+                updatedAt: CREATED,
+                sections: [
+                  {
+                    id: 'sec-1',
+                    slug: 'ringkasan',
+                    title: null,
+                    sortOrder: 0,
+                    updatedAt: CREATED,
+                  },
+                ],
+              },
+            ],
+            createdAt: CREATED,
+            updatedAt: CREATED,
+          },
+        ],
+      });
+    }
+
+    /** Wraps the shared mock: `POST` create URLs go to `onPost`, everything else to the base mock. */
+    function installCreateMock(
+      onPost: (url: string, body: Record<string, unknown>) => Response,
+      extra?: (url: string) => Response | undefined,
+    ): void {
+      const base = globalThis.fetch;
+      globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === '/api/pages?include=sections') return hierarchyResponse();
+        if (
+          init?.method === 'POST' &&
+          (url === '/api/indicators' ||
+            url === '/api/indicator-tables' ||
+            url.endsWith('/rows'))
+        ) {
+          return onPost(url, JSON.parse(String(init.body)) as Record<string, unknown>);
+        }
+        const custom = extra?.(url);
+        if (custom) return custom;
+        return base(input, init);
+      }) as typeof fetch;
+    }
+
+    async function chooseSection(): Promise<void> {
+      await body().get('#create-data-lokasi-page').setValue('p1');
+      await body().get('#create-data-lokasi-chapter').setValue('c1');
+      await body().get('#create-data-lokasi-section').setValue('sec-1');
+    }
+
+    async function submitCreate(): Promise<void> {
+      const save = body()
+        .findAll('button')
+        .find((button) => button.text() === 'Simpan');
+      const form = save?.element.closest('form');
+      expect(form).not.toBeNull();
+      await new DOMWrapper(form as HTMLElement).trigger('submit');
+      await flushPromises();
+    }
+
+    async function openCreate(wrapper: VueWrapper): Promise<void> {
+      await wrapper.get('[data-test="data-create-open"]').trigger('click');
+      await flushPromises();
+    }
+
+    it('creates a scalar indicator with a slug taken from its label and closes the dialog', async () => {
+      const posted: Array<{ url: string; body: Record<string, unknown> }> = [];
+      installCreateMock((url, requestBody) => {
+        posted.push({ url, body: requestBody });
+        return json(
+          {
+            message: 'Indikator berhasil dibuat',
+            indicator: {
+              ...indicator,
+              id: 'ind-2',
+              slug: 'jumlah-kk',
+              label: 'Jumlah KK',
+              unit: 'KK',
+              valueCurrent: '4200',
+              periodCurrent: '2026',
+              valuePrevious: null,
+              periodPrevious: null,
+              isComputedComparison: false,
+              isStale: false,
+              hedgeNote: null,
+              source: null,
+            },
+          },
+          true,
+          201,
+        );
+      });
+
+      const wrapper = mountAttached();
+      await flushPromises();
+      await openCreate(wrapper);
+
+      expect(body().text()).toContain('Tambah Data');
+      await chooseSection();
+      await body().get('#create-data-label').setValue('Jumlah KK');
+      await body().get('#create-data-unit').setValue('KK');
+      await body().get('#create-data-value-current').setValue('4200');
+      await body().get('#create-data-period-current').setValue('2026');
+      await submitCreate();
+
+      expect(posted).toEqual([
+        {
+          url: '/api/indicators',
+          body: {
+            sectionId: 'sec-1',
+            slug: 'jumlah-kk',
+            label: 'Jumlah KK',
+            unit: 'KK',
+            valueCurrent: '4200',
+            periodCurrent: '2026',
+            valuePrevious: null,
+            periodPrevious: null,
+            source: null,
+          },
+        },
+      ]);
+      expect(document.getElementById('create-data-label')).toBeNull();
+      expect(wrapper.find('[data-test="data-create-open"]').exists()).toBe(true);
+      wrapper.unmount();
+    });
+
+    it('keeps the typed draft and shows the plain-Indonesian message on a slug clash', async () => {
+      installCreateMock(() =>
+        json({ error: "Slug 'jumlah-kk' sudah digunakan indikator lain." }, false, 409),
+      );
+
+      const wrapper = mountAttached();
+      await flushPromises();
+      await openCreate(wrapper);
+      await chooseSection();
+      await body().get('#create-data-label').setValue('Jumlah KK');
+      await body().get('#create-data-value-current').setValue('4200');
+      await body().get('#create-data-period-current').setValue('2026');
+      await submitCreate();
+
+      expect(body().text()).toContain(
+        'Gagal menyimpan data baru. Data dengan nama yang sama sudah ada.',
+      );
+      expect(body().text()).not.toContain('sudah digunakan indikator lain');
+      expect((document.getElementById('create-data-label') as HTMLInputElement).value).toBe(
+        'Jumlah KK',
+      );
+      expect((document.getElementById('create-data-value-current') as HTMLInputElement).value).toBe(
+        '4200',
+      );
+      wrapper.unmount();
+    });
+
+    it('adds a row to an open matrix table and shows it in the table after the refetch', async () => {
+      const posted: Array<{ url: string; body: Record<string, unknown> }> = [];
+      let rowAdded = false;
+      const withNewRow = () => ({
+        ...tableDetail(),
+        rows: [
+          ...tableDetail().rows,
+          {
+            id: 'row-2',
+            tableId: 'tbl-1',
+            rowKey: '75-tahun-ke-atas',
+            label: '75 tahun ke atas',
+            male: 5,
+            female: 4,
+            total: 9,
+            sortOrder: 1,
+            createdAt: CREATED,
+            updatedAt: CREATED,
+          },
+        ],
+        totals: { rowCount: 2, male: 105, female: 94, total: 199 },
+      });
+      installCreateMock(
+        (url, requestBody) => {
+          posted.push({ url, body: requestBody });
+          rowAdded = true;
+          return json({ message: 'Baris tabel berhasil dibuat', row: {} }, true, 201);
+        },
+        // Before the add the shared mock answers; after it, the detail carries the new row.
+        (url) =>
+          url === '/api/indicator-tables/tbl-1' && rowAdded
+            ? json({ table: withNewRow() })
+            : undefined,
+      );
+
+      const wrapper = mountAttached();
+      await flushPromises();
+      const card = wrapper.findAll('button').find((b) => b.text().includes('Piramida Usia'));
+      await card?.trigger('click');
+      await flushPromises();
+
+      expect(body().text()).toContain('Edit Tabel Matriks');
+      await body().get('#table-row-add-label').setValue('75 tahun ke atas');
+      await body().get('#table-row-add-male').setValue('5');
+      await body().get('#table-row-add-female').setValue('4');
+      await new DOMWrapper(
+        body().get('[data-test="table-row-add"]').element as HTMLElement,
+      ).trigger('submit');
+      await flushPromises();
+
+      expect(posted).toEqual([
+        {
+          url: '/api/indicator-tables/tbl-1/rows',
+          body: {
+            rowKey: '75-tahun-ke-atas',
+            label: '75 tahun ke atas',
+            male: 5,
+            female: 4,
+          },
+        },
+      ]);
+      expect(body().text()).toContain('75 tahun ke atas');
+      expect((document.getElementById('table-row-add-label') as HTMLInputElement).value).toBe('');
+      // The form keeps keyboard focus, so the next row can be typed without a mouse.
+      expect(document.activeElement?.id).toBe('table-row-add-label');
+      wrapper.unmount();
+    });
+
+    it('retries a clashing slug with the next suffix and saves on the second attempt', async () => {
+      const slugs: string[] = [];
+      installCreateMock((_url, requestBody) => {
+        slugs.push(String(requestBody.slug));
+        if (slugs.length === 1) {
+          return json({ error: 'Slug sudah digunakan' }, false, 409);
+        }
+        return json({ message: 'ok', indicator: { ...indicator, id: 'ind-2', slug: 'jumlah-kk-2' } }, true, 201);
+      });
+
+      const wrapper = mountAttached();
+      await flushPromises();
+      await openCreate(wrapper);
+      await chooseSection();
+      await body().get('#create-data-label').setValue('Jumlah KK');
+      await body().get('#create-data-value-current').setValue('4200');
+      await body().get('#create-data-period-current').setValue('2026');
+      await submitCreate();
+
+      expect(slugs).toEqual(['jumlah-kk', 'jumlah-kk-2']);
+      expect(document.getElementById('create-data-label')).toBeNull();
+      expect(body().text()).not.toContain('Gagal menyimpan data baru');
+      wrapper.unmount();
+    });
+
+    it('creates an empty matrix table and opens its table editor', async () => {
+      const posted: Array<Record<string, unknown>> = [];
+      const created = {
+        ...table,
+        id: 'tbl-2',
+        slug: 'mata-pencaharian',
+        title: 'Mata Pencaharian',
+        kind: 'occupation' as const,
+        rows: [],
+        totals: { rowCount: 0, male: null, female: null, total: null },
+      };
+      installCreateMock(
+        (_url, requestBody) => {
+          posted.push(requestBody);
+          return json({ message: 'Tabel indikator berhasil dibuat', table: created }, true, 201);
+        },
+        (url) => (url === '/api/indicator-tables/tbl-2' ? json({ table: created }) : undefined),
+      );
+
+      const wrapper = mountAttached();
+      await flushPromises();
+      await openCreate(wrapper);
+      await chooseSection();
+      await body().get('#create-data-type-matriks').setValue(true);
+      await body().get('#create-data-kind').setValue('occupation');
+      await body().get('#create-data-title').setValue('Mata Pencaharian');
+      await body().get('#create-data-period').setValue('Juni 2024');
+      await submitCreate();
+
+      expect(posted).toEqual([
+        {
+          sectionId: 'sec-1',
+          slug: 'mata-pencaharian',
+          title: 'Mata Pencaharian',
+          kind: 'occupation',
+          period: 'Juni 2024',
+          source: null,
+        },
+      ]);
+      expect(body().text()).toContain('Edit Tabel Matriks');
+      wrapper.unmount();
+    });
+  });
+
   it('offers no retry when every failing list is forbidden', async () => {
     installFetchMock({ indicatorsFailStatus: 403, tablesFailStatus: 403 });
     const wrapper = mountView();
