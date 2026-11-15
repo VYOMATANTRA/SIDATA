@@ -327,6 +327,13 @@ export const PREVIOUS_PAIR_MESSAGE = 'Nilai dan periode sebelumnya harus diisi b
 export const PREVIOUS_REQUIRED_MESSAGE =
   'Nilai dan periode sebelumnya harus diisi untuk indikator perbandingan.';
 
+/**
+ * A create was refused with 409: another entry already has the generated address (slug). The
+ * lists are reloaded behind the form, so the next save picks a free one.
+ */
+export const SLUG_TAKEN_MESSAGE =
+  'Data dengan nama yang sama sudah ada. Daftar sudah dimuat ulang; coba simpan lagi.';
+
 export const UNKNOWN_FIELD_MESSAGE =
   'Ada isian yang tidak dikenali. Muat ulang halaman lalu coba lagi.';
 export const INPUT_MISMATCH_MESSAGE = 'Isian belum sesuai. Periksa kembali isian yang ditandai.';

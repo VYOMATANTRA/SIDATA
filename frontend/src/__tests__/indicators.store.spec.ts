@@ -1058,6 +1058,97 @@ describe('indicators store slug cache normalisation', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
+describe('indicators store (create)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.restoreAllMocks();
+  });
+
+  it('POSTs the new indicator with CSRF and bearer headers, then adds it to the list', async () => {
+    let postInit: RequestInit | undefined;
+    let postedBody: unknown;
+
+    globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
+      if (url === '/api/indicators?pageSize=200') {
+        return json({ indicators: [makeIndicator()], total: 1 });
+      }
+      if (url === '/api/indicators') {
+        postInit = init;
+        postedBody = JSON.parse(String(init?.body));
+        return json(
+          {
+            message: 'Indikator berhasil dibuat',
+            indicator: makeIndicator({
+              id: 'ind-2',
+              slug: 'jumlah-kk',
+              label: 'Jumlah KK',
+              valuePrevious: null,
+              periodPrevious: null,
+              isComputedComparison: false,
+            }),
+          },
+          true,
+          201,
+        );
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    useAuthStore().accessToken = 'token-1';
+    const store = useIndicatorsStore();
+    await store.fetchIndicators();
+
+    const input = {
+      sectionId: 'sec-1',
+      slug: 'jumlah-kk',
+      label: 'Jumlah KK',
+      valueCurrent: '4200',
+      periodCurrent: '2026',
+    };
+    const created = await store.createIndicator(input);
+
+    expect(created.id).toBe('ind-2');
+    expect(store.indicators.map((item) => item.id)).toEqual(['ind-1', 'ind-2']);
+    expect(store.total).toBe(2);
+    expect(postInit?.method).toBe('POST');
+    const headers = new Headers(postInit?.headers);
+    expect(headers.get('Authorization')).toBe('Bearer token-1');
+    expect(headers.get('x-csrf-token')).toBe('csrf-1');
+    expect(postedBody).toEqual(input);
+  });
+
+  it('leaves the list unchanged and rejects when the server refuses the create', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
+      if (url === '/api/indicators?pageSize=200') {
+        return json({ indicators: [makeIndicator()], total: 1 });
+      }
+      if (url === '/api/indicators') {
+        return json({ error: "Slug 'total-penduduk' sudah digunakan indikator lain." }, false, 409);
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    const store = useIndicatorsStore();
+    await store.fetchIndicators();
+
+    await expect(
+      store.createIndicator({
+        sectionId: 'sec-1',
+        slug: 'total-penduduk',
+        label: 'Total Penduduk',
+        valueCurrent: '1',
+        periodCurrent: '2026',
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(store.indicators).toHaveLength(1);
+    expect(store.total).toBe(1);
+  });
+});
+
 describe('formatIndicatorValue (Indonesian decimal & thousands formatting)', () => {
   it('formats decimals with three trailing fractional digits as decimal comma, not thousands', () => {
     // Specifically targets the blocking bug where "2.500" was mistaken for 2500

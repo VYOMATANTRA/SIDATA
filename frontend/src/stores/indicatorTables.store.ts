@@ -103,6 +103,16 @@ export interface IndicatorTableDetail extends IndicatorTable {
 export type IndicatorTableRowDto = IndicatorTableRow;
 export type IndicatorTableDetailDto = IndicatorTableDetail;
 
+/** Body of `POST /api/indicator-tables` (`createTableSchema`, strict). Rows are not sent. */
+export interface IndicatorTableCreateInput {
+  sectionId: string;
+  slug: string;
+  title: string;
+  kind: IndicatorTableKind;
+  period: string;
+  source?: string | null;
+}
+
 /** Table-level fields the CMS may change; `kind` is immutable once rows exist. */
 export interface IndicatorTablePatch {
   title?: string;
@@ -242,6 +252,21 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
     return data.table;
   }
 
+  /**
+   * Creates a matrix table with no rows (`rows` is not sent). The new table joins the list and
+   * detail caches, and its section's Cerita read is dropped.
+   */
+  async function createTable(input: IndicatorTableCreateInput): Promise<IndicatorTableDetail> {
+    const data = await apiRequestJson<{ table: IndicatorTableDetail }>('/api/indicator-tables', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+    details.value = { ...details.value, [data.table.id]: data.table };
+    replaceTable(data.table);
+    invalidateSectionCache(data.table.sectionId);
+    return data.table;
+  }
+
   async function updateTable(
     id: string,
     patch: IndicatorTablePatch,
@@ -323,6 +348,7 @@ export const useIndicatorTablesStore = defineStore('indicatorTables', () => {
     detailById,
     fetchTables,
     fetchTableDetail,
+    createTable,
     saveTableDetail,
     updateTable,
     replaceTable,
