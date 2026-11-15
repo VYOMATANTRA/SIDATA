@@ -10,6 +10,8 @@ import {
   updatePage,
   deletePage,
   reorderPages,
+  putPageCover,
+  deletePageCover,
   PageServiceError,
   isValidPageSlug,
 } from '../services/pages.service.js';
@@ -154,5 +156,25 @@ export const updatePageHandler = authoringHandler({
   run: async (req, actor, context) => {
     const page = await updatePage(paramOf(req, 'slug'), req.body, actor, context);
     return { message: 'Halaman berhasil diperbarui', page };
+  },
+});
+
+// PUT /api/pages/:slug/cover
+export const putPageCoverHandler = authoringHandler({
+  errorLabel: 'menyimpan thumbnail halaman',
+  run: async (req, actor, context) => {
+    const page = await putPageCover(paramOf(req, 'slug'), req.body, actor, context);
+    return { message: 'Thumbnail halaman berhasil disimpan', page };
+  },
+});
+
+// DELETE /api/pages/:slug/cover?expectedUpdatedAt=…
+export const deletePageCoverHandler = authoringHandler({
+  errorLabel: 'menghapus thumbnail halaman',
+  run: async (req, actor, context) => {
+    const page = await deletePageCover(paramOf(req, 'slug'), actor, context, undefined, {
+      expectedUpdatedAt: parseExpectedUpdatedAtQuery(req.query?.['expectedUpdatedAt']),
+    });
+    return { message: 'Thumbnail halaman berhasil dihapus', page };
   },
 });

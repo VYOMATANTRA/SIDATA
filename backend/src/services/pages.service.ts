@@ -25,6 +25,12 @@ import {
   dependentsError,
   hasDependents,
 } from './hierarchyDependencies.service.js';
+import {
+  attachMedia,
+  detachMedia,
+  MediaServiceError,
+  type MediaTransactionClient,
+} from './media.service.js';
 
 export class PageServiceError extends HierarchyServiceError {
   constructor(
@@ -124,6 +130,7 @@ export interface PageSummaryDTO {
   id: string;
   slug: string;
   title: string;
+  coverAssetId: string | null;
   sortOrder: number;
   chapterCount: number;
 }
@@ -132,6 +139,7 @@ export interface PageWithChapterCount {
   id: string;
   slug: string;
   title: string;
+  coverAssetId?: string | null;
   sortOrder: number;
   _count: {
     chapters: number;
@@ -142,6 +150,7 @@ export const toPageSummary = (page: PageWithChapterCount): PageSummaryDTO => ({
   id: page.id,
   slug: page.slug,
   title: page.title,
+  coverAssetId: page.coverAssetId ?? null,
   sortOrder: page.sortOrder,
   chapterCount: page._count.chapters,
 });
@@ -163,6 +172,7 @@ export interface PageDetailDTO extends PageEditorialDTO {
   id: string;
   slug: string;
   title: string;
+  coverAssetId: string | null;
   sortOrder: number;
   chapters: ChapterDTO[];
   createdAt: string;
@@ -173,6 +183,7 @@ interface PageRowWithChapters extends PageEditorialDTO {
   id: string;
   slug: string;
   title: string;
+  coverAssetId?: string | null;
   sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
@@ -198,6 +209,7 @@ const toPageDetail = (page: PageRowWithChapters): PageDetailDTO => ({
   slug: page.slug,
   title: page.title,
   ...toEditorial(page),
+  coverAssetId: page.coverAssetId ?? null,
   sortOrder: page.sortOrder,
   chapters: page.chapters.map((chapter) => ({
     id: chapter.id,
@@ -396,6 +408,7 @@ export const createPage = async (
         id: createdPage.id,
         slug: createdPage.slug,
         title: createdPage.title,
+        coverAssetId: createdPage.coverAssetId ?? null,
         sortOrder: createdPage.sortOrder,
         chapterCount: 0,
       };
@@ -556,6 +569,228 @@ export const updatePage = async (
   });
 };
 
+export const PAGE_COVER_MEDIA_PURPOSE = 'cerita-cover' as const;
+export const PAGE_COVER_MEDIA_SLOT = 'cover';
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const putPageCoverSchema = z.strictObject(
+  {
+    coverAssetId: z
+      .string({ error: 'Gambar thumbnail tidak valid. Unggah ulang gambarnya.' })
+      .trim()
+      .regex(UUID_PATTERN, 'Gambar thumbnail tidak valid. Unggah ulang gambarnya.')
+      .transform((v) => v.toLowerCase()),
+    expectedUpdatedAt: expectedUpdatedAtSchema,
+  },
+  { error: 'Payload thumbnail memuat isian yang tidak dikenal' },
+);
+
+const coverMediaReference = (pageId: string) => ({
+  purpose: PAGE_COVER_MEDIA_PURPOSE,
+  reference: { type: 'page', id: pageId, slot: PAGE_COVER_MEDIA_SLOT },
+});
+
+const asMediaTx = (tx: unknown): MediaTransactionClient => tx as MediaTransactionClient;
+
+/**
+ * Locks affected media asset rows in ascending ID order up front so concurrent swaps between
+ * old and new cover assets cannot deadlock.
+ */
+async function lockAssetsForUpdate(
+  tx: Pick<Prisma.TransactionClient, '$queryRaw'>,
+  ids: readonly string[],
+): Promise<void> {
+  const sorted = [...new Set(ids)].sort();
+  if (sorted.length === 0) return;
+  await tx.$queryRaw(
+    Prisma.sql`SELECT id FROM media_assets WHERE id IN (${Prisma.join(sorted)}) ORDER BY id FOR UPDATE`,
+  );
+}
+
+/** Wraps MediaServiceError into plain-Indonesian PageServiceError messages for operators. */
+function toPageCoverMediaError(err: unknown, mode: 'save' | 'delete' = 'save'): unknown {
+  if (!(err instanceof MediaServiceError)) return err;
+  if (mode === 'delete') {
+    return new PageServiceError(
+      'Thumbnail halaman belum dapat dihapus karena gambar gagal dilepas. Coba lagi beberapa saat lagi.',
+      409,
+    );
+  }
+  if (err.code === 'MEDIA_PURPOSE_MISMATCH') {
+    return new PageServiceError(
+      'Gambar ini tidak dapat dipakai sebagai thumbnail halaman. Unggah ulang gambarnya dari halaman ini.',
+      400,
+    );
+  }
+  if (err.statusCode >= 400 && err.statusCode < 500) {
+    return new PageServiceError(
+      'Gambar thumbnail tidak ditemukan atau sudah dihapus. Unggah ulang gambarnya.',
+      400,
+    );
+  }
+  return err;
+}
+
+/**
+ * Attaches a `cerita-cover` media asset as a page's thumbnail, replacing and leniently
+ * detaching any previous cover asset inside the same locked ReadCommitted transaction.
+ */
+export const putPageCover = async (
+  rawSlug: string,
+  rawInput: unknown,
+  actor: AuditActor,
+  reqContext?: AuditRequestContext,
+  client = prisma,
+): Promise<PageAuthoringDTO> => {
+  if (!isValidPageSlug(rawSlug)) {
+    throw new PageServiceError(
+      'Slug halaman tidak valid. Gunakan format kebab-case (maksimal 100 karakter).',
+      400,
+    );
+  }
+  assertPlainObject(rawInput, 'Payload halaman harus berupa objek JSON');
+  const input = parseOrThrow(putPageCoverSchema, rawInput);
+  const slug = rawSlug.trim().toLowerCase();
+
+  return executeLockedTransaction({
+    client,
+    isolationLevel: 'ReadCommitted',
+    lockQuery: Prisma.sql`SELECT id FROM pages WHERE slug = ${slug} FOR UPDATE`,
+    execute: async (tx) => {
+      const existing = await tx.page.findUnique({
+        where: { slug },
+        include: { _count: { select: { chapters: true } } },
+      });
+      if (!existing) {
+        throw new PageServiceError('Halaman tidak ditemukan', 404);
+      }
+      assertFresh(existing.updatedAt, input.expectedUpdatedAt, 'Halaman');
+
+      const oldAssetId = existing.coverAssetId ?? null;
+      if (oldAssetId === input.coverAssetId) {
+        try {
+          await lockAssetsForUpdate(tx, [input.coverAssetId]);
+          await attachMedia(asMediaTx(tx), [input.coverAssetId], coverMediaReference(existing.id));
+        } catch (err) {
+          throw toPageCoverMediaError(err, 'save');
+        }
+        return withChangeResult(toPageAuthoring(existing), false);
+      }
+
+      const affectedIds = oldAssetId ? [oldAssetId, input.coverAssetId] : [input.coverAssetId];
+      try {
+        await lockAssetsForUpdate(tx, affectedIds);
+        if (oldAssetId) {
+          await detachMedia(
+            asMediaTx(tx),
+            [oldAssetId],
+            coverMediaReference(existing.id),
+            new Date(),
+            { lenient: true },
+          );
+        }
+        await attachMedia(asMediaTx(tx), [input.coverAssetId], coverMediaReference(existing.id));
+      } catch (err) {
+        throw toPageCoverMediaError(err, 'save');
+      }
+
+      const updated = await tx.page.update({
+        where: { id: existing.id },
+        data: { coverAssetId: input.coverAssetId },
+        include: { _count: { select: { chapters: true } } },
+      });
+
+      await buildAuditLog(
+        {
+          action: AUDIT_ACTIONS.PAGE_COVER_UPDATED,
+          actor,
+          target: { type: 'page', id: existing.id, label: existing.title },
+          metadata: { slug: existing.slug, hasCover: true },
+          context: reqContext,
+        },
+        tx,
+      );
+
+      return toPageAuthoring(updated);
+    },
+  });
+};
+
+/**
+ * Removes a page's thumbnail cover and leniently detaches the underlying media asset.
+ * No-ops without bumping `updatedAt` or auditing if the page already has no cover.
+ */
+export const deletePageCover = async (
+  rawSlug: string,
+  actor: AuditActor,
+  reqContext: AuditRequestContext | undefined,
+  client = prisma,
+  options: { expectedUpdatedAt: string },
+): Promise<PageAuthoringDTO> => {
+  if (!isValidPageSlug(rawSlug)) {
+    throw new PageServiceError(
+      'Slug halaman tidak valid. Gunakan format kebab-case (maksimal 100 karakter).',
+      400,
+    );
+  }
+  const expectedUpdatedAt = parseOrThrow(expectedUpdatedAtSchema, options?.expectedUpdatedAt);
+  const slug = rawSlug.trim().toLowerCase();
+
+  return executeLockedTransaction({
+    client,
+    isolationLevel: 'ReadCommitted',
+    lockQuery: Prisma.sql`SELECT id FROM pages WHERE slug = ${slug} FOR UPDATE`,
+    execute: async (tx) => {
+      const existing = await tx.page.findUnique({
+        where: { slug },
+        include: { _count: { select: { chapters: true } } },
+      });
+      if (!existing) {
+        throw new PageServiceError('Halaman tidak ditemukan', 404);
+      }
+      assertFresh(existing.updatedAt, expectedUpdatedAt, 'Halaman');
+
+      const oldAssetId = existing.coverAssetId ?? null;
+      if (!oldAssetId) {
+        return withChangeResult(toPageAuthoring(existing), false);
+      }
+
+      try {
+        await lockAssetsForUpdate(tx, [oldAssetId]);
+        await detachMedia(
+          asMediaTx(tx),
+          [oldAssetId],
+          coverMediaReference(existing.id),
+          new Date(),
+          { lenient: true },
+        );
+      } catch (err) {
+        throw toPageCoverMediaError(err, 'delete');
+      }
+
+      const updated = await tx.page.update({
+        where: { id: existing.id },
+        data: { coverAssetId: null },
+        include: { _count: { select: { chapters: true } } },
+      });
+
+      await buildAuditLog(
+        {
+          action: AUDIT_ACTIONS.PAGE_COVER_DELETED,
+          actor,
+          target: { type: 'page', id: existing.id, label: existing.title },
+          metadata: { slug: existing.slug, hasCover: false },
+          context: reqContext,
+        },
+        tx,
+      );
+
+      return toPageAuthoring(updated);
+    },
+  });
+};
+
 export interface DeletedPageDTO {
   id: string;
   slug: string;
@@ -618,43 +853,70 @@ export const deletePage = async (
     0,
   );
   const chapterSlugs = chapters.map((ch) => ch.slug);
+  const coverAssetId = existingPage.coverAssetId ?? null;
+
+  const runDeleteTransaction = async (
+    tx: Pick<typeof prisma, 'page' | 'auditLog'>,
+  ): Promise<DeletedPageDTO> => {
+    // The delete is a compare-and-swap on updatedAt (P2025 = lost the race).
+    const deleted = await tx.page.delete({
+      where: { id: existingPage.id, updatedAt: existingPage.updatedAt },
+    });
+
+    if (coverAssetId) {
+      try {
+        await detachMedia(
+          asMediaTx(tx),
+          [coverAssetId],
+          coverMediaReference(existingPage.id),
+          new Date(),
+          { lenient: true },
+        );
+      } catch (err) {
+        throw toPageCoverMediaError(err, 'delete');
+      }
+    }
+
+    await buildAuditLog(
+      {
+        action: AUDIT_ACTIONS.PAGE_DELETED,
+        actor,
+        target: {
+          type: 'page',
+          id: deleted.id,
+          label: deleted.title,
+        },
+        metadata: {
+          slug: deleted.slug,
+          title: deleted.title,
+          sortOrder: deleted.sortOrder,
+          chapterCount,
+          sectionCount,
+          chapterSlugs,
+        },
+        context: reqContext,
+      },
+      tx,
+    );
+
+    return {
+      id: deleted.id,
+      slug: deleted.slug,
+      title: deleted.title,
+      sortOrder: deleted.sortOrder,
+    };
+  };
 
   try {
-    return await client.$transaction(async (tx) => {
-      // The delete is a compare-and-swap on updatedAt (P2025 = lost the race).
-      const deleted = await tx.page.delete({
-        where: { id: existingPage.id, updatedAt: existingPage.updatedAt },
+    if (coverAssetId) {
+      return await executeLockedTransaction({
+        client,
+        isolationLevel: 'ReadCommitted',
+        lockQuery: (tx) => lockAssetsForUpdate(tx, [coverAssetId]),
+        execute: (tx) => runDeleteTransaction(tx),
       });
-
-      await buildAuditLog(
-        {
-          action: AUDIT_ACTIONS.PAGE_DELETED,
-          actor,
-          target: {
-            type: 'page',
-            id: deleted.id,
-            label: deleted.title,
-          },
-          metadata: {
-            slug: deleted.slug,
-            title: deleted.title,
-            sortOrder: deleted.sortOrder,
-            chapterCount,
-            sectionCount,
-            chapterSlugs,
-          },
-          context: reqContext,
-        },
-        tx,
-      );
-
-      return {
-        id: deleted.id,
-        slug: deleted.slug,
-        title: deleted.title,
-        sortOrder: deleted.sortOrder,
-      };
-    });
+    }
+    return await client.$transaction((tx) => runDeleteTransaction(tx));
   } catch (err) {
     if (err instanceof Error && 'code' in err) {
       if (err.code === 'P2003') {

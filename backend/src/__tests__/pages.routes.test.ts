@@ -11,6 +11,8 @@ import {
   createPageHandler,
   deletePageHandler,
   reorderPagesHandler,
+  putPageCoverHandler,
+  deletePageCoverHandler,
 } from '../controllers/pages.controller.js';
 import { verifyToken } from '../middlewares/auth.middleware.js';
 import { requireEditorOrAdmin } from '../middlewares/role.middleware.js';
@@ -53,6 +55,8 @@ describe('pages.routes', () => {
         { path: '/', methods: ['post'] },
         { path: '/:slug', methods: ['delete'] },
         { path: '/:slug', methods: ['patch'] },
+        { path: '/:slug/cover', methods: ['put'] },
+        { path: '/:slug/cover', methods: ['delete'] },
         { path: '/:slug/chapters', methods: ['post'] },
         { path: '/:slug/chapters/reorder', methods: ['put'] },
       ]);
@@ -144,6 +148,30 @@ describe('pages.routes', () => {
         [apiLimiter, verifyToken, requireEditorOrAdmin, pagesWriteLimiter, deletePageHandler],
       );
     });
+
+    it('puts apiLimiter, verifyToken, requireEditorOrAdmin, pagesWriteLimiter, then cover handlers on PUT/DELETE /:slug/cover', async () => {
+      const router = await loadRouter();
+      const apiLimiter = (rateLimit as Record<string, unknown>).apiLimiter;
+      const pagesWriteLimiter = (rateLimit as Record<string, unknown>).pagesWriteLimiter;
+
+      const putCover = routeLayers(router).find(
+        (l) => l.route?.path === '/:slug/cover' && l.route?.methods['put'],
+      );
+      assert.ok(putCover);
+      assert.deepStrictEqual(
+        putCover.route!.stack.map((s) => s.handle),
+        [apiLimiter, verifyToken, requireEditorOrAdmin, pagesWriteLimiter, putPageCoverHandler],
+      );
+
+      const deleteCover = routeLayers(router).find(
+        (l) => l.route?.path === '/:slug/cover' && l.route?.methods['delete'],
+      );
+      assert.ok(deleteCover);
+      assert.deepStrictEqual(
+        deleteCover.route!.stack.map((s) => s.handle),
+        [apiLimiter, verifyToken, requireEditorOrAdmin, pagesWriteLimiter, deletePageCoverHandler],
+      );
+    });
   });
 
   describe('mounted at /api/pages in app', () => {
@@ -222,7 +250,14 @@ describe('pages.routes', () => {
       assert.equal(response.status, 200);
       assert.deepStrictEqual(await response.json(), {
         pages: [
-          { id: 'p1', slug: 'kependudukan', title: 'Kependudukan', sortOrder: 0, chapterCount: 6 },
+          {
+            id: 'p1',
+            slug: 'kependudukan',
+            title: 'Kependudukan',
+            coverAssetId: null,
+            sortOrder: 0,
+            chapterCount: 6,
+          },
         ],
         total: 1,
       });
@@ -341,6 +376,129 @@ describe('pages.routes', () => {
       assert.deepStrictEqual(await response.json(), {
         error: 'Akses ditolak. Membutuhkan hak akses Editor atau Admin.',
       });
+    });
+
+    it('PUT /api/pages/:slug/cover enforces CSRF (403), auth (401), role (403), and wires to handler for editor (400 on bad input)', async () => {
+      const noCsrf = await fetch(`${baseUrl}/api/pages/kependudukan/cover`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      assert.equal(noCsrf.status, 403);
+
+      const csrf = await getCsrf();
+      const unauth = await fetch(`${baseUrl}/api/pages/kependudukan/cover`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrf.token,
+          cookie: csrf.cookie,
+        },
+        body: JSON.stringify({}),
+      });
+      assert.equal(unauth.status, 401);
+
+      const userToken = generateAccessToken({
+        id: 'u-user',
+        email: 'user@manggar.go.id',
+        role: 'user',
+      });
+      const forbidden = await fetch(`${baseUrl}/api/pages/kependudukan/cover`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrf.token,
+          cookie: csrf.cookie,
+          Authorization: `Bearer ${userToken}`,
+        },
+        body: JSON.stringify({}),
+      });
+      assert.equal(forbidden.status, 403);
+
+      prisma.user.findUnique = (async (args: { where: { id?: string } }) =>
+        args?.where?.id
+          ? {
+              id: args.where.id,
+              email: 'editor@manggar.go.id',
+              role: { name: 'editor' },
+              deletedAt: null,
+            }
+          : null) as unknown as typeof prisma.user.findUnique;
+      const editorToken = generateAccessToken({
+        id: 'u-editor',
+        email: 'editor@manggar.go.id',
+        role: 'editor',
+      });
+      const reached = await fetch(`${baseUrl}/api/pages/kependudukan/cover`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrf.token,
+          cookie: csrf.cookie,
+          Authorization: `Bearer ${editorToken}`,
+        },
+        body: JSON.stringify({
+          coverAssetId: 'not-a-uuid',
+          expectedUpdatedAt: '2026-10-01T00:00:00.000Z',
+        }),
+      });
+      assert.equal(reached.status, 400);
+    });
+
+    it('DELETE /api/pages/:slug/cover enforces CSRF (403), auth (401), role (403), and wires to handler for editor (400 on missing token)', async () => {
+      const noCsrf = await fetch(`${baseUrl}/api/pages/kependudukan/cover`, {
+        method: 'DELETE',
+      });
+      assert.equal(noCsrf.status, 403);
+
+      const csrf = await getCsrf();
+      const unauth = await fetch(`${baseUrl}/api/pages/kependudukan/cover`, {
+        method: 'DELETE',
+        headers: {
+          'x-csrf-token': csrf.token,
+          cookie: csrf.cookie,
+        },
+      });
+      assert.equal(unauth.status, 401);
+
+      const userToken = generateAccessToken({
+        id: 'u-user',
+        email: 'user@manggar.go.id',
+        role: 'user',
+      });
+      const forbidden = await fetch(`${baseUrl}/api/pages/kependudukan/cover`, {
+        method: 'DELETE',
+        headers: {
+          'x-csrf-token': csrf.token,
+          cookie: csrf.cookie,
+          Authorization: `Bearer ${userToken}`,
+        },
+      });
+      assert.equal(forbidden.status, 403);
+
+      prisma.user.findUnique = (async (args: { where: { id?: string } }) =>
+        args?.where?.id
+          ? {
+              id: args.where.id,
+              email: 'editor@manggar.go.id',
+              role: { name: 'editor' },
+              deletedAt: null,
+            }
+          : null) as unknown as typeof prisma.user.findUnique;
+      const editorToken = generateAccessToken({
+        id: 'u-editor',
+        email: 'editor@manggar.go.id',
+        role: 'editor',
+      });
+      const reached = await fetch(`${baseUrl}/api/pages/kependudukan/cover`, {
+        method: 'DELETE',
+        headers: {
+          'x-csrf-token': csrf.token,
+          cookie: csrf.cookie,
+          Authorization: `Bearer ${editorToken}`,
+        },
+      });
+      assert.equal(reached.status, 400);
     });
   });
 });

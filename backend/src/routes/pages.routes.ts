@@ -6,6 +6,8 @@ import {
   deletePageHandler,
   reorderPagesHandler,
   updatePageHandler,
+  putPageCoverHandler,
+  deletePageCoverHandler,
 } from '../controllers/pages.controller.js';
 import {
   createChapterHandler,
@@ -62,6 +64,22 @@ router.patch(
   requireEditorOrAdmin,
   pagesWriteLimiter,
   updatePageHandler,
+);
+router.put(
+  '/:slug/cover',
+  apiLimiter,
+  verifyToken,
+  requireEditorOrAdmin,
+  pagesWriteLimiter,
+  putPageCoverHandler,
+);
+router.delete(
+  '/:slug/cover',
+  apiLimiter,
+  verifyToken,
+  requireEditorOrAdmin,
+  pagesWriteLimiter,
+  deletePageCoverHandler,
 );
 router.post(
   '/:slug/chapters',

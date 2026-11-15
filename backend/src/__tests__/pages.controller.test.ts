@@ -67,6 +67,7 @@ const expectedPageDto = (slug = 'kependudukan') => ({
   headline: null,
   bylineAuthor: null,
   bylineAffiliation: null,
+  coverAssetId: null,
   sortOrder: 0,
   chapters: [
     {
@@ -262,8 +263,22 @@ describe('pages.controller', () => {
       assert.equal(res.status, 200);
       assert.deepStrictEqual(res.body, {
         pages: [
-          { id: 'p1', slug: 'kependudukan', title: 'Kependudukan', sortOrder: 0, chapterCount: 6 },
-          { id: 'p2', slug: 'pendidikan', title: 'Pendidikan', sortOrder: 1, chapterCount: 4 },
+          {
+            id: 'p1',
+            slug: 'kependudukan',
+            title: 'Kependudukan',
+            coverAssetId: null,
+            sortOrder: 0,
+            chapterCount: 6,
+          },
+          {
+            id: 'p2',
+            slug: 'pendidikan',
+            title: 'Pendidikan',
+            coverAssetId: null,
+            sortOrder: 1,
+            chapterCount: 4,
+          },
         ],
         total: 2,
       });
@@ -349,6 +364,7 @@ describe('pages.controller', () => {
             headline: null,
             bylineAuthor: null,
             bylineAffiliation: null,
+            coverAssetId: null,
             sortOrder: 0,
             chapters: [
               {
@@ -709,6 +725,7 @@ describe('pages.controller', () => {
           id: 'page-1',
           slug: 'inovasi-desa',
           title: 'Inovasi Desa',
+          coverAssetId: null,
           sortOrder: 8,
           chapterCount: 0,
         },
@@ -939,8 +956,8 @@ describe('pages.controller', () => {
       assert.deepStrictEqual(res.body, {
         message: 'Urutan halaman berhasil diperbarui',
         pages: [
-          { id: 'p2', slug: 'p2', title: 'P2', sortOrder: 0, chapterCount: 4 },
-          { id: 'p1', slug: 'p1', title: 'P1', sortOrder: 1, chapterCount: 2 },
+          { id: 'p2', slug: 'p2', title: 'P2', coverAssetId: null, sortOrder: 0, chapterCount: 4 },
+          { id: 'p1', slug: 'p1', title: 'P1', coverAssetId: null, sortOrder: 1, chapterCount: 2 },
         ],
       });
     });

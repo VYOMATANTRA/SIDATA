@@ -202,7 +202,7 @@ describe('pages.service', () => {
       assert.deepStrictEqual(result, []);
     });
 
-    it('maps a row to exactly {id, slug, title, sortOrder, chapterCount}', async () => {
+    it('maps a row to exactly {id, slug, title, coverAssetId, sortOrder, chapterCount}', async () => {
       stubFindMany(async () => [summaryRow()]);
 
       const result = await getPages();
@@ -212,6 +212,7 @@ describe('pages.service', () => {
           id: 'page-1',
           slug: 'kependudukan',
           title: 'Kependudukan',
+          coverAssetId: null,
           sortOrder: 0,
           chapterCount: 6,
         },
@@ -226,6 +227,7 @@ describe('pages.service', () => {
 
       assert.deepStrictEqual(Object.keys(row).sort(), [
         'chapterCount',
+        'coverAssetId',
         'id',
         'slug',
         'sortOrder',
@@ -290,6 +292,7 @@ describe('pages.service', () => {
           id: r.id,
           slug: r.slug,
           title: r.title,
+          coverAssetId: null,
           sortOrder: r.sortOrder,
           chapterCount: r._count.chapters,
         })),
@@ -371,6 +374,7 @@ describe('pages.service', () => {
         headline: null,
         bylineAuthor: null,
         bylineAffiliation: null,
+        coverAssetId: null,
         sortOrder: 0,
         chapters: [
           {
@@ -489,6 +493,7 @@ describe('pages.service', () => {
         headline: 'Tata Kelola Kelurahan',
         bylineAuthor: 'Tim Penyusun',
         bylineAffiliation: null,
+        coverAssetId: null,
         sortOrder: 5,
         chapters: [
           {
@@ -541,6 +546,7 @@ describe('pages.service', () => {
         'bylineAffiliation',
         'bylineAuthor',
         'chapters',
+        'coverAssetId',
         'createdAt',
         'headline',
         'id',
@@ -1002,6 +1008,7 @@ describe('pages.service', () => {
         id: 'p-new',
         slug: 'inovasi-desa',
         title: 'Inovasi Desa',
+        coverAssetId: null,
         sortOrder: 9,
         chapterCount: 0,
       });
@@ -1971,6 +1978,7 @@ describe('pages.service', () => {
         id: 'page-xyz',
         slug: 'profil-desa',
         title: 'Profil Desa',
+        coverAssetId: null,
         sortOrder: 4,
         chapterCount: 5,
       });
