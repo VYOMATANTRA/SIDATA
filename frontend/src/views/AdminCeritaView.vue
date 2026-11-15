@@ -755,7 +755,7 @@ const dragSlug = ref<string | null>(null);
 const dropTarget = ref<{ slug: string; edge: 'before' | 'after' } | null>(null);
 /** The drag hovers the zone after the last card (drop there = the end of the list). */
 const dropAtEnd = ref(false);
-const bulkTarget = ref<{ items: { slug: string; title: string; token: string }[] } | null>(null);
+const bulkTarget = ref<{ items: { slug: string; title: string }[] } | null>(null);
 const bulkRunning = ref(false);
 const bulkResults = ref<BulkResult[] | null>(null);
 const bulkStale = ref(false);
@@ -892,20 +892,14 @@ function dropOn(slug: string, edge: 'before' | 'after'): void {
 function placeDragged(dragged: string, toIndex: number): void {
   const from = pages.value.findIndex((item) => item.slug === dragged);
   if (from < 0 || toIndex === from) return;
-  const direction: Direction = toIndex > from ? 1 : -1;
   const title = pages.value[from]?.title ?? '';
   void runMove(
     () => store.placePage(dragged, toIndex),
     () => {
       const index = pages.value.findIndex((item) => item.slug === dragged);
       announce(`Halaman “${title}” dipindah ke urutan ${index + 1} dari ${pages.value.length}.`);
-      focusAfterMove(
-        ceritaIds.cardUp(dragged),
-        ceritaIds.cardDown(dragged),
-        index,
-        pages.value.length,
-        direction,
-      );
+      // Naik / Turun exist only in Urutkan mode, so a drop (any mode) keeps focus on the card's Edit.
+      focusId(ceritaIds.cardEdit(dragged));
     },
   );
 }
@@ -921,7 +915,7 @@ function openDeleteFromList(slug: string): void {
 function openBulkDelete(): void {
   const items = pages.value
     .filter((item) => selectedSlugs.value.includes(item.slug))
-    .map((item) => ({ slug: item.slug, title: item.title, token: item.updatedAt }));
+    .map((item) => ({ slug: item.slug, title: item.title }));
   if (items.length === 0) return;
   bulkResults.value = null;
   bulkStale.value = false;
@@ -942,9 +936,11 @@ function closeBulk(): void {
 }
 
 /**
- * Deletes the selected pages one after another, each with the token it had when the dialog
- * opened. A page that still holds content is refused by the server and reported as blocked; a
- * page that changed since is reported as stale. Every page gets one line in the report.
+ * Deletes the selected pages one after another. Each delete takes the page's token as the store
+ * holds it at that moment (the previous delete reloads the tree, so a token another delete moved on
+ * is current again). A page that still holds content is refused by the server and reported as
+ * blocked; a page changed by someone else since the last load is reported as stale. Every page gets
+ * one line in the report.
  */
 async function confirmBulkDelete(): Promise<void> {
   const target = bulkTarget.value;
@@ -954,7 +950,7 @@ async function confirmBulkDelete(): Promise<void> {
   bulkError.value = '';
   const results: BulkResult[] = [];
   for (const item of target.items) {
-    const outcome = await store.removePage(item.slug, item.token);
+    const outcome = await store.removePage(item.slug);
     if (outcome.ok) {
       results.push({ slug: item.slug, title: item.title, status: 'deleted' });
       selectedSlugs.value = selectedSlugs.value.filter((slug) => slug !== item.slug);

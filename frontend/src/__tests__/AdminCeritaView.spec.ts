@@ -1388,7 +1388,31 @@ describe('AdminCeritaView', () => {
       wrapper.unmount();
     });
 
-    it('refuses a page that changed after the dialog opened, and offers a reload', async () => {
+    it('reads each page token when that page is deleted, so an earlier delete that moves a later token on does not block it', async () => {
+      // Deleting Kependudukan moves Pendidikan's token on (the server may renumber it). The matcher
+      // only observes the request and answers false, so the real delete still runs.
+      fake.failNext((r) => {
+        if (r.method === 'DELETE' && r.url.startsWith('/api/pages/kependudukan')) {
+          fake.touchPage('pendidikan');
+        }
+        return false;
+      }, fake.json({}));
+      const wrapper = await mountList();
+      await wrapper.findAll('[data-test="page-checkbox"]')[0]!.setValue(true);
+      await wrapper.findAll('[data-test="page-checkbox"]')[1]!.setValue(true);
+      await wrapper.find('[data-test="bulk-delete"]').trigger('click');
+      await flushPromises();
+
+      await body().find('[data-test="bulk-confirm"]').trigger('click');
+      await flushPromises();
+
+      const rows = body().findAll('[data-test="bulk-results"] li');
+      expect(rows.map((row) => row.attributes('data-status'))).toEqual(['deleted', 'deleted']);
+      expect(fake.pages.map((item) => item.slug)).toEqual(['kesehatan']);
+      wrapper.unmount();
+    });
+
+    it('refuses a page changed on the server since the list was loaded, and offers a reload', async () => {
       const wrapper = await mountList();
       await wrapper.findAll('[data-test="page-checkbox"]')[2]!.setValue(true);
       await wrapper.find('[data-test="bulk-delete"]').trigger('click');
@@ -1450,6 +1474,8 @@ describe('AdminCeritaView', () => {
       expect(fake.lastWrite()).toMatchObject({ method: 'PUT', url: '/api/pages/reorder' });
       expect(pageTitles(wrapper)).toEqual(['Pendidikan', 'Kesehatan', 'Kependudukan']);
       expect(wrapper.find('[data-test="status"]').text()).toContain('urutan 3 dari 3');
+      // Focus stays on the moved card's Edit, which exists in every mode (not on Naik / Turun).
+      expect(document.activeElement?.id).toBe('cerita-kartu-kependudukan-ubah');
       expect(wrapper.find('[data-test="drop-indicator"]').exists()).toBe(false);
       wrapper.unmount();
     });
@@ -1522,6 +1548,7 @@ describe('AdminCeritaView', () => {
 
       expect(fake.lastWrite()).toMatchObject({ method: 'PUT', url: '/api/pages/reorder' });
       expect(pageTitles(wrapper)).toEqual(['Pendidikan', 'Kesehatan', 'Kependudukan']);
+      expect(document.activeElement?.id).toBe('cerita-kartu-kependudukan-ubah');
       expect(wrapper.find('[data-test="drop-end"]').exists()).toBe(false);
       wrapper.unmount();
     });
