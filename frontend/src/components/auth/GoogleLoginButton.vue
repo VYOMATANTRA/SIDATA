@@ -1,5 +1,12 @@
 <script setup lang="ts">
+import { stashPostLoginRedirect } from '../../utils/postLoginRedirect'
+
+/** Where to send the user once Google sign-in completes (already validated by the login page). */
+const props = defineProps<{ redirect?: string | null }>()
+
 function handleGoogleLogin() {
+  // Saved before leaving the app: the callback page reads it back after the Google round trip.
+  stashPostLoginRedirect(props.redirect)
   window.location.href = '/api/auth/google'
 }
 </script>

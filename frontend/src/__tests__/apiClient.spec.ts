@@ -131,6 +131,31 @@ describe('apiClient', () => {
     expect(dataCalls).toBe(1);
     expect(store.accessToken).toBeNull();
     expect(store.isAuthenticated).toBe(false);
+    expect(store.sessionEnded).toBe(true);
+  });
+
+  it('flags the session as ended when a concurrent request already cleared the token', async () => {
+    const store = signIn('expired-token');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async () => {
+        store.clearAuth();
+        return json({ error: 'Token tidak valid' }, 401);
+      }),
+    );
+
+    await apiFetch('/api/indicators');
+
+    expect(store.sessionEnded).toBe(true);
+  });
+
+  it('does not flag a session that was never signed in', async () => {
+    const store = useAuthStore();
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(json({}, 401)));
+
+    await apiFetch('/api/indicators');
+
+    expect(store.sessionEnded).toBe(false);
   });
 
   it('never refreshes a request that was sent without a token', async () => {
@@ -248,11 +273,73 @@ describe('apiClient', () => {
     expect(store.accessToken).toBe('expired-token');
   });
 
+  it('ends the session when the replay after a successful refresh is still refused', async () => {
+    const store = signIn('expired-token');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input);
+        if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-token' });
+        if (url === '/api/auth/refresh') return refreshOk('fresh-token');
+        return json({ error: 'Pengguna dinonaktifkan' }, 401);
+      }),
+    );
+
+    const response = await apiFetch('/api/indicators');
+
+    expect(response.status).toBe(401);
+    expect(store.accessToken).toBeNull();
+    expect(store.sessionEnded).toBe(true);
+  });
+
+  it('hands back the original 401 when the user signs out during the refresh', async () => {
+    const store = signIn('expired-token');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input);
+        if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-token' });
+        if (url === '/api/auth/refresh') {
+          store.clearAuth();
+          return refreshOk('fresh-token');
+        }
+        return json({ error: 'Token kedaluwarsa' }, 401);
+      }),
+    );
+
+    const response = await apiFetch('/api/indicators');
+
+    expect(response.status).toBe(401);
+    expect(store.sessionEnded).toBe(false);
+  });
+
+  it('fails a mutating call as a connection problem when no CSRF token can be fetched', async () => {
+    signIn('still-valid');
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(json({}, 500));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      apiFetch('/api/indicators/ind-1', { method: 'PATCH', body: '{}' }),
+    ).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 503,
+    });
+    expect(fetchMock.mock.calls.every(([input]) => String(input) === '/api/auth/csrf-token')).toBe(
+      true,
+    );
+  });
+
   it('keeps the server message for non-401 failures', async () => {
     signIn('still-valid');
     vi.stubGlobal(
       'fetch',
-      vi.fn<typeof fetch>().mockResolvedValue(json({ error: 'Label sudah dipakai' }, 409)),
+      vi
+        .fn<typeof fetch>()
+        .mockImplementation(async (input) =>
+          String(input) === '/api/auth/csrf-token'
+            ? json({ csrfToken: 'csrf-token' })
+            : json({ error: 'Label sudah dipakai' }, 409),
+        ),
     );
 
     await expect(
@@ -282,5 +369,51 @@ describe('apiClient', () => {
 
     // null means "not set by us", so the browser writes multipart/form-data with its boundary.
     expect(contentTypes).toEqual([null, 'application/json']);
+  });
+
+  it('replays a FormData body intact after a 401 refresh, with the browser multipart type', async () => {
+    const store = signIn('expired-token');
+    const form = new FormData();
+    form.append('purpose', 'cerita');
+    form.append('file', new Blob(['isi berkas'], { type: 'image/png' }), 'foto.png');
+
+    const attempts: Array<{ body: unknown; contentType: string | null; auth: string | null }> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-token' });
+        if (url === '/api/auth/refresh') return refreshOk('fresh-token');
+
+        const headers = new Headers(init?.headers);
+        attempts.push({
+          body: init?.body,
+          contentType: headers.get('Content-Type'),
+          auth: headers.get('Authorization'),
+        });
+        return attempts.length === 1
+          ? json({ error: 'Token kedaluwarsa' }, 401)
+          : json({ media: { id: 'media-1' } });
+      }),
+    );
+
+    const response = await apiFetch('/api/media', { method: 'POST', body: form });
+
+    expect(response.status).toBe(200);
+    expect(attempts).toHaveLength(2);
+    // The same FormData object is sent again: nothing was serialised to JSON or consumed.
+    expect(attempts[0]!.body).toBe(form);
+    expect(attempts[1]!.body).toBe(form);
+    expect(attempts.map((attempt) => attempt.auth)).toEqual([
+      'Bearer expired-token',
+      'Bearer fresh-token',
+    ]);
+    // Neither attempt forces a JSON type, so the browser writes the multipart boundary.
+    expect(attempts.map((attempt) => attempt.contentType)).toEqual([null, null]);
+    expect(store.accessToken).toBe('fresh-token');
+
+    const replayed = attempts[1]!.body as FormData;
+    expect(replayed.get('purpose')).toBe('cerita');
+    expect((replayed.get('file') as File).name).toBe('foto.png');
   });
 });

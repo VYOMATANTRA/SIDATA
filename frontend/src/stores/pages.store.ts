@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { apiErrorFromResponse, apiRequestJson } from '../utils/apiClient';
-import { toUserMessage } from '../utils/userMessages';
+import { toUserMessage, type FailureKind } from '../utils/userMessages';
 
 /**
  * Reads the public page → chapter → section hierarchy (SPEC §2).
@@ -161,6 +161,8 @@ export const usePagesStore = defineStore('pages', () => {
   const isHierarchyLoading = ref(false);
   const isLoaded = ref(false);
   const hierarchyError = ref<string | null>(null);
+  /** Failure class of `hierarchyError`, for AlertBanner; null while it is null. */
+  const hierarchyErrorKind = ref<FailureKind | null>(null);
 
   let hierarchyInFlight: Promise<void> | null = null;
   let hierarchyFollowUp: Promise<void> | null = null;
@@ -251,6 +253,7 @@ export const usePagesStore = defineStore('pages', () => {
   function startHierarchyFetch(): Promise<void> {
     isHierarchyLoading.value = true;
     hierarchyError.value = null;
+    hierarchyErrorKind.value = null;
 
     hierarchyInFlight = (async () => {
       try {
@@ -304,7 +307,9 @@ export const usePagesStore = defineStore('pages', () => {
         hierarchyIncomplete.value = incomplete;
         isLoaded.value = true;
       } catch (err) {
-        hierarchyError.value = toUserMessage(err, 'memuat struktur halaman', 'GET').message;
+        const mapped = toUserMessage(err, 'memuat struktur halaman', 'GET');
+        hierarchyError.value = mapped.message;
+        hierarchyErrorKind.value = mapped.kind;
       } finally {
         // A queued follow-up keeps the loading flag on: it is about to start another request.
         if (!hierarchyFollowUp) isHierarchyLoading.value = false;
@@ -390,6 +395,7 @@ export const usePagesStore = defineStore('pages', () => {
     isHierarchyLoading,
     isLoaded,
     hierarchyError,
+    hierarchyErrorKind,
     pagesBySlug,
     isLoading,
     error,

@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { DOMWrapper, mount } from '@vue/test-utils';
+import { createPinia } from 'pinia';
 import CeritaPageDetailsDialog from '../components/admin/cerita/CeritaPageDetailsDialog.vue';
 
 const body = (): DOMWrapper<HTMLElement> => new DOMWrapper(document.body);
 
+// The dialog shows its failures with AlertBanner, which reads the auth store, so a pinia is needed.
 function open(props: Record<string, unknown> = {}) {
   return mount(CeritaPageDetailsDialog, {
     props: { open: true, pageTitle: 'Kependudukan', ...props },
     attachTo: document.body,
+    global: { plugins: [createPinia()] },
   });
 }
 

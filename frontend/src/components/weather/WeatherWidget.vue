@@ -141,7 +141,7 @@ async function handleRetry() {
         data-test="weather-retry-btn"
       >
         <span v-if="isRetrying || weatherStore.isLoading">Memuat...</span>
-        <span v-else>Coba Lagi</span>
+        <span v-else>Coba lagi</span>
       </button>
     </div>
 

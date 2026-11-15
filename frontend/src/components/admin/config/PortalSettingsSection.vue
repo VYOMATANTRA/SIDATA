@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import BaseButton from '../../common/BaseButton.vue';
+import { computed, onMounted, ref } from 'vue';
+import { useAuthStore } from '../../../stores/auth';
+import AlertBanner from '../../common/AlertBanner.vue';
 import PublicSettingsForm from '../../data/PublicSettingsForm.vue';
 import { useSettingsStore, type PublicSettings } from '../../../stores/settings.store';
-import { toUserMessage } from '../../../utils/userMessages';
+import {
+  PORTAL_SETTINGS_LOAD_FALLBACK_MESSAGE,
+  toUserMessage,
+  type FailureKind,
+} from '../../../utils/userMessages';
 
 /**
  * Saves one part of the public portal settings (SPEC §4, §8): the identity and contact fields,
@@ -11,15 +16,35 @@ import { toUserMessage } from '../../../utils/userMessages';
  * failed map save never costs the contact edits (and vice versa). The form is shown only once
  * the stored values have actually loaded, so the built-in defaults can never be saved over them.
  */
-const props = defineProps<{ part: 'identity' | 'map' }>();
+const props = withDefaults(
+  defineProps<{
+    part: 'identity' | 'map';
+    /** The page mounts this section twice; only one instance shows the shared load failure. */
+    showLoadError?: boolean;
+  }>(),
+  { showLoadError: true },
+);
 
 const emit = defineEmits<{ (e: 'dirty-change', dirty: boolean): void }>();
 
 const store = useSettingsStore();
+const authStore = useAuthStore();
+
+// The first instance hides its banner when the session ended (the global notice covers it), so
+// the second instance must not point at a banner that is not there.
+const loadErrorHiddenElsewhere = computed(
+  () => store.errorKind === 'session' && authStore.sessionEnded,
+);
 
 const formKey = ref(0);
 const busy = ref(false);
 const serverError = ref('');
+/** Failure class of `serverError`; a session failure is hidden when the global notice covers it. */
+const serverErrorKind = ref<FailureKind | null>(null);
+/** The form's server error, or nothing when the session ended and AdminLayout already says so. */
+const visibleServerError = computed(() =>
+  serverErrorKind.value === 'session' && authStore.sessionEnded ? '' : serverError.value,
+);
 const statusMessage = ref('');
 const dirty = ref(false);
 
@@ -28,13 +53,20 @@ const SAVED_MESSAGE: Record<'identity' | 'map', string> = {
   map: 'Tampilan awal peta berhasil disimpan.',
 };
 
-/** True from the first paint until the first load has answered (no error flash before it). */
+/** True while a load (first or retry) is in flight; drives the banner's busy state. */
 const loading = ref(true);
+/**
+ * True once a load has failed and stays true through a retry, so the banner and its focused
+ * "Coba lagi" button are not unmounted while the retry runs (the store clears `error` when a
+ * fetch starts). Before the first answer the "Memuat" line is shown instead.
+ */
+const hasFailedLoad = ref(false);
 
 async function load(): Promise<void> {
   loading.value = true;
   try {
     await store.fetchPublicSettings(true);
+    hasFailedLoad.value = !store.isLoaded;
   } finally {
     loading.value = false;
   }
@@ -51,12 +83,15 @@ function onDirtyChange(value: boolean): void {
 async function handleSubmit(patch: Partial<PublicSettings>): Promise<void> {
   busy.value = true;
   serverError.value = '';
+  serverErrorKind.value = null;
   statusMessage.value = '';
   try {
     await store.updatePublicSettings(patch);
     statusMessage.value = SAVED_MESSAGE[props.part];
   } catch (error) {
-    serverError.value = toUserMessage(error, 'menyimpan pengaturan portal').message;
+    const mapped = toUserMessage(error, 'menyimpan pengaturan portal');
+    serverError.value = mapped.message;
+    serverErrorKind.value = mapped.kind;
   } finally {
     busy.value = false;
   }
@@ -65,6 +100,7 @@ async function handleSubmit(patch: Partial<PublicSettings>): Promise<void> {
 /** "Batalkan perubahan": back to the stored values, errors cleared. */
 function discard(): void {
   serverError.value = '';
+  serverErrorKind.value = null;
   statusMessage.value = '';
   formKey.value += 1;
 }
@@ -72,23 +108,26 @@ function discard(): void {
 
 <template>
   <div>
-    <p v-if="loading && !store.isLoaded" class="text-text-muted text-sm" role="status">
+    <p v-if="!store.isLoaded && !hasFailedLoad" class="text-text-muted text-sm" role="status">
       Memuat pengaturan…
     </p>
 
-    <div
-      v-else-if="!store.isLoaded"
-      role="alert"
-      class="rounded-card border-status-error-border bg-status-error-surface border p-4"
+    <AlertBanner
+      v-else-if="!store.isLoaded && showLoadError"
+      :message="store.error ?? PORTAL_SETTINGS_LOAD_FALLBACK_MESSAGE"
+      :kind="store.errorKind ?? undefined"
+      :busy="loading"
       data-test="portal-load-error"
+      @retry="load"
+    />
+
+    <p
+      v-else-if="!store.isLoaded && !loadErrorHiddenElsewhere"
+      class="text-text-muted text-sm"
+      data-test="portal-load-elsewhere"
     >
-      <p class="text-status-error text-sm font-semibold">
-        {{ store.error ?? 'Pengaturan belum dapat dimuat.' }}
-      </p>
-      <BaseButton variant="secondary" size="md" class="mt-3 min-h-11" @click="load">
-        Coba lagi
-      </BaseButton>
-    </div>
+      Pengaturan belum dapat dimuat. Lihat keterangan di bagian Identitas dan kontak portal.
+    </p>
 
     <template v-else>
       <div role="status" aria-live="polite">
@@ -106,7 +145,7 @@ function discard(): void {
         :part="part"
         :id-prefix="part === 'identity' ? 'identitas' : 'peta'"
         :busy="busy"
-        :server-error="serverError"
+        :server-error="visibleServerError"
         cancel-label="Batalkan perubahan"
         require-changes
         @submit="handleSubmit"

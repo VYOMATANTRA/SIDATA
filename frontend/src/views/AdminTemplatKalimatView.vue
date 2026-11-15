@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import BaseButton from '../components/common/BaseButton.vue';
+import AlertBanner from '../components/common/AlertBanner.vue';
 import BaseModal from '../components/common/BaseModal.vue';
 import ComparisonTemplateForm from '../components/templates/ComparisonTemplateForm.vue';
 import {
@@ -10,6 +11,7 @@ import {
   type ComparisonTemplate,
 } from '../stores/comparisonTemplates.store';
 import { describeBody } from '../utils/comparisonTemplateSegments';
+import type { FailureKind } from '../utils/userMessages';
 
 /**
  * Admin authoring of tier-1 comparison templates (SPEC §5, §8). Static header title and
@@ -30,6 +32,8 @@ const deleting = ref<ComparisonTemplate | null>(null);
 const deleteBusy = ref(false);
 const isDeleting = ref(false);
 const deleteError = ref('');
+/** Failure class of `deleteError`, for AlertBanner. */
+const deleteErrorKind = ref<FailureKind | null>(null);
 const statusMessage = ref('');
 const addButton = ref<InstanceType<typeof BaseButton> | null>(null);
 
@@ -162,6 +166,7 @@ function handleSaved(template: ComparisonTemplate): void {
 
 async function openDelete(template: ComparisonTemplate): Promise<void> {
   deleteError.value = '';
+  deleteErrorKind.value = null;
   deleting.value = template;
   deleteBusy.value = true;
   try {
@@ -183,6 +188,7 @@ function closeDelete(): void {
   if (deleteBusy.value) return;
   deleting.value = null;
   deleteError.value = '';
+  deleteErrorKind.value = null;
 }
 
 const deleteBlockedMessage = computed(() => {
@@ -197,6 +203,7 @@ async function confirmDelete(): Promise<void> {
   deleteBusy.value = true;
   isDeleting.value = true;
   deleteError.value = '';
+  deleteErrorKind.value = null;
   try {
     const outcome = await store.deleteTemplate(target);
     if (outcome.ok) {
@@ -207,6 +214,7 @@ async function confirmDelete(): Promise<void> {
       return;
     }
     deleteError.value = outcome.message;
+    deleteErrorKind.value = outcome.failure;
   } finally {
     deleteBusy.value = false;
     isDeleting.value = false;
@@ -233,23 +241,14 @@ function retry(): void {
 
     <p class="sr-only" role="status" aria-live="polite">{{ statusMessage }}</p>
 
-    <div
+    <AlertBanner
       v-if="store.error"
-      role="alert"
-      class="rounded-card border-status-error-border bg-status-error-surface border p-4"
+      :message="store.error"
+      :kind="store.errorKind ?? undefined"
+      :busy="store.isLoading"
       data-test="list-error"
-    >
-      <p class="text-status-error text-sm font-semibold">{{ store.error }}</p>
-      <BaseButton
-        variant="secondary"
-        size="md"
-        class="mt-3 min-h-11"
-        :disabled="store.isLoading"
-        @click="retry"
-      >
-        {{ store.isLoading ? 'Memuat ulang…' : 'Coba lagi' }}
-      </BaseButton>
-    </div>
+      @retry="retry"
+    />
 
     <p
       v-if="store.isLoading && !store.isLoaded"
@@ -381,7 +380,7 @@ function retry(): void {
           <button
             ref="keepEditingButton"
             type="button"
-            class="bg-brand-navy hover:bg-brand-navy/90 focus-visible:outline-focus-ring min-h-11 rounded-btn px-5 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+            class="bg-brand-navy hover:bg-brand-navy/90 focus-visible:outline-focus-ring rounded-btn min-h-11 px-5 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2"
             data-test="discard-keep"
             @click="keepEditing"
           >
@@ -418,14 +417,12 @@ function retry(): void {
           </p>
         </template>
 
-        <p
+        <AlertBanner
           v-if="deleteError"
-          role="alert"
-          class="rounded-btn border-status-error-border bg-status-error-surface text-status-error border px-3 py-2 text-sm"
+          :message="deleteError"
+          :kind="deleteErrorKind ?? undefined"
           data-test="delete-error"
-        >
-          {{ deleteError }}
-        </p>
+        />
 
         <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <BaseButton

@@ -30,6 +30,9 @@ interface Backend {
   patchPublic: () => Response;
   patchWeather: () => Response;
   patchRetention: () => Response;
+  /** Optional override of the GET answers; a pending promise holds a retry open. */
+  retentionGet?: () => Response | Promise<Response>;
+  weatherConfigGet?: () => Response | Promise<Response>;
 }
 
 let backend: Backend;
@@ -48,12 +51,15 @@ function installFetch(): void {
     }
     if (url === '/api/settings/weather-config') {
       if (method === 'PATCH') return backend.patchWeather();
+      if (backend.weatherConfigGet) return backend.weatherConfigGet();
       return backend.weatherConfigGetStatus === 200
         ? json({ settings: backend.weatherConfig })
         : json({ error: 'x' }, backend.weatherConfigGetStatus);
     }
     if (url === '/api/settings/audit-retention') {
-      return method === 'PATCH' ? backend.patchRetention() : json({ retention: backend.retention });
+      if (method === 'PATCH') return backend.patchRetention();
+      if (backend.retentionGet) return backend.retentionGet();
+      return json({ retention: backend.retention });
     }
     if (url === '/api/weather') {
       if (backend.weatherFails) return json({ error: 'x' }, 502);
@@ -211,6 +217,51 @@ describe('AdminKonfigurasiSistemView', () => {
     });
   });
 
+  describe('load failures', () => {
+    function failSettings(status: number): void {
+      const original = globalThis.fetch;
+      globalThis.fetch = vi.fn<typeof fetch>(async (input, init) => {
+        const url = String(input);
+        if (
+          (url === '/api/settings/public' || url === '/api/settings/audit-retention') &&
+          (init?.method ?? 'GET') === 'GET'
+        ) {
+          return json({ error: 'x' }, status);
+        }
+        return original(input, init);
+      }) as typeof fetch;
+    }
+
+    it('shows a forbidden load failure without a retry button', async () => {
+      failSettings(403);
+      const wrapper = await mountPage();
+
+      expect(q('#identitas [data-test="portal-load-error"]')).not.toBeNull();
+      expect(q('#identitas [data-test="alert-banner-retry"]')).toBeNull();
+      expect(q('#retensi-log [data-test="retention-load-error"]')).not.toBeNull();
+      expect(q('#retensi-log [data-test="alert-banner-retry"]')).toBeNull();
+      wrapper.unmount();
+    });
+
+    it('shows a retry for a server failure', async () => {
+      failSettings(500);
+      const wrapper = await mountPage();
+
+      expect(q('#identitas [data-test="alert-banner-retry"]')).not.toBeNull();
+      expect(q('#retensi-log [data-test="alert-banner-retry"]')).not.toBeNull();
+      wrapper.unmount();
+    });
+
+    it('leaves the session-ended notice to the layout: no banner in the sections', async () => {
+      failSettings(401);
+      const wrapper = await mountPage();
+
+      expect(q('[data-test="portal-load-error"]')).toBeNull();
+      expect(q('[data-test="retention-load-error"]')).toBeNull();
+      wrapper.unmount();
+    });
+  });
+
   describe('starting map view', () => {
     it('opens on the stored view and saves only the new view', async () => {
       const wrapper = await mountPage();
@@ -243,7 +294,10 @@ describe('AdminKonfigurasiSistemView', () => {
       const wrapper = await mountPage();
 
       expect(q('#identitas [data-test="portal-load-error"]')).not.toBeNull();
-      expect(q('#peta [data-test="portal-load-error"]')).not.toBeNull();
+      // The shared failure is explained once; the map section only points to it.
+      expect(q('#peta [data-test="portal-load-error"]')).toBeNull();
+      expect(q('#peta [data-test="portal-load-elsewhere"]')).not.toBeNull();
+      expect(document.querySelectorAll('[data-test="portal-load-error"]')).toHaveLength(1);
       expect(q('#identitas-appName')).toBeNull();
       wrapper.unmount();
     });
@@ -454,8 +508,128 @@ describe('AdminKonfigurasiSistemView', () => {
       expect(q('[data-test="retention-load-error"]')?.textContent).toContain(
         'Gagal memuat masa simpan log',
       );
-      expect(q('[data-test="retention-retry"]')).not.toBeNull();
+      expect(q('[data-test="alert-banner-retry"]')).not.toBeNull();
       expect(q('#retensi-info-hari')).toBeNull();
+      wrapper.unmount();
+    });
+  });
+
+  describe('failure banners: retry, validation and a session that ended', () => {
+    const RETRY = '[data-test="alert-banner-retry"]';
+
+    it('keeps the retention load banner mounted, with its retry busy, while the retry runs', async () => {
+      backend.retentionGet = () => json({ error: 'x' }, 500);
+      const wrapper = await mountPage();
+      expect(q('[data-test="retention-load-error"]')).not.toBeNull();
+
+      backend.retentionGet = () => new Promise<Response>(() => {});
+      await click(`[data-test="retention-load-error"] ${RETRY}`);
+
+      const banner = q('[data-test="retention-load-error"]');
+      expect(banner).not.toBeNull();
+      expect(banner!.textContent).not.toContain('Memuat masa simpan log');
+      expect(q<HTMLButtonElement>(`[data-test="retention-load-error"] ${RETRY}`)!.disabled).toBe(
+        true,
+      );
+      wrapper.unmount();
+    });
+
+    it('keeps the weather load banner mounted, with its retry busy, while the retry runs', async () => {
+      backend.weatherConfigGetStatus = 500;
+      const wrapper = await mountPage();
+      expect(q('[data-test="weather-config-error"]')).not.toBeNull();
+
+      backend.weatherConfigGet = () => new Promise<Response>(() => {});
+      await click(`[data-test="weather-config-error"] ${RETRY}`);
+
+      expect(q('[data-test="weather-config-error"]')).not.toBeNull();
+      expect(q<HTMLButtonElement>(`[data-test="weather-config-error"] ${RETRY}`)!.disabled).toBe(
+        true,
+      );
+      wrapper.unmount();
+    });
+
+    it('keeps the portal load banner mounted, with its retry busy, while the retry runs', async () => {
+      let fail = true;
+      const original = globalThis.fetch;
+      globalThis.fetch = vi.fn<typeof fetch>(async (input, init) => {
+        if (String(input) === '/api/settings/public' && (init?.method ?? 'GET') === 'GET') {
+          return fail ? json({ error: 'x' }, 500) : new Promise<Response>(() => {});
+        }
+        return original(input, init);
+      }) as typeof fetch;
+      const wrapper = await mountPage();
+      expect(q('[data-test="portal-load-error"]')).not.toBeNull();
+
+      fail = false;
+      await click(`[data-test="portal-load-error"] ${RETRY}`);
+
+      expect(q('[data-test="portal-load-error"]')).not.toBeNull();
+      expect(q<HTMLButtonElement>(`[data-test="portal-load-error"] ${RETRY}`)!.disabled).toBe(true);
+      expect(q('#identitas p')?.textContent ?? '').not.toContain('Memuat pengaturan');
+      wrapper.unmount();
+    });
+
+    it('announces the retention validation message politely', async () => {
+      const wrapper = await mountPage();
+
+      await click('#retensi-info-selamanya');
+      await type('#retensi-info-hari', '');
+
+      expect(q('[data-test="retention-validation"]')?.getAttribute('role')).toBe('status');
+      wrapper.unmount();
+    });
+
+    it('shows a retention save refusal from the save state, not the load state', async () => {
+      backend.retention = { info: 0, warning: 0, critical: 0 };
+      backend.patchRetention = () =>
+        json({ error: 'Retensi critical harus >= warning >= info.' }, 400);
+      const wrapper = await mountPage();
+
+      await click('#retensi-info-selamanya');
+      await type('#retensi-info-hari', '30');
+      await click('[data-test="retention-save"]');
+
+      expect(q('[data-test="retention-save-error"]')).not.toBeNull();
+      expect(q('[data-test="retention-load-error"]')).toBeNull();
+      wrapper.unmount();
+    });
+
+    // A 401 on a save marks the session ended, so the layout's global notice covers it and the
+    // section must not repeat the failure beside the form.
+    it('hides a retention save session failure: the session-ended notice covers it', async () => {
+      backend.patchRetention = () => json({ error: 'x' }, 401);
+      const wrapper = await mountPage();
+      await click('#retensi-info-selamanya');
+      await type('#retensi-info-hari', '30');
+      await click('[data-test="retention-save"]');
+
+      expect(q('[data-test="retention-save-error"]')).toBeNull();
+      wrapper.unmount();
+    });
+
+    it('hides a weather save session failure: the session-ended notice covers it', async () => {
+      backend.patchWeather = () => json({ error: 'x' }, 401);
+      const wrapper = await mountPage();
+      document.querySelectorAll<HTMLInputElement>('input[name="cuaca-penyegaran"]')[0]!.click();
+      await flushPromises();
+      q<HTMLFormElement>('#cuaca form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+      await flushPromises();
+
+      expect(q('[data-test="weather-save-error"]')).toBeNull();
+      wrapper.unmount();
+    });
+
+    it('hides a portal save session failure: the session-ended notice covers it', async () => {
+      backend.patchPublic = () => json({ error: 'x' }, 401);
+      const wrapper = await mountPage();
+      await type('#identitas-tagline', 'Tagline');
+      q<HTMLFormElement>('#identitas-tagline')!
+        .closest('form')!
+        .dispatchEvent(new Event('submit', { cancelable: true }));
+      await flushPromises();
+
+      expect(q('#identitas')!.textContent).not.toContain('Gagal menyimpan pengaturan portal.');
       wrapper.unmount();
     });
   });

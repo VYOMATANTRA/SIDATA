@@ -3,6 +3,7 @@ import { getActivePinia } from 'pinia';
 import { useAuthStore } from '../stores/auth';
 import { useSettingsStore } from '../stores/settings.store';
 import { ADMIN_NAV, isAdminNavGroup, type AdminNavRole } from '../config/adminNav';
+import { safeRedirect } from '../utils/safeRedirect';
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -11,6 +12,27 @@ declare module 'vue-router' {
     /** The public header overlays this route's hero: transparent at the top, navy once scrolled. */
     headerOverlay?: boolean;
   }
+}
+
+const AUTH_SCREEN_NAMES: ReadonlySet<unknown> = new Set([
+  'login',
+  'register',
+  'setup-password',
+  'auth-callback',
+]);
+
+/** True for the sign-in screens (and the Google callback), which never need a return address. */
+function isAuthScreen(name: unknown): boolean {
+  return AUTH_SCREEN_NAMES.has(name);
+}
+
+/**
+ * `{ redirect }` for a destination that `safeRedirect` accepts, otherwise no query at all, so an
+ * unsafe or auth-screen destination is dropped rather than carried into the login flow.
+ */
+function redirectQuery(destination: unknown): { redirect: string } | undefined {
+  const safe = safeRedirect(destination);
+  return safe ? { redirect: safe } : undefined;
 }
 
 export function metaForRoles(roles: AdminNavRole[]): {
@@ -346,7 +368,10 @@ router.beforeEach(async (to) => {
 
   if (to.name === 'setup-password') {
     if (!authStore.setupToken && !authStore.mustChangePassword) {
-      return { name: 'login', query: { reason: 'setup_required' } };
+      return {
+        name: 'login',
+        query: { reason: 'setup_required', ...redirectQuery(to.query.redirect) },
+      };
     }
   }
 
@@ -355,11 +380,12 @@ router.beforeEach(async (to) => {
   }
 
   if (authStore.mustChangePassword && to.name !== 'setup-password') {
-    return { name: 'setup-password' };
+    return { name: 'setup-password', query: redirectQuery(to.fullPath) };
   }
 
-  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    return { name: 'login' };
+  // Remember where the visitor was going so the login screen can send them back there.
+  if (to.meta.requiresAuth && !authStore.isAuthenticated && !isAuthScreen(to.name)) {
+    return { name: 'login', query: redirectQuery(to.fullPath) };
   }
 
   if (to.meta.requiresAdmin && !authStore.isAdmin) {
@@ -370,7 +396,11 @@ router.beforeEach(async (to) => {
     return { name: 'home' };
   }
 
-  if ((to.name === 'login' || to.name === 'register') && authStore.isAuthenticated) {
+  if (to.name === 'login' && authStore.isAuthenticated) {
+    return safeRedirect(to.query.redirect) ?? { name: 'home' };
+  }
+
+  if (to.name === 'register' && authStore.isAuthenticated) {
     return { name: 'home' };
   }
 });

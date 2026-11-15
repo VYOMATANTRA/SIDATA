@@ -53,6 +53,10 @@ const table: IndicatorTable = {
 };
 
 interface FetchOverrides {
+  /** Makes `GET /api/indicators?pageSize=200` answer with this HTTP status. */
+  indicatorsFailStatus?: number;
+  /** Makes `GET /api/indicator-tables?pageSize=200` answer with this HTTP status. */
+  tablesFailStatus?: number;
   /** Answers `PATCH /api/indicator-tables/tbl-1`; the default succeeds with the stored detail. */
   tablePatch?: (body: Record<string, unknown>) => Response;
   /** Answers `GET /api/comparison-templates`; defaults to empty templates array. */
@@ -167,6 +171,9 @@ function installFetchMock(overrides: FetchOverrides = {}) {
     }
 
     if (url === '/api/indicators?pageSize=200') {
+      if (overrides.indicatorsFailStatus) {
+        return json({ error: 'x' }, false, overrides.indicatorsFailStatus);
+      }
       return json({ indicators: [indicator], total: 1, page: 1, pageSize: 200 });
     }
 
@@ -190,6 +197,9 @@ function installFetchMock(overrides: FetchOverrides = {}) {
     }
 
     if (url === '/api/indicator-tables?pageSize=200') {
+      if (overrides.tablesFailStatus) {
+        return json({ error: 'x' }, false, overrides.tablesFailStatus);
+      }
       return json({ tables: [table], total: 1, page: 1, pageSize: 200 });
     }
 
@@ -775,6 +785,27 @@ describe('DataManagementView.vue', () => {
 
     expect(fetchSpy).toHaveBeenCalledWith({ force: true, forSelector: true });
 
+    wrapper.unmount();
+  });
+
+  it('keeps Coba lagi when one failing list is retryable, even if the other is forbidden', async () => {
+    installFetchMock({ indicatorsFailStatus: 403, tablesFailStatus: 500 });
+    const wrapper = mountView();
+    await flushPromises();
+
+    const banner = wrapper.find('[data-test="load-error"]');
+    expect(banner.exists()).toBe(true);
+    expect(banner.find('[data-test="alert-banner-retry"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('offers no retry when every failing list is forbidden', async () => {
+    installFetchMock({ indicatorsFailStatus: 403, tablesFailStatus: 403 });
+    const wrapper = mountView();
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="load-error"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="alert-banner-retry"]').exists()).toBe(false);
     wrapper.unmount();
   });
 

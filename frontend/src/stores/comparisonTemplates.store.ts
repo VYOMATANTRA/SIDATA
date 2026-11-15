@@ -1,7 +1,11 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { ApiError, apiRequestJson } from '../utils/apiClient';
-import { toUserMessage, USER_MESSAGES } from '../utils/userMessages';
+import {
+  toUserMessage,
+  USER_MESSAGES,
+  type FailureKind,
+} from '../utils/userMessages';
 import { uniqueSlug } from '../utils/comparisonTemplateSegments';
 
 /**
@@ -72,10 +76,11 @@ export type SaveOutcome =
   | { ok: false; kind: 'stale'; message: string }
   | { ok: false; kind: 'error'; message: string };
 
+/** `failure` is the failure class of `message`, for AlertBanner. */
 export type DeleteOutcome =
   | { ok: true }
-  | { ok: false; kind: 'in_use'; message: string }
-  | { ok: false; kind: 'error'; message: string };
+  | { ok: false; kind: 'in_use'; message: string; failure: FailureKind }
+  | { ok: false; kind: 'error'; message: string; failure: FailureKind };
 
 export const TEMPLATE_VALIDATION_FALLBACK =
   'Templat belum bisa disimpan. Periksa nama dan kalimatnya.';
@@ -86,6 +91,14 @@ export const TEMPLATE_VALIDATION_FALLBACK =
  * field-level errors fall back to template-specific guidance.
  */
 export function describeTemplateFailure(error: unknown, context: string, method?: string): string {
+  return mapTemplateFailure(error, context, method).message;
+}
+
+function mapTemplateFailure(
+  error: unknown,
+  context: string,
+  method?: string,
+): { message: string; kind: FailureKind } {
   const source =
     typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : {};
   const serverMsg =
@@ -114,11 +127,14 @@ export function describeTemplateFailure(error: unknown, context: string, method?
   const hasFieldErrors = userMsg.fieldErrors && Object.keys(userMsg.fieldErrors).length > 0;
   if (userMsg.kind === 'validation' && !hasFieldErrors) {
     if (userMsg.message.endsWith(USER_MESSAGES.validation)) {
-      return userMsg.message.replace(USER_MESSAGES.validation, TEMPLATE_VALIDATION_FALLBACK);
+      return {
+        message: userMsg.message.replace(USER_MESSAGES.validation, TEMPLATE_VALIDATION_FALLBACK),
+        kind: userMsg.kind,
+      };
     }
   }
 
-  return userMsg.message;
+  return { message: userMsg.message, kind: userMsg.kind };
 }
 
 export function inUseMessage(label: string, usageCount: number): string {
@@ -147,6 +163,11 @@ const MAX_STALE_FETCH_RETRIES = 2;
 export interface FetchTemplatesOptions {
   force?: boolean;
   forSelector?: boolean;
+  /**
+   * A background refresh made after a mutation already failed (409). Its own failure stays out of
+   * `error`/`errorKind`/`selectorError`, so the failure is not shown twice. The mutation reports it.
+   */
+  silent?: boolean;
 }
 
 export const useComparisonTemplatesStore = defineStore('comparisonTemplates', () => {
@@ -154,6 +175,8 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
   const isLoading = ref(false);
   const isLoaded = ref(false);
   const error = ref<string | null>(null);
+  /** Failure class of `error`, for AlertBanner; null while `error` is null. */
+  const errorKind = ref<FailureKind | null>(null);
   const selectorError = ref<string | null>(null);
 
   interface ActiveFetch {
@@ -191,7 +214,9 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
   ): Promise<boolean> {
     const force = typeof options === 'boolean' ? options : Boolean(options.force);
     const forSelector = typeof options === 'object' && Boolean(options.forSelector);
-    const forAdmin = !forSelector;
+    const silent = typeof options === 'object' && Boolean(options.silent);
+    // A silent refresh owns no banner at all: it neither clears nor sets error/selectorError.
+    const forAdmin = !forSelector && !silent;
 
     if (isLoaded.value && !force) return true;
 
@@ -206,6 +231,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
       }
       if (forAdmin) {
         error.value = null;
+        errorKind.value = null;
         activeFetch.forAdmin = true;
       }
       return activeFetch.promise;
@@ -216,6 +242,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
     }
     if (forAdmin) {
       error.value = null;
+      errorKind.value = null;
     }
 
     isLoading.value = true;
@@ -247,6 +274,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
           }
           if (request.forAdmin) {
             error.value = null;
+            errorKind.value = null;
           }
           return true;
         }
@@ -257,16 +285,19 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
         }
         if (request.forAdmin) {
           error.value = null;
+          errorKind.value = null;
         }
         return isLoaded.value;
       } catch (err) {
         // A failed refetch keeps the rows already on screen rather than blanking the list.
-        const failureMessage = describeTemplateFailure(err, 'memuat daftar templat kalimat', 'GET');
+        const failure = mapTemplateFailure(err, 'memuat daftar templat kalimat', 'GET');
+        const failureMessage = failure.message;
         if (request.forSelector) {
           selectorError.value = failureMessage;
         }
         if (request.forAdmin) {
           error.value = failureMessage;
+          errorKind.value = failure.kind;
         }
         return false;
       } finally {
@@ -339,7 +370,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
           err.code === 'SLUG_TAKEN' &&
           attempt < MAX_SLUG_RETRIES
         ) {
-          const fetched = await fetchTemplates(true);
+          const fetched = await fetchTemplates({ force: true, silent: true });
           if (!fetched) {
             return failureToOutcome(err, 'menyimpan templat kalimat');
           }
@@ -401,21 +432,19 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         // The count on screen may be stale; refresh it so the message and badge stay honest.
-        const fetched = await fetchTemplates(true);
+        const fetched = await fetchTemplates({ force: true, silent: true });
         const fresh = fetched ? templates.value.find((item) => item.id === template.id) : undefined;
         if (err.code === 'TEMPLATE_IN_USE' || (fresh?.usageCount ?? 0) > 0) {
           return {
             ok: false,
             kind: 'in_use',
             message: inUseMessage(template.label, fresh?.usageCount ?? template.usageCount),
+            failure: 'conflict',
           };
         }
       }
-      return {
-        ok: false,
-        kind: 'error',
-        message: describeTemplateFailure(err, 'menghapus templat kalimat'),
-      };
+      const failure = mapTemplateFailure(err, 'menghapus templat kalimat');
+      return { ok: false, kind: 'error', message: failure.message, failure: failure.kind };
     }
   }
 
@@ -441,6 +470,7 @@ export const useComparisonTemplatesStore = defineStore('comparisonTemplates', ()
     isLoading,
     isLoaded,
     error,
+    errorKind,
     selectorError,
     fetchTemplates,
     createTemplate,

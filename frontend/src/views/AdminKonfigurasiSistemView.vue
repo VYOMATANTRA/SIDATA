@@ -122,7 +122,11 @@ onBeforeUnmount(() => {
       title="Tampilan awal peta"
       description="Bagian peta yang pertama kali dilihat pengunjung."
     >
-      <PortalSettingsSection part="map" @dirty-change="dirty.map = $event" />
+      <PortalSettingsSection
+        part="map"
+        :show-load-error="false"
+        @dirty-change="dirty.map = $event"
+      />
     </ConfigSection>
 
     <ConfigSection

@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useAuditStore } from '../stores/audit.store';
 import { useAuthStore } from '../stores/auth';
-import { READ_USER_MESSAGES, USER_MESSAGES } from '../utils/userMessages';
+import { ApiError } from '../utils/apiClient';
+import { READ_USER_MESSAGES } from '../utils/userMessages';
 
 const AUDIT_LOG = {
   id: 'log-1',
@@ -288,7 +289,7 @@ describe('audit store', () => {
     expect(store.summary?.openCritical).toBe(0);
   });
 
-  it('acknowledgeLog throws on backend error and sets the error ref', async () => {
+  it('acknowledgeLog throws on backend error without touching the load error', async () => {
     mockFetchWith({
       acknowledge: () =>
         ({
@@ -302,8 +303,9 @@ describe('audit store', () => {
     store.logs = [{ ...AUDIT_LOG }];
 
     await expect(store.acknowledgeLog('log-1')).rejects.toMatchObject({ status: 409 });
-    expect(store.error).toBe(`Gagal meng-acknowledge audit log. ${USER_MESSAGES.conflict}`);
-    expect(store.error).not.toContain('sudah di-acknowledge');
+    // The view shows this failure in its own acknowledgeError; the list banner stays clear.
+    expect(store.error).toBeNull();
+    expect(store.errorKind).toBeNull();
     // Row left untouched on failure
     expect(store.logs[0]?.acknowledgedAt).toBeNull();
   });
@@ -318,7 +320,32 @@ describe('audit store', () => {
     await store.fetchLogs();
 
     expect(store.logs).toHaveLength(0);
-    expect(store.error).toBe(`Gagal memuat audit log. ${USER_MESSAGES.forbidden}`);
+    expect(store.error).toBe(`Gagal memuat audit log. ${READ_USER_MESSAGES.forbidden}`);
+    expect(store.errorKind).toBe('forbidden');
+  });
+
+  it('fetchLogs sets errorKind for network and 500 failures and resets it on success', async () => {
+    const store = useAuditStore();
+    mockFetchWith({
+      list: () => {
+        throw new TypeError('Failed to fetch');
+      },
+    });
+    await store.fetchLogs();
+    expect(store.errorKind).toBe('network');
+
+    mockFetchWith({
+      list: () => ({ ok: false, status: 500, json: async () => ({}) }) as Response,
+    });
+    await store.fetchLogs();
+    expect(store.errorKind).toBe('server');
+
+    mockFetchWith({
+      list: () => ({ ok: true, json: async () => ({ logs: [], total: 0 }) }) as Response,
+    });
+    await store.fetchLogs();
+    expect(store.error).toBeNull();
+    expect(store.errorKind).toBeNull();
   });
 
   it('discards a stale fetchLogs response that resolves after a newer one', async () => {
@@ -446,6 +473,136 @@ describe('audit store', () => {
 
     // Both failures surface independently instead of one overwriting the other.
     expect(store.error).toBe(`Gagal memuat audit log. ${READ_USER_MESSAGES.server}`);
-    expect(store.summaryError).toBe(`Gagal memuat ringkasan audit log. ${USER_MESSAGES.forbidden}`);
+    expect(store.summaryError).toBe(
+      `Gagal memuat ringkasan audit log. ${READ_USER_MESSAGES.forbidden}`,
+    );
+  });
+
+  describe('non-JSON error bodies and ended sessions', () => {
+    /** A proxy or gateway answers with an HTML page, so reading it as JSON throws. */
+    function htmlErrorResponse(status: number): Response {
+      return {
+        ok: false,
+        status,
+        json: async () => {
+          throw new SyntaxError('Unexpected token < in JSON at position 0');
+        },
+      } as unknown as Response;
+    }
+
+    it.each([
+      [502, 'server'],
+      [504, 'server'],
+      [413, 'payload_too_large'],
+      [429, 'rate_limited'],
+    ] as const)(
+      'fetchLogs keeps the %i status for a non-JSON body and classifies it as %s',
+      async (status, kind) => {
+        mockFetchWith({ list: () => htmlErrorResponse(status) });
+
+        const store = useAuditStore();
+        await store.fetchLogs();
+
+        expect(store.errorKind).toBe(kind);
+        expect(store.error).toMatch(/^Gagal memuat audit log\./);
+        expect(store.error).not.toMatch(/SyntaxError|Unexpected token/);
+      },
+    );
+
+    it('fetchLogs reports a non-JSON 500 as a server failure, not an unknown one', async () => {
+      mockFetchWith({ list: () => htmlErrorResponse(500) });
+
+      const store = useAuditStore();
+      await store.fetchLogs();
+
+      expect(store.errorKind).toBe('server');
+      expect(store.error).toBe(`Gagal memuat audit log. ${READ_USER_MESSAGES.server}`);
+    });
+
+    it('fetchSummary reports a non-JSON 504 as a server failure and sets summaryErrorKind', async () => {
+      mockFetchWith({ summary: () => htmlErrorResponse(504) });
+
+      const store = useAuditStore();
+      await store.fetchSummary();
+
+      expect(store.summaryErrorKind).toBe('server');
+      expect(store.summaryError).toBe(
+        `Gagal memuat ringkasan audit log. ${READ_USER_MESSAGES.server}`,
+      );
+      expect(store.summary).toBeNull();
+      expect(store.error).toBeNull();
+    });
+
+    it('fetchSummary clears summaryErrorKind on the next successful load', async () => {
+      mockFetchWith({ summary: () => htmlErrorResponse(502) });
+      const store = useAuditStore();
+      await store.fetchSummary();
+      expect(store.summaryErrorKind).toBe('server');
+
+      mockFetchWith({});
+      await store.fetchSummary();
+
+      expect(store.summaryError).toBeNull();
+      expect(store.summaryErrorKind).toBeNull();
+      expect(store.summary?.openCritical).toBe(1);
+    });
+
+    it('acknowledgeLog rejects with an ApiError carrying the status for a non-JSON 502', async () => {
+      mockFetchWith({ acknowledge: () => htmlErrorResponse(502) });
+
+      const store = useAuditStore();
+      store.logs = [{ ...AUDIT_LOG }];
+
+      const failure = await store.acknowledgeLog('log-1').catch((err: unknown) => err);
+      expect(failure).toBeInstanceOf(ApiError);
+      expect(failure).toMatchObject({ status: 502 });
+      expect(store.logs[0]?.acknowledgedAt).toBeNull();
+      expect(store.error).toBeNull();
+    });
+
+    it('fetchAdminActionCount swallows a non-JSON failure and keeps the last count', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockFetchWith({ list: () => htmlErrorResponse(502) });
+
+      const store = useAuditStore();
+      store.adminActionCount = 4;
+      await store.fetchAdminActionCount(24);
+
+      expect(store.adminActionCount).toBe(4);
+      consoleSpy.mockRestore();
+    });
+
+    it('a 401 with a dead refresh yields the session kind and ends the session', async () => {
+      const authStore = useAuthStore();
+      authStore.setAuth(
+        { id: 'admin-1', email: 'admin@example.com', role: 'admin' },
+        'expired-access-token',
+      );
+      globalThis.fetch = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input);
+        if (url.includes('csrf-token')) {
+          return { ok: true, json: async () => ({ csrfToken: 'mock-csrf' }) } as Response;
+        }
+        if (url === '/api/auth/refresh') {
+          return {
+            ok: false,
+            status: 401,
+            json: async () => ({ error: 'Token tidak valid' }),
+          } as Response;
+        }
+        return {
+          ok: false,
+          status: 401,
+          json: async () => ({ error: 'Token tidak valid' }),
+        } as Response;
+      });
+
+      const store = useAuditStore();
+      await store.fetchLogs();
+
+      expect(store.errorKind).toBe('session');
+      expect(store.error).toBe(`Gagal memuat audit log. ${READ_USER_MESSAGES.session}`);
+      expect(authStore.sessionEnded).toBe(true);
+    });
   });
 });

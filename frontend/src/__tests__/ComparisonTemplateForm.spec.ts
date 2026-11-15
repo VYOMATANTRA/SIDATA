@@ -855,20 +855,28 @@ describe('ComparisonTemplateForm', () => {
       });
       saveResponses.push(() => json({ templates: [freshTemplate] }));
 
-      // Confirm dialog when clicking reload latest on dirty form
-      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      // Reloading a dirty form asks in the page first; the draft is untouched until confirmed.
+      const windowConfirm = vi.spyOn(window, 'confirm');
 
       const reloadBtn = wrapper.find('[data-test="reload-latest"]');
       expect(reloadBtn.exists()).toBe(true);
       await reloadBtn.trigger('click');
       await flushPromises();
 
-      expect(confirmSpy).toHaveBeenCalled();
+      expect(wrapper.find('[data-test="reload-confirm"]').exists()).toBe(true);
+      expect(wrapper.find<HTMLInputElement>('#templat-nama').element.value).toBe(
+        'Perbandingan Diedit',
+      );
+
+      await wrapper.find('[data-test="reload-confirm-yes"]').trigger('click');
+      await flushPromises();
+
       // Draft has been swapped to the fresh template
       expect(wrapper.find<HTMLInputElement>('#templat-nama').element.value).toBe(
         'Perbandingan Baru dari Rekan',
       );
       expect(wrapper.find('[data-test="stale-banner"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="reload-confirm"]').exists()).toBe(false);
 
       // Next save now sends the fresh expectedUpdatedAt and succeeds
       saveResponses.push(() => json({ template: freshTemplate }));
@@ -881,7 +889,8 @@ describe('ComparisonTemplateForm', () => {
       });
       expect(wrapper.emitted('saved')).toHaveLength(1);
 
-      confirmSpy.mockRestore();
+      expect(windowConfirm).not.toHaveBeenCalled();
+      windowConfirm.mockRestore();
       wrapper.unmount();
     });
 
@@ -900,19 +909,17 @@ describe('ComparisonTemplateForm', () => {
       // Reloading from server fails with 500
       saveResponses.push(() => json({ error: 'Server failure' }, 500));
 
-      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
       await wrapper.find('[data-test="reload-latest"]').trigger('click');
       await flushPromises();
 
       // Should not ask user to discard draft when fetching the latest version failed
-      expect(confirmSpy).not.toHaveBeenCalled();
+      expect(wrapper.find('[data-test="reload-confirm"]').exists()).toBe(false);
       // Draft is preserved
       expect(wrapper.find<HTMLInputElement>('#templat-nama').element.value).toBe('Diedit Lokal');
       // Stale banner remains and error is shown
       expect(wrapper.find('[data-test="stale-banner"]').exists()).toBe(true);
       expect(wrapper.text()).toContain('Gagal memuat');
 
-      confirmSpy.mockRestore();
       wrapper.unmount();
     });
 
@@ -934,17 +941,19 @@ describe('ComparisonTemplateForm', () => {
       });
       saveResponses.push(() => json({ templates: [freshTemplate] }));
 
-      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
-
       await wrapper.find('[data-test="reload-latest"]').trigger('click');
       await flushPromises();
 
-      expect(confirmSpy).toHaveBeenCalled();
+      expect(wrapper.find('[data-test="reload-confirm"]').exists()).toBe(true);
+      await wrapper.find('[data-test="reload-confirm-no"]').trigger('click');
+      await flushPromises();
+
       // Draft still has local value and original baseUpdatedAt because user declined
+      expect(wrapper.find('[data-test="reload-confirm"]').exists()).toBe(false);
       expect(wrapper.find<HTMLInputElement>('#templat-nama').element.value).toBe('Diedit Lokal');
       expect(wrapper.find('[data-test="stale-banner"]').exists()).toBe(true);
+      expect(wrapper.text()).not.toContain('Versi Server');
 
-      confirmSpy.mockRestore();
       wrapper.unmount();
     });
   });

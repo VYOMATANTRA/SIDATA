@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import type { SpatialPointDTO, SpatialPointType, MapSummaryDTO, RtLeaderDTO } from '../types/maps';
 import { fetchSpatialPoints, fetchMapSummary } from '../services/maps.service';
-import { toUserMessage } from '../utils/userMessages';
+import { toUserMessage, type FailureKind } from '../utils/userMessages';
 
 export const useMapsStore = defineStore('maps', () => {
   const points = ref<SpatialPointDTO[]>([]);
@@ -11,6 +11,8 @@ export const useMapsStore = defineStore('maps', () => {
   const activeTypeFilter = ref<SpatialPointType | 'all'>('all');
   const isLoading = ref(false);
   const error = ref<string | null>(null);
+  /** Failure class of `error`, for AlertBanner; null while `error` is null. */
+  const errorKind = ref<FailureKind | null>(null);
   const summaryError = ref<string | null>(null);
   const isSummaryLoading = ref(false);
   let loadPointsRequest = 0;
@@ -58,6 +60,7 @@ export const useMapsStore = defineStore('maps', () => {
     const requestId = ++loadPointsRequest;
     isLoading.value = true;
     error.value = null;
+    errorKind.value = null;
     try {
       const fetched = await fetchSpatialPoints();
       if (requestId !== loadPointsRequest) return;
@@ -73,7 +76,9 @@ export const useMapsStore = defineStore('maps', () => {
       }
     } catch (err) {
       if (requestId !== loadPointsRequest) return;
-      error.value = toUserMessage(err, 'memuat titik peta', 'GET').message;
+      const mapped = toUserMessage(err, 'memuat titik peta', 'GET');
+      error.value = mapped.message;
+      errorKind.value = mapped.kind;
     } finally {
       if (requestId === loadPointsRequest) {
         isLoading.value = false;
@@ -117,6 +122,7 @@ export const useMapsStore = defineStore('maps', () => {
     activeTypeFilter,
     isLoading,
     error,
+    errorKind,
     summaryError,
     isSummaryLoading,
     filteredPoints,

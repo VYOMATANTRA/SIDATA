@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, watch } from 'vue';
+import AlertBanner from '../../common/AlertBanner.vue';
 import BaseButton from '../../common/BaseButton.vue';
 import FormErrorSummary from '../../common/FormErrorSummary.vue';
 import FormField from '../../common/FormField.vue';
@@ -26,6 +27,7 @@ import {
   type FigureKind,
   type PhotoFields,
 } from '../../../utils/ceritaFigureDraft';
+import type { FailureKind } from '../../../utils/userMessages';
 
 /**
  * Editor for the one figure a Cerita section may have: a single photo, a series of photos, or a
@@ -90,6 +92,8 @@ const reloadedSummary = ref<string | null>(null);
 const reloading = ref(false);
 const confirmingDelete = ref(false);
 const deleteError = ref('');
+/** Failure class of `deleteError`, for AlertBanner. */
+const deleteErrorKind = ref<FailureKind | null>(null);
 const statusMessage = ref('');
 const summaryHost = ref<HTMLElement | null>(null);
 const deleteKeepButton = ref<InstanceType<typeof BaseButton> | null>(null);
@@ -318,6 +322,7 @@ function revert(): void {
 
 function askDelete(): void {
   deleteError.value = '';
+  deleteErrorKind.value = null;
   confirmingDelete.value = true;
   void nextTick(() => {
     const element = deleteKeepButton.value?.$el as HTMLElement | undefined;
@@ -328,12 +333,14 @@ function askDelete(): void {
 function cancelDelete(): void {
   confirmingDelete.value = false;
   deleteError.value = '';
+  deleteErrorKind.value = null;
 }
 
 async function confirmDelete(): Promise<void> {
   if (busy.value) return;
   deleting.value = true;
   deleteError.value = '';
+  deleteErrorKind.value = null;
   const outcome = await store.removeFigure(props.sectionId);
   deleting.value = false;
   if (outcome.ok) {
@@ -355,6 +362,7 @@ async function confirmDelete(): Promise<void> {
     return;
   }
   deleteError.value = outcome.message;
+  deleteErrorKind.value = outcome.kind;
   stale.value = outcome.stale;
   if (outcome.stale) reloadedSummary.value = null;
 }
@@ -722,14 +730,12 @@ defineExpose({ isDirty: () => dirty.value });
         Gambar dan teks pengganti, keterangan, serta datanya dilepas dari bagian ini. Foto yang
         sudah diunggah tidak lagi dipakai dan akan dibersihkan otomatis.
       </p>
-      <p
+      <AlertBanner
         v-if="deleteError"
-        role="alert"
-        class="text-status-error text-sm font-medium"
+        :message="deleteError"
+        :kind="deleteErrorKind ?? undefined"
         data-test="figure-delete-error"
-      >
-        {{ deleteError }}
-      </p>
+      />
       <div class="flex flex-wrap gap-3">
         <BaseButton
           ref="deleteKeepButton"

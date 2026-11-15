@@ -147,6 +147,15 @@ describe('AdminCeritaView', () => {
       wrapper.unmount();
     });
 
+    it('shows a forbidden load failure without a retry button', async () => {
+      fake.failNext((r) => r.url === '/api/pages?include=sections', fake.json({ error: 'x' }, 403));
+      const wrapper = await mountView();
+
+      expect(wrapper.find('[data-test="load-error"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test="alert-banner-retry"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
     it('shows a retry for a failed load and loads once it works', async () => {
       fake.failNext(
         (r) => r.url === '/api/pages?include=sections',
@@ -159,7 +168,7 @@ describe('AdminCeritaView', () => {
       expect(error.text()).not.toMatch(RAW_TERMS);
       expect(error.text()).not.toContain('SQL');
 
-      await wrapper.find('[data-test="load-retry"]').trigger('click');
+      await wrapper.find('[data-test="alert-banner-retry"]').trigger('click');
       await flushPromises();
       expect(wrapper.find('[data-test="load-error"]').exists()).toBe(false);
       expect(pageTitles(wrapper)).toContain('Kependudukan');
@@ -1024,9 +1033,41 @@ describe('AdminCeritaView', () => {
       await wrapper.find('[data-test="action-reload"]').trigger('click');
       await flushPromises();
 
+      // The load-error banner already shows the failure, so the stale notice stays as it was
+      // and does not gain a second, repeated "could not reload" banner.
+      expect(wrapper.find('[data-test="load-error"]').exists()).toBe(true);
       expect(wrapper.find('[data-test="action-reload"]').exists()).toBe(true);
-      expect(wrapper.find('[data-test="action-error"]').text()).toContain(COULD_NOT_RELOAD);
+      expect(wrapper.find('[data-test="action-error"]').text()).not.toContain(COULD_NOT_RELOAD);
+      expect(wrapper.find('[data-test="status"]').text()).toContain(COULD_NOT_RELOAD);
       expect(wrapper.find('[data-test="status"]').text()).not.toContain('Data terbaru dimuat');
+      wrapper.unmount();
+    });
+  });
+
+  describe('a session that ended', () => {
+    it('hides the reload notice once the session has ended, and shows it before', async () => {
+      const wrapper = await mountView();
+      useCeritaAdminStore().reloadNeeded = true;
+      await flushPromises();
+      expect(wrapper.find('[data-test="reload-notice"]').exists()).toBe(true);
+
+      useAuthStore().markSessionEnded();
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="reload-notice"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('hides a session failure of a reorder once the layout notice covers it', async () => {
+      const wrapper = await mountView();
+      fake.failNext((r) => r.method === 'PUT', fake.json({ error: 'x' }, 401));
+      await click('Turun bab Jumlah Penduduk');
+      expect(wrapper.find('[data-test="action-error"]').exists()).toBe(true);
+
+      useAuthStore().markSessionEnded();
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="action-error"]').exists()).toBe(false);
       wrapper.unmount();
     });
   });

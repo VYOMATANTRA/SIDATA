@@ -253,6 +253,77 @@ describe('comparison templates store', () => {
     expect(store.templates.map((t) => t.id)).toEqual(['tpl-created']);
   });
 
+  describe('silent refresh after a failed mutation', () => {
+    it('a failed refresh after a 409 SLUG_TAKEN create leaves the list banner clear', async () => {
+      route({
+        'POST /api/comparison-templates': () =>
+          json({ error: 'Slug sudah dipakai', code: 'SLUG_TAKEN' }, 409),
+        'GET /api/comparison-templates': () => json({ error: 'sql boom' }, 500),
+      });
+      const store = useComparisonTemplatesStore();
+      store.templates = [makeTemplate()];
+
+      const outcome = await store.createTemplate(DRAFT);
+
+      expect(outcome).toMatchObject({ ok: false, kind: 'error' });
+      expect(store.error).toBeNull();
+      expect(store.errorKind).toBeNull();
+      expect(store.selectorError).toBeNull();
+      expect(store.templates).toHaveLength(1);
+    });
+
+    it('a failed refresh after a 409 delete keeps the in-use outcome and leaves the list banner clear', async () => {
+      route({
+        'DELETE /api/comparison-templates/tpl-1': () =>
+          json({ error: 'Template masih dipakai', code: 'TEMPLATE_IN_USE' }, 409),
+        'GET /api/comparison-templates': () => json({ error: 'sql boom' }, 500),
+      });
+      const store = useComparisonTemplatesStore();
+      store.templates = [makeTemplate({ usageCount: 2 })];
+
+      const outcome = await store.deleteTemplate(store.templates[0]!);
+
+      expect(outcome).toMatchObject({ ok: false, kind: 'in_use' });
+      expect(store.error).toBeNull();
+      expect(store.errorKind).toBeNull();
+      expect(store.selectorError).toBeNull();
+    });
+
+    it('a silent refresh that fails writes neither error nor errorKind and keeps the rows shown', async () => {
+      route({
+        'GET /api/comparison-templates': () => json({ error: 'sql boom' }, 500),
+      });
+      const store = useComparisonTemplatesStore();
+      store.templates = [makeTemplate()];
+
+      const ok = await store.fetchTemplates({ force: true, silent: true });
+
+      expect(ok).toBe(false);
+      expect(store.error).toBeNull();
+      expect(store.errorKind).toBeNull();
+      expect(store.selectorError).toBeNull();
+      expect(store.templates).toHaveLength(1);
+    });
+
+    it('a silent refresh that succeeds loads the rows and leaves an existing list error as it was', async () => {
+      route({
+        'GET /api/comparison-templates': () =>
+          json({ templates: [makeTemplate({ id: 'tpl-fresh' })] }),
+      });
+      const store = useComparisonTemplatesStore();
+      store.error = 'Gagal memuat daftar templat kalimat. Coba lagi.';
+      store.errorKind = 'server';
+
+      const ok = await store.fetchTemplates({ force: true, silent: true });
+
+      expect(ok).toBe(true);
+      expect(store.isLoaded).toBe(true);
+      expect(store.templates.map((t) => t.id)).toEqual(['tpl-fresh']);
+      expect(store.error).toBe('Gagal memuat daftar templat kalimat. Coba lagi.');
+      expect(store.errorKind).toBe('server');
+    });
+  });
+
   describe('delete', () => {
     it('explains an in-use template with the usage count and what to do first', async () => {
       route({

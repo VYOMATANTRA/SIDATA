@@ -175,8 +175,33 @@ describe('AdminTemplatKalimatView', () => {
     expect(alert.attributes('role')).toBe('alert');
     expect(alert.text()).toContain('Gagal memuat daftar templat kalimat.');
     expect(alert.text()).not.toMatch(/ER_ACCESS|500/);
+    expect(wrapper.find('[data-test="alert-banner-retry"]').exists()).toBe(true);
     wrapper.unmount();
   });
+
+  it.each([
+    [403, true, false, false],
+    [401, true, false, false],
+    [401, false, false, true],
+  ])(
+    'list load failure with status %i: banner %s, retry %s (session ended %s)',
+    async (status, banner, retry, ended) => {
+      globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL) => {
+        if (String(input) === '/api/auth/csrf-token') return json({ csrfToken: 'c' });
+        return json({ error: 'x' }, status);
+      }) as typeof fetch;
+
+      const wrapper = await mountView();
+      if (ended) {
+        useAuthStore().sessionEnded = true;
+        await flushPromises();
+      }
+
+      expect(wrapper.find('[data-test="list-error"]').exists()).toBe(banner);
+      expect(wrapper.find('[data-test="alert-banner-retry"]').exists()).toBe(retry);
+      wrapper.unmount();
+    },
+  );
 
   describe('delete', () => {
     it('confirms by naming the template, then deletes it', async () => {
@@ -279,7 +304,9 @@ describe('AdminTemplatKalimatView', () => {
   describe('editor dialog', () => {
     const q = <T extends HTMLElement>(sel: string) => document.body.querySelector<T>(sel);
     const press = (key: string) =>
-      document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
+      );
 
     async function openEditor() {
       const wrapper = await mountView();
@@ -341,7 +368,10 @@ describe('AdminTemplatKalimatView', () => {
 
       const dismissers: Array<() => void> = [
         () => press('Escape'),
-        () => (q('[data-test="discard-dialog"]')!.closest('[role="presentation"]') as HTMLElement).click(),
+        () =>
+          (
+            q('[data-test="discard-dialog"]')!.closest('[role="presentation"]') as HTMLElement
+          ).click(),
       ];
       for (const dismiss of dismissers) {
         press('Escape');

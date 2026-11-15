@@ -17,6 +17,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import BaseButton from '../components/common/BaseButton.vue';
+import AlertBanner from '../components/common/AlertBanner.vue';
 import BaseModal from '../components/common/BaseModal.vue';
 import CeritaDeleteDialog from '../components/admin/cerita/CeritaDeleteDialog.vue';
 import CeritaPageDetailsDialog from '../components/admin/cerita/CeritaPageDetailsDialog.vue';
@@ -27,7 +28,9 @@ import CeritaSectionEditor from '../components/admin/cerita/CeritaSectionEditor.
 import CeritaStructurePanel from '../components/admin/cerita/CeritaStructurePanel.vue';
 import { ceritaIds } from '../components/admin/cerita/ceritaDomIds';
 import { dependentsMessage } from '../utils/ceritaAdminMessages';
+import type { FailureKind } from '../utils/userMessages';
 import type { PageDetailsInput } from '../services/ceritaAdmin.service';
+import { useAuthStore } from '../stores/auth';
 import {
   useCeritaAdminStore,
   type AdminChapter,
@@ -36,6 +39,7 @@ import {
 } from '../stores/ceritaAdmin.store';
 
 const store = useCeritaAdminStore();
+const authStore = useAuthStore();
 
 type Direction = -1 | 1;
 
@@ -57,6 +61,8 @@ type DeleteTarget =
 
 const statusMessage = ref('');
 const actionError = ref('');
+/** Failure class of `actionError`, for AlertBanner. */
+const actionErrorKind = ref<FailureKind | null>(null);
 const actionStale = ref(false);
 const reloading = ref(false);
 const moving = ref(false);
@@ -64,6 +70,8 @@ const moving = ref(false);
 const nameTarget = ref<NameTarget | null>(null);
 const nameBusy = ref(false);
 const nameError = ref('');
+/** Failure class of `nameError`, for AlertBanner. */
+const nameErrorKind = ref<FailureKind | null>(null);
 const nameStale = ref(false);
 
 // Headline and byline of the chosen page. `token` follows the name dialog's rule: the first save
@@ -71,6 +79,8 @@ const nameStale = ref(false);
 const detailsTarget = ref<{ slug: string; token: string } | null>(null);
 const detailsBusy = ref(false);
 const detailsError = ref('');
+/** Failure class of `detailsError`, for AlertBanner. */
+const detailsErrorKind = ref<FailureKind | null>(null);
 const detailsStale = ref(false);
 const detailsPage = computed(() =>
   detailsTarget.value ? (store.findPage(detailsTarget.value.slug) ?? null) : null,
@@ -79,6 +89,8 @@ const detailsPage = computed(() =>
 const deleteTarget = ref<DeleteTarget | null>(null);
 const deleteBusy = ref(false);
 const deleteError = ref('');
+/** Failure class of `deleteError`, for AlertBanner. */
+const deleteErrorKind = ref<FailureKind | null>(null);
 const deleteBlocked = ref(false);
 const deleteStale = ref(false);
 
@@ -95,6 +107,8 @@ const structureBusy = computed(
   () => moving.value || nameBusy.value || deleteBusy.value || detailsBusy.value,
 );
 const showInitialLoading = computed(() => !store.hasLoaded && store.isLoading);
+/** Mirrors the load-error banner's `v-if` in the template. */
+const loadErrorShowing = computed(() => store.loadError !== null && !store.reloadNeeded);
 
 onMounted(() => {
   void store.load();
@@ -114,6 +128,7 @@ function focusId(id: string): void {
 
 function clearActionError(): void {
   actionError.value = '';
+  actionErrorKind.value = null;
   actionStale.value = false;
 }
 
@@ -125,8 +140,12 @@ async function reload(): Promise<void> {
   const loaded = await store.load();
   reloading.value = false;
   if (!loaded) {
-    // Nothing new was seen: leave the warning (and its reload button) up and say why.
-    actionError.value = COULD_NOT_RELOAD;
+    // Nothing new was seen: leave the warning (and its reload button) up and say why. When the
+    // load-error banner already shows the failure, a second banner would repeat it, so only announce.
+    if (!loadErrorShowing.value) {
+      actionError.value = COULD_NOT_RELOAD;
+      actionErrorKind.value = 'network';
+    }
     announce(COULD_NOT_RELOAD);
     return;
   }
@@ -273,6 +292,7 @@ async function submitName(title: string): Promise<void> {
     return;
   }
   nameError.value = outcome.message;
+  nameErrorKind.value = outcome.kind;
   nameStale.value = outcome.stale;
 }
 
@@ -306,6 +326,7 @@ async function submitDetails(details: PageDetailsInput): Promise<void> {
     return;
   }
   detailsError.value = outcome.message;
+  detailsErrorKind.value = outcome.kind;
   detailsStale.value = outcome.stale;
 }
 
@@ -313,6 +334,7 @@ async function reloadFromDetails(): Promise<void> {
   const loaded = await store.load();
   if (!loaded) {
     detailsError.value = COULD_NOT_RELOAD;
+    detailsErrorKind.value = null;
     return;
   }
   const target = detailsTarget.value;
@@ -327,6 +349,7 @@ async function reloadFromName(): Promise<void> {
   if (!loaded) {
     // The stale notice stays, the token is not advanced and the typed title is untouched.
     nameError.value = COULD_NOT_RELOAD;
+    nameErrorKind.value = null;
     return;
   }
   const target = nameTarget.value;
@@ -478,6 +501,7 @@ async function confirmDelete(): Promise<void> {
     return;
   }
   deleteError.value = outcome.message;
+  deleteErrorKind.value = outcome.kind;
   deleteBlocked.value = outcome.blocked;
   deleteStale.value = outcome.stale;
 }
@@ -486,6 +510,7 @@ async function reloadFromDelete(): Promise<void> {
   const loaded = await store.load();
   if (!loaded) {
     deleteError.value = COULD_NOT_RELOAD;
+    deleteErrorKind.value = null;
     return;
   }
   const target = deleteTarget.value;
@@ -547,6 +572,10 @@ const SECTION_HINT =
 
 const deleteShownBlocked = computed(() => deleteBlocked.value || deleteLocalBlock.value !== null);
 const deleteShownError = computed(() => deleteError.value || deleteLocalBlock.value?.message || '');
+// The local "still holds content" notice has no failure kind of its own; only a server refusal does.
+const deleteShownErrorKind = computed(() =>
+  deleteError.value ? (deleteErrorKind.value ?? undefined) : undefined,
+);
 const deleteHint = computed(() => {
   if (!deleteShownBlocked.value) return undefined;
   const target = deleteTarget.value;
@@ -590,6 +619,7 @@ async function runMove(action: () => Promise<WriteOutcome>, onDone: () => void):
   moving.value = false;
   if (!outcome.ok) {
     actionError.value = outcome.message;
+    actionErrorKind.value = outcome.kind;
     actionStale.value = outcome.stale;
     return;
   }
@@ -765,46 +795,36 @@ onUnmounted(() => {
 
     <p class="sr-only" role="status" aria-live="polite" data-test="status">{{ statusMessage }}</p>
 
-    <CeritaReloadNotice />
+    <CeritaReloadNotice v-if="!authStore.sessionEnded" />
 
-    <div
+    <AlertBanner
       v-if="store.loadError && !store.reloadNeeded"
-      role="alert"
-      class="rounded-card border-status-error-border bg-status-error-surface border p-4"
+      :message="store.loadError"
+      :kind="store.loadErrorKind ?? undefined"
+      :busy="store.isLoading"
       data-test="load-error"
-    >
-      <p class="text-status-error text-sm font-semibold">{{ store.loadError }}</p>
-      <BaseButton
-        variant="secondary"
-        size="md"
-        class="mt-3 min-h-11"
-        :disabled="store.isLoading"
-        data-test="load-retry"
-        @click="store.load()"
-      >
-        {{ store.isLoading ? 'Memuat ulang…' : 'Coba lagi' }}
-      </BaseButton>
-    </div>
+      @retry="store.load()"
+    />
 
-    <div
+    <AlertBanner
       v-if="actionError"
-      role="alert"
-      class="rounded-card border-status-error-border bg-status-error-surface space-y-3 border p-4"
+      :message="actionError"
+      :kind="actionErrorKind ?? undefined"
       data-test="action-error"
     >
-      <p class="text-status-error text-sm font-semibold">{{ actionError }}</p>
-      <BaseButton
-        v-if="actionStale"
-        variant="secondary"
-        size="md"
-        class="min-h-11"
-        :disabled="reloading"
-        data-test="action-reload"
-        @click="reload"
-      >
-        {{ reloading ? 'Memuat…' : 'Muat ulang' }}
-      </BaseButton>
-    </div>
+      <template v-if="actionStale" #action>
+        <BaseButton
+          variant="secondary"
+          size="md"
+          class="min-h-11"
+          :disabled="reloading"
+          data-test="action-reload"
+          @click="reload"
+        >
+          {{ reloading ? 'Memuat…' : 'Muat ulang' }}
+        </BaseButton>
+      </template>
+    </AlertBanner>
 
     <p v-if="showInitialLoading" class="text-text-muted text-sm" role="status" data-test="loading">
       Memuat halaman Cerita…
@@ -881,6 +901,7 @@ onUnmounted(() => {
       :hint="nameDialog.hint"
       :busy="nameBusy"
       :error="nameError"
+      :error-kind="nameErrorKind ?? undefined"
       :stale="nameStale"
       @submit="submitName"
       @close="closeName"
@@ -895,6 +916,7 @@ onUnmounted(() => {
       :byline-affiliation="detailsPage?.bylineAffiliation ?? null"
       :busy="detailsBusy"
       :error="detailsError"
+      :error-kind="detailsErrorKind ?? undefined"
       :stale="detailsStale"
       @submit="submitDetails"
       @close="closeDetails"
@@ -909,6 +931,7 @@ onUnmounted(() => {
       :confirm-label="deleteDialog.confirm"
       :busy="deleteBusy"
       :error="deleteShownError"
+      :error-kind="deleteShownErrorKind"
       :blocked="deleteShownBlocked"
       :stale="deleteStale"
       :hint="deleteHint"

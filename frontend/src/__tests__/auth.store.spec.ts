@@ -33,6 +33,38 @@ describe('auth store', () => {
     expect(store.isInitialized).toBe(true)
   })
 
+  it('sessionEnded starts false, is set by markSessionEnded and reset by setAuth', () => {
+    const store = useAuthStore()
+    expect(store.sessionEnded).toBe(false)
+    store.markSessionEnded()
+    expect(store.sessionEnded).toBe(true)
+    store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'access-token')
+    expect(store.sessionEnded).toBe(false)
+  })
+
+  it('a user-initiated logout never leaves the session notice on, even for a late 401', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        if (String(input).includes('csrf-token')) {
+          return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+        }
+        return { ok: true, status: 200, json: async () => ({}) } as Response
+      }),
+    )
+    const store = useAuthStore()
+    store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'access-token')
+    expect((await store.logout()).success).toBe(true)
+    expect(store.sessionEnded).toBe(false)
+
+    store.markSessionEnded()
+    expect(store.sessionEnded).toBe(false)
+
+    store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'again')
+    store.markSessionEnded()
+    expect(store.sessionEnded).toBe(true)
+  })
+
   it('initAuth sends credentials so the httpOnly refresh cookie is attached cross-origin', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
       const url = String(input)
@@ -477,6 +509,34 @@ describe('auth store', () => {
     expect(store.user).toEqual({ id: '', email: '', role: '' })
   })
 
+  it('a 200 refresh without accessToken is a denial: auth is cleared and the refresh latched', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      if (String(input).includes('csrf-token')) {
+        return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ user: { id: '1', email: 'user@example.com', role: 'user' } }),
+      } as Response
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const store = useAuthStore()
+    store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'access-token')
+
+    expect(await store.refreshSession()).toBe('denied')
+    expect(store.accessToken).toBeNull()
+    expect(store.user).toBeNull()
+    expect(store.isAuthenticated).toBe(false)
+    expect(store.refreshDenied).toBe(true)
+
+    // The latch stops a dead session from being retried on every navigation.
+    const callsAfterFirst = fetchMock.mock.calls.length
+    expect(await store.refreshSession()).toBe('denied')
+    expect(fetchMock.mock.calls.length).toBe(callsAfterFirst)
+  })
+
   describe('in-flight initAuth race condition & logout', () => {
     it('does not re-authenticate user if clearAuth occurs while initAuth is in-flight', async () => {
       let resolveRefresh: (res: Response) => void
@@ -599,6 +659,87 @@ describe('auth store', () => {
       expect(res.success).toBe(false)
       expect(res.error).toContain('Gagal keluar dari sesi')
       expect(store.isAuthenticated).toBe(true)
+    })
+
+    it('logout treats a 401 from the logout endpoint as an already-ended session and clears local state', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn<typeof fetch>().mockImplementation(async (input) => {
+          const url = String(input)
+          if (url.includes('csrf-token')) {
+            return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+          }
+          if (url.includes('/api/auth/logout')) {
+            return { ok: false, status: 401, json: async () => ({}) } as Response
+          }
+          return { ok: true, json: async () => ({}) } as Response
+        }),
+      )
+
+      const store = useAuthStore()
+      store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'valid-token')
+
+      const res = await store.logout()
+
+      expect(res.success).toBe(true)
+      expect(store.isAuthenticated).toBe(false)
+      expect(store.accessToken).toBeNull()
+      expect(store.refreshDenied).toBe(true)
+      // The user ended it (or the server already had), so no "session ended" notice is shown.
+      expect(store.sessionEnded).toBe(false)
+    })
+
+    it('a logout that lands during an in-flight refresh wins: the late token is discarded', async () => {
+      let releaseRefresh!: (res: Response) => void
+      const refreshResponse = new Promise<Response>((resolve) => {
+        releaseRefresh = resolve
+      })
+      let refreshRequests = 0
+      vi.stubGlobal(
+        'fetch',
+        vi.fn<typeof fetch>().mockImplementation(async (input) => {
+          const url = String(input)
+          if (url.includes('csrf-token')) {
+            return { ok: true, json: async () => ({ csrfToken: 'csrf' }) } as Response
+          }
+          if (url.includes('/api/auth/logout')) {
+            return { ok: true, json: async () => ({}) } as Response
+          }
+          if (url.includes('/api/auth/refresh')) {
+            refreshRequests++
+            return refreshResponse
+          }
+          throw new Error(`unexpected request to ${url}`)
+        }),
+      )
+
+      const store = useAuthStore()
+      store.setAuth({ id: '1', email: 'user@example.com', role: 'user' }, 'old-token')
+
+      // A 401 replay (or the router guard) is refreshing when the user signs out.
+      const refreshing = store.refreshSession()
+      await vi.waitFor(() => expect(refreshRequests).toBe(1))
+
+      const res = await store.logout()
+      expect(res.success).toBe(true)
+
+      // The refresh answers only now, with a perfectly valid token issued before the logout.
+      releaseRefresh({
+        ok: true,
+        json: async () => ({
+          accessToken: 'late-token',
+          user: { id: '1', email: 'user@example.com', role: 'user' },
+        }),
+      } as Response)
+
+      expect(await refreshing).toBe('transient')
+      expect(store.isAuthenticated).toBe(false)
+      expect(store.accessToken).toBeNull()
+      expect(store.user).toBeNull()
+      expect(store.sessionEnded).toBe(false)
+      // Logging out latched the refresh: a later attempt must not resurrect the session.
+      expect(await store.refreshSession()).toBe('denied')
+      expect(refreshRequests).toBe(1)
     })
   })
 

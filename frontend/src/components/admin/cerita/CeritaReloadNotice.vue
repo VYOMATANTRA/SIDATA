@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import AlertBanner from '../../common/AlertBanner.vue';
 import BaseButton from '../../common/BaseButton.vue';
 import { useCeritaAdminStore } from '../../../stores/ceritaAdmin.store';
 
@@ -20,26 +21,24 @@ async function reload(): Promise<void> {
 </script>
 
 <template>
-  <div
+  <AlertBanner
     v-if="store.reloadNeeded"
-    role="alert"
-    class="rounded-card border-status-warning-border bg-status-warning-surface space-y-3 border p-4"
+    tone="warning"
+    message="Perubahan Anda sudah tersimpan, tetapi daftar belum bisa dimuat ulang. Muat ulang agar tampilan sesuai sebelum mengubah yang lain."
     data-test="reload-notice"
   >
-    <p class="text-status-warning text-sm font-semibold">
-      Perubahan Anda sudah tersimpan, tetapi daftar belum bisa dimuat ulang. Muat ulang agar
-      tampilan sesuai sebelum mengubah yang lain.
-    </p>
-    <BaseButton
-      type="button"
-      variant="secondary"
-      size="md"
-      class="min-h-11"
-      :disabled="reloading"
-      data-test="reload-notice-button"
-      @click="reload"
-    >
-      {{ reloading ? 'Memuat…' : 'Muat ulang' }}
-    </BaseButton>
-  </div>
+    <template #action>
+      <BaseButton
+        type="button"
+        variant="secondary"
+        size="md"
+        class="min-h-11"
+        :disabled="reloading"
+        data-test="reload-notice-button"
+        @click="reload"
+      >
+        {{ reloading ? 'Memuat…' : 'Muat ulang' }}
+      </BaseButton>
+    </template>
+  </AlertBanner>
 </template>

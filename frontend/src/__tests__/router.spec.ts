@@ -506,3 +506,101 @@ describe('router scrollBehavior', () => {
     scrollToSpy.mockRestore();
   });
 });
+
+describe('router return address (?redirect=)', () => {
+  function freshAuth(): ReturnType<typeof useAuthStore> {
+    sessionStorage.clear();
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    return useAuthStore(pinia);
+  }
+
+  /** The silent refresh and the settings fetch both fail: the visitor is signed out. */
+  function stubSignedOutFetch() {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async () => {
+        return { ok: false, status: 401, json: async () => ({}) } as Response;
+      }),
+    );
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('sends a signed-out visitor to a protected route to login with the destination', async () => {
+    const authStore = freshAuth();
+    authStore.clearAuth();
+    stubSignedOutFetch();
+
+    await router.push('/users');
+
+    expect(router.currentRoute.value.name).toBe('login');
+    expect(router.currentRoute.value.query.redirect).toBe('/users');
+  });
+
+  it('keeps the query string of the protected destination', async () => {
+    const authStore = freshAuth();
+    authStore.clearAuth();
+    stubSignedOutFetch();
+
+    await router.push('/admin/cerita?tab=2#bagian');
+
+    expect(router.currentRoute.value.name).toBe('login');
+    expect(router.currentRoute.value.query.redirect).toBe('/admin/cerita?tab=2#bagian');
+  });
+
+  it('does not add a return address to the login screen itself', async () => {
+    const authStore = freshAuth();
+    authStore.clearAuth();
+    stubSignedOutFetch();
+
+    await router.push('/login');
+
+    expect(router.currentRoute.value.name).toBe('login');
+    expect(router.currentRoute.value.query.redirect).toBeUndefined();
+  });
+
+  it('sends a signed-in visitor on /login to the safe redirect', async () => {
+    const authStore = freshAuth();
+    authStore.setAuth({ id: '2', email: 'admin@example.com', role: 'admin' }, 'valid-token');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue({ ok: true, json: async () => ({}) } as Response),
+    );
+
+    await router.push({ path: '/login', query: { redirect: '/admin/cerita' } });
+
+    expect(router.currentRoute.value.path).toBe('/admin/cerita');
+  });
+
+  it.each(['//evil.com', 'https://evil.com', '/login?redirect=/admin', '/setup-password'])(
+    'ignores the unsafe redirect %j and sends a signed-in visitor home',
+    async (redirect) => {
+      const authStore = freshAuth();
+      authStore.setAuth({ id: '2', email: 'admin@example.com', role: 'admin' }, 'valid-token');
+      vi.stubGlobal(
+        'fetch',
+        vi.fn<typeof fetch>().mockResolvedValue({ ok: true, json: async () => ({}) } as Response),
+      );
+
+      await router.push({ path: '/login', query: { redirect } });
+
+      expect(router.currentRoute.value.name).toBe('home');
+    },
+  );
+
+  it('sends a signed-in visitor on /login without a redirect to home', async () => {
+    const authStore = freshAuth();
+    authStore.setAuth({ id: '2', email: 'admin@example.com', role: 'admin' }, 'valid-token');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue({ ok: true, json: async () => ({}) } as Response),
+    );
+
+    await router.push('/login');
+
+    expect(router.currentRoute.value.name).toBe('home');
+  });
+});

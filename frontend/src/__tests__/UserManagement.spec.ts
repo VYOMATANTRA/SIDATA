@@ -363,4 +363,195 @@ describe('UserManagement.vue — role, password, and deactivate/activate flows',
     expect(wrapper.text()).toContain('Aktifkan Pengguna?');
     expect(wrapper.text()).toContain(DEACTIVATED_USER.email);
   });
+
+  it('shows a role-change failure inline instead of a native alert, and clears it on the next attempt', async () => {
+    const alertSpy = vi.fn<(message?: string) => void>();
+    vi.stubGlobal('alert', alertSpy);
+    let fail = true;
+    installFetchMock({
+      onRequest: (url, init) => {
+        if (url === `/api/users/${PLAIN_USER.id}/role` && init?.method === 'PATCH') {
+          return fail
+            ? jsonResponse({ error: 'Gagal.' }, false, 500)
+            : jsonResponse({ user: { role: { id: 'role-admin', name: 'admin' } } });
+        }
+        return undefined;
+      },
+    });
+
+    const wrapper = await mountReadyUserManagement();
+    const plainRow = wrapper.findAll('tbody tr').find((r) => r.text().includes(PLAIN_USER.email));
+    await plainRow!
+      .findAll('button')
+      .find((b) => b.text() === 'Ubah Role')!
+      .trigger('click');
+    await wrapper.find('select').setValue('role-admin');
+    const save = () => wrapper.findAll('button').find((b) => b.text() === 'Simpan Perubahan')!;
+    await save().trigger('click');
+    await flushPromises();
+
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-test="user-action-error"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="user-action-error"]').attributes('role')).toBe('alert');
+
+    fail = false;
+    await save().trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[data-test="user-action-error"]').exists()).toBe(false);
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('UserManagement.vue — load error banner', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.restoreAllMocks();
+  });
+
+  it('offers retry for a server failure but not for a 403', async () => {
+    installFetchMock({
+      onRequest: (url) =>
+        url === '/api/users' ? jsonResponse({ error: 'x' }, false, 500) : undefined,
+    });
+    let wrapper = await mountReadyUserManagement();
+    expect(wrapper.find('[data-test="users-load-error"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="alert-banner-retry"]').exists()).toBe(true);
+
+    setActivePinia(createPinia());
+    installFetchMock({
+      onRequest: (url) =>
+        url === '/api/users' ? jsonResponse({ error: 'x' }, false, 403) : undefined,
+    });
+    wrapper = await mountReadyUserManagement();
+    expect(wrapper.find('[data-test="users-load-error"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="alert-banner-retry"]').exists()).toBe(false);
+  });
+});
+
+function requestCount(url: string): number {
+  return vi.mocked(globalThis.fetch).mock.calls.filter(([input]) => String(input) === url).length;
+}
+
+describe('UserManagement.vue — list, roles and dialog failures', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.restoreAllMocks();
+  });
+
+  it('retries both lists from the users banner', async () => {
+    let usersFail = true;
+    installFetchMock({
+      onRequest: (url) =>
+        url === '/api/users' && usersFail ? jsonResponse({ error: 'x' }, false, 500) : undefined,
+    });
+    const wrapper = await mountReadyUserManagement();
+    expect(wrapper.find('[data-test="users-load-error"]').exists()).toBe(true);
+    const rolesBefore = requestCount('/api/users/roles');
+    const usersBefore = requestCount('/api/users');
+
+    usersFail = false;
+    await wrapper
+      .find('[data-test="users-load-error"] [data-test="alert-banner-retry"]')
+      .trigger('click');
+    await flushPromises();
+
+    expect(requestCount('/api/users/roles')).toBe(rolesBefore + 1);
+    expect(requestCount('/api/users')).toBe(usersBefore + 1);
+    expect(wrapper.find('[data-test="users-load-error"]').exists()).toBe(false);
+  });
+
+  it('shows a roles failure in its own banner, with a retry that loads only the roles', async () => {
+    let rolesFail = true;
+    installFetchMock({
+      onRequest: (url) =>
+        url === '/api/users/roles' && rolesFail
+          ? jsonResponse({ error: 'x' }, false, 500)
+          : undefined,
+    });
+    const wrapper = await mountReadyUserManagement();
+    expect(wrapper.find('[data-test="users-load-error"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="roles-load-error"]').text()).toContain(
+      'Gagal memuat daftar role.',
+    );
+    const usersBefore = requestCount('/api/users');
+
+    rolesFail = false;
+    await wrapper
+      .find('[data-test="roles-load-error"] [data-test="alert-banner-retry"]')
+      .trigger('click');
+    await flushPromises();
+
+    expect(requestCount('/api/users')).toBe(usersBefore);
+    expect(wrapper.find('[data-test="roles-load-error"]').exists()).toBe(false);
+  });
+
+  it('shows the roles failure in the create dialog, not the users failure', async () => {
+    installFetchMock({
+      onRequest: (url) =>
+        url === '/api/users' || url === '/api/users/roles'
+          ? jsonResponse({ error: 'x' }, false, 500)
+          : undefined,
+    });
+    const wrapper = await mountReadyUserManagement();
+    const addButton = wrapper.findAll('button').find((b) => b.text().includes('Tambah Pengguna'));
+    await addButton!.trigger('click');
+
+    const dialog = wrapper.find('[role="dialog"]');
+    expect(dialog.find('[data-test="create-roles-error"]').text()).toContain(
+      'Gagal memuat daftar role.',
+    );
+    expect(dialog.text()).not.toContain('Gagal memuat daftar pengguna');
+  });
+
+  it('shows the roles failure in the role dialog', async () => {
+    installFetchMock({
+      onRequest: (url) =>
+        url === '/api/users/roles' ? jsonResponse({ error: 'x' }, false, 500) : undefined,
+    });
+    const wrapper = await mountReadyUserManagement();
+    const roleButton = wrapper
+      .findAll('tbody tr')
+      .find((r) => r.text().includes(PLAIN_USER.email))!
+      .findAll('button')
+      .find((b) => b.text() === 'Ubah Role');
+    await roleButton!.trigger('click');
+
+    const dialog = wrapper.find('[role="dialog"]');
+    expect(dialog.find('[data-test="role-roles-error"]').text()).toContain(
+      'Gagal memuat daftar role.',
+    );
+  });
+
+  it('clears the pending close timer when the create dialog is closed by hand, and on unmount', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      installFetchMock({
+        onRequest: (url, init) =>
+          url === '/api/users' && init?.method === 'POST'
+            ? jsonResponse({
+                message: 'Pengguna berhasil dibuat.',
+                user: { ...PLAIN_USER, id: 'u-new', email: 'baru@example.com' },
+              })
+            : undefined,
+      });
+      const wrapper = await mountReadyUserManagement();
+      const timersBefore = vi.getTimerCount();
+      const addButton = wrapper.findAll('button').find((b) => b.text().includes('Tambah Pengguna'));
+      await addButton!.trigger('click');
+      await wrapper.find('#create-user-email').setValue('baru@example.com');
+      await wrapper.find('form').trigger('submit.prevent');
+      await flushPromises();
+      expect(vi.getTimerCount()).toBe(timersBefore + 1);
+
+      const cancel = wrapper
+        .find('[role="dialog"]')
+        .findAll('button')
+        .find((b) => b.text() === 'Batal');
+      await cancel!.trigger('click');
+      expect(vi.getTimerCount()).toBe(timersBefore);
+      wrapper.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

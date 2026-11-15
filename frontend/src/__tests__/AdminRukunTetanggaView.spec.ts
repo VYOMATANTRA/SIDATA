@@ -491,4 +491,101 @@ describe('AdminRukunTetanggaView.vue', () => {
         .attributes('disabled'),
     ).toBeUndefined();
   });
+
+  describe('failure banners', () => {
+    const RETRY = 'button[data-test="alert-banner-retry"]';
+
+    function leadersFailure(status: number) {
+      return (url: string) =>
+        url.includes('/api/maps/rt-leaders?limit=100')
+          ? ({ ok: false, status, json: async () => ({ error: 'x' }) } as Response)
+          : undefined;
+    }
+
+    it('shows a forbidden load failure without a retry button', async () => {
+      setupFetchMock(leadersFailure(403));
+      const wrapper = mountView();
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="rt-load-error"]').exists()).toBe(true);
+      expect(wrapper.find(RETRY).exists()).toBe(false);
+    });
+
+    it('shows a retry for a server load failure', async () => {
+      setupFetchMock(leadersFailure(500));
+      const wrapper = mountView();
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="rt-load-error"]').text()).toContain(
+        'Gagal memuat daftar Ketua RT.',
+      );
+      expect(wrapper.find(RETRY).exists()).toBe(true);
+    });
+
+    it('keeps the load banner mounted, with its retry busy, while the retry runs', async () => {
+      let fail = true;
+      setupFetchMock((url) => {
+        if (!url.includes('/api/maps/rt-leaders?limit=100')) return undefined;
+        if (fail) return { ok: false, status: 500, json: async () => ({}) } as Response;
+        return new Promise<Response>(() => {}) as unknown as Response;
+      });
+      const wrapper = mountView();
+      await flushPromises();
+      expect(wrapper.find('[data-test="rt-load-error"]').exists()).toBe(true);
+
+      fail = false;
+      await wrapper.find(RETRY).trigger('click');
+      await flushPromises();
+
+      const banner = wrapper.find('[data-test="rt-load-error"]');
+      expect(banner.exists()).toBe(true);
+      expect((banner.find(RETRY).element as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('shows a session failure of the load in neutral wording', async () => {
+      setupFetchMock(leadersFailure(401));
+      const wrapper = mountView();
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="rt-load-error"]').text()).toContain('Sesi Anda berakhir.');
+      expect(wrapper.find(RETRY).exists()).toBe(false);
+    });
+
+    it('shows a forbidden save failure in the editor with no retry', async () => {
+      setupFetchMock((url, init) => {
+        if (url.includes('/api/maps/rt-leaders/1') && init?.method === 'PATCH') {
+          return { ok: false, status: 403, json: async () => ({ error: 'x' }) } as Response;
+        }
+      });
+      const wrapper = mountView();
+      await flushPromises();
+      await wrapper.find('[data-test="rt-edit-1"]').trigger('click');
+      await wrapper.find('input#rt-phone').setValue('0899999999');
+
+      await wrapper.find('form').trigger('submit');
+      await flushPromises();
+
+      const banner = wrapper.find('[data-test="rt-save-error"]');
+      expect(banner.text()).toContain('Gagal menyimpan data RT.');
+      expect(banner.find(RETRY).exists()).toBe(false);
+    });
+
+    it('shows a server failure of the CSV preview in the import banner', async () => {
+      setupFetchMock((url) =>
+        url.includes('/import/preview')
+          ? ({ ok: false, status: 500, json: async () => ({ error: 'x' }) } as Response)
+          : undefined,
+      );
+      const wrapper = mountView();
+      await flushPromises();
+      await wrapper.find<HTMLTextAreaElement>('textarea#rt-csv-text').setValue('rtNumber\n1');
+      const preview = wrapper.findAll('button').find((b) => b.text().includes('Periksa CSV'))!;
+      await preview.trigger('click');
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="rt-import-error"]').text()).toContain(
+        'Gagal memeriksa CSV.',
+      );
+    });
+  });
 });

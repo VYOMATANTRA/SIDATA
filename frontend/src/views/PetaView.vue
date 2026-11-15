@@ -387,7 +387,7 @@ onUnmounted(() => {
             :disabled="mapsStore.isSummaryLoading"
             @click="mapsStore.loadSummary()"
           >
-            Coba muat rincian lagi
+            Coba lagi
           </button>
         </div>
 

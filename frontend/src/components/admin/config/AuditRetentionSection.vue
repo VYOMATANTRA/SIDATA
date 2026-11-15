@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import BaseButton from '../../common/BaseButton.vue';
+import AlertBanner from '../../common/AlertBanner.vue';
+import { RETENTION_LOAD_FALLBACK_MESSAGE, withDraftKept } from '../../../utils/userMessages';
 import {
   MAX_RETENTION_DAYS,
   SEVERITY_LABELS,
@@ -48,8 +50,12 @@ const rows = reactive<Record<Key, Row>>({
 });
 
 const isLoaded = ref(false);
-/** True from the first paint until the first load has answered (no error flash before it). */
-const loadingInitial = ref(true);
+/**
+ * True once a load has failed and stays true through a retry, so the banner (and its focused
+ * "Coba lagi" button) is never unmounted while the retry runs. Before the first answer the
+ * "Memuat" line is shown instead, so no error flashes on first paint.
+ */
+const hasFailedLoad = ref(false);
 
 function syncFromStore(): void {
   for (const key of KEYS) {
@@ -84,11 +90,10 @@ const canSave = computed(
 );
 
 async function load(): Promise<void> {
-  loadingInitial.value = true;
   const ok = await store.fetchRetention();
   isLoaded.value = ok;
+  hasFailedLoad.value = !ok;
   if (ok) syncFromStore();
-  loadingInitial.value = false;
 }
 
 onMounted(load);
@@ -137,29 +142,18 @@ function durationLabel(key: Key): string {
       </li>
     </ul>
 
-    <p v-if="loadingInitial" class="text-text-muted text-sm" role="status">
+    <p v-if="!isLoaded && !hasFailedLoad" class="text-text-muted text-sm" role="status">
       Memuat masa simpan log…
     </p>
 
-    <div
+    <AlertBanner
       v-else-if="!isLoaded"
-      role="alert"
-      class="rounded-card border-status-error-border bg-status-error-surface border p-4"
+      :message="store.error ?? RETENTION_LOAD_FALLBACK_MESSAGE"
+      :kind="store.errorKind ?? undefined"
+      :busy="store.isLoading"
       data-test="retention-load-error"
-    >
-      <p class="text-status-error text-sm font-semibold">
-        {{ store.error ?? 'Masa simpan log belum dapat dimuat.' }}
-      </p>
-      <BaseButton
-        variant="secondary"
-        size="md"
-        class="mt-3 min-h-11"
-        data-test="retention-retry"
-        @click="load"
-      >
-        Coba lagi
-      </BaseButton>
-    </div>
+      @retry="load"
+    />
 
     <form v-else class="space-y-5" novalidate @submit.prevent="save">
       <fieldset
@@ -224,14 +218,12 @@ function durationLabel(key: Key): string {
         </div>
       </fieldset>
 
-      <p
+      <AlertBanner
         v-if="validationError"
-        role="alert"
-        class="rounded-card border-status-error-border bg-status-error-surface text-status-error border px-4 py-3 text-sm font-semibold"
+        :message="validationError"
+        live="polite"
         data-test="retention-validation"
-      >
-        {{ validationError }}
-      </p>
+      />
 
       <div role="status" aria-live="polite">
         <p
@@ -243,14 +235,12 @@ function durationLabel(key: Key): string {
         </p>
       </div>
 
-      <p
-        v-if="store.error"
-        role="alert"
-        class="rounded-card border-status-error-border bg-status-error-surface text-status-error border px-4 py-3 text-sm font-semibold"
+      <AlertBanner
+        v-if="store.saveError"
+        :message="withDraftKept(store.saveError, store.saveErrorKind)"
+        :kind="store.saveErrorKind ?? undefined"
         data-test="retention-save-error"
-      >
-        {{ store.error }} Isian Anda masih ada di formulir.
-      </p>
+      />
 
       <div class="border-border flex flex-wrap items-center justify-end gap-3 border-t pt-3">
         <BaseButton

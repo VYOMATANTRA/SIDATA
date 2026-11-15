@@ -15,6 +15,7 @@
  */
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
+import AlertBanner from '../components/common/AlertBanner.vue';
 import BaseButton from '../components/common/BaseButton.vue';
 import BaseModal from '../components/common/BaseModal.vue';
 import AdminPointList from '../components/admin/maps/AdminPointList.vue';
@@ -35,7 +36,7 @@ import {
   typeLabel,
 } from '../utils/adminMapPoints';
 import { INPUT_CLASSES } from '../utils/formStyles';
-import { classifyFailure, toUserMessage } from '../utils/userMessages';
+import { classifyFailure, toUserMessage, type FailureKind } from '../utils/userMessages';
 
 /** Below this width the list and the map take turns instead of sitting side by side. */
 const SPLIT_LAYOUT_QUERY = '(min-width: 1280px)';
@@ -114,6 +115,8 @@ const searchInput = ref<HTMLInputElement | null>(null);
 
 const statusMessage = ref('');
 const pageError = ref('');
+/** Failure class of `pageError`, for AlertBanner. */
+const pageErrorKind = ref<FailureKind | null>(null);
 
 function announce(message: string): void {
   // Clearing first makes an identical repeat message announce again.
@@ -242,6 +245,7 @@ async function handleSaved(point: SpatialPointDTO, created: boolean): Promise<vo
       : `Perubahan titik “${point.name}” disimpan.`,
   );
   pageError.value = '';
+  pageErrorKind.value = null;
   await refreshAll();
   selectPoint(point, true);
 }
@@ -269,16 +273,20 @@ async function handleReload(): Promise<void> {
 const deleting = ref<SpatialPointDTO | null>(null);
 const deleteBusy = ref(false);
 const deleteError = ref('');
+/** Failure class of `deleteError`, for AlertBanner. */
+const deleteErrorKind = ref<FailureKind | null>(null);
 
 function openDelete(point: SpatialPointDTO): void {
   deleting.value = point;
   deleteError.value = '';
+  deleteErrorKind.value = null;
 }
 
 function closeDelete(): void {
   if (deleteBusy.value) return;
   deleting.value = null;
   deleteError.value = '';
+  deleteErrorKind.value = null;
 }
 
 const deleteExplanation = computed(() => {
@@ -297,12 +305,14 @@ async function confirmDelete(): Promise<void> {
   if (!point || deleteBusy.value) return;
   deleteBusy.value = true;
   deleteError.value = '';
+  deleteErrorKind.value = null;
   try {
     await deletePoint(point.id, ownedRtNumber(point));
     deleteBusy.value = false;
     deleting.value = null;
     if (selectedId.value === point.id) selectedId.value = null;
     pageError.value = '';
+    pageErrorKind.value = null;
     announce(`Titik “${point.name}” dihapus.`);
     await refreshAll();
     await nextTick();
@@ -320,9 +330,12 @@ async function confirmDelete(): Promise<void> {
       // reload, and let the editor open Hapus again from the fresh data.
       deleting.value = null;
       pageError.value = `Titik “${point.name}” baru saja diubah oleh orang lain, jadi belum dihapus. Periksa titik itu lagi, lalu hapus bila masih perlu.`;
+      pageErrorKind.value = kind;
       await refreshAll();
     } else {
-      deleteError.value = toUserMessage(error, 'menghapus titik').message;
+      const mapped = toUserMessage(error, 'menghapus titik');
+      deleteError.value = mapped.message;
+      deleteErrorKind.value = mapped.kind;
     }
   }
 }
@@ -369,33 +382,22 @@ async function reloadAll(): Promise<void> {
         </BaseButton>
       </div>
 
-      <div
+      <AlertBanner
         v-if="mapsStore.error"
-        role="alert"
-        class="border-status-error-border bg-status-error-surface text-status-error flex flex-wrap items-center justify-between gap-3 rounded-card border px-4 py-3 text-sm"
+        :message="mapsStore.error"
+        :kind="mapsStore.errorKind ?? undefined"
+        :busy="mapsStore.isLoading"
         data-test="peta-load-error"
-      >
-        <p>{{ mapsStore.error }}</p>
-        <BaseButton
-          variant="secondary"
-          size="md"
-          class="min-h-11"
-          :disabled="mapsStore.isLoading"
-          data-test="peta-retry"
-          @click="reloadAll"
-        >
-          Coba lagi
-        </BaseButton>
-      </div>
+        @retry="reloadAll"
+      />
 
-      <div
+      <AlertBanner
         v-if="pageError"
-        role="alert"
-        class="border-status-warning-border bg-status-warning-surface text-status-warning rounded-card border px-4 py-3 text-sm"
+        :message="pageError"
+        :kind="pageErrorKind ?? undefined"
+        tone="warning"
         data-test="peta-page-error"
-      >
-        {{ pageError }}
-      </div>
+      />
 
       <p v-if="points.length > 0" class="text-brand-navy text-sm" data-test="peta-counts">
         {{ points.length }} titik: {{ counts.ketua_rt }} Ketua RT, {{ counts.bank_sampah }} Bank
@@ -701,14 +703,12 @@ async function reloadAll(): Promise<void> {
         </p>
         <p class="text-text-muted text-sm">{{ deleteExplanation }}</p>
 
-        <p
+        <AlertBanner
           v-if="deleteError"
-          role="alert"
-          class="rounded-btn border-status-error-border bg-status-error-surface text-status-error border px-3 py-2 text-sm"
+          :message="deleteError"
+          :kind="deleteErrorKind ?? undefined"
           data-test="delete-error"
-        >
-          {{ deleteError }}
-        </p>
+        />
 
         <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <BaseButton

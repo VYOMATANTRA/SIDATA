@@ -59,7 +59,7 @@ describe('auth.middleware verifyToken', () => {
 
     await verifyToken(req({ authorization: `Bearer ${badToken}` }), res, next);
 
-    assert.equal(res.status, 403);
+    assert.equal(res.status, 401);
     assert.deepEqual(res.body, { error: 'Token tidak valid atau sudah kedaluwarsa.' });
     assert.equal(spy.calls, 0);
   });
@@ -71,7 +71,7 @@ describe('auth.middleware verifyToken', () => {
 
     await verifyToken(req({ authorization: `Bearer ${expiredToken}` }), res, next);
 
-    assert.equal(res.status, 403);
+    assert.equal(res.status, 401);
     assert.deepEqual(res.body, { error: 'Token tidak valid atau sudah kedaluwarsa.' });
     assert.equal(spy.calls, 0);
   });
@@ -118,6 +118,29 @@ describe('auth.middleware verifyToken', () => {
       assert.equal(spy.calls, 0);
     } finally {
       prisma.user.findUnique = originalFindUnique;
+    }
+  });
+
+  it('answers 500, not 401, when the user lookup itself fails', async () => {
+    const originalFindUnique = prisma.user.findUnique;
+    prisma.user.findUnique = (async () => {
+      throw new Error('db down');
+    }) as unknown as typeof prisma.user.findUnique;
+    const originalError = console.error;
+    console.error = () => {};
+
+    try {
+      const res = fakeRes();
+      const { next, spy } = nextSpy();
+      const validToken = jwt.sign({ id: 'some-user-id' }, JWT_SECRET);
+
+      await verifyToken(req({ authorization: `Bearer ${validToken}` }), res, next);
+
+      assert.equal(res.status, 500);
+      assert.equal(spy.calls, 0);
+    } finally {
+      prisma.user.findUnique = originalFindUnique;
+      console.error = originalError;
     }
   });
 

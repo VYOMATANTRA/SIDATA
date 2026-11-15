@@ -36,6 +36,7 @@ function catalogBlock(overrides: Partial<ContentBlock> = {}): ContentBlock {
 let stored: ContentBlock;
 let putBodies: Array<Record<string, unknown>>;
 let putResponse: () => Response;
+let blocksGet: () => Response | Promise<Response>;
 
 function installFetch(): void {
   putBodies = [];
@@ -44,7 +45,7 @@ function installFetch(): void {
     const url = String(input);
     const method = (init?.method ?? 'GET').toUpperCase();
     if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-1' });
-    if (method === 'GET' && url === '/api/content-blocks') return json({ blocks: [stored] });
+    if (method === 'GET' && url === '/api/content-blocks') return blocksGet();
     if (method === 'PUT' && url === '/api/publikasi/catalog') {
       putBodies.push(JSON.parse(String(init?.body)));
       return putResponse();
@@ -65,7 +66,53 @@ async function mountView(): Promise<VueWrapper> {
 describe('AdminPublikasiView', () => {
   beforeEach(() => {
     stored = catalogBlock();
+    blocksGet = () => json({ blocks: [stored] });
     installFetch();
+  });
+
+  describe('when the catalog cannot be loaded', () => {
+    const RETRY = '[data-test="publikasi-unavailable"] [data-test="alert-banner-retry"]';
+
+    it('shows the failure with a retry for a server error and none for a forbidden one', async () => {
+      blocksGet = () => json({ error: 'x' }, 500);
+      const wrapper = await mountView();
+      expect(wrapper.find(RETRY).exists()).toBe(true);
+      wrapper.unmount();
+
+      blocksGet = () => json({ error: 'x' }, 403);
+      const forbidden = await mountView();
+      expect(forbidden.find('[data-test="publikasi-unavailable"]').exists()).toBe(true);
+      expect(forbidden.find(RETRY).exists()).toBe(false);
+      forbidden.unmount();
+    });
+
+    it('keeps the banner mounted, with its retry busy, while the retry runs', async () => {
+      blocksGet = () => json({ error: 'x' }, 500);
+      const wrapper = await mountView();
+
+      blocksGet = () => new Promise<Response>(() => {});
+      await wrapper.find(RETRY).trigger('click');
+      await flushPromises();
+
+      const banner = wrapper.find('[data-test="publikasi-unavailable"]');
+      expect(banner.exists()).toBe(true);
+      expect(banner.text()).not.toContain('Memuat katalog publikasi');
+      expect((wrapper.find(RETRY).element as HTMLButtonElement).disabled).toBe(true);
+      wrapper.unmount();
+    });
+
+    it('shows the form once a retry succeeds', async () => {
+      blocksGet = () => json({ error: 'x' }, 500);
+      const wrapper = await mountView();
+
+      blocksGet = () => json({ blocks: [stored] });
+      await wrapper.find(RETRY).trigger('click');
+      await flushPromises();
+
+      expect(wrapper.find('form').exists()).toBe(true);
+      expect(wrapper.find('[data-test="publikasi-unavailable"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
   });
 
   it('loads the stored catalog into the form', async () => {

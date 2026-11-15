@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue';
+import AlertBanner from '../components/common/AlertBanner.vue';
 import BaseButton from '../components/common/BaseButton.vue';
 import BaseModal from '../components/common/BaseModal.vue';
 import IndicatorCard, { type IndicatorCardModel } from '../components/data/IndicatorCard.vue';
@@ -27,7 +28,12 @@ import { useSettingsStore, type PublicSettings } from '../stores/settings.store'
 import { useAuthStore } from '../stores/auth';
 import { formatDecimalId } from '../utils/formatNumber';
 import { INPUT_CLASSES } from '../utils/formStyles';
-import { classifyFailure, toUserMessage } from '../utils/userMessages';
+import {
+  classifyFailure,
+  isRetryable,
+  toUserMessage,
+  type FailureKind,
+} from '../utils/userMessages';
 import {
   blockDisplayName,
   blockPlacement,
@@ -110,6 +116,8 @@ let settingsFocusBeforePrompt: HTMLElement | null = null;
 const isTableDetailLoading = ref(false);
 const saving = ref(false);
 const serverError = ref('');
+/** Failure class of `serverError`, for AlertBanner; null for local notices. */
+const serverErrorKind = ref<FailureKind | null>(null);
 const statusMessage = ref('');
 
 const isEditorOpen = computed(
@@ -131,6 +139,24 @@ const loadError = computed(() => {
   // The settings tab only links to the configuration page; it loads nothing of its own.
   if (activeTab.value === 'pengaturan') return null;
   return indicatorsStore.error || tablesStore.error;
+});
+
+/** Kinds of every failing store on the active tab. */
+const loadFailureKinds = computed<FailureKind[]>(() => {
+  if (activeTab.value === 'konten') {
+    return contentBlocksStore.error ? [contentBlocksStore.errorKind ?? 'unknown'] : [];
+  }
+  if (activeTab.value === 'pengaturan') return [];
+  const kinds: FailureKind[] = [];
+  if (indicatorsStore.error) kinds.push(indicatorsStore.errorKind ?? 'unknown');
+  if (tablesStore.error) kinds.push(tablesStore.errorKind ?? 'unknown');
+  return kinds;
+});
+
+// When two stores fail with different kinds, prefer a retryable one so "Coba lagi" stays available.
+const loadErrorKind = computed<FailureKind | undefined>(() => {
+  const kinds = loadFailureKinds.value;
+  return kinds.find((kind) => isRetryable(kind)) ?? kinds[0];
 });
 
 function compareCards(a: IndicatorCardModel, b: IndicatorCardModel): number {
@@ -287,8 +313,15 @@ function announce(message: string): void {
   statusMessage.value = message;
 }
 
-function errorMessage(error: unknown, action: string, method?: string): string {
-  return toUserMessage(error, action, method).message;
+/** Shows a local notice (no failure class) or a store message with its kind. */
+function setServerError(message: string, kind: FailureKind | null = null): void {
+  serverError.value = message;
+  serverErrorKind.value = message ? kind : null;
+}
+
+function setServerFailure(error: unknown, action: string, method?: string): void {
+  const failure = toUserMessage(error, action, method);
+  setServerError(failure.message, failure.kind);
 }
 
 async function loadAll(): Promise<void> {
@@ -306,7 +339,7 @@ onMounted(() => {
 });
 
 function openScalar(indicator: Indicator): void {
-  serverError.value = '';
+  setServerError('');
   activeTableId.value = null;
   activeTable.value = null;
   activeContentBlock.value = null;
@@ -326,7 +359,7 @@ function openScalar(indicator: Indicator): void {
  * nothing instead of dereferencing `undefined`.
  */
 function handleEdit(card: IndicatorCardModel): void {
-  serverError.value = '';
+  setServerError('');
   activeScalar.value = null;
   activeTableId.value = null;
   activeTable.value = null;
@@ -357,11 +390,15 @@ function handleEdit(card: IndicatorCardModel): void {
   if (card.type === 'pengaturan') {
     if (!authStore.isAdmin) return;
     if (settingsStore.error || !settingsStore.isLoaded) {
-      serverError.value = settingsStore.error
-        ? settingsStore.error
-        : settingsStore.isLoading
-          ? 'Pengaturan publik masih dimuat. Coba lagi sebentar lagi.'
-          : 'Pengaturan publik belum siap. Muat ulang halaman lalu coba lagi.';
+      if (settingsStore.error) {
+        setServerError(settingsStore.error, settingsStore.errorKind);
+      } else {
+        setServerError(
+          settingsStore.isLoading
+            ? 'Pengaturan publik masih dimuat. Coba lagi sebentar lagi.'
+            : 'Pengaturan publik belum siap. Muat ulang halaman lalu coba lagi.',
+        );
+      }
       return;
     }
     settingsFormDirty.value = false;
@@ -371,7 +408,7 @@ function handleEdit(card: IndicatorCardModel): void {
 }
 
 async function openTable(table: IndicatorTable): Promise<void> {
-  serverError.value = '';
+  setServerError('');
   activeScalar.value = null;
   activeTable.value = null;
   activeContentBlock.value = null;
@@ -381,7 +418,7 @@ async function openTable(table: IndicatorTable): Promise<void> {
   try {
     activeTable.value = await tablesStore.fetchTableDetail(table.id);
   } catch (error) {
-    serverError.value = errorMessage(error, 'memuat rincian tabel', 'GET');
+    setServerFailure(error, 'memuat rincian tabel', 'GET');
   } finally {
     isTableDetailLoading.value = false;
   }
@@ -398,7 +435,7 @@ function resetEditor(): void {
   isEditingSettings.value = false;
   settingsFormDirty.value = false;
   isTableDetailLoading.value = false;
-  serverError.value = '';
+  setServerError('');
   templatesStore.clearSelectorError();
 }
 
@@ -407,7 +444,7 @@ async function handleContentBlockSubmit(payload: BlockSavePayload): Promise<void
   if (!target) return;
 
   saving.value = true;
-  serverError.value = '';
+  setServerError('');
   try {
     const updated = await contentBlocksStore.updateBlock(target.slug, {
       ...payload,
@@ -418,7 +455,7 @@ async function handleContentBlockSubmit(payload: BlockSavePayload): Promise<void
     announce(`Perubahan blok konten “${blockDisplayName(updated)}” disimpan.`);
   } catch (error) {
     // The dialog stays open with every field as typed; nothing is cleared on a failed save.
-    serverError.value = errorMessage(error, 'menyimpan perubahan blok konten');
+    setServerFailure(error, 'menyimpan perubahan blok konten');
     if (classifyFailure(error).kind === 'stale') {
       contentBlockStale.value = true;
       // Refresh the list behind the dialog; the open draft is untouched until the editor asks.
@@ -440,7 +477,7 @@ async function handleContentBlockReload(): Promise<void> {
     announce('Blok konten ini tidak ditemukan lagi. Daftar sudah dimuat ulang.');
     return;
   }
-  serverError.value = '';
+  setServerError('');
   contentBlockStale.value = false;
   activeContentBlock.value = fresh;
   announce('Versi terbaru blok konten dimuat.');
@@ -484,13 +521,13 @@ function handleModalClose(): void {
 
 async function handleSettingsSubmit(patch: Partial<PublicSettings>): Promise<void> {
   saving.value = true;
-  serverError.value = '';
+  setServerError('');
   try {
     await settingsStore.updatePublicSettings(patch);
     resetEditor();
     announce('Pengaturan publik portal berhasil disimpan.');
   } catch (error) {
-    serverError.value = errorMessage(error, 'menyimpan pengaturan publik');
+    setServerFailure(error, 'menyimpan pengaturan publik');
   } finally {
     saving.value = false;
   }
@@ -501,13 +538,13 @@ async function handleScalarSubmit(patch: IndicatorPatch): Promise<void> {
   if (!target) return;
 
   saving.value = true;
-  serverError.value = '';
+  setServerError('');
   try {
     await indicatorsStore.updateIndicator(target.id, patch);
     resetEditor();
     announce(`Perubahan indikator “${target.label}” disimpan.`);
   } catch (error) {
-    serverError.value = errorMessage(error, 'menyimpan perubahan indikator');
+    setServerFailure(error, 'menyimpan perubahan indikator');
   } finally {
     saving.value = false;
   }
@@ -518,7 +555,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
   if (!target) return;
 
   saving.value = true;
-  serverError.value = '';
+  setServerError('');
   try {
     // One atomic PATCH: the header and every changed row commit together or not at all, so
     // there is no partial write to reconcile here.
@@ -529,7 +566,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
     // Deliberately no refetch. Replacing `activeTable` would hand the form a new `table` prop,
     // and its watcher resets every draft — the failed row and the rows that were never sent.
     // The request wrote nothing, so the drafts are still exactly what the editor typed.
-    serverError.value = errorMessage(error, 'menyimpan perubahan tabel');
+    setServerFailure(error, 'menyimpan perubahan tabel');
   } finally {
     saving.value = false;
   }
@@ -562,33 +599,35 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
       </button>
     </div>
 
-    <div
+    <AlertBanner
       v-if="loadError"
-      role="alert"
-      class="rounded-card mt-6 border border-rose-300 bg-rose-50 px-4 py-3"
-    >
-      <p class="text-sm font-medium text-rose-900">{{ loadError }}</p>
-      <BaseButton variant="secondary" size="sm" class="mt-3" @click="loadAll">
-        Coba muat ulang
-      </BaseButton>
-    </div>
+      :message="loadError"
+      :kind="loadErrorKind"
+      :busy="isLoading"
+      class="mt-6"
+      data-test="load-error"
+      @retry="loadAll"
+    />
 
-    <p
+    <AlertBanner
       v-if="serverError && !isEditorOpen && serverError !== loadError"
-      role="alert"
-      class="rounded-card mt-4 border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+      :message="serverError"
+      :kind="serverErrorKind ?? undefined"
+      tone="warning"
+      class="mt-4"
       data-test="page-message"
-    >
-      {{ serverError }}
-    </p>
+    />
 
-    <p
+    <!-- A notice, not a blocking failure: the page list still works without the hierarchy. -->
+    <AlertBanner
       v-if="pagesStore.hierarchyError"
-      class="rounded-card mt-4 border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900"
-    >
-      Struktur halaman tidak dapat dimuat, jadi asal halaman tiap data tidak ditampilkan. Daftar
-      data tetap dapat diedit.
-    </p>
+      tone="warning"
+      live="polite"
+      class="mt-4"
+      message="Struktur halaman tidak dapat dimuat, jadi asal halaman tiap data tidak ditampilkan. Daftar data tetap dapat diedit."
+      :kind="pagesStore.hierarchyErrorKind ?? undefined"
+      data-test="hierarchy-error"
+    />
 
     <div
       v-for="tab in availableTabs"
@@ -801,9 +840,11 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
         @dirty-change="settingsFormDirty = $event"
       />
 
-      <p v-else-if="serverError" role="alert" class="text-sm text-rose-700">
-        {{ serverError }}
-      </p>
+      <AlertBanner
+        v-else-if="serverError"
+        :message="serverError"
+        :kind="serverErrorKind ?? undefined"
+      />
 
       <div
         v-if="isEditingSettings && settingsDiscardPromptOpen"

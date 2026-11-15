@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import PublikasiCatalogForm from '../components/admin/publikasi/PublikasiCatalogForm.vue';
 import type { ContentBlock } from '../stores/contentBlocks.store';
@@ -65,6 +66,7 @@ async function submit(wrapper: VueWrapper) {
 
 describe('PublikasiCatalogForm uploads', () => {
   beforeEach(() => {
+    setActivePinia(createPinia());
     mocks.uploadMedia.mockReset();
     mocks.render.mockReset();
     URL.createObjectURL = vi.fn<(obj: Blob | MediaSource) => string>(() => 'blob:cover');

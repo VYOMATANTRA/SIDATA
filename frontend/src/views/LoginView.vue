@@ -6,12 +6,30 @@ import TurnstileWidget from '../components/auth/TurnstileWidget.vue'
 import OtpVerificationModal from '../components/auth/OtpVerificationModal.vue'
 import { getCsrfToken } from '../utils/csrf'
 import { useAuthStore } from '../stores/auth'
+import { safeRedirect } from '../utils/safeRedirect'
+import { loginReasonMessage } from '../utils/userMessages'
 import bgImage from '../assets/img/background_laman_depan_kelurahan.webp'
 import logoBalikpapan from '../assets/img/logo_balikpapan.webp'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+
+// The page the user was on when they were sent here, if it is safe. Validated once and reused for
+// the post-login destination, the setup-password hop and the Google sign-in button.
+const redirectTarget = computed(() => safeRedirect(route.query.redirect))
+
+// Where to go after sign-in: the page the user was on when the session ended, if it is safe.
+function postLoginDestination(): string {
+  return redirectTarget.value ?? '/'
+}
+
+// The first-login password screen keeps the same return address until the password is set.
+function setupPasswordLocation() {
+  return redirectTarget.value
+    ? { name: 'setup-password', query: { redirect: redirectTarget.value } }
+    : { name: 'setup-password' }
+}
 
 const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
 
@@ -67,16 +85,13 @@ function resetTurnstile() {
 }
 
 onMounted(() => {
-  if (route.query.reason === 'setup_required') {
-    errorMessage.value =
-      'Sesi penyiapan kata sandi tidak ditemukan atau telah kedaluwarsa. Silakan masuk kembali untuk melanjutkan.'
+  const reasonMessage = loginReasonMessage(route.query.reason)
+  if (reasonMessage) {
+    errorMessage.value = reasonMessage
     return
   }
-  if (route.query.error === 'oauth_failed' || route.query.reason) {
-    const reason = route.query.reason ? String(route.query.reason) : ''
-    errorMessage.value = reason
-      ? `Gagal masuk dengan Google (${reason}). Silakan coba lagi.`
-      : 'Gagal masuk dengan Google. Silakan coba lagi.'
+  if (route.query.error === 'oauth_failed') {
+    errorMessage.value = 'Gagal masuk dengan Google. Silakan coba lagi.'
   }
 })
 
@@ -124,7 +139,7 @@ async function handleLogin() {
       authStore.setSetupAuth(data.setupToken)
       successMessage.value = 'Login berhasil! Silakan atur kata sandi baru Anda...'
       setTimeout(() => {
-        router.push('/setup-password')
+        router.push(setupPasswordLocation())
       }, 600)
       return
     }
@@ -148,7 +163,7 @@ async function handleLogin() {
 
     successMessage.value = 'Login berhasil! Mengalihkan ke aplikasi...'
     setTimeout(() => {
-      router.push('/')
+      router.push(postLoginDestination())
     }, 800)
   } catch {
     errorMessage.value = 'Terjadi kesalahan jaringan. Silakan coba lagi.'
@@ -168,7 +183,7 @@ function onOtpVerified(data?: unknown) {
   }
   successMessage.value = 'Email terverifikasi & login berhasil! Mengalihkan...'
   setTimeout(() => {
-    router.push('/')
+    router.push(postLoginDestination())
   }, 800)
 }
 </script>
@@ -281,7 +296,7 @@ function onOtpVerified(data?: unknown) {
 
       <!-- Google OAuth Button -->
       <div class="mb-6 max-w-[598px] mx-auto">
-        <GoogleLoginButton />
+        <GoogleLoginButton :redirect="redirectTarget" />
       </div>
 
       <div class="mt-8 text-center text-sm text-slate-600 font-medium">
