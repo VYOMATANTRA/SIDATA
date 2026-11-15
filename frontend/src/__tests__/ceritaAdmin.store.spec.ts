@@ -123,6 +123,26 @@ describe('ceritaAdmin store', () => {
     expect(fake.writes()).toHaveLength(before);
   });
 
+  it('places a dragged page at its drop index and saves the whole order in one reorder request', async () => {
+    fake.addPage('Kesehatan', []);
+    await store.load();
+    const outcome = await store.placePage('kependudukan', 2);
+
+    expect(outcome.ok).toBe(true);
+    expect(fake.lastWrite()).toMatchObject({ method: 'PUT', url: '/api/pages/reorder' });
+    expect(store.tree.map((p) => p.title)).toEqual(['Pendidikan', 'Kesehatan', 'Kependudukan']);
+  });
+
+  it('does nothing and sends nothing when the page would stay where it is', async () => {
+    await store.load();
+    const before = fake.writes().length;
+
+    const outcome = await store.placePage('pendidikan', 1);
+
+    expect(outcome.ok).toBe(true);
+    expect(fake.writes()).toHaveLength(before);
+  });
+
   it('blocks deleting a section that holds a paragraph with the dependency sentence', async () => {
     const section = store.tree[0]!.chapters[0]!.sections[0]!;
     fake.addParagraph(section.id, 'Pembuka', 'Isi paragraf.');

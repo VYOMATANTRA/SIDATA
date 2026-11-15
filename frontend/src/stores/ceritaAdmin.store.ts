@@ -12,7 +12,7 @@ import {
 } from './pages.store';
 import { ceritaFailure, type FailureOptions } from '../utils/ceritaAdminMessages';
 import type { FailureKind } from '../utils/userMessages';
-import { swapReorderItems } from '../utils/ceritaOrder';
+import { moveReorderItems, swapReorderItems } from '../utils/ceritaOrder';
 
 /**
  * State and writes behind `/admin/cerita` (SPEC §3, §8).
@@ -358,6 +358,18 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     });
   }
 
+  /** Drag and drop: puts one page at `toIndex` (0-based) of the full order. Same save as `movePage`. */
+  async function placePage(slug: string, toIndex: number): Promise<WriteOutcome> {
+    const page = findPage(slug);
+    if (!page) return missing('mengurutkan halaman');
+    const items = moveReorderItems(tree.value, page.id, toIndex);
+    if (!items) return { ok: true, value: undefined };
+    return run('mengurutkan halaman', 'tree', async () => {
+      await api.reorderPages(items);
+      return undefined;
+    });
+  }
+
   async function addChapter(
     pageSlug: string,
     title: string,
@@ -601,6 +613,7 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     updatePageDetails,
     removePage,
     movePage,
+    placePage,
     addChapter,
     renameChapter,
     removeChapter,
