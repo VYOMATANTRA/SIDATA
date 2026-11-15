@@ -843,10 +843,18 @@ rujukan) with Naik / Turun / Hapus (never drag-only) and Tambah publikasi.
 hierarchy and what a section holds, on the authoring APIs of §2, §3 and §7. The screen has two views.
 The default is the **Cerita list**: one white card per page showing its title, Penulis, Tanggal
 Dibuat and Terakhir Diedit, with Edit and Hapus; a search box filters the cards by title, and
-"Tambah Cerita" adds a page and opens it. **Urutkan Cerita** shows Naik / Turun on each card (buttons
-only, never drag). **Pilih Cerita** adds a checkbox per card and "Hapus terpilih (n)", which deletes
-the selected pages one at a time and reports each page as deleted or refused; a page that still holds
-paragraphs, a figure, indicators or tables is refused and stays selected. **Edit** opens the page's
+"Tambah Cerita" (icon and label on one row) adds a page and opens it. Every card has a checkbox, always
+visible; a checked card gets a tinted fill and a stronger border as well as the checked box. The toolbar
+has one select-all button with three states, all acting on the cards the search currently shows: none
+checked reads "Pilih semua" (empty box); some checked reads "Pilih semua" with a dash, `aria-checked="mixed"`;
+all checked reads "Batal pilih semua" (checked box). Once at least one card is checked, the count
+("N dipilih") and "Hapus semua" appear; "Hapus semua" deletes the selected pages one at a time and
+reports each page as deleted or refused; a page that still holds paragraphs, a figure, indicators or
+tables is refused and stays selected. There is no shared "Edit semua": cards have no common editable
+field. **Urutkan Cerita** makes the grip on each card draggable (HTML5 drag and drop; a line marks the
+drop place) and shows Naik / Turun buttons, which are the keyboard route to the same reorder; a drop
+saves the whole order through the reorder API and announces the new position, and a refused or failed
+save is shown in the same banner as the buttons. Touch devices without drag support use Naik / Turun. **Edit** opens the page's
 structure at `?halaman=<slug>` (browser Back and "Kembali ke daftar" return to the list): its chapters
 and sections (add, rename, reorder, delete), and a section editor dialog for the section's paragraphs
 (prose blocks: add, edit, reorder, delete) and its one figure. "Judul utama & penulis" on the chosen page opens a
