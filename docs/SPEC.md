@@ -285,7 +285,7 @@ Hybrid model:
 - **Prose & Standalone Content Blocks** — field-by-field forms (tier-1 builder or tier-2 free text; see §5). Standalone landing content blocks (`landing-hero`, `landing-sambutan-lurah`, `landing-highlights`) are managed via `/api/content-blocks`. Specifically, the hero block manages `title`, `body`, and optional `backgroundImage`; `badge` and call-to-action buttons were removed to maintain a clean institutional profile voice without redundant action buttons. Blocks attached to a section are created, deleted and reordered through the Cerita authoring API (§3); the standalone blocks are fixed slots that are only edited, never created or deleted.
 
 The frontend surface is the `/data` view (`DataManagementView`, editor/admin only, mounted inside
-the admin base layout shell from §8), organized into three accessible tabbed categories:
+the admin base layout shell from §8), organized into two accessible tabbed categories:
 
 1. **Indikator & Tabel (default):** A searchable, type-filterable card list of every scalar indicator
    and matrix table, each opening an accessible edit dialog. It is edit-only — an indicator or table
@@ -326,17 +326,6 @@ the admin base layout shell from §8), organized into three accessible tabbed ca
    `STALE_WRITE` refusal keeps the whole draft in the open dialog, shows the approved stale-write message and
    offers "Muat versi terbaru", which replaces the draft with the stored block only when the editor asks.
    Any failed save keeps every field as typed.
-
-3. **Pengaturan Publik Portal** (Admin only): a short note and a link to Konfigurasi sistem
-   (`/admin/sistem/konfigurasi`), which owns the portal settings (§8). Those settings are the identity
-   settings (`public.app_name`, `public.institution_name`, `public.tagline`,
-   `public.administrative_area`), the public contact channels (`public.contact_phone`,
-   `public.contact_whatsapp`, `public.contact_email`, `public.contact_address`), and the default map
-   view (`public.default_coordinates`, edited visually on a map picker: staff pan and zoom the map
-   instead of typing latitude, longitude or a zoom number; the stored value stays `{ lat, lon, zoom }`).
-   Identity/contact and the map view are separate forms with separate saves. Mutations use
-   `PATCH /api/settings/public` (audited as `settings.public_updated`); a part form sends only its own
-   fields.
 
 A matrix-table save is one atomic request: `PATCH /api/indicator-tables/:id` carries the table
 header plus every changed row (at most 500) and applies them in a single transaction, mirroring
@@ -730,25 +719,27 @@ Implemented frontend routes:
 `/tentang` redirects to `/tentang/kelurahan-manggar`.
 
 **CMS Data & Konten (`/data`).** Accessible to users with `editor` or `admin` roles (`requiresEditor: true`).
-Provides three tabbed operational interfaces:
+Provides two tabbed operational interfaces:
 
 1. **Indikator & Tabel**: Searchable and filterable list of all scalar indicators and matrix tables with modal editing forms (`ScalarIndicatorForm` and `TableIndicatorForm`).
 2. **Blok Konten & Profil**: Direct editing of narrative content blocks (`landing-hero`, `landing-sambutan-lurah`, `landing-highlights`, `tentang-kelurahan-profil`) through named forms (§4); `publikasi-katalog` is edited only at `/admin/publikasi`: collections are edited as repeatable rows, never as raw JSON, and each card states where residents see the block. `landing-highlights` stays editable but is labelled "Tidak ditampilkan di situs" because no public page reads it.
-3. **Pengaturan Publik Portal** (admin only): a note and a link to Konfigurasi sistem (`/admin/sistem/konfigurasi`); no settings card, form or dialog. Editors do not see this tab.
-
 **Konfigurasi sistem (`/admin/sistem/konfigurasi`).** The single Admin destination for system
 settings (Editors are redirected, even by direct URL, and none of its calls are made). One page
 with four sections, each a labelled `<h2>` with its own form, Save and result, plus section links
 that move focus to the chosen heading:
 
 - **Identitas dan kontak portal** and **Tampilan awal peta** (`PublicSettingsForm`, `part` identity /
-  map): identity and contact fields; the default map view set with the shared `LocationPicker`
+  map): identity and contact fields (`public.app_name`, `public.institution_name`, `public.tagline`,
+  `public.administrative_area`, `public.contact_phone`, `public.contact_whatsapp`,
+  `public.contact_email`, `public.contact_address`); the default map view (`public.default_coordinates`,
+  stored as `{ lat, lon, zoom }`) set with the shared `LocationPicker`
   ("Atur tampilan peta"), where panning and zooming the map, or its direction/zoom buttons and
   keyboard mode, define the centre and zoom and there is no numeric latitude, longitude or zoom
   entry. The API still validates latitude -90..90, longitude -180..180 and integer zoom 1..20. A
   form is shown only once the stored settings have loaded (never built on defaults); a failed load
   shows its message with a retry. Save stays disabled until something changed; "Batalkan perubahan"
-  returns to the stored values; a failed save keeps the draft and shows approved wording.
+  returns to the stored values; a failed save keeps the draft and shows approved wording. Mutations use
+  `PATCH /api/settings/public` (audited as `settings.public_updated`); a part form sends only its own fields.
 - **Cuaca**: area name read-only (Manggar), the plain service status and last successful update (in
   WITA) from the public weather endpoint, and the three named refresh choices of §7.
 - **Retensi log**: see §3.
