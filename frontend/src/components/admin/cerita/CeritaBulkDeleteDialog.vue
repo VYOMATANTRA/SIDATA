@@ -51,7 +51,7 @@ const deletedCount = computed(() => (props.results ?? []).length - kept.value.le
 const summary = computed(() => {
   if (props.results === null) return '';
   const removed = `${deletedCount.value} halaman dihapus`;
-  return kept.value.length === 0 ? `${removed}.` : `${removed}, ${kept.value.length} tidak dihapus.`;
+  return kept.value.length === 0 ? `${removed}.` : `${removed}, ${kept.value.length} tidak dapat dihapus.`;
 });
 </script>
 
@@ -65,8 +65,8 @@ const summary = computed(() => {
           Halaman berikut akan dihapus satu per satu. Tindakan ini tidak bisa dibatalkan.
         </p>
         <p class="text-text-muted text-sm">
-          Halaman yang masih berisi paragraf, gambar, angka, atau tabel tidak dapat dihapus dan akan
-          dilaporkan.
+          Halaman yang masih berisi paragraf, gambar, angka, atau tabel akan dilewati. Setelah selesai,
+          halaman itu ditampilkan sebagai “tidak dapat dihapus” dalam daftar hasil, beserta alasannya.
         </p>
         <ul class="text-brand-navy list-disc space-y-1 pl-5 text-sm" data-test="bulk-items">
           <li v-for="item in items" :key="item.slug">{{ item.title }}</li>
@@ -93,7 +93,7 @@ const summary = computed(() => {
           >
             <span class="text-brand-navy font-semibold break-words">{{ item.title }}</span>
             <span class="text-brand-navy block">
-              {{ item.status === 'deleted' ? 'Dihapus.' : `Tidak dihapus. ${item.message ?? ''}` }}
+              {{ item.status === 'deleted' ? 'Dihapus.' : `Tidak dapat dihapus. ${item.message ?? ''}` }}
             </span>
           </li>
         </ul>

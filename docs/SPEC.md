@@ -847,10 +847,17 @@ Dibuat and Terakhir Diedit, with Edit and Hapus; a search box filters the cards 
 visible; a checked card gets a tinted fill and a stronger border as well as the checked box. The toolbar
 has one select-all button with three states, all acting on the cards the search currently shows: none
 checked reads "Pilih semua" (empty box); some checked reads "Pilih semua" with a dash, `aria-checked="mixed"`;
-all checked reads "Batal pilih semua" (checked box). Once at least one card is checked, the count
-("N dipilih") and "Hapus semua" appear; "Hapus semua" deletes the selected pages one at a time and
-reports each page as deleted or refused; a page that still holds paragraphs, a figure, indicators or
-tables is refused and stays selected. There is no shared "Edit semua": cards have no common editable
+all checked reads "Batal pilih semua" (checked box). While at least one card is checked, select-all takes the
+primary (filled) style and "Tambah Cerita" is hidden in place (`invisible`: its slot stays, so nothing moves,
+and it leaves the focus order and the accessibility tree); with nothing checked, select-all is the outlined
+style and "Tambah Cerita" shows. Focus stays on select-all if the focused Tambah or Hapus semua goes away.
+The select-all button has a fixed minimum width, and
+the row above the cards is a fixed-height slot: the search count and, once at least one card is checked,
+the count ("N dipilih") and "Hapus semua" appear there, so selecting or searching never moves the
+toolbar, the search box or the cards. The list shows no explanatory hints. "Hapus semua" deletes the
+selected pages one at a time and lists each page as deleted or, when it still holds paragraphs, a
+figure, indicators or tables, as "tidak dapat dihapus" with the reason; that page is skipped and stays
+selected. There is no shared "Edit semua": cards have no common editable
 field. The grip on each card can be dragged at any time (HTML5 drag and drop, Urutkan on or off; a line
 marks the drop place). It is disabled, with the reason in its title, while a search filter is active
 (the order is only shown in full) and while a save is in flight. A drop saves the whole order through

@@ -1171,6 +1171,9 @@ describe('AdminCeritaView', () => {
       expect(document.querySelector(`label[for="${search.id}"]`)?.textContent).toContain(
         'Cari Cerita',
       );
+      // The magnifier is decoration only; the input keeps its own label.
+      const icon = wrapper.find('[data-test="search"]').element.parentElement!.querySelector('svg');
+      expect(icon?.getAttribute('aria-hidden')).toBe('true');
       expect(wrapper.find('[data-test="sort-toggle"]').text()).toBe('Urutkan Cerita');
       expect(wrapper.find('[data-test="select-all"]').text()).toBe('Pilih semua');
       expect(wrapper.find('[data-test="add-page"]').text()).toBe('Tambah Cerita');
@@ -1179,6 +1182,63 @@ describe('AdminCeritaView', () => {
 
       const unnamed = wrapper.findAll('button').filter((item) => item.text().trim() === '');
       expect(unnamed).toHaveLength(0);
+      wrapper.unmount();
+    });
+
+    it('keeps a fixed selection row for the bulk actions and shows no explanatory hints above the cards', async () => {
+      const wrapper = await mountList();
+      const bar = () => wrapper.find('[data-test="selection-bar"]');
+
+      // The row is always there, so selecting a card does not shift the cards below it.
+      expect(bar().exists()).toBe(true);
+      expect(bar().find('[data-test="bulk-delete"]').exists()).toBe(false);
+      expect(bar().find('[data-test="selected-count"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="sort-hint"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="select-hint"]').exists()).toBe(false);
+
+      await wrapper.findAll('[data-test="page-checkbox"]')[0]!.setValue(true);
+      expect(bar().find('[data-test="selected-count"]').text()).toBe('1 dipilih');
+      expect(bar().find('[data-test="bulk-delete"]').text()).toBe('Hapus semua');
+      // The bulk group sits inside the row, not in the toolbar that holds the search and buttons.
+      expect(wrapper.find('[data-test="toolbar"] [data-test="bulk-delete"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="toolbar"] [data-test="selected-count"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('hides Tambah Cerita and uses the primary style for select-all while cards are selected', async () => {
+      const wrapper = await mountList();
+      const add = () => wrapper.find('[data-test="add-page"]');
+      const selectAll = () => wrapper.find('[data-test="select-all"]');
+
+      expect(add().classes()).not.toContain('invisible');
+      expect(selectAll().classes()).toContain('bg-surface');
+
+      await wrapper.findAll('[data-test="page-checkbox"]')[0]!.setValue(true);
+      // `invisible` keeps the slot (no shift) and removes the button from focus and the a11y tree.
+      expect(add().classes()).toContain('invisible');
+      expect(selectAll().classes()).toContain('bg-brand-navy');
+      expect(selectAll().text()).toBe('Pilih semua');
+
+      await wrapper.findAll('[data-test="page-checkbox"]')[1]!.setValue(true);
+      await wrapper.findAll('[data-test="page-checkbox"]')[2]!.setValue(true);
+      expect(selectAll().text()).toBe('Batal pilih semua');
+      expect(selectAll().classes()).toContain('bg-brand-navy');
+      wrapper.unmount();
+    });
+
+    it('moves focus to select-all when the focused Hapus semua disappears', async () => {
+      const wrapper = await mountList();
+      await wrapper.findAll('[data-test="page-checkbox"]')[0]!.setValue(true);
+      const bulk = wrapper.find('[data-test="bulk-delete"]').element as HTMLButtonElement;
+      bulk.focus();
+      expect(document.activeElement).toBe(bulk);
+
+      // Clearing the selection removes the bulk button; focus must not fall to the body.
+      await wrapper.findAll('[data-test="page-checkbox"]')[0]!.setValue(false);
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="bulk-delete"]').exists()).toBe(false);
+      expect(document.activeElement?.id).toBe('cerita-pilih-semua');
       wrapper.unmount();
     });
 
@@ -1300,7 +1360,7 @@ describe('AdminCeritaView', () => {
       const rows = body().findAll('[data-test="bulk-results"] li');
       expect(rows.map((row) => row.attributes('data-status'))).toEqual(['deleted', 'blocked']);
       expect(body().find('[data-test="bulk-summary"]').text()).toBe(
-        '1 halaman dihapus, 1 tidak dihapus.',
+        '1 halaman dihapus, 1 tidak dapat dihapus.',
       );
       expect(rows[1]!.text()).toContain('Pendidikan');
       expect(rows[1]!.text()).toContain('belum bisa dihapus');

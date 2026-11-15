@@ -18,7 +18,12 @@
  */
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
-import { ArrowLeftIcon, BookOpenIcon, PlusIcon } from '@heroicons/vue/24/outline';
+import {
+  ArrowLeftIcon,
+  BookOpenIcon,
+  MagnifyingGlassIcon,
+  PlusIcon,
+} from '@heroicons/vue/24/outline';
 import BaseButton from '../components/common/BaseButton.vue';
 import AlertBanner from '../components/common/AlertBanner.vue';
 import BaseModal from '../components/common/BaseModal.vue';
@@ -789,6 +794,20 @@ function toggleSelected(slug: string): void {
 }
 
 /** Select-all acts on the cards the list shows (after the search), never on hidden ones. */
+// While something is selected, "Tambah Cerita" is hidden with `invisible`: its slot keeps the
+// toolbar still, and a hidden control leaves the focus order and the accessibility tree. If the
+// focused control is one that disappears (Tambah or Hapus semua), focus moves to select-all.
+watch(
+  () => selectedSlugs.value.length,
+  (count, previous) => {
+    if (count === previous) return;
+    const active = document.activeElement?.id;
+    if (active === ceritaIds.bulkDelete || active === ceritaIds.addPage) {
+      void nextTick(() => focusId(ceritaIds.selectAll));
+    }
+  },
+);
+
 const selectedVisibleCount = computed(
   () => filteredPages.value.filter((item) => selectedSlugs.value.includes(item.slug)).length,
 );
@@ -925,7 +944,7 @@ async function confirmBulkDelete(): Promise<void> {
   bulkRunning.value = false;
   bulkResults.value = results;
   const deleted = results.filter((item) => item.status === 'deleted').length;
-  announce(`${deleted} halaman dihapus, ${results.length - deleted} tidak dihapus.`);
+  announce(`${deleted} halaman dihapus, ${results.length - deleted} tidak dapat dihapus.`);
 }
 
 /** Loads the latest pages after a stale report; the editor then opens the dialog again. */
@@ -1100,15 +1119,20 @@ onUnmounted(() => {
         </h2>
 
         <div class="flex flex-wrap items-center justify-end gap-2" data-test="toolbar">
-          <div>
+          <div class="relative">
             <label :for="ceritaIds.search" class="sr-only">Cari Cerita</label>
+            <MagnifyingGlassIcon
+              class="text-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
+              aria-hidden="true"
+              data-test="search-icon"
+            />
             <input
               :id="ceritaIds.search"
               v-model="query"
               type="search"
               placeholder="Cari Cerita"
               autocomplete="off"
-              class="rounded-btn border-border-strong text-brand-navy placeholder:text-text-muted focus-visible:outline-focus-ring min-h-11 w-56 border bg-surface px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
+              class="rounded-btn border-border-strong text-brand-navy placeholder:text-text-muted focus-visible:outline-focus-ring min-h-11 w-56 border bg-surface py-2 pr-3 pl-9 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
               data-test="search"
             />
           </div>
@@ -1129,9 +1153,9 @@ onUnmounted(() => {
             :id="ceritaIds.selectAll"
             type="button"
             role="checkbox"
-            variant="secondary"
+            :variant="selectedSlugs.length > 0 ? 'primary' : 'secondary'"
             size="md"
-            class="min-h-11"
+            class="min-h-11 min-w-[12.5rem]"
             :aria-checked="selectAllState === 'some' ? 'mixed' : selectAllState === 'all' ? 'true' : 'false'"
             :disabled="listBusy || pages.length === 0"
             data-test="select-all"
@@ -1146,28 +1170,12 @@ onUnmounted(() => {
             </template>
             {{ selectAllState === 'all' ? 'Batal pilih semua' : 'Pilih semua' }}
           </BaseButton>
-          <template v-if="selectedSlugs.length > 0">
-            <span class="text-brand-navy text-sm font-semibold" data-test="selected-count">
-              {{ selectedSlugs.length }} dipilih
-            </span>
-            <BaseButton
-              :id="ceritaIds.bulkDelete"
-              type="button"
-              variant="secondary"
-              size="md"
-              class="min-h-11"
-              :disabled="listBusy"
-              data-test="bulk-delete"
-              @click="openBulkDelete"
-            >
-              Hapus semua
-            </BaseButton>
-          </template>
           <BaseButton
             :id="ceritaIds.addPage"
             type="button"
             size="md"
             class="min-h-11"
+            :class="selectedSlugs.length > 0 ? 'invisible' : ''"
             :disabled="listBusy"
             data-test="add-page"
             @click="openName({ kind: 'page-add' })"
@@ -1180,22 +1188,37 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <p v-if="sorting" class="text-text-muted text-sm" data-test="sort-hint">
-        Seret ikon garis di kiri kartu untuk mengubah urutan, atau gunakan Naik dan Turun. Perubahan
-        langsung tersimpan.
-      </p>
-      <p v-else-if="selectedSlugs.length > 0" class="text-text-muted text-sm" data-test="select-hint">
-        “Hapus semua” menghapus Cerita yang dipilih satu per satu. Cerita yang masih berisi
-        paragraf, gambar, angka, atau tabel tidak dapat dihapus.
-      </p>
-      <p
-        v-if="query.trim() !== ''"
-        class="text-text-muted text-sm"
-        role="status"
-        data-test="search-count"
-      >
-        Menampilkan {{ filteredPages.length }} dari {{ pages.length }} Cerita.
-      </p>
+      <!--
+        A fixed-height row: the search count and the bulk actions come and go here, so nothing
+        above or below it moves. The bulk group exists only while at least one card is selected.
+      -->
+      <div class="flex min-h-11 items-center gap-3" data-test="selection-bar">
+        <p
+          v-if="query.trim() !== ''"
+          class="text-text-muted text-sm"
+          role="status"
+          data-test="search-count"
+        >
+          Menampilkan {{ filteredPages.length }} dari {{ pages.length }} Cerita.
+        </p>
+        <div v-if="selectedSlugs.length > 0" class="ml-auto flex items-center gap-3">
+          <span class="text-brand-navy text-sm font-semibold" data-test="selected-count">
+            {{ selectedSlugs.length }} dipilih
+          </span>
+          <BaseButton
+            :id="ceritaIds.bulkDelete"
+            type="button"
+            variant="secondary"
+            size="md"
+            class="min-h-11"
+            :disabled="listBusy"
+            data-test="bulk-delete"
+            @click="openBulkDelete"
+          >
+            Hapus semua
+          </BaseButton>
+        </div>
+      </div>
 
       <CeritaPageCardList
         :pages="filteredPages"
