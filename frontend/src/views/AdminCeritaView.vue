@@ -17,7 +17,7 @@
  *   to the list.
  */
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router';
 import {
   ArrowLeftIcon,
   ArrowsUpDownIcon,
@@ -152,6 +152,9 @@ watch(
   detailSlug,
   (slug, previous) => {
     store.selectPage(slug);
+    // An editor belongs to one page's structure: moving to another page or the list closes it. (An
+    // unsaved draft was already confirmed by the route-update guard before this point.)
+    if (editingSectionId.value) closeEditor();
     if (slug === null && previous) focusId(ceritaIds.cardEdit(previous));
   },
   { immediate: true },
@@ -1070,6 +1073,21 @@ function removeBeforeUnload(): void {
 }
 
 onBeforeRouteLeave(() => {
+  if (editorBusy.value) return false;
+  if (!editingSectionId.value || !editorDirty.value) return true;
+  discardPromptOpen.value = true;
+  void nextTick(() => (keepEditingButton.value?.$el as HTMLElement | undefined)?.focus());
+  return new Promise<boolean>((resolve) => {
+    pendingRouteLeave?.(false);
+    pendingRouteLeave = resolve;
+  });
+});
+
+// Back and Forward between the list and a page (or between two pages) change only the query, so
+// the component stays mounted and the leave guard above does not run. Ask the same way here, so an
+// unsaved section draft is never dropped silently. "Tetap di sini" cancels the navigation.
+onBeforeRouteUpdate((to, from) => {
+  if (to.query['halaman'] === from.query['halaman']) return true;
   if (editorBusy.value) return false;
   if (!editingSectionId.value || !editorDirty.value) return true;
   discardPromptOpen.value = true;

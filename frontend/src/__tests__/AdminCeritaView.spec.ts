@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils';
-import { createMemoryHistory, createRouter, type Router } from 'vue-router';
+import { createMemoryHistory, createRouter, RouterView, type Router } from 'vue-router';
+import { h } from 'vue';
 import AdminCeritaView from '../views/AdminCeritaView.vue';
 import { useAuthStore } from '../stores/auth';
 import { useCeritaAdminStore } from '../stores/ceritaAdmin.store';
@@ -42,7 +43,9 @@ async function mountView(slug: string | null = 'kependudukan'): Promise<VueWrapp
   });
   await router.push(slug ? { name: 'admin-cerita', query: { halaman: slug } } : { name: 'admin-cerita' });
   await router.isReady();
-  const wrapper = mount(AdminCeritaView, {
+  // Rendered through <RouterView>, as the app renders it: vue-router only runs the route's update
+  // guards for a component it renders itself.
+  const wrapper = mount(() => h(RouterView), {
     global: { plugins: [createPinia(), router] },
     attachTo: document.body,
   });
@@ -834,6 +837,36 @@ describe('AdminCeritaView', () => {
       await flushPromises();
       await expect(pending).resolves.toBe(false);
       expect(body().find('[data-test="section-editor"]').exists()).toBe(true);
+      wrapper.unmount();
+    });
+
+    it('asks before a Back navigation drops an unsaved draft, and keeps the draft on "Tetap di sini"', async () => {
+      const wrapper = await openRingkasan();
+      await click('Tambah paragraf');
+      await body().find('[data-test="paragraph-body"]').setValue('belum disimpan');
+
+      // The query changes (the list) without leaving the route: the same component stays mounted.
+      const navigation = router.push({ name: 'admin-cerita' });
+      await flushPromises();
+      expect(body().find('[data-test="discard-dialog"]').exists()).toBe(true);
+      expect(router.currentRoute.value.query['halaman']).toBe('kependudukan');
+
+      await body().find('[data-test="discard-keep"]').trigger('click');
+      await flushPromises();
+      await navigation;
+      expect(router.currentRoute.value.query['halaman']).toBe('kependudukan');
+      expect(body().find('[data-test="section-editor"]').exists()).toBe(true);
+      wrapper.unmount();
+    });
+
+    it('closes the editor when the page changes after a Back navigation with no unsaved draft', async () => {
+      const wrapper = await openRingkasan();
+
+      await router.push({ name: 'admin-cerita', query: { halaman: 'pendidikan' } });
+      await flushPromises();
+
+      expect(body().find('[data-test="section-editor"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="page-heading"]').text()).toBe('Pendidikan');
       wrapper.unmount();
     });
 
