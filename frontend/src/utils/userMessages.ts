@@ -177,7 +177,7 @@ function kindForStatus(status: number): FailureKind {
   if (status === 404) return 'not_found';
   if (status === 409) return 'conflict';
   if (status === 413) return 'payload_too_large';
-  if (status === 400 || status === 422) return 'validation';
+  if (status === 400 || status === 415 || status === 422) return 'validation';
   if (status === 429) return 'rate_limited';
   if (status >= 500 && status <= 599) return 'server';
   return 'unknown';

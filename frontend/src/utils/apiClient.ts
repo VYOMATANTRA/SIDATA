@@ -16,9 +16,8 @@ export { CSRF_INVALID_MESSAGE, REFRESH_UNAVAILABLE_MESSAGE, SESSION_EXPIRED_MESS
  * Shared fetch wrapper for the CMS/editor endpoints. The backend mounts
  * `doubleCsrfProtection` globally, and every mutating content route sits behind
  * `verifyToken` + a role guard, so a request has to carry both the CSRF token header and
- * the in-memory access token. The per-store `getAuthHeaders()` copies in
- * `users.store.ts` / `contentBlocks.store.ts` predate this helper; new stores use it
- * instead of adding a third and fourth copy.
+ * the in-memory access token. Authenticated admin calls go through this helper so an expired
+ * access token is refreshed and replayed once instead of surfacing as an error.
  */
 const MUTATING_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
 
@@ -88,7 +87,13 @@ async function buildInit(init: RequestInit): Promise<RequestInit> {
   }
 
   if (MUTATING_METHODS.has(method)) {
-    headers.set('x-csrf-token', await getCsrfToken());
+    const csrfToken = await getCsrfToken();
+    if (!csrfToken) {
+      // getCsrfToken() collapses a network/5xx failure into ''. Sending an empty header would
+      // turn a brief outage into a misleading 403, so fail as a retryable connection problem.
+      throw new ApiError(REFRESH_UNAVAILABLE_MESSAGE, 503, { method });
+    }
+    headers.set('x-csrf-token', csrfToken);
     // A FormData body (media upload) needs the browser's own multipart boundary, so it must not
     // be forced to JSON. The body is not a stream, so a replay after a refresh can resend it.
     const isFormData = typeof FormData !== 'undefined' && init.body instanceof FormData;
@@ -154,6 +159,15 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
     // requests that 401'd at the same time, so a burst of saves triggers one refresh.
     const outcome = await authStore.refreshSession();
     if (outcome === 'transient') {
+      if (!authStore.accessToken) {
+        // The user signed out while the refresh was in flight, which supersedes it. That is not
+        // a connection problem and not a dead session: hand back the original 401.
+        return response;
+      }
+      if (authStore.accessToken !== tokenUsed) {
+        // Another sign-in replaced the token meanwhile; the new one is worth a replay.
+        return send(path, init);
+      }
       // The refresh endpoint failed, not the session: throwing here (rather than returning the
       // original 401) keeps the caller from showing "please log in again" to a user who is
       // still signed in.
@@ -174,7 +188,14 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
 
   // Safe to replay because every body in this app is a JSON string. A streaming body would have
   // been consumed by the first attempt.
-  return send(path, init);
+  const retried = await send(path, init);
+  if (retried.status === 401) {
+    // Refreshed a moment ago and still refused (deactivated user, revoked token): the session
+    // is over, so drop it and let the layout show its single notice.
+    authStore.clearAuth();
+    authStore.markSessionEnded();
+  }
+  return retried;
 }
 
 /** Parses an error response's JSON body; a non-JSON body (HTML error page) yields undefined. */

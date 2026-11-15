@@ -159,6 +159,10 @@ describe('toUserMessage mappings', () => {
     expect(toUserMessage(error).message).not.toContain('diubah oleh orang lain');
   });
 
+  it('classifies 415 (unsupported media type) as non-retryable validation', () => {
+    expect(classifyFailure(httpFailure(415)).kind).toBe('validation');
+  });
+
   it('maps 413 to the too-much-content wording', () => {
     expect(toUserMessage(httpFailure(413)).message).toBe(
       'Isi yang dikirim terlalu besar. Persingkat teks atau kurangi jumlah baris.',

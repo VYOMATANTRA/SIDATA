@@ -273,11 +273,73 @@ describe('apiClient', () => {
     expect(store.accessToken).toBe('expired-token');
   });
 
+  it('ends the session when the replay after a successful refresh is still refused', async () => {
+    const store = signIn('expired-token');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input);
+        if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-token' });
+        if (url === '/api/auth/refresh') return refreshOk('fresh-token');
+        return json({ error: 'Pengguna dinonaktifkan' }, 401);
+      }),
+    );
+
+    const response = await apiFetch('/api/indicators');
+
+    expect(response.status).toBe(401);
+    expect(store.accessToken).toBeNull();
+    expect(store.sessionEnded).toBe(true);
+  });
+
+  it('hands back the original 401 when the user signs out during the refresh', async () => {
+    const store = signIn('expired-token');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input) => {
+        const url = String(input);
+        if (url === '/api/auth/csrf-token') return json({ csrfToken: 'csrf-token' });
+        if (url === '/api/auth/refresh') {
+          store.clearAuth();
+          return refreshOk('fresh-token');
+        }
+        return json({ error: 'Token kedaluwarsa' }, 401);
+      }),
+    );
+
+    const response = await apiFetch('/api/indicators');
+
+    expect(response.status).toBe(401);
+    expect(store.sessionEnded).toBe(false);
+  });
+
+  it('fails a mutating call as a connection problem when no CSRF token can be fetched', async () => {
+    signIn('still-valid');
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(json({}, 500));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      apiFetch('/api/indicators/ind-1', { method: 'PATCH', body: '{}' }),
+    ).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 503,
+    });
+    expect(fetchMock.mock.calls.every(([input]) => String(input) === '/api/auth/csrf-token')).toBe(
+      true,
+    );
+  });
+
   it('keeps the server message for non-401 failures', async () => {
     signIn('still-valid');
     vi.stubGlobal(
       'fetch',
-      vi.fn<typeof fetch>().mockResolvedValue(json({ error: 'Label sudah dipakai' }, 409)),
+      vi
+        .fn<typeof fetch>()
+        .mockImplementation(async (input) =>
+          String(input) === '/api/auth/csrf-token'
+            ? json({ csrfToken: 'csrf-token' })
+            : json({ error: 'Label sudah dipakai' }, 409),
+        ),
     );
 
     await expect(

@@ -179,6 +179,7 @@ export const useAuthStore = defineStore('auth', () => {
 
       if (currentEpoch === authEpoch) {
         clearAuth(mustChangePassword.value)
+        refreshDenied.value = true
       }
       return 'denied'
     } catch {
