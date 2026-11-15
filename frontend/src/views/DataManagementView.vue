@@ -880,7 +880,6 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
         :message="serverError"
         :kind="serverErrorKind ?? undefined"
       />
-
     </BaseModal>
   </div>
 </template>

@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import DataManagementView from '../views/DataManagementView.vue';
 import type { Indicator } from '../stores/indicators.store';
 import type { IndicatorTable } from '../stores/indicatorTables.store';
+import { useAuthStore } from '../stores/auth';
 import { useComparisonTemplatesStore } from '../stores/comparisonTemplates.store';
 import { USER_MESSAGES } from '../utils/userMessages';
 import { resetLeafletMock } from './leafletMock';
@@ -668,6 +669,23 @@ describe('DataManagementView.vue', () => {
     const tabs = wrapper.findAll('[role="tab"]');
     expect(tabs.map((tab) => tab.text())).toEqual(['Indikator & Tabel', 'Blok Konten & Profil']);
     expect(wrapper.find('[data-test="tab-pengaturan"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('never requests portal settings or renders a settings tab or card, even for an admin', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    useAuthStore().setAuth({ id: '1', email: 'admin@example.com', role: 'admin' }, 'token');
+    const wrapper = mount(DataManagementView, {
+      global: { plugins: [pinia], stubs: { RouterLink: true, teleport: true } },
+    });
+    await flushPromises();
+
+    const requested = vi.mocked(globalThis.fetch).mock.calls.map(([input]) => String(input));
+    expect(requested.some((url) => url.startsWith('/api/settings/public'))).toBe(false);
+    expect(wrapper.find('[data-test="tab-pengaturan"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="settings-moved"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Pengaturan Publik Portal');
     wrapper.unmount();
   });
 
