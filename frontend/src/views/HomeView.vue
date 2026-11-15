@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { CERITA_COVERS } from '@/content/ceritaCovers';
 import { onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useContentBlocksStore } from '../stores/contentBlocks.store';
@@ -7,14 +8,6 @@ import { isRouteAvailable as checkRouteAvailable } from '@/config/publicNav';
 import SectionHero from '../components/landing/SectionHero.vue';
 import SectionSambutanLurah from '../components/landing/SectionSambutanLurah.vue';
 import StatOverview from '../components/common/StatOverview.vue';
-import bgKependudukan from '@/assets/img/landing-page/demografi_penduduk.webp';
-import bgPendidikan from '@/assets/img/landing-page/pendidikan.webp';
-import bgKesehatan from '@/assets/img/landing-page/kesehatan.webp';
-import bgEkonomi from '@/assets/img/landing-page/ekonomi.webp';
-import bgPemerintahan from '@/assets/img/landing-page/pemerintahan_kelembagaan.webp';
-import bgGeografis from '@/assets/img/landing-page/geografis_tata_ruang.webp';
-import bgInfrastruktur from '@/assets/img/landing-page/infrastruktur_perumahan.webp';
-import bgPersampahan from '@/assets/img/landing-page/persampahan.webp';
 
 interface CeritaPreviewCategory {
   slug: string;
@@ -38,7 +31,7 @@ const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
     cardTitle: 'Ringkasan Statistik Kependudukan Kelurahan Manggar',
     to: '/cerita/kependudukan',
     bgOverlay: CERITA_BG_OVERLAY,
-    bgImage: bgKependudukan,
+    bgImage: CERITA_COVERS['kependudukan'],
   },
   {
     slug: 'pendidikan',
@@ -48,7 +41,7 @@ const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
     cardTitle: 'Ringkasan Statistik Pendidikan Kelurahan Manggar',
     to: '/cerita/pendidikan',
     bgOverlay: CERITA_BG_OVERLAY,
-    bgImage: bgPendidikan,
+    bgImage: CERITA_COVERS['pendidikan'],
   },
   {
     slug: 'kesehatan',
@@ -58,7 +51,7 @@ const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
     cardTitle: 'Ringkasan Statistik Kesehatan Kelurahan Manggar',
     to: '/cerita/kesehatan',
     bgOverlay: CERITA_BG_OVERLAY,
-    bgImage: bgKesehatan,
+    bgImage: CERITA_COVERS['kesehatan'],
   },
   {
     slug: 'ekonomi-dan-ketertiban',
@@ -68,7 +61,7 @@ const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
     cardTitle: 'Ringkasan Statistik Ekonomi & Ketertiban Kelurahan Manggar',
     to: '/cerita/ekonomi-dan-ketertiban',
     bgOverlay: CERITA_BG_OVERLAY,
-    bgImage: bgEkonomi,
+    bgImage: CERITA_COVERS['ekonomi-dan-ketertiban'],
   },
   {
     slug: 'pemerintahan-dan-kelembagaan',
@@ -78,7 +71,7 @@ const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
     cardTitle: 'Ringkasan Statistik Pemerintahan & Kelembagaan Kelurahan Manggar',
     to: '/cerita/pemerintahan-dan-kelembagaan',
     bgOverlay: CERITA_BG_OVERLAY,
-    bgImage: bgPemerintahan,
+    bgImage: CERITA_COVERS['pemerintahan-dan-kelembagaan'],
   },
   {
     slug: 'geografis-dan-tata-ruang',
@@ -88,7 +81,7 @@ const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
     cardTitle: 'Ringkasan Statistik Geografis & Tata Ruang Kelurahan Manggar',
     to: '/cerita/geografis-dan-tata-ruang',
     bgOverlay: CERITA_BG_OVERLAY,
-    bgImage: bgGeografis,
+    bgImage: CERITA_COVERS['geografis-dan-tata-ruang'],
   },
   {
     slug: 'infrastruktur-dan-perumahan',
@@ -98,7 +91,7 @@ const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
     cardTitle: 'Ringkasan Statistik Infrastruktur & Perumahan Kelurahan Manggar',
     to: '/cerita/infrastruktur-dan-perumahan',
     bgOverlay: CERITA_BG_OVERLAY,
-    bgImage: bgInfrastruktur,
+    bgImage: CERITA_COVERS['infrastruktur-dan-perumahan'],
   },
   {
     slug: 'persampahan-dan-bank-sampah-unit',
@@ -108,7 +101,7 @@ const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
     cardTitle: 'Ringkasan Statistik Persampahan & Bank Sampah Unit Kelurahan Manggar',
     to: '/cerita/persampahan-dan-bank-sampah-unit',
     bgOverlay: CERITA_BG_OVERLAY,
-    bgImage: bgPersampahan,
+    bgImage: CERITA_COVERS['persampahan-dan-bank-sampah-unit'],
   },
 ];
 
