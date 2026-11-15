@@ -52,6 +52,7 @@ const emit = defineEmits<{
       :publication="row.publication"
       :sorting="sorting"
       :drag-block="dragBlock"
+      :drag-active="dragKey != null"
       :selected="selectedKeys?.includes(row.key) ?? false"
       :dragging="dragKey === row.key"
       :drop-edge="dropTarget?.key === row.key ? dropTarget.edge : null"

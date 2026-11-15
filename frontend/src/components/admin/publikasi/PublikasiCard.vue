@@ -42,6 +42,8 @@ const props = withDefaults(
     /** Urutkan mode: the Naik / Turun links show. */
     sorting?: boolean;
     dragBlock?: DragBlock;
+    /** A card of this list is being dragged; only then does the card take part in a drop. */
+    dragActive?: boolean;
     selected?: boolean;
     dragging?: boolean;
     dropEdge?: 'before' | 'after' | null;
@@ -52,6 +54,7 @@ const props = withDefaults(
   {
     sorting: false,
     dragBlock: null,
+    dragActive: false,
     selected: false,
     dragging: false,
     dropEdge: null,
@@ -117,15 +120,17 @@ const coverPath = computed(() => {
 });
 const cover = useAuthenticatedBlobUrl(coverPath);
 
+// Only a card drag of this list is handled. A file or text dragged in from outside is left alone, so
+// the browser's own behaviour applies and nothing is prevented or reported as a move.
 function onDragOver(event: DragEvent): void {
-  if (props.dragBlock) return;
+  if (props.dragBlock || !props.dragActive) return;
   event.preventDefault();
   if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
   emit('drag-over', edgeAt(event));
 }
 
 function onDrop(event: DragEvent): void {
-  if (props.dragBlock) return;
+  if (props.dragBlock || !props.dragActive) return;
   event.preventDefault();
   emit('drop', edgeAt(event));
 }

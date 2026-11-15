@@ -159,6 +159,21 @@ describe('PublikasiCard', () => {
     expect(blocked.find('[data-test="grip"]').attributes('title')).toContain('pencarian');
   });
 
+  it('takes part in a drop only while a card of this list is being dragged', async () => {
+    const idle = mountCard(UPLOADED);
+    const external = new Event('dragover', { cancelable: true, bubbles: true });
+    idle.find('[data-test="publication-card"]').element.dispatchEvent(external);
+    expect(external.defaultPrevented).toBe(false);
+    await idle.find('[data-test="publication-card"]').trigger('drop');
+    expect(idle.emitted('drop')).toBeUndefined();
+
+    const dragging = mountCard(UPLOADED, { dragActive: true });
+    const own = new Event('dragover', { cancelable: true, bubbles: true });
+    dragging.find('[data-test="publication-card"]').element.dispatchEvent(own);
+    expect(own.defaultPrevented).toBe(true);
+    expect(dragging.emitted('drag-over')).toHaveLength(1);
+  });
+
   it('shows a drop line on the side the card would land', () => {
     const wrapper = mountCard(UPLOADED, { dropEdge: 'before' });
     expect(wrapper.find('[data-test="drop-indicator"]').attributes('data-edge')).toBe('before');
