@@ -151,7 +151,7 @@ const linkClass =
       @drag-end="emit('drag-end')"
     />
 
-    <div class="flex min-w-0 flex-1 items-center gap-4 p-4">
+    <div class="flex min-w-0 flex-1 items-center gap-3 p-3 sm:gap-4 sm:p-4">
       <CardSelectCheckbox
         :id="`${idPrefix}-pilih`"
         :checked="selected"
@@ -228,7 +228,7 @@ const linkClass =
             </div>
             <div class="min-w-0">
               <dt class="text-text-muted text-xs">Sumber</dt>
-              <dd class="text-brand-navy text-base font-semibold break-words" data-test="card-source">{{ source }}</dd>
+              <dd class="text-brand-navy text-sm leading-snug font-medium break-words" data-test="card-source">{{ source }}</dd>
             </div>
           </dl>
         </div>
