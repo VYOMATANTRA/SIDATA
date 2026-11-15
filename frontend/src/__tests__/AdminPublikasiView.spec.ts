@@ -543,6 +543,25 @@ describe('AdminPublikasiView', () => {
       expect(wrapper.find('h3').text()).toBe('Baru');
     });
 
+    it('editing one card keeps the selection of the other cards', async () => {
+      stored = threeStored();
+      const wrapper = await mountView();
+      await tickCheckbox(wrapper, 0);
+      await tickCheckbox(wrapper, 2);
+      expect(wrapper.find('[data-test="selected-count"]').text()).toBe('2 dipilih');
+
+      await clickPage(wrapper, '#publikasi-card-1-ubah');
+      await typeInto('#publikasi-item-title', 'Dua (revisi)');
+      await submitDialogForm();
+
+      expect(sentList().map((p) => p.title)).toEqual(['Satu', 'Dua (revisi)', 'Tiga']);
+      expect(wrapper.find('[data-test="selected-count"]').text()).toBe('2 dipilih');
+      const selected = wrapper
+        .findAll('[data-selected="true"] h3')
+        .map((h) => h.text());
+      expect(selected).toEqual(['Satu', 'Tiga']);
+    });
+
     it('dragging a card onto the end zone saves the new order', async () => {
       stored = threeStored();
       const wrapper = await mountView();
@@ -555,6 +574,8 @@ describe('AdminPublikasiView', () => {
       expect(wrapper.find('[data-test="publikasi-status"]').text()).toBe(
         'Publikasi “Satu” dipindah ke posisi 3.',
       );
+      // A pointer drop keeps focus on the moved card's Ubah button.
+      expect(document.activeElement?.id).toBe('publikasi-card-2-ubah');
     });
 
     it('dragging is off while a search or category filter is active', async () => {

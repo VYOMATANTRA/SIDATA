@@ -14,7 +14,7 @@
  * `components/admin/cards/`). Header title and subtitle live in route `meta` (router/index.ts), so this
  * view starts at <h2>.
  */
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, toRaw, watch } from 'vue';
 import AlertBanner from '../components/common/AlertBanner.vue';
 import BaseButton from '../components/common/BaseButton.vue';
 import BaseModal from '../components/common/BaseModal.vue';
@@ -90,20 +90,40 @@ const bulkResults = ref<BulkResult[] | null>(null);
 const bulkStale = ref(false);
 const bulkError = ref('');
 
-// A card needs a stable key for selection and drag, even before the server has given it an id (the
-// built-in defaults are never saved). The key is remembered per object, so it survives reorders and
-// removals of other cards.
+// A card needs a stable key for selection, drag and the bulk delete. A stored publication has its
+// server `id`. An item without one (only the built-in defaults, before the first save) gets a key that
+// is carried over from the list it came from when its content is unchanged, so editing one card keeps
+// the keys, and so the selection, of the others. The key is remembered per object of the current list.
 const keyByItem = new WeakMap<StoredPublication, string>();
+let keyEntries: { key: string; signature: string }[] = [];
 let keySequence = 0;
+
 function keyOf(item: StoredPublication): string {
   if (typeof item.id === 'string' && item.id !== '') return item.id;
-  let key = keyByItem.get(item);
+  // `items` is reactive, so the item read here is a Proxy: key on the raw object it wraps.
+  const raw = toRaw(item);
+  let key = keyByItem.get(raw);
   if (!key) {
     keySequence += 1;
     key = `new-${keySequence}`;
-    keyByItem.set(item, key);
+    keyByItem.set(raw, key);
   }
   return key;
+}
+
+/** Assigns keys to a freshly loaded list, reusing the keys of unchanged items from the last one. */
+function assignKeys(list: StoredPublication[]): void {
+  const previous = keyEntries.slice();
+  const next: { key: string; signature: string }[] = [];
+  for (const item of list) {
+    const signature = JSON.stringify(item);
+    const index = previous.findIndex((entry) => entry.signature === signature);
+    const reused = index >= 0 ? previous.splice(index, 1)[0] : undefined;
+    const key = typeof item.id === 'string' && item.id !== '' ? item.id : (reused?.key ?? '');
+    if (key) keyByItem.set(toRaw(item), key);
+    next.push({ key: key || keyOf(item), signature });
+  }
+  keyEntries = next;
 }
 
 function readPublications(meta: Record<string, unknown> | null): StoredPublication[] {
@@ -115,7 +135,9 @@ function readPublications(meta: Record<string, unknown> | null): StoredPublicati
 
 function applyBlock(next: ContentBlock): void {
   block.value = next;
-  items.value = readPublications(next.metadata);
+  const list = readPublications(next.metadata);
+  assignKeys(list);
+  items.value = list;
 }
 
 async function loadCatalog(): Promise<void> {
@@ -178,7 +200,7 @@ const itemKeys = computed(() => items.value.map(keyOf));
 const drag = useCardDragReorder({
   order: itemKeys,
   blocked: dragBlock,
-  onMove: (key, toIndex) => void placeByKey(key, toIndex),
+  onMove: (key, toIndex) => void placeByKey(key, toIndex, 'drag'),
 });
 const dragKey = drag.dragKey;
 const dropTarget = drag.dropTarget;
@@ -305,7 +327,12 @@ async function confirmDelete(): Promise<void> {
 }
 
 /** Moves one publication to `toIndex` (0-based, catalog order) and saves the list. */
-async function placeByKey(key: string, toIndex: number): Promise<void> {
+/**
+ * Moves one publication to `toIndex` and saves. Focus afterwards: a pointer drop keeps focus on the
+ * card's Ubah button (Naik / Turun do not exist for a drop outside Urutkan mode), without scrolling
+ * the page; Naik / Turun keep their own button focus.
+ */
+async function placeByKey(key: string, toIndex: number, source: 'drag' | 'button'): Promise<void> {
   const from = items.value.findIndex((item) => keyOf(item) === key);
   if (from < 0 || toIndex === from || toIndex < 0 || toIndex >= items.value.length) return;
   const next = [...items.value];
@@ -317,14 +344,22 @@ async function placeByKey(key: string, toIndex: number): Promise<void> {
     { publications: next },
     `Publikasi “${moved.title.trim()}” dipindah ke posisi ${toIndex + 1}.`,
   );
-  if (saved) focusMovedCard(toIndex, direction);
+  if (!saved) return;
+  if (source === 'drag') focusCardEdit(toIndex);
+  else focusMovedCard(toIndex, direction);
+}
+
+function focusCardEdit(index: number): void {
+  void nextTick(() => {
+    document.getElementById(`publikasi-card-${index}-ubah`)?.focus({ preventScroll: true });
+  });
 }
 
 function movePublication(index: number, direction: -1 | 1): void {
   if (filtering.value || saving.value) return;
   const current = items.value[index];
   if (!current) return;
-  void placeByKey(keyOf(current), index + direction);
+  void placeByKey(keyOf(current), index + direction, 'button');
 }
 
 /** Keeps keyboard focus on the moved card, on the same arrow when it can still move that way. */
