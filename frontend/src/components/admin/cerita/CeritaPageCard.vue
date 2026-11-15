@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { BookOpenIcon } from '@heroicons/vue/24/outline';
-import BaseButton from '../../common/BaseButton.vue';
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  BookOpenIcon,
+  PencilSquareIcon,
+  XMarkIcon,
+} from '@heroicons/vue/24/outline';
+import CardActionButton from '../cards/CardActionButton.vue';
 import CardDragGrip from '../cards/CardDragGrip.vue';
 import CardDropIndicator from '../cards/CardDropIndicator.vue';
 import CardSelectCheckbox from '../cards/CardSelectCheckbox.vue';
@@ -135,55 +141,43 @@ function onDrop(event: DragEvent): void {
 
         <div class="flex flex-wrap items-center gap-2" data-test="card-actions">
           <template v-if="sorting">
-            <BaseButton
+            <CardActionButton
               :id="ceritaIds.cardUp(page.slug)"
-              type="button"
-              variant="secondary"
-              size="md"
-              class="min-h-11"
+              :icon="ArrowUpIcon"
+              label="Naik"
+              :sr-text="`halaman ${page.title}`"
               :disabled="busy || isFirst"
               data-test="card-up"
               @click="emit('move', -1)"
-            >
-              Naik <span class="sr-only">halaman {{ page.title }}</span>
-            </BaseButton>
-            <BaseButton
+            />
+            <CardActionButton
               :id="ceritaIds.cardDown(page.slug)"
-              type="button"
-              variant="secondary"
-              size="md"
-              class="min-h-11"
+              :icon="ArrowDownIcon"
+              label="Turun"
+              :sr-text="`halaman ${page.title}`"
               :disabled="busy || isLast"
               data-test="card-down"
               @click="emit('move', 1)"
-            >
-              Turun <span class="sr-only">halaman {{ page.title }}</span>
-            </BaseButton>
+            />
           </template>
-          <BaseButton
+          <CardActionButton
             :id="ceritaIds.cardEdit(page.slug)"
-            type="button"
-            variant="secondary"
-            size="md"
-            class="min-h-11"
+            :icon="PencilSquareIcon"
+            label="Edit"
+            :sr-text="`halaman ${page.title}`"
             :disabled="busy"
             data-test="card-edit"
             @click="emit('edit')"
-          >
-            Edit <span class="sr-only">halaman {{ page.title }}</span>
-          </BaseButton>
-          <BaseButton
+          />
+          <CardActionButton
             :id="ceritaIds.cardDelete(page.slug)"
-            type="button"
-            variant="secondary"
-            size="md"
-            class="min-h-11"
+            :icon="XMarkIcon"
+            label="Hapus"
+            :sr-text="`halaman ${page.title}`"
             :disabled="busy"
             data-test="card-delete"
             @click="emit('delete')"
-          >
-            Hapus <span class="sr-only">halaman {{ page.title }}</span>
-          </BaseButton>
+          />
         </div>
       </div>
     </div>

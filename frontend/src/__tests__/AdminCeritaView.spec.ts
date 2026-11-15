@@ -1175,6 +1175,17 @@ describe('AdminCeritaView', () => {
       const icon = wrapper.find('[data-test="search"]').element.parentElement!.querySelector('svg');
       expect(icon?.getAttribute('aria-hidden')).toBe('true');
       expect(wrapper.find('[data-test="sort-toggle"]').text()).toBe('Urutkan Cerita');
+      // Each action carries its icon on the label row, before the label.
+      expect(wrapper.find('[data-test="sort-toggle"] [data-test="left-icon"] svg').exists()).toBe(
+        true,
+      );
+      expect(wrapper.find('[data-test="card-edit"] [data-test="left-icon"] svg').exists()).toBe(
+        true,
+      );
+      expect(wrapper.find('[data-test="card-delete"] [data-test="left-icon"] svg').exists()).toBe(
+        true,
+      );
+      expect(wrapper.find('[data-test="card-edit"]').text()).toMatch(/^Edit/);
       expect(wrapper.find('[data-test="select-all"]').text()).toBe('Pilih semua');
       expect(wrapper.find('[data-test="add-page"]').text()).toBe('Tambah Cerita');
       expect(wrapper.find('[data-test="sort-toggle"]').attributes('aria-pressed')).toBe('false');
@@ -1347,6 +1358,7 @@ describe('AdminCeritaView', () => {
       await flushPromises();
       expect(wrapper.find('[data-test="selected-count"]').text()).toBe('2 dipilih');
       expect(bulk().text()).toBe('Hapus semua');
+      expect(bulk().find('[data-test="left-icon"] svg').exists()).toBe(true);
 
       await bulk().trigger('click');
       await flushPromises();

@@ -31,6 +31,7 @@ import CardListToolbar from '../components/admin/cards/CardListToolbar.vue';
 import CardSearchField from '../components/admin/cards/CardSearchField.vue';
 import CardSelectionBar from '../components/admin/cards/CardSelectionBar.vue';
 import SelectAllButton from '../components/admin/cards/SelectAllButton.vue';
+import SortToggleButton from '../components/admin/cards/SortToggleButton.vue';
 import type { BulkResult } from '../components/admin/cards/cardTypes';
 import { useCardDragReorder } from '../composables/useCardDragReorder';
 import { useCardSelection } from '../composables/useCardSelection';
@@ -1095,19 +1096,13 @@ onUnmounted(() => {
             />
           </template>
           <template #sort>
-            <BaseButton
+            <SortToggleButton
               :id="ceritaIds.sortToggle"
-              type="button"
-              variant="secondary"
-              size="md"
-              class="min-h-11 w-full md:w-auto"
-              :aria-pressed="sorting ? 'true' : 'false'"
+              :pressed="sorting"
+              label="Urutkan Cerita"
               :disabled="listBusy"
-              data-test="sort-toggle"
               @click="toggleSorting"
-            >
-              Urutkan Cerita
-            </BaseButton>
+            />
           </template>
           <template #select-all>
             <SelectAllButton

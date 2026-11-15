@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { XMarkIcon } from '@heroicons/vue/24/outline';
 import BaseButton from '../../common/BaseButton.vue';
 
 /**
@@ -40,6 +41,9 @@ const emit = defineEmits<{ (e: 'bulk-delete'): void }>();
         data-test="bulk-delete"
         @click="emit('bulk-delete')"
       >
+        <template #leftIcon>
+          <XMarkIcon class="h-4 w-4" aria-hidden="true" />
+        </template>
         {{ bulkLabel }}
       </BaseButton>
     </div>
