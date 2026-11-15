@@ -816,23 +816,37 @@ merely disabled. Cerita, Rukun Tetangga, Konfigurasi sistem (above), Templat kal
 Peta (below) and Publikasi (below) open their real management views.
 
 **Publikasi management (`/admin/publikasi`).** Editor and Admin manage the publication catalog, the
-`publikasi-katalog` content block (`metadata.publications[]`, at most 25 publications). The page is a
-card grid (one column on a phone, two from `sm`, three from `xl`). Each card shows the category, the
-title, "N Halaman, Diterbitkan Bulan YYYY" when stored, the description, the file type and size, and
-the actions Ubah, Hapus, Unduh (only when the publication is downloadable), Naik and Turun. Every
-action is a button (Unduh a link), and Naik / Turun are the reorder controls (never drag-only).
-A search field (judul, kategori, deskripsi) and a category select ("Semua Kategori" plus each
-category in use) narrow the grid. Naik and Turun are off while either is set, because order only
-means something for the full catalog. "Tambah Publikasi" and Ubah open one dialog holding one
-publication's fields; Hapus asks for confirmation first. "Ubah judul & pengantar" edits the catalog's
-title (required) and intro in a small dialog. Each add, edit, removal or move saves the whole list at
-once; the page keeps no unsaved list of its own. "Import From" is not built.
+`publikasi-katalog` content block (`metadata.publications[]`, at most 25 publications). The page is one
+full-width card per publication in a single-column list, like a journal listing. A card has the grip
+and the selection checkbox in a left column, then the category chip (with "Segera hadir" beside it when
+the publication is not downloadable), the title, the description clamped to three lines, the cover
+(a portrait thumbnail, or a neutral placeholder) beside five labelled facts (Halaman, Diterbitkan,
+Format, Ukuran, Sumber, each "—" when not stored), a divider, and the text-link actions Unduh (only when
+downloadable), Ubah and Hapus; Naik and Turun show in Urutkan mode. Every action is a real button or link
+whose accessible name starts with the visible word and names the publication. The cover is the editor
+preview, loaded with the authenticated client as a blob URL, only once the card is near the viewport.
+
+The list works like the Cerita page list (`/admin/cerita`), through the shared card parts in
+`components/admin/cards/` and `composables/useCardSelection.ts` and `useCardDragReorder.ts`: a search field
+(judul, kategori, deskripsi) with a magnifier, a category select ("Semua Kategori" plus each category in
+use), and an Urutkan toggle that shows Naik / Turun. Checkboxes are always visible; the select-all control
+is a tri-state checkbox ("Pilih semua", "Batal pilih semua") that acts on the cards the list shows. While
+at least one card is selected, "N dipilih" and "Hapus semua" show, select-all becomes the primary button,
+and "Tambah Publikasi" is hidden in place so the toolbar does not move. Dragging a card by its grip (and the
+Naik / Turun keys) reorders the catalog; the grip is off while a search or category filter is active or a
+save is running. Naik / Turun are off while a filter is active, because order only means something for the
+full catalog. "Hapus semua" asks first and removes the selected publications in one catalog save, so it is
+all-or-nothing: if the save fails, nothing is removed and the report says so. "Tambah Publikasi" and Ubah
+open one dialog holding one publication's fields; Hapus asks for confirmation first. "Ubah judul &
+pengantar" edits the catalog's title (required) and intro in a small dialog. Each add, edit, removal,
+move or bulk delete saves the whole list at once; the page keeps no unsaved list of its own. "Import From"
+is not built.
 
 - **Page count and publication date** (both optional, per publication): `pageCount` is a whole number
-  from 1 to 100000; `publishedAt` is `YYYY-MM` or `YYYY-MM-DD` (anything else is refused). The public
-  page shows only "N Halaman, Diterbitkan Bulan YYYY", leaving out a part that is not stored; the day
-  is kept but not shown.
-
+  from 1 to 100000; `publishedAt` is `YYYY-MM` or `YYYY-MM-DD` (anything else is refused). The card and the
+  public page show the month and year only ("Diterbitkan Maret 2026"), and the public line reads "N
+  Halaman, Diterbitkan Bulan YYYY" with a part left out when it is not stored; the day is kept but not
+  shown.
 - **One download source per row**, chosen from a select: *Segera hadir* (none), *Unggah berkas*
   (PDF or DOCX, up to 20 MB, purpose `publikasi-document`) or *Tautan https*. Availability is derived
   from the source (`isAvailableOnline` true iff a file or link is set), so the two cannot disagree. A
