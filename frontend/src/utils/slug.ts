@@ -27,11 +27,17 @@ export function slugifyLabel(label: string, fallback: string): string {
 
 /**
  * Returns `base` when it is free, otherwise `base-2`, `base-3`, … (the first free suffix).
- * `taken` is the set of slugs already in use in the same collection.
+ * `taken` is the set of slugs already in use in the same collection. `rejected` holds candidates
+ * the server already refused (409) that the loaded list did not show, so a retry moves on.
  */
-export function uniqueSlug(base: string, taken: ReadonlySet<string>): string {
-  if (!taken.has(base)) return base;
+export function uniqueSlug(
+  base: string,
+  taken: ReadonlySet<string>,
+  rejected: ReadonlySet<string> = new Set(),
+): string {
+  const isFree = (candidate: string): boolean => !taken.has(candidate) && !rejected.has(candidate);
+  if (isFree(base)) return base;
   let suffix = 2;
-  while (taken.has(`${base}-${suffix}`)) suffix += 1;
+  while (!isFree(`${base}-${suffix}`)) suffix += 1;
   return `${base}-${suffix}`;
 }

@@ -37,4 +37,9 @@ describe('uniqueSlug', () => {
     const taken = new Set(['total-penduduk', 'total-penduduk-2']);
     expect(uniqueSlug('total-penduduk', taken)).toBe('total-penduduk-3');
   });
+
+  it('skips candidates the server already refused, even when the list did not show them', () => {
+    const rejected = new Set(['total-penduduk', 'total-penduduk-2']);
+    expect(uniqueSlug('total-penduduk', new Set(), rejected)).toBe('total-penduduk-3');
+  });
 });

@@ -446,41 +446,74 @@ async function handleContentBlockReload(): Promise<void> {
  * made unique against the lists already loaded. On success the dialog closes; a matrix table then
  * opens its row editor. On failure the dialog stays open and `CreateDataForm` keeps every field.
  */
+/** Attempts per save: the first try plus retries after a slug clash. */
+const MAX_CREATE_ATTEMPTS = 4;
+
+/** Reloads both lists and waits, so the next candidate is judged against the newest data. */
+async function reloadCreateLists(): Promise<void> {
+  await Promise.allSettled([indicatorsStore.fetchIndicators(true), tablesStore.fetchTables(true)]);
+}
+
+/** Opens the row editor on the table the server just returned; no refetch is needed. */
+function showTableEditor(table: IndicatorTableDetail): void {
+  activeScalar.value = null;
+  activeContentBlock.value = null;
+  activeTableId.value = table.id;
+  activeTable.value = table;
+  isTableDetailLoading.value = false;
+}
+
+/**
+ * Saves a new indicator or an empty matrix table. The slug starts from the label or title, made
+ * unique against the loaded list. The loaded list may hold only the first page, so a clash can be
+ * invisible here: a 409 then reloads the lists (awaited) and retries with the next free suffix,
+ * up to MAX_CREATE_ATTEMPTS. Only when every attempt clashes does the operator see a message.
+ */
 async function handleCreateSubmit(payload: CreateDataPayload): Promise<void> {
   saving.value = true;
   setServerError('');
+  const isScalar = payload.type === 'skalar';
+  const base = isScalar
+    ? slugifyLabel(payload.input.label, 'indikator')
+    : slugifyLabel(payload.input.title, 'tabel');
+  const rejected = new Set<string>();
   try {
-    if (payload.type === 'skalar') {
-      const taken = new Set(indicatorsStore.indicators.map((item) => item.slug));
-      const slug = uniqueSlug(slugifyLabel(payload.input.label, 'indikator'), taken);
-      const created = await indicatorsStore.createIndicator({
-        ...payload.input,
-        sectionId: payload.sectionId,
-        slug,
-      });
-      resetEditor();
-      announce(`Indikator “${created.label}” ditambahkan.`);
-      return;
+    for (let attempt = 1; attempt <= MAX_CREATE_ATTEMPTS; attempt += 1) {
+      const taken = new Set(
+        isScalar
+          ? indicatorsStore.indicators.map((item) => item.slug)
+          : tablesStore.tables.map((item) => item.slug),
+      );
+      const slug = uniqueSlug(base, taken, rejected);
+      try {
+        if (payload.type === 'skalar') {
+          const created = await indicatorsStore.createIndicator({
+            ...payload.input,
+            sectionId: payload.sectionId,
+            slug,
+          });
+          resetEditor();
+          announce(`Indikator “${created.label}” ditambahkan.`);
+        } else {
+          const created = await tablesStore.createTable({
+            ...payload.input,
+            sectionId: payload.sectionId,
+            slug,
+          });
+          resetEditor();
+          showTableEditor(created);
+          announce(`Tabel “${created.title}” dibuat. Formulir tabel terbuka.`);
+        }
+        return;
+      } catch (error) {
+        if (classifyFailure(error).status !== 409) throw error;
+        rejected.add(slug);
+        await reloadCreateLists();
+      }
     }
-
-    const taken = new Set(tablesStore.tables.map((item) => item.slug));
-    const slug = uniqueSlug(slugifyLabel(payload.input.title, 'tabel'), taken);
-    const created = await tablesStore.createTable({
-      ...payload.input,
-      sectionId: payload.sectionId,
-      slug,
-    });
-    resetEditor();
-    announce(`Tabel “${created.title}” dibuat. Formulir tabel terbuka.`);
-    await openTable(created);
+    setServerError(`Gagal menyimpan data baru. ${SLUG_TAKEN_MESSAGE}`, 'conflict');
   } catch (error) {
-    if (classifyFailure(error).status === 409) {
-      // Someone else took the generated address. Reload both lists so the next save picks a free one.
-      void Promise.allSettled([indicatorsStore.fetchIndicators(true), tablesStore.fetchTables(true)]);
-      setServerError(`Gagal menyimpan data baru. ${SLUG_TAKEN_MESSAGE}`, 'conflict');
-    } else {
-      setServerFailure(error, 'menyimpan data baru');
-    }
+    setServerFailure(error, 'menyimpan data baru');
   } finally {
     saving.value = false;
   }

@@ -986,6 +986,31 @@ describe('DataManagementView.vue', () => {
       wrapper.unmount();
     });
 
+    it('retries a clashing slug with the next suffix and saves on the second attempt', async () => {
+      const slugs: string[] = [];
+      installCreateMock((_url, requestBody) => {
+        slugs.push(String(requestBody.slug));
+        if (slugs.length === 1) {
+          return json({ error: 'Slug sudah digunakan' }, false, 409);
+        }
+        return json({ message: 'ok', indicator: { ...indicator, id: 'ind-2', slug: 'jumlah-kk-2' } }, true, 201);
+      });
+
+      const wrapper = mountAttached();
+      await flushPromises();
+      await openCreate(wrapper);
+      await chooseSection();
+      await body().get('#create-data-label').setValue('Jumlah KK');
+      await body().get('#create-data-value-current').setValue('4200');
+      await body().get('#create-data-period-current').setValue('2026');
+      await submitCreate();
+
+      expect(slugs).toEqual(['jumlah-kk', 'jumlah-kk-2']);
+      expect(document.getElementById('create-data-label')).toBeNull();
+      expect(body().text()).not.toContain('Gagal menyimpan data baru');
+      wrapper.unmount();
+    });
+
     it('creates an empty matrix table and opens its table editor', async () => {
       const posted: Array<Record<string, unknown>> = [];
       const created = {
