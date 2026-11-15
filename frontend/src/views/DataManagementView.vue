@@ -9,7 +9,6 @@ import TableIndicatorForm, {
   type TableSavePayload,
 } from '../components/data/TableIndicatorForm.vue';
 import ContentBlockForm from '../components/data/ContentBlockForm.vue';
-import PublicSettingsForm from '../components/data/PublicSettingsForm.vue';
 import {
   INDICATOR_TABLE_KIND_META,
   useIndicatorTablesStore,
@@ -24,8 +23,6 @@ import {
 import { useComparisonTemplatesStore } from '../stores/comparisonTemplates.store';
 import { usePagesStore } from '../stores/pages.store';
 import { useContentBlocksStore, type ContentBlock } from '../stores/contentBlocks.store';
-import { useSettingsStore, type PublicSettings } from '../stores/settings.store';
-import { useAuthStore } from '../stores/auth';
 import { formatDecimalId } from '../utils/formatNumber';
 import { INPUT_CLASSES } from '../utils/formStyles';
 import {
@@ -42,49 +39,42 @@ import {
 import type { BlockSavePayload } from '../components/data/blocks/blockFormShared';
 
 /**
- * CMS entry point for indicator data, content blocks, and public settings (SPEC §3/§4).
+ * CMS entry point for indicator data and content blocks (SPEC §4).
  *
  * Scoped CMS editing:
  * - Scalar indicators (ScalarIndicatorForm)
  * - Matrix tables (TableIndicatorForm)
  * - Content blocks (ContentBlockForm)
- * - Public portal settings (PublicSettingsForm, admin-only)
+ *
+ * Portal settings live on /admin/sistem/konfigurasi, not here.
  */
 
 type TypeFilter = 'all' | 'skalar' | 'matriks';
-type ActiveTab = 'indikator' | 'konten' | 'pengaturan';
+type ActiveTab = 'indikator' | 'konten';
 
 const indicatorsStore = useIndicatorsStore();
 const tablesStore = useIndicatorTablesStore();
 const pagesStore = usePagesStore();
 const contentBlocksStore = useContentBlocksStore();
-const settingsStore = useSettingsStore();
-const authStore = useAuthStore();
 const templatesStore = useComparisonTemplatesStore();
 
 const activeTab = ref<ActiveTab>('indikator');
 const searchQuery = ref('');
 const typeFilter = ref<TypeFilter>('all');
 
-const availableTabs = computed(() => {
-  const tabs: { id: ActiveTab; label: string }[] = [
-    { id: 'indikator', label: 'Indikator & Tabel' },
-    { id: 'konten', label: 'Blok Konten & Profil' },
-  ];
-  if (authStore.isAdmin) {
-    tabs.push({ id: 'pengaturan', label: 'Pengaturan Publik Portal' });
-  }
-  return tabs;
-});
+const availableTabs: { id: ActiveTab; label: string }[] = [
+  { id: 'indikator', label: 'Indikator & Tabel' },
+  { id: 'konten', label: 'Blok Konten & Profil' },
+];
 
-function selectTab(tab: (typeof availableTabs.value)[number]) {
+function selectTab(tab: (typeof availableTabs)[number]) {
   activeTab.value = tab.id;
   typeFilter.value = 'all';
   searchQuery.value = '';
 }
 
 async function handleTabKeydown(event: KeyboardEvent, index: number) {
-  const tabs = availableTabs.value;
+  const tabs = availableTabs;
   let nextIndex: number | null = null;
   if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
   if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length;
@@ -105,13 +95,6 @@ const activeTable = ref<IndicatorTableDetail | null>(null);
 const activeContentBlock = ref<ContentBlock | null>(null);
 /** Set when a content-block save was refused because someone else saved it first. */
 const contentBlockStale = ref(false);
-const isEditingSettings = ref(false);
-const settingsForm = ref<InstanceType<typeof PublicSettingsForm> | null>(null);
-const settingsFormDirty = ref(false);
-const settingsDiscardPromptOpen = ref(false);
-const settingsKeepButton = ref<HTMLButtonElement | null>(null);
-/** Control that had focus when the discard prompt opened, so "Tetap di sini" can give it back. */
-let settingsFocusBeforePrompt: HTMLElement | null = null;
 
 const isTableDetailLoading = ref(false);
 const saving = ref(false);
@@ -124,20 +107,16 @@ const isEditorOpen = computed(
   () =>
     activeScalar.value !== null ||
     activeTableId.value !== null ||
-    activeContentBlock.value !== null ||
-    isEditingSettings.value,
+    activeContentBlock.value !== null,
 );
 
 const isLoading = computed(() => {
   if (activeTab.value === 'konten') return contentBlocksStore.isLoading;
-  if (activeTab.value === 'pengaturan') return settingsStore.isLoading;
   return indicatorsStore.isLoading || tablesStore.isLoading;
 });
 
 const loadError = computed(() => {
   if (activeTab.value === 'konten') return contentBlocksStore.error;
-  // The settings tab only links to the configuration page; it loads nothing of its own.
-  if (activeTab.value === 'pengaturan') return null;
   return indicatorsStore.error || tablesStore.error;
 });
 
@@ -146,7 +125,6 @@ const loadFailureKinds = computed<FailureKind[]>(() => {
   if (activeTab.value === 'konten') {
     return contentBlocksStore.error ? [contentBlocksStore.errorKind ?? 'unknown'] : [];
   }
-  if (activeTab.value === 'pengaturan') return [];
   const kinds: FailureKind[] = [];
   if (indicatorsStore.error) kinds.push(indicatorsStore.errorKind ?? 'unknown');
   if (tablesStore.error) kinds.push(tablesStore.errorKind ?? 'unknown');
@@ -160,8 +138,6 @@ const loadErrorKind = computed<FailureKind | undefined>(() => {
 });
 
 function compareCards(a: IndicatorCardModel, b: IndicatorCardModel): number {
-  if (a.type === 'pengaturan') return 1;
-  if (b.type === 'pengaturan') return -1;
   const pageA = a.kicker ?? '\uffff';
   const pageB = b.kicker ?? '\uffff';
   const byPage = pageA.localeCompare(pageB, 'id');
@@ -240,26 +216,6 @@ const cards = computed<IndicatorCardModel[]>(() => {
     );
   }
 
-  if (activeTab.value === 'pengaturan') {
-    if (!authStore.isAdmin) return [];
-    return [
-      {
-        id: 'public-settings',
-        type: 'pengaturan' as const,
-        title: 'Pengaturan Publik Portal',
-        kicker: 'Sistem',
-        sectionLabel: settingsStore.appName,
-        stats: [
-          { label: 'Nama Institusi', value: settingsStore.institutionName },
-          { label: 'Kontak Telepon', value: settingsStore.contactPhone || '—' },
-        ],
-        source: null,
-        hedgeNote: null,
-        isStale: false,
-      },
-    ];
-  }
-
   return [...scalarCards, ...tableCards].sort(compareCards);
 });
 
@@ -277,22 +233,16 @@ const modalTitle = computed(() => {
   if (activeContentBlock.value) {
     return `Edit Blok Konten: ${blockDisplayName(activeContentBlock.value)}`;
   }
-  if (isEditingSettings.value) {
-    return 'Edit Pengaturan Publik Portal';
-  }
   return activeTableId.value ? 'Edit Tabel Matriks' : 'Edit Angka Indikator Skalar';
 });
 
 const modalSize = computed<'md' | 'xl'>(() =>
-  activeTableId.value || activeContentBlock.value || isEditingSettings.value ? 'xl' : 'md',
+  activeTableId.value || activeContentBlock.value ? 'xl' : 'md',
 );
 
 const modalDescription = computed(() => {
   // A content block's own form opens with the "Tampil di: …" line, so the dialog adds none.
   if (activeContentBlock.value) return undefined;
-  if (isEditingSettings.value) {
-    return 'Pengaturan profil institusi, kontak pelayanan, dan tampilan awal peta.';
-  }
   const sectionId = activeScalar.value?.sectionId ?? activeTable.value?.sectionId;
   if (!sectionId) return undefined;
   const parts = pagesStore.breadcrumbParts(sectionId);
@@ -330,7 +280,6 @@ async function loadAll(): Promise<void> {
     indicatorsStore.fetchIndicators(true),
     tablesStore.fetchTables(true),
     contentBlocksStore.fetchBlocks(true),
-    settingsStore.fetchPublicSettings(true),
   ]);
 }
 
@@ -343,7 +292,6 @@ function openScalar(indicator: Indicator): void {
   activeTableId.value = null;
   activeTable.value = null;
   activeContentBlock.value = null;
-  isEditingSettings.value = false;
   activeScalar.value = indicator;
   templatesStore.clearSelectorError();
   // Only a computed-comparison indicator can be given a template, so only then is the list
@@ -364,7 +312,6 @@ function handleEdit(card: IndicatorCardModel): void {
   activeTableId.value = null;
   activeTable.value = null;
   activeContentBlock.value = null;
-  isEditingSettings.value = false;
 
   if (card.type === 'skalar') {
     const indicator = indicatorsStore.indicators.find((item) => item.id === card.id);
@@ -386,25 +333,6 @@ function handleEdit(card: IndicatorCardModel): void {
     }
     return;
   }
-
-  if (card.type === 'pengaturan') {
-    if (!authStore.isAdmin) return;
-    if (settingsStore.error || !settingsStore.isLoaded) {
-      if (settingsStore.error) {
-        setServerError(settingsStore.error, settingsStore.errorKind);
-      } else {
-        setServerError(
-          settingsStore.isLoading
-            ? 'Pengaturan publik masih dimuat. Coba lagi sebentar lagi.'
-            : 'Pengaturan publik belum siap. Muat ulang halaman lalu coba lagi.',
-        );
-      }
-      return;
-    }
-    settingsFormDirty.value = false;
-    isEditingSettings.value = true;
-    return;
-  }
 }
 
 async function openTable(table: IndicatorTable): Promise<void> {
@@ -412,7 +340,6 @@ async function openTable(table: IndicatorTable): Promise<void> {
   activeScalar.value = null;
   activeTable.value = null;
   activeContentBlock.value = null;
-  isEditingSettings.value = false;
   activeTableId.value = table.id;
   isTableDetailLoading.value = true;
   try {
@@ -425,15 +352,11 @@ async function openTable(table: IndicatorTable): Promise<void> {
 }
 
 function resetEditor(): void {
-  settingsDiscardPromptOpen.value = false;
-  settingsFocusBeforePrompt = null;
   activeScalar.value = null;
   activeTableId.value = null;
   activeTable.value = null;
   activeContentBlock.value = null;
   contentBlockStale.value = false;
-  isEditingSettings.value = false;
-  settingsFormDirty.value = false;
   isTableDetailLoading.value = false;
   setServerError('');
   templatesStore.clearSelectorError();
@@ -481,56 +404,6 @@ async function handleContentBlockReload(): Promise<void> {
   contentBlockStale.value = false;
   activeContentBlock.value = fresh;
   announce('Versi terbaru blok konten dimuat.');
-}
-
-/**
- * Batal, Escape, the close button and the backdrop all land here for the settings dialog. A dirty
- * draft asks first; while the prompt is up, Escape, the backdrop and the close button mean "stay".
- */
-function requestCloseSettings(): void {
-  if (saving.value) return;
-  if (settingsDiscardPromptOpen.value) {
-    keepEditingSettings();
-    return;
-  }
-  const isDirty = settingsForm.value?.isDirty ?? settingsFormDirty.value;
-  if (!isDirty) {
-    resetEditor();
-    return;
-  }
-  const active = document.activeElement;
-  settingsFocusBeforePrompt = active instanceof HTMLElement ? active : null;
-  settingsDiscardPromptOpen.value = true;
-  void nextTick(() => settingsKeepButton.value?.focus());
-}
-
-function keepEditingSettings(): void {
-  settingsDiscardPromptOpen.value = false;
-  const target = settingsFocusBeforePrompt;
-  settingsFocusBeforePrompt = null;
-  void nextTick(() => {
-    if (target?.isConnected) target.focus();
-    else document.getElementById('settings-appName')?.focus();
-  });
-}
-
-function handleModalClose(): void {
-  if (isEditingSettings.value) requestCloseSettings();
-  else resetEditor();
-}
-
-async function handleSettingsSubmit(patch: Partial<PublicSettings>): Promise<void> {
-  saving.value = true;
-  setServerError('');
-  try {
-    await settingsStore.updatePublicSettings(patch);
-    resetEditor();
-    announce('Pengaturan publik portal berhasil disimpan.');
-  } catch (error) {
-    setServerFailure(error, 'menyimpan pengaturan publik');
-  } finally {
-    saving.value = false;
-  }
 }
 
 async function handleScalarSubmit(patch: IndicatorPatch): Promise<void> {
@@ -637,25 +510,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
       :aria-labelledby="`tab-${tab.id}`"
       :hidden="activeTab !== tab.id"
     >
-      <div
-        v-if="tab.id === 'pengaturan' && activeTab === tab.id"
-        class="rounded-card border-border bg-surface-muted mt-6 space-y-3 border p-6"
-        data-test="settings-moved"
-      >
-        <p class="text-brand-navy text-sm">
-          Pengaturan portal kini dikelola di halaman Konfigurasi sistem, bersama tampilan awal peta,
-          cuaca, dan masa simpan log.
-        </p>
-        <router-link
-          to="/admin/sistem/konfigurasi"
-          class="rounded-btn border-brand-navy text-brand-navy hover:bg-brand-navy hover:text-text-inverse focus-visible:outline-focus-ring inline-flex min-h-11 items-center justify-center border-2 bg-white px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
-          data-test="settings-moved-link"
-        >
-          Buka Konfigurasi sistem
-        </router-link>
-      </div>
-
-      <template v-if="activeTab === tab.id && tab.id !== 'pengaturan'">
+      <template v-if="activeTab === tab.id">
         <p
           v-if="tab.id === 'konten'"
           class="text-text-muted mt-6 text-sm"
@@ -728,9 +583,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
               cards.length === 0
                 ? activeTab === 'konten'
                   ? 'Belum ada data blok konten'
-                  : activeTab === 'pengaturan'
-                    ? 'Belum ada pengaturan'
-                    : 'Belum ada data indikator'
+                  : 'Belum ada data indikator'
                 : 'Tidak ada data yang cocok'
             }}
           </p>
@@ -739,9 +592,6 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
               <template v-if="activeTab === 'konten'">
                 Blok konten belum tersedia untuk lingkungan ini. Setelah dimigrasikan atau diisi,
                 kartunya akan muncul di sini dan bisa diedit.
-              </template>
-              <template v-else-if="activeTab === 'pengaturan'">
-                Pengaturan publik belum dikonfigurasi.
               </template>
               <template v-else>
                 Data indikator dan tabel matriks belum tersedia untuk lingkungan ini. Setelah
@@ -785,7 +635,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
       :description="modalDescription"
       :size="modalSize"
       :busy="saving"
-      @close="handleModalClose"
+      @close="resetEditor"
     >
       <p v-if="isTableDetailLoading" class="text-sm text-slate-600" aria-live="polite">
         Memuat rincian tabel…
@@ -828,59 +678,11 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
         @reload="handleContentBlockReload"
       />
 
-      <PublicSettingsForm
-        v-else-if="isEditingSettings"
-        v-show="!settingsDiscardPromptOpen"
-        ref="settingsForm"
-        :settings="settingsStore.settings"
-        :busy="saving"
-        :server-error="serverError"
-        @submit="handleSettingsSubmit"
-        @cancel="requestCloseSettings"
-        @dirty-change="settingsFormDirty = $event"
-      />
-
       <AlertBanner
         v-else-if="serverError"
         :message="serverError"
         :kind="serverErrorKind ?? undefined"
       />
-
-      <div
-        v-if="isEditingSettings && settingsDiscardPromptOpen"
-        role="alertdialog"
-        aria-labelledby="settings-discard-title"
-        aria-describedby="settings-discard-body"
-        class="space-y-4"
-        data-test="settings-discard-prompt"
-      >
-        <h3 id="settings-discard-title" class="text-brand-navy text-base font-semibold">
-          Perubahan belum disimpan
-        </h3>
-        <p id="settings-discard-body" class="text-brand-navy text-sm">
-          Tutup tanpa menyimpan perubahan?
-        </p>
-        <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <BaseButton
-            variant="secondary"
-            size="md"
-            class="min-h-11"
-            data-test="settings-discard-confirm"
-            @click="resetEditor"
-          >
-            Tutup tanpa menyimpan
-          </BaseButton>
-          <button
-            ref="settingsKeepButton"
-            type="button"
-            class="bg-brand-navy hover:bg-brand-navy/90 focus-visible:outline-focus-ring rounded-btn min-h-11 px-5 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2"
-            data-test="settings-discard-keep"
-            @click="keepEditingSettings"
-          >
-            Tetap di sini
-          </button>
-        </div>
-      </div>
     </BaseModal>
   </div>
 </template>
