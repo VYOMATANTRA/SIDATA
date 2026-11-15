@@ -821,8 +821,8 @@ full-width card per publication in a single-column list, like a journal listing.
 and the selection checkbox in a left column, then the category chip (with "Segera hadir" beside it when
 the publication is not downloadable), the title, the description clamped to three lines, the cover
 (a portrait thumbnail, or a neutral placeholder) beside five labelled facts (Halaman, Diterbitkan,
-Format, Ukuran, Sumber, each "—" when not stored), a divider, and the text-link actions Unduh (only when
-downloadable), Ubah and Hapus; Naik and Turun show in Urutkan mode. Every action is a real button or link
+Format, Ukuran, Sumber, each "—" when not stored), a divider, and the outlined actions (the same buttons as Cerita, with the same icons)
+Unduh (a link, only when downloadable), Ubah and Hapus; Naik and Turun show in Urutkan mode. Every action is a real button or link
 whose accessible name starts with the visible word and names the publication. The cover is the editor
 preview, loaded with the authenticated client as a blob URL, only once the card is near the viewport.
 
