@@ -76,6 +76,47 @@ describe('pages store (CMS hierarchy)', () => {
     expect(store.isLoaded).toBe(true);
   });
 
+  it('copies createdAt onto each authoring page, and leaves it null when the API omits it', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url === '/api/pages?include=sections') {
+        return json({
+          pages: [
+            {
+              id: 'p1',
+              slug: 'kependudukan',
+              title: 'Kependudukan',
+              sortOrder: 0,
+              chapters: [],
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-02-01T00:00:00.000Z',
+            },
+            {
+              id: 'p2',
+              slug: 'pendidikan',
+              title: 'Pendidikan',
+              sortOrder: 1,
+              chapters: [],
+              updatedAt: '2026-02-01T00:00:00.000Z',
+            },
+          ],
+        });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const store = usePagesStore();
+    await store.fetchHierarchy(true);
+
+    expect(store.hierarchyIncomplete).toBe(false);
+    expect(store.hierarchyPages.map((page) => page.createdAt)).toEqual([
+      '2026-01-01T00:00:00.000Z',
+      null,
+    ]);
+    expect(store.hierarchyPages[0]?.updatedAt).toBe('2026-02-01T00:00:00.000Z');
+  });
+
   it('omits a null section title from the breadcrumb', async () => {
     globalThis.fetch = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);

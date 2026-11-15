@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { swapReorderItems } from '../utils/ceritaOrder';
+import { moveReorderItems, swapReorderItems } from '../utils/ceritaOrder';
 
 const rows = [
   { id: 'a', sortOrder: 0 },
@@ -107,5 +107,41 @@ describe('swapReorderItems', () => {
       { id: 'n', sortOrder: 0 },
       { id: 'a', sortOrder: 1 },
     ]);
+  });
+});
+
+describe('moveReorderItems (drag and drop)', () => {
+  const siblings = [
+    { id: 'a', sortOrder: 0 },
+    { id: 'b', sortOrder: 1 },
+    { id: 'c', sortOrder: 2 },
+  ];
+
+  it('moves a sibling to a later index and renumbers the list in its new order', () => {
+    expect(moveReorderItems(siblings, 'a', 2)).toEqual([
+      { id: 'b', sortOrder: 0 },
+      { id: 'c', sortOrder: 1 },
+      { id: 'a', sortOrder: 2 },
+    ]);
+  });
+
+  it('moves a sibling to an earlier index', () => {
+    expect(moveReorderItems(siblings, 'c', 0)).toEqual([
+      { id: 'c', sortOrder: 0 },
+      { id: 'a', sortOrder: 1 },
+      { id: 'b', sortOrder: 2 },
+    ]);
+  });
+
+  it('returns null when the sibling would stay in place, the index is out of range, or the id is unknown', () => {
+    expect(moveReorderItems(siblings, 'b', 1)).toBeNull();
+    expect(moveReorderItems(siblings, 'b', 3)).toBeNull();
+    expect(moveReorderItems(siblings, 'b', -1)).toBeNull();
+    expect(moveReorderItems(siblings, 'zz', 0)).toBeNull();
+  });
+
+  it('agrees with swapReorderItems for a one-step move', () => {
+    expect(moveReorderItems(siblings, 'b', 0)).toEqual(swapReorderItems(siblings, 'b', -1));
+    expect(moveReorderItems(siblings, 'b', 2)).toEqual(swapReorderItems(siblings, 'b', 1));
   });
 });

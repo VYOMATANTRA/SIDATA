@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
- * `/admin/cerita`: management of the Cerita pages (SPEC §2, §3, §8). Editors and Admins add,
- * rename, reorder and delete pages, chapters and sections, and fill a section with paragraphs
- * and one figure (a photo, several photos or a diagram).
+ * `/admin/cerita`: management of the Cerita pages (SPEC §2, §3, §8). The default view is a list of
+ * page cards (search, Urutkan, Pilih, Tambah). Edit opens one page's structure at
+ * `?halaman=<slug>`, where editors add, rename, reorder and delete chapters and sections and fill a
+ * section with paragraphs and one figure (a photo, several photos or a diagram).
  *
  * Header title and subtitle live in route `meta` (router/index.ts), seeded by AdminLayout, so
  * this view's own headings start at <h2>.
@@ -12,18 +13,26 @@
  * - A refused write never clears a draft; a "stale" refusal offers a reload that leaves it.
  * - Messages are plain Indonesian from `ceritaAdminMessages` / `userMessages`; no status codes,
  *   field names or server strings reach the screen.
- * - Focus goes back where the editor was working after every dialog, add, move and delete.
+ * - Focus goes back where the editor was working after every dialog, add, move, delete and return
+ *   to the list.
  */
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { onBeforeRouteLeave } from 'vue-router';
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
+import {
+  ArrowLeftIcon,
+  BookOpenIcon,
+  MagnifyingGlassIcon,
+  PlusIcon,
+} from '@heroicons/vue/24/outline';
 import BaseButton from '../components/common/BaseButton.vue';
 import AlertBanner from '../components/common/AlertBanner.vue';
 import BaseModal from '../components/common/BaseModal.vue';
+import CeritaBulkDeleteDialog from '../components/admin/cerita/CeritaBulkDeleteDialog.vue';
 import CeritaDeleteDialog from '../components/admin/cerita/CeritaDeleteDialog.vue';
 import CeritaPageDetailsDialog from '../components/admin/cerita/CeritaPageDetailsDialog.vue';
 import CeritaNameDialog from '../components/admin/cerita/CeritaNameDialog.vue';
+import CeritaPageCardList from '../components/admin/cerita/CeritaPageCardList.vue';
 import CeritaReloadNotice from '../components/admin/cerita/CeritaReloadNotice.vue';
-import CeritaPageList from '../components/admin/cerita/CeritaPageList.vue';
 import CeritaSectionEditor from '../components/admin/cerita/CeritaSectionEditor.vue';
 import CeritaStructurePanel from '../components/admin/cerita/CeritaStructurePanel.vue';
 import { ceritaIds } from '../components/admin/cerita/ceritaDomIds';
@@ -34,14 +43,25 @@ import { useAuthStore } from '../stores/auth';
 import {
   useCeritaAdminStore,
   type AdminChapter,
+  type AdminPage,
   type AdminSection,
   type WriteOutcome,
 } from '../stores/ceritaAdmin.store';
 
 const store = useCeritaAdminStore();
 const authStore = useAuthStore();
+const route = useRoute();
+const router = useRouter();
 
 type Direction = -1 | 1;
+
+/** One line of the bulk-delete report: what happened to one selected page. */
+interface BulkResult {
+  slug: string;
+  title: string;
+  status: 'deleted' | 'blocked' | 'failed';
+  message?: string;
+}
 
 type NameTarget =
   | { kind: 'page-add' }
@@ -100,8 +120,18 @@ const editorDirty = ref(false);
 const discardPromptOpen = ref(false);
 const keepEditingButton = ref<InstanceType<typeof BaseButton> | null>(null);
 
+// The page open in the structure view comes from the URL (`?halaman=<slug>`), so Back and a
+// reload land where the editor was. No query means the list.
+const detailSlug = computed(() => {
+  const raw = route.query.halaman;
+  return typeof raw === 'string' && raw !== '' ? raw : null;
+});
+
 const pages = computed(() => store.tree);
-const page = computed(() => store.selectedPage);
+/** The page whose structure is open; null on the list, and while the slug is not (yet) known. */
+const page = computed<AdminPage | null>(() =>
+  detailSlug.value ? (store.findPage(detailSlug.value) ?? null) : null,
+);
 const pageIndex = computed(() => pages.value.findIndex((item) => item.slug === page.value?.slug));
 const structureBusy = computed(
   () => moving.value || nameBusy.value || deleteBusy.value || detailsBusy.value,
@@ -113,6 +143,17 @@ const loadErrorShowing = computed(() => store.loadError !== null && !store.reloa
 onMounted(() => {
   void store.load();
 });
+
+// The store's own selection follows the URL, so its page-level helpers agree with the screen. When
+// the structure view closes (Back, the list button, or a delete), the page's Edit button gets focus.
+watch(
+  detailSlug,
+  (slug, previous) => {
+    store.selectPage(slug);
+    if (slug === null && previous) focusId(ceritaIds.cardEdit(previous));
+  },
+  { immediate: true },
+);
 
 function announce(message: string): void {
   // Clearing first makes an identical repeat message announce again.
@@ -153,10 +194,18 @@ async function reload(): Promise<void> {
   announce('Data terbaru dimuat.');
 }
 
-function selectPage(slug: string): void {
-  store.selectPage(slug);
+/** Edit on a card: opens the page's structure (a history entry, so the browser Back returns here). */
+async function openPage(slug: string): Promise<void> {
   clearActionError();
+  await router.push({ name: 'admin-cerita', query: { halaman: slug } });
+  await nextTick();
   focusId(ceritaIds.pageHeading);
+}
+
+/** "Kembali ke daftar": the list again; the watch on `detailSlug` returns focus to the card. */
+function backToList(): void {
+  clearActionError();
+  void router.push({ name: 'admin-cerita' });
 }
 
 // --- Add / rename dialog ---
@@ -252,6 +301,10 @@ async function submitName(title: string): Promise<void> {
       outcome = result;
       focus = ceritaIds.pageHeading;
       message = `Halaman “${title}” ditambahkan.`;
+      // The new page opens at once, so its first chapter can be added.
+      if (result.ok) {
+        await router.push({ name: 'admin-cerita', query: { halaman: result.value.slug } });
+      }
       break;
     }
     case 'page-rename':
@@ -414,16 +467,16 @@ function sectionLabel(section: AdminSection, chapter: AdminChapter): string {
   return section.title?.trim() ? section.title : `Bagian ${index + 1}`;
 }
 
-function openDeletePage(): void {
-  const current = page.value;
-  if (!current) return;
+/** Delete for one page: from its card (`target` given) or from the open structure view. */
+function openDeletePage(target: AdminPage | null = page.value): void {
+  if (!target) return;
   deleteTarget.value = {
     kind: 'page',
-    slug: current.slug,
-    title: current.title,
-    chapters: current.chapters.length,
-    sections: current.chapters.reduce((sum, chapter) => sum + chapter.sections.length, 0),
-    token: current.updatedAt,
+    slug: target.slug,
+    title: target.title,
+    chapters: target.chapters.length,
+    sections: target.chapters.reduce((sum, chapter) => sum + chapter.sections.length, 0),
+    token: target.updatedAt,
   };
   resetDeleteState();
 }
@@ -476,7 +529,7 @@ async function confirmDelete(): Promise<void> {
     case 'page':
       outcome = await store.removePage(target.slug, target.token);
       message = `Halaman “${target.title}” dihapus.`;
-      focus = store.selectedPage ? ceritaIds.pageHeading : ceritaIds.addPage;
+      focus = ceritaIds.addPage;
       break;
     case 'chapter':
       outcome = await store.removeChapter(target.id, target.token);
@@ -494,9 +547,11 @@ async function confirmDelete(): Promise<void> {
   if (outcome.ok) {
     deleteTarget.value = null;
     announce(message);
+    // A page deleted from its own structure view has nothing left to show there: back to the list.
+    if (target.kind === 'page' && detailSlug.value === target.slug) {
+      await router.replace({ name: 'admin-cerita' });
+    }
     await nextTick();
-    if (target.kind === 'page')
-      focus = store.selectedPage ? ceritaIds.pageHeading : ceritaIds.addPage;
     if (focus) focusId(focus);
     return;
   }
@@ -626,19 +681,24 @@ async function runMove(action: () => Promise<WriteOutcome>, onDone: () => void):
   onDone();
 }
 
+/** Moves one page; the two ids are the buttons that move it (list card or structure view). */
+function movePageBySlug(slug: string, direction: Direction, upId: string, downId: string): void {
+  const target = store.findPage(slug);
+  if (!target) return;
+  void runMove(
+    () => store.movePage(slug, direction),
+    () => {
+      const index = pages.value.findIndex((item) => item.slug === slug);
+      announce(`Halaman “${target.title}” dipindah ke urutan ${index + 1} dari ${pages.value.length}.`);
+      focusAfterMove(upId, downId, index, pages.value.length, direction);
+    },
+  );
+}
+
 function movePage(direction: Direction): void {
   const current = page.value;
   if (!current) return;
-  void runMove(
-    () => store.movePage(current.slug, direction),
-    () => {
-      const index = pages.value.findIndex((item) => item.slug === current.slug);
-      announce(
-        `Halaman “${current.title}” dipindah ke urutan ${index + 1} dari ${pages.value.length}.`,
-      );
-      focusAfterMove(ceritaIds.pageUp, ceritaIds.pageDown, index, pages.value.length, direction);
-    },
-  );
+  movePageBySlug(current.slug, direction, ceritaIds.pageUp, ceritaIds.pageDown);
 }
 
 function moveChapter(chapter: AdminChapter, direction: Direction): void {
@@ -679,6 +739,249 @@ function moveSection(chapter: AdminChapter, section: AdminSection, direction: Di
       );
     },
   );
+}
+
+// --- Cerita list (the default view) ---
+
+const query = ref('');
+/** Urutkan mode: Naik / Turun buttons show on each card (drag works either way). */
+const sorting = ref(false);
+/** Checked cards. Checkboxes are always shown; only cards the list shows are ever selected. */
+const selectedSlugs = ref<string[]>([]);
+/** Card being dragged (Urutkan mode) and the card it hovers, with the side the drop would land. */
+const dragSlug = ref<string | null>(null);
+const dropTarget = ref<{ slug: string; edge: 'before' | 'after' } | null>(null);
+/** The drag hovers the zone after the last card (drop there = the end of the list). */
+const dropAtEnd = ref(false);
+const bulkTarget = ref<{ items: { slug: string; title: string; token: string }[] } | null>(null);
+const bulkRunning = ref(false);
+const bulkResults = ref<BulkResult[] | null>(null);
+const bulkStale = ref(false);
+const bulkError = ref('');
+
+const filteredPages = computed(() => {
+  const term = query.value.trim().toLowerCase();
+  return term ? pages.value.filter((item) => item.title.toLowerCase().includes(term)) : pages.value;
+});
+const firstSlug = computed(() => pages.value[0]?.slug ?? null);
+const lastSlug = computed(() => pages.value[pages.value.length - 1]?.slug ?? null);
+const listBusy = computed(() => moving.value || deleteBusy.value || bulkRunning.value);
+/**
+ * Why dragging is off right now: a search filter hides part of the order, and a save in flight
+ * would race the next drop. Null means the grip can be dragged, in Urutkan mode or not.
+ */
+const dragBlock = computed<'search' | 'busy' | null>(() => {
+  if (query.value.trim() !== '') return 'search';
+  if (listBusy.value) return 'busy';
+  return null;
+});
+
+// A selection only ever covers pages the list shows: a page hidden by the search, or removed
+// elsewhere, is dropped so "Hapus terpilih" cannot touch what the editor cannot see.
+watch([query, pages], () => {
+  const visible = new Set(filteredPages.value.map((item) => item.slug));
+  const kept = selectedSlugs.value.filter((slug) => visible.has(slug));
+  if (kept.length !== selectedSlugs.value.length) selectedSlugs.value = kept;
+});
+
+function toggleSorting(): void {
+  sorting.value = !sorting.value;
+  clearDrag();
+}
+
+function toggleSelected(slug: string): void {
+  selectedSlugs.value = selectedSlugs.value.includes(slug)
+    ? selectedSlugs.value.filter((item) => item !== slug)
+    : [...selectedSlugs.value, slug];
+}
+
+/** Select-all acts on the cards the list shows (after the search), never on hidden ones. */
+// While something is selected, "Tambah Cerita" is hidden with `invisible`: its slot keeps the
+// toolbar still, and a hidden control leaves the focus order and the accessibility tree. If the
+// focused control is one that disappears (Tambah or Hapus semua), focus moves to select-all.
+watch(
+  () => selectedSlugs.value.length,
+  (count, previous) => {
+    if (count === previous) return;
+    const active = document.activeElement?.id;
+    if (active === ceritaIds.bulkDelete || active === ceritaIds.addPage) {
+      void nextTick(() => focusId(ceritaIds.selectAll));
+    }
+  },
+);
+
+const selectedVisibleCount = computed(
+  () => filteredPages.value.filter((item) => selectedSlugs.value.includes(item.slug)).length,
+);
+/** none / some / all, for the tri-state select-all button. */
+const selectAllState = computed<'none' | 'some' | 'all'>(() => {
+  const visible = filteredPages.value.length;
+  if (selectedVisibleCount.value === 0) return 'none';
+  return selectedVisibleCount.value === visible ? 'all' : 'some';
+});
+
+function toggleSelectAll(): void {
+  const visible = filteredPages.value.map((item) => item.slug);
+  if (selectAllState.value === 'all') {
+    selectedSlugs.value = selectedSlugs.value.filter((slug) => !visible.includes(slug));
+    announce('Pilihan Cerita dibatalkan.');
+    return;
+  }
+  selectedSlugs.value = [...new Set([...selectedSlugs.value, ...visible])];
+  announce(`${visible.length} Cerita dipilih.`);
+}
+
+// --- Drag and drop: the grip works at any time except during a search or a save (`dragBlock`).
+// Naik / Turun in Urutkan mode do the same reorder from the keyboard and on touch. ---
+
+function clearDrag(): void {
+  dragSlug.value = null;
+  dropTarget.value = null;
+  dropAtEnd.value = false;
+}
+
+function startDrag(slug: string): void {
+  if (dragBlock.value) return;
+  dragSlug.value = slug;
+  dropTarget.value = null;
+}
+
+function hoverDrop(slug: string, edge: 'before' | 'after'): void {
+  dropAtEnd.value = false;
+  if (!dragSlug.value || dragSlug.value === slug) {
+    dropTarget.value = null;
+    return;
+  }
+  dropTarget.value = { slug, edge };
+}
+
+function hoverEnd(): void {
+  dropTarget.value = null;
+  dropAtEnd.value = dragSlug.value !== null;
+}
+
+/** Drop after the last card: the dragged card becomes the last one. */
+function dropEnd(): void {
+  const dragged = dragSlug.value;
+  clearDrag();
+  if (!dragged) return;
+  const last = pages.value[pages.value.length - 1]?.slug;
+  if (!last || last === dragged) return;
+  placeDragged(dragged, pages.value.length - 1);
+}
+
+/**
+ * Saves the drop: the dragged card goes before or after the card it was dropped on. Positions are
+ * taken from the full order, so a search filter cannot shift the result.
+ */
+function dropOn(slug: string, edge: 'before' | 'after'): void {
+  const dragged = dragSlug.value;
+  clearDrag();
+  if (!dragged || dragged === slug) return;
+  const from = pages.value.findIndex((item) => item.slug === dragged);
+  const anchor = pages.value.findIndex((item) => item.slug === slug);
+  if (from < 0 || anchor < 0) return;
+  let toIndex = edge === 'before' ? anchor : anchor + 1;
+  if (from < toIndex) toIndex -= 1;
+  placeDragged(dragged, toIndex);
+}
+
+/** Saves a drop at `toIndex` (0-based, full order) and announces and focuses the result. */
+function placeDragged(dragged: string, toIndex: number): void {
+  const from = pages.value.findIndex((item) => item.slug === dragged);
+  if (from < 0 || toIndex === from) return;
+  const direction: Direction = toIndex > from ? 1 : -1;
+  const title = pages.value[from]?.title ?? '';
+  void runMove(
+    () => store.placePage(dragged, toIndex),
+    () => {
+      const index = pages.value.findIndex((item) => item.slug === dragged);
+      announce(`Halaman “${title}” dipindah ke urutan ${index + 1} dari ${pages.value.length}.`);
+      focusAfterMove(
+        ceritaIds.cardUp(dragged),
+        ceritaIds.cardDown(dragged),
+        index,
+        pages.value.length,
+        direction,
+      );
+    },
+  );
+}
+
+function moveListPage(slug: string, direction: Direction): void {
+  movePageBySlug(slug, direction, ceritaIds.cardUp(slug), ceritaIds.cardDown(slug));
+}
+
+function openDeleteFromList(slug: string): void {
+  openDeletePage(store.findPage(slug) ?? null);
+}
+
+function openBulkDelete(): void {
+  const items = pages.value
+    .filter((item) => selectedSlugs.value.includes(item.slug))
+    .map((item) => ({ slug: item.slug, title: item.title, token: item.updatedAt }));
+  if (items.length === 0) return;
+  bulkResults.value = null;
+  bulkStale.value = false;
+  bulkError.value = '';
+  bulkTarget.value = { items };
+}
+
+function closeBulk(): void {
+  if (bulkRunning.value) return;
+  bulkTarget.value = null;
+  bulkResults.value = null;
+  bulkStale.value = false;
+  bulkError.value = '';
+  // The button that opened the dialog may now be disabled (nothing selected), so pick a live one.
+  void nextTick(() =>
+    focusId(selectedSlugs.value.length > 0 ? ceritaIds.bulkDelete : ceritaIds.selectAll),
+  );
+}
+
+/**
+ * Deletes the selected pages one after another, each with the token it had when the dialog
+ * opened. A page that still holds content is refused by the server and reported as blocked; a
+ * page that changed since is reported as stale. Every page gets one line in the report.
+ */
+async function confirmBulkDelete(): Promise<void> {
+  const target = bulkTarget.value;
+  if (!target || bulkRunning.value) return;
+  bulkRunning.value = true;
+  bulkStale.value = false;
+  bulkError.value = '';
+  const results: BulkResult[] = [];
+  for (const item of target.items) {
+    const outcome = await store.removePage(item.slug, item.token);
+    if (outcome.ok) {
+      results.push({ slug: item.slug, title: item.title, status: 'deleted' });
+      selectedSlugs.value = selectedSlugs.value.filter((slug) => slug !== item.slug);
+    } else {
+      results.push({
+        slug: item.slug,
+        title: item.title,
+        status: outcome.blocked ? 'blocked' : 'failed',
+        message: outcome.message,
+      });
+      if (outcome.stale) bulkStale.value = true;
+    }
+  }
+  bulkRunning.value = false;
+  bulkResults.value = results;
+  const deleted = results.filter((item) => item.status === 'deleted').length;
+  announce(`${deleted} halaman dihapus, ${results.length - deleted} tidak dapat dihapus.`);
+}
+
+/** Loads the latest pages after a stale report; the editor then opens the dialog again. */
+async function reloadBulk(): Promise<void> {
+  const loaded = await store.load();
+  if (!loaded) {
+    bulkError.value = COULD_NOT_RELOAD;
+    return;
+  }
+  bulkStale.value = false;
+  bulkError.value = '';
+  announce('Data terbaru dimuat. Tutup jendela ini lalu pilih lagi halaman yang ingin dihapus.');
 }
 
 // --- Section editor dialog ---
@@ -788,11 +1091,6 @@ onUnmounted(() => {
 
 <template>
   <div class="space-y-6">
-    <p class="text-text-muted max-w-3xl text-sm">
-      Atur halaman Cerita, bab, dan bagiannya, lalu isi setiap bagian dengan paragraf dan satu
-      gambar. Perubahan langsung tampil di situs setelah disimpan.
-    </p>
-
     <p class="sr-only" role="status" aria-live="polite" data-test="status">{{ statusMessage }}</p>
 
     <CeritaReloadNotice v-if="!authStore.sessionEnded" />
@@ -830,20 +1128,187 @@ onUnmounted(() => {
       Memuat halaman Cerita…
     </p>
 
-    <div
-      v-else-if="store.hasLoaded"
-      class="grid gap-8 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] lg:items-start"
+    <section
+      v-else-if="store.hasLoaded && detailSlug === null"
+      aria-labelledby="cerita-judul-daftar"
+      class="space-y-4"
+      data-test="list-view"
     >
-      <CeritaPageList
-        :pages="pages"
-        :selected-slug="page?.slug ?? null"
-        :busy="structureBusy"
-        @select="selectPage"
-        @add="openName({ kind: 'page-add' })"
+      <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <h2
+          id="cerita-judul-daftar"
+          class="text-brand-navy flex items-center gap-2 text-xl font-semibold"
+        >
+          <BookOpenIcon class="h-6 w-6 shrink-0" aria-hidden="true" />
+          Cerita
+        </h2>
+
+        <!-- Phones: every control full width in one column; from md: one row, right-aligned. -->
+        <div
+          class="flex w-full flex-col gap-2 md:w-auto md:flex-row md:flex-wrap md:items-center md:justify-end"
+          data-test="toolbar"
+        >
+          <div class="relative w-full md:w-auto">
+            <label :for="ceritaIds.search" class="sr-only">Cari Cerita</label>
+            <MagnifyingGlassIcon
+              class="text-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
+              aria-hidden="true"
+              data-test="search-icon"
+            />
+            <input
+              :id="ceritaIds.search"
+              v-model="query"
+              type="search"
+              placeholder="Cari Cerita"
+              autocomplete="off"
+              class="rounded-btn border-border-strong text-brand-navy placeholder:text-text-muted focus-visible:outline-focus-ring min-h-11 w-full border bg-surface py-2 pr-3 pl-9 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 md:w-56"
+              data-test="search"
+            />
+          </div>
+          <BaseButton
+            :id="ceritaIds.sortToggle"
+            type="button"
+            variant="secondary"
+            size="md"
+            class="min-h-11 w-full md:w-auto"
+            :aria-pressed="sorting ? 'true' : 'false'"
+            :disabled="listBusy"
+            data-test="sort-toggle"
+            @click="toggleSorting"
+          >
+            Urutkan Cerita
+          </BaseButton>
+          <BaseButton
+            :id="ceritaIds.selectAll"
+            type="button"
+            role="checkbox"
+            :variant="selectedSlugs.length > 0 ? 'primary' : 'secondary'"
+            size="md"
+            class="min-h-11 w-full min-w-[12.5rem] md:w-auto"
+            :aria-checked="selectAllState === 'some' ? 'mixed' : selectAllState === 'all' ? 'true' : 'false'"
+            :disabled="listBusy || pages.length === 0"
+            data-test="select-all"
+            @click="toggleSelectAll"
+          >
+            <template #leftIcon>
+              <svg viewBox="0 0 20 20" class="h-4 w-4" aria-hidden="true" focusable="false">
+                <rect x="3" y="3" width="14" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="1.6" />
+                <path v-if="selectAllState === 'all'" d="M6.5 10.5l2.4 2.4 4.6-4.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                <path v-else-if="selectAllState === 'some'" d="M6.5 10h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+            </template>
+            {{ selectAllState === 'all' ? 'Batal pilih semua' : 'Pilih semua' }}
+          </BaseButton>
+          <BaseButton
+            :id="ceritaIds.addPage"
+            type="button"
+            size="md"
+            class="min-h-11 w-full md:w-auto"
+            :class="selectedSlugs.length > 0 ? 'invisible' : ''"
+            :disabled="listBusy"
+            data-test="add-page"
+            @click="openName({ kind: 'page-add' })"
+          >
+            <template #leftIcon>
+              <PlusIcon class="h-4 w-4" aria-hidden="true" />
+            </template>
+            Tambah Cerita
+          </BaseButton>
+        </div>
+      </div>
+
+      <!--
+        A fixed-height row: the search count and the bulk actions come and go here, so nothing
+        above or below it moves. The bulk group exists only while at least one card is selected.
+      -->
+      <div class="flex min-h-11 items-center gap-3" data-test="selection-bar">
+        <p
+          v-if="query.trim() !== ''"
+          class="text-text-muted text-sm"
+          role="status"
+          data-test="search-count"
+        >
+          Menampilkan {{ filteredPages.length }} dari {{ pages.length }} Cerita.
+        </p>
+        <div v-if="selectedSlugs.length > 0" class="ml-auto flex items-center gap-3">
+          <span class="text-brand-navy text-sm font-semibold" data-test="selected-count">
+            {{ selectedSlugs.length }} dipilih
+          </span>
+          <BaseButton
+            :id="ceritaIds.bulkDelete"
+            type="button"
+            variant="secondary"
+            size="md"
+            class="min-h-11"
+            :disabled="listBusy"
+            data-test="bulk-delete"
+            @click="openBulkDelete"
+          >
+            Hapus semua
+          </BaseButton>
+        </div>
+      </div>
+
+      <CeritaPageCardList
+        :pages="filteredPages"
+        :total-count="pages.length"
+        :first-slug="firstSlug"
+        :last-slug="lastSlug"
+        :sorting="sorting"
+        :drag-block="dragBlock"
+        :selected-slugs="selectedSlugs"
+        :drag-slug="dragSlug"
+        :drop-target="dropTarget"
+        :busy="listBusy"
+        @edit="openPage"
+        @delete="openDeleteFromList"
+        @move="moveListPage"
+        @toggle="toggleSelected"
+        @drag-start="startDrag"
+        @drag-end="clearDrag"
+        @drag-over="hoverDrop"
+        :drop-at-end="dropAtEnd"
+        @drop="dropOn"
+        @drag-over-end="hoverEnd"
+        @drop-end="dropEnd"
       />
+    </section>
+
+    <div v-else-if="store.hasLoaded" class="space-y-6" data-test="detail-view">
+      <div>
+        <BaseButton
+          :id="ceritaIds.backToList"
+          type="button"
+          variant="secondary"
+          size="md"
+          class="min-h-11"
+          data-test="back-to-list"
+          @click="backToList"
+        >
+          <template #leftIcon>
+            <ArrowLeftIcon class="h-4 w-4" aria-hidden="true" />
+          </template>
+          Kembali ke daftar
+        </BaseButton>
+      </div>
+
+      <p class="text-text-muted max-w-3xl text-sm">
+        Atur bab dan bagian halaman ini, lalu isi setiap bagian dengan paragraf dan satu gambar.
+        Perubahan langsung tampil di situs setelah disimpan.
+      </p>
+
+      <p
+        v-if="!page"
+        class="rounded-card border-border-strong text-text-muted border border-dashed p-4 text-sm"
+        role="status"
+        data-test="page-missing"
+      >
+        Halaman ini tidak ditemukan. Mungkin sudah dihapus. Pilih “Kembali ke daftar” untuk memilih
+        Cerita yang lain.
+      </p>
 
       <CeritaStructurePanel
-        v-if="page"
+        v-else
         :page="page"
         :is-first-page="pageIndex <= 0"
         :is-last-page="pageIndex === pages.length - 1"
@@ -940,6 +1405,18 @@ onUnmounted(() => {
       @confirm="confirmDelete"
       @close="closeDelete"
       @reload="reloadFromDelete"
+    />
+
+    <CeritaBulkDeleteDialog
+      :open="bulkTarget !== null"
+      :items="bulkTarget?.items ?? []"
+      :busy="bulkRunning"
+      :results="bulkResults"
+      :stale="bulkStale"
+      :error="bulkError"
+      @confirm="confirmBulkDelete"
+      @close="closeBulk"
+      @reload="reloadBulk"
     />
 
     <BaseModal
