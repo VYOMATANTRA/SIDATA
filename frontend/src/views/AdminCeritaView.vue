@@ -42,6 +42,7 @@ import CeritaPageCardList from '../components/admin/cerita/CeritaPageCardList.vu
 import CeritaReloadNotice from '../components/admin/cerita/CeritaReloadNotice.vue';
 import CeritaSectionEditor from '../components/admin/cerita/CeritaSectionEditor.vue';
 import CeritaStructurePanel from '../components/admin/cerita/CeritaStructurePanel.vue';
+import CeritaThumbnailDialog from '../components/admin/cerita/CeritaThumbnailDialog.vue';
 import { ceritaIds } from '../components/admin/cerita/ceritaDomIds';
 import { dependentsMessage } from '../utils/ceritaAdminMessages';
 import type { FailureKind } from '../utils/userMessages';
@@ -106,6 +107,18 @@ const detailsPage = computed(() =>
   detailsTarget.value ? (store.findPage(detailsTarget.value.slug) ?? null) : null,
 );
 
+// Custom cover thumbnail of the chosen page. `token` follows the details dialog's rule: the first
+// save/remove carries the `updatedAt` seen when the dialog opened; only its reload button advances it.
+const thumbnailTarget = ref<{ slug: string; token: string; triggerId: string } | null>(null);
+const thumbnailBusy = ref(false);
+const thumbnailError = ref('');
+/** Failure class of `thumbnailError`, for AlertBanner. */
+const thumbnailErrorKind = ref<FailureKind | null>(null);
+const thumbnailStale = ref(false);
+const thumbnailPage = computed(() =>
+  thumbnailTarget.value ? (store.findPage(thumbnailTarget.value.slug) ?? null) : null,
+);
+
 const deleteTarget = ref<DeleteTarget | null>(null);
 const deleteBusy = ref(false);
 const deleteError = ref('');
@@ -134,7 +147,8 @@ const page = computed<AdminPage | null>(() =>
 );
 const pageIndex = computed(() => pages.value.findIndex((item) => item.slug === page.value?.slug));
 const structureBusy = computed(
-  () => moving.value || nameBusy.value || deleteBusy.value || detailsBusy.value,
+  () =>
+    moving.value || nameBusy.value || deleteBusy.value || detailsBusy.value || thumbnailBusy.value,
 );
 const showInitialLoading = computed(() => !store.hasLoaded && store.isLoading);
 /** Mirrors the load-error banner's `v-if` in the template. */
@@ -398,6 +412,79 @@ async function reloadFromDetails(): Promise<void> {
   if (target && token) detailsTarget.value = { ...target, token };
   detailsStale.value = false;
   detailsError.value = '';
+}
+
+function openThumbnail(slug: string, triggerId: string): void {
+  const targetPage = store.findPage(slug);
+  if (!targetPage) return;
+  thumbnailError.value = '';
+  thumbnailErrorKind.value = null;
+  thumbnailStale.value = false;
+  thumbnailTarget.value = { slug, token: targetPage.updatedAt, triggerId };
+}
+
+function closeThumbnail(): void {
+  const target = thumbnailTarget.value;
+  if (thumbnailBusy.value || !target) return;
+  thumbnailTarget.value = null;
+  thumbnailError.value = '';
+  thumbnailErrorKind.value = null;
+  thumbnailStale.value = false;
+  focusId(target.triggerId);
+}
+
+async function runThumbnailWrite(
+  action: (target: { slug: string; token: string; triggerId: string }) => Promise<WriteOutcome>,
+  successMessage: string,
+): Promise<void> {
+  const target = thumbnailTarget.value;
+  if (!target || thumbnailBusy.value) return;
+  thumbnailBusy.value = true;
+  thumbnailError.value = '';
+  thumbnailErrorKind.value = null;
+  thumbnailStale.value = false;
+  const outcome = await action(target);
+  thumbnailBusy.value = false;
+
+  if (outcome.ok) {
+    thumbnailTarget.value = null;
+    announce(successMessage);
+    await nextTick();
+    focusId(target.triggerId);
+    return;
+  }
+  thumbnailError.value = outcome.message;
+  thumbnailErrorKind.value = outcome.kind;
+  thumbnailStale.value = outcome.stale;
+}
+
+async function submitThumbnail(coverAssetId: string): Promise<void> {
+  await runThumbnailWrite(
+    (target) => store.updatePageCover(target.slug, coverAssetId, target.token),
+    'Thumbnail halaman disimpan.',
+  );
+}
+
+async function removeThumbnail(): Promise<void> {
+  await runThumbnailWrite(
+    (target) => store.deletePageCover(target.slug, target.token),
+    'Thumbnail halaman dihapus.',
+  );
+}
+
+async function reloadFromThumbnail(): Promise<void> {
+  const loaded = await store.load();
+  if (!loaded) {
+    thumbnailError.value = COULD_NOT_RELOAD;
+    thumbnailErrorKind.value = null;
+    return;
+  }
+  const target = thumbnailTarget.value;
+  const token = target ? store.findPage(target.slug)?.updatedAt : undefined;
+  if (target && token) thumbnailTarget.value = { ...target, token };
+  thumbnailStale.value = false;
+  thumbnailError.value = '';
+  thumbnailErrorKind.value = null;
 }
 
 async function reloadFromName(): Promise<void> {
@@ -762,7 +849,9 @@ const filteredPages = computed(() => {
 });
 const firstSlug = computed(() => pages.value[0]?.slug ?? null);
 const lastSlug = computed(() => pages.value[pages.value.length - 1]?.slug ?? null);
-const listBusy = computed(() => moving.value || deleteBusy.value || bulkRunning.value);
+const listBusy = computed(
+  () => moving.value || deleteBusy.value || bulkRunning.value || thumbnailBusy.value,
+);
 /**
  * Why dragging is off right now: a search filter hides part of the order, and a save in flight
  * would race the next drop. Null means the grip can be dragged, in Urutkan mode or not.
@@ -1183,6 +1272,7 @@ onUnmounted(() => {
         :drop-target="dropTarget"
         :busy="listBusy"
         @edit="openPage"
+        @thumbnail="(slug) => openThumbnail(slug, ceritaIds.cardThumbnail(slug))"
         @delete="openDeleteFromList"
         @move="moveListPage"
         @toggle="toggleSelected"
@@ -1244,6 +1334,7 @@ onUnmounted(() => {
           })
         "
         @edit-page-details="openDetails(page.slug, page.updatedAt)"
+        @edit-thumbnail="openThumbnail(page.slug, ceritaIds.pageThumbnail)"
         @move-page="movePage"
         @delete-page="openDeletePage"
         @add-chapter="openName({ kind: 'chapter-add', pageSlug: page.slug })"
@@ -1308,6 +1399,21 @@ onUnmounted(() => {
       @submit="submitDetails"
       @close="closeDetails"
       @reload="reloadFromDetails"
+    />
+
+    <CeritaThumbnailDialog
+      :open="thumbnailTarget !== null"
+      :page-slug="thumbnailPage?.slug ?? thumbnailTarget?.slug ?? ''"
+      :page-title="thumbnailPage?.title ?? ''"
+      :cover-asset-id="thumbnailPage?.coverAssetId ?? null"
+      :busy="thumbnailBusy"
+      :error="thumbnailError"
+      :error-kind="thumbnailErrorKind ?? undefined"
+      :stale="thumbnailStale"
+      @submit="submitThumbnail"
+      @remove="removeThumbnail"
+      @close="closeThumbnail"
+      @reload="reloadFromThumbnail"
     />
 
     <CeritaDeleteDialog

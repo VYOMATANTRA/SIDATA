@@ -481,7 +481,7 @@ export function createFakeCerita() {
     globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       const method = (init?.method ?? 'GET').toUpperCase();
-      if (url.endsWith('/preview')) {
+      if (new URL(url, 'http://localhost').pathname.endsWith('/preview')) {
         return {
           ok: true,
           status: 200,

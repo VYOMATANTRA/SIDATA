@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
   BookOpenIcon,
   PencilSquareIcon,
+  PhotoIcon,
   XMarkIcon,
 } from '@heroicons/vue/24/outline';
 import CardActionButton from '../cards/CardActionButton.vue';
@@ -13,6 +14,8 @@ import CardDropIndicator from '../cards/CardDropIndicator.vue';
 import CardSelectCheckbox from '../cards/CardSelectCheckbox.vue';
 import type { AdminPage } from '../../../stores/ceritaAdmin.store';
 import { edgeAt, type DragBlock } from '../../../composables/useCardDragReorder';
+import { useAuthenticatedBlobUrl } from '../../../composables/useAuthenticatedBlobUrl';
+import { mediaPreviewPath } from '../../../services/media.service';
 import { ceritaIds } from './ceritaDomIds';
 import { ceritaCoverFor } from '../../../content/ceritaCovers';
 
@@ -20,7 +23,8 @@ import { ceritaCoverFor } from '../../../content/ceritaCovers';
  * One Cerita page as a card on `/admin/cerita`: the grip handle, the selection checkbox (always
  * shown, centred on the card), the big title, the Penulis / Tanggal Dibuat / Terakhir Diedit columns
  * and the actions under them (the same left edge on every width). From `md` a thumbnail sits at the
- * right: the category's bundled photo (`content/ceritaCovers`), or a neutral placeholder. The grip can be dragged at any time
+ * right: a custom uploaded cover fetched lazily via the authenticated preview client (`?variant=thumbnail`),
+ * or the category's bundled photo (`content/ceritaCovers`), or a neutral placeholder. The grip can be dragged at any time
  * unless a search filter is active or a save is in flight; Naik / Turun in Urutkan mode are the
  * keyboard and touch route to the same reorder. The card only reports what was asked; the view runs
  * the save, the dialogs and the focus. The grip, checkbox and drop line are the shared card parts in
@@ -46,6 +50,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'edit'): void;
+  (e: 'thumbnail'): void;
   (e: 'delete'): void;
   (e: 'move', direction: -1 | 1): void;
   (e: 'toggle'): void;
@@ -64,9 +69,40 @@ function formatDate(value: string | null): string {
   return Number.isNaN(date.getTime()) ? '—' : DATE_FORMAT.format(date);
 }
 
-// The thumbnail is the category's bundled photo (the same one the home page shows), keyed by slug.
-// A page without one gets the neutral placeholder.
-const coverSrc = computed(() => ceritaCoverFor(props.page.slug));
+// Lazy custom cover: requested only once the card is near the viewport. Without an
+// IntersectionObserver (old browsers, tests) it loads at once.
+const inView = ref(typeof IntersectionObserver === 'undefined');
+let observer: IntersectionObserver | null = null;
+onMounted(() => {
+  if (inView.value || !cardElement.value) return;
+  observer = new IntersectionObserver(
+    (entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      inView.value = true;
+      observer?.disconnect();
+      observer = null;
+    },
+    { rootMargin: '200px' },
+  );
+  observer.observe(cardElement.value);
+});
+onBeforeUnmount(() => {
+  observer?.disconnect();
+  observer = null;
+});
+
+const customCoverPath = computed(() => {
+  const id = props.page.coverAssetId;
+  if (!id || !inView.value) return null;
+  return `${mediaPreviewPath(id)}?variant=thumbnail`;
+});
+const customCover = useAuthenticatedBlobUrl(customCoverPath);
+
+// When a custom cover is set, display its authenticated blob URL; otherwise fall back to the
+// category's bundled photo (or the neutral placeholder).
+const coverSrc = computed(() =>
+  props.page.coverAssetId ? customCover.url.value : ceritaCoverFor(props.page.slug),
+);
 
 // Only a card drag of this list is handled. A file or text dragged in from outside is left alone, so
 // the browser's own behaviour applies and nothing is prevented or reported as a move.
@@ -172,6 +208,15 @@ function onDrop(event: DragEvent): void {
             :disabled="busy"
             data-test="card-edit"
             @click="emit('edit')"
+          />
+          <CardActionButton
+            :id="ceritaIds.cardThumbnail(page.slug)"
+            :icon="PhotoIcon"
+            label="Thumbnail"
+            :sr-text="`halaman ${page.title}`"
+            :disabled="busy"
+            data-test="card-thumbnail-btn"
+            @click="emit('thumbnail')"
           />
           <CardActionButton
             :id="ceritaIds.cardDelete(page.slug)"

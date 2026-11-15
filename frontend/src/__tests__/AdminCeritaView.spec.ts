@@ -1647,4 +1647,133 @@ describe('AdminCeritaView', () => {
       wrapper.unmount();
     });
   });
+
+  describe('page thumbnail', () => {
+    function stubCropBrowserApis(): () => void {
+      const originalImage = globalThis.Image;
+      const originalCreateObjectURL = URL.createObjectURL;
+      const originalRevokeObjectURL = URL.revokeObjectURL;
+      let counter = 0;
+
+      URL.createObjectURL = vi.fn<(blob: Blob) => string>(() => `blob:admin-thumb-${++counter}`);
+      URL.revokeObjectURL = vi.fn<(url: string) => void>();
+
+      const getContextSpy = vi
+        .spyOn(HTMLCanvasElement.prototype, 'getContext')
+        .mockImplementation(() => {
+          return {
+            fillStyle: '',
+            fillRect: vi.fn<() => void>(),
+            drawImage: vi.fn<() => void>(),
+          } as unknown as CanvasRenderingContext2D;
+        });
+      const toBlobSpy = vi
+        .spyOn(HTMLCanvasElement.prototype, 'toBlob')
+        .mockImplementation((callback: BlobCallback) => {
+          callback(new Blob(['cropped'], { type: 'image/webp' }));
+        });
+
+      class MockImage {
+        naturalWidth = 2000;
+        naturalHeight = 1200;
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        private _src = '';
+        get src(): string {
+          return this._src;
+        }
+        set src(value: string) {
+          this._src = value;
+          if (value) queueMicrotask(() => this.onload?.());
+        }
+      }
+      vi.stubGlobal('Image', MockImage);
+
+      return () => {
+        globalThis.Image = originalImage;
+        URL.createObjectURL = originalCreateObjectURL;
+        URL.revokeObjectURL = originalRevokeObjectURL;
+        getContextSpy.mockRestore();
+        toBlobSpy.mockRestore();
+      };
+    }
+
+    it('opens thumbnail dialog from card button, saves cover, and returns focus on save and cancel', async () => {
+      const restore = stubCropBrowserApis();
+      try {
+        const wrapper = await mountList();
+        const cardBtn = wrapper.find('[data-slug="kependudukan"] [data-test="card-thumbnail-btn"]');
+        expect(cardBtn.exists()).toBe(true);
+
+        await cardBtn.trigger('click');
+        await flushPromises();
+        expect(body().find('[data-test="image-crop-form"]').exists()).toBe(true);
+
+        await body().find('[data-test="crop-cancel"]').trigger('click');
+        await flushPromises();
+        expect(body().find('[data-test="image-crop-form"]').exists()).toBe(false);
+        expect(document.activeElement?.id).toBe('cerita-kartu-kependudukan-thumbnail');
+
+        await cardBtn.trigger('click');
+        await flushPromises();
+        await body().find('[data-test="image-crop-form"]').trigger('submit');
+        await flushPromises();
+
+        expect(body().find('[data-test="image-crop-form"]').exists()).toBe(false);
+        expect(fake.pages[0]!.coverAssetId).toBeTruthy();
+        expect(fake.lastWrite()).toMatchObject({
+          method: 'PUT',
+          url: '/api/pages/kependudukan/cover',
+        });
+        expect(document.activeElement?.id).toBe('cerita-kartu-kependudukan-thumbnail');
+        wrapper.unmount();
+      } finally {
+        restore();
+      }
+    });
+
+    it('opens thumbnail dialog from structure panel Ubah thumbnail, handles stale reload & remove, and returns focus', async () => {
+      const restore = stubCropBrowserApis();
+      try {
+        fake.pages[0]!.coverAssetId = 'asset-initial';
+        const wrapper = await mountView('kependudukan');
+        const btn = wrapper.find('[data-test="page-thumbnail"]');
+        expect(btn.exists()).toBe(true);
+        expect(btn.text()).toContain('Ubah thumbnail');
+
+        await btn.trigger('click');
+        await flushPromises();
+        expect(body().find('[data-test="image-crop-form"]').exists()).toBe(true);
+
+        // Stale save -> reload -> save succeeds
+        fake.touchPage('kependudukan');
+        await body().find('[data-test="image-crop-form"]').trigger('submit');
+        await flushPromises();
+        expect(body().find('[data-test="crop-stale"]').exists()).toBe(true);
+
+        await body().find('[data-test="crop-reload"]').trigger('click');
+        await flushPromises();
+        expect(body().find('[data-test="crop-stale"]').exists()).toBe(false);
+
+        await body().find('[data-test="image-crop-form"]').trigger('submit');
+        await flushPromises();
+        expect(body().find('[data-test="image-crop-form"]').exists()).toBe(false);
+        expect(fake.pages[0]!.coverAssetId).toBeTruthy();
+        expect(fake.pages[0]!.coverAssetId).not.toBe('asset-initial');
+        expect(document.activeElement?.id).toBe('cerita-halaman-thumbnail');
+
+        // Reopen and remove custom thumbnail
+        await btn.trigger('click');
+        await flushPromises();
+        await body().find('[data-test="crop-remove"]').trigger('click');
+        await flushPromises();
+        expect(body().find('[data-test="image-crop-form"]').exists()).toBe(false);
+        expect(fake.pages[0]!.coverAssetId).toBeNull();
+        expect(document.activeElement?.id).toBe('cerita-halaman-thumbnail');
+        wrapper.unmount();
+      } finally {
+        restore();
+      }
+    });
+  });
 });

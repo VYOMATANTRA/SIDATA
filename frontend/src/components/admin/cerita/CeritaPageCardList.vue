@@ -28,6 +28,7 @@ defineProps<{
 
 const emit = defineEmits<{
   (e: 'edit', slug: string): void;
+  (e: 'thumbnail', slug: string): void;
   (e: 'delete', slug: string): void;
   (e: 'move', slug: string, direction: -1 | 1): void;
   (e: 'toggle', slug: string): void;
@@ -73,6 +74,7 @@ const emit = defineEmits<{
         :is-last="page.slug === lastSlug"
         :busy="busy"
         @edit="emit('edit', page.slug)"
+        @thumbnail="emit('thumbnail', page.slug)"
         @delete="emit('delete', page.slug)"
         @move="(direction) => emit('move', page.slug, direction)"
         @toggle="emit('toggle', page.slug)"

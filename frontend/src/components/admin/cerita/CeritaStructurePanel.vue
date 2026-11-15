@@ -20,6 +20,7 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'rename-page'): void;
   (e: 'edit-page-details'): void;
+  (e: 'edit-thumbnail'): void;
   (e: 'move-page', direction: -1 | 1): void;
   (e: 'delete-page'): void;
   (e: 'add-chapter'): void;
@@ -82,6 +83,18 @@ function sectionLabel(section: AdminSection, index: number): string {
           @click="emit('edit-page-details')"
         >
           Judul utama &amp; penulis<span class="sr-only"> halaman {{ page.title }}</span>
+        </BaseButton>
+        <BaseButton
+          :id="ceritaIds.pageThumbnail"
+          type="button"
+          variant="secondary"
+          size="sm"
+          class="min-h-11"
+          :disabled="busy"
+          data-test="page-thumbnail"
+          @click="emit('edit-thumbnail')"
+        >
+          Ubah thumbnail<span class="sr-only"> halaman {{ page.title }}</span>
         </BaseButton>
         <CollectionRowActions
           :row-label="`halaman ${page.title}`"

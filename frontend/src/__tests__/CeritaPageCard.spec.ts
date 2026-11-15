@@ -1,7 +1,21 @@
-import { describe, expect, it } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { flushPromises, mount } from '@vue/test-utils';
 import CeritaPageCard from '../components/admin/cerita/CeritaPageCard.vue';
+import { fetchMediaPreviewBlob } from '../services/media.service';
 import type { AdminPage } from '../stores/ceritaAdmin.store';
+
+vi.mock('../services/media.service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/media.service')>()),
+  fetchMediaPreviewBlob: vi.fn<(path: string) => Promise<Blob>>(
+    async () => new Blob(['x'], { type: 'image/webp' }),
+  ),
+}));
+
+beforeEach(() => {
+  vi.mocked(fetchMediaPreviewBlob).mockClear();
+  URL.createObjectURL = vi.fn<(obj: Blob | MediaSource) => string>(() => 'blob:cover-thumb');
+  URL.revokeObjectURL = vi.fn<(url: string) => void>();
+});
 
 const page: AdminPage = {
   id: 'p1',
@@ -53,5 +67,73 @@ describe('CeritaPageCard drag guard', () => {
     expect(wrapper.emitted('drag-over')).toHaveLength(1);
     expect(wrapper.emitted('drop')).toHaveLength(1);
     wrapper.unmount();
+  });
+});
+
+describe('CeritaPageCard thumbnail', () => {
+  it('emits thumbnail when clicking card-thumbnail-btn', async () => {
+    const wrapper = mount(CeritaPageCard, { props: { page } });
+    const btn = wrapper.find('[data-test="card-thumbnail-btn"]');
+    expect(btn.exists()).toBe(true);
+    expect(btn.text()).toContain('Thumbnail');
+    expect(btn.attributes('id')).toBe('cerita-kartu-kependudukan-thumbnail');
+
+    await btn.trigger('click');
+    expect(wrapper.emitted('thumbnail')).toHaveLength(1);
+    wrapper.unmount();
+  });
+
+  it('loads custom coverAssetId via useAuthenticatedBlobUrl (?variant=thumbnail) instead of ceritaCoverFor', async () => {
+    const wrapper = mount(CeritaPageCard, {
+      props: { page: { ...page, coverAssetId: 'asset-1' } },
+    });
+    await flushPromises();
+
+    expect(fetchMediaPreviewBlob).toHaveBeenCalledWith(
+      '/api/media/asset-1/preview?variant=thumbnail',
+    );
+    expect(wrapper.find('[data-test="thumbnail-image"]').attributes('src')).toBe('blob:cover-thumb');
+    wrapper.unmount();
+  });
+
+  it('waits until near the viewport via IntersectionObserver before fetching custom cover', async () => {
+    let onIntersect: IntersectionObserverCallback = () => {};
+    const observe = vi.fn<(target: Element) => void>();
+    const disconnect = vi.fn<() => void>();
+    vi.stubGlobal(
+      'IntersectionObserver',
+      vi.fn(function (callback: IntersectionObserverCallback) {
+        onIntersect = callback;
+        return {
+          observe,
+          disconnect,
+          unobserve: vi.fn<(target: Element) => void>(),
+          takeRecords: vi.fn<() => IntersectionObserverEntry[]>(),
+        };
+      }),
+    );
+    try {
+      const wrapper = mount(CeritaPageCard, {
+        props: { page: { ...page, coverAssetId: 'asset-1' } },
+      });
+      await flushPromises();
+      expect(observe).toHaveBeenCalledTimes(1);
+      expect(fetchMediaPreviewBlob).not.toHaveBeenCalled();
+
+      onIntersect(
+        [{ isIntersecting: true } as IntersectionObserverEntry],
+        {} as IntersectionObserver,
+      );
+      await flushPromises();
+      expect(fetchMediaPreviewBlob).toHaveBeenCalledWith(
+        '/api/media/asset-1/preview?variant=thumbnail',
+      );
+      expect(wrapper.find('[data-test="thumbnail-image"]').attributes('src')).toBe(
+        'blob:cover-thumb',
+      );
+      wrapper.unmount();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
