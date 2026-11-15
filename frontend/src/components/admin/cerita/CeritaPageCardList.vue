@@ -5,7 +5,8 @@ import CeritaPageCard from './CeritaPageCard.vue';
 /**
  * The list of Cerita page cards on `/admin/cerita`, in server order. `pages` is the list after the
  * search filter; `firstSlug` / `lastSlug` name the ends of the full order, so Naik / Turun are
- * disabled by the real position rather than by what the filter happens to show.
+ * disabled by the real position rather than by what the filter happens to show. Drag state comes
+ * from the view: `dragSlug` is the card in flight, `dropTarget` the card it hovers and the side.
  */
 defineProps<{
   pages: readonly AdminPage[];
@@ -14,8 +15,9 @@ defineProps<{
   firstSlug: string | null;
   lastSlug: string | null;
   sorting?: boolean;
-  selecting?: boolean;
   selectedSlugs?: readonly string[];
+  dragSlug?: string | null;
+  dropTarget?: { slug: string; edge: 'before' | 'after' } | null;
   busy?: boolean;
 }>();
 
@@ -24,6 +26,10 @@ const emit = defineEmits<{
   (e: 'delete', slug: string): void;
   (e: 'move', slug: string, direction: -1 | 1): void;
   (e: 'toggle', slug: string): void;
+  (e: 'drag-start', slug: string): void;
+  (e: 'drag-end'): void;
+  (e: 'drag-over', slug: string, edge: 'before' | 'after'): void;
+  (e: 'drop', slug: string, edge: 'before' | 'after'): void;
 }>();
 </script>
 
@@ -51,8 +57,9 @@ const emit = defineEmits<{
         :key="page.id"
         :page="page"
         :sorting="sorting"
-        :selecting="selecting"
         :selected="selectedSlugs?.includes(page.slug) ?? false"
+        :dragging="dragSlug === page.slug"
+        :drop-edge="dropTarget?.slug === page.slug ? dropTarget.edge : null"
         :is-first="page.slug === firstSlug"
         :is-last="page.slug === lastSlug"
         :busy="busy"
@@ -60,6 +67,10 @@ const emit = defineEmits<{
         @delete="emit('delete', page.slug)"
         @move="(direction) => emit('move', page.slug, direction)"
         @toggle="emit('toggle', page.slug)"
+        @drag-start="emit('drag-start', page.slug)"
+        @drag-end="emit('drag-end')"
+        @drag-over="(edge) => emit('drag-over', page.slug, edge)"
+        @drop="(edge) => emit('drop', page.slug, edge)"
       />
     </ol>
   </div>

@@ -739,11 +739,13 @@ function moveSection(chapter: AdminChapter, section: AdminSection, direction: Di
 // --- Cerita list (the default view) ---
 
 const query = ref('');
-/** Urutkan mode: Naik / Turun buttons on each card. Mutually exclusive with Pilih. */
+/** Urutkan mode: the grip can be dragged, and Naik / Turun buttons show on each card. */
 const sorting = ref(false);
-/** Pilih mode: checkboxes and "Hapus terpilih". Mutually exclusive with Urutkan. */
-const selecting = ref(false);
+/** Checked cards. Checkboxes are always shown; only cards the list shows are ever selected. */
 const selectedSlugs = ref<string[]>([]);
+/** Card being dragged (Urutkan mode) and the card it hovers, with the side the drop would land. */
+const dragSlug = ref<string | null>(null);
+const dropTarget = ref<{ slug: string; edge: 'before' | 'after' } | null>(null);
 const bulkTarget = ref<{ items: { slug: string; title: string; token: string }[] } | null>(null);
 const bulkRunning = ref(false);
 const bulkResults = ref<BulkResult[] | null>(null);
@@ -768,20 +770,88 @@ watch([query, pages], () => {
 
 function toggleSorting(): void {
   sorting.value = !sorting.value;
-  selecting.value = false;
-  selectedSlugs.value = [];
-}
-
-function toggleSelecting(): void {
-  selecting.value = !selecting.value;
-  sorting.value = false;
-  selectedSlugs.value = [];
+  clearDrag();
 }
 
 function toggleSelected(slug: string): void {
   selectedSlugs.value = selectedSlugs.value.includes(slug)
     ? selectedSlugs.value.filter((item) => item !== slug)
     : [...selectedSlugs.value, slug];
+}
+
+/** Select-all acts on the cards the list shows (after the search), never on hidden ones. */
+const selectedVisibleCount = computed(
+  () => filteredPages.value.filter((item) => selectedSlugs.value.includes(item.slug)).length,
+);
+/** none / some / all, for the tri-state select-all button. */
+const selectAllState = computed<'none' | 'some' | 'all'>(() => {
+  const visible = filteredPages.value.length;
+  if (selectedVisibleCount.value === 0) return 'none';
+  return selectedVisibleCount.value === visible ? 'all' : 'some';
+});
+
+function toggleSelectAll(): void {
+  const visible = filteredPages.value.map((item) => item.slug);
+  if (selectAllState.value === 'all') {
+    selectedSlugs.value = selectedSlugs.value.filter((slug) => !visible.includes(slug));
+    announce('Pilihan Cerita dibatalkan.');
+    return;
+  }
+  selectedSlugs.value = [...new Set([...selectedSlugs.value, ...visible])];
+  announce(`${visible.length} Cerita dipilih.`);
+}
+
+// --- Drag and drop (Urutkan mode). Naik / Turun do the same from the keyboard. ---
+
+function clearDrag(): void {
+  dragSlug.value = null;
+  dropTarget.value = null;
+}
+
+function startDrag(slug: string): void {
+  if (!sorting.value || listBusy.value) return;
+  dragSlug.value = slug;
+  dropTarget.value = null;
+}
+
+function hoverDrop(slug: string, edge: 'before' | 'after'): void {
+  if (!dragSlug.value || dragSlug.value === slug) {
+    dropTarget.value = null;
+    return;
+  }
+  dropTarget.value = { slug, edge };
+}
+
+/**
+ * Saves the drop: the dragged card goes before or after the card it was dropped on. Positions are
+ * taken from the full order, so a search filter cannot shift the result.
+ */
+function dropOn(slug: string, edge: 'before' | 'after'): void {
+  const dragged = dragSlug.value;
+  clearDrag();
+  if (!dragged || dragged === slug) return;
+  const from = pages.value.findIndex((item) => item.slug === dragged);
+  const anchor = pages.value.findIndex((item) => item.slug === slug);
+  if (from < 0 || anchor < 0) return;
+  let toIndex = edge === 'before' ? anchor : anchor + 1;
+  if (from < toIndex) toIndex -= 1;
+  if (toIndex === from) return;
+  const direction: Direction = toIndex > from ? 1 : -1;
+  const title = pages.value[from]?.title ?? '';
+  void runMove(
+    () => store.placePage(dragged, toIndex),
+    () => {
+      const index = pages.value.findIndex((item) => item.slug === dragged);
+      announce(`Halaman “${title}” dipindah ke urutan ${index + 1} dari ${pages.value.length}.`);
+      focusAfterMove(
+        ceritaIds.cardUp(dragged),
+        ceritaIds.cardDown(dragged),
+        index,
+        pages.value.length,
+        direction,
+      );
+    },
+  );
 }
 
 function moveListPage(slug: string, direction: Direction): void {
@@ -811,7 +881,7 @@ function closeBulk(): void {
   bulkError.value = '';
   // The button that opened the dialog may now be disabled (nothing selected), so pick a live one.
   void nextTick(() =>
-    focusId(selectedSlugs.value.length > 0 ? ceritaIds.bulkDelete : ceritaIds.selectToggle),
+    focusId(selectedSlugs.value.length > 0 ? ceritaIds.bulkDelete : ceritaIds.selectAll),
   );
 }
 
@@ -1046,31 +1116,43 @@ onUnmounted(() => {
             Urutkan Cerita
           </BaseButton>
           <BaseButton
-            :id="ceritaIds.selectToggle"
+            :id="ceritaIds.selectAll"
             type="button"
+            role="checkbox"
             variant="secondary"
             size="md"
             class="min-h-11"
-            :aria-pressed="selecting ? 'true' : 'false'"
-            :disabled="listBusy"
-            data-test="select-toggle"
-            @click="toggleSelecting"
+            :aria-checked="selectAllState === 'some' ? 'mixed' : selectAllState === 'all' ? 'true' : 'false'"
+            :disabled="listBusy || pages.length === 0"
+            data-test="select-all"
+            @click="toggleSelectAll"
           >
-            Pilih Cerita
+            <template #leftIcon>
+              <svg viewBox="0 0 20 20" class="h-4 w-4" aria-hidden="true" focusable="false">
+                <rect x="3" y="3" width="14" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="1.6" />
+                <path v-if="selectAllState === 'all'" d="M6.5 10.5l2.4 2.4 4.6-4.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                <path v-else-if="selectAllState === 'some'" d="M6.5 10h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+            </template>
+            {{ selectAllState === 'all' ? 'Batal pilih semua' : 'Pilih semua' }}
           </BaseButton>
-          <BaseButton
-            v-if="selecting"
-            :id="ceritaIds.bulkDelete"
-            type="button"
-            variant="secondary"
-            size="md"
-            class="min-h-11"
-            :disabled="selectedSlugs.length === 0 || listBusy"
-            data-test="bulk-delete"
-            @click="openBulkDelete"
-          >
-            Hapus terpilih ({{ selectedSlugs.length }})
-          </BaseButton>
+          <template v-if="selectedSlugs.length > 0">
+            <span class="text-brand-navy text-sm font-semibold" data-test="selected-count">
+              {{ selectedSlugs.length }} dipilih
+            </span>
+            <BaseButton
+              :id="ceritaIds.bulkDelete"
+              type="button"
+              variant="secondary"
+              size="md"
+              class="min-h-11"
+              :disabled="listBusy"
+              data-test="bulk-delete"
+              @click="openBulkDelete"
+            >
+              Hapus semua
+            </BaseButton>
+          </template>
           <BaseButton
             :id="ceritaIds.addPage"
             type="button"
@@ -1080,17 +1162,20 @@ onUnmounted(() => {
             data-test="add-page"
             @click="openName({ kind: 'page-add' })"
           >
-            <PlusIcon class="h-4 w-4" aria-hidden="true" />
+            <template #leftIcon>
+              <PlusIcon class="h-4 w-4" aria-hidden="true" />
+            </template>
             Tambah Cerita
           </BaseButton>
         </div>
       </div>
 
       <p v-if="sorting" class="text-text-muted text-sm" data-test="sort-hint">
-        Gunakan Naik dan Turun untuk mengubah urutan Cerita. Perubahan langsung tersimpan.
+        Seret ikon garis di kiri kartu untuk mengubah urutan, atau gunakan Naik dan Turun. Perubahan
+        langsung tersimpan.
       </p>
-      <p v-else-if="selecting" class="text-text-muted text-sm" data-test="select-hint">
-        Centang Cerita yang ingin dihapus, lalu pilih “Hapus terpilih”. Cerita yang masih berisi
+      <p v-else-if="selectedSlugs.length > 0" class="text-text-muted text-sm" data-test="select-hint">
+        “Hapus semua” menghapus Cerita yang dipilih satu per satu. Cerita yang masih berisi
         paragraf, gambar, angka, atau tabel tidak dapat dihapus.
       </p>
       <p
@@ -1108,13 +1193,18 @@ onUnmounted(() => {
         :first-slug="firstSlug"
         :last-slug="lastSlug"
         :sorting="sorting"
-        :selecting="selecting"
         :selected-slugs="selectedSlugs"
+        :drag-slug="dragSlug"
+        :drop-target="dropTarget"
         :busy="listBusy"
         @edit="openPage"
         @delete="openDeleteFromList"
         @move="moveListPage"
         @toggle="toggleSelected"
+        @drag-start="startDrag"
+        @drag-end="clearDrag"
+        @drag-over="hoverDrop"
+        @drop="dropOn"
       />
     </section>
 
@@ -1129,7 +1219,9 @@ onUnmounted(() => {
           data-test="back-to-list"
           @click="backToList"
         >
-          <ArrowLeftIcon class="h-4 w-4" aria-hidden="true" />
+          <template #leftIcon>
+            <ArrowLeftIcon class="h-4 w-4" aria-hidden="true" />
+          </template>
           Kembali ke daftar
         </BaseButton>
       </div>

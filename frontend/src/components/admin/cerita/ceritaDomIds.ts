@@ -6,7 +6,7 @@
 export const ceritaIds = {
   search: 'cerita-cari',
   sortToggle: 'cerita-urutkan',
-  selectToggle: 'cerita-pilih',
+  selectAll: 'cerita-pilih-semua',
   bulkDelete: 'cerita-hapus-terpilih',
   addPage: 'cerita-tambah-halaman',
   cardEdit: (slug: string): string => `cerita-kartu-${slug}-ubah`,
