@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils';
+import { createMemoryHistory, createRouter, RouterView, type Router } from 'vue-router';
+import { h } from 'vue';
 import AdminCeritaView from '../views/AdminCeritaView.vue';
 import { useAuthStore } from '../stores/auth';
 import { useCeritaAdminStore } from '../stores/ceritaAdmin.store';
@@ -19,6 +21,7 @@ vi.mock('vue-router', async (importOriginal) => {
 });
 
 let fake: FakeCerita;
+let router: Router;
 
 function seed(): void {
   fake.addPage('Kependudukan', [
@@ -29,13 +32,31 @@ function seed(): void {
   fake.addPage('Kesehatan', []);
 }
 
-async function mountView(): Promise<VueWrapper> {
-  const wrapper = mount(AdminCeritaView, {
-    global: { plugins: [createPinia()] },
+/**
+ * Mounts the screen at `/admin/cerita`. The default is the structure of the first page (the URL the
+ * Edit button produces); pass `null` for the list, which is the screen's own default.
+ */
+async function mountView(slug: string | null = 'kependudukan'): Promise<VueWrapper> {
+  router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/admin/cerita', name: 'admin-cerita', component: AdminCeritaView }],
+  });
+  await router.push(
+    slug ? { name: 'admin-cerita', query: { halaman: slug } } : { name: 'admin-cerita' },
+  );
+  await router.isReady();
+  // Rendered through <RouterView>, as the app renders it: vue-router only runs the route's update
+  // guards for a component it renders itself.
+  const wrapper = mount(() => h(RouterView), {
+    global: { plugins: [createPinia(), router] },
     attachTo: document.body,
   });
   await flushPromises();
   return wrapper;
+}
+
+async function mountList(): Promise<VueWrapper> {
+  return mountView(null);
 }
 
 const body = (): DOMWrapper<HTMLElement> => new DOMWrapper(document.body);
@@ -62,15 +83,20 @@ async function submitDialog(): Promise<void> {
   await flushPromises();
 }
 
+/** The spoken state of select-all: the text its aria-describedby points to, or undefined. */
+function selectAllNote(wrapper: VueWrapper): string | undefined {
+  const id = wrapper.find('[data-test="select-all"]').attributes('aria-describedby');
+  return id ? (document.getElementById(id)?.textContent?.trim() ?? undefined) : undefined;
+}
+
+/** Page titles in the order the shared store holds them (what the list and the public site read). */
+function pageOrder(): string[] {
+  return useCeritaAdminStore().tree.map((item) => item.title);
+}
+
+/** Titles of the page cards on the list, in order. */
 function pageTitles(wrapper: VueWrapper): string[] {
-  return wrapper.findAll('[data-test="page-select"]').map((item) =>
-    item
-      .text()
-      .replace(/Urutan \d+:/, '')
-      .replace(/\d+ bab.*$/, '')
-      .replace(/Dibuka/, '')
-      .trim(),
-  );
+  return wrapper.findAll('[data-test="card-title"]').map((item) => item.text().trim());
 }
 
 const RAW_TERMS =
@@ -88,13 +114,29 @@ describe('AdminCeritaView', () => {
   });
 
   describe('page list and structure', () => {
-    it('lists the pages in order, marks the open one and shows its chapters and sections', async () => {
+    it('shows the Cerita pages as cards in order, each with its author and dates', async () => {
+      const wrapper = await mountList();
+
+      expect(wrapper.find('[data-test="list-view"] h2').text()).toBe('Cerita');
+      expect(pageTitles(wrapper)).toEqual(['Kependudukan', 'Pendidikan', 'Kesehatan']);
+      const cards = wrapper.findAll('[data-test="page-card"]');
+      expect(cards).toHaveLength(3);
+      expect(cards[0]!.find('[data-test="card-author"]').text()).toBe('—');
+      // The fake stamps 13 Nov 2026 10:00 UTC, the same calendar day in any timezone from UTC-10 to UTC+13.
+      expect(cards[0]!.find('[data-test="card-created"]').text()).toBe('13 November 2026');
+      expect(cards[0]!.find('[data-test="card-updated"]').text()).toBe('13 November 2026');
+      expect(cards[0]!.find('[data-test="card-edit"]').text()).toContain('Edit');
+      expect(cards[0]!.find('[data-test="card-delete"]').text()).toContain('Hapus');
+      // Naik / Turun only show in Urutkan mode; the selection checkbox is always there.
+      expect(cards[0]!.find('[data-test="card-up"]').exists()).toBe(false);
+      expect(cards[0]!.find('input[type="checkbox"]').exists()).toBe(true);
+      wrapper.unmount();
+    });
+
+    it('shows the chosen page with its chapters and sections, and no list', async () => {
       const wrapper = await mountView();
 
-      expect(pageTitles(wrapper)).toEqual(['Kependudukan', 'Pendidikan', 'Kesehatan']);
-      const selected = wrapper.findAll('[data-test="page-select"]');
-      expect(selected[0]!.attributes('aria-current')).toBe('true');
-      expect(selected[1]!.attributes('aria-current')).toBeUndefined();
+      expect(wrapper.find('[data-test="list-view"]').exists()).toBe(false);
       expect(wrapper.find('[data-test="page-heading"]').text()).toBe('Kependudukan');
       expect(wrapper.findAll('[data-test="chapter-title"]').map((c) => c.text())).toEqual([
         'Jumlah Penduduk',
@@ -108,17 +150,37 @@ describe('AdminCeritaView', () => {
       wrapper.unmount();
     });
 
-    it('opens another page, moves focus to its heading and keeps one h2 per region', async () => {
-      const wrapper = await mountView();
+    it('opens a page from its Edit button, moves focus to its heading and keeps one h2 per region', async () => {
+      const wrapper = await mountList();
 
-      await wrapper.findAll('[data-test="page-select"]')[1]!.trigger('click');
+      await wrapper.findAll('[data-test="card-edit"]')[1]!.trigger('click');
       await flushPromises();
 
+      expect(router.currentRoute.value.query['halaman']).toBe('pendidikan');
       expect(wrapper.find('[data-test="page-heading"]').text()).toBe('Pendidikan');
       expect(document.activeElement).toBe(wrapper.find('[data-test="page-heading"]').element);
-      expect(wrapper.findAll('[data-test="page-select"]')[1]!.attributes('aria-current')).toBe(
-        'true',
-      );
+      expect(wrapper.findAll('h2').map((item) => item.text())).toContain('Pendidikan');
+      wrapper.unmount();
+    });
+
+    it('returns to the list with the back button and focuses the card it came from', async () => {
+      const wrapper = await mountView('pendidikan');
+
+      await wrapper.find('[data-test="back-to-list"]').trigger('click');
+      await flushPromises();
+
+      expect(router.currentRoute.value.query['halaman']).toBeUndefined();
+      expect(wrapper.find('[data-test="list-view"]').exists()).toBe(true);
+      expect(document.activeElement).toBe(document.getElementById('cerita-kartu-pendidikan-ubah'));
+      wrapper.unmount();
+    });
+
+    it('shows a plain notice for a page that is not there, with a way back', async () => {
+      const wrapper = await mountView('tidak-ada');
+
+      expect(wrapper.find('[data-test="page-missing"]').text()).toContain('tidak ditemukan');
+      expect(wrapper.find('[data-test="back-to-list"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test="page-heading"]').exists()).toBe(false);
       wrapper.unmount();
     });
 
@@ -134,10 +196,7 @@ describe('AdminCeritaView', () => {
     });
 
     it('shows the empty states for a page without chapters and a chapter without sections', async () => {
-      const wrapper = await mountView();
-
-      await wrapper.findAll('[data-test="page-select"]')[2]!.trigger('click');
-      await flushPromises();
+      const wrapper = await mountView('kesehatan');
       expect(wrapper.find('[data-test="chapter-empty"]').text()).toContain('belum memiliki bab');
 
       await click('Tambah bab');
@@ -171,16 +230,17 @@ describe('AdminCeritaView', () => {
       await wrapper.find('[data-test="alert-banner-retry"]').trigger('click');
       await flushPromises();
       expect(wrapper.find('[data-test="load-error"]').exists()).toBe(false);
-      expect(pageTitles(wrapper)).toContain('Kependudukan');
+      expect(pageOrder()).toContain('Kependudukan');
       wrapper.unmount();
     });
   });
 
   describe('pages', () => {
-    it('adds a page: asks for a title, saves it, selects it and moves focus to its heading', async () => {
-      const wrapper = await mountView();
+    it('adds a page: asks for a title, saves it, opens it and moves focus to its heading', async () => {
+      const wrapper = await mountList();
 
-      await click('Tambah halaman');
+      await click('Tambah Cerita');
+
       const dialog = body().find('[data-test="name-dialog"]');
       expect(dialog.exists()).toBe(true);
       expect(document.body.textContent).toContain('Judul halaman');
@@ -199,7 +259,7 @@ describe('AdminCeritaView', () => {
         body: { title: 'Ekonomi Lokal' },
       });
       expect(body().find('[data-test="name-dialog"]').exists()).toBe(false);
-      expect(pageTitles(wrapper)).toContain('Ekonomi Lokal');
+      expect(router.currentRoute.value.query['halaman']).toBe('ekonomi-lokal');
       expect(wrapper.find('[data-test="page-heading"]').text()).toBe('Ekonomi Lokal');
       expect(document.activeElement).toBe(wrapper.find('[data-test="page-heading"]').element);
       expect(wrapper.find('[data-test="status"]').text()).toContain(
@@ -209,9 +269,9 @@ describe('AdminCeritaView', () => {
     });
 
     it('keeps the typed title and explains plainly when a page title is already taken', async () => {
-      const wrapper = await mountView();
+      const wrapper = await mountList();
 
-      await click('Tambah halaman');
+      await click('Tambah Cerita');
       await typeInto('[data-test="name-input"]', 'Pendidikan');
       await submitDialog();
 
@@ -374,18 +434,18 @@ describe('AdminCeritaView', () => {
 
       await click('Turun halaman Kependudukan');
       expect(fake.lastWrite()).toMatchObject({ method: 'PUT', url: '/api/pages/reorder' });
-      expect(pageTitles(wrapper)).toEqual(['Pendidikan', 'Kependudukan', 'Kesehatan']);
+      expect(pageOrder()).toEqual(['Pendidikan', 'Kependudukan', 'Kesehatan']);
       expect(wrapper.find('[data-test="status"]').text()).toContain('urutan 2 dari 3');
       expect(document.activeElement?.id).toBe('cerita-halaman-turun');
 
       await click('Turun halaman Kependudukan');
-      expect(pageTitles(wrapper)).toEqual(['Pendidikan', 'Kesehatan', 'Kependudukan']);
+      expect(pageOrder()).toEqual(['Pendidikan', 'Kesehatan', 'Kependudukan']);
       // The last page cannot go further down, so focus moves to the other button.
       expect(wrapper.find('#cerita-halaman-turun').attributes('disabled')).toBeDefined();
       expect(document.activeElement?.id).toBe('cerita-halaman-naik');
 
       await click('Naik halaman Kependudukan');
-      expect(pageTitles(wrapper)).toEqual(['Pendidikan', 'Kependudukan', 'Kesehatan']);
+      expect(pageOrder()).toEqual(['Pendidikan', 'Kependudukan', 'Kesehatan']);
       wrapper.unmount();
     });
 
@@ -409,7 +469,7 @@ describe('AdminCeritaView', () => {
       const error = wrapper.find('[data-test="action-error"]');
       expect(error.text()).toContain('baru saja diubah oleh orang lain');
       expect(error.text()).not.toMatch(RAW_TERMS);
-      expect(pageTitles(wrapper)).toEqual(['Kependudukan', 'Pendidikan', 'Kesehatan']);
+      expect(pageOrder()).toEqual(['Kependudukan', 'Pendidikan', 'Kesehatan']);
 
       await wrapper.find('[data-test="action-reload"]').trigger('click');
       await flushPromises();
@@ -417,10 +477,8 @@ describe('AdminCeritaView', () => {
       wrapper.unmount();
     });
 
-    it('deletes an empty page after confirming, then opens its neighbour', async () => {
-      const wrapper = await mountView();
-      await wrapper.findAll('[data-test="page-select"]')[2]!.trigger('click');
-      await flushPromises();
+    it('deletes an empty page from its structure after confirming, then returns to the list', async () => {
+      const wrapper = await mountView('kesehatan');
 
       await click('Hapus halaman Kesehatan');
       expect(body().find('[data-test="delete-dialog"]').text()).toContain(
@@ -435,9 +493,10 @@ describe('AdminCeritaView', () => {
         method: 'DELETE',
         url: expect.stringContaining('/api/pages/kesehatan?expectedUpdatedAt=') as string,
       });
+      expect(router.currentRoute.value.query['halaman']).toBeUndefined();
       expect(pageTitles(wrapper)).toEqual(['Kependudukan', 'Pendidikan']);
-      expect(wrapper.find('[data-test="page-heading"]').text()).toBe('Pendidikan');
-      expect(document.activeElement).toBe(wrapper.find('[data-test="page-heading"]').element);
+      expect(wrapper.find('[data-test="page-heading"]').exists()).toBe(false);
+      expect(document.activeElement).toBe(document.getElementById('cerita-tambah-halaman'));
       wrapper.unmount();
     });
 
@@ -475,7 +534,7 @@ describe('AdminCeritaView', () => {
       expect(body().find('[data-test="delete-confirm"]').exists()).toBe(false);
       expect(body().find('[data-test="delete-cancel"]').text()).toBe('Mengerti');
       expect(fake.writes()).toHaveLength(0);
-      expect(pageTitles(wrapper)).toContain('Kependudukan');
+      expect(pageOrder()).toContain('Kependudukan');
       wrapper.unmount();
     });
 
@@ -493,7 +552,7 @@ describe('AdminCeritaView', () => {
       expect(error).toContain('Halaman ini belum bisa dihapus karena masih berisi 1 paragraf.');
       expect(error).not.toMatch(RAW_TERMS);
       expect(body().find('[data-test="delete-confirm"]').exists()).toBe(false);
-      expect(pageTitles(wrapper)).toContain('Kependudukan');
+      expect(pageOrder()).toContain('Kependudukan');
       wrapper.unmount();
     });
   });
@@ -692,8 +751,7 @@ describe('AdminCeritaView', () => {
 
     it('labels an untitled section by its position', async () => {
       fake.pages[1]!.chapters[0]!.sections[0]!.title = null;
-      const wrapper = await mountView();
-      await wrapper.findAll('[data-test="page-select"]')[1]!.trigger('click');
+      const wrapper = await mountView('pendidikan');
 
       expect(wrapper.find('[data-test="section-title"]').text()).toBe('Bagian 1');
       wrapper.unmount();
@@ -788,6 +846,36 @@ describe('AdminCeritaView', () => {
       wrapper.unmount();
     });
 
+    it('asks before a Back navigation drops an unsaved draft, and keeps the draft on "Tetap di sini"', async () => {
+      const wrapper = await openRingkasan();
+      await click('Tambah paragraf');
+      await body().find('[data-test="paragraph-body"]').setValue('belum disimpan');
+
+      // The query changes (the list) without leaving the route: the same component stays mounted.
+      const navigation = router.push({ name: 'admin-cerita' });
+      await flushPromises();
+      expect(body().find('[data-test="discard-dialog"]').exists()).toBe(true);
+      expect(router.currentRoute.value.query['halaman']).toBe('kependudukan');
+
+      await body().find('[data-test="discard-keep"]').trigger('click');
+      await flushPromises();
+      await navigation;
+      expect(router.currentRoute.value.query['halaman']).toBe('kependudukan');
+      expect(body().find('[data-test="section-editor"]').exists()).toBe(true);
+      wrapper.unmount();
+    });
+
+    it('closes the editor when the page changes after a Back navigation with no unsaved draft', async () => {
+      const wrapper = await openRingkasan();
+
+      await router.push({ name: 'admin-cerita', query: { halaman: 'pendidikan' } });
+      await flushPromises();
+
+      expect(body().find('[data-test="section-editor"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="page-heading"]').text()).toBe('Pendidikan');
+      wrapper.unmount();
+    });
+
     it('saves a paragraph through the dialog and the section token chains into the next write', async () => {
       const wrapper = await openRingkasan();
       await click('Tambah paragraf');
@@ -831,9 +919,7 @@ describe('AdminCeritaView', () => {
 
   describe('when the reload after a saved change fails', () => {
     it('says the change is saved, offers a reload, and keeps a deleted page off the screen', async () => {
-      const wrapper = await mountView();
-      await wrapper.findAll('[data-test="page-select"]')[2]!.trigger('click');
-      await flushPromises();
+      const wrapper = await mountView('kesehatan');
       fake.failNext(
         (r) => r.method === 'GET' && r.url === '/api/pages?include=sections',
         fake.json({ error: 'SQL boom' }, 500),
@@ -848,9 +934,10 @@ describe('AdminCeritaView', () => {
       expect(notice.text()).toContain('belum bisa dimuat ulang');
       expect(notice.text()).not.toMatch(RAW_TERMS);
       expect(notice.text()).not.toContain('SQL');
-      // The deleted page is gone and another page is open, not a dead selection.
+      // The deleted page is gone: the screen is back on the list, without a dead structure view.
+      expect(wrapper.find('[data-test="list-view"]').exists()).toBe(true);
       expect(pageTitles(wrapper)).toEqual(['Kependudukan', 'Pendidikan']);
-      expect(wrapper.find('[data-test="page-heading"]').text()).toBe('Pendidikan');
+      expect(wrapper.find('[data-test="page-heading"]').exists()).toBe(false);
       // The generic load error is replaced by this clearer notice.
       expect(wrapper.find('[data-test="load-error"]').exists()).toBe(false);
 
@@ -938,9 +1025,7 @@ describe('AdminCeritaView', () => {
     });
 
     it('refuses a delete confirmed after another editor changed the page, until reloaded', async () => {
-      const wrapper = await mountView();
-      await wrapper.findAll('[data-test="page-select"]')[2]!.trigger('click');
-      await flushPromises();
+      const wrapper = await mountView('kesehatan');
       await click('Hapus halaman Kesehatan');
 
       await otherEditorSavesThenScreenReloads(() => fake.touchPage('kesehatan'));
@@ -999,9 +1084,7 @@ describe('AdminCeritaView', () => {
     });
 
     it('keeps the stale notice and the confirm button in the delete dialog, and still refuses the delete', async () => {
-      const wrapper = await mountView();
-      await wrapper.findAll('[data-test="page-select"]')[2]!.trigger('click');
-      await flushPromises();
+      const wrapper = await mountView('kesehatan');
       await click('Hapus halaman Kesehatan');
       fake.touchPage('kesehatan');
       await body().find('[data-test="delete-confirm"]').trigger('click');
@@ -1083,7 +1166,7 @@ describe('AdminCeritaView', () => {
       expect(unnamed).toHaveLength(0);
       expect(document.body.textContent).not.toMatch(RAW_TERMS);
 
-      await click('Tambah halaman');
+      await click('Ubah judul halaman Kependudukan');
       const input = body().find('[data-test="name-input"]').element as HTMLInputElement;
       const label = document.querySelector(`label[for="${input.id}"]`);
       expect(label?.textContent).toContain('Judul halaman');
@@ -1115,6 +1198,452 @@ describe('AdminCeritaView', () => {
 
       expect(body().text()).toContain('tidak boleh memuat tag HTML');
       expect(fake.writes()).toHaveLength(0);
+      wrapper.unmount();
+    });
+  });
+
+  describe('Cerita list', () => {
+    it('labels the search box and names the toolbar buttons in their visible words', async () => {
+      const wrapper = await mountList();
+
+      const search = wrapper.find('[data-test="search"]').element as HTMLInputElement;
+      expect(document.querySelector(`label[for="${search.id}"]`)?.textContent).toContain(
+        'Cari Cerita',
+      );
+      // The magnifier is decoration only; the input keeps its own label.
+      const icon = wrapper.find('[data-test="search"]').element.parentElement!.querySelector('svg');
+      expect(icon?.getAttribute('aria-hidden')).toBe('true');
+      expect(wrapper.find('[data-test="sort-toggle"]').text()).toBe('Urutkan Cerita');
+      // Each action carries its icon on the label row, before the label.
+      expect(wrapper.find('[data-test="sort-toggle"] [data-test="left-icon"] svg').exists()).toBe(
+        true,
+      );
+      expect(wrapper.find('[data-test="card-edit"] [data-test="left-icon"] svg').exists()).toBe(
+        true,
+      );
+      expect(wrapper.find('[data-test="card-delete"] [data-test="left-icon"] svg').exists()).toBe(
+        true,
+      );
+      expect(wrapper.find('[data-test="card-edit"]').text()).toMatch(/^Edit/);
+      expect(wrapper.find('[data-test="select-all"]').text()).toBe('Pilih semua');
+      expect(wrapper.find('[data-test="add-page"]').text()).toBe('Tambah Cerita');
+      expect(wrapper.find('[data-test="sort-toggle"]').attributes('aria-pressed')).toBe('false');
+      expect(wrapper.find('[data-test="bulk-delete"]').exists()).toBe(false);
+
+      const unnamed = wrapper.findAll('button').filter((item) => item.text().trim() === '');
+      expect(unnamed).toHaveLength(0);
+      wrapper.unmount();
+    });
+
+    it('keeps a fixed selection row for the bulk actions and shows no explanatory hints above the cards', async () => {
+      const wrapper = await mountList();
+      const bar = () => wrapper.find('[data-test="selection-bar"]');
+
+      // The row is always there, so selecting a card does not shift the cards below it.
+      expect(bar().exists()).toBe(true);
+      expect(bar().find('[data-test="bulk-delete"]').exists()).toBe(false);
+      expect(bar().find('[data-test="selected-count"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="sort-hint"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="select-hint"]').exists()).toBe(false);
+
+      await wrapper.findAll('[data-test="page-checkbox"]')[0]!.setValue(true);
+      expect(bar().find('[data-test="selected-count"]').text()).toBe('1 dipilih');
+      expect(bar().find('[data-test="bulk-delete"]').text()).toBe('Hapus semua');
+      // The bulk group sits inside the row, not in the toolbar that holds the search and buttons.
+      expect(wrapper.find('[data-test="toolbar"] [data-test="bulk-delete"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="toolbar"] [data-test="selected-count"]').exists()).toBe(
+        false,
+      );
+      wrapper.unmount();
+    });
+
+    it('hides Tambah Cerita and uses the primary style for select-all while cards are selected', async () => {
+      const wrapper = await mountList();
+      const add = () => wrapper.find('[data-test="add-page"]');
+      const selectAll = () => wrapper.find('[data-test="select-all"]');
+
+      expect(add().classes()).not.toContain('invisible');
+      expect(selectAll().classes()).toContain('bg-surface');
+
+      await wrapper.findAll('[data-test="page-checkbox"]')[0]!.setValue(true);
+      // `invisible` keeps the slot (no shift) and removes the button from focus and the a11y tree.
+      expect(add().classes()).toContain('invisible');
+      expect(selectAll().classes()).toContain('bg-brand-navy');
+      expect(selectAll().text()).toBe('Pilih semua');
+
+      await wrapper.findAll('[data-test="page-checkbox"]')[1]!.setValue(true);
+      await wrapper.findAll('[data-test="page-checkbox"]')[2]!.setValue(true);
+      expect(selectAll().text()).toBe('Batal pilih semua');
+      expect(selectAll().classes()).toContain('bg-brand-navy');
+      wrapper.unmount();
+    });
+
+    it('disables select-all when the search matches nothing, so nothing is announced as selected', async () => {
+      const wrapper = await mountList();
+      await typeInto('[data-test="search"]', 'zzz');
+
+      expect(wrapper.find('[data-test="select-all"]').attributes('disabled')).toBeDefined();
+      expect(wrapper.find('[data-test="selected-count"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('moves focus to select-all after a card delete while cards are selected, since Tambah is hidden', async () => {
+      const wrapper = await mountList();
+      await wrapper.findAll('[data-test="page-checkbox"]')[0]!.setValue(true);
+
+      await wrapper.findAll('[data-test="card-delete"]')[2]!.trigger('click');
+      await body().find('[data-test="delete-confirm"]').trigger('click');
+      await flushPromises();
+
+      expect(pageTitles(wrapper)).toEqual(['Kependudukan', 'Pendidikan']);
+      expect(document.activeElement?.id).toBe('cerita-pilih-semua');
+      wrapper.unmount();
+    });
+
+    it('moves focus to select-all when the focused Hapus semua disappears', async () => {
+      const wrapper = await mountList();
+      await wrapper.findAll('[data-test="page-checkbox"]')[0]!.setValue(true);
+      const bulk = wrapper.find('[data-test="bulk-delete"]').element as HTMLButtonElement;
+      bulk.focus();
+      expect(document.activeElement).toBe(bulk);
+
+      // Clearing the selection removes the bulk button; focus must not fall to the body.
+      await wrapper.findAll('[data-test="page-checkbox"]')[0]!.setValue(false);
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="bulk-delete"]').exists()).toBe(false);
+      expect(document.activeElement?.id).toBe('cerita-pilih-semua');
+      wrapper.unmount();
+    });
+
+    it('draws the Tambah Cerita icon in the same row as its label', async () => {
+      const wrapper = await mountList();
+
+      const icon = wrapper.find('[data-test="add-page"] [data-test="left-icon"]');
+      expect(icon.exists()).toBe(true);
+      expect(icon.find('svg').exists()).toBe(true);
+      wrapper.unmount();
+    });
+
+    it('shows a checkbox on every card without any mode switch', async () => {
+      const wrapper = await mountList();
+
+      expect(wrapper.findAll('[data-test="page-checkbox"]')).toHaveLength(3);
+      const boxes = wrapper.findAll('[data-test="page-checkbox"]');
+      const label = document.querySelector(`label[for="${boxes[0]!.attributes('id')}"]`);
+      expect(label?.textContent?.trim()).toBe('Pilih halaman Kependudukan');
+      wrapper.unmount();
+    });
+
+    it('filters the cards by title as the editor types, and says how many match', async () => {
+      const wrapper = await mountList();
+
+      await typeInto('[data-test="search"]', 'Pendidikan');
+      expect(pageTitles(wrapper)).toEqual(['Pendidikan']);
+      expect(wrapper.find('[data-test="search-count"]').text()).toBe(
+        'Menampilkan 1 dari 3 Cerita.',
+      );
+
+      await typeInto('[data-test="search"]', 'zzz');
+      expect(wrapper.find('[data-test="search-empty"]').text()).toContain(
+        'Tidak ada Cerita yang cocok',
+      );
+      expect(wrapper.find('[data-test="page-card"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('explains an empty site and still offers adding the first Cerita', async () => {
+      fake.pages.splice(0, fake.pages.length);
+      const wrapper = await mountList();
+
+      expect(wrapper.find('[data-test="page-empty"]').text()).toContain('Belum ada Cerita');
+      expect(wrapper.find('[data-test="add-page"]').attributes('disabled')).toBeUndefined();
+      wrapper.unmount();
+    });
+
+    it('goes through select-all states: none, some (mixed) and all, then clears', async () => {
+      const wrapper = await mountList();
+      const selectAll = () => wrapper.find('[data-test="select-all"]');
+
+      // A plain button, not a checkbox: its name is the visible label and the state is a note.
+      expect(selectAll().attributes('role')).toBeUndefined();
+      expect(selectAll().text()).toBe('Pilih semua');
+      expect(selectAllNote(wrapper)).toBeUndefined();
+      await selectAll().trigger('click');
+      expect(selectAllNote(wrapper)).toBe('semua dipilih');
+      expect(selectAll().text()).toBe('Batal pilih semua');
+      expect(wrapper.find('[data-test="selected-count"]').text()).toBe('3 dipilih');
+      expect(wrapper.find('[data-test="bulk-delete"]').text()).toBe('Hapus semua');
+      expect(wrapper.findAll('[data-test="page-card"][data-selected="true"]')).toHaveLength(3);
+
+      await selectAll().trigger('click');
+      expect(selectAllNote(wrapper)).toBeUndefined();
+      expect(selectAll().text()).toBe('Pilih semua');
+      expect(wrapper.find('[data-test="bulk-delete"]').exists()).toBe(false);
+
+      await wrapper.findAll('[data-test="page-checkbox"]')[0]!.setValue(true);
+      expect(selectAllNote(wrapper)).toBe('sebagian dipilih');
+      expect(selectAll().text()).toBe('Pilih semua');
+      expect(wrapper.find('[data-test="selected-count"]').text()).toBe('1 dipilih');
+      wrapper.unmount();
+    });
+
+    it('selects only the cards the search shows when select-all is used', async () => {
+      const wrapper = await mountList();
+
+      await typeInto('[data-test="search"]', 'Pendidikan');
+      await wrapper.find('[data-test="select-all"]').trigger('click');
+
+      expect(wrapper.find('[data-test="selected-count"]').text()).toBe('1 dipilih');
+      expect(selectAllNote(wrapper)).toBe('semua dipilih');
+      wrapper.unmount();
+    });
+
+    it('gives a selected card a tinted fill and a stronger border, not only a checked box', async () => {
+      const wrapper = await mountList();
+      await wrapper.findAll('[data-test="page-checkbox"]')[1]!.setValue(true);
+
+      const selected = wrapper.findAll('[data-test="page-card"]')[1]!;
+      const plain = wrapper.findAll('[data-test="page-card"]')[0]!;
+      expect(selected.classes()).toContain('bg-surface-hover');
+      expect(selected.classes()).toContain('border-brand-navy');
+      expect(plain.classes()).toContain('bg-surface');
+      expect(plain.classes()).not.toContain('bg-surface-hover');
+      wrapper.unmount();
+    });
+
+    it('deletes the selected empty pages one by one and reports the page that still holds content', async () => {
+      const sectionId = fake.pages[1]!.chapters[0]!.sections[0]!.id;
+      fake.addParagraph(sectionId, 'Ringkasan', 'Isi bagian.');
+      const wrapper = await mountList();
+      const bulk = () => wrapper.find('[data-test="bulk-delete"]');
+
+      const boxes = wrapper.findAll('[data-test="page-checkbox"]');
+      await boxes[0]!.setValue(true);
+      await boxes[1]!.setValue(true);
+      await flushPromises();
+      expect(wrapper.find('[data-test="selected-count"]').text()).toBe('2 dipilih');
+      expect(bulk().text()).toBe('Hapus semua');
+      expect(bulk().find('[data-test="left-icon"] svg').exists()).toBe(true);
+
+      await bulk().trigger('click');
+      await flushPromises();
+      expect(body().find('[data-test="bulk-items"]').text()).toContain('Kependudukan');
+      expect(body().find('[data-test="bulk-items"]').text()).toContain('Pendidikan');
+      expect(fake.writes()).toHaveLength(0);
+
+      await body().find('[data-test="bulk-confirm"]').trigger('click');
+      await flushPromises();
+
+      const rows = body().findAll('[data-test="bulk-results"] li');
+      expect(rows.map((row) => row.attributes('data-status'))).toEqual(['deleted', 'blocked']);
+      expect(body().find('[data-test="bulk-summary"]').text()).toBe(
+        '1 halaman dihapus, 1 tidak dapat dihapus.',
+      );
+      expect(rows[1]!.text()).toContain('Pendidikan');
+      expect(rows[1]!.text()).toContain('belum bisa dihapus');
+      expect(fake.pages.map((item) => item.title)).toEqual(['Pendidikan', 'Kesehatan']);
+      expect(document.activeElement?.getAttribute('data-test')).toBe('bulk-close');
+
+      await body().find('[data-test="bulk-close"]').trigger('click');
+      await flushPromises();
+      expect(body().find('[data-test="bulk-delete-dialog"]').exists()).toBe(false);
+      // The page that was deleted leaves the selection; the blocked one stays selected.
+      expect(wrapper.find('[data-test="selected-count"]').text()).toBe('1 dipilih');
+      expect(pageTitles(wrapper)).toEqual(['Pendidikan', 'Kesehatan']);
+      wrapper.unmount();
+    });
+
+    it('reads each page token when that page is deleted, so an earlier delete that moves a later token on does not block it', async () => {
+      // Deleting Kependudukan moves Pendidikan's token on (the server may renumber it). The matcher
+      // only observes the request and answers false, so the real delete still runs.
+      fake.failNext((r) => {
+        if (r.method === 'DELETE' && r.url.startsWith('/api/pages/kependudukan')) {
+          fake.touchPage('pendidikan');
+        }
+        return false;
+      }, fake.json({}));
+      const wrapper = await mountList();
+      await wrapper.findAll('[data-test="page-checkbox"]')[0]!.setValue(true);
+      await wrapper.findAll('[data-test="page-checkbox"]')[1]!.setValue(true);
+      await wrapper.find('[data-test="bulk-delete"]').trigger('click');
+      await flushPromises();
+
+      await body().find('[data-test="bulk-confirm"]').trigger('click');
+      await flushPromises();
+
+      const rows = body().findAll('[data-test="bulk-results"] li');
+      expect(rows.map((row) => row.attributes('data-status'))).toEqual(['deleted', 'deleted']);
+      expect(fake.pages.map((item) => item.slug)).toEqual(['kesehatan']);
+      wrapper.unmount();
+    });
+
+    it('refuses a page changed on the server since the list was loaded, and offers a reload', async () => {
+      const wrapper = await mountList();
+      await wrapper.findAll('[data-test="page-checkbox"]')[2]!.setValue(true);
+      await wrapper.find('[data-test="bulk-delete"]').trigger('click');
+      await flushPromises();
+
+      // Another editor saves Kesehatan after the dialog has opened.
+      fake.pages[2]!.updatedAt = '2030-01-01T00:00:00.000Z';
+      await body().find('[data-test="bulk-confirm"]').trigger('click');
+      await flushPromises();
+
+      expect(body().find('[data-test="bulk-results"] li').attributes('data-status')).toBe('failed');
+      expect(body().find('[data-test="bulk-stale"]').exists()).toBe(true);
+      expect(fake.pages).toHaveLength(3);
+
+      await body().find('[data-test="bulk-reload"]').trigger('click');
+      await flushPromises();
+      expect(body().find('[data-test="bulk-stale"]').exists()).toBe(false);
+      expect(body().find('[data-test="bulk-reload"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('moves a card down in Urutkan mode with its button, saves the order and keeps focus on that card', async () => {
+      const wrapper = await mountList();
+
+      await wrapper.find('[data-test="sort-toggle"]').trigger('click');
+      expect(wrapper.find('[data-test="sort-toggle"]').attributes('aria-pressed')).toBe('true');
+      expect(wrapper.findAll('[data-test="card-up"]')).toHaveLength(3);
+      expect(wrapper.findAll('[data-test="card-up"]')[0]!.attributes('disabled')).toBeDefined();
+      expect(wrapper.findAll('[data-test="card-down"]')[2]!.attributes('disabled')).toBeDefined();
+
+      await wrapper.findAll('[data-test="card-down"]')[0]!.trigger('click');
+      await flushPromises();
+
+      expect(fake.lastWrite()).toMatchObject({ method: 'PUT', url: '/api/pages/reorder' });
+      expect(pageTitles(wrapper)).toEqual(['Pendidikan', 'Kependudukan', 'Kesehatan']);
+      expect(wrapper.find('[data-test="status"]').text()).toContain('urutan 2 dari 3');
+      expect(document.activeElement?.id).toBe('cerita-kartu-kependudukan-turun');
+      wrapper.unmount();
+    });
+
+    it('drags a card by its grip with Urutkan off, shows a drop line and saves the new order', async () => {
+      const wrapper = await mountList();
+      const grip = () => wrapper.findAll('[data-test="grip"]')[0]!;
+      expect(wrapper.find('[data-test="sort-toggle"]').attributes('aria-pressed')).toBe('false');
+      expect(grip().attributes('draggable')).toBe('true');
+      expect(grip().attributes('title')).toContain('Seret untuk mengubah urutan');
+
+      await grip().trigger('dragstart');
+      const target = wrapper.find('[data-slug="kesehatan"]');
+      await target.trigger('dragover', { clientY: 0 });
+      await flushPromises();
+      expect(target.find('[data-test="drop-indicator"]').exists()).toBe(true);
+
+      await target.trigger('drop', { clientY: 0 });
+      await flushPromises();
+
+      expect(fake.lastWrite()).toMatchObject({ method: 'PUT', url: '/api/pages/reorder' });
+      expect(pageTitles(wrapper)).toEqual(['Pendidikan', 'Kesehatan', 'Kependudukan']);
+      expect(wrapper.find('[data-test="status"]').text()).toContain('urutan 3 dari 3');
+      // Focus stays on the moved card's Edit, which exists in every mode (not on Naik / Turun).
+      expect(document.activeElement?.id).toBe('cerita-kartu-kependudukan-ubah');
+      expect(wrapper.find('[data-test="drop-indicator"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('disables the grip while a search filter is active, with the reason in its title', async () => {
+      const wrapper = await mountList();
+      await typeInto('[data-test="search"]', 'Pendidikan');
+      const grip = wrapper.findAll('[data-test="grip"]')[0]!;
+
+      expect(grip.attributes('draggable')).toBe('false');
+      expect(grip.attributes('title')).toContain('pencarian aktif');
+
+      // A drop while the filter is on is refused: nothing is sent.
+      const before = fake.writes().length;
+      await wrapper.find('[data-slug="pendidikan"]').trigger('drop', { clientY: 0 });
+      await flushPromises();
+      expect(fake.writes()).toHaveLength(before);
+
+      await typeInto('[data-test="search"]', '');
+      expect(wrapper.findAll('[data-test="grip"]')[0]!.attributes('draggable')).toBe('true');
+      wrapper.unmount();
+    });
+
+    it('ignores a drop on the same card and sends nothing', async () => {
+      const wrapper = await mountList();
+      const before = fake.writes().length;
+
+      await wrapper.findAll('[data-test="grip"]')[1]!.trigger('dragstart');
+      await wrapper.find('[data-slug="pendidikan"]').trigger('drop', { clientY: 0 });
+      await flushPromises();
+
+      expect(fake.writes()).toHaveLength(before);
+      expect(pageTitles(wrapper)).toEqual(['Kependudukan', 'Pendidikan', 'Kesehatan']);
+      wrapper.unmount();
+    });
+
+    it('shows the category photo as a decorative thumbnail, and a placeholder for a page without one', async () => {
+      fake.addPage('Halaman Baru', []);
+      const wrapper = await mountList();
+
+      const kependudukan = wrapper.find('[data-slug="kependudukan"]');
+      const thumb = kependudukan.find('[data-test="thumbnail-image"]');
+      expect(thumb.exists()).toBe(true);
+      expect(thumb.attributes('alt')).toBe('');
+      expect(thumb.attributes('loading')).toBe('lazy');
+      expect(thumb.attributes('decoding')).toBe('async');
+      expect(kependudukan.find('[data-test="thumbnail-placeholder"]').exists()).toBe(false);
+
+      const fresh = wrapper.find('[data-slug="halaman-baru"]');
+      expect(fresh.find('[data-test="thumbnail-image"]').exists()).toBe(false);
+      expect(fresh.find('[data-test="thumbnail-placeholder"]').attributes('aria-hidden')).toBe(
+        'true',
+      );
+      wrapper.unmount();
+    });
+
+    it('drops a card on the zone after the last card, which shows a line while hovered', async () => {
+      const wrapper = await mountList();
+      expect(wrapper.find('[data-test="drop-end"]').exists()).toBe(false);
+
+      await wrapper.findAll('[data-test="grip"]')[0]!.trigger('dragstart');
+      const zone = wrapper.find('[data-test="drop-end"]');
+      expect(zone.exists()).toBe(true);
+      await zone.trigger('dragover');
+      await flushPromises();
+      expect(wrapper.find('[data-test="drop-indicator"][data-edge="end"]').exists()).toBe(true);
+
+      await zone.trigger('drop');
+      await flushPromises();
+
+      expect(fake.lastWrite()).toMatchObject({ method: 'PUT', url: '/api/pages/reorder' });
+      expect(pageTitles(wrapper)).toEqual(['Pendidikan', 'Kesehatan', 'Kependudukan']);
+      expect(document.activeElement?.id).toBe('cerita-kartu-kependudukan-ubah');
+      expect(wrapper.find('[data-test="drop-end"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('gives the toolbar full-width stacked controls on phones and one row from md', async () => {
+      const wrapper = await mountList();
+      const toolbar = wrapper.find('[data-test="toolbar"]').classes();
+
+      expect(toolbar).toContain('w-full');
+      expect(toolbar).toContain('flex-col');
+      expect(toolbar).toContain('md:flex-row');
+      for (const selector of ['sort-toggle', 'select-all', 'add-page']) {
+        expect(wrapper.find(`[data-test="${selector}"]`).classes()).toEqual(
+          expect.arrayContaining(['w-full', 'md:w-auto']),
+        );
+      }
+      wrapper.unmount();
+    });
+
+    it('deletes one page from its card through the same confirmation as the structure view', async () => {
+      const wrapper = await mountList();
+
+      await wrapper.findAll('[data-test="card-delete"]')[2]!.trigger('click');
+      expect(body().find('[data-test="delete-dialog"]').text()).toContain(
+        'Hapus halaman “Kesehatan”?',
+      );
+      await body().find('[data-test="delete-confirm"]').trigger('click');
+      await flushPromises();
+
+      expect(pageTitles(wrapper)).toEqual(['Kependudukan', 'Pendidikan']);
+      expect(document.activeElement?.id).toBe('cerita-tambah-halaman');
       wrapper.unmount();
     });
   });

@@ -838,10 +838,43 @@ rujukan) with Naik / Turun / Hapus (never drag-only) and Tambah publikasi.
   shows "Muat versi terbaru", which replaces the draft only when the editor asks.
 
 **Cerita management (`/admin/cerita`).** Editor and Admin manage the page → chapter → section
-hierarchy and what a section holds, on the authoring APIs of §2, §3 and §7. One master-detail screen:
-the page list (add, rename, reorder, delete) beside the chosen page's chapters and sections (add,
-rename, reorder, delete), and a section editor dialog for the section's paragraphs (prose blocks:
-add, edit, reorder, delete) and its one figure. "Judul utama & penulis" on the chosen page opens a
+hierarchy and what a section holds, on the authoring APIs of §2, §3 and §7. The screen has two views.
+The default is the **Cerita list**: one white card per page showing its title, Penulis, Tanggal
+Dibuat and Terakhir Diedit, with Edit and Hapus; a search box filters the cards by title, and
+"Tambah Cerita" (icon and label on one row) adds a page and opens it. Every card has a checkbox, always
+visible; a checked card gets a tinted fill and a stronger border as well as the checked box. The toolbar
+has one select-all button with three states, all acting on the cards the search currently shows: none
+checked reads "Pilih semua" (empty box); some checked reads "Pilih semua" with a dash; all checked reads
+"Batal pilih semua" (checked box). It is a plain button named by its visible label; the partial and full
+states are spoken through a described-by note ("sebagian dipilih", "semua dipilih"), not a checkbox role.
+With no card in the search results it is disabled. While at least one card is checked, select-all takes the
+primary (filled) style and "Tambah Cerita" is hidden in place (`invisible`: its slot stays, so nothing moves,
+and it leaves the focus order and the accessibility tree); with nothing checked, select-all is the outlined
+style and "Tambah Cerita" shows. Focus stays on select-all if the focused Tambah or Hapus semua goes away.
+Actions carry a decorative icon before the label: Edit (pencil), Hapus and "Hapus semua" (x mark), Urutkan
+Cerita (up-down arrows), Naik and Turun (arrows). Card actions use the shared `components/admin/cards/CardActionButton`
+(icon, label, the item title spoken after it), so the Publikasi cards can use the same button. The select-all button has a fixed minimum width, and
+the row above the cards is a fixed-height slot: the search count and, once at least one card is checked,
+the count ("N dipilih") and "Hapus semua" appear there, so selecting or searching never moves the
+toolbar, the search box or the cards. The list shows no explanatory hints. "Hapus semua" deletes the
+selected pages one at a time and lists each page as deleted or, when it still holds paragraphs, a
+figure, indicators or tables, as "tidak dapat dihapus" with the reason; that page is skipped and stays
+selected. Layout: below `md` the toolbar's controls stack full width in one column, and each card's
+actions sit under its text on the title's left edge, with the checkbox centred on the card; from `md` the
+controls share one right-aligned row and a 16:9 thumbnail sits at the card's right. The thumbnail is the
+Cerita category's bundled photo, the one the home page shows (`content/ceritaCovers.ts`, keyed by page
+slug); a page without one gets a neutral placeholder. It is a static asset: the list makes no media
+request. A drag shows a bold insertion line with a dot on the side the card will land (above or below the
+hovered card, or in the zone after the last card), and the dragged card is dimmed. There is no shared "Edit semua": cards have no common editable
+field. The grip on each card can be dragged at any time (HTML5 drag and drop, Urutkan on or off; a line
+marks the drop place). It is disabled, with the reason in its title, while a search filter is active
+(the order is only shown in full) and while a save is in flight. A drop saves the whole order through
+the reorder API and announces the new position; a refused or failed save is shown in the same banner
+as the buttons. **Urutkan Cerita** shows Naik / Turun buttons on each card: the keyboard and touch
+route to the same reorder, since drag does not work on touch devices. **Edit** opens the page's
+structure at `?halaman=<slug>` (browser Back and "Kembali ke daftar" return to the list): its chapters
+and sections (add, rename, reorder, delete), and a section editor dialog for the section's paragraphs
+(prose blocks: add, edit, reorder, delete) and its one figure. "Judul utama & penulis" on the chosen page opens a
 dialog for its optional headline, byline author and byline affiliation (all may stay empty; same
 token, stale-write and keep-the-draft behavior as rename). The reader shows the headline as the page
 `<h1>` (the page title moves into the eyebrow) and "Oleh <author>" with the affiliation only when an

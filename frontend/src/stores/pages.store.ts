@@ -75,6 +75,8 @@ export interface HierarchyPage {
   bylineAuthor: string | null;
   bylineAffiliation: string | null;
   sortOrder: number;
+  /** Creation time as the API sends it (the list card's "Tanggal Dibuat"); null if absent. */
+  createdAt: string | null;
   updatedAt: string;
   chapters: HierarchyChapter[];
 }
@@ -114,6 +116,7 @@ function toHierarchyPage(detail: PageDetail): HierarchyPage | null {
     bylineAuthor: detail.bylineAuthor ?? null,
     bylineAffiliation: detail.bylineAffiliation ?? null,
     sortOrder: detail.sortOrder,
+    createdAt: typeof detail.createdAt === 'string' ? detail.createdAt : null,
     updatedAt: detail.updatedAt,
     chapters,
   };
