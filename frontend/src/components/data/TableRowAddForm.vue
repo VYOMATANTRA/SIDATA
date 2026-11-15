@@ -20,12 +20,14 @@ import type { FailureKind } from '../../utils/userMessages';
  * The row key is not typed; the view derives it from the label.
  */
 
-export interface TableRowAddPayload {
-  label: string;
-  male: number | null;
-  female: number | null;
-  total: number | null;
-}
+/**
+ * Only the cell keys that apply to the table kind are present. A sex-split row never carries
+ * `total` and a single-value row never carries `male`/`female` (the service rejects the wrong
+ * shape, and a missing key is read as null, the same as a blank cell).
+ */
+export type TableRowAddPayload =
+  | { label: string; male: number | null; female: number | null }
+  | { label: string; total: number | null };
 
 export interface TableRowAddFormProps {
   kind: IndicatorTableKind;
@@ -55,6 +57,7 @@ interface RowDraft {
 
 const draft = ref<RowDraft>({ label: '', male: '', female: '', total: '' });
 const submitted = ref(false);
+const labelInput = ref<HTMLInputElement | null>(null);
 
 const fieldId = (name: string): string => `${props.idPrefix}-${name}`;
 const sexSplit = computed(() => isSexSplitKind(props.kind));
@@ -115,12 +118,13 @@ function handleSubmit(): void {
   submitted.value = true;
   if (errorEntries.value.length > 0 || props.busy) return;
   const d = draft.value;
-  emit('submit', {
-    label: d.label.trim(),
-    male: sexSplit.value ? parseCell(d.male) : null,
-    female: sexSplit.value ? parseCell(d.female) : null,
-    total: sexSplit.value ? null : parseCell(d.total),
-  });
+  const label = d.label.trim();
+  emit(
+    'submit',
+    sexSplit.value
+      ? { label, male: parseCell(d.male), female: parseCell(d.female) }
+      : { label, total: parseCell(d.total) },
+  );
 }
 
 /** Clears the draft after the parent confirms the row was added. */
@@ -129,7 +133,12 @@ function reset(): void {
   submitted.value = false;
 }
 
-defineExpose({ reset });
+/** Moves focus to the label, so the keyboard user stays in the form after a successful add. */
+function focusLabel(): void {
+  labelInput.value?.focus();
+}
+
+defineExpose({ reset, focusLabel });
 </script>
 
 <template>
@@ -154,6 +163,7 @@ defineExpose({ reset });
     >
       <input
         :id="fieldId('label')"
+        ref="labelInput"
         v-model="draft.label"
         type="text"
         maxlength="255"

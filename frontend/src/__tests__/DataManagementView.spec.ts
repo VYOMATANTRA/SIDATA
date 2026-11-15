@@ -977,12 +977,13 @@ describe('DataManagementView.vue', () => {
             label: '75 tahun ke atas',
             male: 5,
             female: 4,
-            total: null,
           },
         },
       ]);
       expect(body().text()).toContain('75 tahun ke atas');
       expect((document.getElementById('table-row-add-label') as HTMLInputElement).value).toBe('');
+      // The form keeps keyboard focus, so the next row can be typed without a mouse.
+      expect(document.activeElement?.id).toBe('table-row-add-label');
       wrapper.unmount();
     });
 

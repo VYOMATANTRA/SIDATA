@@ -107,8 +107,8 @@ const isCreateOpen = ref(false);
 const rowError = ref('');
 const rowErrorKind = ref<FailureKind | null>(null);
 const addingRow = ref(false);
-/** Bumped after a row is added so the row form starts empty. */
-const rowFormKey = ref(0);
+/** The "Tambah baris" form, to clear its draft and move focus after a successful add. */
+const rowAddForm = ref<{ reset: () => void; focusLabel: () => void } | null>(null);
 
 const isTableDetailLoading = ref(false);
 const saving = ref(false);
@@ -528,6 +528,10 @@ async function handleRowAdd(payload: TableRowAddPayload): Promise<void> {
   const target = activeTable.value;
   if (!target) return;
 
+  // Every result is applied only while the same table is still open: the editor may have closed,
+  // or another table opened, while the request was in flight.
+  const stillOpen = (): boolean => activeTableId.value === target.id;
+
   addingRow.value = true;
   rowError.value = '';
   rowErrorKind.value = null;
@@ -536,22 +540,25 @@ async function handleRowAdd(payload: TableRowAddPayload): Promise<void> {
     // rowKey is capped at 64 characters by the backend; keep room for a collision suffix.
     const base = slugifyLabel(payload.label, 'baris').slice(0, 60).replace(/-+$/, '');
     const rowKey = uniqueSlug(base, taken);
-    activeTable.value = await tablesStore.createTableRow(target.id, {
-      rowKey,
-      label: payload.label,
-      male: payload.male,
-      female: payload.female,
-      total: payload.total,
-    });
-    rowFormKey.value += 1;
+    const detail = await tablesStore.createTableRow(target.id, { rowKey, ...payload });
+    if (!stillOpen()) return;
+    activeTable.value = detail;
     announce(`Baris “${payload.label}” ditambahkan.`);
+    rowAddForm.value?.reset();
+    // The inputs are disabled while a save is in flight; clear that before moving focus into them.
+    addingRow.value = false;
+    await nextTick();
+    rowAddForm.value?.focusLabel();
   } catch (error) {
+    if (!stillOpen()) return;
     if (classifyFailure(error).status === 409) {
       try {
-        activeTable.value = await tablesStore.fetchTableDetail(target.id);
+        const refreshed = await tablesStore.fetchTableDetail(target.id);
+        if (stillOpen()) activeTable.value = refreshed;
       } catch {
         // The reload failed too; the banner below still explains what to do.
       }
+      if (!stillOpen()) return;
       rowError.value = `Gagal menambah baris. ${ROW_ADD_CONFLICT_MESSAGE}`;
       rowErrorKind.value = 'conflict';
     } else {
@@ -841,7 +848,7 @@ async function handleTableSubmit(payload: TableSavePayload): Promise<void> {
 
         <div class="border-t border-slate-200 pt-6">
           <TableRowAddForm
-            :key="rowFormKey"
+            ref="rowAddForm"
             :kind="activeTable.kind"
             :busy="saving || addingRow"
             :server-error="rowError"

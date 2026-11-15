@@ -64,9 +64,12 @@ describe('TableRowAddForm', () => {
     await fill(wrapper, { label: '75 tahun ke atas', male: '5', female: '' });
     await wrapper.get('form').trigger('submit');
 
+    // A sex-split row carries male and female only: no total key at all.
     expect(wrapper.emitted('submit')).toEqual([
-      [{ label: '75 tahun ke atas', male: 5, female: null, total: null }],
+      [{ label: '75 tahun ke atas', male: 5, female: null }],
     ]);
+    const [[payload]] = wrapper.emitted('submit') as [[Record<string, unknown>]];
+    expect(payload).not.toHaveProperty('total');
     wrapper.unmount();
   });
 
@@ -77,10 +80,23 @@ describe('TableRowAddForm', () => {
     await fill(wrapper, { label: 'Petani', total: '240' });
     await wrapper.get('form').trigger('submit');
 
-    expect(wrapper.emitted('submit')).toEqual([
-      [{ label: 'Petani', male: null, female: null, total: 240 }],
-    ]);
+    // A single-value row carries total only: no male or female key.
+    expect(wrapper.emitted('submit')).toEqual([[{ label: 'Petani', total: 240 }]]);
+    const [[payload]] = wrapper.emitted('submit') as [[Record<string, unknown>]];
+    expect(payload).not.toHaveProperty('male');
+    expect(payload).not.toHaveProperty('female');
     wrapper.unmount();
+  });
+
+  it('moves focus to the label when focusLabel() is called', async () => {
+    const wrapper = mount(TableRowAddForm, {
+      props: { kind: 'occupation' },
+      attachTo: document.body,
+    });
+    (wrapper.vm as unknown as { focusLabel: () => void }).focusLabel();
+    expect(document.activeElement?.id).toBe('table-row-add-label');
+    wrapper.unmount();
+    document.body.innerHTML = '';
   });
 
   it('names a missing label and an invalid cell in text, and sends nothing', async () => {
