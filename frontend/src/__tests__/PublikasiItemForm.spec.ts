@@ -235,6 +235,12 @@ describe('PublikasiItemForm', () => {
     expect(wrapper.find('[data-test="item-save"]').text()).toContain('Menyimpan');
   });
 
+  it('passes through a stored key that the form does not edit', async () => {
+    const wrapper = mountForm({ ...PENDING, legacyNote: 'tetap', rank: 3 });
+    await submit(wrapper);
+    expect(payloadOf(wrapper)).toMatchObject({ legacyNote: 'tetap', rank: 3 });
+  });
+
   it('emits cancel from the Batal button without saving', async () => {
     const wrapper = mountForm(PENDING);
     await wrapper.find('[data-test="item-cancel"]').trigger('click');

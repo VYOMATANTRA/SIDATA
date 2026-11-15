@@ -298,20 +298,48 @@ describe('PublikasiItemForm uploads', () => {
     expect(saved.isAvailableOnline).toBe(false);
   });
 
-  it('does not send the stored format or size of an uploaded file (the server derives them)', async () => {
+  it('keeps the format and size the server derived for an uploaded file, and unknown stored keys', async () => {
     const wrapper = mount(PublikasiItemForm, {
       props: {
         publication: {
-            ...BASE,
-            documentAssetId: DOC_ID,
-            fileType: 'PDF',
-            fileSizeBytes: 2048,
-            isAvailableOnline: true,
+          ...BASE,
+          documentAssetId: DOC_ID,
+          fileType: 'PDF',
+          fileSizeBytes: 2048,
+          isAvailableOnline: true,
+          legacyNote: 'dari versi lain',
         },
       },
     });
     await submit(wrapper);
+    expect(payloadOf(wrapper)).toEqual({
+      ...BASE,
+      documentAssetId: DOC_ID,
+      fileType: 'PDF',
+      fileSizeBytes: 2048,
+      isAvailableOnline: true,
+      legacyNote: 'dari versi lain',
+    });
+  });
+
+  it('drops the derived format and size when the file is replaced by a new one', async () => {
+    mocks.uploadMedia.mockResolvedValueOnce({ id: COVER_ID, byteSize: 10, originalName: 'b.docx' });
+    const wrapper = mount(PublikasiItemForm, {
+      props: {
+        publication: {
+          ...BASE,
+          documentAssetId: DOC_ID,
+          fileType: 'PDF',
+          fileSizeBytes: 2048,
+          isAvailableOnline: true,
+        },
+      },
+    });
+    await wrapper.find('[data-test="document-remove"]').trigger('click');
+    await wrapper.find('select#publikasi-item-mode').setValue('none');
+    await submit(wrapper);
     const saved = payloadOf(wrapper);
-    expect(saved).toEqual({ ...BASE, documentAssetId: DOC_ID, isAvailableOnline: true });
+    expect('fileType' in saved).toBe(false);
+    expect('fileSizeBytes' in saved).toBe(false);
   });
 });

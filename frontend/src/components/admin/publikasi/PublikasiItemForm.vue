@@ -247,7 +247,30 @@ const errorEntries = computed<FormErrorEntry[]>(() =>
   })).filter((entry): entry is FormErrorEntry => Boolean(entry.message)),
 );
 
+/** Keys this form owns. Any other key of the stored item is not the form's and is passed through. */
+const FORM_KEYS = new Set([
+  'id',
+  'category',
+  'title',
+  'description',
+  'source',
+  'pageCount',
+  'publishedAt',
+  'href',
+  'documentAssetId',
+  'coverAssetId',
+  'coverIsAuto',
+  'fileType',
+  'fileSizeBytes',
+  'isAvailableOnline',
+]);
+
 function buildPublication(): Record<string, unknown> {
+  const original = props.publication ?? {};
+  // Keys this form does not edit (added by another tool or a later version) survive the save.
+  const passthrough = Object.fromEntries(
+    Object.entries(original).filter(([key]) => !FORM_KEYS.has(key)),
+  );
   const href = draft.mode === 'link' ? draft.href.trim() : '';
   const documentAssetId = draft.mode === 'file' ? draft.documentAssetId : null;
   const source = draft.source.trim();
@@ -255,7 +278,14 @@ function buildPublication(): Record<string, unknown> {
   const size = draft.mode === 'link' ? parseSizeBytes(draft) : undefined;
   const pageCount = parsePageCount(draft.pageCount);
   const publishedAt = draft.publishedAt.trim();
+  // A file row keeps the format and size the server derived from its asset (the server re-derives
+  // them on save anyway); only while it is still the same file the row was loaded with.
+  const sameFile = documentAssetId !== null && original.documentAssetId === documentAssetId;
+  const derivedType = sameFile && typeof original.fileType === 'string' ? original.fileType : '';
+  const derivedBytes =
+    sameFile && typeof original.fileSizeBytes === 'number' ? original.fileSizeBytes : undefined;
   return {
+    ...passthrough,
     ...(draft.id ? { id: draft.id } : {}),
     category: draft.category.trim(),
     title: draft.title.trim(),
@@ -273,7 +303,11 @@ function buildPublication(): Record<string, unknown> {
         }
       : {}),
     ...(fileType ? { fileType } : {}),
+    ...(!fileType && derivedType ? { fileType: derivedType } : {}),
     ...(typeof size === 'number' ? { fileSizeBytes: size } : {}),
+    ...(typeof size !== 'number' && typeof derivedBytes === 'number'
+      ? { fileSizeBytes: derivedBytes }
+      : {}),
     isAvailableOnline: href !== '' || documentAssetId !== null,
   };
 }
