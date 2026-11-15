@@ -851,7 +851,9 @@ all checked reads "Batal pilih semua" (checked box). While at least one card is 
 primary (filled) style and "Tambah Cerita" is hidden in place (`invisible`: its slot stays, so nothing moves,
 and it leaves the focus order and the accessibility tree); with nothing checked, select-all is the outlined
 style and "Tambah Cerita" shows. Focus stays on select-all if the focused Tambah or Hapus semua goes away.
-The select-all button has a fixed minimum width, and
+Actions carry a decorative icon before the label: Edit (pencil), Hapus and "Hapus semua" (x mark), Urutkan
+Cerita (up-down arrows), Naik and Turun (arrows). Card actions use the shared `components/admin/cards/CardActionButton`
+(icon, label, the item title spoken after it), so the Publikasi cards can use the same button. The select-all button has a fixed minimum width, and
 the row above the cards is a fixed-height slot: the search count and, once at least one card is checked,
 the count ("N dipilih") and "Hapus semua" appear there, so selecting or searching never moves the
 toolbar, the search box or the cards. The list shows no explanatory hints. "Hapus semua" deletes the

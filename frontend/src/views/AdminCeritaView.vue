@@ -20,9 +20,11 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import {
   ArrowLeftIcon,
+  ArrowsUpDownIcon,
   BookOpenIcon,
   MagnifyingGlassIcon,
   PlusIcon,
+  XMarkIcon,
 } from '@heroicons/vue/24/outline';
 import BaseButton from '../components/common/BaseButton.vue';
 import AlertBanner from '../components/common/AlertBanner.vue';
@@ -1176,6 +1178,9 @@ onUnmounted(() => {
             data-test="sort-toggle"
             @click="toggleSorting"
           >
+            <template #leftIcon>
+              <ArrowsUpDownIcon class="h-4 w-4" aria-hidden="true" />
+            </template>
             Urutkan Cerita
           </BaseButton>
           <BaseButton
@@ -1244,6 +1249,9 @@ onUnmounted(() => {
             data-test="bulk-delete"
             @click="openBulkDelete"
           >
+            <template #leftIcon>
+              <XMarkIcon class="h-4 w-4" aria-hidden="true" />
+            </template>
             Hapus semua
           </BaseButton>
         </div>
