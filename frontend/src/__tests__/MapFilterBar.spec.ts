@@ -11,21 +11,23 @@ describe('MapFilterBar.vue', () => {
     });
 
     const buttons = wrapper.findAll('button');
-    const ketuaRtBtn = buttons.find((b) => b.text().includes('Ketua RT'));
-    expect(ketuaRtBtn).toBeDefined();
+    const bankSampahBtn = buttons.find((b) => b.text().includes('Bank Sampah'));
+    expect(bankSampahBtn).toBeDefined();
 
-    await ketuaRtBtn?.trigger('click');
-    expect(wrapper.emitted('update:type')?.[0]).toEqual(['ketua_rt']);
+    await bankSampahBtn?.trigger('click');
+    expect(wrapper.emitted('update:type')?.[0]).toEqual(['bank_sampah']);
   });
 
-  it('renders only the category filters so RT search can share the main search field', () => {
+  it('omits the Ketua RT pill while keeping the remaining category filters without search input', () => {
     const wrapper = mount(MapFilterBar, {
       props: {
         activeType: 'all',
       },
     });
 
+    const buttons = wrapper.findAll('button');
     expect(wrapper.find('input').exists()).toBe(false);
-    expect(wrapper.findAll('button')).toHaveLength(4);
+    expect(buttons).toHaveLength(3);
+    expect(buttons.some((b) => b.text().includes('Ketua RT'))).toBe(false);
   });
 });
