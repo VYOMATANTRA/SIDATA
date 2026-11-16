@@ -204,6 +204,20 @@ npm run content:import -- \
    (pass `--overwrite` if updating existing items in place; the script automatically fetches CSRF
    tokens and backs off on HTTP `429`).
 
+To wipe Cerita section contents (`indicators`, `indicator_tables`, section `content_blocks`, `sections`)
+before a clean re-import while preserving accounts, roles, settings, RT leaders, spatial points,
+standalone landing/catalog blocks, and page cover thumbnails:
+
+```bash
+cd backend
+npm run content:reset -- --dry-run
+npm run content:reset -- --force   # --force is required when NODE_ENV=production; add --reset-covers to clear page covers too
+```
+
+Restart the backend process/container afterward (`docker compose restart backend`) so in-memory caches
+(`indicators`, `indicator_tables`, `content_blocks`) reload from the empty tables, then run `npm run media:cleanup`
+after the retention window if detached figure assets are no longer referenced anywhere.
+
 ### Upgrading a database that was seeded with sample data
 
 Seeding uses `update: {}` so it never overwrites existing rows, which means previously seeded

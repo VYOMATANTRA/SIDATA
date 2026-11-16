@@ -117,6 +117,9 @@ export const AUDIT_ACTIONS = {
   // One-off ops script: cleanup-legacy-sample-rt-leaders.ts --force.
   // Metadata holds counts only — never names or phone numbers.
   MAINTENANCE_LEGACY_RT_CLEANUP: defineAction('maintenance.legacy_rt_cleanup', 'warning'),
+  // Ops script scripts/reset-cerita-content.ts: clears Cerita section content back to canonical
+  // pages/chapters while keeping users, settings, comparison templates, RT data, and standalone blocks.
+  MAINTENANCE_CERITA_RESET: defineAction('maintenance.cerita_reset', 'warning'),
 } as const satisfies Record<string, AuditActionDef>;
 
 export interface AuditActor {
