@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "pages": [
+    {
+      "slug": "kependudukan",
+      "title": "Kependudukan",
+      "chapters": [
+        {
+          "slug": "jumlah-penduduk",
+          "title": "Jumlah Penduduk",
+          "sections": [
+            {
+              "title": "Ringkasan Populasi (Contoh)",
+              "proseBlocks": [
+                {
+                  "title": "Contoh Paragraf Pembuka",
+                  "body": "Teks contoh ini hanya menunjukkan struktur manifest untuk impor otomatis."
+                }
+              ],
+              "figure": {
+                "kind": "diagram",
+                "title": "Contoh Diagram Batang",
+                "source": "Contoh Sumber Data (2025)",
+                "bars": {
+                  "unit": "jiwa",
+                  "items": [
+                    { "label": "Kategori A", "value": 120 },
+                    { "label": "Kategori B", "value": 80 }
+                  ]
+                }
+              },
+              "indicators": [
+                {
+                  "slug": "contoh-jumlah-penduduk",
+                  "label": "Contoh Jumlah Penduduk",
+                  "unit": "jiwa",
+                  "valueCurrent": 200,
+                  "valuePrevious": 190,
+                  "periodCurrent": "2025",
+                  "periodPrevious": "2024",
+                  "isComputedComparison": true,
+                  "comparisonTemplateSlug": "perbandingan-tahunan",
+                  "source": "Contoh Sumber Data",
+                  "sortOrder": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "slug": "piramida-usia",
+          "title": "Piramida Usia",
+          "sections": [
+            {
+              "title": "Contoh Tabel Piramida Usia",
+              "tables": [
+                {
+                  "slug": "contoh-piramida-usia",
+                  "title": "Contoh Kelompok Umur",
+                  "kind": "age_pyramid",
+                  "period": "2025",
+                  "source": "Contoh Sumber Data",
+                  "rows": [
+                    { "rowKey": "0-4", "label": "0-4", "male": 50, "female": 48, "sortOrder": 0 },
+                    { "rowKey": "5-9", "label": "5-9", "male": 60, "female": 58, "sortOrder": 1 }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

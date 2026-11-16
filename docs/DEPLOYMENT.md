@@ -181,6 +181,29 @@ slots (`rtNumber` 1–100, blank names and contacts, no spatial points) and sets
 `maps.rt_leaders_sample_roster` to `false`. Enter real leader names, contacts and coordinates
 through the CMS manual editor or CSV import.
 
+### Importing Cerita content via the API
+
+To populate Cerita chapters, sections, prose blocks, figures, scalar indicators, and indicator tables
+from a JSON bundle (without committing real operational content to Git — keep manifests under the
+gitignored `content-bundle/` directory):
+
+1. Obtain an editor/admin refresh token (or short-lived access token) so the script can call
+   `/api/auth/refresh` without triggering interactive Cloudflare Turnstile on `/api/auth/login`.
+2. Preview the operations first with `--dry-run`:
+
+```bash
+cd backend
+npm run content:import -- \
+  --file ../content-bundle/cerita-manggar-2026.json \
+  --base-url https://your-domain.example \
+  --refresh-token "$SIDATA_REFRESH_TOKEN" \
+  --dry-run
+```
+
+3. Run without `--dry-run` to create missing sections/prose/indicators/tables and save section figures
+   (pass `--overwrite` if updating existing items in place; the script automatically fetches CSRF
+   tokens and backs off on HTTP `429`).
+
 ### Upgrading a database that was seeded with sample data
 
 Seeding uses `update: {}` so it never overwrites existing rows, which means previously seeded

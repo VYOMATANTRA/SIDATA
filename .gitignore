@@ -154,3 +154,7 @@ vite.config.ts.timestamp-*
 
 # Uploaded media (UPLOAD_DIR default) — runtime data, never committed
 /uploads/
+
+# Runtime content-import bundles (may hold prod content/media) — never committed
+/content-bundle/
+backend/data/*.local.json

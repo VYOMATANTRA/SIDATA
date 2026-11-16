@@ -64,6 +64,7 @@ Key details:
 - `prisma/seedRtLeaders.ts`, `src/data/rtLeadersData.ts`: create-only RT seed helpers and the development-only synthetic map/contact data
 - `backend/src/utils/rtLeadersCsv.ts`: CSV parsing and validation for the Ketua RT operational import
 - `prisma/seeder_indicator.ts`: Seeds sample scalar indicator figures across all 8 Cerita categories (`npm run seed:indicator`)
+- `src/utils/contentImport.ts`, `scripts/import-content.ts`, `scripts/content-import.example.json`: Zod manifest validation and authenticated API-driven bulk importer (`npm run content:import`) for Cerita pages, sections, prose blocks, figures, scalar indicators, indicator tables, and media assets
 - `generated/prisma/`: Auto-generated Prisma client (do not edit)
 - `scripts/grants/audit-logs-grants.sql`, `scripts/prune-audit-logs.ts`, `scripts/cleanup-legacy-sample-rt-leaders.ts`: audit trail operations and development sample cleanup — see Audit Trail below
 
