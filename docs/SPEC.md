@@ -612,11 +612,15 @@ setup-password, the OAuth callback, `/dashboard` (its own `<main>`) and the admi
     missing cells and no bar for them.
   **Stored figure.** The reader reads the section's `figure` block (§7 `content_blocks`) from the
   same `GET /api/content-blocks` request as the paragraphs and draws it with the article figure
-  components: one photo, an offset pair for two, a swipeable row for three or more, or a diagram
-  (picture or bars, with its source). Photos are addressed as `/api/media/<mediaId>` (full size; the
+  components: one photo, an offset pair for two, a swipeable row for three or more, a diagram
+  (picture or bars, with its source), or a chart. A chart reads the indicator table it names (same
+  page, looked up by id among the page's loaded tables): `bar` draws horizontal bars, `column` vertical
+  columns, and `by_sex` draws male and female per row, told apart by a hatch pattern and text labels as
+  well as colour; `total` draws one value per row. Each chart has a "Lihat sebagai tabel" table with the
+  same values and its source. A chart whose table is missing or has no value left renders nothing. Photos are addressed as `/api/media/<mediaId>` (full size; the
   thumbnail variant is not used because the cards are shown large). Alt text, caption and credit are
   shown as stored; a photo without its own credit shows the group's shared credit. The stored data is parsed defensively (`utils/ceritaStoredFigure.ts`): a figure
-  of an unknown kind or shape, a photo without alt text or with a malformed id, and a bar without a
+  of an unknown kind or shape (a chart with a bad table id, type, series or title included), a photo without alt text or with a malformed id, and a bar without a
   label or finite value are left out rather than raising an error; a figure block with no section,
   or for a section not on the page, is ignored. A figure counts as content, so a section that holds
   only a figure renders and is not reported as empty. **A photo that fails to load** (never attached,

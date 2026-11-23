@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
-import type { CeritaArticle } from '../../types/ceritaArticle';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import type { CeritaArticle, ChartTable } from '../../types/ceritaArticle';
 import CeritaHero from './CeritaHero.vue';
 import ChapterToc from './ChapterToc.vue';
 import ArticleFigure from './ArticleFigure.vue';
@@ -18,6 +18,10 @@ import { READER_GRID, READER_MAIN } from './readerLayout';
 const props = defineProps<{ article: CeritaArticle }>();
 
 const activeChapterId = ref<string | null>(props.article.chapters[0]?.id ?? null);
+
+const chartTablesById = computed<Record<string, ChartTable>>(() =>
+  Object.fromEntries((props.article.tables ?? []).map((table) => [table.id, table])),
+);
 
 // Highlights the chapter being read: the last chapter to start inside the band under the header.
 let observer: IntersectionObserver | null = null;
@@ -107,7 +111,11 @@ function nextChapter(index: number) {
                 :key="i"
                 :body="paragraph"
               />
-              <ArticleFigure v-if="section.figure" :figure="section.figure" />
+              <ArticleFigure
+                v-if="section.figure"
+                :figure="section.figure"
+                :tables="chartTablesById"
+              />
             </div>
 
             <p v-if="nextChapter(chapterIndex)" class="mt-10" data-test="article-next-chapter">

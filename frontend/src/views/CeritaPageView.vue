@@ -107,6 +107,16 @@ function handleFigureVisibility(sectionId: string, visible: boolean) {
   hiddenFigureSectionIds.value = hidden;
 }
 
+// Every loaded table of the page by id: a chart names its table by id, and the table may sit in a
+// section other than the chart's own.
+const chartTablesById = computed<Record<string, IndicatorTableDetailDto>>(() => {
+  const byId: Record<string, IndicatorTableDetailDto> = {};
+  for (const tables of Object.values(tablesBySectionId.value)) {
+    for (const table of tables) byId[table.id] = table;
+  }
+  return byId;
+});
+
 const indicatorsBySectionId = computed<Record<string, IndicatorDto[]>>(
   () => indicatorsStore.bySectionId,
 );
@@ -482,6 +492,7 @@ defineExpose({ retryLoad, loadPage });
               :hidden-figure-section-ids="hiddenFigureSectionIds"
               :indicators-by-section-id="indicatorsBySectionId"
               :tables-by-section-id="tablesBySectionId"
+              :chart-tables-by-id="chartTablesById"
               :section-errors-by-section-id="sectionErrorsBySectionId"
               :prose-unavailable="proseUnavailable"
               @retry-section="retrySection"
