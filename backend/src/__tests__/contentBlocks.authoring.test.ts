@@ -437,9 +437,21 @@ describe('contentBlocks authoring (section prose blocks)', () => {
 
   describe('prose body is limited Markdown, never HTML', () => {
     it('accepts Markdown markers and a bare less-than sign', async () => {
-      const body = '**Tebal** dan *miring*, [tautan](https://contoh.id)\n\n- satu\n- dua\n\n5 < 7';
+      const body =
+        '**Tebal** dan *miring*, [tautan](https://contoh.id)\n\n- satu\n- dua\n\n5 < 7, p<q dan a<b atau RT<RW';
       const result = await createProseBlock('sec-1', { title: 'Format', body }, actor, ctx);
       assert.equal(result.block.body, body);
+    });
+
+    it('lets an untouched legacy body that already holds a tag be saved with a new title', async () => {
+      db.addBlock({ id: 'b8', slug: 'warisan', body: 'Lama <br> tetap' });
+      const updated = await updateContentBlock(
+        'warisan',
+        { title: 'Judul baru', body: 'Lama <br> tetap' },
+        actor,
+        ctx,
+      );
+      assert.equal(updated.title, 'Judul baru');
     });
 
     it('refuses an HTML tag on create and on update, writing nothing', async () => {

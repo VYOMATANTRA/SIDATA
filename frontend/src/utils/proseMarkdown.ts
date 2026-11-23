@@ -57,7 +57,8 @@ export function isAllowedLinkUrl(value: unknown): value is string {
 }
 
 /** Same test the backend applies to reject HTML tags in prose: `<` followed by a letter, `!` or `/`. */
-export const HTML_TAG_PATTERN = /<[a-z!/]/i;
+export const HTML_TAG_PATTERN =
+  /<\/?[a-z][a-z0-9-]*(\s[^<>]*)?\/?>|<!/i;
 
 export function containsHtmlTag(text: string): boolean {
   return HTML_TAG_PATTERN.test(text);

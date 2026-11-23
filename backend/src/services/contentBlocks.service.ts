@@ -788,6 +788,7 @@ export const updateContentBlock = async (
       if (
         existing.type === 'prose' &&
         input.body !== undefined &&
+        input.body !== existing.body &&
         HTML_TAG_PATTERN.test(input.body)
       ) {
         throw new ContentBlockServiceError(PROSE_HTML_MESSAGE, 400);
