@@ -13,6 +13,10 @@ import { useIsDesktop } from '../composables/useIsDesktop';
 const route = useRoute();
 const authStore = useAuthStore();
 
+// A route can opt out of the padded card (`meta.fullBleed`), for a full-width editor such as
+// /admin/cerita. The view then owns its own spacing; the breadcrumb keeps the page's gutters.
+const isFullBleed = computed(() => route.meta.fullBleed === true);
+
 const loginLocation = computed(() => ({
   path: '/login',
   query: { redirect: route.fullPath },
@@ -106,12 +110,16 @@ watch(
       <main
         id="admin-main-content"
         ref="mainRef"
-        class="flex-1 px-6 py-6 focus:outline-none md:px-10 md:py-8"
+        :class="
+          isFullBleed
+            ? 'flex min-h-0 flex-1 flex-col focus:outline-none'
+            : 'flex-1 px-6 py-6 focus:outline-none md:px-10 md:py-8'
+        "
         tabindex="-1"
       >
         <AlertBanner
           v-if="authStore.sessionEnded"
-          class="mb-4"
+          :class="isFullBleed ? 'mx-6 mt-6 md:mx-10 md:mt-8' : 'mb-4'"
           tone="warning"
           live="polite"
           message="Sesi Anda telah berakhir. Masuk kembali untuk melanjutkan; isian yang belum disimpan tetap ada di halaman ini."
@@ -128,7 +136,11 @@ watch(
             />
           </template>
         </AlertBanner>
-        <div class="rounded-card border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+        <div v-if="isFullBleed" class="flex min-h-0 flex-1 flex-col">
+          <AdminBreadcrumb class="px-6 pt-6 md:px-10 md:pt-8" />
+          <RouterView />
+        </div>
+        <div v-else class="rounded-card border border-slate-200 bg-white p-6 shadow-sm md:p-8">
           <AdminBreadcrumb class="mb-6" />
           <RouterView />
         </div>

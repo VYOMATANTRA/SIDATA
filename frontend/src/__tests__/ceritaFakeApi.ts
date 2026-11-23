@@ -362,6 +362,60 @@ export function createFakeCerita() {
         201,
       );
     }
+    if ((m = path.match(/^\/api\/sections\/([^/]+)\/duplicate$/)) && method === 'POST') {
+      const found = findSection(m[1]!);
+      if (!found) return notFound();
+      if (body['expectedUpdatedAt'] !== found.section.updatedAt)
+        return stale(found.section.updatedAt);
+      const copy: FakeSection = {
+        id: nextId('sec'),
+        slug: slugify(`${found.section.title ?? ''} salinan ${counter}`),
+        title: `${found.section.title ?? ''} (salinan)`,
+        sortOrder: found.chapter.sections.length,
+        updatedAt: stamp(),
+      };
+      found.chapter.sections.push(copy);
+      for (const block of blocks.filter((b) => b.sectionId === found.section.id)) {
+        blocks.push({
+          ...block,
+          id: nextId('blk'),
+          sectionId: copy.id,
+          slug: `${block.slug}-salinan-${counter}`,
+          updatedAt: stamp(),
+        });
+      }
+      found.chapter.updatedAt = stamp();
+      return json(
+        {
+          message: 'Bagian berhasil digandakan',
+          section: { ...copy, chapterId: found.chapter.id },
+          chapter: { id: found.chapter.id, slug: found.chapter.slug, updatedAt: found.chapter.updatedAt },
+        },
+        201,
+      );
+    }
+    if ((m = path.match(/^\/api\/sections\/([^/]+)\/move$/)) && method === 'POST') {
+      const found = findSection(m[1]!);
+      if (!found) return notFound();
+      if (body['expectedUpdatedAt'] !== found.section.updatedAt)
+        return stale(found.section.updatedAt);
+      const target = findChapter(String(body['targetChapterId']));
+      if (!target || target.page !== found.page)
+        return json({ error: 'Bab tujuan harus berada di halaman yang sama' }, 422);
+      const fromChapter = found.chapter;
+      fromChapter.sections.splice(fromChapter.sections.indexOf(found.section), 1);
+      found.section.sortOrder = target.chapter.sections.length;
+      target.chapter.sections.push(found.section);
+      fromChapter.updatedAt = stamp();
+      target.chapter.updatedAt = stamp();
+      const token = (c: FakeChapter) => ({ id: c.id, slug: c.slug, updatedAt: c.updatedAt });
+      return json({
+        message: 'Bagian berhasil dipindahkan',
+        section: { ...found.section, chapterId: target.chapter.id },
+        chapter: token(target.chapter),
+        fromChapter: token(fromChapter),
+      });
+    }
     if ((m = path.match(/^\/api\/sections\/([^/]+)\/figure$/))) {
       const found = findSection(m[1]!);
       if (!found) return notFound();

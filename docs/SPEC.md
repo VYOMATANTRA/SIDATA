@@ -918,10 +918,7 @@ marks the drop place). It is disabled, with the reason in its title, while a sea
 (the order is only shown in full) and while a save is in flight. A drop saves the whole order through
 the reorder API and announces the new position; a refused or failed save is shown in the same banner
 as the buttons. **Urutkan Cerita** shows Naik / Turun buttons on each card: the keyboard and touch
-route to the same reorder, since drag does not work on touch devices. **Edit** opens the page's
-structure at `?halaman=<slug>` (browser Back and "Kembali ke daftar" return to the list): its chapters
-and sections (add, rename, reorder, delete), and a section editor dialog for the section's paragraphs
-(prose blocks: add, edit, reorder, delete) and its one figure. "Judul utama & penulis" on the chosen page opens a
+route to the same reorder, since drag does not work on touch devices. **Edit** opens the page at `?halaman=<slug>` (browser Back and "Kembali ke daftar" return to the list) as a three-column editor. The left column is the structure tree: "Info cerita" (headline and byline dialog), then chapters, each expandable, with its sections numbered `1.1`, `1.2` and the kind of each section's figure (a section without one reads "Figur kosong"). The centre column holds the selected section (`?bab=<chapterId>&bagian=<sectionId>`, so a reload keeps it): its paragraphs (prose blocks: add, edit, reorder, delete) and its one figure, with Duplikat (a copy with its paragraphs and figure, appended to the same chapter) and Hapus bagian. The right column is a live preview of the saved section, Desktop or Ponsel, drawn with the public reader components; unsaved edits are not shown there. Each chapter and section also has an options menu (Ubah judul, Naik, Turun, Hapus) and its grip can be dragged within its chapter or page; the buttons are the baseline, drag is never required. Moving a section to another chapter of the same page is the move dialog (next step). "Judul utama & penulis" on the chosen page opens a
 dialog for its optional headline, byline author and byline affiliation (all may stay empty; same
 token, stale-write and keep-the-draft behavior as rename). The reader shows the headline as the page
 `<h1>` (the page title moves into the eyebrow) and "Oleh <author>" with the affiliation only when an

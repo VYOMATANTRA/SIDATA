@@ -17,7 +17,8 @@ export const ceritaIds = {
   backToList: 'cerita-kembali-ke-daftar',
   pageHeading: 'cerita-halaman-judul',
   pageRename: 'cerita-halaman-ubah',
-  pageDetails: 'cerita-halaman-judul-utama',
+  /** The "Info cerita" row of the structure tree: opens the headline and byline dialog. */
+  pageDetails: 'cerita-info',
   pageUp: 'cerita-halaman-naik',
   pageDown: 'cerita-halaman-turun',
   pageDelete: 'cerita-halaman-hapus',
@@ -27,9 +28,16 @@ export const ceritaIds = {
   chapterDown: (id: string): string => `cerita-bab-${id}-turun`,
   chapterDelete: (id: string): string => `cerita-bab-${id}-hapus`,
   addSection: (chapterId: string): string => `cerita-bab-${chapterId}-tambah-bagian`,
-  sectionOpen: (id: string): string => `cerita-bagian-${id}-isi`,
   sectionRename: (id: string): string => `cerita-bagian-${id}-ubah`,
   sectionUp: (id: string): string => `cerita-bagian-${id}-naik`,
   sectionDown: (id: string): string => `cerita-bagian-${id}-turun`,
   sectionDelete: (id: string): string => `cerita-bagian-${id}-hapus`,
+  /** Tree rows: the chapter toggle and the section button (focus returns to these). */
+  treeChapter: (id: string): string => `cerita-pohon-bab-${id}`,
+  treeSection: (id: string): string => `cerita-pohon-bagian-${id}`,
+  /** Centre column: the section heading (focus after add, duplicate and selection). */
+  sectionHeading: 'cerita-bagian-judul',
+  sectionDuplicate: 'cerita-bagian-duplikat',
+  sectionPrev: 'cerita-bagian-sebelumnya',
+  sectionNext: 'cerita-bagian-berikutnya',
 } as const;

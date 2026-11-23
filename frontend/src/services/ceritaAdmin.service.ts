@@ -127,6 +127,42 @@ export async function deleteSection(id: string, expectedUpdatedAt: string): Prom
   await remove(`/api/sections/${enc(id)}${tokenQuery(expectedUpdatedAt)}`);
 }
 
+/** The updated token of a section and of the chapter it sits in, as the server returns them. */
+export interface SectionTokenResult {
+  section: { id: string; chapterId: string; slug: string; title: string | null; updatedAt: string };
+  chapter: { id: string; slug: string; updatedAt: string };
+}
+
+/**
+ * Copies a section (its paragraphs and figure) as the last section of its chapter (SPEC §3). The
+ * copy keeps the same page, so only the chapter token of the section's own chapter moves.
+ */
+export async function duplicateSection(
+  id: string,
+  expectedUpdatedAt: string,
+): Promise<SectionTokenResult> {
+  return post<SectionTokenResult>(`/api/sections/${enc(id)}/duplicate`, { expectedUpdatedAt });
+}
+
+/**
+ * Moves a section to another chapter of the same page (SPEC §3). The server answers 422 for a
+ * chapter on another page. The result names the chapter it left as well as the one it joined.
+ */
+export interface SectionMoveResult extends SectionTokenResult {
+  fromChapter: { id: string; slug: string; updatedAt: string };
+}
+
+export async function moveSectionToChapter(
+  id: string,
+  targetChapterId: string,
+  expectedUpdatedAt: string,
+): Promise<SectionMoveResult> {
+  return post<SectionMoveResult>(`/api/sections/${enc(id)}/move`, {
+    targetChapterId,
+    expectedUpdatedAt,
+  });
+}
+
 /** `expectedUpdatedAt` is the parent chapter's token. */
 export async function reorderSections(
   chapterId: string,

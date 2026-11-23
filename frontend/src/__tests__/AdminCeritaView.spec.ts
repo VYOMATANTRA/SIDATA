@@ -36,13 +36,18 @@ function seed(): void {
  * Mounts the screen at `/admin/cerita`. The default is the structure of the first page (the URL the
  * Edit button produces); pass `null` for the list, which is the screen's own default.
  */
-async function mountView(slug: string | null = 'kependudukan'): Promise<VueWrapper> {
+async function mountView(
+  slug: string | null = 'kependudukan',
+  selection: Record<string, string> = {},
+): Promise<VueWrapper> {
   router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/admin/cerita', name: 'admin-cerita', component: AdminCeritaView }],
   });
   await router.push(
-    slug ? { name: 'admin-cerita', query: { halaman: slug } } : { name: 'admin-cerita' },
+    slug
+      ? { name: 'admin-cerita', query: { halaman: slug, ...selection } }
+      : { name: 'admin-cerita' },
   );
   await router.isReady();
   // Rendered through <RouterView>, as the app renders it: vue-router only runs the route's update
@@ -99,6 +104,62 @@ function pageTitles(wrapper: VueWrapper): string[] {
   return wrapper.findAll('[data-test="card-title"]').map((item) => item.text().trim());
 }
 
+/** Title of a section row in the structure tree (without its number or figure label). */
+function sectionTitleOf(row: Element): string {
+  return (row.querySelector('[data-test="section-select"] .font-medium')?.textContent ?? '').trim();
+}
+
+/** Title of a chapter row in the tree, without the "Bab N · " prefix. */
+function chapterTitleOf(row: Element): string {
+  return (row.querySelector('[data-test="chapter-title"]')?.textContent ?? '')
+    .replace(/^\s*Bab \S+ · /, '')
+    .trim();
+}
+
+function sectionTitles(): string[] {
+  return Array.from(document.querySelectorAll('[data-test="section-item"]')).map(sectionTitleOf);
+}
+
+function chapterTitles(): string[] {
+  return Array.from(document.querySelectorAll('[data-test="chapter-item"]')).map(chapterTitleOf);
+}
+
+function sectionRow(title: string): HTMLElement {
+  const row = Array.from(document.querySelectorAll<HTMLElement>('[data-test="section-item"]')).find(
+    (item) => sectionTitleOf(item) === title,
+  );
+  if (!row) throw new Error(`no section row "${title}"`);
+  return row;
+}
+
+function chapterRow(title: string): HTMLElement {
+  const row = Array.from(document.querySelectorAll<HTMLElement>('[data-test="chapter-item"]')).find(
+    (item) => chapterTitleOf(item) === title,
+  );
+  if (!row) throw new Error(`no chapter row "${title}"`);
+  return row;
+}
+
+/** A button in a row's ⋯ menu. The menu is closed in the DOM, but its buttons are still there. */
+function menuButton(row: HTMLElement, label: string): HTMLButtonElement {
+  const found = Array.from(row.querySelectorAll('button')).find(
+    (item) => (item.textContent ?? '').trim() === label,
+  );
+  if (!found) throw new Error(`no "${label}" in that row`);
+  return found;
+}
+
+async function clickMenu(row: HTMLElement, label: string): Promise<void> {
+  menuButton(row, label).click();
+  await flushPromises();
+}
+
+/** Selects a section in the tree (the centre column opens it). */
+async function openSection(title: string): Promise<void> {
+  sectionRow(title).querySelector<HTMLButtonElement>('[data-test="section-select"]')!.click();
+  await flushPromises();
+}
+
 const RAW_TERMS =
   /STALE_WRITE|HAS_DEPENDENTS|\b409\b|\b400\b|\b500\b|sortOrder|expectedUpdatedAt|\/api\/|undefined|\[object/;
 
@@ -139,14 +200,15 @@ describe('AdminCeritaView', () => {
       expect(wrapper.find('[data-test="list-view"]').exists()).toBe(false);
       expect(wrapper.find('[data-test="page-heading"]').text()).toBe('Kependudukan');
       expect(wrapper.findAll('[data-test="chapter-title"]').map((c) => c.text())).toEqual([
-        'Jumlah Penduduk',
-        'Jumlah Keluarga',
+        'Bab 1 · Jumlah Penduduk',
+        'Bab 2 · Jumlah Keluarga',
       ]);
-      expect(wrapper.findAll('[data-test="section-title"]').map((c) => c.text())).toEqual([
-        'Ringkasan',
-        'Rincian',
-        'Ringkasan keluarga',
-      ]);
+      expect(sectionTitles()).toEqual(['Ringkasan', 'Rincian', 'Ringkasan keluarga']);
+      expect(
+        Array.from(wrapper.findAll('[data-test="section-select"]')).map((item) =>
+          item.find('.tabular-nums').text(),
+        ),
+      ).toEqual(['1.1', '1.2', '2.1']);
       wrapper.unmount();
     });
 
@@ -202,7 +264,7 @@ describe('AdminCeritaView', () => {
       await click('Tambah bab');
       await typeInto('[data-test="name-input"]', 'Ibu Hamil');
       await submitDialog();
-      expect(wrapper.find('[data-test="section-empty"]').text()).toContain('belum memiliki bagian');
+      expect(wrapper.find('[data-test="section-empty"]').text()).toContain('Belum ada bagian');
       wrapper.unmount();
     });
 
@@ -315,7 +377,7 @@ describe('AdminCeritaView', () => {
       const wrapper = await mountView();
       const token = fake.pages[0]!.updatedAt;
 
-      await click('Judul utama & penulis');
+      await click('Info cerita');
       expect(body().find('[data-test="details-dialog"]').exists()).toBe(true);
       await typeInto('[data-test="details-headline"]', '  Potret Kependudukan ');
       await typeInto('[data-test="details-author"]', 'Tim Penyusun');
@@ -336,10 +398,10 @@ describe('AdminCeritaView', () => {
       expect(fake.pages[0]!.title).toBe('Kependudukan');
       expect(body().find('[data-test="details-dialog"]').exists()).toBe(false);
       expect(wrapper.find('[data-test="status"]').text()).toContain('Judul utama dan penulis');
-      expect(document.activeElement).toBe(wrapper.find('[data-test="page-details"]').element);
+      expect(document.activeElement).toBe(wrapper.find('[data-test="info-button"]').element);
 
       // Reopened with the stored values.
-      await click('Judul utama & penulis');
+      await click('Info cerita');
       expect(
         (body().find('[data-test="details-headline"]').element as HTMLInputElement).value,
       ).toBe('Potret Kependudukan');
@@ -348,7 +410,7 @@ describe('AdminCeritaView', () => {
 
     it('refuses an affiliation without an author on the client and sends nothing', async () => {
       const wrapper = await mountView();
-      await click('Judul utama & penulis');
+      await click('Info cerita');
       await typeInto('[data-test="details-affiliation"]', 'Kelurahan Manggar');
       await body().find('[data-test="details-dialog"]').trigger('submit');
       await flushPromises();
@@ -359,7 +421,7 @@ describe('AdminCeritaView', () => {
 
     it('keeps the typed headline on a stale save and saves after the dialog reload', async () => {
       const wrapper = await mountView();
-      await click('Judul utama & penulis');
+      await click('Info cerita');
       await typeInto('[data-test="details-headline"]', 'Judul saya');
       fake.touchPage('kependudukan');
 
@@ -571,20 +633,18 @@ describe('AdminCeritaView', () => {
         url: '/api/pages/kependudukan/chapters',
         body: { title: 'Rasio Jenis Kelamin' },
       });
-      expect(wrapper.findAll('[data-test="chapter-title"]').map((c) => c.text())).toContain(
-        'Rasio Jenis Kelamin',
-      );
+      expect(chapterTitles()).toContain('Rasio Jenis Kelamin');
       const newChapter = fake.pages[0]!.chapters[fake.pages[0]!.chapters.length - 1]!;
       expect(document.activeElement?.id).toBe(`cerita-bab-${newChapter.id}-tambah-bagian`);
       wrapper.unmount();
     });
 
-    it('renames a chapter with the chapter token', async () => {
+    it('renames a chapter from its options menu with the chapter token', async () => {
       const wrapper = await mountView();
       const chapter = fake.pages[0]!.chapters[0]!;
       const token = chapter.updatedAt;
 
-      await click('Ubah judul bab Jumlah Penduduk');
+      await clickMenu(chapterRow('Jumlah Penduduk'), 'Ubah judul');
       await typeInto('[data-test="name-input"]', 'Penduduk Total');
       await submitDialog();
 
@@ -593,7 +653,7 @@ describe('AdminCeritaView', () => {
         url: `/api/chapters/${chapter.id}`,
         body: { title: 'Penduduk Total', expectedUpdatedAt: token },
       });
-      expect(wrapper.findAll('[data-test="chapter-title"]')[0]!.text()).toBe('Penduduk Total');
+      expect(chapterTitles()[0]).toBe('Penduduk Total');
       wrapper.unmount();
     });
 
@@ -602,7 +662,7 @@ describe('AdminCeritaView', () => {
       fake.addParagraph(held, 'Pembuka', 'Isi.');
       const wrapper = await mountView();
 
-      await click('Hapus bab Jumlah Penduduk');
+      await clickMenu(chapterRow('Jumlah Penduduk'), 'Hapus bab');
       expect(body().find('[data-test="delete-error"]').text()).toContain(
         'Bab ini belum bisa dihapus karena masih berisi 1 paragraf.',
       );
@@ -613,25 +673,24 @@ describe('AdminCeritaView', () => {
 
       // The second chapter's only section is empty, so deleting the section and then the
       // chapter goes through.
-      await click('Hapus bagian Ringkasan keluarga');
+      await clickMenu(sectionRow('Ringkasan keluarga'), 'Hapus bagian');
       await body().find('[data-test="delete-confirm"]').trigger('click');
       await flushPromises();
-      await click('Hapus bab Jumlah Keluarga');
+      await clickMenu(chapterRow('Jumlah Keluarga'), 'Hapus bab');
       await body().find('[data-test="delete-confirm"]').trigger('click');
       await flushPromises();
-      expect(wrapper.findAll('[data-test="chapter-title"]').map((c) => c.text())).toEqual([
-        'Jumlah Penduduk',
-      ]);
+      expect(chapterTitles()).toEqual(['Jumlah Penduduk']);
       expect(document.activeElement?.id).toBe('cerita-tambah-bab');
       wrapper.unmount();
     });
   });
 
   describe('sections', () => {
-    it('adds a section and moves focus to its "Isi bagian" button', async () => {
+    it('adds a section and opens it in the centre column, with focus on its heading', async () => {
       const wrapper = await mountView();
 
-      await click('Tambah bagian pada bab Jumlah Penduduk');
+      chapterRow('Jumlah Penduduk').querySelector<HTMLButtonElement>('[data-test="section-add"]')!.click();
+      await flushPromises();
       await typeInto('[data-test="name-input"]', 'Penduduk menurut usia');
       await submitDialog();
 
@@ -642,19 +701,19 @@ describe('AdminCeritaView', () => {
         body: { title: 'Penduduk menurut usia' },
       });
       const created = chapter.sections[chapter.sections.length - 1]!;
-      expect(document.activeElement?.id).toBe(`cerita-bagian-${created.id}-isi`);
-      expect(wrapper.findAll('[data-test="section-title"]').map((c) => c.text())).toContain(
-        'Penduduk menurut usia',
-      );
+      expect(sectionTitles()).toContain('Penduduk menurut usia');
+      expect(router.currentRoute.value.query['bagian']).toBe(created.id);
+      expect(wrapper.find('[data-test="section-heading"]').text()).toContain('Penduduk menurut usia');
+      expect(document.activeElement?.id).toBe('cerita-bagian-judul');
       wrapper.unmount();
     });
 
-    it('renames a section with the section token', async () => {
+    it('renames a section from its options menu with the section token', async () => {
       const wrapper = await mountView();
       const section = fake.pages[0]!.chapters[0]!.sections[0]!;
       const token = section.updatedAt;
 
-      await click('Ubah judul bagian Ringkasan');
+      await clickMenu(sectionRow('Ringkasan'), 'Ubah judul');
       await typeInto('[data-test="name-input"]', 'Ringkasan umum');
       await submitDialog();
 
@@ -663,37 +722,33 @@ describe('AdminCeritaView', () => {
         url: `/api/sections/${section.id}`,
         body: { title: 'Ringkasan umum', expectedUpdatedAt: token },
       });
-      expect(wrapper.findAll('[data-test="section-title"]')[0]!.text()).toBe('Ringkasan umum');
+      expect(sectionTitles()[0]).toBe('Ringkasan umum');
       wrapper.unmount();
     });
 
-    it('moves a section with the chapter token', async () => {
+    it('moves a section down with its button and sends the chapter token', async () => {
       const wrapper = await mountView();
       const chapter = fake.pages[0]!.chapters[0]!;
       const token = chapter.updatedAt;
 
-      await click('Turun bagian Ringkasan');
+      await clickMenu(sectionRow('Ringkasan'), 'Turun');
 
       expect(fake.lastWrite()).toMatchObject({
         method: 'PUT',
         url: `/api/chapters/${chapter.id}/sections/reorder`,
         body: { expectedUpdatedAt: token },
       });
-      expect(
-        wrapper
-          .findAll('[data-test="section-title"]')
-          .slice(0, 2)
-          .map((c) => c.text()),
-      ).toEqual(['Rincian', 'Ringkasan']);
+      expect(sectionTitles().slice(0, 2)).toEqual(['Rincian', 'Ringkasan']);
+      expect(document.activeElement?.id).toBe(`cerita-pohon-bagian-${chapter.sections[0]!.id}`);
       wrapper.unmount();
     });
 
-    it('blocks deleting a section that holds a paragraph and offers the section editor', async () => {
+    it('blocks deleting a section that holds a paragraph and offers to open it', async () => {
       const section = fake.pages[0]!.chapters[0]!.sections[0]!;
       fake.addParagraph(section.id, 'Pembuka', 'Isi.');
       const wrapper = await mountView();
 
-      await click('Hapus bagian Ringkasan');
+      await clickMenu(sectionRow('Ringkasan'), 'Hapus bagian');
 
       expect(body().find('[data-test="delete-error"]').text()).toContain(
         'Bagian ini belum bisa dihapus karena masih berisi 1 paragraf.',
@@ -704,8 +759,8 @@ describe('AdminCeritaView', () => {
       await body().find('[data-test="delete-action"]').trigger('click');
       await flushPromises();
       expect(body().find('[data-test="delete-dialog"]').exists()).toBe(false);
-      expect(body().find('[data-test="section-editor"]').exists()).toBe(true);
-      expect(document.body.textContent).toContain('Isi bagian: Ringkasan');
+      expect(router.currentRoute.value.query['bagian']).toBe(section.id);
+      expect(wrapper.find('[data-test="section-heading"]').text()).toContain('Ringkasan');
       wrapper.unmount();
     });
 
@@ -724,7 +779,7 @@ describe('AdminCeritaView', () => {
       });
       const wrapper = await mountView();
 
-      await click('Hapus bagian Ringkasan');
+      await clickMenu(sectionRow('Ringkasan'), 'Hapus bagian');
 
       expect(body().find('[data-test="delete-error"]').text()).toContain('masih berisi 1 gambar.');
       expect(body().find('[data-test="delete-action"]').text()).toBe('Buka isi bagian');
@@ -735,14 +790,11 @@ describe('AdminCeritaView', () => {
     it("deletes an empty section and returns focus to the chapter's add button", async () => {
       const wrapper = await mountView();
 
-      await click('Hapus bagian Rincian');
+      await clickMenu(sectionRow('Rincian'), 'Hapus bagian');
       await body().find('[data-test="delete-confirm"]').trigger('click');
       await flushPromises();
 
-      expect(wrapper.findAll('[data-test="section-title"]').map((c) => c.text())).toEqual([
-        'Ringkasan',
-        'Ringkasan keluarga',
-      ]);
+      expect(sectionTitles()).toEqual(['Ringkasan', 'Ringkasan keluarga']);
       expect(document.activeElement?.id).toBe(
         `cerita-bab-${fake.pages[0]!.chapters[0]!.id}-tambah-bagian`,
       );
@@ -753,131 +805,127 @@ describe('AdminCeritaView', () => {
       fake.pages[1]!.chapters[0]!.sections[0]!.title = null;
       const wrapper = await mountView('pendidikan');
 
-      expect(wrapper.find('[data-test="section-title"]').text()).toBe('Bagian 1');
+      expect(sectionTitles()).toEqual(['Bagian 1']);
       wrapper.unmount();
     });
   });
 
-  describe('section editor dialog', () => {
-    async function openRingkasan(): Promise<VueWrapper> {
+  describe('section selection and the centre column', () => {
+    it('opens a section in the centre column with its number, breadcrumb and both editor cards', async () => {
       const wrapper = await mountView();
-      await click('Isi bagian Ringkasan');
-      return wrapper;
-    }
 
-    it('opens the editor for the chosen section with its place in the title and description', async () => {
-      const wrapper = await openRingkasan();
+      await openSection('Ringkasan');
 
+      expect(router.currentRoute.value.query['bagian']).toBe(fake.pages[0]!.chapters[0]!.sections[0]!.id);
+      expect(wrapper.find('[data-test="section-heading"]').text()).toBe('1.1 Ringkasan');
+      expect(wrapper.find('[data-test="breadcrumb"]').text()).toContain('Bab 1 · Jumlah Penduduk');
+      expect(wrapper.find('[data-test="breadcrumb"]').text()).toContain('Bagian 1.1');
       expect(body().find('[data-test="section-editor"]').exists()).toBe(true);
-      expect(document.body.textContent).toContain('Isi bagian: Ringkasan');
-      expect(document.body.textContent).toContain('Kependudukan › Jumlah Penduduk');
       expect(
         body()
           .find('[data-test="section-editor"]')
           .findAll('h3')
           .map((h) => h.text()),
       ).toEqual(['Paragraf', 'Gambar']);
+      expect(wrapper.find('[data-test="section-select"][aria-current="true"]').exists()).toBe(true);
       wrapper.unmount();
     });
 
-    it('closes without a question when nothing is unsaved and returns focus to the opener', async () => {
+    it('restores the selection from the URL on a fresh mount', async () => {
+      const section = fake.pages[0]!.chapters[0]!.sections[1]!;
+      const wrapper = await mountView('kependudukan', {
+        bab: fake.pages[0]!.chapters[0]!.id,
+        bagian: section.id,
+      });
+
+      expect(wrapper.find('[data-test="section-heading"]').text()).toBe('1.2 Rincian');
+      wrapper.unmount();
+    });
+
+    it('asks before switching to another section with an unsaved paragraph, and keeps the draft on "Tetap di sini"', async () => {
       const wrapper = await mountView();
-      const opener = document.getElementById(
-        `cerita-bagian-${fake.pages[0]!.chapters[0]!.sections[0]!.id}-isi`,
-      )!;
-      opener.focus();
-      opener.click();
-      await flushPromises();
-
-      await body().find('button[aria-label="Tutup dialog"]').trigger('click');
-      await flushPromises();
-
-      expect(body().find('[data-test="section-editor"]').exists()).toBe(false);
-      expect(body().find('[data-test="discard-dialog"]').exists()).toBe(false);
-      expect(document.activeElement).toBe(opener);
-      wrapper.unmount();
-    });
-
-    it('asks before closing with an unsaved paragraph and keeps the draft on "Tetap di sini"', async () => {
-      const wrapper = await openRingkasan();
+      await openSection('Ringkasan');
       await click('Tambah paragraf');
-      await body().find('[data-test="paragraph-title"]').setValue('Judul');
-      await body().find('[data-test="paragraph-body"]').setValue('Teks yang belum disimpan.');
+      await body().find('[data-test="paragraph-title"]').setValue('Pembuka');
+      await body().find('[data-test="paragraph-body"]').setValue('Isi.');
 
-      await body().find('button[aria-label="Tutup dialog"]').trigger('click');
-      await flushPromises();
+      await openSection('Rincian');
 
-      const prompt = body().find('[data-test="discard-dialog"]');
-      expect(prompt.text()).toContain('Perubahan belum disimpan');
-      expect(document.activeElement).toBe(body().find('[data-test="discard-keep"]').element);
-
+      expect(body().find('[data-test="discard-dialog"]').exists()).toBe(true);
+      expect(router.currentRoute.value.query['bagian']).toBe(fake.pages[0]!.chapters[0]!.sections[0]!.id);
       await body().find('[data-test="discard-keep"]').trigger('click');
       await flushPromises();
       expect(body().find('[data-test="discard-dialog"]').exists()).toBe(false);
-      expect(
-        (body().find('[data-test="paragraph-body"]').element as HTMLTextAreaElement).value,
-      ).toBe('Teks yang belum disimpan.');
+      expect(router.currentRoute.value.query['bagian']).toBe(fake.pages[0]!.chapters[0]!.sections[0]!.id);
+      expect(body().find('[data-test="paragraph-title"]').exists()).toBe(true);
+      wrapper.unmount();
+    });
 
-      await body().find('button[aria-label="Tutup dialog"]').trigger('click');
-      await flushPromises();
+    it('switches section when the unsaved draft is discarded', async () => {
+      const wrapper = await mountView();
+      await openSection('Ringkasan');
+      await click('Tambah paragraf');
+      await body().find('[data-test="paragraph-body"]').setValue('Isi.');
+
+      await openSection('Rincian');
       await body().find('[data-test="discard-confirm"]').trigger('click');
       await flushPromises();
-      expect(body().find('[data-test="section-editor"]').exists()).toBe(false);
-      expect(fake.writes()).toHaveLength(0);
+
+      expect(router.currentRoute.value.query['bagian']).toBe(fake.pages[0]!.chapters[0]!.sections[1]!.id);
+      expect(wrapper.find('[data-test="section-heading"]').text()).toBe('1.2 Rincian');
       wrapper.unmount();
     });
 
-    it('asks before leaving the route with an unsaved draft and lets the editor stay', async () => {
-      const wrapper = await openRingkasan();
-      expect(leaveGuards).toHaveLength(1);
-      expect(await leaveGuards[0]!()).toBe(true);
+    it('switches section without a question when nothing is unsaved', async () => {
+      const wrapper = await mountView();
+      await openSection('Ringkasan');
 
-      await click('Tambah paragraf');
-      await body().find('[data-test="paragraph-body"]').setValue('belum disimpan');
+      await openSection('Rincian');
 
-      const pending = leaveGuards[0]!() as Promise<boolean>;
-      await flushPromises();
-      expect(body().find('[data-test="discard-dialog"]').exists()).toBe(true);
-
-      await body().find('[data-test="discard-keep"]').trigger('click');
-      await flushPromises();
-      await expect(pending).resolves.toBe(false);
-      expect(body().find('[data-test="section-editor"]').exists()).toBe(true);
+      expect(body().find('[data-test="discard-dialog"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="section-heading"]').text()).toBe('1.2 Rincian');
       wrapper.unmount();
     });
 
-    it('asks before a Back navigation drops an unsaved draft, and keeps the draft on "Tetap di sini"', async () => {
-      const wrapper = await openRingkasan();
-      await click('Tambah paragraf');
-      await body().find('[data-test="paragraph-body"]').setValue('belum disimpan');
+    it('moves between sections with the previous and next buttons and focuses the heading', async () => {
+      const wrapper = await mountView();
+      await openSection('Rincian');
 
-      // The query changes (the list) without leaving the route: the same component stays mounted.
-      const navigation = router.push({ name: 'admin-cerita' });
+      expect(wrapper.find('[data-test="section-prev"]').text()).toContain('1.1 Ringkasan');
+      expect(wrapper.find('[data-test="section-next"]').text()).toContain('2.1 Ringkasan keluarga');
+      await wrapper.find('[data-test="section-next"]').trigger('click');
       await flushPromises();
-      expect(body().find('[data-test="discard-dialog"]').exists()).toBe(true);
-      expect(router.currentRoute.value.query['halaman']).toBe('kependudukan');
 
-      await body().find('[data-test="discard-keep"]').trigger('click');
-      await flushPromises();
-      await navigation;
-      expect(router.currentRoute.value.query['halaman']).toBe('kependudukan');
-      expect(body().find('[data-test="section-editor"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test="section-heading"]').text()).toBe('2.1 Ringkasan keluarga');
+      expect(document.activeElement?.id).toBe('cerita-bagian-judul');
       wrapper.unmount();
     });
 
-    it('closes the editor when the page changes after a Back navigation with no unsaved draft', async () => {
-      const wrapper = await openRingkasan();
+    it('duplicates the open section: the copy opens with its own paragraphs', async () => {
+      const section = fake.pages[0]!.chapters[0]!.sections[0]!;
+      fake.addParagraph(section.id, 'Pembuka', 'Isi pembuka.');
+      const wrapper = await mountView();
+      await openSection('Ringkasan');
 
-      await router.push({ name: 'admin-cerita', query: { halaman: 'pendidikan' } });
+      await wrapper.find('[data-test="section-duplicate"]').trigger('click');
       await flushPromises();
 
-      expect(body().find('[data-test="section-editor"]').exists()).toBe(false);
-      expect(wrapper.find('[data-test="page-heading"]').text()).toBe('Pendidikan');
+      expect(fake.lastWrite()).toMatchObject({
+        method: 'POST',
+        url: `/api/sections/${section.id}/duplicate`,
+        body: { expectedUpdatedAt: section.updatedAt },
+      });
+      expect(sectionTitles()).toEqual(['Ringkasan', 'Rincian', 'Ringkasan (salinan)', 'Ringkasan keluarga']);
+      const copy = fake.pages[0]!.chapters[0]!.sections[2]!;
+      expect(router.currentRoute.value.query['bagian']).toBe(copy.id);
+      expect(wrapper.find('[data-test="section-heading"]').text()).toContain('Ringkasan (salinan)');
+      expect(document.activeElement?.id).toBe('cerita-bagian-judul');
       wrapper.unmount();
     });
 
-    it('saves a paragraph through the dialog and the section token chains into the next write', async () => {
-      const wrapper = await openRingkasan();
+    it('saves a paragraph in the centre column and the section token chains into the next write', async () => {
+      const wrapper = await mountView();
+      await openSection('Ringkasan');
       await click('Tambah paragraf');
       await body().find('[data-test="paragraph-title"]').setValue('Pertama');
       await body().find('[data-test="paragraph-body"]').setValue('Isi pertama.');
@@ -902,17 +950,17 @@ describe('AdminCeritaView', () => {
       wrapper.unmount();
     });
 
-    it('closes the editor when its section is deleted elsewhere', async () => {
-      const wrapper = await openRingkasan();
+    it('clears the centre column when its section is deleted elsewhere, and says so', async () => {
+      const wrapper = await mountView();
+      await openSection('Ringkasan');
       fake.pages[0]!.chapters[0]!.sections.shift();
 
       await useCeritaAdminStore().load();
       await flushPromises();
 
       expect(body().find('[data-test="section-editor"]').exists()).toBe(false);
-      expect(wrapper.find('[data-test="status"]').text()).toContain(
-        'sudah dihapus oleh orang lain',
-      );
+      expect(wrapper.find('[data-test="section-missing"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test="status"]').text()).toContain('sudah tidak ada');
       wrapper.unmount();
     });
   });
@@ -949,7 +997,7 @@ describe('AdminCeritaView', () => {
 
     it('shows the same notice inside the section editor after a paragraph is saved', async () => {
       const wrapper = await mountView();
-      await click('Isi bagian Ringkasan');
+      await openSection('Ringkasan');
       await click('Tambah paragraf');
       await body().find('[data-test="paragraph-title"]').setValue('Pembuka');
       await body().find('[data-test="paragraph-body"]').setValue('Isi.');
@@ -1005,7 +1053,7 @@ describe('AdminCeritaView', () => {
       const wrapper = await mountView();
       const chapter = fake.pages[0]!.chapters[0]!;
 
-      await click('Ubah judul bab Jumlah Penduduk');
+      await clickMenu(chapterRow('Jumlah Penduduk'), 'Ubah judul');
       await typeInto('[data-test="name-input"]', 'Bab saya');
       await otherEditorSavesThenScreenReloads(() => fake.touchChapter(chapter.id));
       await submitDialog();
@@ -1015,7 +1063,7 @@ describe('AdminCeritaView', () => {
       await flushPromises();
 
       const section = chapter.sections[0]!;
-      await click('Ubah judul bagian Ringkasan');
+      await clickMenu(sectionRow('Ringkasan'), 'Ubah judul');
       await typeInto('[data-test="name-input"]', 'Bagian saya');
       await otherEditorSavesThenScreenReloads(() => fake.touchSection(section.id));
       await submitDialog();
@@ -1109,7 +1157,7 @@ describe('AdminCeritaView', () => {
       const wrapper = await mountView();
       // A chapter reorder carries the page's token, so another editor's save makes it stale.
       fake.touchPage('kependudukan');
-      await click('Turun bab Jumlah Penduduk');
+      await clickMenu(chapterRow('Jumlah Penduduk'), 'Turun');
       expect(wrapper.find('[data-test="action-reload"]').exists()).toBe(true);
 
       failReload();
@@ -1144,7 +1192,7 @@ describe('AdminCeritaView', () => {
     it('hides a session failure of a reorder once the layout notice covers it', async () => {
       const wrapper = await mountView();
       fake.failNext((r) => r.method === 'PUT', fake.json({ error: 'x' }, 401));
-      await click('Turun bab Jumlah Penduduk');
+      await clickMenu(chapterRow('Jumlah Penduduk'), 'Turun');
       expect(wrapper.find('[data-test="action-error"]').exists()).toBe(true);
 
       useAuthStore().markSessionEnded();
