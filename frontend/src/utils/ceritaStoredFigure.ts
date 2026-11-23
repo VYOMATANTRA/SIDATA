@@ -100,7 +100,13 @@ export function storedFigureToArticleFigure(metadata: unknown): ArticleFigure | 
 
   if (kind === 'photos') {
     const photos = parsePhotos(metadata['photos']);
-    return photos.length > 0 ? { kind: 'photos', photos } : null;
+    if (photos.length === 0) return null;
+    // A shared credit fills in every photo that has none of its own; a photo's own credit wins.
+    const shared = text(metadata['credit']);
+    const inherited = shared
+      ? photos.map((photo) => (photo.credit ? photo : { ...photo, credit: shared }))
+      : photos;
+    return { kind: 'photos', photos: inherited };
   }
 
   if (kind === 'diagram') {

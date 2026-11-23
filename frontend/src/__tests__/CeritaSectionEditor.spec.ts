@@ -769,6 +769,77 @@ describe('CeritaSectionEditor', () => {
       wrapper.unmount();
     });
 
+    it('saves a series with one shared credit, omitted when blank, and says a photo credit replaces it', async () => {
+      const wrapper = await mountEditor();
+      await wrapper.find('[data-test="kind-photos"]').setValue();
+      expect(wrapper.find('[data-test="shared-credit"]').exists()).toBe(true);
+      expect(
+        wrapper
+          .find('label[for="' + wrapper.find('[data-test="shared-credit"]').attributes('id') + '"]')
+          .text(),
+      ).toContain('Sumber bersama (untuk semua foto)');
+      expect(
+        wrapper.find('[data-test="photo-credit"]').element.closest('fieldset')?.textContent,
+      ).toContain('Sumber foto ini (opsional)');
+      for (let i = 0; i < 2; i += 1) {
+        await upload(wrapper, i);
+        await wrapper.findAll('[data-test="photo-alt"]')[i]!.setValue(`Foto ${i + 1}`);
+      }
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      await flushPromises();
+      expect((fake.lastWrite()!.body as { figure: object }).figure).not.toHaveProperty('credit');
+
+      await wrapper.find('[data-test="shared-credit"]').setValue('  Tim Survei  ');
+      await wrapper.findAll('[data-test="photo-credit"]')[1]!.setValue('Foto Lembaga');
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      await flushPromises();
+      expect((fake.lastWrite()!.body as { figure: object }).figure).toMatchObject({
+        kind: 'photos',
+        credit: 'Tim Survei',
+      });
+      wrapper.unmount();
+    });
+
+    it('refuses a shared credit over 120 characters next to its field, with no API field name', async () => {
+      const wrapper = await mountEditor();
+      await wrapper.find('[data-test="kind-photos"]').setValue();
+      await wrapper.find('[data-test="shared-credit"]').setValue('x'.repeat(121));
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      const alert = wrapper.find('[role="alert"]').text();
+      expect(alert).toContain('Sumber bersama untuk semua foto maksimal 120 karakter.');
+      expect(alert).not.toMatch(/credit|kredit/i);
+      expect(fake.writes().filter((w) => w.url.includes('figure'))).toHaveLength(0);
+      wrapper.unmount();
+    });
+
+    it('loads a stored shared credit into a series and hides it for a single photo', async () => {
+      fake.blocks.push({
+        id: 'fig-1',
+        sectionId,
+        type: 'figure',
+        slug: `figure-${sectionId}`,
+        title: null,
+        body: '',
+        metadata: {
+          kind: 'photos',
+          credit: 'Tim Survei',
+          photos: [
+            { mediaId: 'media-1', alt: 'Satu' },
+            { mediaId: 'media-2', alt: 'Dua' },
+          ],
+        },
+        sortOrder: null,
+        updatedAt: '2026-11-13T10:00:00.000Z',
+      });
+      const wrapper = await mountEditor();
+      expect((wrapper.find('[data-test="shared-credit"]').element as HTMLInputElement).value).toBe(
+        'Tim Survei',
+      );
+      await wrapper.find('[data-test="kind-photo"]').setValue();
+      expect(wrapper.find('[data-test="shared-credit"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
     it('refuses a series with fewer than two photos', async () => {
       const wrapper = await mountEditor();
       await wrapper.find('[data-test="kind-photos"]').setValue();

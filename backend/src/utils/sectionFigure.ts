@@ -113,6 +113,8 @@ const singlePhotoFigure = z.strictObject(
 const photoGroupFigure = z.strictObject(
   {
     kind: z.literal('photos'),
+    /** Credit shared by the whole group; a photo's own `credit` overrides it. */
+    credit: optionalText('Sumber bersama foto', 120),
     photos: z
       .array(photoSchema, { error: 'Daftar foto harus berupa daftar' })
       .min(2, 'Kelompok foto minimal berisi 2 foto')

@@ -201,10 +201,10 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
     400. The generic `PATCH`/`DELETE /api/content-blocks/:slug` refuse a figure block (`409
     FIGURE_BLOCK_PROTECTED`) so media bookkeeping cannot be bypassed. A figure is not a sibling of the
     section's prose blocks: it has no sort order, and prose create/reorder consider prose blocks only.
-    - Shape: `{ kind: 'photo' | 'photos', photos: [{ mediaId, alt, caption?, credit? }] }` or
+    - Shape: `{ kind: 'photo', photos: [{ mediaId, alt, caption?, credit? }] }`, `{ kind: 'photos', credit?, photos: [...] }` (`credit` is shared by the whole group; a photo's own `credit` overrides it) or
       `{ kind: 'diagram', title, source?, image?: { mediaId, alt }, bars?: { unit?, items: [{ label,
       value }] } }`. A diagram needs an image or bars. Limits: alt 1–300 characters (required),
-      caption ≤ 200, credit ≤ 120, diagram title 1–120, source ≤ 200, 1–20 bars with labels 1–80 and a
+      caption ≤ 200, credit (per photo or shared) ≤ 120, diagram title 1–120, source ≤ 200, 1–20 bars with labels 1–80 and a
       finite number value of at most 1 000 000 000 in magnitude, unique labels (compared trimmed and case-insensitively), unit ≤ 20; the serialized figure may not exceed 12 000 characters. Text is trimmed (a blank optional field is dropped), unknown keys
       are refused, the same media asset may not appear twice in one figure, and text may contain no HTML
       tags or control/bidi characters. Every `mediaId` must be a `cerita`-purpose photo upload (§7).
@@ -599,7 +599,7 @@ setup-password, the OAuth callback, `/dashboard` (its own `<main>`) and the admi
   components: one photo, an offset pair for two, a swipeable row for three or more, or a diagram
   (picture or bars, with its source). Photos are addressed as `/api/media/<mediaId>` (full size; the
   thumbnail variant is not used because the cards are shown large). Alt text, caption and credit are
-  shown as stored. The stored data is parsed defensively (`utils/ceritaStoredFigure.ts`): a figure
+  shown as stored; a photo without its own credit shows the group's shared credit. The stored data is parsed defensively (`utils/ceritaStoredFigure.ts`): a figure
   of an unknown kind or shape, a photo without alt text or with a malformed id, and a bar without a
   label or finite value are left out rather than raising an error; a figure block with no section,
   or for a section not on the page, is ignored. A figure counts as content, so a section that holds
@@ -940,7 +940,9 @@ author is stored; with nothing stored it shows the page title alone.
 - **The section editor** keeps one paragraph form open at a time (a draft is never silently replaced)
   and asks before closing or leaving the route with unsaved work. Figure kinds: one photo, several
   photos (2 to 12) or a diagram (an image, bars, or both). **Alt text is required for every photo and
-  every diagram image**; caption, credit, diagram source and bar unit are optional. Bar numbers follow
+  every diagram image**; caption, credit, diagram source and bar unit are optional. A group of several
+  photos may also carry one optional shared credit ("Sumber bersama"), which applies to every photo
+  without its own credit; a photo's own credit replaces it. Bar numbers follow
   the Indonesian convention (dot for thousands, comma for decimals): "1.234" is 1234 and "1.234,5" is
   1234.5, a dot that is not a valid thousands grouping ("12.5") is refused with a hint to use a comma,
   and a value like "12.500" is accepted as 12500 with a note under the field saying how it was read. Removing a
