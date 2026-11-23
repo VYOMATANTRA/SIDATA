@@ -8,9 +8,23 @@ import {
 /**
  * The editor's working copy of a section figure, and the one place that turns it into the stored
  * shape (or into plain-Indonesian problems). Nothing here names a field or an API term.
+ *
+ * The editor offers four tiles (the design's "Jenis figur"); they map onto the stored kinds like
+ * this (SPEC §8):
+ * - `photo` (1 gambar) → `photo`, exactly one photo;
+ * - `photos-2` (2 gambar) → `photos`, exactly two photos;
+ * - `gallery` (Galeri) → `photos`, three to twelve photos;
+ * - `chart` (Grafik) → `chart` from a table of the Data menu, or, when the operator chooses
+ *   "Unggah gambar grafik", the uploaded `diagram` (picture and/or bars).
+ * Each kind keeps its own draft while the editor is open, so moving between tiles does not lose
+ * what was typed (the two photo tiles share one group of photo rows, see `photoGroupOf`).
  */
 
-export type FigureKind = 'photo' | 'photos' | 'diagram';
+export type FigureKind = 'photo' | 'photos' | 'diagram' | 'chart';
+export type FigureTile = 'photo' | 'photos-2' | 'gallery' | 'chart';
+export type GrafikSource = 'table' | 'upload';
+export type ChartTypeChoice = 'bar' | 'column';
+export type ChartSeriesChoice = 'total' | 'by_sex';
 
 export interface PhotoFields {
   /** Asset id once a photo is uploaded; null while the slot is empty. */
@@ -27,9 +41,12 @@ export interface BarFields {
 }
 
 export interface FigureDraft {
-  kind: FigureKind | null;
+  /** The tile chosen; null while no figure kind is picked. */
+  tile: FigureTile | null;
+  /** Only for the Grafik tile: a table of the Data menu, or an uploaded chart picture. */
+  grafikSource: GrafikSource;
   photos: PhotoFields[];
-  /** Shared credit for a "Beberapa foto" group; ignored for the other kinds. */
+  /** Shared credit for the photo groups (2 gambar and Galeri); ignored for "1 gambar". */
   sharedCredit: string;
   diagramTitle: string;
   diagramSource: string;
@@ -37,6 +54,11 @@ export interface FigureDraft {
   diagramImageAlt: string;
   barUnit: string;
   bars: BarFields[];
+  chartTableId: string;
+  chartType: ChartTypeChoice;
+  chartSeries: ChartSeriesChoice;
+  chartTitle: string;
+  chartSource: string;
 }
 
 export interface FigureProblem {
@@ -44,10 +66,32 @@ export interface FigureProblem {
   message: string;
 }
 
-export const KIND_LABELS: Readonly<Record<FigureKind, string>> = {
-  photo: 'Satu foto',
-  photos: 'Beberapa foto',
-  diagram: 'Diagram',
+/** A table of the page the chart may read: its id and whether it can be split by sex. */
+export interface ChartTableOption {
+  id: string;
+  sexSplit: boolean;
+}
+
+/** Galeri needs at least this many photos (2 gambar uses exactly two). */
+export const GALLERY_PHOTOS_MIN = 3;
+
+export const TILE_ORDER: readonly FigureTile[] = ['photo', 'photos-2', 'gallery', 'chart'];
+
+export const TILE_LABELS: Readonly<Record<FigureTile, { title: string; description: string }>> = {
+  photo: { title: '1 gambar', description: 'Satu foto' },
+  'photos-2': { title: '2 gambar', description: 'Bertumpuk' },
+  gallery: { title: 'Galeri', description: '3+ foto, korsel' },
+  chart: { title: 'Grafik', description: 'Dari menu Data' },
+};
+
+export const CHART_TYPE_LABELS: Readonly<Record<ChartTypeChoice, string>> = {
+  bar: 'Batang',
+  column: 'Kolom',
+};
+
+export const CHART_SERIES_LABELS: Readonly<Record<ChartSeriesChoice, string>> = {
+  total: 'Jumlah total',
+  by_sex: 'Menurut jenis kelamin',
 };
 
 export function emptyPhoto(): PhotoFields {
@@ -60,7 +104,8 @@ export function emptyBar(): BarFields {
 
 export function emptyDraft(): FigureDraft {
   return {
-    kind: null,
+    tile: null,
+    grafikSource: 'table',
     photos: [],
     sharedCredit: '',
     diagramTitle: '',
@@ -69,7 +114,53 @@ export function emptyDraft(): FigureDraft {
     diagramImageAlt: '',
     barUnit: '',
     bars: [],
+    chartTableId: '',
+    chartType: 'bar',
+    chartSeries: 'total',
+    chartTitle: '',
+    chartSource: '',
   };
+}
+
+/** The stored kind a tile saves as. */
+export function kindForTile(tile: FigureTile, source: GrafikSource): FigureKind {
+  if (tile === 'photo') return 'photo';
+  if (tile === 'chart') return source === 'table' ? 'chart' : 'diagram';
+  return 'photos';
+}
+
+/** The stored kind of a draft, or null while no tile is chosen. */
+export function kindOfDraft(draft: FigureDraft): FigureKind | null {
+  return draft.tile === null ? null : kindForTile(draft.tile, draft.grafikSource);
+}
+
+/**
+ * The tile a stored figure shows as: photo count decides between "1 gambar", "2 gambar" and
+ * "Galeri"; a diagram is an uploaded chart picture, a chart reads a table. Null for no figure.
+ */
+export function tileOfFigure(
+  figure: SectionFigure | null,
+): { tile: FigureTile; grafikSource: GrafikSource } | null {
+  if (!figure) return null;
+  if (figure.kind === 'photo') return { tile: 'photo', grafikSource: 'table' };
+  if (figure.kind === 'photos') {
+    return {
+      tile: figure.photos.length === 2 ? 'photos-2' : 'gallery',
+      grafikSource: 'table',
+    };
+  }
+  if (figure.kind === 'diagram') return { tile: 'chart', grafikSource: 'upload' };
+  return { tile: 'chart', grafikSource: 'table' };
+}
+
+/**
+ * The photo rows a tile edits: "1 gambar" has its own rows, "2 gambar" and "Galeri" share one
+ * group (they store the same kind). Null for the tiles without photos.
+ */
+export function photoGroupOf(tile: FigureTile | null): 'photo' | 'photos' | null {
+  if (tile === 'photo') return 'photo';
+  if (tile === 'photos-2' || tile === 'gallery') return 'photos';
+  return null;
 }
 
 /**
@@ -83,10 +174,13 @@ export function formatBarValue(value: number): string {
 
 export function draftFromFigure(figure: SectionFigure | null): FigureDraft {
   const draft = emptyDraft();
-  // A chart is not editable here yet: its draft stays empty so it is never saved over by accident.
-  if (!figure || figure.kind === 'chart') return draft;
+  if (!figure) return draft;
 
-  draft.kind = figure.kind;
+  const placement = tileOfFigure(figure);
+  if (!placement) return draft;
+  draft.tile = placement.tile;
+  draft.grafikSource = placement.grafikSource;
+
   if (figure.kind === 'photo' || figure.kind === 'photos') {
     draft.photos = figure.photos.map((photo) => ({
       mediaId: photo.mediaId,
@@ -95,6 +189,15 @@ export function draftFromFigure(figure: SectionFigure | null): FigureDraft {
       credit: photo.credit ?? '',
     }));
     draft.sharedCredit = figure.kind === 'photos' ? (figure.credit ?? '') : '';
+    return draft;
+  }
+
+  if (figure.kind === 'chart') {
+    draft.chartTableId = figure.tableId;
+    draft.chartType = figure.chartType;
+    draft.chartSeries = figure.series;
+    draft.chartTitle = figure.title;
+    draft.chartSource = figure.source ?? '';
     return draft;
   }
 
@@ -110,7 +213,8 @@ export function draftFromFigure(figure: SectionFigure | null): FigureDraft {
   return draft;
 }
 
-function isBlankPhoto(photo: PhotoFields): boolean {
+/** True when a photo slot holds nothing the editor would keep. */
+export function isBlankPhoto(photo: PhotoFields): boolean {
   return (
     !photo.mediaId &&
     photo.alt.trim() === '' &&
@@ -126,18 +230,31 @@ function isBlankBar(bar: BarFields): boolean {
 /**
  * What the figure editor would store, as a string, so "has the draft changed?" is a plain
  * comparison. Only real content counts:
- * - slots that hold nothing (an empty photo row added by choosing "Beberapa foto", a bar row nobody
- *   typed in) are ignored;
- * - "Satu foto" and "Beberapa foto" with the same photos are the same content, so choosing the other
- *   kind is not an edit until a photo, text or bar really changes;
- * - a figure with nothing in it is `none`, whatever kind is chosen;
- * - parts of a kind that is not chosen (a photo kept in the draft after switching to a diagram) do
- *   not count.
+ * - slots that hold nothing (an empty photo row, a bar row nobody typed in) are ignored;
+ * - "2 gambar" and "Galeri" with the same photos store the same figure, so switching between them
+ *   is not an edit;
+ * - a figure with nothing in it is `none`, whatever tile is chosen;
+ * - parts of a kind that is not chosen do not count.
  */
 export function draftSignature(draft: FigureDraft): string {
-  if (draft.kind === null) return 'none';
+  const kind = kindOfDraft(draft);
+  if (kind === null) return 'none';
 
-  if (draft.kind === 'diagram') {
+  if (kind === 'chart') {
+    const title = draft.chartTitle.trim();
+    const source = draft.chartSource.trim();
+    if (draft.chartTableId === '' && title === '' && source === '') return 'none';
+    return JSON.stringify([
+      'chart',
+      draft.chartTableId,
+      draft.chartType,
+      draft.chartSeries,
+      title,
+      source,
+    ]);
+  }
+
+  if (kind === 'diagram') {
     const bars = draft.bars.filter((bar) => !isBlankBar(bar));
     // The description belongs to the image: once the image is gone it is not part of the draft.
     const imageAlt = draft.diagramImageId ? draft.diagramImageAlt : '';
@@ -160,13 +277,13 @@ export function draftSignature(draft: FigureDraft): string {
     ]);
   }
 
-  const photos = (draft.kind === 'photo' ? draft.photos.slice(0, 1) : draft.photos).filter(
+  const photos = (draft.tile === 'photo' ? draft.photos.slice(0, 1) : draft.photos).filter(
     (photo) => !isBlankPhoto(photo),
   );
   if (photos.length === 0) return 'none';
   return JSON.stringify([
     'photos',
-    draft.kind === 'photos' ? draft.sharedCredit.trim() : '',
+    draft.tile === 'photo' ? '' : draft.sharedCredit.trim(),
     photos.map((photo) => [photo.mediaId, photo.alt, photo.caption, photo.credit]),
   ]);
 }
@@ -174,9 +291,10 @@ export function draftSignature(draft: FigureDraft): string {
 // --- Ids (so an error summary can focus a field) ---
 
 export interface FigureIds {
-  /** First kind option: where an error about the missing kind sends focus. */
+  /** The first tile: where an error about the missing kind sends focus. */
   kind: string;
-  kindOption: (kind: FigureKind) => string;
+  tile: (tile: FigureTile) => string;
+  grafikSource: (source: GrafikSource) => string;
   photoFile: (index: number) => string;
   photoAlt: (index: number) => string;
   photoCaption: (index: number) => string;
@@ -184,6 +302,7 @@ export interface FigureIds {
   photoUp: (index: number) => string;
   photoDown: (index: number) => string;
   photoRemove: (index: number) => string;
+  swapPhotos: string;
   addPhoto: string;
   photosGroup: string;
   sharedCredit: string;
@@ -199,12 +318,18 @@ export interface FigureIds {
   barDown: (index: number) => string;
   barRemove: (index: number) => string;
   addBar: string;
+  chartTable: string;
+  chartType: (type: ChartTypeChoice) => string;
+  chartSeries: (series: ChartSeriesChoice) => string;
+  chartTitle: string;
+  chartSource: string;
 }
 
 export function figureIds(prefix: string): FigureIds {
   return {
-    kind: `${prefix}-jenis-photo`,
-    kindOption: (kind) => `${prefix}-jenis-${kind}`,
+    kind: `${prefix}-tile-photo`,
+    tile: (tile) => `${prefix}-tile-${tile}`,
+    grafikSource: (source) => `${prefix}-grafik-${source}`,
     photoFile: (i) => `${prefix}-foto-${i}-berkas`,
     photoAlt: (i) => `${prefix}-foto-${i}-alt`,
     photoCaption: (i) => `${prefix}-foto-${i}-keterangan`,
@@ -212,6 +337,7 @@ export function figureIds(prefix: string): FigureIds {
     photoUp: (i) => `${prefix}-foto-${i}-naik`,
     photoDown: (i) => `${prefix}-foto-${i}-turun`,
     photoRemove: (i) => `${prefix}-foto-${i}-hapus`,
+    swapPhotos: `${prefix}-tukar-urutan`,
     addPhoto: `${prefix}-tambah-foto`,
     photosGroup: `${prefix}-kumpulan-foto`,
     sharedCredit: `${prefix}-kredit-bersama`,
@@ -227,6 +353,11 @@ export function figureIds(prefix: string): FigureIds {
     barDown: (i) => `${prefix}-batang-${i}-turun`,
     barRemove: (i) => `${prefix}-batang-${i}-hapus`,
     addBar: `${prefix}-tambah-batang`,
+    chartTable: `${prefix}-grafik-tabel`,
+    chartType: (type) => `${prefix}-grafik-jenis-${type}`,
+    chartSeries: (series) => `${prefix}-grafik-data-${series}`,
+    chartTitle: `${prefix}-grafik-judul`,
+    chartSource: `${prefix}-grafik-sumber`,
   };
 }
 
@@ -298,8 +429,10 @@ function collector(): Collector {
   return { problems, add: (fieldId, message) => problems.push({ fieldId, message }) };
 }
 
-function photoLabel(kind: FigureKind, index: number): string {
-  return kind === 'photo' ? 'foto' : `foto ${index + 1}`;
+function photoLabel(tile: FigureTile, index: number): string {
+  if (tile === 'photo') return 'foto';
+  if (tile === 'photos-2') return `gambar ${index + 1}`;
+  return `foto ${index + 1}`;
 }
 
 function validatePhotos(
@@ -307,24 +440,27 @@ function validatePhotos(
   ids: FigureIds,
   out: Collector,
 ): FigurePhotoInput[] | null {
-  const kind = draft.kind as 'photo' | 'photos';
-  const rows = kind === 'photo' ? draft.photos.slice(0, 1) : draft.photos;
+  const tile = draft.tile as 'photo' | 'photos-2' | 'gallery';
+  const rows = tile === 'photo' ? draft.photos.slice(0, 1) : draft.photos;
   const start = out.problems.length;
 
-  if (kind === 'photo' && rows.length < 1) {
+  if (tile === 'photo' && rows.length < 1) {
     out.add(ids.photoFile(0), 'Pilih foto yang akan ditampilkan.');
   }
+  if (tile === 'photos-2' && rows.length !== 2) {
+    out.add(ids.swapPhotos, '2 gambar membutuhkan tepat 2 foto.');
+  }
   if (
-    kind === 'photos' &&
-    (rows.length < FIGURE_LIMITS.photosMin || rows.length > FIGURE_LIMITS.photosMax)
+    tile === 'gallery' &&
+    (rows.length < GALLERY_PHOTOS_MIN || rows.length > FIGURE_LIMITS.photosMax)
   ) {
     out.add(
       ids.addPhoto,
-      `Beberapa foto membutuhkan ${FIGURE_LIMITS.photosMin} sampai ${FIGURE_LIMITS.photosMax} foto.`,
+      `Galeri membutuhkan ${GALLERY_PHOTOS_MIN} sampai ${FIGURE_LIMITS.photosMax} foto.`,
     );
   }
 
-  if (kind === 'photos') {
+  if (tile !== 'photo') {
     const shared = draft.sharedCredit.trim();
     const problem =
       shared.length > FIGURE_LIMITS.credit
@@ -336,7 +472,7 @@ function validatePhotos(
   const seen = new Set<string>();
   const photos: FigurePhotoInput[] = [];
   rows.forEach((row, index) => {
-    const label = photoLabel(kind, index);
+    const label = photoLabel(tile, index);
     const alt = row.alt.trim();
     const caption = row.caption.trim();
     const credit = row.credit.trim();
@@ -354,10 +490,10 @@ function validatePhotos(
 
     const altProblem =
       alt === ''
-        ? `Teks pengganti untuk ${label} wajib diisi. Tulis apa yang terlihat pada foto.`
+        ? `Teks alternatif untuk ${label} wajib diisi. Tulis apa yang terlihat pada foto.`
         : alt.length > FIGURE_LIMITS.alt
-          ? `Teks pengganti untuk ${label} maksimal ${FIGURE_LIMITS.alt} karakter.`
-          : textProblem(alt, `Teks pengganti untuk ${label}`);
+          ? `Teks alternatif untuk ${label} maksimal ${FIGURE_LIMITS.alt} karakter.`
+          : textProblem(alt, `Teks alternatif untuk ${label}`);
     if (altProblem) out.add(ids.photoAlt(index), altProblem);
 
     const captionProblem =
@@ -385,23 +521,28 @@ function validatePhotos(
   return out.problems.length === start ? photos : null;
 }
 
-function validateDiagram(draft: FigureDraft, ids: FigureIds, out: Collector): SectionFigure | null {
+/** The uploaded-picture chart ("Unggah gambar grafik"): the stored `diagram` kind. */
+function validateUploadedChart(
+  draft: FigureDraft,
+  ids: FigureIds,
+  out: Collector,
+): SectionFigure | null {
   const start = out.problems.length;
   const title = draft.diagramTitle.trim();
   const source = draft.diagramSource.trim();
 
   if (title === '') {
-    out.add(ids.diagramTitle, 'Judul diagram wajib diisi.');
+    out.add(ids.diagramTitle, 'Judul grafik wajib diisi.');
   } else if (title.length > FIGURE_LIMITS.diagramTitle) {
-    out.add(ids.diagramTitle, `Judul diagram maksimal ${FIGURE_LIMITS.diagramTitle} karakter.`);
+    out.add(ids.diagramTitle, `Judul grafik maksimal ${FIGURE_LIMITS.diagramTitle} karakter.`);
   } else {
-    const problem = textProblem(title, 'Judul diagram');
+    const problem = textProblem(title, 'Judul grafik');
     if (problem) out.add(ids.diagramTitle, problem);
   }
   if (source.length > FIGURE_LIMITS.diagramSource) {
-    out.add(ids.diagramSource, `Sumber diagram maksimal ${FIGURE_LIMITS.diagramSource} karakter.`);
+    out.add(ids.diagramSource, `Sumber grafik maksimal ${FIGURE_LIMITS.diagramSource} karakter.`);
   } else if (source) {
-    const problem = textProblem(source, 'Sumber diagram');
+    const problem = textProblem(source, 'Sumber grafik');
     if (problem) out.add(ids.diagramSource, problem);
   }
 
@@ -411,12 +552,12 @@ function validateDiagram(draft: FigureDraft, ids: FigureIds, out: Collector): Se
     if (imageAlt === '') {
       out.add(
         ids.diagramImageAlt,
-        'Teks pengganti untuk gambar diagram wajib diisi. Tulis apa yang terlihat pada diagram.',
+        'Teks alternatif untuk gambar grafik wajib diisi. Tulis apa yang terlihat pada grafik.',
       );
     } else if (imageAlt.length > FIGURE_LIMITS.alt) {
-      out.add(ids.diagramImageAlt, `Teks pengganti maksimal ${FIGURE_LIMITS.alt} karakter.`);
+      out.add(ids.diagramImageAlt, `Teks alternatif maksimal ${FIGURE_LIMITS.alt} karakter.`);
     } else {
-      const problem = textProblem(imageAlt, 'Teks pengganti gambar diagram');
+      const problem = textProblem(imageAlt, 'Teks alternatif gambar grafik');
       if (problem) out.add(ids.diagramImageAlt, problem);
     }
   }
@@ -459,7 +600,7 @@ function validateDiagram(draft: FigureDraft, ids: FigureIds, out: Collector): Se
   if (!hasImage && filledBars.length === 0) {
     out.add(
       ids.diagramImage,
-      'Diagram membutuhkan gambar atau data batang. Unggah gambar diagram atau isi data batang.',
+      'Grafik unggahan membutuhkan gambar atau data batang. Unggah gambar grafik atau isi data batang.',
     );
   }
 
@@ -473,25 +614,90 @@ function validateDiagram(draft: FigureDraft, ids: FigureIds, out: Collector): Se
   return figure;
 }
 
+/**
+ * The chart that reads a table of the Data menu. `tables` lists the tables of this page (null while
+ * they are still loading: the table is then not checked here, the server does). A "by_sex" series
+ * needs a table that is split by sex.
+ */
+function validateTableChart(
+  draft: FigureDraft,
+  ids: FigureIds,
+  tables: readonly ChartTableOption[] | null,
+  out: Collector,
+): SectionFigure | null {
+  const start = out.problems.length;
+  const tableId = draft.chartTableId;
+  const option = tables?.find((table) => table.id === tableId) ?? null;
+
+  if (tableId === '') {
+    out.add(ids.chartTable, 'Pilih tabel data untuk grafik.');
+  } else if (tables !== null && option === null) {
+    out.add(ids.chartTable, 'Tabel data ini tidak ditemukan di halaman ini. Pilih tabel lain.');
+  }
+  if (draft.chartSeries === 'by_sex' && option !== null && !option.sexSplit) {
+    out.add(ids.chartSeries('by_sex'), 'Tabel ini hanya memuat jumlah total.');
+  }
+
+  const title = draft.chartTitle.trim();
+  const source = draft.chartSource.trim();
+  if (title === '') {
+    out.add(ids.chartTitle, 'Judul grafik wajib diisi.');
+  } else if (title.length > FIGURE_LIMITS.diagramTitle) {
+    out.add(ids.chartTitle, `Judul grafik maksimal ${FIGURE_LIMITS.diagramTitle} karakter.`);
+  } else {
+    const problem = textProblem(title, 'Judul grafik');
+    if (problem) out.add(ids.chartTitle, problem);
+  }
+  if (source.length > FIGURE_LIMITS.diagramSource) {
+    out.add(ids.chartSource, `Sumber data maksimal ${FIGURE_LIMITS.diagramSource} karakter.`);
+  } else if (source) {
+    const problem = textProblem(source, 'Sumber data');
+    if (problem) out.add(ids.chartSource, problem);
+  }
+
+  if (out.problems.length !== start) return null;
+  return {
+    kind: 'chart',
+    tableId,
+    chartType: draft.chartType,
+    series: draft.chartSeries,
+    title,
+    ...(source ? { source } : {}),
+  };
+}
+
 export interface FigureValidation {
   problems: FigureProblem[];
   /** The figure to send; null while there are problems or no kind is chosen. */
   figure: SectionFigure | null;
 }
 
-export function validateFigureDraft(draft: FigureDraft, ids: FigureIds): FigureValidation {
+/**
+ * Checks the draft and builds the figure to store. `chartTables` is the page's table list for the
+ * Grafik tile (null while it has not loaded).
+ */
+export function validateFigureDraft(
+  draft: FigureDraft,
+  ids: FigureIds,
+  chartTables: readonly ChartTableOption[] | null = null,
+): FigureValidation {
   const out = collector();
-  if (draft.kind === null) {
-    out.add(ids.kind, 'Pilih jenis gambar terlebih dahulu.');
+  const kind = kindOfDraft(draft);
+  if (kind === null) {
+    out.add(ids.kind, 'Pilih jenis figur terlebih dahulu.');
     return { problems: out.problems, figure: null };
   }
-  if (draft.kind === 'diagram') {
-    const figure = validateDiagram(draft, ids, out);
+  if (kind === 'chart') {
+    const figure = validateTableChart(draft, ids, chartTables, out);
+    return { problems: out.problems, figure };
+  }
+  if (kind === 'diagram') {
+    const figure = validateUploadedChart(draft, ids, out);
     return { problems: out.problems, figure };
   }
   const photos = validatePhotos(draft, ids, out);
   if (!photos) return { problems: out.problems, figure: null };
-  if (draft.kind === 'photo') {
+  if (draft.tile === 'photo') {
     const [first] = photos;
     return { problems: out.problems, figure: first ? { kind: 'photo', photos: [first] } : null };
   }
@@ -508,8 +714,8 @@ export function describeFigure(figure: SectionFigure | null): string {
     return 'Gambar tersimpan, tetapi isinya tidak dapat dibaca. Simpan gambar baru untuk menggantinya.';
   if (figure.kind === 'photo') return 'Tersimpan: satu foto.';
   if (figure.kind === 'photos') return `Tersimpan: ${figure.photos.length} foto.`;
-  if (figure.kind === 'chart') return `Tersimpan: bagan “${figure.title}”.`;
-  return `Tersimpan: diagram “${figure.title}”.`;
+  if (figure.kind === 'chart') return `Tersimpan: grafik “${figure.title}”.`;
+  return `Tersimpan: grafik unggahan “${figure.title}”.`;
 }
 
 /** What a stored figure is, in a few words, for a note about someone else's version. */
@@ -518,6 +724,6 @@ export function summarizeFigure(figure: SectionFigure | null, exists: boolean): 
   if (!figure) return 'gambar yang isinya tidak dapat dibaca';
   if (figure.kind === 'photo') return 'satu foto';
   if (figure.kind === 'photos') return `${figure.photos.length} foto`;
-  if (figure.kind === 'chart') return `bagan “${figure.title}”`;
-  return `diagram “${figure.title}”`;
+  if (figure.kind === 'chart') return `grafik “${figure.title}”`;
+  return `grafik unggahan “${figure.title}”`;
 }

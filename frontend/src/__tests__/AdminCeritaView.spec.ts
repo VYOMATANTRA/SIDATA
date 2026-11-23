@@ -689,7 +689,9 @@ describe('AdminCeritaView', () => {
     it('adds a section and opens it in the centre column, with focus on its heading', async () => {
       const wrapper = await mountView();
 
-      chapterRow('Jumlah Penduduk').querySelector<HTMLButtonElement>('[data-test="section-add"]')!.click();
+      chapterRow('Jumlah Penduduk')
+        .querySelector<HTMLButtonElement>('[data-test="section-add"]')!
+        .click();
       await flushPromises();
       await typeInto('[data-test="name-input"]', 'Penduduk menurut usia');
       await submitDialog();
@@ -703,7 +705,9 @@ describe('AdminCeritaView', () => {
       const created = chapter.sections[chapter.sections.length - 1]!;
       expect(sectionTitles()).toContain('Penduduk menurut usia');
       expect(router.currentRoute.value.query['bagian']).toBe(created.id);
-      expect(wrapper.find('[data-test="section-heading"]').text()).toContain('Penduduk menurut usia');
+      expect(wrapper.find('[data-test="section-heading"]').text()).toContain(
+        'Penduduk menurut usia',
+      );
       expect(document.activeElement?.id).toBe('cerita-bagian-judul');
       wrapper.unmount();
     });
@@ -816,7 +820,9 @@ describe('AdminCeritaView', () => {
 
       await openSection('Ringkasan');
 
-      expect(router.currentRoute.value.query['bagian']).toBe(fake.pages[0]!.chapters[0]!.sections[0]!.id);
+      expect(router.currentRoute.value.query['bagian']).toBe(
+        fake.pages[0]!.chapters[0]!.sections[0]!.id,
+      );
       expect(wrapper.find('[data-test="section-heading"]').text()).toBe('1.1 Ringkasan');
       expect(wrapper.find('[data-test="breadcrumb"]').text()).toContain('Bab 1 · Jumlah Penduduk');
       expect(wrapper.find('[data-test="breadcrumb"]').text()).toContain('Bagian 1.1');
@@ -852,11 +858,15 @@ describe('AdminCeritaView', () => {
       await openSection('Rincian');
 
       expect(body().find('[data-test="discard-dialog"]').exists()).toBe(true);
-      expect(router.currentRoute.value.query['bagian']).toBe(fake.pages[0]!.chapters[0]!.sections[0]!.id);
+      expect(router.currentRoute.value.query['bagian']).toBe(
+        fake.pages[0]!.chapters[0]!.sections[0]!.id,
+      );
       await body().find('[data-test="discard-keep"]').trigger('click');
       await flushPromises();
       expect(body().find('[data-test="discard-dialog"]').exists()).toBe(false);
-      expect(router.currentRoute.value.query['bagian']).toBe(fake.pages[0]!.chapters[0]!.sections[0]!.id);
+      expect(router.currentRoute.value.query['bagian']).toBe(
+        fake.pages[0]!.chapters[0]!.sections[0]!.id,
+      );
       expect(body().find('[data-test="paragraph-title"]').exists()).toBe(true);
       wrapper.unmount();
     });
@@ -871,7 +881,9 @@ describe('AdminCeritaView', () => {
       await body().find('[data-test="discard-confirm"]').trigger('click');
       await flushPromises();
 
-      expect(router.currentRoute.value.query['bagian']).toBe(fake.pages[0]!.chapters[0]!.sections[1]!.id);
+      expect(router.currentRoute.value.query['bagian']).toBe(
+        fake.pages[0]!.chapters[0]!.sections[1]!.id,
+      );
       expect(wrapper.find('[data-test="section-heading"]').text()).toBe('1.2 Rincian');
       wrapper.unmount();
     });
@@ -915,7 +927,12 @@ describe('AdminCeritaView', () => {
         url: `/api/sections/${section.id}/duplicate`,
         body: { expectedUpdatedAt: section.updatedAt },
       });
-      expect(sectionTitles()).toEqual(['Ringkasan', 'Rincian', 'Ringkasan (salinan)', 'Ringkasan keluarga']);
+      expect(sectionTitles()).toEqual([
+        'Ringkasan',
+        'Rincian',
+        'Ringkasan (salinan)',
+        'Ringkasan keluarga',
+      ]);
       const copy = fake.pages[0]!.chapters[0]!.sections[2]!;
       expect(router.currentRoute.value.query['bagian']).toBe(copy.id);
       expect(wrapper.find('[data-test="section-heading"]').text()).toContain('Ringkasan (salinan)');
@@ -1694,5 +1711,109 @@ describe('AdminCeritaView', () => {
       expect(document.activeElement?.id).toBe('cerita-tambah-halaman');
       wrapper.unmount();
     });
+  });
+});
+
+describe('AdminCeritaView chapter overview', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    useAuthStore().setAuth({ id: 'u-1', email: 'e@example.com', role: 'editor' }, 'token-1');
+    document.body.innerHTML = '';
+    leaveGuards.length = 0;
+    fake = createFakeCerita();
+    seed();
+    fake.install();
+  });
+
+  function overviewTitles(): string[] {
+    return Array.from(document.querySelectorAll('[data-test="overview-title"]')).map((item) =>
+      (item.textContent ?? '').trim(),
+    );
+  }
+
+  function overviewCard(title: string): HTMLElement {
+    const card = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-test="overview-item"]'),
+    ).find(
+      (item) =>
+        (item.querySelector('[data-test="overview-title"]')?.textContent ?? '').trim() === title,
+    );
+    if (!card) throw new Error(`no overview card "${title}"`);
+    return card;
+  }
+
+  async function openChapter(title: string): Promise<void> {
+    chapterRow(title).querySelector<HTMLButtonElement>('[data-test="chapter-toggle"]')!.click();
+    await flushPromises();
+  }
+
+  it('selecting a chapter in the tree shows its overview, not a section', async () => {
+    const wrapper = await mountView();
+
+    await openChapter('Jumlah Penduduk');
+
+    expect(router.currentRoute.value.query['bagian']).toBeUndefined();
+    expect(router.currentRoute.value.query['bab']).toBe(fake.pages[0]!.chapters[0]!.id);
+    expect(wrapper.find('[data-test="overview-heading"]').text()).toBe(
+      'Bab 1 dari 2 · Jumlah Penduduk',
+    );
+    expect(overviewTitles()).toEqual(['Ringkasan', 'Rincian']);
+    expect(wrapper.find('[data-test="section-editor"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('shows the empty-chapter notice with the add panel', async () => {
+    fake.addPage('Lingkungan', [{ title: 'Sampah' }]);
+    fake.pages[3]!.chapters[0]!.sections = [];
+    const wrapper = await mountView('lingkungan', { bab: fake.pages[3]!.chapters[0]!.id });
+
+    expect(wrapper.find('[data-test="overview-empty"]').text()).toBe(
+      'Belum ada bagian di bab ini.',
+    );
+    expect(wrapper.find('[data-test="add-section-panel"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('moves a section with its Turun button and keeps focus on the moved card', async () => {
+    const wrapper = await mountView();
+    await openChapter('Jumlah Penduduk');
+
+    overviewCard('Ringkasan').querySelector<HTMLButtonElement>('[data-test="card-down"]')!.click();
+    await flushPromises();
+
+    expect(overviewTitles()).toEqual(['Rincian', 'Ringkasan']);
+    expect(document.activeElement?.id).toBe(
+      `cerita-ringkasan-bagian-${fake.pages[0]!.chapters[0]!.sections[0]!.id}`,
+    );
+    wrapper.unmount();
+  });
+
+  it('saves the chapter title with Simpan judul and shows it in the tree', async () => {
+    const wrapper = await mountView();
+    await openChapter('Jumlah Penduduk');
+
+    const input = wrapper.get<HTMLInputElement>('[data-test="chapter-title-input"]');
+    await input.setValue('Penduduk Desa');
+    await wrapper.get('[data-test="chapter-title-save"]').trigger('click');
+    await flushPromises();
+
+    expect(fake.pages[0]!.chapters[0]!.title).toBe('Penduduk Desa');
+    expect(chapterTitles()).toContain('Penduduk Desa');
+    wrapper.unmount();
+  });
+
+  it('adds a section with a figure kind and opens it in the section editor', async () => {
+    const wrapper = await mountView();
+    await openChapter('Jumlah Penduduk');
+
+    await wrapper.get('[data-test="tile-gallery"]').setValue(true);
+    await wrapper.get('[data-test="add-section-title"]').setValue('Bagian Baru');
+    await wrapper.get('[data-test="add-section-submit"]').trigger('click');
+    await flushPromises();
+
+    const added = fake.pages[0]!.chapters[0]!.sections.find((item) => item.title === 'Bagian Baru');
+    expect(added).toBeDefined();
+    expect(router.currentRoute.value.query['bagian']).toBe(added!.id);
+    wrapper.unmount();
   });
 });

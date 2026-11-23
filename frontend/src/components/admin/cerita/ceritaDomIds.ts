@@ -40,4 +40,21 @@ export const ceritaIds = {
   sectionDuplicate: 'cerita-bagian-duplikat',
   sectionPrev: 'cerita-bagian-sebelumnya',
   sectionNext: 'cerita-bagian-berikutnya',
+  /** Chapter overview (centre column when a chapter is selected). */
+  overviewLabel: 'cerita-ringkasan-bab',
+  overviewTitleField: 'cerita-ringkasan-judul',
+  overviewTitleSave: 'cerita-ringkasan-judul-simpan',
+  overviewChapterUp: 'cerita-ringkasan-bab-naik',
+  overviewChapterDown: 'cerita-ringkasan-bab-turun',
+  overviewChapterDelete: 'cerita-ringkasan-bab-hapus',
+  overviewList: 'cerita-ringkasan-daftar',
+  overviewAddHeading: 'cerita-ringkasan-tambah-judul',
+  /** Section card: the title button (focus target) and the ⋯ menu summary. */
+  overviewCardTitle: (id: string): string => `cerita-ringkasan-bagian-${id}`,
+  overviewCardMenu: (id: string): string => `cerita-ringkasan-menu-${id}`,
+  overviewCardUp: (id: string): string => `cerita-ringkasan-bagian-${id}-naik`,
+  overviewCardDown: (id: string): string => `cerita-ringkasan-bagian-${id}-turun`,
+  overviewCardMove: (id: string): string => `cerita-ringkasan-bagian-${id}-pindah`,
+  overviewCardDuplicate: (id: string): string => `cerita-ringkasan-bagian-${id}-duplikat`,
+  overviewCardDelete: (id: string): string => `cerita-ringkasan-bagian-${id}-hapus`,
 } as const;

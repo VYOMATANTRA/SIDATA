@@ -6,7 +6,11 @@ import CardDragGrip from '../cards/CardDragGrip.vue';
 import { useCardDragReorder } from '../../../composables/useCardDragReorder';
 import { edgeAt } from '../../../composables/useCardDragReorder';
 import type { AdminChapter, AdminPage, AdminSection } from '../../../stores/ceritaAdmin.store';
-import { chapterNumberLabel, sectionNumberLabel, type FigureTreeLabel } from '../../../utils/ceritaTreeLabels';
+import {
+  chapterNumberLabel,
+  sectionNumberLabel,
+  type FigureTreeLabel,
+} from '../../../utils/ceritaTreeLabels';
 import { ceritaIds } from './ceritaDomIds';
 
 /**
@@ -22,12 +26,15 @@ const props = defineProps<{
   page: AdminPage;
   selectedChapterId: string | null;
   selectedSectionId: string | null;
+  /** The chapter whose overview is open in the centre column (no section selected), or null. */
+  overviewChapterId?: string | null;
   busy: boolean;
   figureSummary: (sectionId: string) => FigureTreeLabel;
 }>();
 
 const emit = defineEmits<{
   (e: 'info'): void;
+  (e: 'select-chapter', chapter: AdminChapter): void;
   (e: 'select-section', chapter: AdminChapter, section: AdminSection): void;
   (e: 'add-chapter'): void;
   (e: 'add-section', chapter: AdminChapter): void;
@@ -134,7 +141,9 @@ function allowDrop(event: DragEvent): void {
 }
 
 function chapterEdge(chapter: AdminChapter, edge: 'before' | 'after'): boolean {
-  return chapterDrag.dropTarget.value?.key === chapter.id && chapterDrag.dropTarget.value.edge === edge;
+  return (
+    chapterDrag.dropTarget.value?.key === chapter.id && chapterDrag.dropTarget.value.edge === edge
+  );
 }
 
 function sectionEdge(
@@ -157,14 +166,12 @@ function closeMenu(event: Event): void {
 
 <template>
   <nav aria-labelledby="cerita-pohon-judul" class="space-y-4" data-test="structure-tree">
-    <h3 id="cerita-pohon-judul" class="text-brand-navy text-base font-semibold">
-      Struktur cerita
-    </h3>
+    <h3 id="cerita-pohon-judul" class="text-brand-navy text-base font-semibold">Struktur cerita</h3>
 
     <button
       :id="ceritaIds.pageDetails"
       type="button"
-      class="border-border hover:bg-surface-muted focus-visible:outline-focus-ring flex min-h-11 w-full items-center gap-2 rounded-btn border bg-white px-3 text-left text-sm font-medium text-brand-navy focus-visible:outline-2 focus-visible:outline-offset-2"
+      class="border-border hover:bg-surface-muted focus-visible:outline-focus-ring rounded-btn text-brand-navy flex min-h-11 w-full items-center gap-2 border bg-white px-3 text-left text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
       :disabled="busy"
       data-test="info-button"
       @click="emit('info')"
@@ -198,7 +205,7 @@ function closeMenu(event: Event): void {
         "
         @drop.prevent="chapterDrag.dropOn(chapter.id, edgeAt($event))"
       >
-        <div class="border-border flex items-stretch overflow-hidden rounded-btn border bg-white">
+        <div class="border-border rounded-btn flex items-stretch overflow-hidden border bg-white">
           <CardDragGrip
             :blocked="dragBlock"
             :data-text="chapter.title"
@@ -212,14 +219,22 @@ function closeMenu(event: Event): void {
             class="hover:bg-surface-muted focus-visible:outline-focus-ring flex min-h-11 min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2"
             :aria-expanded="isOpen(chapter) ? 'true' : 'false'"
             :aria-controls="`cerita-pohon-bab-panel-${chapter.id}`"
+            :aria-current="overviewChapterId === chapter.id ? 'true' : undefined"
+            :class="overviewChapterId === chapter.id ? 'bg-brand-navy/5' : ''"
             data-test="chapter-toggle"
-            @click="toggle(chapter)"
+            @click="
+              toggle(chapter);
+              emit('select-chapter', chapter);
+            "
           >
             <span aria-hidden="true" class="text-text-muted w-3 shrink-0 text-xs">
               {{ isOpen(chapter) ? '▾' : '▸' }}
             </span>
             <span class="min-w-0 flex-1">
-              <span class="text-brand-navy block truncate text-sm font-semibold" data-test="chapter-title">
+              <span
+                class="text-brand-navy block truncate text-sm font-semibold"
+                data-test="chapter-title"
+              >
                 {{ chapterLabel(chapter, chapterIndex) }}
               </span>
               <span class="text-text-muted block text-xs" data-test="chapter-meta">
@@ -245,7 +260,10 @@ function closeMenu(event: Event): void {
                 class="min-h-11 justify-start"
                 :disabled="busy"
                 data-test="chapter-rename"
-                @click="closeMenu($event); emit('rename-chapter', chapter)"
+                @click="
+                  closeMenu($event);
+                  emit('rename-chapter', chapter);
+                "
               >
                 Ubah judul
               </BaseButton>
@@ -256,7 +274,10 @@ function closeMenu(event: Event): void {
                 size="sm"
                 class="min-h-11 justify-start"
                 :disabled="busy || chapterIndex === 0"
-                @click="closeMenu($event); emit('move-chapter', chapter, -1)"
+                @click="
+                  closeMenu($event);
+                  emit('move-chapter', chapter, -1);
+                "
               >
                 Naik
               </BaseButton>
@@ -267,7 +288,10 @@ function closeMenu(event: Event): void {
                 size="sm"
                 class="min-h-11 justify-start"
                 :disabled="busy || chapterIndex === page.chapters.length - 1"
-                @click="closeMenu($event); emit('move-chapter', chapter, 1)"
+                @click="
+                  closeMenu($event);
+                  emit('move-chapter', chapter, 1);
+                "
               >
                 Turun
               </BaseButton>
@@ -278,7 +302,10 @@ function closeMenu(event: Event): void {
                 size="sm"
                 class="min-h-11 justify-start"
                 :disabled="busy"
-                @click="closeMenu($event); emit('delete-chapter', chapter)"
+                @click="
+                  closeMenu($event);
+                  emit('delete-chapter', chapter);
+                "
               >
                 Hapus bab
               </BaseButton>
@@ -299,11 +326,15 @@ function closeMenu(event: Event): void {
             Belum ada bagian.
           </p>
 
-          <ol v-else class="space-y-1" :aria-label="`Bagian dari ${chapterLabel(chapter, chapterIndex)}`">
+          <ol
+            v-else
+            class="space-y-1"
+            :aria-label="`Bagian dari ${chapterLabel(chapter, chapterIndex)}`"
+          >
             <li
               v-for="(section, sectionIndex) in chapter.sections"
               :key="section.id"
-              class="relative rounded-btn"
+              class="rounded-btn relative"
               :class="{
                 'border-brand-navy border-t-2': sectionEdge(chapter, section, 'before'),
                 'border-brand-navy border-b-2': sectionEdge(chapter, section, 'after'),
@@ -312,13 +343,14 @@ function closeMenu(event: Event): void {
               @dragover="
                 (event) => {
                   allowDrop(event);
-                  if (dragChapterId === chapter.id) sectionDrag.hoverDrop(section.id, edgeAt(event));
+                  if (dragChapterId === chapter.id)
+                    sectionDrag.hoverDrop(section.id, edgeAt(event));
                 }
               "
               @drop.prevent="dropSection(chapter, section, $event)"
             >
               <div
-                class="flex items-stretch overflow-hidden rounded-btn border"
+                class="rounded-btn flex items-stretch overflow-hidden border"
                 :class="
                   selectedSectionId === section.id
                     ? 'border-brand-navy bg-brand-navy/5'
@@ -349,7 +381,11 @@ function closeMenu(event: Event): void {
                     </span>
                     <span
                       class="block text-xs"
-                      :class="figureSummary(section.id).empty ? 'font-medium text-amber-900' : 'text-text-muted'"
+                      :class="
+                        figureSummary(section.id).empty
+                          ? 'font-medium text-amber-900'
+                          : 'text-text-muted'
+                      "
                       data-test="section-figure"
                     >
                       <ExclamationTriangleIcon
@@ -378,7 +414,10 @@ function closeMenu(event: Event): void {
                       class="min-h-11 justify-start"
                       :disabled="busy"
                       data-test="section-rename"
-                      @click="closeMenu($event); emit('rename-section', chapter, section)"
+                      @click="
+                        closeMenu($event);
+                        emit('rename-section', chapter, section);
+                      "
                     >
                       Ubah judul
                     </BaseButton>
@@ -389,7 +428,10 @@ function closeMenu(event: Event): void {
                       size="sm"
                       class="min-h-11 justify-start"
                       :disabled="busy || sectionIndex === 0"
-                      @click="closeMenu($event); emit('move-section', chapter, section, -1)"
+                      @click="
+                        closeMenu($event);
+                        emit('move-section', chapter, section, -1);
+                      "
                     >
                       Naik
                     </BaseButton>
@@ -400,7 +442,10 @@ function closeMenu(event: Event): void {
                       size="sm"
                       class="min-h-11 justify-start"
                       :disabled="busy || sectionIndex === chapter.sections.length - 1"
-                      @click="closeMenu($event); emit('move-section', chapter, section, 1)"
+                      @click="
+                        closeMenu($event);
+                        emit('move-section', chapter, section, 1);
+                      "
                     >
                       Turun
                     </BaseButton>
@@ -411,7 +456,10 @@ function closeMenu(event: Event): void {
                       size="sm"
                       class="min-h-11 justify-start"
                       :disabled="busy"
-                      @click="closeMenu($event); emit('delete-section', chapter, section)"
+                      @click="
+                        closeMenu($event);
+                        emit('delete-section', chapter, section);
+                      "
                     >
                       Hapus bagian
                     </BaseButton>
@@ -434,7 +482,8 @@ function closeMenu(event: Event): void {
             <template #leftIcon>
               <PlusIcon class="h-4 w-4" aria-hidden="true" />
             </template>
-            Tambah bagian <span class="sr-only">pada {{ chapterLabel(chapter, chapterIndex) }}</span>
+            Tambah bagian
+            <span class="sr-only">pada {{ chapterLabel(chapter, chapterIndex) }}</span>
           </BaseButton>
         </div>
       </li>

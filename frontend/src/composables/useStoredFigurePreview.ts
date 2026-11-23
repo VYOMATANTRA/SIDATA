@@ -1,6 +1,7 @@
 import { computed, onBeforeUnmount, ref, watch, type ComputedRef, type Ref } from 'vue';
-import type { ArticleFigure, ArticlePhoto } from '../types/ceritaArticle';
+import type { ArticleFigure, ArticlePhoto, ChartTable } from '../types/ceritaArticle';
 import { fetchMediaPreviewBlob, mediaPreviewPath } from '../services/media.service';
+import { useIndicatorTablesStore } from '../stores/indicatorTables.store';
 
 const PUBLIC_MEDIA_PATH = /^\/api\/media\/([0-9a-f-]{36})$/i;
 
@@ -47,21 +48,29 @@ function withSources(figure: ArticleFigure, urlFor: (id: string) => string): Art
 export interface StoredFigurePreview {
   /** The figure with blob URLs for its photos; photos not loaded yet are left out by the figure. */
   figure: ComputedRef<ArticleFigure | null>;
-  /** Photos are being fetched. */
+  /** Photos or the chart's table are being fetched. */
   loading: Ref<boolean>;
-  /** At least one photo could not be fetched (missing, deleted or offline). */
+  /** At least one photo, or the chart's table, could not be fetched (missing, deleted or offline). */
   unavailable: ComputedRef<boolean>;
+  /** The table a chart figure reads, by id (the shape `ArticleFigure` takes as `tables`). */
+  tables: ComputedRef<Record<string, ChartTable>>;
 }
 
 /**
- * Loads the photos of a stored figure for the editor's live preview. Each photo is fetched with the
+ * Loads what a stored figure shows for the editor's live preview. Each photo is fetched with the
  * authenticated client from the editor preview route and shown as a blob URL, because a bare
- * `<img src>` to the API would get 401 for an editor's session. Fetched photos are kept while the
- * figure still uses them, and every blob URL is revoked when the preview goes away.
+ * `<img src>` to the API would get 401 for an editor's session. A chart's table is fetched through
+ * the indicator-table store (the same cache the chart editor's table list uses), so the preview
+ * draws the numbers the public page will draw. Fetched photos are kept while the figure still uses
+ * them, and every blob URL is revoked when the preview goes away.
  */
 export function useStoredFigurePreview(source: Ref<ArticleFigure | null>): StoredFigurePreview {
+  const tablesStore = useIndicatorTablesStore();
   const urls = ref<Record<string, string>>({});
+  const chartTables = ref<Record<string, ChartTable>>({});
   const loading = ref(false);
+  /** A chart whose table could not be fetched (or does not exist). */
+  const tableMissing = ref(false);
   let generation = 0;
 
   function revoke(id: string): void {
@@ -81,19 +90,37 @@ export function useStoredFigurePreview(source: Ref<ArticleFigure | null>): Store
       }
       urls.value = kept;
 
+      const tableId = figure?.kind === 'chart' ? figure.tableId : null;
+      const keptTable = tableId !== null && chartTables.value[tableId];
+      chartTables.value = keptTable && tableId ? { [tableId]: keptTable } : {};
+      tableMissing.value = false;
+
       const missing = ids.filter((id) => !(id in kept));
-      loading.value = missing.length > 0;
-      await Promise.all(
-        missing.map(async (id) => {
-          try {
-            const blob = await fetchMediaPreviewBlob(mediaPreviewPath(id));
-            if (current !== generation) return;
-            urls.value = { ...urls.value, [id]: URL.createObjectURL(blob) };
-          } catch {
-            // Left out: the figure drops the photo and `unavailable` says so.
-          }
-        }),
-      );
+      const needTable = tableId !== null && !keptTable;
+      loading.value = missing.length > 0 || needTable;
+
+      const photoLoads = missing.map(async (id) => {
+        try {
+          const blob = await fetchMediaPreviewBlob(mediaPreviewPath(id));
+          if (current !== generation) return;
+          urls.value = { ...urls.value, [id]: URL.createObjectURL(blob) };
+        } catch {
+          // Left out: the figure drops the photo and `unavailable` says so.
+        }
+      });
+      const tableLoad =
+        tableId !== null && needTable
+          ? tablesStore
+              .fetchTableDetail(tableId)
+              .then((table) => {
+                if (current === generation) chartTables.value = { [tableId]: table };
+              })
+              .catch(() => {
+                if (current === generation) tableMissing.value = true;
+              })
+          : Promise.resolve();
+
+      await Promise.all([...photoLoads, tableLoad]);
       if (current === generation) loading.value = false;
     },
     { immediate: true },
@@ -113,8 +140,12 @@ export function useStoredFigurePreview(source: Ref<ArticleFigure | null>): Store
 
   const unavailable = computed(() => {
     if (loading.value || !source.value) return false;
+    if (source.value.kind === 'chart')
+      return tableMissing.value || !chartTables.value[source.value.tableId];
     return mediaIdsOf(source.value).some((id) => !(id in urls.value));
   });
 
-  return { figure, loading, unavailable };
+  const tables = computed(() => chartTables.value);
+
+  return { figure, loading, unavailable, tables };
 }

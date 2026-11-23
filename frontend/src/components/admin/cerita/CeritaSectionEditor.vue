@@ -76,7 +76,8 @@ defineExpose({ isDirty: () => isDirty.value });
     >
       <h3 :id="`${baseId}-gambar`" class="text-brand-navy text-base font-semibold">Gambar</h3>
       <p class="text-text-muted text-sm">
-        Setiap bagian dapat memiliki satu gambar: satu foto, beberapa foto, atau diagram.
+        Setiap bagian dapat memiliki satu figur: satu gambar, dua gambar, galeri, atau grafik dari
+        menu Data.
       </p>
       <CeritaFigureEditor
         ref="figure"

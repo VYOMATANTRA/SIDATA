@@ -67,6 +67,8 @@ export function createFakeCerita() {
   const pages: FakePage[] = [];
   const blocks: ContentBlock[] = [];
   const requests: RecordedRequest[] = [];
+  /** Indicator tables (Data menu), listed and read by the chart editor and the live preview. */
+  const indicatorTables: Array<Record<string, unknown>> = [];
   /** First matching override answers instead of the model, once. */
   const overrides: Array<{ match: (r: RecordedRequest) => boolean; response: Response }> = [];
 
@@ -109,6 +111,39 @@ export function createFakeCerita() {
     });
     pages.push(page);
     return page;
+  }
+
+  /** Adds an indicator table to a section (its kind decides whether "by_sex" is allowed). */
+  function addIndicatorTable(input: {
+    id: string;
+    sectionId: string;
+    title: string;
+    kind: 'age_pyramid' | 'ethnicity' | 'religion_by_sex' | 'occupation';
+    period: string;
+  }): void {
+    indicatorTables.push({
+      slug: slugify(input.title),
+      source: null,
+      sortOrder: indicatorTables.length,
+      createdAt: stamp(),
+      updatedAt: stamp(),
+      ...input,
+      rows: [
+        {
+          id: `${input.id}-r1`,
+          tableId: input.id,
+          rowKey: 'k1',
+          label: 'Kelompok A',
+          male: 10,
+          female: 12,
+          total: 22,
+          sortOrder: 0,
+          createdAt: stamp(),
+          updatedAt: stamp(),
+        },
+      ],
+      totals: { rowCount: 1, male: 10, female: 12, total: 22 },
+    });
   }
 
   function addParagraph(sectionId: string, title: string, body: string): ContentBlock {
@@ -205,6 +240,15 @@ export function createFakeCerita() {
     let m: RegExpMatchArray | null;
 
     if (path === '/api/auth/csrf-token') return json({ csrfToken: 'csrf' });
+
+    if (method === 'GET' && path === '/api/indicator-tables') {
+      const tables = indicatorTables.map(({ rows: _rows, ...table }) => table);
+      return json({ tables, total: tables.length });
+    }
+    if (method === 'GET' && (m = /^\/api\/indicator-tables\/([^/]+)$/.exec(path))) {
+      const table = indicatorTables.find((item) => item['id'] === m![1]);
+      return table ? json({ table }) : json({ error: 'Tabel tidak ditemukan' }, 404);
+    }
 
     if (method === 'GET' && path === '/api/pages') {
       return json({
@@ -389,7 +433,11 @@ export function createFakeCerita() {
         {
           message: 'Bagian berhasil digandakan',
           section: { ...copy, chapterId: found.chapter.id },
-          chapter: { id: found.chapter.id, slug: found.chapter.slug, updatedAt: found.chapter.updatedAt },
+          chapter: {
+            id: found.chapter.id,
+            slug: found.chapter.slug,
+            updatedAt: found.chapter.updatedAt,
+          },
         },
         201,
       );
@@ -541,6 +589,7 @@ export function createFakeCerita() {
     blocks,
     requests,
     addPage,
+    addIndicatorTable,
     addParagraph,
     findSection,
     install,

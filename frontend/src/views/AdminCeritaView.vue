@@ -20,11 +20,7 @@
  */
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router';
-import {
-  ArrowLeftIcon,
-  BookOpenIcon,
-  PlusIcon,
-} from '@heroicons/vue/24/outline';
+import { ArrowLeftIcon, BookOpenIcon, PlusIcon } from '@heroicons/vue/24/outline';
 import BaseButton from '../components/common/BaseButton.vue';
 import AlertBanner from '../components/common/AlertBanner.vue';
 import BaseModal from '../components/common/BaseModal.vue';
@@ -46,7 +42,18 @@ import CeritaReloadNotice from '../components/admin/cerita/CeritaReloadNotice.vu
 import CeritaLivePreview from '../components/admin/cerita/CeritaLivePreview.vue';
 import CeritaSectionPane from '../components/admin/cerita/CeritaSectionPane.vue';
 import CeritaStructureTree from '../components/admin/cerita/CeritaStructureTree.vue';
+import CeritaChapterOverview from '../components/admin/cerita/CeritaChapterOverview.vue';
+import CeritaMoveSectionDialog from '../components/admin/cerita/CeritaMoveSectionDialog.vue';
 import { ceritaIds } from '../components/admin/cerita/ceritaDomIds';
+import { pendingFigureKind, type PendingFigureKind } from '../composables/figureKindHint';
+import { mediaPreviewPath } from '../services/media.service';
+import {
+  figureBadge,
+  plainExcerpt,
+  sectionCompleteness,
+  thumbnailMediaId,
+  type OverviewCard,
+} from '../utils/ceritaChapterOverview';
 import { dependentsMessage } from '../utils/ceritaAdminMessages';
 import { storedFigureToArticleFigure } from '../utils/ceritaStoredFigure';
 import {
@@ -74,7 +81,6 @@ const route = useRoute();
 const router = useRouter();
 
 type Direction = -1 | 1;
-
 
 type NameTarget =
   | { kind: 'page-add' }
@@ -154,11 +160,7 @@ const page = computed<AdminPage | null>(() =>
 const pageIndex = computed(() => pages.value.findIndex((item) => item.slug === page.value?.slug));
 const structureBusy = computed(
   () =>
-    moving.value ||
-    nameBusy.value ||
-    deleteBusy.value ||
-    detailsBusy.value ||
-    duplicating.value,
+    moving.value || nameBusy.value || deleteBusy.value || detailsBusy.value || duplicating.value,
 );
 
 // --- Selection in the URL: `?halaman=<slug>&bab=<chapterId>&bagian=<sectionId>` ---
@@ -182,6 +184,30 @@ const selectedChapterId = computed<string | null>(() => {
   const id = queryId('bab');
   return id && page.value?.chapters.some((chapter) => chapter.id === id) ? id : null;
 });
+/**
+ * The chapter overview: a chapter named in the URL with no section (`?bab=<id>` alone). Null when a
+ * section is named (its editor, or the missing-section notice, takes the centre) or the chapter is
+ * not on the open page.
+ */
+const overviewInfo = computed<{ chapter: AdminChapter; index: number } | null>(() => {
+  if (!page.value || queryId('bagian') !== null) return null;
+  const id = queryId('bab');
+  if (!id) return null;
+  const index = page.value.chapters.findIndex((chapter) => chapter.id === id);
+  const chapter = index >= 0 ? page.value.chapters[index] : undefined;
+  return chapter ? { chapter, index } : null;
+});
+const overviewChapter = computed<AdminChapter | null>(() => overviewInfo.value?.chapter ?? null);
+/** Other chapters of the page (the targets of a move), with the labels the move dialog shows. */
+function chapterTargetsFor(chapterId: string): { id: string; label: string }[] {
+  return (page.value?.chapters ?? [])
+    .map((chapter, index) => ({ chapter, index }))
+    .filter((item) => item.chapter.id !== chapterId)
+    .map((item) => ({
+      id: item.chapter.id,
+      label: `Bab ${chapterNumberLabel(item.chapter.number, item.index)} · ${item.chapter.title}`,
+    }));
+}
 /** A section id in the URL that the open page does not have (deleted, or another page's). */
 const sectionMissing = computed(
   () => queryId('bagian') !== null && store.hasLoaded && selectedSection.value === null,
@@ -656,7 +682,15 @@ async function confirmDelete(): Promise<void> {
     case 'section':
       outcome = await store.removeSection(target.id, target.token);
       message = `Bagian “${target.label}” dihapus.`;
-      focus = chapterIdOfSection ? ceritaIds.addSection(chapterIdOfSection) : null;
+      // The overview of this chapter stays on screen when the section was not open (or was the open one).
+      focus =
+        chapterIdOfSection &&
+        queryId('bab') === chapterIdOfSection &&
+        (queryId('bagian') === null || queryId('bagian') === target.id)
+          ? ceritaIds.overviewLabel
+          : chapterIdOfSection
+            ? ceritaIds.addSection(chapterIdOfSection)
+            : null;
       break;
   }
   deleteBusy.value = false;
@@ -667,6 +701,13 @@ async function confirmDelete(): Promise<void> {
     // A page deleted from its own structure view has nothing left to show there: back to the list.
     if (target.kind === 'page' && detailSlug.value === target.slug) {
       await router.replace({ name: 'admin-cerita' });
+    }
+    // The chapter whose overview is open is gone: the URL drops it and the page's structure shows.
+    if (target.kind === 'chapter' && queryId('bab') === target.id) {
+      await router.replace({
+        name: 'admin-cerita',
+        query: { halaman: detailSlug.value ?? undefined },
+      });
     }
     // The open section is gone: its draft goes with it (no discard question), and the URL drops it.
     if (target.kind === 'section' && queryId('bagian') === target.id) {
@@ -814,7 +855,9 @@ function movePageBySlug(slug: string, direction: Direction, upId: string, downId
     () => store.movePage(slug, direction),
     () => {
       const index = pages.value.findIndex((item) => item.slug === slug);
-      announce(`Halaman “${target.title}” dipindah ke urutan ${index + 1} dari ${pages.value.length}.`);
+      announce(
+        `Halaman “${target.title}” dipindah ke urutan ${index + 1} dari ${pages.value.length}.`,
+      );
       focusAfterMove(upId, downId, index, pages.value.length, direction);
     },
   );
@@ -1116,7 +1159,9 @@ async function openSectionById(sectionId: string): Promise<boolean> {
 }
 
 /** Prev / next buttons: open the neighbour and move focus to the new section heading. */
-async function goToSection(item: { chapter: AdminChapter; section: AdminSection } | null): Promise<void> {
+async function goToSection(
+  item: { chapter: AdminChapter; section: AdminSection } | null,
+): Promise<void> {
   if (!item) return;
   if (await selectSection(item.chapter, item.section)) focusId(ceritaIds.sectionHeading);
 }
@@ -1140,6 +1185,274 @@ async function duplicateSelected(): Promise<void> {
   if (copy && (await selectSection(copy.chapter, copy.section))) {
     focusId(ceritaIds.sectionHeading);
   }
+}
+
+// --- Chapter overview (centre column when a chapter is open and no section is) ---
+
+const titleSaving = ref(false);
+const overviewTitleError = ref('');
+const overviewTitleErrorKind = ref<FailureKind | null>(null);
+const overviewTitleStale = ref(false);
+const addSectionBusy = ref(false);
+const addSectionError = ref('');
+const addSectionErrorKind = ref<FailureKind | null>(null);
+/** The section "Pindahkan ke bab lain…" is open for, with the chapter it is in and its label. */
+const relocate = ref<{ sectionId: string; chapterId: string; title: string } | null>(null);
+const relocateBusy = ref(false);
+const relocateError = ref('');
+const relocateErrorKind = ref<FailureKind | null>(null);
+const relocateStale = ref(false);
+
+const overviewCards = computed<OverviewCard[]>(() => {
+  const info = overviewInfo.value;
+  if (!info) return [];
+  const chapterNumber = chapterNumberLabel(info.chapter.number, info.index);
+  return info.chapter.sections.map((section, sectionIndex) => {
+    const figure = store.figureFor(section.id)?.figure ?? null;
+    const paragraphs = store.paragraphsFor(section.id);
+    const mediaId = thumbnailMediaId(figure);
+    const number = sectionNumberLabel(chapterNumber, sectionIndex);
+    return {
+      section,
+      number,
+      title: sectionLabelIn(section, sectionIndex),
+      excerpt: plainExcerpt(paragraphs[0]?.body),
+      figureBadge: figureBadge(figure),
+      completeness: sectionCompleteness({
+        title: section.title,
+        paragraphCount: paragraphs.length,
+        figure,
+      }),
+      thumbPath: mediaId ? mediaPreviewPath(mediaId) : null,
+      thumbAlt: `Pratinjau gambar bagian ${number}`,
+    };
+  });
+});
+
+/** Name of a section in the open chapter, for announcements and dialogs. */
+function overviewLabelOf(section: AdminSection): string {
+  return overviewChapter.value
+    ? sectionLabel(section, overviewChapter.value)
+    : (section.title ?? '');
+}
+
+/** A chapter row in the tree: opens its overview (the URL keeps no section). */
+async function selectChapter(chapter: AdminChapter): Promise<void> {
+  const slug = detailSlug.value ?? page.value?.slug;
+  if (!slug) return;
+  clearActionError();
+  const failure = await router.push({
+    name: 'admin-cerita',
+    query: { halaman: slug, bab: chapter.id },
+  });
+  if (!failure) announce(`Ringkasan bab “${chapter.title}” dibuka.`);
+}
+
+/** "Edit bagian" on an overview card: opens the section in the centre column. */
+async function openOverviewSection(section: AdminSection): Promise<void> {
+  const chapter = overviewChapter.value;
+  if (chapter) await selectSection(chapter, section);
+}
+
+async function saveOverviewTitle(title: string): Promise<void> {
+  const chapter = overviewChapter.value;
+  if (!chapter || titleSaving.value) return;
+  titleSaving.value = true;
+  overviewTitleError.value = '';
+  overviewTitleErrorKind.value = null;
+  overviewTitleStale.value = false;
+  // The chapter's token is the one the screen loaded; a stale refusal keeps the typed title.
+  const outcome = await store.renameChapter(chapter.id, title, chapter.updatedAt);
+  titleSaving.value = false;
+  if (outcome.ok) {
+    announce(`Judul bab diubah menjadi “${title}”.`);
+    return;
+  }
+  overviewTitleError.value = outcome.message;
+  overviewTitleErrorKind.value = outcome.kind;
+  overviewTitleStale.value = outcome.stale;
+}
+
+/** Loads the latest data after a stale title refusal; the typed title stays where it is. */
+async function reloadFromOverview(): Promise<void> {
+  const loaded = await store.load();
+  if (!loaded) {
+    overviewTitleError.value = COULD_NOT_RELOAD;
+    overviewTitleErrorKind.value = null;
+    return;
+  }
+  overviewTitleError.value = '';
+  overviewTitleStale.value = false;
+}
+
+function moveOverviewChapter(direction: Direction): void {
+  const info = overviewInfo.value;
+  const current = page.value;
+  if (!info || !current) return;
+  const chapter = info.chapter;
+  void runMove(
+    () => store.moveChapter(current.slug, chapter.id, direction),
+    () => {
+      const chapters = store.findPage(current.slug)?.chapters ?? [];
+      const index = chapters.findIndex((item) => item.id === chapter.id);
+      announce(`Bab “${chapter.title}” dipindah ke urutan ${index + 1} dari ${chapters.length}.`);
+      focusAfterMove(
+        ceritaIds.overviewChapterUp,
+        ceritaIds.overviewChapterDown,
+        index,
+        chapters.length,
+        direction,
+      );
+    },
+  );
+}
+
+function moveOverviewSection(section: AdminSection, direction: Direction): void {
+  const chapter = overviewChapter.value;
+  if (!chapter) return;
+  void runMove(
+    () => store.moveSection(chapter.id, section.id, direction),
+    () => {
+      const sections = store.findChapter(chapter.id)?.chapter.sections ?? [];
+      const index = sections.findIndex((item) => item.id === section.id);
+      announce(
+        `Bagian “${overviewLabelOf(section)}” dipindah ke urutan ${index + 1} dari ${sections.length}.`,
+      );
+      // The card's ⋯ menu closed behind the choice, so focus goes to the card's title.
+      focusId(ceritaIds.overviewCardTitle(section.id));
+    },
+  );
+}
+
+function placeOverviewSection(section: AdminSection, toIndex: number): void {
+  const chapter = overviewChapter.value;
+  if (!chapter) return;
+  void runMove(
+    () => store.placeSection(chapter.id, section.id, toIndex),
+    () => {
+      const sections = store.findChapter(chapter.id)?.chapter.sections ?? [];
+      const index = sections.findIndex((item) => item.id === section.id);
+      announce(
+        `Bagian “${overviewLabelOf(section)}” dipindah ke urutan ${index + 1} dari ${sections.length}.`,
+      );
+      focusId(ceritaIds.overviewCardTitle(section.id));
+    },
+  );
+}
+
+async function duplicateOverviewSection(section: AdminSection): Promise<void> {
+  if (structureBusy.value) return;
+  duplicating.value = true;
+  clearActionError();
+  const outcome = await store.duplicateSection(section.id);
+  duplicating.value = false;
+  if (!outcome.ok) {
+    actionError.value = outcome.message;
+    actionErrorKind.value = outcome.kind;
+    actionStale.value = outcome.stale;
+    return;
+  }
+  // The copy is appended to this chapter; the overview stays open and the copy's title takes focus.
+  announce(`Bagian “${overviewLabelOf(section)}” digandakan. Salinan ada di akhir bab ini.`);
+  await nextTick();
+  focusId(ceritaIds.overviewCardTitle(outcome.value.id));
+}
+
+function deleteOverviewSection(section: AdminSection): void {
+  const chapter = overviewChapter.value;
+  if (chapter) openDeleteSection(chapter, section);
+}
+
+function openRelocate(section: AdminSection): void {
+  const chapter = overviewChapter.value;
+  if (!chapter) return;
+  relocateError.value = '';
+  relocateErrorKind.value = null;
+  relocateStale.value = false;
+  relocate.value = {
+    sectionId: section.id,
+    chapterId: chapter.id,
+    title: overviewLabelOf(section),
+  };
+}
+
+function closeRelocate(): void {
+  if (relocateBusy.value) return;
+  const sectionId = relocate.value?.sectionId ?? null;
+  relocate.value = null;
+  relocateError.value = '';
+  relocateErrorKind.value = null;
+  relocateStale.value = false;
+  if (sectionId) void nextTick(() => focusId(ceritaIds.overviewCardTitle(sectionId)));
+}
+
+/** Moves the section to the chosen chapter of the same page; the overview stays on its chapter. */
+async function submitRelocate(targetChapterId: string): Promise<void> {
+  const target = relocate.value;
+  if (!target || relocateBusy.value) return;
+  relocateBusy.value = true;
+  relocateError.value = '';
+  relocateStale.value = false;
+  const outcome = await store.moveSectionToChapter(target.sectionId, targetChapterId);
+  relocateBusy.value = false;
+  if (!outcome.ok) {
+    relocateError.value = outcome.message;
+    relocateErrorKind.value = outcome.kind;
+    relocateStale.value = outcome.stale;
+    return;
+  }
+  const destIndex = page.value?.chapters.findIndex((item) => item.id === targetChapterId) ?? -1;
+  const dest = store.findChapter(targetChapterId)?.chapter;
+  const destLabel = dest
+    ? `Bab ${chapterNumberLabel(dest.number, destIndex)} · ${dest.title}`
+    : 'bab yang dipilih';
+  relocate.value = null;
+  announce(`Bagian “${target.title}” dipindah ke ${destLabel}.`);
+  await nextTick();
+  focusId(ceritaIds.overviewLabel);
+}
+
+async function reloadFromRelocate(): Promise<void> {
+  const loaded = await store.load();
+  if (!loaded) {
+    relocateError.value = COULD_NOT_RELOAD;
+    relocateErrorKind.value = null;
+    return;
+  }
+  relocateStale.value = false;
+  relocateError.value = '';
+}
+
+/**
+ * "Tambah bagian baru": creates the section, hands the chosen figure kind to the figure editor
+ * (`pendingFigureKind`, set just before the section opens) and opens it.
+ */
+async function addSectionFromOverview(
+  title: string,
+  kind: PendingFigureKind | null,
+): Promise<void> {
+  const chapter = overviewChapter.value;
+  if (!chapter || addSectionBusy.value) return;
+  addSectionBusy.value = true;
+  addSectionError.value = '';
+  addSectionErrorKind.value = null;
+  const result = await store.addSection(chapter.id, title);
+  addSectionBusy.value = false;
+  if (!result.ok) {
+    addSectionError.value = result.message;
+    addSectionErrorKind.value = result.kind;
+    return;
+  }
+  pendingFigureKind.value = kind;
+  const opened = await openSectionById(result.value.id);
+  if (!opened) {
+    pendingFigureKind.value = null;
+    announce(`Bagian “${title}” ditambahkan.`);
+    return;
+  }
+  announce(`Bagian “${title}” ditambahkan dan dibuka untuk diisi.`);
+  await nextTick();
+  focusId(ceritaIds.sectionHeading);
 }
 
 // --- Section editor guard (the centre column keeps its own draft) ---
@@ -1225,7 +1538,10 @@ onBeforeRouteLeave(() => {
 // Back and Forward, and a section change, only change the query, so the component stays mounted and
 // the leave guard above does not run. The same question is asked here.
 onBeforeRouteUpdate((to, from) => {
-  if (to.query['halaman'] === from.query['halaman'] && to.query['bagian'] === from.query['bagian']) {
+  if (
+    to.query['halaman'] === from.query['halaman'] &&
+    to.query['bagian'] === from.query['bagian']
+  ) {
     return true;
   }
   if (editorBusy.value) return false;
@@ -1245,37 +1561,36 @@ onUnmounted(() => {
     <p class="sr-only" role="status" aria-live="polite" data-test="status">{{ statusMessage }}</p>
 
     <div class="space-y-4 px-6 pt-4 md:px-10">
-    <CeritaReloadNotice v-if="!authStore.sessionEnded" />
+      <CeritaReloadNotice v-if="!authStore.sessionEnded" />
 
-    <AlertBanner
-      v-if="store.loadError && !store.reloadNeeded"
-      :message="store.loadError"
-      :kind="store.loadErrorKind ?? undefined"
-      :busy="store.isLoading"
-      data-test="load-error"
-      @retry="store.load()"
-    />
+      <AlertBanner
+        v-if="store.loadError && !store.reloadNeeded"
+        :message="store.loadError"
+        :kind="store.loadErrorKind ?? undefined"
+        :busy="store.isLoading"
+        data-test="load-error"
+        @retry="store.load()"
+      />
 
-    <AlertBanner
-      v-if="actionError"
-      :message="actionError"
-      :kind="actionErrorKind ?? undefined"
-      data-test="action-error"
-    >
-      <template v-if="actionStale" #action>
-        <BaseButton
-          variant="secondary"
-          size="md"
-          class="min-h-11"
-          :disabled="reloading"
-          data-test="action-reload"
-          @click="reload"
-        >
-          {{ reloading ? 'Memuat…' : 'Muat ulang' }}
-        </BaseButton>
-      </template>
-    </AlertBanner>
-
+      <AlertBanner
+        v-if="actionError"
+        :message="actionError"
+        :kind="actionErrorKind ?? undefined"
+        data-test="action-error"
+      >
+        <template v-if="actionStale" #action>
+          <BaseButton
+            variant="secondary"
+            size="md"
+            class="min-h-11"
+            :disabled="reloading"
+            data-test="action-reload"
+            @click="reload"
+          >
+            {{ reloading ? 'Memuat…' : 'Muat ulang' }}
+          </BaseButton>
+        </template>
+      </AlertBanner>
     </div>
 
     <p
@@ -1290,7 +1605,7 @@ onUnmounted(() => {
     <section
       v-else-if="store.hasLoaded && detailSlug === null"
       aria-labelledby="cerita-judul-daftar"
-      class="mx-6 mb-6 space-y-4 rounded-card border border-slate-200 bg-white p-6 shadow-sm md:mx-10 md:mb-8 md:p-8"
+      class="rounded-card mx-6 mb-6 space-y-4 border border-slate-200 bg-white p-6 shadow-sm md:mx-10 md:mb-8 md:p-8"
       data-test="list-view"
     >
       <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
@@ -1358,7 +1673,9 @@ onUnmounted(() => {
       <CardSelectionBar
         :selected-count="selectedSlugs.length"
         :search-count="
-          query.trim() !== '' ? `Menampilkan ${filteredPages.length} dari ${pages.length} Cerita.` : null
+          query.trim() !== ''
+            ? `Menampilkan ${filteredPages.length} dari ${pages.length} Cerita.`
+            : null
         "
         :busy="listBusy"
         :bulk-id="ceritaIds.bulkDelete"
@@ -1481,7 +1798,7 @@ onUnmounted(() => {
 
       <div
         v-else
-        class="grid min-h-0 flex-1 xl:grid-cols-[320px_minmax(0,1fr)_400px]"
+        class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)_400px]"
         data-test="editor-columns"
       >
         <aside
@@ -1493,9 +1810,11 @@ onUnmounted(() => {
             :page="page"
             :selected-chapter-id="selectedChapterId"
             :selected-section-id="selectedSection?.id ?? null"
+            :overview-chapter-id="overviewChapter?.id ?? null"
             :busy="structureBusy"
             :figure-summary="figureSummary"
             @info="openDetails(page.slug, page.updatedAt)"
+            @select-chapter="selectChapter"
             @select-section="(chapter, section) => selectSection(chapter, section)"
             @add-chapter="openName({ kind: 'chapter-add', pageSlug: page.slug })"
             @add-section="(chapter) => openName({ kind: 'section-add', chapterId: chapter.id })"
@@ -1547,6 +1866,35 @@ onUnmounted(() => {
             @next="goToSection(nextSection)"
             @busy="editorBusy = $event"
             @dirty-change="editorDirty = $event"
+          />
+          <CeritaChapterOverview
+            v-else-if="overviewInfo"
+            :chapter="overviewInfo.chapter"
+            :position="overviewInfo.index + 1"
+            :total="page.chapters.length"
+            :cards="overviewCards"
+            :other-chapters-count="page.chapters.length - 1"
+            :busy="structureBusy || titleSaving || addSectionBusy || relocateBusy"
+            :is-first="overviewInfo.index === 0"
+            :is-last="overviewInfo.index === page.chapters.length - 1"
+            :title-error="overviewTitleError || undefined"
+            :title-error-kind="overviewTitleErrorKind ?? undefined"
+            :title-stale="overviewTitleStale"
+            :add-error="addSectionError || undefined"
+            :add-error-kind="addSectionErrorKind ?? undefined"
+            :add-busy="addSectionBusy"
+            @save-title="saveOverviewTitle"
+            @reload="reloadFromOverview"
+            @chapter-up="moveOverviewChapter(-1)"
+            @chapter-down="moveOverviewChapter(1)"
+            @chapter-delete="openDeleteChapter(overviewInfo.chapter)"
+            @edit-section="openOverviewSection"
+            @move-section="moveOverviewSection"
+            @relocate-section="openRelocate"
+            @duplicate-section="duplicateOverviewSection"
+            @delete-section="deleteOverviewSection"
+            @place-section="placeOverviewSection"
+            @add-section="addSectionFromOverview"
           />
           <p
             v-else-if="sectionMissing"
@@ -1660,11 +2008,25 @@ onUnmounted(() => {
           Halaman berikut akan dihapus satu per satu. Tindakan ini tidak bisa dibatalkan.
         </p>
         <p class="text-text-muted text-sm">
-          Halaman yang masih berisi paragraf, gambar, angka, atau tabel akan dilewati. Setelah selesai,
-          halaman itu ditampilkan sebagai “tidak dapat dihapus” dalam daftar hasil, beserta alasannya.
+          Halaman yang masih berisi paragraf, gambar, angka, atau tabel akan dilewati. Setelah
+          selesai, halaman itu ditampilkan sebagai “tidak dapat dihapus” dalam daftar hasil, beserta
+          alasannya.
         </p>
       </template>
     </BulkDeleteDialog>
+
+    <CeritaMoveSectionDialog
+      :open="relocate !== null"
+      :section-title="relocate?.title ?? ''"
+      :targets="relocate ? chapterTargetsFor(relocate.chapterId) : []"
+      :busy="relocateBusy"
+      :error="relocateError"
+      :error-kind="relocateErrorKind ?? undefined"
+      :stale="relocateStale"
+      @submit="submitRelocate"
+      @close="closeRelocate"
+      @reload="reloadFromRelocate"
+    />
 
     <BaseModal
       :open="discardPromptOpen"
@@ -1673,7 +2035,10 @@ onUnmounted(() => {
       size="md"
       @close="keepEditing"
     >
-      <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end" data-test="discard-dialog">
+      <div
+        class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"
+        data-test="discard-dialog"
+      >
         <BaseButton
           variant="secondary"
           size="md"

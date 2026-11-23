@@ -30,11 +30,19 @@ const isEmpty = computed(() => props.paragraphs.length === 0 && props.figure ===
       <h3 id="cerita-pratinjau-judul" class="text-brand-navy text-base font-semibold">
         Pratinjau langsung
       </h3>
-      <div role="group" aria-label="Ukuran pratinjau" class="border-border inline-flex rounded-btn border bg-white p-0.5">
+      <div
+        role="group"
+        aria-label="Ukuran pratinjau"
+        class="border-border rounded-btn inline-flex border bg-white p-0.5"
+      >
         <button
           type="button"
-          class="focus-visible:outline-focus-ring min-h-11 rounded-btn px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
-          :class="mode === 'desktop' ? 'bg-brand-navy text-white' : 'text-brand-navy hover:bg-surface-muted'"
+          class="focus-visible:outline-focus-ring rounded-btn min-h-11 px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
+          :class="
+            mode === 'desktop'
+              ? 'bg-brand-navy text-white'
+              : 'text-brand-navy hover:bg-surface-muted'
+          "
           :aria-pressed="mode === 'desktop' ? 'true' : 'false'"
           data-test="preview-desktop"
           @click="mode = 'desktop'"
@@ -43,8 +51,10 @@ const isEmpty = computed(() => props.paragraphs.length === 0 && props.figure ===
         </button>
         <button
           type="button"
-          class="focus-visible:outline-focus-ring min-h-11 rounded-btn px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
-          :class="mode === 'phone' ? 'bg-brand-navy text-white' : 'text-brand-navy hover:bg-surface-muted'"
+          class="focus-visible:outline-focus-ring rounded-btn min-h-11 px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
+          :class="
+            mode === 'phone' ? 'bg-brand-navy text-white' : 'text-brand-navy hover:bg-surface-muted'
+          "
           :aria-pressed="mode === 'phone' ? 'true' : 'false'"
           data-test="preview-phone"
           @click="mode = 'phone'"
@@ -66,7 +76,10 @@ const isEmpty = computed(() => props.paragraphs.length === 0 && props.figure ===
           aria-labelledby="cerita-pratinjau-artikel"
           class="rounded-card border-border space-y-4 border bg-white p-4"
         >
-          <h4 id="cerita-pratinjau-artikel" class="text-brand-navy text-lg font-semibold break-words">
+          <h4
+            id="cerita-pratinjau-artikel"
+            class="text-brand-navy text-lg font-semibold break-words"
+          >
             {{ sectionTitle }}
           </h4>
 
@@ -77,13 +90,14 @@ const isEmpty = computed(() => props.paragraphs.length === 0 && props.figure ===
           <SectionProse v-for="(body, index) in paragraphs" :key="index" :body="body" />
 
           <div v-if="figure" class="space-y-2" data-test="preview-figure">
-            <p v-if="figure.kind === 'chart'" class="text-text-muted text-sm">
-              Grafik “{{ figure.title }}” ditampilkan dari tabel indikator di situs.
-            </p>
-            <p v-else-if="preview.loading.value" class="text-text-muted text-sm" role="status">
+            <p v-if="preview.loading.value" class="text-text-muted text-sm" role="status">
               Memuat gambar…
             </p>
-            <ArticleFigure v-else-if="preview.figure.value" :figure="preview.figure.value" />
+            <ArticleFigure
+              v-else-if="preview.figure.value"
+              :figure="preview.figure.value"
+              :tables="preview.tables.value"
+            />
             <p
               v-if="preview.unavailable.value"
               class="text-text-muted text-sm"

@@ -1,0 +1,258 @@
+import { describe, expect, it, vi } from 'vitest';
+import { mount } from '@vue/test-utils';
+import CeritaChapterOverview from '../components/admin/cerita/CeritaChapterOverview.vue';
+import CeritaAddSectionPanel from '../components/admin/cerita/CeritaAddSectionPanel.vue';
+import CeritaMoveSectionDialog from '../components/admin/cerita/CeritaMoveSectionDialog.vue';
+import type { AdminChapter, AdminSection } from '../stores/ceritaAdmin.store';
+import type { OverviewCard } from '../utils/ceritaChapterOverview';
+
+// The thumbnail loads through the authenticated client; the specs never reach the network.
+vi.mock('../services/media.service', () => ({
+  fetchMediaPreviewBlob: vi.fn<(path: string) => Promise<Blob>>(
+    async () => new Blob(['x'], { type: 'image/webp' }),
+  ),
+  mediaPreviewPath: (id: string) => `/api/media/${id}/preview`,
+}));
+
+const sectionA: AdminSection = {
+  id: 'sec-a',
+  slug: 'ringkasan',
+  title: 'Ringkasan',
+  sortOrder: 0,
+  updatedAt: 't1',
+};
+const sectionB: AdminSection = {
+  id: 'sec-b',
+  slug: 'rincian',
+  title: 'Rincian',
+  sortOrder: 1,
+  updatedAt: 't2',
+};
+
+const chapter: AdminChapter = {
+  id: 'chap-2',
+  slug: 'jumlah-keluarga',
+  number: '2',
+  title: 'Jumlah Keluarga',
+  sortOrder: 1,
+  updatedAt: 'tc',
+  sections: [sectionA, sectionB],
+};
+
+const cards: OverviewCard[] = [
+  {
+    section: sectionA,
+    number: '2.1',
+    title: 'Ringkasan',
+    excerpt: 'Jumlah keluarga naik.',
+    figureBadge: '1 gambar',
+    completeness: { label: 'Lengkap', complete: true },
+    thumbPath: '/api/media/m-1/preview',
+    thumbAlt: 'Pratinjau gambar bagian 2.1',
+  },
+  {
+    section: sectionB,
+    number: '2.2',
+    title: 'Rincian',
+    excerpt: null,
+    figureBadge: 'Grafik',
+    completeness: { label: 'Belum lengkap', complete: false },
+    thumbPath: null,
+    thumbAlt: 'Pratinjau gambar bagian 2.2',
+  },
+];
+
+function mountOverview(props: Partial<InstanceType<typeof CeritaChapterOverview>['$props']> = {}) {
+  return mount(CeritaChapterOverview, {
+    attachTo: document.body,
+    props: {
+      chapter,
+      position: 2,
+      total: 3,
+      cards,
+      otherChaptersCount: 2,
+      busy: false,
+      isFirst: false,
+      isLast: false,
+      ...props,
+    } as never,
+  });
+}
+
+function buttonWith(wrapper: ReturnType<typeof mountOverview>, label: string) {
+  const found = wrapper
+    .findAll('button')
+    .find((button) => (button.text() ?? '').replace(/\s+/g, ' ').trim().startsWith(label));
+  if (!found) throw new Error(`no button "${label}"`);
+  return found;
+}
+
+describe('CeritaChapterOverview', () => {
+  it('shows the position label and the chapter title in a labelled field', () => {
+    const wrapper = mountOverview();
+    expect(wrapper.get('[data-test="overview-heading"]').text()).toBe(
+      'Bab 2 dari 3 · Jumlah Keluarga',
+    );
+    const input = wrapper.get<HTMLInputElement>('input[type="text"]');
+    expect(input.element.value).toBe('Jumlah Keluarga');
+    const label = wrapper.get('label[for="cerita-ringkasan-judul"]');
+    expect(label.text()).toContain('Judul bab');
+    wrapper.unmount();
+  });
+
+  it('saves the trimmed title with Simpan judul', async () => {
+    const wrapper = mountOverview();
+    await wrapper.get('input[type="text"]').setValue('  Keluarga Baru  ');
+    await wrapper.get('[data-test="chapter-title-save"]').trigger('click');
+    expect(wrapper.emitted('save-title')).toEqual([['Keluarga Baru']]);
+    wrapper.unmount();
+  });
+
+  it('does not save an empty title and says why', async () => {
+    const wrapper = mountOverview();
+    await wrapper.get('input[type="text"]').setValue('   ');
+    await wrapper.get('[data-test="chapter-title-save"]').trigger('click');
+    expect(wrapper.emitted('save-title')).toBeUndefined();
+    expect(wrapper.text()).toContain('Judul bab wajib diisi.');
+    wrapper.unmount();
+  });
+
+  it('shows the drag hint and lists each section as an ordered list item', () => {
+    const wrapper = mountOverview();
+    expect(wrapper.get('[data-test="overview-hint"]').text()).toBe(
+      'Seret kartu untuk mengubah urutan. Klik kartu untuk mengedit isi dan figurnya.',
+    );
+    const items = wrapper.findAll('[data-test="overview-list"] > li');
+    expect(items).toHaveLength(2);
+    expect(wrapper.get('ol[data-test="overview-list"]').element.tagName).toBe('OL');
+    expect(items[0]!.text()).toContain('Bagian 2.1');
+    expect(items[0]!.text()).toContain('1 gambar');
+    expect(items[0]!.text()).toContain('Lengkap');
+    expect(items[1]!.text()).toContain('Grafik');
+    expect(items[1]!.text()).toContain('Belum lengkap');
+    wrapper.unmount();
+  });
+
+  it('shows the empty-chapter notice and still offers the add panel', () => {
+    const wrapper = mountOverview({ cards: [] });
+    expect(wrapper.get('[data-test="overview-empty"]').text()).toBe('Belum ada bagian di bab ini.');
+    expect(wrapper.find('[data-test="overview-list"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="add-section-panel"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('emits the card title as the edit request', async () => {
+    const wrapper = mountOverview();
+    await wrapper.findAll('[data-test="overview-title"]')[1]!.trigger('click');
+    expect(wrapper.emitted('edit-section')?.[0]?.[0]).toEqual(sectionB);
+    wrapper.unmount();
+  });
+
+  it('offers Naik and Turun per card, disabling the ends', async () => {
+    const wrapper = mountOverview();
+    const cardItems = wrapper.findAll('[data-test="overview-item"]');
+    const firstUp = cardItems[0]!.get('[data-test="card-up"]');
+    const firstDown = cardItems[0]!.get('[data-test="card-down"]');
+    const lastDown = cardItems[1]!.get('[data-test="card-down"]');
+    expect((firstUp.element as HTMLButtonElement).disabled).toBe(true);
+    expect((firstDown.element as HTMLButtonElement).disabled).toBe(false);
+    expect((lastDown.element as HTMLButtonElement).disabled).toBe(true);
+    await firstDown.trigger('click');
+    expect(wrapper.emitted('move-section')?.[0]).toEqual([sectionA, 1]);
+    wrapper.unmount();
+  });
+
+  it('disables moving a section to another chapter when the page has no other chapter', () => {
+    const wrapper = mountOverview({ otherChaptersCount: 0 });
+    const move = wrapper.get('[data-test="card-move"]');
+    expect((move.element as HTMLButtonElement).disabled).toBe(true);
+    expect(wrapper.find('[data-test="card-move-info"]').text()).toContain('hanya punya satu bab');
+    wrapper.unmount();
+  });
+
+  it('emits chapter Naik, Turun and Hapus bab', async () => {
+    const wrapper = mountOverview();
+    await buttonWith(wrapper, 'Naik').trigger('click');
+    await buttonWith(wrapper, 'Turun').trigger('click');
+    await buttonWith(wrapper, 'Hapus bab').trigger('click');
+    expect(wrapper.emitted('chapter-up')).toHaveLength(1);
+    expect(wrapper.emitted('chapter-down')).toHaveLength(1);
+    expect(wrapper.emitted('chapter-delete')).toHaveLength(1);
+    wrapper.unmount();
+  });
+
+  it('emits the add request from the panel with the chosen figure kind', async () => {
+    const wrapper = mountOverview({ cards: [] });
+    await wrapper.get('[data-test="tile-gallery"]').setValue(true);
+    await wrapper.get('[data-test="add-section-title"]').setValue('Bagian Baru');
+    await wrapper.get('[data-test="add-section-submit"]').trigger('click');
+    expect(wrapper.emitted('add-section')).toEqual([['Bagian Baru', 'gallery']]);
+    wrapper.unmount();
+  });
+});
+
+describe('CeritaAddSectionPanel', () => {
+  it('shows the four figure tiles as native radio inputs with their descriptions', () => {
+    const wrapper = mount(CeritaAddSectionPanel, { props: { busy: false } });
+    const radios = wrapper.findAll('input[type="radio"]');
+    expect(radios).toHaveLength(4);
+    expect(wrapper.text()).toContain('1 gambar');
+    expect(wrapper.text()).toContain('Satu foto dengan keterangan');
+    expect(wrapper.text()).toContain('Dua foto bertumpuk');
+    expect(wrapper.text()).toContain('3 foto atau lebih, tampil sebagai korsel');
+    expect(wrapper.text()).toContain('Dari tabel di menu Data');
+    wrapper.unmount();
+  });
+
+  it('requires a title and emits null when no kind is chosen', async () => {
+    const wrapper = mount(CeritaAddSectionPanel, {
+      props: { busy: false },
+      attachTo: document.body,
+    });
+    await wrapper.get('[data-test="add-section-submit"]').trigger('click');
+    expect(wrapper.emitted('add')).toBeUndefined();
+    expect(wrapper.text()).toContain('Judul bagian wajib diisi.');
+    await wrapper.get('[data-test="add-section-title"]').setValue('Judul');
+    await wrapper.get('[data-test="add-section-submit"]').trigger('click');
+    expect(wrapper.emitted('add')).toEqual([['Judul', null]]);
+    wrapper.unmount();
+  });
+});
+
+describe('CeritaMoveSectionDialog', () => {
+  // The dialog is teleported by BaseModal, so its controls are read from the document.
+  const targets = [
+    { id: 'chap-1', label: 'Bab 1 · Jumlah Penduduk' },
+    { id: 'chap-3', label: 'Bab 3 · Pendidikan' },
+  ];
+
+  function radiosInDocument(): HTMLInputElement[] {
+    return Array.from(document.querySelectorAll<HTMLInputElement>('input[type="radio"]'));
+  }
+
+  it('lists the other chapters as radios, the first one chosen', async () => {
+    const wrapper = mount(CeritaMoveSectionDialog, {
+      props: { open: true, sectionTitle: 'Rincian', targets },
+      attachTo: document.body,
+    });
+    await wrapper.vm.$nextTick();
+    const radios = radiosInDocument();
+    expect(radios.map((radio) => radio.value)).toEqual(['chap-1', 'chap-3']);
+    expect(radios[0]!.checked).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('emits the chosen chapter on submit', async () => {
+    const wrapper = mount(CeritaMoveSectionDialog, {
+      props: { open: true, sectionTitle: 'Rincian', targets },
+      attachTo: document.body,
+    });
+    await wrapper.vm.$nextTick();
+    radiosInDocument()[1]!.click();
+    await wrapper.vm.$nextTick();
+    document.querySelector<HTMLButtonElement>('[data-test="move-submit"]')!.click();
+    await wrapper.vm.$nextTick();
+    expect(wrapper.emitted('submit')).toEqual([['chap-3']]);
+    wrapper.unmount();
+  });
+});
