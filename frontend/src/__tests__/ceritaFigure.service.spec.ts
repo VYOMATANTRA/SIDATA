@@ -120,3 +120,80 @@ describe('figure writes', () => {
     });
   });
 });
+
+describe('figureFromBlock shared credit', () => {
+  const photos = [
+    { mediaId: 'm1', alt: 'a' },
+    { mediaId: 'm2', alt: 'b', credit: 'Own' },
+  ];
+
+  it('reads the group credit of a photo group and keeps each photo as stored', () => {
+    expect(figureFromBlock(block({ kind: 'photos', credit: 'Tim', photos }))).toEqual({
+      kind: 'photos',
+      credit: 'Tim',
+      photos: [
+        { mediaId: 'm1', alt: 'a' },
+        { mediaId: 'm2', alt: 'b', credit: 'Own' },
+      ],
+    });
+  });
+
+  it('drops a blank or non-text group credit', () => {
+    expect(figureFromBlock(block({ kind: 'photos', credit: ' ', photos }))).toEqual({
+      kind: 'photos',
+      photos: [
+        { mediaId: 'm1', alt: 'a' },
+        { mediaId: 'm2', alt: 'b', credit: 'Own' },
+      ],
+    });
+    expect(figureFromBlock(block({ kind: 'photos', credit: 7, photos }))).not.toHaveProperty(
+      'credit',
+    );
+  });
+
+  it('does not read a group credit on a single photo', () => {
+    expect(
+      figureFromBlock(
+        block({ kind: 'photo', credit: 'Tim', photos: [{ mediaId: 'm1', alt: 'a' }] }),
+      ),
+    ).toEqual({ kind: 'photo', photos: [{ mediaId: 'm1', alt: 'a' }] });
+  });
+});
+
+describe('saveSectionFigure shared credit', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    useAuthStore().setAuth({ id: 'u', email: 'e@example.com', role: 'editor' }, 't');
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('sends the group credit with the photo group', async () => {
+    const bodies: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(async (input, init) => {
+        if (String(input) === '/api/auth/csrf-token') {
+          return { ok: true, status: 200, json: async () => ({ csrfToken: 'c' }) } as Response;
+        }
+        bodies.push(init?.body);
+        return { ok: true, status: 200, json: async () => ({}) } as Response;
+      }),
+    );
+    await saveSectionFigure('s1', '2026-11-13T10:00:00.000Z', {
+      kind: 'photos',
+      credit: 'Tim Survei',
+      photos: [
+        { mediaId: 'm1', alt: 'a' },
+        { mediaId: 'm2', alt: 'b' },
+      ],
+    });
+    expect(JSON.parse(bodies[0] as string).figure).toEqual({
+      kind: 'photos',
+      credit: 'Tim Survei',
+      photos: [
+        { mediaId: 'm1', alt: 'a' },
+        { mediaId: 'm2', alt: 'b' },
+      ],
+    });
+  });
+});

@@ -18,6 +18,8 @@ defineProps<{
   /** Problems keyed by field id, shown beside the field they concern. */
   errors: Record<string, string>;
   showActions: boolean;
+  /** In a series, the credit here replaces the shared credit of the group. */
+  groupCredit?: boolean;
   isFirst: boolean;
   isLast: boolean;
   busy: boolean;
@@ -91,8 +93,12 @@ const emit = defineEmits<{
       </FormField>
       <FormField
         :id="ids.photoCredit(index)"
-        label="Sumber foto (opsional)"
-        hint="Contoh: nama pemotret atau lembaga."
+        :label="groupCredit ? 'Sumber foto ini (opsional)' : 'Sumber foto (opsional)'"
+        :hint="
+          groupCredit
+            ? 'Isi hanya jika foto ini bersumber lain. Isian ini menggantikan sumber bersama.'
+            : 'Contoh: nama pemotret atau lembaga.'
+        "
         :error="errors[ids.photoCredit(index)]"
         v-slot="{ describedBy, invalid }"
       >

@@ -34,8 +34,8 @@ import type { FailureKind } from '../../../utils/userMessages';
  * diagram (an image, bars, or both). It works on a draft: nothing is stored until "Simpan gambar",
  * and a failed save (stale, refused, offline) leaves every field as it was.
  *
- * Rules (SPEC §8): alt text is required for every photo; caption and credit are optional; photos
- * are ordered with buttons; a "stale" refusal keeps the draft and offers a reload that does not
+ * Rules (SPEC §8): alt text is required for every photo; caption and credit are optional; a series
+ * may have one shared credit that a photo's own credit replaces; photos are ordered with buttons; a "stale" refusal keeps the draft and offers a reload that does not
  * replace it; deleting asks first and is blocked by the server while it cannot be done.
  */
 const props = defineProps<{ sectionId: string }>();
@@ -57,6 +57,7 @@ const diagramSource = ref('');
 const diagramImageId = ref<string | null>(null);
 const diagramImageAlt = ref('');
 const barUnit = ref('');
+const sharedCredit = ref('');
 
 const photoRows = useRepeatableRows<PhotoFields>([], {
   max: FIGURE_LIMITS.photosMax,
@@ -106,6 +107,7 @@ const storedNote = computed(() =>
 const draft = computed<FigureDraft>(() => ({
   kind: kind.value,
   photos: photoRows.rows.value,
+  sharedCredit: sharedCredit.value,
   diagramTitle: diagramTitle.value,
   diagramSource: diagramSource.value,
   diagramImageId: diagramImageId.value,
@@ -129,6 +131,7 @@ watch(dirty, (value) => emit('dirty-change', value), { immediate: true });
 function applyDraft(next: FigureDraft): void {
   kind.value = next.kind;
   photoRows.setRows(next.photos);
+  sharedCredit.value = next.sharedCredit;
   diagramTitle.value = next.diagramTitle;
   diagramSource.value = next.diagramSource;
   diagramImageId.value = next.diagramImageId;
@@ -447,6 +450,26 @@ defineExpose({ isDirty: () => dirty.value });
         Hanya foto pertama yang dipakai untuk “Satu foto”. Foto lainnya tidak ikut disimpan.
       </p>
 
+      <FormField
+        v-if="kind === 'photos'"
+        :id="ids.sharedCredit"
+        label="Sumber bersama (untuk semua foto)"
+        hint="Opsional. Dipakai untuk setiap foto yang tidak punya sumber sendiri."
+        :error="errorByField[ids.sharedCredit]"
+        v-slot="{ describedBy, invalid }"
+      >
+        <input
+          :id="ids.sharedCredit"
+          v-model="sharedCredit"
+          type="text"
+          :class="INPUT_CLASSES"
+          :disabled="busy || uploading"
+          :aria-describedby="describedBy"
+          :aria-invalid="invalid ? 'true' : undefined"
+          data-test="shared-credit"
+        />
+      </FormField>
+
       <CeritaFigurePhotoRow
         v-for="(row, index) in visiblePhotoRows"
         :key="row.uid"
@@ -459,6 +482,7 @@ defineExpose({ isDirty: () => dirty.value });
         :ids="ids"
         :errors="errorByField"
         :show-actions="kind === 'photos'"
+        :group-credit="kind === 'photos'"
         :is-first="index === 0"
         :is-last="index === visiblePhotoRows.length - 1"
         :busy="busy || uploading"

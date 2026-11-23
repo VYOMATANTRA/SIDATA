@@ -29,6 +29,8 @@ export interface BarFields {
 export interface FigureDraft {
   kind: FigureKind | null;
   photos: PhotoFields[];
+  /** Shared credit for a "Beberapa foto" group; ignored for the other kinds. */
+  sharedCredit: string;
   diagramTitle: string;
   diagramSource: string;
   diagramImageId: string | null;
@@ -60,6 +62,7 @@ export function emptyDraft(): FigureDraft {
   return {
     kind: null,
     photos: [],
+    sharedCredit: '',
     diagramTitle: '',
     diagramSource: '',
     diagramImageId: null,
@@ -90,6 +93,7 @@ export function draftFromFigure(figure: SectionFigure | null): FigureDraft {
       caption: photo.caption ?? '',
       credit: photo.credit ?? '',
     }));
+    draft.sharedCredit = figure.kind === 'photos' ? (figure.credit ?? '') : '';
     return draft;
   }
 
@@ -161,6 +165,7 @@ export function draftSignature(draft: FigureDraft): string {
   if (photos.length === 0) return 'none';
   return JSON.stringify([
     'photos',
+    draft.kind === 'photos' ? draft.sharedCredit.trim() : '',
     photos.map((photo) => [photo.mediaId, photo.alt, photo.caption, photo.credit]),
   ]);
 }
@@ -180,6 +185,7 @@ export interface FigureIds {
   photoRemove: (index: number) => string;
   addPhoto: string;
   photosGroup: string;
+  sharedCredit: string;
   diagramTitle: string;
   diagramSource: string;
   diagramImage: string;
@@ -207,6 +213,7 @@ export function figureIds(prefix: string): FigureIds {
     photoRemove: (i) => `${prefix}-foto-${i}-hapus`,
     addPhoto: `${prefix}-tambah-foto`,
     photosGroup: `${prefix}-kumpulan-foto`,
+    sharedCredit: `${prefix}-kredit-bersama`,
     diagramTitle: `${prefix}-diagram-judul`,
     diagramSource: `${prefix}-diagram-sumber`,
     diagramImage: `${prefix}-diagram-berkas`,
@@ -314,6 +321,15 @@ function validatePhotos(
       ids.addPhoto,
       `Beberapa foto membutuhkan ${FIGURE_LIMITS.photosMin} sampai ${FIGURE_LIMITS.photosMax} foto.`,
     );
+  }
+
+  if (kind === 'photos') {
+    const shared = draft.sharedCredit.trim();
+    const problem =
+      shared.length > FIGURE_LIMITS.credit
+        ? `Sumber bersama untuk semua foto maksimal ${FIGURE_LIMITS.credit} karakter.`
+        : textProblem(shared, 'Sumber bersama untuk semua foto');
+    if (problem) out.add(ids.sharedCredit, problem);
   }
 
   const seen = new Set<string>();
@@ -478,7 +494,11 @@ export function validateFigureDraft(draft: FigureDraft, ids: FigureIds): FigureV
     const [first] = photos;
     return { problems: out.problems, figure: first ? { kind: 'photo', photos: [first] } : null };
   }
-  return { problems: out.problems, figure: { kind: 'photos', photos } };
+  const shared = draft.sharedCredit.trim();
+  return {
+    problems: out.problems,
+    figure: { kind: 'photos', ...(shared ? { credit: shared } : {}), photos },
+  };
 }
 
 /** One line describing a stored figure, for the "currently saved" note. */

@@ -19,7 +19,7 @@ export interface FigurePhotoInput {
 
 export type SectionFigure =
   | { kind: 'photo'; photos: [FigurePhotoInput] }
-  | { kind: 'photos'; photos: FigurePhotoInput[] }
+  | { kind: 'photos'; credit?: string; photos: FigurePhotoInput[] }
   | {
       kind: 'diagram';
       title: string;
@@ -84,7 +84,9 @@ export function figureFromBlock(block: ContentBlock | null | undefined): Section
       const [first] = photos;
       return first ? { kind: 'photo', photos: [first] } : null;
     }
-    return { kind: 'photos', photos };
+    // Blank (or only spaces) means no shared credit, as the server would store it.
+    const credit = text(meta['credit'])?.trim();
+    return { kind: 'photos', ...(credit ? { credit } : {}), photos };
   }
 
   if (meta['kind'] === 'diagram') {

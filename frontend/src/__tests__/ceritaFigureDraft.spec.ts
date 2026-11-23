@@ -419,3 +419,80 @@ describe('summarizeFigure', () => {
     );
   });
 });
+
+describe('shared credit of a photo group', () => {
+  const group = (sharedCredit: string, rows: Partial<FigureDraft['photos'][number]>[] = []) => ({
+    ...photoDraft('photos', [{ mediaId: 'a' }, { mediaId: 'b' }, ...rows]),
+    sharedCredit,
+  });
+
+  it('sends a trimmed shared credit with the group, and omits a blank one', () => {
+    expect(validateFigureDraft(group('  Tim Survei  '), ids).figure).toEqual({
+      kind: 'photos',
+      credit: 'Tim Survei',
+      photos: [
+        { mediaId: 'a', alt: 'Balai' },
+        { mediaId: 'b', alt: 'Balai' },
+      ],
+    });
+    expect(validateFigureDraft(group('   '), ids).figure).toEqual({
+      kind: 'photos',
+      photos: [
+        { mediaId: 'a', alt: 'Balai' },
+        { mediaId: 'b', alt: 'Balai' },
+      ],
+    });
+  });
+
+  it('refuses a shared credit over 120 characters or with HTML, naming the field', () => {
+    const long = validateFigureDraft(group('x'.repeat(121)), ids);
+    expect(long.figure).toBeNull();
+    expect(long.problems).toEqual([
+      {
+        fieldId: ids.sharedCredit,
+        message: 'Sumber bersama untuk semua foto maksimal 120 karakter.',
+      },
+    ]);
+    expect(validateFigureDraft(group('x'.repeat(120)), ids).problems).toEqual([]);
+
+    const html = validateFigureDraft(group('<b>Tim</b>'), ids);
+    expect(html.figure).toBeNull();
+    expect(html.problems).toEqual([
+      expect.objectContaining({ fieldId: ids.sharedCredit }) as unknown,
+    ]);
+    expect(html.problems[0]!.message).not.toMatch(/sharedCredit|credit|kredit/i);
+  });
+
+  it('never sends a shared credit for a single photo', () => {
+    const result = validateFigureDraft(
+      { ...photoDraft('photo', [{ mediaId: 'a' }]), sharedCredit: 'Tim' },
+      ids,
+    );
+    expect(result.figure).toEqual({ kind: 'photo', photos: [{ mediaId: 'a', alt: 'Balai' }] });
+  });
+
+  it('reads the shared credit back when a stored group is loaded', () => {
+    const draft = draftFromFigure({
+      kind: 'photos',
+      credit: 'Tim',
+      photos: [
+        { mediaId: 'a', alt: 'x' },
+        { mediaId: 'b', alt: 'y' },
+      ],
+    });
+    expect(draft.sharedCredit).toBe('Tim');
+    expect(
+      draftFromFigure({ kind: 'photo', photos: [{ mediaId: 'a', alt: 'x' }] }).sharedCredit,
+    ).toBe('');
+  });
+
+  it('counts a changed shared credit as an edit, but not a trailing space or a single photo', () => {
+    const base = draftSignature(group('Tim'));
+    expect(draftSignature(group('Tim Lain'))).not.toBe(base);
+    expect(draftSignature(group('Tim  '))).toBe(base);
+    expect(draftSignature(group(''))).not.toBe(base);
+    expect(
+      draftSignature({ ...photoDraft('photo', [{ mediaId: 'a' }]), sharedCredit: 'Tim' }),
+    ).toBe(draftSignature(photoDraft('photo', [{ mediaId: 'a' }])));
+  });
+});
