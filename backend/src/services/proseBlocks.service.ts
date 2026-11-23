@@ -16,12 +16,14 @@ import {
   assertPlainObject,
   baseSlugFromTitle,
   expectedUpdatedAtSchema,
+  HTML_TAG_PATTERN,
   idParamSchema,
   isUniqueViolation,
   MAX_SLUG_LENGTH,
   MAX_SORT_ORDER,
   parseOrThrow,
   planReorder,
+  PROSE_HTML_MESSAGE,
   reorderBodySchema,
   resolveUniqueSlug,
   titleSchema,
@@ -82,7 +84,8 @@ export const createProseBlockSchema = z
       .string({ error: 'Isi konten harus berupa string' })
       .trim()
       .min(1, 'Isi konten wajib diisi dan tidak boleh hanya berupa spasi')
-      .max(50000, 'Isi konten maksimal 50.000 karakter'),
+      .max(50000, 'Isi konten maksimal 50.000 karakter')
+      .refine((v) => !HTML_TAG_PATTERN.test(v), PROSE_HTML_MESSAGE),
   })
   .strict();
 

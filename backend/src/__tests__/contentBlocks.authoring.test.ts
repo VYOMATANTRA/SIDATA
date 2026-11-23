@@ -435,6 +435,28 @@ describe('contentBlocks authoring (section prose blocks)', () => {
     });
   });
 
+  describe('prose body is limited Markdown, never HTML', () => {
+    it('accepts Markdown markers and a bare less-than sign', async () => {
+      const body = '**Tebal** dan *miring*, [tautan](https://contoh.id)\n\n- satu\n- dua\n\n5 < 7';
+      const result = await createProseBlock('sec-1', { title: 'Format', body }, actor, ctx);
+      assert.equal(result.block.body, body);
+    });
+
+    it('refuses an HTML tag on create and on update, writing nothing', async () => {
+      await assert.rejects(
+        createProseBlock('sec-1', { title: 'T', body: 'Halo <script>x</script>' }, actor, ctx),
+        expectError(400),
+      );
+      db.addBlock({ id: 'b9', slug: 'lama', body: 'Lama' });
+      await assert.rejects(
+        updateContentBlock('lama', { body: '<b>Baru</b>' }, actor, ctx),
+        expectError(400),
+      );
+      assert.equal(db.contentBlock.rows.find((b) => b.id === 'b9')!.body, 'Lama');
+      assert.equal(db.auditRows.length, 0);
+    });
+  });
+
   describe('updateContentBlock optional expectedUpdatedAt', () => {
     beforeEach(() => {
       db.addBlock({ id: 'b1', slug: 'pendahuluan', body: 'Lama' });
