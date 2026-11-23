@@ -50,6 +50,11 @@ export function sendHierarchyError(res: Response, error: unknown): boolean {
 }
 
 export const MAX_SORT_ORDER = 2_147_483_647;
+/** A tag-like `<x`, `</x` or `<!`; prose is limited Markdown (SPEC §8) and never carries HTML. */
+export const HTML_TAG_PATTERN = /<[a-z!/]/i;
+export const PROSE_HTML_MESSAGE =
+  'Isi konten tidak boleh mengandung tag HTML. Gunakan tombol format untuk huruf tebal, miring, tautan atau daftar';
+
 export const MAX_SLUG_LENGTH = 100;
 export const MAX_REORDER_ITEMS = 500;
 
