@@ -73,7 +73,7 @@ const toToken = (s: { id: string; updatedAt: Date }): FigureSectionToken => ({
   updatedAt: s.updatedAt.toISOString(),
 });
 
-const mediaReference = (blockId: string) => ({
+export const mediaReference = (blockId: string) => ({
   purpose: FIGURE_MEDIA_PURPOSE,
   reference: { type: 'content_block', id: blockId, slot: FIGURE_MEDIA_SLOT },
 });
@@ -83,10 +83,10 @@ const mediaReference = (blockId: string) => ({
  * `$extends`-wrapped client (audit guard) produces a structurally equivalent but nominally
  * different transaction type, so it is narrowed here once.
  */
-const asMediaTx = (tx: unknown): MediaTransactionClient => tx as MediaTransactionClient;
+export const asMediaTx = (tx: unknown): MediaTransactionClient => tx as MediaTransactionClient;
 
 /** Media failures become plain 400s (the CMS shows the sentence); anything else bubbles up. */
-function toFigureMediaError(err: unknown, mode: 'save' | 'delete' = 'save'): unknown {
+export function toFigureMediaError(err: unknown, mode: 'save' | 'delete' = 'save'): unknown {
   if (!(err instanceof MediaServiceError)) return err;
   if (mode === 'delete') {
     // Releasing media is lenient, so this is not expected; never ask the editor to re-upload
@@ -136,7 +136,7 @@ async function lockSectionAndFigure(
  * Takes the row locks of every affected asset in ascending id order up front, so two figures
  * that swap shared photos in opposite directions cannot lock them in inverted order.
  */
-async function lockAffectedAssets(
+export async function lockAffectedAssets(
   tx: Pick<Prisma.TransactionClient, '$queryRaw'>,
   ids: readonly string[],
 ): Promise<void> {
