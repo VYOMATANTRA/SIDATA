@@ -591,6 +591,16 @@ describe('section figure against real MySQL', () => {
       assert.equal((await figureBlocks(section.id)).length, 0);
     });
 
+    it('refuses a by-sex series on a table that only holds totals', async () => {
+      const section = await seedSection();
+      const tableId = await seedTable(section.id); // ethnicity: totals only
+
+      await assert.rejects(
+        save(section.id, section.updatedAt, { ...chart(tableId), series: 'by_sex' }),
+        (err) => statusOf(err) === 422 && /jenis kelamin/.test((err as Error).message),
+      );
+    });
+
     it('blocks deleting a table a chart uses until the chart is gone', async () => {
       const section = await seedSection();
       const tableId = await seedTable(section.id);

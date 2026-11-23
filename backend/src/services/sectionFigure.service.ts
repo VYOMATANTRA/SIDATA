@@ -192,7 +192,14 @@ export const putSectionFigure = async (
             tx,
             figure.tableId,
             await pageIdOfSection(tx, sectionId),
+            figure.series,
           );
+          if (check === 'no-sex-split') {
+            throw new HierarchyServiceError(
+              'Tabel ini hanya memuat jumlah total, tidak dipisah menurut jenis kelamin. Pilih jumlah total.',
+              422,
+            );
+          }
           if (check === 'missing') {
             throw new HierarchyServiceError(
               'Tabel data untuk grafik tidak ditemukan. Pilih tabel lain.',
