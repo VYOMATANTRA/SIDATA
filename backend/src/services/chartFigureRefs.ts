@@ -1,4 +1,5 @@
 import prisma from '../utils/prisma.js';
+import { SEX_SPLIT_KINDS } from '../utils/indicatorTableKinds.js';
 
 /**
  * Chart figures (SPEC §2) reference an indicator table by id inside the figure block's
@@ -38,7 +39,7 @@ export async function countChartsUsingTable(
   });
 }
 
-export type ChartTableCheck = 'ok' | 'missing' | 'other-page';
+export type ChartTableCheck = 'ok' | 'missing' | 'other-page' | 'no-sex-split';
 
 /**
  * Checks that the table exists on the same page as the section. The caller has already locked the
@@ -48,12 +49,15 @@ export async function checkChartTable(
   tx: RefClient,
   tableId: string,
   sectionPageId: string | null,
+  series: 'total' | 'by_sex' = 'total',
 ): Promise<ChartTableCheck> {
   const table = await tx.indicatorTable.findUnique({
     where: { id: tableId },
-    select: { sectionId: true },
+    select: { sectionId: true, kind: true },
   });
   if (!table) return 'missing';
   const tablePageId = await pageIdOfSection(tx, table.sectionId);
-  return tablePageId !== null && tablePageId === sectionPageId ? 'ok' : 'other-page';
+  if (tablePageId === null || tablePageId !== sectionPageId) return 'other-page';
+  if (series === 'by_sex' && !SEX_SPLIT_KINDS.has(table.kind)) return 'no-sex-split';
+  return 'ok';
 }
