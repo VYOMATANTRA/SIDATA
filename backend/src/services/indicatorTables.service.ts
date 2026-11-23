@@ -1,3 +1,4 @@
+import { countChartsUsingTable, pageIdOfSection } from './chartFigureRefs.js';
 import { z } from 'zod';
 import prisma from '../utils/prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
@@ -877,6 +878,21 @@ export const updateIndicatorTable = async (
           if (!section) {
             throw new IndicatorTableServiceError('Section tidak ditemukan.', 404);
           }
+          if (nextSectionId !== existing.sectionId) {
+            // A chart may only draw from a table on its own page, so a table a chart uses cannot
+            // be moved to another page.
+            const charts = await countChartsUsingTable(tx, normalizedId);
+            if (
+              charts > 0 &&
+              (await pageIdOfSection(tx, nextSectionId)) !==
+                (await pageIdOfSection(tx, existing.sectionId))
+            ) {
+              throw new IndicatorTableServiceError(
+                `Tabel ini dipakai sebagai grafik pada ${charts} bagian cerita, sehingga tidak dapat dipindahkan ke halaman lain.`,
+                409,
+              );
+            }
+          }
         }
 
         if (input.slug !== undefined && input.slug !== existing.slug) {
@@ -1173,6 +1189,14 @@ export const deleteIndicatorTable = async (
         })) as unknown as TableRow | null;
         if (!existing) {
           throw new IndicatorTableServiceError('Tabel indikator tidak ditemukan.', 404);
+        }
+
+        const charts = await countChartsUsingTable(tx, normalizedId);
+        if (charts > 0) {
+          throw new IndicatorTableServiceError(
+            `Tabel ini dipakai sebagai grafik pada ${charts} bagian cerita. Hapus grafiknya terlebih dahulu.`,
+            409,
+          );
         }
 
         const rowCount = await tx.indicatorTableRow.count({ where: { tableId: normalizedId } });

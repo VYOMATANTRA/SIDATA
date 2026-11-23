@@ -188,8 +188,8 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
   - **Standalone blocks.** `hero`, `sambutan_lurah`, `highlight` and the profile/catalog blocks
     (`section_id` NULL) can be neither created nor deleted through these endpoints (delete: `409
     STANDALONE_BLOCK_PROTECTED`); they are edited only via `PATCH /api/content-blocks/:slug`.
-  - **Section figure.** A section carries at most one figure: one photo, a group of 2–12 photos, or a
-    diagram (a stored `figure` content block, §7). Editors and Admins manage it only through
+  - **Section figure.** A section carries at most one figure: one photo, a group of 2–12 photos, a
+    diagram, or a chart (a stored `figure` content block, §7). Editors and Admins manage it only through
     `PUT /api/sections/:id/figure` (body `{ expectedUpdatedAt, figure }`, creates or replaces) and
     `DELETE /api/sections/:id/figure?expectedUpdatedAt=` (`404 FIGURE_NOT_FOUND` when there is none);
     both are CSRF-protected, use the content-block write limiter, and run in one transaction with the
@@ -208,6 +208,12 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
       finite number value of at most 1 000 000 000 in magnitude, unique labels (compared trimmed and case-insensitively), unit ≤ 20; the serialized figure may not exceed 12 000 characters. Text is trimmed (a blank optional field is dropped), unknown keys
       are refused, the same media asset may not appear twice in one figure, and text may contain no HTML
       tags or control/bidi characters. Every `mediaId` must be a `cerita`-purpose photo upload (§7).
+    - **Chart:** `{ kind: 'chart', tableId, chartType: 'bar' | 'column', series: 'total' | 'by_sex', title,
+      source? }`, title 1–120, source ≤ 200. It stores a reference to an indicator table, never the
+      numbers, so the chart follows the table. The table must exist and sit on the **same Cerita page**
+      as the section (`422` otherwise). A chart has no media. While any chart uses a table, deleting that
+      table, or moving it to a section on another page, answers `409` (moving within the page is fine).
+      Line charts are not offered: the tables hold one snapshot period, not a time series.
     - Media is attached with reference `('content_block', <figure block id>, 'figure')` for every photo in
       the new figure and detached for photos the replaced figure had and the new one lacks; deleting the
       figure detaches all of its photos. An asset still referenced elsewhere stays published. Media

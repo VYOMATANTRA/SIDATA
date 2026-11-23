@@ -1,3 +1,4 @@
+import { checkChartTable, pageIdOfSection } from './chartFigureRefs.js';
 import prisma from '../utils/prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import {
@@ -174,6 +175,26 @@ export const putSectionFigure = async (
           throw new ContentBlockServiceError('Bagian tidak ditemukan', 404);
         }
         assertFresh(section.updatedAt, body.expectedUpdatedAt, 'Bagian');
+
+        if (figure.kind === 'chart') {
+          const check = await checkChartTable(
+            tx,
+            figure.tableId,
+            await pageIdOfSection(tx, sectionId),
+          );
+          if (check === 'missing') {
+            throw new HierarchyServiceError(
+              'Tabel data untuk grafik tidak ditemukan. Pilih tabel lain.',
+              422,
+            );
+          }
+          if (check === 'other-page') {
+            throw new HierarchyServiceError(
+              'Grafik hanya dapat memakai tabel data dari halaman cerita yang sama.',
+              422,
+            );
+          }
+        }
 
         const existing = await tx.contentBlock.findUnique({ where: { slug } });
         if (existing && (existing.type !== 'figure' || existing.sectionId !== sectionId)) {
