@@ -213,6 +213,7 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
       numbers, so the chart follows the table. The table must exist and sit on the **same Cerita page**
       as the section (`422` otherwise). A chart has no media. While any chart uses a table, deleting that
       table, or moving it to a section on another page, answers `409` (moving within the page is fine).
+      `by_sex` needs a table with a male/female split (`age_pyramid`, `religion_by_sex`); `422` otherwise.
       Line charts are not offered: the tables hold one snapshot period, not a time series.
     - Media is attached with reference `('content_block', <figure block id>, 'figure')` for every photo in
       the new figure and detached for photos the replaced figure had and the new one lacks; deleting the
