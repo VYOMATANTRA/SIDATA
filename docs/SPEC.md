@@ -616,7 +616,7 @@ setup-password, the OAuth callback, `/dashboard` (its own `<main>`) and the admi
   components: one photo, an offset pair for two, a swipeable row for three or more, a diagram
   (picture or bars, with its source), or a chart. A chart reads the indicator table it names (same
   page, looked up by id among the page's loaded tables): `bar` draws horizontal bars, `column` vertical
-  columns, and `by_sex` draws male and female per row, told apart by a hatch pattern and text labels as
+  columns, and `by_sex` draws male and female per row, told apart by text labels (in horizontal bars the series is named in each bar's label; columns also use a hatch pattern) as
   well as colour; `total` draws one value per row. Each chart has a "Lihat sebagai tabel" table with the
   same values and its source. A chart whose table is missing or has no value left renders nothing. Photos are addressed as `/api/media/<mediaId>` (full size; the
   thumbnail variant is not used because the cards are shown large). Alt text, caption and credit are
