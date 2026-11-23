@@ -199,6 +199,46 @@ describe('section move and duplicate against real MySQL', () => {
       assert.equal(await prisma.contentBlock.count({ where: { sectionId: section.id } }), 3);
     });
 
+    it('copies a chart figure and keeps its table', async () => {
+      const { section } = await seedTree();
+      const table = await prisma.indicatorTable.create({
+        data: {
+          sectionId: section.id,
+          slug: 'tabel-umur',
+          title: 'Umur',
+          kind: 'age_pyramid',
+          period: '2024',
+        },
+      });
+      await putSectionFigure(
+        section.id,
+        {
+          expectedUpdatedAt: await fresh(section.id),
+          figure: {
+            kind: 'chart',
+            tableId: table.id,
+            chartType: 'column',
+            series: 'by_sex',
+            title: 'Umur penduduk',
+          },
+        },
+        ACTOR,
+        REQUEST_CONTEXT,
+      );
+
+      const result = await duplicateSection(
+        section.id,
+        { expectedUpdatedAt: await fresh(section.id) },
+        ACTOR,
+        REQUEST_CONTEXT,
+      );
+
+      const copy = await prisma.contentBlock.findUniqueOrThrow({
+        where: { slug: `figure-${result.section.id}` },
+      });
+      assert.equal((copy.metadata as { tableId?: string }).tableId, table.id);
+    });
+
     it('duplicates a section without a figure or prose, and refuses a stale token', async () => {
       const { section } = await seedTree();
 

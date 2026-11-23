@@ -617,6 +617,17 @@ describe('section figure against real MySQL', () => {
       assert.equal(await prisma.indicatorTable.count({ where: { id: tableId } }), 0);
     });
 
+    it('blocks changing the kind of a table a chart uses', async () => {
+      const section = await seedSection();
+      const tableId = await seedTable(section.id);
+      await save(section.id, section.updatedAt, chart(tableId));
+
+      await assert.rejects(
+        updateIndicatorTable(tableId, { kind: 'occupation' }, ACTOR, REQUEST_CONTEXT),
+        (err) => (err as { statusCode?: number }).statusCode === 409,
+      );
+    });
+
     it('blocks moving a charted table to another page but allows moving within the page', async () => {
       const section = await seedSection();
       const sibling = await seedSection('bagian-dua');

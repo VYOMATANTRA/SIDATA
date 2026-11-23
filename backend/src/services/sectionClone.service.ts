@@ -333,26 +333,36 @@ export const duplicateSection = async (
           });
         }
 
-        const figure = await tx.contentBlock.findUnique({
+        const figureBlock = await tx.contentBlock.findUnique({
           where: { slug: figureSlugForSection(id) },
         });
+        // Only the section's own figure block counts (a prose block could hold the reserved slug).
+        const figure =
+          figureBlock && figureBlock.type === 'figure' && figureBlock.sectionId === id
+            ? figureBlock
+            : null;
         let photoCount = 0;
-        const chartTableId = (figure?.metadata as { tableId?: unknown } | null)?.tableId;
-        if (typeof chartTableId === 'string') {
-          if (chartTableId !== lockedTableId) throw movedMeanwhile();
-          const check = await checkChartTable(
-            tx,
-            chartTableId,
-            await pageIdOfSection(tx, existing.id),
-          );
-          if (check !== 'ok') {
-            throw new HierarchyServiceError(
-              'Grafik pada bagian ini memakai tabel data yang tidak tersedia di halaman ini. Perbaiki grafiknya dulu.',
-              422,
+        if (figure) {
+          const meta = figure.metadata as {
+            kind?: unknown;
+            tableId?: unknown;
+            series?: unknown;
+          } | null;
+          if (meta?.kind === 'chart' && typeof meta.tableId === 'string') {
+            if (meta.tableId !== lockedTableId) throw movedMeanwhile();
+            const check = await checkChartTable(
+              tx,
+              meta.tableId,
+              await pageIdOfSection(tx, existing.id),
+              meta.series === 'by_sex' ? 'by_sex' : 'total',
             );
+            if (check !== 'ok') {
+              throw new HierarchyServiceError(
+                'Grafik pada bagian ini tidak dapat digandakan karena tabel datanya tidak lagi sesuai. Perbaiki grafiknya dulu.',
+                422,
+              );
+            }
           }
-        }
-        if (figure && figure.type === 'figure' && figure.sectionId === id) {
           const created = await tx.contentBlock.create({
             data: {
               sectionId: copy.id,
