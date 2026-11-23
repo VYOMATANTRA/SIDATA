@@ -915,6 +915,13 @@ export const updateIndicatorTable = async (
               400,
             );
           }
+          const charts = await countChartsUsingTable(tx, existing.id);
+          if (charts > 0) {
+            throw new IndicatorTableServiceError(
+              `Jenis tabel tidak dapat diubah karena tabel ini dipakai sebagai grafik pada ${charts} bagian cerita.`,
+              409,
+            );
+          }
         }
 
         const changes: Record<string, { before: unknown; after: unknown }> = {};
