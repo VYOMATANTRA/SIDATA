@@ -104,7 +104,7 @@ export const dummyPendidikanArticle: CeritaArticle = {
         {
           id: 'dummy-s5',
           heading: 'Perbandingan jenjang pendidikan',
-          paragraphs: ['Teks contoh untuk bagian dengan bagan dari tabel indikator.'],
+          paragraphs: ['Teks contoh untuk bagian dengan grafik dari tabel indikator.'],
           figure: {
             kind: 'chart',
             tableId: 'dummy-tabel-jenjang',

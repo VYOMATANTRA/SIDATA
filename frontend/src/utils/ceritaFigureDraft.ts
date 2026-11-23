@@ -508,7 +508,7 @@ export function describeFigure(figure: SectionFigure | null): string {
     return 'Gambar tersimpan, tetapi isinya tidak dapat dibaca. Simpan gambar baru untuk menggantinya.';
   if (figure.kind === 'photo') return 'Tersimpan: satu foto.';
   if (figure.kind === 'photos') return `Tersimpan: ${figure.photos.length} foto.`;
-  if (figure.kind === 'chart') return `Tersimpan: bagan “${figure.title}”.`;
+  if (figure.kind === 'chart') return `Tersimpan: grafik “${figure.title}”.`;
   return `Tersimpan: diagram “${figure.title}”.`;
 }
 
@@ -518,6 +518,6 @@ export function summarizeFigure(figure: SectionFigure | null, exists: boolean): 
   if (!figure) return 'gambar yang isinya tidak dapat dibaca';
   if (figure.kind === 'photo') return 'satu foto';
   if (figure.kind === 'photos') return `${figure.photos.length} foto`;
-  if (figure.kind === 'chart') return `bagan “${figure.title}”`;
+  if (figure.kind === 'chart') return `grafik “${figure.title}”`;
   return `diagram “${figure.title}”`;
 }

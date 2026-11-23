@@ -512,7 +512,7 @@ describe('a stored chart the editor cannot edit', () => {
   });
 
   it('is described as a chart in the stored note and the reloaded summary', () => {
-    expect(describeFigure(chart)).toBe('Tersimpan: bagan “Bagan contoh”.');
-    expect(summarizeFigure(chart, true)).toBe('bagan “Bagan contoh”');
+    expect(describeFigure(chart)).toBe('Tersimpan: grafik “Bagan contoh”.');
+    expect(summarizeFigure(chart, true)).toBe('grafik “Bagan contoh”');
   });
 });

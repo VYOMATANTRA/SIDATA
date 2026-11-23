@@ -11,9 +11,9 @@ import {
 
 /**
  * A chart of one indicator table on the Cerita page (SPEC §8). `bar` draws horizontal bars with the
- * shared BarDiagram; `column` draws vertical columns in CSS. Male is a solid bar and female a
- * hatched one, and every value also has its text name (legend and labels), so the two never rely on
- * colour alone. The same numbers are always available as a table under "Lihat sebagai tabel".
+ * shared BarDiagram; `column` draws vertical columns in CSS. In columns, male is solid and female
+ * hatched; in horizontal bars each bar's own label names the series ("Kelurahan — Perempuan") and
+ * the tone differs, so the two never rely on colour alone. The same numbers are always available as a table under "Lihat sebagai tabel".
  *
  * Renders nothing when the table is missing or has no value to draw.
  */
