@@ -1,20 +1,34 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import type { ArticleFigure, ArticlePhoto, DiagramFigure } from '../../types/ceritaArticle';
+import type {
+  ArticleFigure,
+  ArticlePhoto,
+  ChartFigure,
+  ChartTable,
+  DiagramFigure,
+} from '../../types/ceritaArticle';
 import { safeImageSrc } from '../../utils/ceritaFigures';
+import { chartGroups } from '../../utils/ceritaChart';
 import FigureCard from './FigureCard.vue';
 import FigurePhotoPair from './FigurePhotoPair.vue';
 import FigureCarousel from './FigureCarousel.vue';
 import FigureDiagram from './FigureDiagram.vue';
+import FigureChart from './FigureChart.vue';
 
 /**
  * Picks the layout for a section's figure: one picture, a pair, a carousel, or a diagram.
  * A picture that fails to load (never attached, deleted, offline) is left out and the rest is laid
  * out again: a pair of which one fails becomes a single card, a diagram whose picture fails falls
  * back to its bars. When nothing is left the figure renders nothing at all, and says so through
- * `visible-change` so the section can count itself as empty.
+ * `visible-change` so the section can count itself as empty. A chart is laid out from the page's
+ * indicator tables (`tables`, by id); a chart whose table is missing or empty is left out.
  */
-const props = defineProps<{ figure: ArticleFigure }>();
+const props = withDefaults(
+  defineProps<{ figure: ArticleFigure; tables?: Record<string, ChartTable> }>(),
+  {
+    tables: () => ({}),
+  },
+);
 const emit = defineEmits<{ 'visible-change': [visible: boolean] }>();
 
 const failedPhotoIds = ref<Set<string>>(new Set());
@@ -51,7 +65,13 @@ const diagram = computed<DiagramFigure | null>(() => {
   return { ...figure, src: undefined, alt: undefined };
 });
 
+const chart = computed<ChartFigure | null>(() =>
+  props.figure.kind === 'chart' ? props.figure : null,
+);
+const chartTable = computed(() => (chart.value ? props.tables[chart.value.tableId] : undefined));
+
 const visible = computed(() => {
+  if (chart.value) return chartGroups(chart.value, chartTable.value).length > 0;
   if (diagram.value) {
     return safeImageSrc(diagram.value.src) !== null || (diagram.value.bars?.items.length ?? 0) > 0;
   }
@@ -63,6 +83,9 @@ watch(visible, (value) => emit('visible-change', value), { immediate: true });
 
 <template>
   <template v-if="!visible" />
+  <template v-else-if="chart">
+    <FigureChart :figure="chart" :table="chartTable" />
+  </template>
   <template v-else-if="diagram">
     <FigureDiagram :figure="diagram" @image-error="diagramImageFailed = true" />
   </template>

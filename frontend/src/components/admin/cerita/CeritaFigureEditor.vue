@@ -103,6 +103,11 @@ const stored = computed(() => store.figureFor(props.sectionId));
 const storedNote = computed(() =>
   stored.value ? describeFigure(stored.value.figure) : 'Bagian ini belum memiliki gambar.',
 );
+/**
+ * A stored chart has no editor yet. The form is hidden so it cannot be saved over (which would
+ * replace it with what the draft holds); it can still be removed with "Hapus gambar".
+ */
+const unsupported = computed(() => stored.value?.figure?.kind === 'chart');
 
 const draft = computed<FigureDraft>(() => ({
   kind: kind.value,
@@ -246,7 +251,7 @@ function focusSummary(): void {
 }
 
 async function save(): Promise<void> {
-  if (busy.value || uploading.value) return;
+  if (busy.value || uploading.value || unsupported.value) return;
   submitted.value = true;
   serverError.value = '';
   stale.value = false;
@@ -381,6 +386,15 @@ defineExpose({ isDirty: () => dirty.value });
 
     <p class="text-text-muted text-sm" data-test="figure-stored-note">{{ storedNote }}</p>
 
+    <p
+      v-if="unsupported"
+      class="rounded-card border-border bg-surface-muted text-text-muted border px-4 py-3 text-sm"
+      data-test="figure-chart-notice"
+    >
+      Bagan ini belum dapat diubah di editor ini. Untuk menggantinya, hapus gambar ini lalu buat
+      gambar baru.
+    </p>
+
     <div ref="summaryHost">
       <FormErrorSummary :errors="problems" :form-error="serverError" />
     </div>
@@ -419,292 +433,301 @@ defineExpose({ isDirty: () => dirty.value });
       </p>
     </div>
 
-    <fieldset class="space-y-2" :disabled="busy || uploading">
-      <legend class="text-text-muted text-sm font-medium">Jenis gambar</legend>
-      <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-5">
-        <label
-          v-for="option in ['photo', 'photos', 'diagram'] as FigureKind[]"
-          :key="option"
-          :for="ids.kindOption(option)"
-          class="text-brand-navy flex min-h-11 cursor-pointer items-center gap-2 text-sm"
-        >
-          <input
-            :id="ids.kindOption(option)"
-            v-model="kindModel"
-            type="radio"
-            :name="kindName"
-            :value="option"
-            class="text-brand-navy focus-visible:outline-focus-ring h-4 w-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-            :data-test="`kind-${option}`"
-          />
-          {{ KIND_LABELS[option] }}
-        </label>
-      </div>
-      <p v-if="kind === null" class="text-text-muted text-xs">
-        Pilih jenis gambar untuk mulai menambahkan.
-      </p>
-    </fieldset>
-
-    <div v-if="kind === 'photo' || kind === 'photos'" class="space-y-4" data-test="figure-photos">
-      <p v-if="hiddenPhotoCount > 0" class="text-text-muted text-sm" data-test="figure-extra-note">
-        Hanya foto pertama yang dipakai untuk “Satu foto”. Foto lainnya tidak ikut disimpan.
-      </p>
-
-      <FormField
-        v-if="kind === 'photos'"
-        :id="ids.sharedCredit"
-        label="Sumber bersama (untuk semua foto)"
-        hint="Opsional. Dipakai untuk setiap foto yang tidak punya sumber sendiri."
-        :error="errorByField[ids.sharedCredit]"
-        v-slot="{ describedBy, invalid }"
-      >
-        <input
-          :id="ids.sharedCredit"
-          v-model="sharedCredit"
-          type="text"
-          :class="INPUT_CLASSES"
-          :disabled="busy || uploading"
-          :aria-describedby="describedBy"
-          :aria-invalid="invalid ? 'true' : undefined"
-          data-test="shared-credit"
-        />
-      </FormField>
-
-      <CeritaFigurePhotoRow
-        v-for="(row, index) in visiblePhotoRows"
-        :key="row.uid"
-        v-model:media-id="row.mediaId"
-        v-model:alt="row.alt"
-        v-model:caption="row.caption"
-        v-model:credit="row.credit"
-        :index="index"
-        :label="kind === 'photo' ? 'Foto' : `Foto ${index + 1}`"
-        :ids="ids"
-        :errors="errorByField"
-        :show-actions="kind === 'photos'"
-        :group-credit="kind === 'photos'"
-        :is-first="index === 0"
-        :is-last="index === visiblePhotoRows.length - 1"
-        :busy="busy || uploading"
-        @move-up="photoRows.move(index, -1)"
-        @move-down="photoRows.move(index, 1)"
-        @remove="photoRows.remove(index)"
-        @uploading="onUploading"
-      />
-
-      <div v-if="kind === 'photos'" class="space-y-2">
-        <BaseButton
-          :id="ids.addPhoto"
-          type="button"
-          variant="secondary"
-          size="md"
-          class="min-h-11"
-          :disabled="busy || uploading || photoRows.isFull()"
-          data-test="add-photo"
-          @click="photoRows.add()"
-        >
-          Tambah foto
-        </BaseButton>
-        <p class="text-text-muted text-xs">
-          {{ photoRows.rows.value.length }} dari {{ FIGURE_LIMITS.photosMax }} foto (minimal
-          {{ FIGURE_LIMITS.photosMin }}).
+    <template v-if="!unsupported">
+      <fieldset class="space-y-2" :disabled="busy || uploading">
+        <legend class="text-text-muted text-sm font-medium">Jenis gambar</legend>
+        <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-5">
+          <label
+            v-for="option in ['photo', 'photos', 'diagram'] as FigureKind[]"
+            :key="option"
+            :for="ids.kindOption(option)"
+            class="text-brand-navy flex min-h-11 cursor-pointer items-center gap-2 text-sm"
+          >
+            <input
+              :id="ids.kindOption(option)"
+              v-model="kindModel"
+              type="radio"
+              :name="kindName"
+              :value="option"
+              class="text-brand-navy focus-visible:outline-focus-ring h-4 w-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+              :data-test="`kind-${option}`"
+            />
+            {{ KIND_LABELS[option] }}
+          </label>
+        </div>
+        <p v-if="kind === null" class="text-text-muted text-xs">
+          Pilih jenis gambar untuk mulai menambahkan.
         </p>
-        <p v-if="errorByField[ids.addPhoto]" class="text-status-error text-xs font-medium">
-          {{ errorByField[ids.addPhoto] }}
-        </p>
-      </div>
-    </div>
-
-    <div v-else-if="kind === 'diagram'" class="space-y-5" data-test="figure-diagram">
-      <FormField
-        :id="ids.diagramTitle"
-        label="Judul diagram"
-        :error="errorByField[ids.diagramTitle]"
-        required
-        v-slot="{ describedBy, invalid }"
-      >
-        <input
-          :id="ids.diagramTitle"
-          v-model="diagramTitle"
-          type="text"
-          :class="INPUT_CLASSES"
-          :disabled="busy"
-          :aria-describedby="describedBy"
-          :aria-invalid="invalid ? 'true' : undefined"
-          data-test="diagram-title"
-        />
-      </FormField>
-
-      <FormField
-        :id="ids.diagramSource"
-        label="Sumber data (opsional)"
-        hint="Contoh: nama publikasi dan tahunnya."
-        :error="errorByField[ids.diagramSource]"
-        v-slot="{ describedBy, invalid }"
-      >
-        <input
-          :id="ids.diagramSource"
-          v-model="diagramSource"
-          type="text"
-          :class="INPUT_CLASSES"
-          :disabled="busy"
-          :aria-describedby="describedBy"
-          :aria-invalid="invalid ? 'true' : undefined"
-          data-test="diagram-source"
-        />
-      </FormField>
-
-      <p class="text-text-muted text-sm">Diagram membutuhkan gambar, data batang, atau keduanya.</p>
-
-      <fieldset class="rounded-card border-border space-y-4 border p-4">
-        <legend class="text-brand-navy px-1 text-sm font-semibold">Gambar diagram</legend>
-        <MediaPhotoField
-          v-model="diagramImageId"
-          purpose="cerita"
-          label="Gambar diagram"
-          :input-id="ids.diagramImage"
-          :disabled="busy"
-          :error="errorByField[ids.diagramImage]"
-          preview-alt="Pratinjau gambar diagram"
-          @busy="onUploading"
-        />
-        <FormField
-          v-if="diagramImageId"
-          :id="ids.diagramImageAlt"
-          label="Teks pengganti gambar diagram"
-          hint="Jelaskan isi diagram untuk pembaca yang tidak bisa melihatnya."
-          :error="errorByField[ids.diagramImageAlt]"
-          required
-          v-slot="{ describedBy, invalid }"
-        >
-          <textarea
-            :id="ids.diagramImageAlt"
-            v-model="diagramImageAlt"
-            rows="2"
-            :class="INPUT_CLASSES"
-            :disabled="busy"
-            :aria-describedby="describedBy"
-            :aria-invalid="invalid ? 'true' : undefined"
-            data-test="diagram-image-alt"
-          ></textarea>
-        </FormField>
       </fieldset>
 
-      <fieldset class="rounded-card border-border space-y-4 border p-4" :disabled="busy">
-        <legend class="text-brand-navy px-1 text-sm font-semibold">Data batang</legend>
+      <div v-if="kind === 'photo' || kind === 'photos'" class="space-y-4" data-test="figure-photos">
+        <p
+          v-if="hiddenPhotoCount > 0"
+          class="text-text-muted text-sm"
+          data-test="figure-extra-note"
+        >
+          Hanya foto pertama yang dipakai untuk “Satu foto”. Foto lainnya tidak ikut disimpan.
+        </p>
 
         <FormField
-          :id="ids.barUnit"
-          label="Satuan (opsional)"
-          hint="Contoh: jiwa, KK, atau persen."
-          :error="errorByField[ids.barUnit]"
+          v-if="kind === 'photos'"
+          :id="ids.sharedCredit"
+          label="Sumber bersama (untuk semua foto)"
+          hint="Opsional. Dipakai untuk setiap foto yang tidak punya sumber sendiri."
+          :error="errorByField[ids.sharedCredit]"
           v-slot="{ describedBy, invalid }"
         >
           <input
-            :id="ids.barUnit"
-            v-model="barUnit"
+            :id="ids.sharedCredit"
+            v-model="sharedCredit"
             type="text"
             :class="INPUT_CLASSES"
+            :disabled="busy || uploading"
             :aria-describedby="describedBy"
             :aria-invalid="invalid ? 'true' : undefined"
-            data-test="bar-unit"
+            data-test="shared-credit"
           />
         </FormField>
 
-        <p v-if="barRows.rows.value.length === 0" class="text-text-muted text-sm">
-          Belum ada data batang.
-        </p>
+        <CeritaFigurePhotoRow
+          v-for="(row, index) in visiblePhotoRows"
+          :key="row.uid"
+          v-model:media-id="row.mediaId"
+          v-model:alt="row.alt"
+          v-model:caption="row.caption"
+          v-model:credit="row.credit"
+          :index="index"
+          :label="kind === 'photo' ? 'Foto' : `Foto ${index + 1}`"
+          :ids="ids"
+          :errors="errorByField"
+          :show-actions="kind === 'photos'"
+          :group-credit="kind === 'photos'"
+          :is-first="index === 0"
+          :is-last="index === visiblePhotoRows.length - 1"
+          :busy="busy || uploading"
+          @move-up="photoRows.move(index, -1)"
+          @move-down="photoRows.move(index, 1)"
+          @remove="photoRows.remove(index)"
+          @uploading="onUploading"
+        />
 
-        <div
-          v-for="(bar, index) in barRows.rows.value"
-          :key="bar.uid"
-          class="border-border space-y-3 border-t pt-4 first:border-t-0 first:pt-0"
-          data-test="bar-row"
-        >
-          <div class="grid gap-4 sm:grid-cols-2">
-            <FormField
-              :id="ids.barLabel(index)"
-              :label="`Nama batang ${index + 1}`"
-              :error="errorByField[ids.barLabel(index)]"
-              v-slot="{ describedBy, invalid }"
-            >
-              <input
-                :id="ids.barLabel(index)"
-                v-model="bar.label"
-                type="text"
-                :class="INPUT_CLASSES"
-                :aria-describedby="describedBy"
-                :aria-invalid="invalid ? 'true' : undefined"
-                data-test="bar-label"
-              />
-            </FormField>
-            <FormField
-              :id="ids.barValue(index)"
-              :label="`Angka batang ${index + 1}`"
-              hint="Titik untuk ribuan, koma untuk desimal. Contoh: 1.234,5."
-              :error="errorByField[ids.barValue(index)]"
-              v-slot="{ describedBy, invalid }"
-            >
-              <input
-                :id="ids.barValue(index)"
-                v-model="bar.value"
-                type="text"
-                inputmode="decimal"
-                :class="INPUT_CLASSES"
-                :aria-describedby="
-                  [describedBy, barNote(bar.value) ? `${ids.barValue(index)}-note` : undefined]
-                    .filter(Boolean)
-                    .join(' ') || undefined
-                "
-                :aria-invalid="invalid ? 'true' : undefined"
-                data-test="bar-value"
-              />
-              <p
-                v-if="barNote(bar.value)"
-                :id="`${ids.barValue(index)}-note`"
-                class="text-text-muted mt-1.5 text-xs"
-                data-test="bar-value-note"
-              >
-                {{ barNote(bar.value) }}
-              </p>
-            </FormField>
-          </div>
-          <CollectionRowActions
-            :row-label="`batang ${index + 1}`"
-            :is-first="index === 0"
-            :is-last="index === barRows.rows.value.length - 1"
-            :busy="busy"
-            :move-up-id="ids.barUp(index)"
-            :move-down-id="ids.barDown(index)"
-            :remove-id="ids.barRemove(index)"
-            @move-up="barRows.move(index, -1)"
-            @move-down="barRows.move(index, 1)"
-            @remove="barRows.remove(index)"
-          />
-        </div>
-
-        <div class="space-y-2">
+        <div v-if="kind === 'photos'" class="space-y-2">
           <BaseButton
-            :id="ids.addBar"
+            :id="ids.addPhoto"
             type="button"
             variant="secondary"
             size="md"
             class="min-h-11"
-            :disabled="busy || barRows.isFull()"
-            data-test="add-bar"
-            @click="barRows.add()"
+            :disabled="busy || uploading || photoRows.isFull()"
+            data-test="add-photo"
+            @click="photoRows.add()"
           >
-            Tambah batang
+            Tambah foto
           </BaseButton>
-          <p v-if="errorByField[ids.addBar]" class="text-status-error text-xs font-medium">
-            {{ errorByField[ids.addBar] }}
+          <p class="text-text-muted text-xs">
+            {{ photoRows.rows.value.length }} dari {{ FIGURE_LIMITS.photosMax }} foto (minimal
+            {{ FIGURE_LIMITS.photosMin }}).
+          </p>
+          <p v-if="errorByField[ids.addPhoto]" class="text-status-error text-xs font-medium">
+            {{ errorByField[ids.addPhoto] }}
           </p>
         </div>
-      </fieldset>
-    </div>
+      </div>
+
+      <div v-else-if="kind === 'diagram'" class="space-y-5" data-test="figure-diagram">
+        <FormField
+          :id="ids.diagramTitle"
+          label="Judul diagram"
+          :error="errorByField[ids.diagramTitle]"
+          required
+          v-slot="{ describedBy, invalid }"
+        >
+          <input
+            :id="ids.diagramTitle"
+            v-model="diagramTitle"
+            type="text"
+            :class="INPUT_CLASSES"
+            :disabled="busy"
+            :aria-describedby="describedBy"
+            :aria-invalid="invalid ? 'true' : undefined"
+            data-test="diagram-title"
+          />
+        </FormField>
+
+        <FormField
+          :id="ids.diagramSource"
+          label="Sumber data (opsional)"
+          hint="Contoh: nama publikasi dan tahunnya."
+          :error="errorByField[ids.diagramSource]"
+          v-slot="{ describedBy, invalid }"
+        >
+          <input
+            :id="ids.diagramSource"
+            v-model="diagramSource"
+            type="text"
+            :class="INPUT_CLASSES"
+            :disabled="busy"
+            :aria-describedby="describedBy"
+            :aria-invalid="invalid ? 'true' : undefined"
+            data-test="diagram-source"
+          />
+        </FormField>
+
+        <p class="text-text-muted text-sm">
+          Diagram membutuhkan gambar, data batang, atau keduanya.
+        </p>
+
+        <fieldset class="rounded-card border-border space-y-4 border p-4">
+          <legend class="text-brand-navy px-1 text-sm font-semibold">Gambar diagram</legend>
+          <MediaPhotoField
+            v-model="diagramImageId"
+            purpose="cerita"
+            label="Gambar diagram"
+            :input-id="ids.diagramImage"
+            :disabled="busy"
+            :error="errorByField[ids.diagramImage]"
+            preview-alt="Pratinjau gambar diagram"
+            @busy="onUploading"
+          />
+          <FormField
+            v-if="diagramImageId"
+            :id="ids.diagramImageAlt"
+            label="Teks pengganti gambar diagram"
+            hint="Jelaskan isi diagram untuk pembaca yang tidak bisa melihatnya."
+            :error="errorByField[ids.diagramImageAlt]"
+            required
+            v-slot="{ describedBy, invalid }"
+          >
+            <textarea
+              :id="ids.diagramImageAlt"
+              v-model="diagramImageAlt"
+              rows="2"
+              :class="INPUT_CLASSES"
+              :disabled="busy"
+              :aria-describedby="describedBy"
+              :aria-invalid="invalid ? 'true' : undefined"
+              data-test="diagram-image-alt"
+            ></textarea>
+          </FormField>
+        </fieldset>
+
+        <fieldset class="rounded-card border-border space-y-4 border p-4" :disabled="busy">
+          <legend class="text-brand-navy px-1 text-sm font-semibold">Data batang</legend>
+
+          <FormField
+            :id="ids.barUnit"
+            label="Satuan (opsional)"
+            hint="Contoh: jiwa, KK, atau persen."
+            :error="errorByField[ids.barUnit]"
+            v-slot="{ describedBy, invalid }"
+          >
+            <input
+              :id="ids.barUnit"
+              v-model="barUnit"
+              type="text"
+              :class="INPUT_CLASSES"
+              :aria-describedby="describedBy"
+              :aria-invalid="invalid ? 'true' : undefined"
+              data-test="bar-unit"
+            />
+          </FormField>
+
+          <p v-if="barRows.rows.value.length === 0" class="text-text-muted text-sm">
+            Belum ada data batang.
+          </p>
+
+          <div
+            v-for="(bar, index) in barRows.rows.value"
+            :key="bar.uid"
+            class="border-border space-y-3 border-t pt-4 first:border-t-0 first:pt-0"
+            data-test="bar-row"
+          >
+            <div class="grid gap-4 sm:grid-cols-2">
+              <FormField
+                :id="ids.barLabel(index)"
+                :label="`Nama batang ${index + 1}`"
+                :error="errorByField[ids.barLabel(index)]"
+                v-slot="{ describedBy, invalid }"
+              >
+                <input
+                  :id="ids.barLabel(index)"
+                  v-model="bar.label"
+                  type="text"
+                  :class="INPUT_CLASSES"
+                  :aria-describedby="describedBy"
+                  :aria-invalid="invalid ? 'true' : undefined"
+                  data-test="bar-label"
+                />
+              </FormField>
+              <FormField
+                :id="ids.barValue(index)"
+                :label="`Angka batang ${index + 1}`"
+                hint="Titik untuk ribuan, koma untuk desimal. Contoh: 1.234,5."
+                :error="errorByField[ids.barValue(index)]"
+                v-slot="{ describedBy, invalid }"
+              >
+                <input
+                  :id="ids.barValue(index)"
+                  v-model="bar.value"
+                  type="text"
+                  inputmode="decimal"
+                  :class="INPUT_CLASSES"
+                  :aria-describedby="
+                    [describedBy, barNote(bar.value) ? `${ids.barValue(index)}-note` : undefined]
+                      .filter(Boolean)
+                      .join(' ') || undefined
+                  "
+                  :aria-invalid="invalid ? 'true' : undefined"
+                  data-test="bar-value"
+                />
+                <p
+                  v-if="barNote(bar.value)"
+                  :id="`${ids.barValue(index)}-note`"
+                  class="text-text-muted mt-1.5 text-xs"
+                  data-test="bar-value-note"
+                >
+                  {{ barNote(bar.value) }}
+                </p>
+              </FormField>
+            </div>
+            <CollectionRowActions
+              :row-label="`batang ${index + 1}`"
+              :is-first="index === 0"
+              :is-last="index === barRows.rows.value.length - 1"
+              :busy="busy"
+              :move-up-id="ids.barUp(index)"
+              :move-down-id="ids.barDown(index)"
+              :remove-id="ids.barRemove(index)"
+              @move-up="barRows.move(index, -1)"
+              @move-down="barRows.move(index, 1)"
+              @remove="barRows.remove(index)"
+            />
+          </div>
+
+          <div class="space-y-2">
+            <BaseButton
+              :id="ids.addBar"
+              type="button"
+              variant="secondary"
+              size="md"
+              class="min-h-11"
+              :disabled="busy || barRows.isFull()"
+              data-test="add-bar"
+              @click="barRows.add()"
+            >
+              Tambah batang
+            </BaseButton>
+            <p v-if="errorByField[ids.addBar]" class="text-status-error text-xs font-medium">
+              {{ errorByField[ids.addBar] }}
+            </p>
+          </div>
+        </fieldset>
+      </div>
+    </template>
 
     <div class="border-border flex flex-wrap items-center gap-3 border-t pt-4">
       <BaseButton
+        v-if="!unsupported"
         type="submit"
         variant="primary"
         size="md"
