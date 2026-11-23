@@ -1,4 +1,3 @@
-import { Prisma } from '../../generated/prisma/client.js';
 import prisma from '../utils/prisma.js';
 
 /**
@@ -42,15 +41,14 @@ export async function countChartsUsingTable(
 export type ChartTableCheck = 'ok' | 'missing' | 'other-page';
 
 /**
- * Locks the table row (so a concurrent delete or move waits for this save) and checks that it
- * exists on the same page as the section.
+ * Checks that the table exists on the same page as the section. The caller has already locked the
+ * table row (`lockSectionAndFigure`), so a concurrent delete or move waits for this save.
  */
 export async function checkChartTable(
   tx: RefClient,
   tableId: string,
   sectionPageId: string | null,
 ): Promise<ChartTableCheck> {
-  await tx.$queryRaw(Prisma.sql`SELECT id FROM indicator_tables WHERE id = ${tableId} FOR UPDATE`);
   const table = await tx.indicatorTable.findUnique({
     where: { id: tableId },
     select: { sectionId: true },

@@ -206,15 +206,26 @@ export function figureMediaIds(
   figure: SectionFigure,
   options: { dedupe?: boolean } = {},
 ): string[] {
-  const ids =
-    figure.kind === 'chart'
-      ? []
-      : figure.kind === 'diagram'
-        ? figure.image
-          ? [figure.image.mediaId]
-          : []
-        : figure.photos.map((p) => p.mediaId);
+  const ids = rawMediaIds(figure);
   return options.dedupe === false ? ids : [...new Set(ids)];
+}
+
+function rawMediaIds(figure: SectionFigure): string[] {
+  switch (figure.kind) {
+    case 'photo':
+    case 'photos':
+      return figure.photos.map((p) => p.mediaId);
+    case 'diagram':
+      return figure.image ? [figure.image.mediaId] : [];
+    case 'chart':
+      return [];
+    default:
+      return assertNever(figure);
+  }
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled figure kind: ${JSON.stringify(value)}`);
 }
 
 /** Media ids of a stored figure (`metadata` JSON) without re-validating it; tolerant of junk. */
@@ -237,15 +248,5 @@ export function mediaIdsOfStoredFigure(metadata: unknown): string[] {
 
 /** Audit-safe summary: kind and photo count only, never captions or alt text. */
 export function figureAuditSummary(figure: SectionFigure): { kind: string; photoCount: number } {
-  return {
-    kind: figure.kind,
-    photoCount:
-      figure.kind === 'chart'
-        ? 0
-        : figure.kind === 'diagram'
-          ? figure.image
-            ? 1
-            : 0
-          : figure.photos.length,
-  };
+  return { kind: figure.kind, photoCount: rawMediaIds(figure).length };
 }
