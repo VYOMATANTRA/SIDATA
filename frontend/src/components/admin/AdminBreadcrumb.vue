@@ -21,7 +21,15 @@ interface NormalizedSegment {
   to?: string;
 }
 
+/**
+ * `trail` replaces the route's `meta.breadcrumb` when the header shows the editor's own trail
+ * (`setAdminHeader(..., { trail })`). An override has no "Beranda" link: it starts at its first
+ * segment, as the design's "Cerita / Kependudukan" does.
+ */
+const props = defineProps<{ trail?: BreadcrumbSegment[] | null }>();
+
 const route = useRoute();
+const override = computed(() => Array.isArray(props.trail) && props.trail.length > 0);
 
 /**
  * Each admin route declares `meta.breadcrumb: BreadcrumbSegment[]` for the trail segments after
@@ -31,9 +39,11 @@ const route = useRoute();
  * forgets to set it still renders something sane.
  */
 const trail = computed<NormalizedSegment[]>(() => {
-  const configured = route.meta.breadcrumb;
+  const configured = override.value ? props.trail : route.meta.breadcrumb;
   if (Array.isArray(configured)) {
-    return configured.map((segment) => (typeof segment === 'string' ? { label: segment } : segment));
+    return configured.map((segment) =>
+      typeof segment === 'string' ? { label: segment } : segment,
+    );
   }
   return typeof route.meta.title === 'string' ? [{ label: route.meta.title }] : [];
 });
@@ -42,8 +52,15 @@ const trail = computed<NormalizedSegment[]>(() => {
 <template>
   <nav aria-label="Breadcrumb" data-test="admin-breadcrumb">
     <ol class="flex flex-wrap items-center gap-1.5 text-sm text-slate-500">
-      <li class="flex items-center gap-1.5">
-        <RouterLink v-if="trail.length" to="/admin" class="hover:text-brand-navy hover:underline">
+      <li v-if="!override" class="flex items-center gap-1.5">
+        <!-- aria-current-value="false": an ancestor link that is also the current URL (the Cerita list
+             while a page is open) must not be announced as the current page. -->
+        <RouterLink
+          v-if="trail.length"
+          to="/admin"
+          aria-current-value="false"
+          class="hover:text-brand-navy hover:underline"
+        >
           Beranda
         </RouterLink>
         <span v-else aria-current="page">Beranda</span>
@@ -57,6 +74,7 @@ const trail = computed<NormalizedSegment[]>(() => {
         <RouterLink
           v-if="segment.to && index < trail.length - 1"
           :to="segment.to"
+          aria-current-value="false"
           class="hover:text-brand-navy hover:underline"
         >
           {{ segment.label }}

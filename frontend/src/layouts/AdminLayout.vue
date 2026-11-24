@@ -7,7 +7,7 @@ import AlertBanner from '../components/common/AlertBanner.vue';
 import BaseLink from '../components/common/BaseLink.vue';
 import { useAuthStore } from '../stores/auth';
 import AdminBreadcrumb from '../components/admin/AdminBreadcrumb.vue';
-import { setAdminHeader } from '../composables/useAdminHeader';
+import { setAdminHeader, useAdminHeader } from '../composables/useAdminHeader';
 import { useIsDesktop } from '../composables/useIsDesktop';
 
 const route = useRoute();
@@ -16,6 +16,9 @@ const authStore = useAuthStore();
 // A route can opt out of the padded card (`meta.fullBleed`), for a full-width editor such as
 // /admin/cerita. The view then owns its own spacing; the breadcrumb keeps the page's gutters.
 const isFullBleed = computed(() => route.meta.fullBleed === true);
+// A view that sets its own header trail (the Cerita editor) shows that breadcrumb inside the header,
+// so the route's breadcrumb is not rendered a second time on a full-bleed page.
+const { trail: headerTrail } = useAdminHeader();
 
 const loginLocation = computed(() => ({
   path: '/login',
@@ -61,6 +64,7 @@ watch(
   (newPath, oldPath) => {
     const title = typeof route.meta.title === 'string' ? route.meta.title : '';
     const subtitle = typeof route.meta.subtitle === 'string' ? route.meta.subtitle : '';
+    // Replaces the whole header state, so a trail or compact flag a view set does not outlive its page.
     setAdminHeader(title, subtitle);
     closeMobileSidebar();
     if (oldPath !== undefined && newPath !== oldPath) {
@@ -137,7 +141,7 @@ watch(
           </template>
         </AlertBanner>
         <div v-if="isFullBleed" class="flex min-h-0 flex-1 flex-col">
-          <AdminBreadcrumb class="px-6 pt-6 md:px-10 md:pt-8" />
+          <AdminBreadcrumb v-if="!headerTrail" class="px-6 pt-6 md:px-10 md:pt-8" />
           <RouterView />
         </div>
         <div v-else class="rounded-card border border-slate-200 bg-white p-6 shadow-sm md:p-8">
