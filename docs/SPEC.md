@@ -608,7 +608,7 @@ setup-password, the OAuth callback, `/dashboard` (its own `<main>`) and the admi
   - **Failed** (any other failure, or a success without a page): an `<h1>`, the approved plain-language
     read message and a "Coba lagi" button; never a blank page.
   - **Ready**: chapters in order, each section showing its stored paragraphs (prose blocks in
-    `sort_order`), then its stored figure (below), its scalar figures with the backend-rendered
+    `sort_order`, rendered as limited Markdown, below), then its stored figure (below), its scalar figures with the backend-rendered
     comparison sentence (or hedged framing, §6) and source, and its matrix tables with `—` for
     missing cells and no bar for them.
   **Stored figure.** The reader reads the section's `figure` block (§7 `content_blocks`) from the
@@ -958,6 +958,15 @@ author is stored; with nothing stored it shows the page title alone.
   answer without a figure count reads "N paragraf atau gambar"), the server's refusal is worded the
   same way, and for a section the dialog offers "Buka isi bagian" so the editor is never at
   a dead end.
+- **Paragraph text is limited Markdown, stored as plain text.** Section paragraphs (`block_type`
+  `prose`) accept `**tebal**`, `*miring*`, `[teks](alamat)` and lines starting `- ` for a bullet list.
+  A blank line starts a new paragraph; a single line break stays a line break. Links accept only
+  `http://`, `https://` and `mailto:` addresses; any other address shows its label as plain text.
+  Unpaired or odd markers stay literal. **No HTML is ever accepted**: a body containing an HTML tag
+  (`<` followed by a letter, `!` or `/`) is refused with 400 on create and update, and the public
+  reader renders the text with real elements, never as markup. The editor's paragraph form offers
+  a format toolbar (Tebal, Miring, Tautan, Daftar) that inserts the same syntax; Tautan asks for the
+  address in a small inline field and refuses anything outside the allow-list.
 - **The section editor** keeps one paragraph form open at a time (a draft is never silently replaced)
   and asks before closing or leaving the route with unsaved work. Figure kinds: one photo, several
   photos (2 to 12) or a diagram (an image, bars, or both). **Alt text is required for every photo and
