@@ -271,3 +271,71 @@ describe('figuresBySectionId', () => {
     expect(blocks.map((b) => b.id)).toEqual(['b', 'a']);
   });
 });
+
+describe('shared credit of a photo group', () => {
+  it('gives every photo without its own credit the group credit', () => {
+    expect(
+      storedFigureToArticleFigure({
+        kind: 'photos',
+        credit: 'Tim Survei',
+        photos: [
+          { mediaId: A, alt: 'Satu' },
+          { mediaId: B, alt: 'Dua', credit: 'Foto Lembaga' },
+          { mediaId: C, alt: 'Tiga', credit: '   ' },
+        ],
+      }),
+    ).toEqual({
+      kind: 'photos',
+      photos: [
+        { id: `/api/media/${A}`, src: `/api/media/${A}`, alt: 'Satu', credit: 'Tim Survei' },
+        {
+          id: `/api/media/${B}`,
+          src: `/api/media/${B}`,
+          alt: 'Dua',
+          credit: 'Foto Lembaga',
+        },
+        { id: `/api/media/${C}`, src: `/api/media/${C}`, alt: 'Tiga', credit: 'Tim Survei' },
+      ],
+    });
+  });
+
+  it('trims the group credit and leaves photos alone when it is blank or not text', () => {
+    const blank = storedFigureToArticleFigure({
+      kind: 'photos',
+      credit: '   ',
+      photos: [{ mediaId: A, alt: 'Satu' }],
+    });
+    expect(blank).toEqual({
+      kind: 'photos',
+      photos: [{ id: `/api/media/${A}`, src: `/api/media/${A}`, alt: 'Satu' }],
+    });
+    const padded = storedFigureToArticleFigure({
+      kind: 'photos',
+      credit: '  Tim  ',
+      photos: [{ mediaId: A, alt: 'Satu' }],
+    });
+    expect(padded).toMatchObject({ photos: [{ credit: 'Tim' }] });
+    const wrongType = storedFigureToArticleFigure({
+      kind: 'photos',
+      credit: 42,
+      photos: [{ mediaId: A, alt: 'Satu' }],
+    });
+    expect(wrongType).toEqual({
+      kind: 'photos',
+      photos: [{ id: `/api/media/${A}`, src: `/api/media/${A}`, alt: 'Satu' }],
+    });
+  });
+
+  it('ignores a group credit on a single photo', () => {
+    expect(
+      storedFigureToArticleFigure({
+        kind: 'photo',
+        credit: 'Tim Survei',
+        photos: [{ mediaId: A, alt: 'Satu' }],
+      }),
+    ).toEqual({
+      kind: 'photo',
+      photo: { id: `/api/media/${A}`, src: `/api/media/${A}`, alt: 'Satu' },
+    });
+  });
+});

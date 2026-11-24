@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import prisma from '../utils/prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
+import { countChartsUsingTable, pageIdOfSection } from './chartFigureRefs.js';
+import { SEX_SPLIT_KINDS } from '../utils/indicatorTableKinds.js';
 import {
   buildAuditLog,
   AUDIT_ACTIONS,
@@ -35,7 +37,6 @@ export const INDICATOR_TABLE_KINDS = [
 export type IndicatorTableKind = (typeof INDICATOR_TABLE_KINDS)[number];
 
 /** Kinds whose rows carry a male/female split; the rest carry a single total. */
-const SEX_SPLIT_KINDS: ReadonlySet<string> = new Set(['age_pyramid', 'religion_by_sex']);
 
 const isSexSplitKind = (kind: string): boolean => SEX_SPLIT_KINDS.has(kind);
 
@@ -877,6 +878,21 @@ export const updateIndicatorTable = async (
           if (!section) {
             throw new IndicatorTableServiceError('Section tidak ditemukan.', 404);
           }
+          if (nextSectionId !== existing.sectionId) {
+            // A chart may only draw from a table on its own page, so a table a chart uses cannot
+            // be moved to another page.
+            const charts = await countChartsUsingTable(tx, existing.id);
+            if (
+              charts > 0 &&
+              (await pageIdOfSection(tx, nextSectionId)) !==
+                (await pageIdOfSection(tx, existing.sectionId))
+            ) {
+              throw new IndicatorTableServiceError(
+                `Tabel ini dipakai sebagai grafik pada ${charts} bagian cerita, sehingga tidak dapat dipindahkan ke halaman lain.`,
+                409,
+              );
+            }
+          }
         }
 
         if (input.slug !== undefined && input.slug !== existing.slug) {
@@ -897,6 +913,13 @@ export const updateIndicatorTable = async (
             throw new IndicatorTableServiceError(
               'Jenis tabel tidak dapat diubah selama masih memiliki baris — hapus barisnya dulu.',
               400,
+            );
+          }
+          const charts = await countChartsUsingTable(tx, existing.id);
+          if (charts > 0) {
+            throw new IndicatorTableServiceError(
+              `Jenis tabel tidak dapat diubah karena tabel ini dipakai sebagai grafik pada ${charts} bagian cerita.`,
+              409,
             );
           }
         }
@@ -1173,6 +1196,14 @@ export const deleteIndicatorTable = async (
         })) as unknown as TableRow | null;
         if (!existing) {
           throw new IndicatorTableServiceError('Tabel indikator tidak ditemukan.', 404);
+        }
+
+        const charts = await countChartsUsingTable(tx, existing.id);
+        if (charts > 0) {
+          throw new IndicatorTableServiceError(
+            `Tabel ini dipakai sebagai grafik pada ${charts} bagian cerita. Hapus grafiknya terlebih dahulu.`,
+            409,
+          );
         }
 
         const rowCount = await tx.indicatorTableRow.count({ where: { tableId: normalizedId } });

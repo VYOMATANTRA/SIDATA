@@ -23,6 +23,8 @@ import {
   PUBLIKASI_BLOCK_PROTECTED_CODE,
   PUBLIKASI_BLOCK_PROTECTED_MESSAGE,
   hasControlCharacters as hasSharedControlCharacters,
+  HTML_TAG_PATTERN,
+  PROSE_HTML_MESSAGE,
 } from '../utils/hierarchyAuthoring.js';
 
 export class ContentBlockServiceError extends HierarchyServiceError {
@@ -781,6 +783,15 @@ export const updateContentBlock = async (
           409,
           PUBLIKASI_BLOCK_PROTECTED_CODE,
         );
+      }
+
+      if (
+        existing.type === 'prose' &&
+        input.body !== undefined &&
+        input.body !== existing.body &&
+        HTML_TAG_PATTERN.test(input.body)
+      ) {
+        throw new ContentBlockServiceError(PROSE_HTML_MESSAGE, 400);
       }
 
       if (input.expectedUpdatedAt !== undefined) {

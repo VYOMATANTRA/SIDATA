@@ -186,6 +186,16 @@ describe('toUserMessage mappings', () => {
     expect(toUserMessage(Object.assign(error, { status: 422 })).kind).toBe('validation');
   });
 
+  it('shows the HTML refusal for prose bodies as written, without naming a field', () => {
+    const sentence =
+      'Isi konten tidak boleh mengandung tag HTML. Gunakan tombol format untuk huruf tebal, miring, tautan atau daftar';
+    const error = Object.assign(httpFailure(400), { serverMessage: sentence });
+
+    expect(toUserMessage(error, 'menyimpan paragraf').message).toBe(
+      `Gagal menyimpan paragraf. ${sentence}`,
+    );
+  });
+
   it('never shows an API field name: template attach refusals get approved wording', () => {
     const attach = Object.assign(httpFailure(400), {
       serverMessage:

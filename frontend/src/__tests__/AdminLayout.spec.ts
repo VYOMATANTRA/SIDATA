@@ -49,6 +49,42 @@ describe('AdminLayout.vue', () => {
     expect(navs.some((n) => n.attributes('aria-label') === 'Breadcrumb')).toBe(true);
   });
 
+  it('drops the padded card for a fullBleed route and keeps the breadcrumb on the page gutters', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: '/admin/cerita',
+          component: { template: '<div data-test="full-body">Editor</div>' },
+          meta: { title: 'Cerita', breadcrumb: ['Cerita'], fullBleed: true },
+        },
+        {
+          path: '/admin/peta',
+          component: { template: '<div data-test="card-body">Peta</div>' },
+          meta: { title: 'Peta', breadcrumb: ['Peta'] },
+        },
+      ],
+    });
+    await router.push('/admin/cerita');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
+    expect(wrapper.find('[data-test="full-body"]').exists()).toBe(true);
+    expect(wrapper.find('main').classes()).toContain('flex-col');
+    expect(wrapper.find('main').classes()).not.toContain('px-6');
+    expect(wrapper.find('[data-test="admin-breadcrumb"]').classes()).toContain('px-6');
+    wrapper.unmount();
+
+    await router.push('/admin/peta');
+    await flushPromises();
+    const card = mount(AdminLayout, { global: { plugins: [router] } });
+    expect(card.find('main').classes()).toContain('px-6');
+    expect(card.find('[data-test="card-body"]').element.parentElement?.classList).toContain(
+      'rounded-card',
+    );
+    card.unmount();
+  });
+
   it('renders a skip link pointing at the main content landmark', async () => {
     const router = createTestRouter();
     await router.push('/admin');

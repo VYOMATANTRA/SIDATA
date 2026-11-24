@@ -68,6 +68,8 @@ export const AUDIT_ACTIONS = {
   SECTION_UPDATED: defineAction('section.updated', 'info'),
   SECTION_DELETED: defineAction('section.deleted', 'warning'),
   SECTION_REORDERED: defineAction('section.reordered', 'info'),
+  SECTION_MOVED: defineAction('section.moved', 'info'),
+  SECTION_DUPLICATED: defineAction('section.duplicated', 'info'),
   CONTENT_BLOCK_CREATED: defineAction('content_block.created', 'info'),
   CONTENT_BLOCK_DELETED: defineAction('content_block.deleted', 'warning'),
   CONTENT_BLOCK_REORDERED: defineAction('content_block.reordered', 'info'),

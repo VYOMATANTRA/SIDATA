@@ -4,6 +4,7 @@ import {
   deleteSection,
   reorderSections,
 } from '../services/sections.service.js';
+import { moveSection, duplicateSection } from '../services/sectionClone.service.js';
 import { putSectionFigure, deleteSectionFigure } from '../services/sectionFigure.service.js';
 import { createProseBlock, reorderProseBlocks } from '../services/proseBlocks.service.js';
 import { authoringHandler, expectedUpdatedAtFromQuery, paramOf } from './hierarchyHandler.js';
@@ -89,5 +90,24 @@ export const deleteSectionFigureHandler = authoringHandler({
       context,
     );
     return { message: 'Gambar bagian berhasil dihapus', ...result };
+  },
+});
+
+// POST /api/sections/:id/move
+export const moveSectionHandler = authoringHandler({
+  errorLabel: 'memindahkan bagian',
+  run: async (req, actor, context) => {
+    const result = await moveSection(paramOf(req, 'id'), req.body, actor, context);
+    return { message: 'Bagian berhasil dipindahkan', ...result };
+  },
+});
+
+// POST /api/sections/:id/duplicate
+export const duplicateSectionHandler = authoringHandler({
+  errorLabel: 'menggandakan bagian',
+  successStatus: 201,
+  run: async (req, actor, context) => {
+    const result = await duplicateSection(paramOf(req, 'id'), req.body, actor, context);
+    return { message: 'Bagian berhasil digandakan', ...result };
   },
 });

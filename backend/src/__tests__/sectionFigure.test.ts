@@ -77,6 +77,40 @@ describe('sectionFigureSchema', () => {
       assert.match(message({ kind: 'photos', photos: photos(13) }), /maksimal berisi 12 foto/);
     });
 
+    it('accepts a shared credit on the group, trimmed, and drops a blank one', () => {
+      const out = sectionFigureSchema.parse({
+        kind: 'photos',
+        credit: '  Tim Lapangan  ',
+        photos: photos(3),
+      });
+      assert.equal(out.kind === 'photos' && out.credit, 'Tim Lapangan');
+      const blank = sectionFigureSchema.parse({ kind: 'photos', credit: '  ', photos: photos(2) });
+      assert.equal(JSON.stringify(blank).includes('credit'), false);
+    });
+
+    it('limits the shared credit to 120 characters and refuses HTML', () => {
+      assert.equal(
+        sectionFigureSchema.safeParse({
+          kind: 'photos',
+          credit: 'k'.repeat(120),
+          photos: photos(2),
+        }).success,
+        true,
+      );
+      assert.match(
+        message({ kind: 'photos', credit: 'k'.repeat(121), photos: photos(2) }),
+        /Sumber bersama foto maksimal 120/,
+      );
+      assert.match(
+        message({ kind: 'photos', credit: '<b>x</b>', photos: photos(2) }),
+        /Sumber bersama foto tidak boleh mengandung tag HTML/,
+      );
+    });
+
+    it('refuses a shared credit on a single photo', () => {
+      assert.match(message({ kind: 'photo', credit: 'Tim', photos: photos(1) }), /tidak dikenal/);
+    });
+
     it('rejects a duplicate media id inside one figure, case-insensitively', () => {
       const dup = [photo(1), { mediaId: ID(1).toUpperCase(), alt: 'Lagi' }];
       assert.match(
@@ -359,6 +393,50 @@ describe('sectionFigureSchema', () => {
         credit: '"'.repeat(120),
       }));
       assert.match(message({ kind: 'photos', photos: escaped }), /Gambar terlalu besar/);
+    });
+  });
+
+  describe('chart', () => {
+    const chart = (extra: Record<string, unknown> = {}) => ({
+      kind: 'chart',
+      tableId: ID(7).toUpperCase(),
+      chartType: 'column',
+      series: 'by_sex',
+      title: '  Suku di Manggar ',
+      ...extra,
+    });
+
+    it('accepts a chart, lowercases the table id and trims text', () => {
+      const out = sectionFigureSchema.parse(chart({ source: ' Potensi ' }));
+      assert.deepEqual(JSON.parse(JSON.stringify(out)), {
+        kind: 'chart',
+        tableId: ID(7),
+        chartType: 'column',
+        series: 'by_sex',
+        title: 'Suku di Manggar',
+        source: 'Potensi',
+      });
+    });
+
+    it('rejects an invalid table id, unknown chart type or series, and a missing title', () => {
+      assert.match(message(chart({ tableId: 'abc' })), /Tabel data tidak valid/);
+      assert.match(message(chart({ chartType: 'line' })), /Jenis grafik tidak dikenal/);
+      assert.match(message(chart({ series: 'x' })), /Data grafik tidak dikenal/);
+      assert.match(message(chart({ title: ' ' })), /Judul grafik wajib diisi/);
+    });
+
+    it('limits title and source and refuses HTML and unknown keys', () => {
+      assert.match(message(chart({ title: 't'.repeat(121) })), /Judul grafik maksimal 120/);
+      assert.match(message(chart({ source: 's'.repeat(201) })), /Sumber grafik maksimal 200/);
+      assert.match(message(chart({ title: '<b>x</b>' })), /tidak boleh mengandung tag HTML/);
+      assert.match(message(chart({ photos: [] })), /tidak dikenal/);
+    });
+
+    it('carries no media and audits kind only', () => {
+      const out = sectionFigureSchema.parse(chart());
+      assert.deepEqual(figureMediaIds(out), []);
+      assert.deepEqual(figureAuditSummary(out), { kind: 'chart', photoCount: 0 });
+      assert.deepEqual(mediaIdsOfStoredFigure(JSON.parse(JSON.stringify(out))), []);
     });
   });
 

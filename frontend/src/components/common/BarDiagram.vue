@@ -30,6 +30,8 @@ export interface BarDiagramProps {
   loading?: boolean;
   /** Message displayed when items array is empty */
   emptyText?: string;
+  /** Hides the built-in title header, for a caller that already shows the title (default: false) */
+  hideHeader?: boolean;
 }
 
 const props = withDefaults(defineProps<BarDiagramProps>(), {
@@ -40,6 +42,7 @@ const props = withDefaults(defineProps<BarDiagramProps>(), {
   barColorClass: 'bg-brand-navy',
   loading: false,
   emptyText: 'Belum ada data diagram untuk ditampilkan.',
+  hideHeader: false,
 });
 
 /**
@@ -90,11 +93,14 @@ function getPercentage(value: number): number {
 
 <template>
   <div
-    class="rounded-card border border-border bg-white p-5 shadow-xs transition-shadow sm:p-6"
+    class="rounded-card border-border border bg-white p-5 shadow-xs transition-shadow sm:p-6"
     data-test="bar-diagram-card"
   >
     <!-- Header: Icon & Diagram Title -->
-    <div class="mb-5 flex items-center justify-between gap-3 border-b border-border pb-4">
+    <div
+      v-if="!hideHeader"
+      class="border-border mb-5 flex items-center justify-between gap-3 border-b pb-4"
+    >
       <div class="flex min-w-0 items-center gap-3">
         <!-- Default Report/Chart Icon or Slot -->
         <slot name="icon">
@@ -125,7 +131,7 @@ function getPercentage(value: number): number {
 
         <!-- Diagram Title -->
         <h3
-          class="min-w-0 truncate text-base font-bold tracking-tight text-brand-navy sm:text-lg"
+          class="text-brand-navy min-w-0 truncate text-base font-bold tracking-tight sm:text-lg"
           data-test="diagram-title"
         >
           {{ title }}
@@ -140,17 +146,17 @@ function getPercentage(value: number): number {
     <div v-if="loading" class="space-y-4 py-2" data-test="loading-skeleton">
       <div v-for="n in 4" :key="n" class="animate-pulse space-y-2">
         <div class="flex justify-between">
-          <div class="h-4 w-28 rounded-md bg-surface-hover" />
-          <div class="h-4 w-10 rounded-md bg-surface-hover" />
+          <div class="bg-surface-hover h-4 w-28 rounded-md" />
+          <div class="bg-surface-hover h-4 w-10 rounded-md" />
         </div>
-        <div class="h-3.5 w-full rounded-full bg-surface-muted" />
+        <div class="bg-surface-muted h-3.5 w-full rounded-full" />
       </div>
     </div>
 
     <!-- Empty State -->
     <div
       v-else-if="items.length === 0"
-      class="py-8 text-center text-xs text-text-muted sm:text-sm"
+      class="text-text-muted py-8 text-center text-xs sm:text-sm"
       data-test="empty-state"
     >
       <slot name="empty">

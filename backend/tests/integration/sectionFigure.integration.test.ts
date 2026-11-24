@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import prisma from '../../src/utils/prisma.js';
 import { deleteSectionFigure, putSectionFigure } from '../../src/services/sectionFigure.service.js';
+import {
+  deleteIndicatorTable,
+  updateIndicatorTable,
+} from '../../src/services/indicatorTables.service.js';
 import { deleteSection } from '../../src/services/sections.service.js';
 import { createProseBlock, reorderProseBlocks } from '../../src/services/proseBlocks.service.js';
 import {
@@ -60,6 +64,35 @@ async function seedPhotos(...ns: number[]): Promise<void> {
     })),
   });
 }
+
+async function seedTable(sectionId: string, slug = 'tabel-uji'): Promise<string> {
+  const table = await prisma.indicatorTable.create({
+    data: { sectionId, slug, title: 'Tabel uji', kind: 'ethnicity', period: 'Juni 2024' },
+  });
+  return table.id;
+}
+
+async function seedOtherPageSection(): Promise<string> {
+  const page = await prisma.page.create({
+    data: { slug: 'halaman-lain', title: 'Halaman Lain', sortOrder: 1 },
+  });
+  const chapter = await prisma.chapter.create({
+    data: { pageId: page.id, slug: 'bab-lain', title: 'Bab Lain', sortOrder: 0 },
+  });
+  const section = await prisma.section.create({
+    data: { chapterId: chapter.id, slug: 'bagian-lain', title: 'Bagian Lain', sortOrder: 0 },
+  });
+  return section.id;
+}
+
+const chart = (tableId: string) => ({
+  kind: 'chart',
+  tableId,
+  chartType: 'bar',
+  series: 'total',
+  title: 'Suku di Manggar',
+  source: 'Potensi Kelurahan',
+});
 
 const asset = (n: number) => prisma.mediaAsset.findUniqueOrThrow({ where: { id: ID(n) } });
 const refCount = (n: number) => prisma.mediaAssetReference.count({ where: { assetId: ID(n) } });
@@ -529,6 +562,92 @@ describe('section figure against real MySQL', () => {
       assert.equal(await refCount(2), 0);
       assert.equal(await refCount(3), 1);
       assert.notEqual((await asset(3)).attachedAt, null);
+    });
+  });
+
+  describe('chart figure', () => {
+    it('saves a chart that references a table on the same page, without media', async () => {
+      const section = await seedSection();
+      const tableId = await seedTable(section.id);
+
+      const saved = await save(section.id, section.updatedAt, chart(tableId));
+
+      assert.deepEqual(saved.block.metadata, chart(tableId));
+      assert.equal(await prisma.mediaAssetReference.count(), 0);
+    });
+
+    it('refuses a table from another page and a table that does not exist', async () => {
+      const section = await seedSection();
+      const otherTable = await seedTable(await seedOtherPageSection(), 'tabel-lain');
+
+      await assert.rejects(
+        save(section.id, section.updatedAt, chart(otherTable)),
+        (err) => statusOf(err) === 422 && /halaman cerita yang sama/.test((err as Error).message),
+      );
+      await assert.rejects(
+        save(section.id, section.updatedAt, chart(ID(99))),
+        (err) => statusOf(err) === 422 && /tidak ditemukan/.test((err as Error).message),
+      );
+      assert.equal((await figureBlocks(section.id)).length, 0);
+    });
+
+    it('refuses a by-sex series on a table that only holds totals', async () => {
+      const section = await seedSection();
+      const tableId = await seedTable(section.id); // ethnicity: totals only
+
+      await assert.rejects(
+        save(section.id, section.updatedAt, { ...chart(tableId), series: 'by_sex' }),
+        (err) => statusOf(err) === 422 && /jenis kelamin/.test((err as Error).message),
+      );
+    });
+
+    it('blocks deleting a table a chart uses until the chart is gone', async () => {
+      const section = await seedSection();
+      const tableId = await seedTable(section.id);
+      const saved = await save(section.id, section.updatedAt, chart(tableId));
+
+      await assert.rejects(
+        deleteIndicatorTable(tableId, ACTOR, REQUEST_CONTEXT),
+        (err) => (err as { statusCode?: number }).statusCode === 409,
+      );
+      assert.equal(await prisma.indicatorTable.count({ where: { id: tableId } }), 1);
+
+      await deleteSectionFigure(section.id, saved.section.updatedAt, ACTOR, REQUEST_CONTEXT);
+      await deleteIndicatorTable(tableId, ACTOR, REQUEST_CONTEXT);
+      assert.equal(await prisma.indicatorTable.count({ where: { id: tableId } }), 0);
+    });
+
+    it('blocks changing the kind of a table a chart uses', async () => {
+      const section = await seedSection();
+      const tableId = await seedTable(section.id);
+      await save(section.id, section.updatedAt, chart(tableId));
+
+      await assert.rejects(
+        updateIndicatorTable(tableId, { kind: 'occupation' }, ACTOR, REQUEST_CONTEXT),
+        (err) => (err as { statusCode?: number }).statusCode === 409,
+      );
+    });
+
+    it('blocks moving a charted table to another page but allows moving within the page', async () => {
+      const section = await seedSection();
+      const sibling = await seedSection('bagian-dua');
+      const tableId = await seedTable(section.id);
+      await save(section.id, section.updatedAt, chart(tableId));
+
+      await assert.rejects(
+        updateIndicatorTable(
+          tableId,
+          { sectionId: await seedOtherPageSection() },
+          ACTOR,
+          REQUEST_CONTEXT,
+        ),
+        (err) => (err as { statusCode?: number }).statusCode === 409,
+      );
+      await updateIndicatorTable(tableId, { sectionId: sibling.id }, ACTOR, REQUEST_CONTEXT);
+      assert.equal(
+        (await prisma.indicatorTable.findUniqueOrThrow({ where: { id: tableId } })).sectionId,
+        sibling.id,
+      );
     });
   });
 });

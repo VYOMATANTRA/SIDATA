@@ -67,6 +67,8 @@ export function createFakeCerita() {
   const pages: FakePage[] = [];
   const blocks: ContentBlock[] = [];
   const requests: RecordedRequest[] = [];
+  /** Indicator tables (Data menu), listed and read by the chart editor and the live preview. */
+  const indicatorTables: Array<Record<string, unknown>> = [];
   /** First matching override answers instead of the model, once. */
   const overrides: Array<{ match: (r: RecordedRequest) => boolean; response: Response }> = [];
 
@@ -109,6 +111,39 @@ export function createFakeCerita() {
     });
     pages.push(page);
     return page;
+  }
+
+  /** Adds an indicator table to a section (its kind decides whether "by_sex" is allowed). */
+  function addIndicatorTable(input: {
+    id: string;
+    sectionId: string;
+    title: string;
+    kind: 'age_pyramid' | 'ethnicity' | 'religion_by_sex' | 'occupation';
+    period: string;
+  }): void {
+    indicatorTables.push({
+      slug: slugify(input.title),
+      source: null,
+      sortOrder: indicatorTables.length,
+      createdAt: stamp(),
+      updatedAt: stamp(),
+      ...input,
+      rows: [
+        {
+          id: `${input.id}-r1`,
+          tableId: input.id,
+          rowKey: 'k1',
+          label: 'Kelompok A',
+          male: 10,
+          female: 12,
+          total: 22,
+          sortOrder: 0,
+          createdAt: stamp(),
+          updatedAt: stamp(),
+        },
+      ],
+      totals: { rowCount: 1, male: 10, female: 12, total: 22 },
+    });
   }
 
   function addParagraph(sectionId: string, title: string, body: string): ContentBlock {
@@ -205,6 +240,15 @@ export function createFakeCerita() {
     let m: RegExpMatchArray | null;
 
     if (path === '/api/auth/csrf-token') return json({ csrfToken: 'csrf' });
+
+    if (method === 'GET' && path === '/api/indicator-tables') {
+      const tables = indicatorTables.map(({ rows: _rows, ...table }) => table);
+      return json({ tables, total: tables.length });
+    }
+    if (method === 'GET' && (m = /^\/api\/indicator-tables\/([^/]+)$/.exec(path))) {
+      const table = indicatorTables.find((item) => item['id'] === m![1]);
+      return table ? json({ table }) : json({ error: 'Tabel tidak ditemukan' }, 404);
+    }
 
     if (method === 'GET' && path === '/api/pages') {
       return json({
@@ -362,6 +406,64 @@ export function createFakeCerita() {
         201,
       );
     }
+    if ((m = path.match(/^\/api\/sections\/([^/]+)\/duplicate$/)) && method === 'POST') {
+      const found = findSection(m[1]!);
+      if (!found) return notFound();
+      if (body['expectedUpdatedAt'] !== found.section.updatedAt)
+        return stale(found.section.updatedAt);
+      const copy: FakeSection = {
+        id: nextId('sec'),
+        slug: slugify(`${found.section.title ?? ''} salinan ${counter}`),
+        title: `${found.section.title ?? ''} (salinan)`,
+        sortOrder: found.chapter.sections.length,
+        updatedAt: stamp(),
+      };
+      found.chapter.sections.push(copy);
+      for (const block of blocks.filter((b) => b.sectionId === found.section.id)) {
+        blocks.push({
+          ...block,
+          id: nextId('blk'),
+          sectionId: copy.id,
+          slug: `${block.slug}-salinan-${counter}`,
+          updatedAt: stamp(),
+        });
+      }
+      found.chapter.updatedAt = stamp();
+      return json(
+        {
+          message: 'Bagian berhasil digandakan',
+          section: { ...copy, chapterId: found.chapter.id },
+          chapter: {
+            id: found.chapter.id,
+            slug: found.chapter.slug,
+            updatedAt: found.chapter.updatedAt,
+          },
+        },
+        201,
+      );
+    }
+    if ((m = path.match(/^\/api\/sections\/([^/]+)\/move$/)) && method === 'POST') {
+      const found = findSection(m[1]!);
+      if (!found) return notFound();
+      if (body['expectedUpdatedAt'] !== found.section.updatedAt)
+        return stale(found.section.updatedAt);
+      const target = findChapter(String(body['targetChapterId']));
+      if (!target || target.page !== found.page)
+        return json({ error: 'Bab tujuan harus berada di halaman yang sama' }, 422);
+      const fromChapter = found.chapter;
+      fromChapter.sections.splice(fromChapter.sections.indexOf(found.section), 1);
+      found.section.sortOrder = target.chapter.sections.length;
+      target.chapter.sections.push(found.section);
+      fromChapter.updatedAt = stamp();
+      target.chapter.updatedAt = stamp();
+      const token = (c: FakeChapter) => ({ id: c.id, slug: c.slug, updatedAt: c.updatedAt });
+      return json({
+        message: 'Bagian berhasil dipindahkan',
+        section: { ...found.section, chapterId: target.chapter.id },
+        chapter: token(target.chapter),
+        fromChapter: token(fromChapter),
+      });
+    }
     if ((m = path.match(/^\/api\/sections\/([^/]+)\/figure$/))) {
       const found = findSection(m[1]!);
       if (!found) return notFound();
@@ -487,6 +589,7 @@ export function createFakeCerita() {
     blocks,
     requests,
     addPage,
+    addIndicatorTable,
     addParagraph,
     findSection,
     install,

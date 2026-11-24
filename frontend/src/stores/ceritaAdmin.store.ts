@@ -491,6 +491,85 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     });
   }
 
+  /**
+   * Copies a section with its paragraphs and figure, as the last section of its chapter (SPEC §3).
+   * The copy has content of its own, so both caches are reloaded. Resolves to the copy's id.
+   */
+  async function duplicateSection(
+    sectionId: string,
+    expectedUpdatedAt?: string,
+  ): Promise<WriteOutcome<{ id: string }>> {
+    const found = findSection(sectionId);
+    if (!found) return missing('menggandakan bagian');
+    return run('menggandakan bagian', 'both', async () => {
+      const result = await api.duplicateSection(
+        sectionId,
+        expectedUpdatedAt ?? found.section.updatedAt,
+      );
+      return { id: result.section.id };
+    });
+  }
+
+  /**
+   * Moves a section to another chapter of the same page. A chapter on another page is refused here
+   * without a request, as the server would (422). Moving into the chapter it is already in does nothing.
+   */
+  async function moveSectionToChapter(
+    sectionId: string,
+    targetChapterId: string,
+    expectedUpdatedAt?: string,
+  ): Promise<WriteOutcome<{ id: string; chapterId: string }>> {
+    const found = findSection(sectionId);
+    if (!found) return missing('memindahkan bagian');
+    const target = findChapter(targetChapterId);
+    if (!target || target.page.slug !== found.page.slug) {
+      return { ok: false, ...ceritaFailure({ status: 422 }, 'memindahkan bagian') };
+    }
+    if (target.chapter.id === found.chapter.id) {
+      return { ok: true, value: { id: sectionId, chapterId: targetChapterId } };
+    }
+    return run('memindahkan bagian', 'tree', async () => {
+      await api.moveSectionToChapter(
+        sectionId,
+        targetChapterId,
+        expectedUpdatedAt ?? found.section.updatedAt,
+      );
+      return { id: sectionId, chapterId: targetChapterId };
+    });
+  }
+
+  /** Drag and drop: puts a chapter at `toIndex` (0-based) of its page. Same save as `moveChapter`. */
+  async function placeChapter(
+    pageSlug: string,
+    chapterId: string,
+    toIndex: number,
+  ): Promise<WriteOutcome> {
+    const page = findPage(pageSlug);
+    if (!page) return missing('mengurutkan bab');
+    const items = moveReorderItems(page.chapters, chapterId, toIndex);
+    if (!items) return { ok: true, value: undefined };
+    return run('mengurutkan bab', 'tree', async () => {
+      await api.reorderChapters(pageSlug, page.updatedAt, items);
+      return undefined;
+    });
+  }
+
+  /** Drag and drop: puts a section at `toIndex` (0-based) of its chapter. Same save as `moveSection`. */
+  async function placeSection(
+    chapterId: string,
+    sectionId: string,
+    toIndex: number,
+  ): Promise<WriteOutcome> {
+    const found = findChapter(chapterId);
+    if (!found) return missing('mengurutkan bagian');
+    const items = moveReorderItems(found.chapter.sections, sectionId, toIndex);
+    if (!items) return { ok: true, value: undefined };
+    return run('mengurutkan bagian', 'tree', async () => {
+      await api.reorderSections(chapterId, found.chapter.updatedAt, items);
+      return undefined;
+    });
+  }
+
   // Paragraphs and the figure bump the section's token, so both caches are refreshed.
 
   async function addParagraph(
@@ -622,6 +701,10 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     renameSection,
     removeSection,
     moveSection,
+    duplicateSection,
+    moveSectionToChapter,
+    placeChapter,
+    placeSection,
     addParagraph,
     editParagraph,
     removeParagraph,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, useId, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, useId, watch } from 'vue';
 import AlertBanner from '../../common/AlertBanner.vue';
 import BaseButton from '../../common/BaseButton.vue';
 import FormErrorSummary from '../../common/FormErrorSummary.vue';
@@ -8,35 +8,51 @@ import MediaPhotoField from '../../common/MediaPhotoField.vue';
 import CollectionRowActions from '../../data/blocks/CollectionRowActions.vue';
 import CeritaFigurePhotoRow from './CeritaFigurePhotoRow.vue';
 import { useRepeatableRows } from '../../data/blocks/blockFormShared';
+import { edgeAt, useCardDragReorder } from '../../../composables/useCardDragReorder';
+import { consumePendingFigureKind } from '../../../composables/figureKindHint';
 import { FIGURE_LIMITS } from '../../../services/ceritaFigure.service';
 import { useCeritaAdminStore } from '../../../stores/ceritaAdmin.store';
+import { isSexSplitKind, useIndicatorTablesStore } from '../../../stores/indicatorTables.store';
 import { INPUT_CLASSES } from '../../../utils/formStyles';
 import {
-  KIND_LABELS,
+  CHART_SERIES_LABELS,
+  CHART_TYPE_LABELS,
+  GALLERY_PHOTOS_MIN,
+  TILE_LABELS,
+  TILE_ORDER,
+  barValueNote as barNote,
   describeFigure,
   draftFromFigure,
   draftSignature,
   emptyBar,
   emptyPhoto,
-  barValueNote as barNote,
   figureIds,
+  isBlankPhoto,
+  photoGroupOf,
   summarizeFigure,
   validateFigureDraft,
   type BarFields,
+  type ChartSeriesChoice,
+  type ChartTypeChoice,
   type FigureDraft,
-  type FigureKind,
+  type FigureTile,
+  type GrafikSource,
   type PhotoFields,
 } from '../../../utils/ceritaFigureDraft';
 import type { FailureKind } from '../../../utils/userMessages';
 
 /**
- * Editor for the one figure a Cerita section may have: a single photo, a series of photos, or a
- * diagram (an image, bars, or both). It works on a draft: nothing is stored until "Simpan gambar",
- * and a failed save (stale, refused, offline) leaves every field as it was.
+ * Editor for the one figure a Cerita section may have, picked with the "Jenis figur" tiles:
+ * "1 gambar" (one photo), "2 gambar" (two photos, stacked), "Galeri" (3 to 12 photos, a carousel)
+ * or "Grafik" (a chart of a table in the Data menu, or an uploaded chart picture). Each kind keeps
+ * its own draft while the editor is open; switching tiles only asks first when it would drop typed
+ * or uploaded content.
  *
- * Rules (SPEC §8): alt text is required for every photo; caption and credit are optional; photos
- * are ordered with buttons; a "stale" refusal keeps the draft and offers a reload that does not
- * replace it; deleting asks first and is blocked by the server while it cannot be done.
+ * Rules (SPEC §8): alt text is required for every photo; caption and credit are optional; a group
+ * of photos may carry one shared credit that a photo's own credit replaces; photos are ordered with
+ * buttons (the gallery's grip is only a pointer shortcut); nothing is stored until "Simpan gambar";
+ * a "stale" refusal keeps the draft and offers a reload that does not replace it; deleting asks
+ * first.
  */
 const props = defineProps<{ sectionId: string }>();
 
@@ -46,17 +62,17 @@ const emit = defineEmits<{
 }>();
 
 const store = useCeritaAdminStore();
+const tablesStore = useIndicatorTablesStore();
 
 const baseId = useId();
 const ids = figureIds(`${baseId}-gambar`);
-const kindName = `${baseId}-jenis-gambar`;
+const tileName = `${baseId}-jenis-figur`;
+const sourceName = `${baseId}-sumber-grafik`;
+const chartTypeName = `${baseId}-jenis-grafik`;
+const seriesName = `${baseId}-data-grafik`;
 
-const kind = ref<FigureKind | null>(null);
-const diagramTitle = ref('');
-const diagramSource = ref('');
-const diagramImageId = ref<string | null>(null);
-const diagramImageAlt = ref('');
-const barUnit = ref('');
+const tile = ref<FigureTile | null>(null);
+const grafikSource = ref<GrafikSource>('table');
 
 const photoRows = useRepeatableRows<PhotoFields>([], {
   max: FIGURE_LIMITS.photosMax,
@@ -81,6 +97,21 @@ const barRows = useRepeatableRows<BarFields>([], {
   },
 });
 
+/** Photo rows of the group that is not on screen ("1 gambar" or the shared 2/Galeri group). */
+const photoStash: Record<'photo' | 'photos', PhotoFields[]> = { photo: [], photos: [] };
+
+const sharedCredit = ref('');
+const diagramTitle = ref('');
+const diagramSource = ref('');
+const diagramImageId = ref<string | null>(null);
+const diagramImageAlt = ref('');
+const barUnit = ref('');
+const chartTableId = ref('');
+const chartType = ref<ChartTypeChoice>('bar');
+const chartSeries = ref<ChartSeriesChoice>('total');
+const chartTitle = ref('');
+const chartSource = ref('');
+
 const submitted = ref(false);
 const saving = ref(false);
 const deleting = ref(false);
@@ -94,24 +125,45 @@ const confirmingDelete = ref(false);
 const deleteError = ref('');
 /** Failure class of `deleteError`, for AlertBanner. */
 const deleteErrorKind = ref<FailureKind | null>(null);
+/** A tile switch that would drop photos waits here until the operator confirms. */
+const pendingTile = ref<FigureTile | null>(null);
 const statusMessage = ref('');
 const summaryHost = ref<HTMLElement | null>(null);
 const deleteKeepButton = ref<InstanceType<typeof BaseButton> | null>(null);
+const tileCancelButton = ref<InstanceType<typeof BaseButton> | null>(null);
+const swapButton = ref<InstanceType<typeof BaseButton> | null>(null);
 
 const stored = computed(() => store.figureFor(props.sectionId));
 const storedNote = computed(() =>
   stored.value ? describeFigure(stored.value.figure) : 'Bagian ini belum memiliki gambar.',
 );
 
+/** Photo rows as a plain snapshot, so a stash does not share objects with the live rows. */
+function snapshotPhotos(): PhotoFields[] {
+  return photoRows.rows.value.map((row) => ({
+    mediaId: row.mediaId,
+    alt: row.alt,
+    caption: row.caption,
+    credit: row.credit,
+  }));
+}
+
 const draft = computed<FigureDraft>(() => ({
-  kind: kind.value,
+  tile: tile.value,
+  grafikSource: grafikSource.value,
   photos: photoRows.rows.value,
+  sharedCredit: sharedCredit.value,
   diagramTitle: diagramTitle.value,
   diagramSource: diagramSource.value,
   diagramImageId: diagramImageId.value,
   diagramImageAlt: diagramImageAlt.value,
   barUnit: barUnit.value,
   bars: barRows.rows.value,
+  chartTableId: chartTableId.value,
+  chartType: chartType.value,
+  chartSeries: chartSeries.value,
+  chartTitle: chartTitle.value,
+  chartSource: chartSource.value,
 }));
 
 const baseline = ref('none');
@@ -126,15 +178,66 @@ watch(diagramImageId, (id) => {
 });
 watch(dirty, (value) => emit('dirty-change', value), { immediate: true });
 
+// --- Pages' tables (the Grafik tile reads a table of this page only) ---
+
+/** Every section id of the page this section belongs to; the chart may read any table among them. */
+const pageSectionIds = computed<string[]>(() => {
+  const found = store.findSection(props.sectionId);
+  if (!found) return [props.sectionId];
+  return found.page.chapters.flatMap((chapter) => chapter.sections.map((section) => section.id));
+});
+
+const pageTables = computed(() =>
+  tablesStore.tables.filter((table) => pageSectionIds.value.includes(table.sectionId)),
+);
+
+/** Null while the table list has not loaded: the server then checks the table on save. */
+const chartTableOptions = computed(() =>
+  tablesStore.isLoaded
+    ? pageTables.value.map((table) => ({ id: table.id, sexSplit: isSexSplitKind(table.kind) }))
+    : null,
+);
+
+const selectedTable = computed(() => pageTables.value.find((t) => t.id === chartTableId.value));
+/** A stored table that is not in the list (deleted or on another page) still shows, so it is not silently blanked. */
+const missingSelectedTable = computed(
+  () => chartTableId.value !== '' && tablesStore.isLoaded && !selectedTable.value,
+);
+const bySexAllowed = computed(
+  () => selectedTable.value !== undefined && isSexSplitKind(selectedTable.value.kind),
+);
+const bySexHint = computed(() => {
+  if (chartTableId.value === '') return 'Pilih tabel data dahulu.';
+  if (selectedTable.value && !bySexAllowed.value) return 'Tabel ini hanya memuat jumlah total.';
+  return null;
+});
+
+function onChartTableChange(tableId: string): void {
+  chartTableId.value = tableId;
+  // A table without a sex split cannot show "by_sex": fall back to the total rather than refuse.
+  if (chartSeries.value === 'by_sex' && !bySexAllowed.value) chartSeries.value = 'total';
+}
+
+// --- Loading and baselines ---
+
 function applyDraft(next: FigureDraft): void {
-  kind.value = next.kind;
+  tile.value = next.tile;
+  grafikSource.value = next.grafikSource;
+  photoStash.photo = [];
+  photoStash.photos = [];
   photoRows.setRows(next.photos);
+  sharedCredit.value = next.sharedCredit;
   diagramTitle.value = next.diagramTitle;
   diagramSource.value = next.diagramSource;
   diagramImageId.value = next.diagramImageId;
   diagramImageAlt.value = next.diagramImageAlt;
   barUnit.value = next.barUnit;
   barRows.setRows(next.bars);
+  chartTableId.value = next.chartTableId;
+  chartType.value = next.chartType;
+  chartSeries.value = next.chartSeries;
+  chartTitle.value = next.chartTitle;
+  chartSource.value = next.chartSource;
   baseline.value = draftSignature(next);
 }
 
@@ -187,12 +290,21 @@ watch(
     serverError.value = '';
     stale.value = false;
     confirmingDelete.value = false;
+    pendingTile.value = null;
     loadFromStored();
   },
 );
 
+onMounted(() => {
+  // The Data menu hands over a kind chosen in "Tambah bagian baru"; it is used once, and never on
+  // top of a figure the section already has.
+  const pending = consumePendingFigureKind();
+  if (pending && stored.value === null) applyTile(pending);
+  void tablesStore.fetchTables(true);
+});
+
 const problems = computed(() =>
-  submitted.value ? validateFigureDraft(draft.value, ids).problems : [],
+  submitted.value ? validateFigureDraft(draft.value, ids, chartTableOptions.value).problems : [],
 );
 const errorByField = computed(() => {
   const map: Record<string, string> = {};
@@ -209,28 +321,152 @@ function announce(message: string): void {
   });
 }
 
-function setKind(next: FigureKind): void {
-  kind.value = next;
-  const needed = next === 'photo' ? 1 : next === 'photos' ? FIGURE_LIMITS.photosMin : 0;
-  if (photoRows.rows.value.length < needed) {
-    const missing = Array.from({ length: needed - photoRows.rows.value.length }, emptyPhoto);
-    photoRows.setRows([...photoRows.rows.value, ...missing]);
+function focusTile(next: FigureTile | null): void {
+  void nextTick(() => {
+    const element = next === null ? null : document.getElementById(ids.tile(next));
+    if (element instanceof HTMLElement) element.focus();
+  });
+}
+
+// --- Tiles ---
+
+/** Photos a switch to `next` would drop: the content beyond the two of "2 gambar". */
+function photosDroppedBy(next: FigureTile): number {
+  if (next !== 'photos-2' || photoGroupOf(tile.value) !== 'photos') return 0;
+  return photoRows.rows.value.slice(2).filter((row) => !isBlankPhoto(row)).length;
+}
+
+/** Sets the photo rows a tile needs: exactly one, exactly two, or at least three (Galeri). */
+function fitPhotoRows(next: FigureTile): void {
+  const group = photoGroupOf(next);
+  if (!group) return;
+  const rows = snapshotPhotos();
+  const size = next === 'photo' ? 1 : next === 'photos-2' ? 2 : GALLERY_PHOTOS_MIN;
+  const kept = next === 'gallery' ? rows : rows.slice(0, size);
+  while (kept.length < size) kept.push(emptyPhoto());
+  photoRows.setRows(kept);
+}
+
+function applyTile(next: FigureTile): void {
+  const from = photoGroupOf(tile.value);
+  const to = photoGroupOf(next);
+  if (from !== null && from !== to) photoStash[from] = snapshotPhotos();
+  if (to !== null && to !== from) photoRows.setRows(photoStash[to]);
+  tile.value = next;
+  fitPhotoRows(next);
+}
+
+function chooseTile(next: FigureTile): void {
+  if (next === tile.value) return;
+  if (photosDroppedBy(next) > 0) {
+    pendingTile.value = next;
+    void nextTick(() => {
+      const element = tileCancelButton.value?.$el as HTMLElement | undefined;
+      element?.focus();
+    });
+    return;
+  }
+  applyTile(next);
+  announce(`Jenis figur: ${TILE_LABELS[next].title}.`);
+}
+
+function onTileChange(next: FigureTile): void {
+  if (busy.value || uploading.value) {
+    // A radio can only be picked while the group is enabled; restore the shown choice regardless.
+    syncTileRadios();
+    return;
+  }
+  chooseTile(next);
+}
+
+/** Puts the radio checked state back to the tile in effect (after a refused or cancelled switch). */
+function syncTileRadios(): void {
+  for (const option of TILE_ORDER) {
+    const element = document.getElementById(ids.tile(option));
+    if (element instanceof HTMLInputElement) element.checked = option === tile.value;
   }
 }
 
-const kindModel = computed<FigureKind | null>({
-  get: () => kind.value,
-  set: (value) => {
-    if (value) setKind(value);
+function confirmTile(): void {
+  const next = pendingTile.value;
+  pendingTile.value = null;
+  if (next === null) return;
+  applyTile(next);
+  announce(`Jenis figur: ${TILE_LABELS[next].title}. Foto di luar jumlah itu dibuang.`);
+  focusTile(next);
+}
+
+function cancelTile(): void {
+  pendingTile.value = null;
+  syncTileRadios();
+  focusTile(tile.value);
+  announce('Jenis figur tidak diubah.');
+}
+
+const droppedCount = computed(() =>
+  pendingTile.value === null ? 0 : photosDroppedBy(pendingTile.value),
+);
+
+// --- Photos (1 gambar, 2 gambar, Galeri) ---
+
+const isPhotoTile = computed(() => photoGroupOf(tile.value) !== null);
+const galleryRows = computed(() => (tile.value === 'gallery' ? photoRows.rows.value : []));
+const pairRows = computed(() => (tile.value === 'photos-2' ? photoRows.rows.value : []));
+
+function photoCardLabel(index: number): string {
+  if (tile.value === 'photo') return 'Gambar';
+  if (tile.value === 'photos-2') return index === 0 ? 'Gambar 1 · depan' : 'Gambar 2 · belakang';
+  return `Foto ${index + 1}`;
+}
+
+function swapPairPhotos(): void {
+  if (busy.value || uploading.value || photoRows.rows.value.length !== 2) return;
+  const [first, second] = photoRows.rows.value;
+  if (!first || !second) return;
+  photoRows.rows.value = [second, first];
+  photoRows.announcement.value = 'Urutan gambar ditukar: gambar 1 sekarang di belakang.';
+  void nextTick(() => {
+    (swapButton.value?.$el as HTMLElement | undefined)?.focus();
+  });
+}
+
+// Gallery drag: a pointer shortcut only; Naik / Turun reach the same order from the keyboard.
+const dragBlocked = computed(() => (busy.value || uploading.value ? 'busy' : null));
+const drag = useCardDragReorder({
+  order: computed(() => photoRows.rows.value.map((row) => String(row.uid))),
+  blocked: dragBlocked,
+  onMove: (key, toIndex) => {
+    const rows = [...photoRows.rows.value];
+    const from = rows.findIndex((row) => String(row.uid) === key);
+    if (from < 0) return;
+    const [moved] = rows.splice(from, 1);
+    if (!moved) return;
+    rows.splice(toIndex, 0, moved);
+    photoRows.rows.value = rows;
+    photoRows.announcement.value = `Foto dipindah ke urutan ${toIndex + 1} dari ${rows.length}.`;
   },
 });
 
-const visiblePhotoRows = computed(() =>
-  kind.value === 'photo' ? photoRows.rows.value.slice(0, 1) : photoRows.rows.value,
-);
-const hiddenPhotoCount = computed(() =>
-  kind.value === 'photo' ? Math.max(0, photoRows.rows.value.length - 1) : 0,
-);
+function onCardDragOver(event: DragEvent, key: string): void {
+  if (!drag.dragKey.value) return;
+  drag.hoverDrop(key, edgeAt(event));
+}
+
+function onCardDrop(event: DragEvent, key: string): void {
+  drag.dropOn(key, edgeAt(event));
+}
+
+function dropClass(key: string): string {
+  const target = drag.dropTarget.value;
+  if (!target || target.key !== key) return '';
+  return target.edge === 'before' ? 'border-t-4 border-brand-navy' : 'border-b-4 border-brand-navy';
+}
+
+function addGalleryPhoto(): void {
+  photoRows.add();
+}
+
+// --- Save, reload, revert, delete ---
 
 function onUploading(value: boolean): void {
   uploadingCount.value = Math.max(0, uploadingCount.value + (value ? 1 : -1));
@@ -248,15 +484,10 @@ async function save(): Promise<void> {
   serverError.value = '';
   stale.value = false;
 
-  const result = validateFigureDraft(draft.value, ids);
+  const result = validateFigureDraft(draft.value, ids, chartTableOptions.value);
   if (result.problems.length > 0 || !result.figure) {
     focusSummary();
     return;
-  }
-
-  // "Satu foto" stores one photo: drop the hidden rows now so they cannot resurface later.
-  if (kind.value === 'photo' && photoRows.rows.value.length > 1) {
-    photoRows.setRows(photoRows.rows.value.slice(0, 1));
   }
 
   saving.value = true;
@@ -316,6 +547,7 @@ function revert(): void {
   reloadedSummary.value = null;
   serverError.value = '';
   stale.value = false;
+  pendingTile.value = null;
   loadFromStored();
   announce('Perubahan gambar dibatalkan.');
 }
@@ -358,7 +590,7 @@ async function confirmDelete(): Promise<void> {
         : 'Gambar dihapus dari bagian ini.',
     );
     await nextTick();
-    document.getElementById(ids.kind)?.focus();
+    document.getElementById(ids.tile('photo'))?.focus();
     return;
   }
   deleteError.value = outcome.message;
@@ -416,268 +648,595 @@ defineExpose({ isDirty: () => dirty.value });
       </p>
     </div>
 
-    <fieldset class="space-y-2" :disabled="busy || uploading">
-      <legend class="text-text-muted text-sm font-medium">Jenis gambar</legend>
-      <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-5">
-        <label
-          v-for="option in ['photo', 'photos', 'diagram'] as FigureKind[]"
-          :key="option"
-          :for="ids.kindOption(option)"
-          class="text-brand-navy flex min-h-11 cursor-pointer items-center gap-2 text-sm"
-        >
+    <fieldset class="space-y-2" :disabled="busy || uploading" data-test="figure-tiles">
+      <legend class="text-text-muted text-sm font-medium">Jenis figur</legend>
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div v-for="option in TILE_ORDER" :key="option" class="relative">
           <input
-            :id="ids.kindOption(option)"
-            v-model="kindModel"
+            :id="ids.tile(option)"
             type="radio"
-            :name="kindName"
+            :name="tileName"
             :value="option"
-            class="text-brand-navy focus-visible:outline-focus-ring h-4 w-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+            :checked="tile === option"
+            class="peer sr-only"
             :data-test="`kind-${option}`"
+            @change="onTileChange(option)"
           />
-          {{ KIND_LABELS[option] }}
-        </label>
+          <label
+            :for="ids.tile(option)"
+            class="rounded-card border-border-strong text-brand-navy peer-checked:border-brand-navy peer-checked:bg-brand-navy peer-focus-visible:outline-focus-ring hover:bg-surface-muted peer-checked:hover:bg-brand-navy flex min-h-16 cursor-pointer flex-col justify-center gap-0.5 border bg-white px-4 py-3 peer-checked:text-white peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2"
+          >
+            <span class="text-sm font-semibold">{{ TILE_LABELS[option].title }}</span>
+            <span class="text-xs opacity-90">{{ TILE_LABELS[option].description }}</span>
+          </label>
+        </div>
       </div>
-      <p v-if="kind === null" class="text-text-muted text-xs">
-        Pilih jenis gambar untuk mulai menambahkan.
+      <p v-if="tile === null" class="text-text-muted text-xs">
+        Pilih jenis figur untuk mulai menambahkan gambar.
       </p>
     </fieldset>
 
-    <div v-if="kind === 'photo' || kind === 'photos'" class="space-y-4" data-test="figure-photos">
-      <p v-if="hiddenPhotoCount > 0" class="text-text-muted text-sm" data-test="figure-extra-note">
-        Hanya foto pertama yang dipakai untuk “Satu foto”. Foto lainnya tidak ikut disimpan.
+    <div
+      v-if="pendingTile"
+      role="alertdialog"
+      :aria-labelledby="`${baseId}-pindah-judul`"
+      :aria-describedby="`${baseId}-pindah-isi`"
+      class="rounded-card border-border-strong bg-surface-muted space-y-3 border p-4"
+      data-test="tile-confirm"
+    >
+      <p :id="`${baseId}-pindah-judul`" class="text-brand-navy text-sm font-semibold">
+        Pindah ke {{ TILE_LABELS[pendingTile].title }}?
       </p>
-
-      <CeritaFigurePhotoRow
-        v-for="(row, index) in visiblePhotoRows"
-        :key="row.uid"
-        v-model:media-id="row.mediaId"
-        v-model:alt="row.alt"
-        v-model:caption="row.caption"
-        v-model:credit="row.credit"
-        :index="index"
-        :label="kind === 'photo' ? 'Foto' : `Foto ${index + 1}`"
-        :ids="ids"
-        :errors="errorByField"
-        :show-actions="kind === 'photos'"
-        :is-first="index === 0"
-        :is-last="index === visiblePhotoRows.length - 1"
-        :busy="busy || uploading"
-        @move-up="photoRows.move(index, -1)"
-        @move-down="photoRows.move(index, 1)"
-        @remove="photoRows.remove(index)"
-        @uploading="onUploading"
-      />
-
-      <div v-if="kind === 'photos'" class="space-y-2">
+      <p :id="`${baseId}-pindah-isi`" class="text-text-muted text-sm">
+        {{ droppedCount }} foto yang sudah terisi di luar dua foto pertama akan dibuang dari
+        formulir. Foto yang belum disimpan tidak bisa dikembalikan.
+      </p>
+      <div class="flex flex-wrap gap-3">
         <BaseButton
-          :id="ids.addPhoto"
+          ref="tileCancelButton"
           type="button"
           variant="secondary"
           size="md"
           class="min-h-11"
-          :disabled="busy || uploading || photoRows.isFull()"
-          data-test="add-photo"
-          @click="photoRows.add()"
+          data-test="tile-confirm-cancel"
+          @click="cancelTile"
         >
-          Tambah foto
+          Batal
         </BaseButton>
-        <p class="text-text-muted text-xs">
-          {{ photoRows.rows.value.length }} dari {{ FIGURE_LIMITS.photosMax }} foto (minimal
-          {{ FIGURE_LIMITS.photosMin }}).
-        </p>
-        <p v-if="errorByField[ids.addPhoto]" class="text-status-error text-xs font-medium">
-          {{ errorByField[ids.addPhoto] }}
-        </p>
+        <BaseButton
+          type="button"
+          variant="primary"
+          size="md"
+          class="min-h-11"
+          data-test="tile-confirm-ok"
+          @click="confirmTile"
+        >
+          Ya, pindah
+        </BaseButton>
       </div>
     </div>
 
-    <div v-else-if="kind === 'diagram'" class="space-y-5" data-test="figure-diagram">
+    <template v-if="isPhotoTile">
       <FormField
-        :id="ids.diagramTitle"
-        label="Judul diagram"
-        :error="errorByField[ids.diagramTitle]"
-        required
+        v-if="tile !== 'photo'"
+        :id="ids.sharedCredit"
+        label="Sumber bersama (untuk semua foto)"
+        hint="Opsional. Dipakai untuk setiap foto yang tidak punya sumber sendiri."
+        :error="errorByField[ids.sharedCredit]"
         v-slot="{ describedBy, invalid }"
       >
         <input
-          :id="ids.diagramTitle"
-          v-model="diagramTitle"
+          :id="ids.sharedCredit"
+          v-model="sharedCredit"
           type="text"
           :class="INPUT_CLASSES"
-          :disabled="busy"
+          :disabled="busy || uploading"
           :aria-describedby="describedBy"
           :aria-invalid="invalid ? 'true' : undefined"
-          data-test="diagram-title"
+          data-test="shared-credit"
         />
       </FormField>
 
-      <FormField
-        :id="ids.diagramSource"
-        label="Sumber data (opsional)"
-        hint="Contoh: nama publikasi dan tahunnya."
-        :error="errorByField[ids.diagramSource]"
-        v-slot="{ describedBy, invalid }"
+      <div
+        v-if="tile === 'photo'"
+        class="rounded-card border-border space-y-4 border p-4"
+        data-test="figure-photos"
       >
-        <input
-          :id="ids.diagramSource"
-          v-model="diagramSource"
-          type="text"
-          :class="INPUT_CLASSES"
-          :disabled="busy"
-          :aria-describedby="describedBy"
-          :aria-invalid="invalid ? 'true' : undefined"
-          data-test="diagram-source"
+        <CeritaFigurePhotoRow
+          v-if="photoRows.rows.value[0]"
+          v-model:media-id="photoRows.rows.value[0].mediaId"
+          v-model:alt="photoRows.rows.value[0].alt"
+          v-model:caption="photoRows.rows.value[0].caption"
+          v-model:credit="photoRows.rows.value[0].credit"
+          :index="0"
+          :label="photoCardLabel(0)"
+          :ids="ids"
+          :errors="errorByField"
+          :show-actions="false"
+          :is-first="true"
+          :is-last="true"
+          :busy="busy || uploading"
+          caption-label="Keterangan (opsional)"
+          credit-label="Sumber/kredit (opsional)"
+          @uploading="onUploading"
         />
-      </FormField>
+      </div>
 
-      <p class="text-text-muted text-sm">Diagram membutuhkan gambar, data batang, atau keduanya.</p>
-
-      <fieldset class="rounded-card border-border space-y-4 border p-4">
-        <legend class="text-brand-navy px-1 text-sm font-semibold">Gambar diagram</legend>
-        <MediaPhotoField
-          v-model="diagramImageId"
-          purpose="cerita"
-          label="Gambar diagram"
-          :input-id="ids.diagramImage"
-          :disabled="busy"
-          :error="errorByField[ids.diagramImage]"
-          preview-alt="Pratinjau gambar diagram"
-          @busy="onUploading"
-        />
-        <FormField
-          v-if="diagramImageId"
-          :id="ids.diagramImageAlt"
-          label="Teks pengganti gambar diagram"
-          hint="Jelaskan isi diagram untuk pembaca yang tidak bisa melihatnya."
-          :error="errorByField[ids.diagramImageAlt]"
-          required
-          v-slot="{ describedBy, invalid }"
-        >
-          <textarea
-            :id="ids.diagramImageAlt"
-            v-model="diagramImageAlt"
-            rows="2"
-            :class="INPUT_CLASSES"
-            :disabled="busy"
-            :aria-describedby="describedBy"
-            :aria-invalid="invalid ? 'true' : undefined"
-            data-test="diagram-image-alt"
-          ></textarea>
-        </FormField>
-      </fieldset>
-
-      <fieldset class="rounded-card border-border space-y-4 border p-4" :disabled="busy">
-        <legend class="text-brand-navy px-1 text-sm font-semibold">Data batang</legend>
-
-        <FormField
-          :id="ids.barUnit"
-          label="Satuan (opsional)"
-          hint="Contoh: jiwa, KK, atau persen."
-          :error="errorByField[ids.barUnit]"
-          v-slot="{ describedBy, invalid }"
-        >
-          <input
-            :id="ids.barUnit"
-            v-model="barUnit"
-            type="text"
-            :class="INPUT_CLASSES"
-            :aria-describedby="describedBy"
-            :aria-invalid="invalid ? 'true' : undefined"
-            data-test="bar-unit"
-          />
-        </FormField>
-
-        <p v-if="barRows.rows.value.length === 0" class="text-text-muted text-sm">
-          Belum ada data batang.
-        </p>
-
-        <div
-          v-for="(bar, index) in barRows.rows.value"
-          :key="bar.uid"
-          class="border-border space-y-3 border-t pt-4 first:border-t-0 first:pt-0"
-          data-test="bar-row"
-        >
-          <div class="grid gap-4 sm:grid-cols-2">
-            <FormField
-              :id="ids.barLabel(index)"
-              :label="`Nama batang ${index + 1}`"
-              :error="errorByField[ids.barLabel(index)]"
-              v-slot="{ describedBy, invalid }"
-            >
-              <input
-                :id="ids.barLabel(index)"
-                v-model="bar.label"
-                type="text"
-                :class="INPUT_CLASSES"
-                :aria-describedby="describedBy"
-                :aria-invalid="invalid ? 'true' : undefined"
-                data-test="bar-label"
-              />
-            </FormField>
-            <FormField
-              :id="ids.barValue(index)"
-              :label="`Angka batang ${index + 1}`"
-              hint="Titik untuk ribuan, koma untuk desimal. Contoh: 1.234,5."
-              :error="errorByField[ids.barValue(index)]"
-              v-slot="{ describedBy, invalid }"
-            >
-              <input
-                :id="ids.barValue(index)"
-                v-model="bar.value"
-                type="text"
-                inputmode="decimal"
-                :class="INPUT_CLASSES"
-                :aria-describedby="
-                  [describedBy, barNote(bar.value) ? `${ids.barValue(index)}-note` : undefined]
-                    .filter(Boolean)
-                    .join(' ') || undefined
-                "
-                :aria-invalid="invalid ? 'true' : undefined"
-                data-test="bar-value"
-              />
-              <p
-                v-if="barNote(bar.value)"
-                :id="`${ids.barValue(index)}-note`"
-                class="text-text-muted mt-1.5 text-xs"
-                data-test="bar-value-note"
-              >
-                {{ barNote(bar.value) }}
-              </p>
-            </FormField>
-          </div>
-          <CollectionRowActions
-            :row-label="`batang ${index + 1}`"
+      <div v-else-if="tile === 'photos-2'" class="space-y-4" data-test="figure-photos">
+        <div class="grid gap-4 lg:grid-cols-2">
+          <CeritaFigurePhotoRow
+            v-for="(row, index) in pairRows"
+            :key="row.uid"
+            v-model:media-id="row.mediaId"
+            v-model:alt="row.alt"
+            v-model:caption="row.caption"
+            v-model:credit="row.credit"
+            :index="index"
+            :label="photoCardLabel(index)"
+            :ids="ids"
+            :errors="errorByField"
+            :show-actions="false"
+            :group-credit="true"
             :is-first="index === 0"
-            :is-last="index === barRows.rows.value.length - 1"
-            :busy="busy"
-            :move-up-id="ids.barUp(index)"
-            :move-down-id="ids.barDown(index)"
-            :remove-id="ids.barRemove(index)"
-            @move-up="barRows.move(index, -1)"
-            @move-down="barRows.move(index, 1)"
-            @remove="barRows.remove(index)"
+            :is-last="index === pairRows.length - 1"
+            :busy="busy || uploading"
+            caption-label="Keterangan (opsional)"
+            credit-label="Kredit (opsional)"
+            @uploading="onUploading"
           />
+        </div>
+        <BaseButton
+          :id="ids.swapPhotos"
+          ref="swapButton"
+          type="button"
+          variant="secondary"
+          size="md"
+          class="min-h-11"
+          :disabled="busy || uploading"
+          data-test="swap-photos"
+          @click="swapPairPhotos"
+        >
+          Tukar urutan
+        </BaseButton>
+        <p v-if="errorByField[ids.swapPhotos]" class="text-status-error text-xs font-medium">
+          {{ errorByField[ids.swapPhotos] }}
+        </p>
+      </div>
+
+      <div v-else class="space-y-4" data-test="figure-photos">
+        <div class="grid gap-4 lg:grid-cols-2">
+          <div
+            v-for="(row, index) in galleryRows"
+            :key="row.uid"
+            :class="dropClass(String(row.uid))"
+            class="rounded-card"
+            :data-test="`gallery-card-${index}`"
+            @dragover.prevent="onCardDragOver($event, String(row.uid))"
+            @drop.prevent="onCardDrop($event, String(row.uid))"
+          >
+            <CeritaFigurePhotoRow
+              v-model:media-id="row.mediaId"
+              v-model:alt="row.alt"
+              v-model:caption="row.caption"
+              v-model:credit="row.credit"
+              :index="index"
+              :label="photoCardLabel(index)"
+              :ids="ids"
+              :errors="errorByField"
+              :show-actions="true"
+              :show-grip="true"
+              :group-credit="true"
+              :dragging="drag.dragKey.value === String(row.uid)"
+              caption-label="Keterangan foto (opsional)"
+              credit-label="Sumber foto ini (opsional)"
+              :is-first="index === 0"
+              :is-last="index === galleryRows.length - 1"
+              :busy="busy || uploading"
+              @move-up="photoRows.move(index, -1)"
+              @move-down="photoRows.move(index, 1)"
+              @remove="photoRows.remove(index)"
+              @uploading="onUploading"
+              @grip-start="drag.startDrag(String(row.uid))"
+              @grip-end="drag.clearDrag()"
+            />
+          </div>
         </div>
 
         <div class="space-y-2">
           <BaseButton
-            :id="ids.addBar"
+            :id="ids.addPhoto"
             type="button"
             variant="secondary"
             size="md"
             class="min-h-11"
-            :disabled="busy || barRows.isFull()"
-            data-test="add-bar"
-            @click="barRows.add()"
+            :disabled="busy || uploading || photoRows.isFull()"
+            data-test="add-photo"
+            @click="addGalleryPhoto"
           >
-            Tambah batang
+            Tambah gambar
           </BaseButton>
-          <p v-if="errorByField[ids.addBar]" class="text-status-error text-xs font-medium">
-            {{ errorByField[ids.addBar] }}
+          <p class="text-text-muted text-xs">
+            {{ photoRows.rows.value.length }} dari {{ FIGURE_LIMITS.photosMax }} foto (minimal
+            {{ GALLERY_PHOTOS_MIN }}).
+          </p>
+          <p v-if="errorByField[ids.addPhoto]" class="text-status-error text-xs font-medium">
+            {{ errorByField[ids.addPhoto] }}
           </p>
         </div>
+      </div>
+    </template>
+
+    <template v-else-if="tile === 'chart'">
+      <fieldset class="space-y-2" :disabled="busy || uploading" data-test="figure-grafik-source">
+        <legend class="text-text-muted text-sm font-medium">Sumber grafik</legend>
+        <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-5">
+          <label
+            v-for="source in ['table', 'upload'] as GrafikSource[]"
+            :key="source"
+            :for="ids.grafikSource(source)"
+            class="text-brand-navy flex min-h-11 cursor-pointer items-center gap-2 text-sm"
+          >
+            <input
+              :id="ids.grafikSource(source)"
+              v-model="grafikSource"
+              type="radio"
+              :name="sourceName"
+              :value="source"
+              class="text-brand-navy focus-visible:outline-focus-ring h-4 w-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+              :data-test="`grafik-source-${source}`"
+            />
+            {{ source === 'table' ? 'Dari tabel di menu Data' : 'Unggah gambar grafik' }}
+          </label>
+        </div>
       </fieldset>
-    </div>
+
+      <div v-if="grafikSource === 'table'" class="space-y-5" data-test="figure-chart">
+        <FormField
+          :id="ids.chartTable"
+          label="Tabel data"
+          hint="Hanya tabel dari halaman ini. Tabel baru dibuat di menu Data."
+          :error="errorByField[ids.chartTable]"
+          required
+          v-slot="{ describedBy, invalid }"
+        >
+          <select
+            :id="ids.chartTable"
+            :value="chartTableId"
+            :class="INPUT_CLASSES"
+            :disabled="busy || uploading"
+            :aria-describedby="describedBy"
+            :aria-invalid="invalid ? 'true' : undefined"
+            data-test="chart-table"
+            @change="onChartTableChange(($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">Pilih tabel…</option>
+            <option v-if="missingSelectedTable" :value="chartTableId">
+              Tabel yang tersimpan tidak ada di halaman ini
+            </option>
+            <option v-for="table in pageTables" :key="table.id" :value="table.id">
+              {{ table.title }} ({{ table.period }})
+            </option>
+          </select>
+        </FormField>
+        <AlertBanner
+          v-if="tablesStore.error"
+          :message="tablesStore.error"
+          :kind="tablesStore.errorKind ?? undefined"
+          data-test="chart-tables-error"
+        />
+        <p
+          v-else-if="chartTableOptions !== null && pageTables.length === 0"
+          class="text-text-muted text-sm"
+          data-test="chart-tables-empty"
+        >
+          Belum ada tabel data di halaman ini. Tambahkan tabel di menu Data, lalu kembali ke sini.
+        </p>
+        <p v-else-if="chartTableOptions === null" class="text-text-muted text-sm" role="status">
+          Daftar tabel sedang dimuat…
+        </p>
+
+        <fieldset class="space-y-2" :disabled="busy || uploading">
+          <legend class="text-text-muted text-sm font-medium">Jenis grafik</legend>
+          <div class="flex flex-wrap gap-3">
+            <div
+              v-for="type in ['bar', 'column'] as ChartTypeChoice[]"
+              :key="type"
+              class="relative"
+            >
+              <input
+                :id="ids.chartType(type)"
+                v-model="chartType"
+                type="radio"
+                :name="chartTypeName"
+                :value="type"
+                class="peer sr-only"
+                :data-test="`chart-type-${type}`"
+              />
+              <label
+                :for="ids.chartType(type)"
+                class="rounded-btn border-border-strong text-brand-navy peer-checked:border-brand-navy peer-checked:bg-brand-navy peer-focus-visible:outline-focus-ring flex min-h-11 cursor-pointer items-center border bg-white px-4 text-sm font-medium peer-checked:text-white peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2"
+              >
+                {{ CHART_TYPE_LABELS[type] }}
+              </label>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="space-y-2" :disabled="busy || uploading">
+          <legend class="text-text-muted text-sm font-medium">Data</legend>
+          <div class="flex flex-wrap gap-3">
+            <div
+              v-for="series in ['total', 'by_sex'] as ChartSeriesChoice[]"
+              :key="series"
+              class="relative"
+            >
+              <input
+                :id="ids.chartSeries(series)"
+                v-model="chartSeries"
+                type="radio"
+                :name="seriesName"
+                :value="series"
+                :disabled="series === 'by_sex' ? !bySexAllowed || busy || uploading : undefined"
+                class="peer sr-only"
+                :aria-describedby="
+                  series === 'by_sex' && bySexHint ? `${ids.chartSeries('by_sex')}-hint` : undefined
+                "
+                :data-test="`chart-series-${series}`"
+              />
+              <label
+                :for="ids.chartSeries(series)"
+                class="rounded-btn border-border-strong text-brand-navy peer-checked:border-brand-navy peer-checked:bg-brand-navy peer-focus-visible:outline-focus-ring peer-disabled:text-text-muted flex min-h-11 cursor-pointer items-center border bg-white px-4 text-sm font-medium peer-checked:text-white peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-disabled:cursor-not-allowed peer-disabled:opacity-60"
+              >
+                {{ CHART_SERIES_LABELS[series] }}
+              </label>
+            </div>
+          </div>
+          <p
+            v-if="bySexHint"
+            :id="`${ids.chartSeries('by_sex')}-hint`"
+            class="text-text-muted text-xs"
+            data-test="chart-series-hint"
+          >
+            {{ bySexHint }}
+          </p>
+          <p
+            v-if="errorByField[ids.chartSeries('by_sex')]"
+            class="text-status-error text-xs font-medium"
+          >
+            {{ errorByField[ids.chartSeries('by_sex')] }}
+          </p>
+        </fieldset>
+
+        <FormField
+          :id="ids.chartTitle"
+          label="Judul grafik"
+          hint="Maksimal 120 karakter."
+          :error="errorByField[ids.chartTitle]"
+          required
+          v-slot="{ describedBy, invalid }"
+        >
+          <input
+            :id="ids.chartTitle"
+            v-model="chartTitle"
+            type="text"
+            :class="INPUT_CLASSES"
+            :disabled="busy || uploading"
+            :aria-describedby="describedBy"
+            :aria-invalid="invalid ? 'true' : undefined"
+            data-test="chart-title"
+          />
+        </FormField>
+
+        <FormField
+          :id="ids.chartSource"
+          label="Sumber data (opsional)"
+          hint="Cantumkan sumbernya, misalnya nama publikasi dan tahunnya. Untuk data menurut waktu, tulis periodenya, misalnya “Berdasarkan data Juni 2024”."
+          :error="errorByField[ids.chartSource]"
+          v-slot="{ describedBy, invalid }"
+        >
+          <input
+            :id="ids.chartSource"
+            v-model="chartSource"
+            type="text"
+            :class="INPUT_CLASSES"
+            :disabled="busy || uploading"
+            :aria-describedby="describedBy"
+            :aria-invalid="invalid ? 'true' : undefined"
+            data-test="chart-source"
+          />
+        </FormField>
+      </div>
+
+      <div v-else class="space-y-5" data-test="figure-diagram">
+        <FormField
+          :id="ids.diagramTitle"
+          label="Judul grafik"
+          :error="errorByField[ids.diagramTitle]"
+          required
+          v-slot="{ describedBy, invalid }"
+        >
+          <input
+            :id="ids.diagramTitle"
+            v-model="diagramTitle"
+            type="text"
+            :class="INPUT_CLASSES"
+            :disabled="busy"
+            :aria-describedby="describedBy"
+            :aria-invalid="invalid ? 'true' : undefined"
+            data-test="diagram-title"
+          />
+        </FormField>
+
+        <FormField
+          :id="ids.diagramSource"
+          label="Sumber data (opsional)"
+          hint="Contoh: nama publikasi dan tahunnya."
+          :error="errorByField[ids.diagramSource]"
+          v-slot="{ describedBy, invalid }"
+        >
+          <input
+            :id="ids.diagramSource"
+            v-model="diagramSource"
+            type="text"
+            :class="INPUT_CLASSES"
+            :disabled="busy"
+            :aria-describedby="describedBy"
+            :aria-invalid="invalid ? 'true' : undefined"
+            data-test="diagram-source"
+          />
+        </FormField>
+
+        <p class="text-text-muted text-sm">
+          Grafik unggahan membutuhkan gambar, data batang, atau keduanya.
+        </p>
+
+        <fieldset class="rounded-card border-border space-y-4 border p-4">
+          <legend class="text-brand-navy px-1 text-sm font-semibold">Gambar grafik</legend>
+          <MediaPhotoField
+            v-model="diagramImageId"
+            purpose="cerita"
+            label="Gambar grafik"
+            :input-id="ids.diagramImage"
+            :disabled="busy"
+            :error="errorByField[ids.diagramImage]"
+            preview-alt="Pratinjau gambar grafik"
+            @busy="onUploading"
+          />
+          <FormField
+            v-if="diagramImageId"
+            :id="ids.diagramImageAlt"
+            label="Teks alternatif gambar grafik"
+            hint="Jelaskan isi grafik untuk pembaca yang tidak bisa melihatnya."
+            :error="errorByField[ids.diagramImageAlt]"
+            required
+            v-slot="{ describedBy, invalid }"
+          >
+            <textarea
+              :id="ids.diagramImageAlt"
+              v-model="diagramImageAlt"
+              rows="2"
+              :class="INPUT_CLASSES"
+              :disabled="busy"
+              :aria-describedby="describedBy"
+              :aria-invalid="invalid ? 'true' : undefined"
+              data-test="diagram-image-alt"
+            ></textarea>
+          </FormField>
+        </fieldset>
+
+        <fieldset class="rounded-card border-border space-y-4 border p-4" :disabled="busy">
+          <legend class="text-brand-navy px-1 text-sm font-semibold">Data batang</legend>
+
+          <FormField
+            :id="ids.barUnit"
+            label="Satuan (opsional)"
+            hint="Contoh: jiwa, KK, atau persen."
+            :error="errorByField[ids.barUnit]"
+            v-slot="{ describedBy, invalid }"
+          >
+            <input
+              :id="ids.barUnit"
+              v-model="barUnit"
+              type="text"
+              :class="INPUT_CLASSES"
+              :aria-describedby="describedBy"
+              :aria-invalid="invalid ? 'true' : undefined"
+              data-test="bar-unit"
+            />
+          </FormField>
+
+          <p v-if="barRows.rows.value.length === 0" class="text-text-muted text-sm">
+            Belum ada data batang.
+          </p>
+
+          <div
+            v-for="(bar, index) in barRows.rows.value"
+            :key="bar.uid"
+            class="border-border space-y-3 border-t pt-4 first:border-t-0 first:pt-0"
+            data-test="bar-row"
+          >
+            <div class="grid gap-4 sm:grid-cols-2">
+              <FormField
+                :id="ids.barLabel(index)"
+                :label="`Nama batang ${index + 1}`"
+                :error="errorByField[ids.barLabel(index)]"
+                v-slot="{ describedBy, invalid }"
+              >
+                <input
+                  :id="ids.barLabel(index)"
+                  v-model="bar.label"
+                  type="text"
+                  :class="INPUT_CLASSES"
+                  :aria-describedby="describedBy"
+                  :aria-invalid="invalid ? 'true' : undefined"
+                  data-test="bar-label"
+                />
+              </FormField>
+              <FormField
+                :id="ids.barValue(index)"
+                :label="`Angka batang ${index + 1}`"
+                hint="Titik untuk ribuan, koma untuk desimal. Contoh: 1.234,5."
+                :error="errorByField[ids.barValue(index)]"
+                v-slot="{ describedBy, invalid }"
+              >
+                <input
+                  :id="ids.barValue(index)"
+                  v-model="bar.value"
+                  type="text"
+                  inputmode="decimal"
+                  :class="INPUT_CLASSES"
+                  :aria-describedby="
+                    [describedBy, barNote(bar.value) ? `${ids.barValue(index)}-note` : undefined]
+                      .filter(Boolean)
+                      .join(' ') || undefined
+                  "
+                  :aria-invalid="invalid ? 'true' : undefined"
+                  data-test="bar-value"
+                />
+                <p
+                  v-if="barNote(bar.value)"
+                  :id="`${ids.barValue(index)}-note`"
+                  class="text-text-muted mt-1.5 text-xs"
+                  data-test="bar-value-note"
+                >
+                  {{ barNote(bar.value) }}
+                </p>
+              </FormField>
+            </div>
+            <CollectionRowActions
+              :row-label="`batang ${index + 1}`"
+              :is-first="index === 0"
+              :is-last="index === barRows.rows.value.length - 1"
+              :busy="busy"
+              :move-up-id="ids.barUp(index)"
+              :move-down-id="ids.barDown(index)"
+              :remove-id="ids.barRemove(index)"
+              @move-up="barRows.move(index, -1)"
+              @move-down="barRows.move(index, 1)"
+              @remove="barRows.remove(index)"
+            />
+          </div>
+
+          <div class="space-y-2">
+            <BaseButton
+              :id="ids.addBar"
+              type="button"
+              variant="secondary"
+              size="md"
+              class="min-h-11"
+              :disabled="busy || barRows.isFull()"
+              data-test="add-bar"
+              @click="barRows.add()"
+            >
+              Tambah batang
+            </BaseButton>
+            <p v-if="errorByField[ids.addBar]" class="text-status-error text-xs font-medium">
+              {{ errorByField[ids.addBar] }}
+            </p>
+          </div>
+        </fieldset>
+      </div>
+    </template>
 
     <div class="border-border flex flex-wrap items-center gap-3 border-t pt-4">
       <BaseButton
@@ -727,7 +1286,7 @@ defineExpose({ isDirty: () => dirty.value });
         Hapus gambar dari bagian ini?
       </p>
       <p class="text-text-muted text-sm">
-        Gambar dan teks pengganti, keterangan, serta datanya dilepas dari bagian ini. Foto yang
+        Gambar dan teks alternatif, keterangan, serta datanya dilepas dari bagian ini. Foto yang
         sudah diunggah tidak lagi dipakai dan akan dibersihkan otomatis.
       </p>
       <AlertBanner

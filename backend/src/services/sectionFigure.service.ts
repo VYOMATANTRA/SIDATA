@@ -1,5 +1,6 @@
 import prisma from '../utils/prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
+import { checkChartTable, pageIdOfSection } from './chartFigureRefs.js';
 import {
   buildAuditLog,
   AUDIT_ACTIONS,
@@ -72,7 +73,7 @@ const toToken = (s: { id: string; updatedAt: Date }): FigureSectionToken => ({
   updatedAt: s.updatedAt.toISOString(),
 });
 
-const mediaReference = (blockId: string) => ({
+export const mediaReference = (blockId: string) => ({
   purpose: FIGURE_MEDIA_PURPOSE,
   reference: { type: 'content_block', id: blockId, slot: FIGURE_MEDIA_SLOT },
 });
@@ -82,10 +83,10 @@ const mediaReference = (blockId: string) => ({
  * `$extends`-wrapped client (audit guard) produces a structurally equivalent but nominally
  * different transaction type, so it is narrowed here once.
  */
-const asMediaTx = (tx: unknown): MediaTransactionClient => tx as MediaTransactionClient;
+export const asMediaTx = (tx: unknown): MediaTransactionClient => tx as MediaTransactionClient;
 
 /** Media failures become plain 400s (the CMS shows the sentence); anything else bubbles up. */
-function toFigureMediaError(err: unknown, mode: 'save' | 'delete' = 'save'): unknown {
+export function toFigureMediaError(err: unknown, mode: 'save' | 'delete' = 'save'): unknown {
   if (!(err instanceof MediaServiceError)) return err;
   if (mode === 'delete') {
     // Releasing media is lenient, so this is not expected; never ask the editor to re-upload
@@ -110,11 +111,21 @@ function toFigureMediaError(err: unknown, mode: 'save' | 'delete' = 'save'): unk
   return err;
 }
 
-/** Locks section, then the figure block (parent-first, SPEC §3). */
+/**
+ * Locks the chart's table (when the figure is a chart), then the section, then the figure block.
+ * The table goes first so the order matches `updateIndicatorTable` (table, then target section);
+ * the other order would deadlock a save against a table move.
+ */
 async function lockSectionAndFigure(
   tx: Pick<Prisma.TransactionClient, '$queryRaw'>,
   sectionId: string,
+  chartTableId?: string,
 ): Promise<void> {
+  if (chartTableId) {
+    await tx.$queryRaw(
+      Prisma.sql`SELECT id FROM indicator_tables WHERE id = ${chartTableId} FOR UPDATE`,
+    );
+  }
   await tx.$queryRaw(Prisma.sql`SELECT id FROM sections WHERE id = ${sectionId} FOR UPDATE`);
   await tx.$queryRaw(
     Prisma.sql`SELECT id FROM content_blocks WHERE slug = ${figureSlugForSection(sectionId)} FOR UPDATE`,
@@ -125,7 +136,7 @@ async function lockSectionAndFigure(
  * Takes the row locks of every affected asset in ascending id order up front, so two figures
  * that swap shared photos in opposite directions cannot lock them in inverted order.
  */
-async function lockAffectedAssets(
+export async function lockAffectedAssets(
   tx: Pick<Prisma.TransactionClient, '$queryRaw'>,
   ids: readonly string[],
 ): Promise<void> {
@@ -164,7 +175,8 @@ export const putSectionFigure = async (
       // REPEATABLE READ would use a snapshot older than the asset locks and miss a reference a
       // competing figure committed while this transaction waited (it would unpublish a shared photo).
       isolationLevel: 'ReadCommitted',
-      lockQuery: (tx) => lockSectionAndFigure(tx, sectionId),
+      lockQuery: (tx) =>
+        lockSectionAndFigure(tx, sectionId, figure.kind === 'chart' ? figure.tableId : undefined),
       execute: async (tx) => {
         const section = await tx.section.findUnique({
           where: { id: sectionId },
@@ -174,6 +186,33 @@ export const putSectionFigure = async (
           throw new ContentBlockServiceError('Bagian tidak ditemukan', 404);
         }
         assertFresh(section.updatedAt, body.expectedUpdatedAt, 'Bagian');
+
+        if (figure.kind === 'chart') {
+          const check = await checkChartTable(
+            tx,
+            figure.tableId,
+            await pageIdOfSection(tx, sectionId),
+            figure.series,
+          );
+          if (check === 'no-sex-split') {
+            throw new HierarchyServiceError(
+              'Tabel ini hanya memuat jumlah total, tidak dipisah menurut jenis kelamin. Pilih jumlah total.',
+              422,
+            );
+          }
+          if (check === 'missing') {
+            throw new HierarchyServiceError(
+              'Tabel data untuk grafik tidak ditemukan. Pilih tabel lain.',
+              422,
+            );
+          }
+          if (check === 'other-page') {
+            throw new HierarchyServiceError(
+              'Grafik hanya dapat memakai tabel data dari halaman cerita yang sama.',
+              422,
+            );
+          }
+        }
 
         const existing = await tx.contentBlock.findUnique({ where: { slug } });
         if (existing && (existing.type !== 'figure' || existing.sectionId !== sectionId)) {

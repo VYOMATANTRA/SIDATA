@@ -188,8 +188,18 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
   - **Standalone blocks.** `hero`, `sambutan_lurah`, `highlight` and the profile/catalog blocks
     (`section_id` NULL) can be neither created nor deleted through these endpoints (delete: `409
     STANDALONE_BLOCK_PROTECTED`); they are edited only via `PATCH /api/content-blocks/:slug`.
-  - **Section figure.** A section carries at most one figure: one photo, a group of 2–12 photos, or a
-    diagram (a stored `figure` content block, §7). Editors and Admins manage it only through
+  - **Move and duplicate a section.** `POST /api/sections/:id/move` (`{ targetChapterId,
+    expectedUpdatedAt }`) puts the section at the end of another chapter **of the same page** (`422`
+    for another page, `400` for its own chapter); its prose, figure, indicators and tables go with it,
+    its slug gets a numeric suffix if the target already uses it, and both chapters' tokens are bumped
+    (response: `section`, `chapter`, `fromChapter`). `POST /api/sections/:id/duplicate`
+    (`{ expectedUpdatedAt }`, `201`) appends a copy at the end of the same chapter titled "<title>
+    (salinan)" with copies of its prose blocks (same order, fresh slugs) and its figure (photos are
+    attached to the copy as well; a chart keeps its table). Indicators and tables are data rows and
+    are **not** copied. Both lock chapters then section, run in one transaction and are audited
+    (`section.moved`, `section.duplicated`, info).
+  - **Section figure.** A section carries at most one figure: one photo, a group of 2–12 photos, a
+    diagram, or a chart (a stored `figure` content block, §7). Editors and Admins manage it only through
     `PUT /api/sections/:id/figure` (body `{ expectedUpdatedAt, figure }`, creates or replaces) and
     `DELETE /api/sections/:id/figure?expectedUpdatedAt=` (`404 FIGURE_NOT_FOUND` when there is none);
     both are CSRF-protected, use the content-block write limiter, and run in one transaction with the
@@ -201,13 +211,20 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
     400. The generic `PATCH`/`DELETE /api/content-blocks/:slug` refuse a figure block (`409
     FIGURE_BLOCK_PROTECTED`) so media bookkeeping cannot be bypassed. A figure is not a sibling of the
     section's prose blocks: it has no sort order, and prose create/reorder consider prose blocks only.
-    - Shape: `{ kind: 'photo' | 'photos', photos: [{ mediaId, alt, caption?, credit? }] }` or
+    - Shape: `{ kind: 'photo', photos: [{ mediaId, alt, caption?, credit? }] }`, `{ kind: 'photos', credit?, photos: [...] }` (`credit` is shared by the whole group; a photo's own `credit` overrides it) or
       `{ kind: 'diagram', title, source?, image?: { mediaId, alt }, bars?: { unit?, items: [{ label,
       value }] } }`. A diagram needs an image or bars. Limits: alt 1–300 characters (required),
-      caption ≤ 200, credit ≤ 120, diagram title 1–120, source ≤ 200, 1–20 bars with labels 1–80 and a
+      caption ≤ 200, credit (per photo or shared) ≤ 120, diagram title 1–120, source ≤ 200, 1–20 bars with labels 1–80 and a
       finite number value of at most 1 000 000 000 in magnitude, unique labels (compared trimmed and case-insensitively), unit ≤ 20; the serialized figure may not exceed 12 000 characters. Text is trimmed (a blank optional field is dropped), unknown keys
       are refused, the same media asset may not appear twice in one figure, and text may contain no HTML
       tags or control/bidi characters. Every `mediaId` must be a `cerita`-purpose photo upload (§7).
+    - **Chart:** `{ kind: 'chart', tableId, chartType: 'bar' | 'column', series: 'total' | 'by_sex', title,
+      source? }`, title 1–120, source ≤ 200. It stores a reference to an indicator table, never the
+      numbers, so the chart follows the table. The table must exist and sit on the **same Cerita page**
+      as the section (`422` otherwise). A chart has no media. While any chart uses a table, deleting that
+      table, or moving it to a section on another page, answers `409` (moving within the page is fine).
+      `by_sex` needs a table with a male/female split (`age_pyramid`, `religion_by_sex`); `422` otherwise.
+      Line charts are not offered: the tables hold one snapshot period, not a time series.
     - Media is attached with reference `('content_block', <figure block id>, 'figure')` for every photo in
       the new figure and detached for photos the replaced figure had and the new one lacks; deleting the
       figure detaches all of its photos. An asset still referenced elsewhere stays published. Media
@@ -591,16 +608,20 @@ setup-password, the OAuth callback, `/dashboard` (its own `<main>`) and the admi
   - **Failed** (any other failure, or a success without a page): an `<h1>`, the approved plain-language
     read message and a "Coba lagi" button; never a blank page.
   - **Ready**: chapters in order, each section showing its stored paragraphs (prose blocks in
-    `sort_order`), then its stored figure (below), its scalar figures with the backend-rendered
+    `sort_order`, rendered as limited Markdown, below), then its stored figure (below), its scalar figures with the backend-rendered
     comparison sentence (or hedged framing, §6) and source, and its matrix tables with `—` for
     missing cells and no bar for them.
   **Stored figure.** The reader reads the section's `figure` block (§7 `content_blocks`) from the
   same `GET /api/content-blocks` request as the paragraphs and draws it with the article figure
-  components: one photo, an offset pair for two, a swipeable row for three or more, or a diagram
-  (picture or bars, with its source). Photos are addressed as `/api/media/<mediaId>` (full size; the
+  components: one photo, an offset pair for two, a swipeable row for three or more, a diagram
+  (picture or bars, with its source), or a chart. A chart reads the indicator table it names (same
+  page, looked up by id among the page's loaded tables): `bar` draws horizontal bars, `column` vertical
+  columns, and `by_sex` draws male and female per row, told apart by text labels (in horizontal bars the series is named in each bar's label; columns also use a hatch pattern) as
+  well as colour; `total` draws one value per row. Each chart has a "Lihat sebagai tabel" table with the
+  same values and its source. A chart whose table is missing or has no value left renders nothing. Photos are addressed as `/api/media/<mediaId>` (full size; the
   thumbnail variant is not used because the cards are shown large). Alt text, caption and credit are
-  shown as stored. The stored data is parsed defensively (`utils/ceritaStoredFigure.ts`): a figure
-  of an unknown kind or shape, a photo without alt text or with a malformed id, and a bar without a
+  shown as stored; a photo without its own credit shows the group's shared credit. The stored data is parsed defensively (`utils/ceritaStoredFigure.ts`): a figure
+  of an unknown kind or shape (a chart with a bad table id, type, series or title included), a photo without alt text or with a malformed id, and a bar without a
   label or finite value are left out rather than raising an error; a figure block with no section,
   or for a section not on the page, is ignored. A figure counts as content, so a section that holds
   only a figure renders and is not reported as empty. **A photo that fails to load** (never attached,
@@ -898,10 +919,7 @@ marks the drop place). It is disabled, with the reason in its title, while a sea
 (the order is only shown in full) and while a save is in flight. A drop saves the whole order through
 the reorder API and announces the new position; a refused or failed save is shown in the same banner
 as the buttons. **Urutkan Cerita** shows Naik / Turun buttons on each card: the keyboard and touch
-route to the same reorder, since drag does not work on touch devices. **Edit** opens the page's
-structure at `?halaman=<slug>` (browser Back and "Kembali ke daftar" return to the list): its chapters
-and sections (add, rename, reorder, delete), and a section editor dialog for the section's paragraphs
-(prose blocks: add, edit, reorder, delete) and its one figure. "Judul utama & penulis" on the chosen page opens a
+route to the same reorder, since drag does not work on touch devices. **Edit** opens the page at `?halaman=<slug>` (browser Back and "Kembali ke daftar" return to the list) as a three-column editor. The left column is the structure tree: "Info cerita" (headline and byline dialog), then chapters, each expandable, with its sections numbered `1.1`, `1.2` and the kind of each section's figure (a section without one reads "Figur kosong"). The centre column holds the selected section (`?bab=<chapterId>&bagian=<sectionId>`, so a reload keeps it): its paragraphs (prose blocks: add, edit, reorder, delete) and its one figure, with Duplikat (a copy with its paragraphs and figure, appended to the same chapter) and Hapus bagian. The right column is a live preview of the saved section, Desktop or Ponsel, drawn with the public reader components; unsaved edits are not shown there. Each chapter and section also has an options menu (Ubah judul, Naik, Turun, Hapus) and its grip can be dragged within its chapter or page; the buttons are the baseline, drag is never required. Moving a section to another chapter of the same page is the move dialog. Choosing a chapter in the tree (`?halaman=<slug>&bab=<chapterId>`, no `bagian`) opens the **chapter overview** in the centre column: "BAB n DARI N · JUDUL", the chapter title as a labelled field saved with "Simpan judul" (a stale write keeps the typed title), Naik, Turun and Hapus bab, then one card per section (grip, thumbnail of its first photo or an icon for a chart, diagram or no figure, "BAGIAN 1.2", the title, a one-line excerpt of its first paragraph, a figure badge and a completeness badge "Lengkap", "Belum lengkap" or "Figur kosong", and a ⋯ menu: Edit bagian, Duplikat, Pindahkan ke bab lain…, Naik satu posisi, Turun satu posisi, Hapus bagian). Moving to another chapter lists only the other chapters of the same page; a chapter that is the only one hides the option and says why. A move or duplicate keeps the overview open and moves focus to the card. "Tambah bagian baru" closes the list: a title and an optional figure kind (1 gambar, 2 gambar, Galeri, Grafik) creates the section and opens it with that kind preselected in the figure editor. "Judul utama & penulis" on the chosen page opens a
 dialog for its optional headline, byline author and byline affiliation (all may stay empty; same
 token, stale-write and keep-the-draft behavior as rename). The reader shows the headline as the page
 `<h1>` (the page title moves into the eyebrow) and "Oleh <author>" with the affiliation only when an
@@ -937,10 +955,23 @@ author is stored; with nothing stored it shows the page title alone.
   answer without a figure count reads "N paragraf atau gambar"), the server's refusal is worded the
   same way, and for a section the dialog offers "Buka isi bagian" so the editor is never at
   a dead end.
+- **Paragraph text is limited Markdown, stored as plain text.** Section paragraphs (`block_type`
+  `prose`) accept `**tebal**`, `*miring*`, `[teks](alamat)` and lines starting `- ` for a bullet list.
+  A blank line starts a new paragraph; a single line break stays a line break. Links accept only
+  `http://`, `https://` and `mailto:` addresses; any other address shows its label as plain text.
+  Unpaired or odd markers stay literal. **No HTML is ever accepted**: a body containing an HTML tag
+  (`<` followed by a letter, `!` or `/`) is refused with 400 on create and update, and the public
+  reader renders the text with real elements, never as markup. The editor's paragraph form offers
+  a format toolbar (Tebal, Miring, Tautan, Daftar) that inserts the same syntax; Tautan asks for the
+  address in a small inline field and refuses anything outside the allow-list.
 - **The section editor** keeps one paragraph form open at a time (a draft is never silently replaced)
-  and asks before closing or leaving the route with unsaved work. Figure kinds: one photo, several
-  photos (2 to 12) or a diagram (an image, bars, or both). **Alt text is required for every photo and
-  every diagram image**; caption, credit, diagram source and bar unit are optional. Bar numbers follow
+  and asks before closing or leaving the route with unsaved work. Figure tiles ("Jenis figur"): **1 gambar** (one photo), **2 gambar** (two photos, shown as a pair), **Galeri** (3 to 12
+  photos, a carousel) or **Grafik**: a chart of an indicator table on the same page, read through "Dari tabel di menu Data" (bar or column, total or
+  by sex, required title, optional source; "Menurut jenis kelamin" only for an age-pyramid or religion-by-sex table, and the
+  editor says so otherwise), or an uploaded chart picture with bars and/or an image ("Unggah gambar grafik"). **Alt text is
+  required for every photo and every uploaded chart picture** ("Teks alternatif"); caption, credit, source and bar unit are optional. A group of several
+  photos may also carry one optional shared credit ("Sumber bersama"), which applies to every photo
+  without its own credit; a photo's own credit replaces it. Bar numbers follow
   the Indonesian convention (dot for thousands, comma for decimals): "1.234" is 1234 and "1.234,5" is
   1234.5, a dot that is not a valid thousands grouping ("12.5") is refused with a hint to use a comma,
   and a value like "12.500" is accepted as 12500 with a note under the field saying how it was read. Removing a

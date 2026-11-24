@@ -101,6 +101,30 @@ export const dummyPendidikanArticle: CeritaArticle = {
             source: 'Data contoh',
           },
         },
+        {
+          id: 'dummy-s5',
+          heading: 'Perbandingan jenjang pendidikan',
+          paragraphs: ['Teks contoh untuk bagian dengan grafik dari tabel indikator.'],
+          figure: {
+            kind: 'chart',
+            tableId: 'dummy-tabel-jenjang',
+            chartType: 'column',
+            series: 'by_sex',
+            title: 'Jenjang pendidikan menurut jenis kelamin (contoh)',
+            source: 'Data contoh',
+          },
+        },
+      ],
+    },
+  ],
+  tables: [
+    {
+      id: 'dummy-tabel-jenjang',
+      period: '2025 (contoh)',
+      rows: [
+        { id: 'sd', label: 'Tamat SD', male: 1650, female: 1550, total: 3200 },
+        { id: 'smp', label: 'Tamat SMP', male: 1300, female: 1300, total: 2600 },
+        { id: 'slta', label: 'Tamat SLTA (SMA)', male: 2000, female: null, total: 4100 },
       ],
     },
   ],
