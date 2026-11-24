@@ -10,13 +10,15 @@ import { toUserMessage, type FailureKind } from '../utils/userMessages';
  * Two consumers, one store:
  * - The Cerita page reads indicators per section (`fetchBySectionId`, `bySectionId`), tracking
  *   loading/error per section so one failed section cannot blank out or clobber a sibling.
- * - The CMS pulls the whole list in one page (`fetchIndicators`) and edits a row in place
- *   (`updateIndicator`). The backend caps `pageSize` at 200 and the kelurahan publishes dozens of
- *   figures, so the CMS filters client-side, the same choice the Ketua RT page makes for its 100
- *   rows (SPEC §8).
+ * - The CMS pulls the whole list (`fetchIndicators`, one request per 200-row page until the reported
+ *   total is reached) and edits a row in place (`updateIndicator`). The backend caps `pageSize`
+ *   at 200 and a full Prodeskel import runs to several hundred figures, so the CMS filters
+ *   client-side, the same choice the Ketua RT page makes for its 100 rows (SPEC §8).
  */
 
 export const INDICATORS_PAGE_SIZE = 200;
+/** Safety cap on the paging loop (50 × 200 = 10 000 indicators). */
+const MAX_INDICATOR_PAGES = 50;
 
 export type ComparisonTrend = 'naik' | 'turun' | 'tetap';
 
@@ -317,11 +319,27 @@ export const useIndicatorsStore = defineStore('indicators', () => {
 
     inFlight = (async () => {
       try {
-        const data = await apiRequestJson<{ indicators?: Indicator[]; total?: number }>(
-          `/api/indicators?pageSize=${INDICATORS_PAGE_SIZE}`,
-        );
-        indicators.value = Array.isArray(data.indicators) ? data.indicators : [];
-        total.value = typeof data.total === 'number' ? data.total : indicators.value.length;
+        // The API caps a page at INDICATORS_PAGE_SIZE rows, so walk the pages until the reported
+        // total is reached. Nothing is published to the store until every page has loaded, so a
+        // failure part-way keeps the previous list instead of showing a truncated one.
+        const base = `/api/indicators?pageSize=${INDICATORS_PAGE_SIZE}`;
+        const byId = new Map<string, Indicator>();
+        let reportedTotal = 0;
+        for (let page = 1; page <= MAX_INDICATOR_PAGES; page += 1) {
+          const data = await apiRequestJson<{ indicators?: Indicator[]; total?: number }>(
+            page === 1 ? base : `${base}&page=${page}`,
+          );
+          const rows = Array.isArray(data.indicators) ? data.indicators : [];
+          // Keyed by id: a row added or deleted mid-load shifts the pages and can repeat a row.
+          const before = byId.size;
+          for (const row of rows) byId.set(row.id, row);
+          reportedTotal = typeof data.total === 'number' ? data.total : byId.size;
+          if (byId.size === before || byId.size >= reportedTotal) break;
+        }
+        const all = [...byId.values()];
+        indicators.value = all;
+        // If the safety cap was hit, report what is actually loaded rather than a larger total.
+        total.value = Math.min(reportedTotal, all.length) || all.length;
         isLoaded.value = true;
       } catch (err) {
         // Do NOT treat 404 as loaded or empty — report error and keep existing data on failed refetch
