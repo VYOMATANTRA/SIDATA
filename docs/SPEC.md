@@ -94,8 +94,8 @@ Notes:
   coordinates enter only through the CMS/CSV import, so real roster data is never committed to the
   repository. Development seeds a fully synthetic roster and synthetic map points.
 - The public "data contoh" sample-roster flag (`maps.rt_leaders_sample_roster`) is explicit: ordinary
-  leader edits and CSV imports never change it. Only an Admin may flip it through
-  `PATCH /api/maps/rt-leaders/sample-status`, which is audited. Production seeds it `false`;
+  leader edits and CSV imports never change it. It has no CMS control: an Admin flips it only through
+  the audited `PATCH /api/maps/rt-leaders/sample-status` API. Production seeds it `false`;
   development seeds it `true` because its map coordinates are synthetic.
 - RT editor location PATCH and DELETE requests include `expectedRtNumber` (1–100). Under the
   point lock the server requires a `ketua_rt` point with exactly that coverage, returning 409 if
@@ -1023,8 +1023,8 @@ latitude, longitude, zoom, a point id or a metadata field.
   Ketua RT point it also says the Ketua RT's name and phone are not deleted. Deleting a seeded
   Ketua RT point still tombstones it server-side (§2).
 - **Boundaries.** Ketua RT name, phone and address stay in `/admin/rukun-tetangga`, which this screen
-  links to; a point never carries a second contact field. The sample-roster flag is Admin-only and
-  lives there; point edits never change it. After every create, edit or delete the shared maps
+  links to; a point never carries a second contact field. Point edits never change the
+  sample-roster flag. After every create, edit or delete the shared maps
   store (points and summary) and the Ketua RT roster are reloaded, so the public map and the Ketua
   RT page show the change without waiting for their caches.
 

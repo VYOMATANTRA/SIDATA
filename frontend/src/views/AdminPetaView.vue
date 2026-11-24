@@ -9,7 +9,7 @@
  * Boundaries kept on purpose:
  * - Ketua RT names, phones and addresses stay in `/admin/rukun-tetangga`; this screen only links
  *   there, and a point never carries a second contact field.
- * - The sample-roster flag is Admin-only and lives on the RT screen; nothing here changes it.
+ * - Nothing here changes the sample-roster flag.
  * - After every write the shared maps store and the Ketua RT roster are reloaded, so the public
  *   map and the Ketua RT page show the change at once instead of after their cache expires.
  */
@@ -368,7 +368,7 @@ async function reloadAll(): Promise<void> {
             >
               Rukun Tetangga
             </RouterLink>
-            . Status “data contoh” daftar Ketua RT juga diatur di sana.
+            .
           </p>
         </div>
         <BaseButton
