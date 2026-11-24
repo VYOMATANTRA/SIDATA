@@ -178,12 +178,13 @@ export function useKeyboardReorder(options: KeyboardReorderOptions): {
     });
   }
 
-  function cancel(): void {
+  // Escape puts focus back on the grip; a blur-cancel must leave focus where the user put it.
+  function cancel(restoreFocus = true): void {
     if (carriedKey.value === null) return;
     carriedKey.value = null;
     carriedTo.value = carriedFrom.value;
     announcement.value = 'Dibatalkan.';
-    focusGrip();
+    if (restoreFocus) focusGrip();
     finish();
   }
 
@@ -226,7 +227,7 @@ export function useKeyboardReorder(options: KeyboardReorderOptions): {
     const element = event.currentTarget as HTMLElement;
     // Let a list re-render (which can move the grip in the DOM) settle first, then check focus.
     void nextTick(() => {
-      if (carriedKey.value === key && document.activeElement !== element) cancel();
+      if (carriedKey.value === key && document.activeElement !== element) cancel(false);
     });
   }
 

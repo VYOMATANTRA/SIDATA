@@ -161,11 +161,24 @@ describe('useKeyboardReorder', () => {
     press(grip, ' ');
     press(grip, 'ArrowDown');
     await nextTick();
-    grip.blur();
+    const other = document.createElement('button');
+    document.body.appendChild(other);
+    other.focus();
     await nextTick();
     await Promise.resolve();
     expect(kb.isCarried('b')).toBe(false);
     expect(onMove).not.toHaveBeenCalled();
+    // The blur-cancel must not pull focus back to the grip the user just left.
+    expect(document.activeElement).toBe(other);
+  });
+
+  it('puts focus back on the grip when Escape cancels', () => {
+    const { kb, grip } = setup(['a', 'b', 'c']);
+    grip.focus();
+    press(grip, ' ');
+    press(grip, 'Escape');
+    expect(kb.isCarried('b')).toBe(false);
+    expect(document.activeElement).toBe(grip);
   });
 
   it('keeps the carried item while the list re-renders and focus returns to the grip', async () => {
