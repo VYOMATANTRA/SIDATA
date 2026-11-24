@@ -188,6 +188,16 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
   - **Standalone blocks.** `hero`, `sambutan_lurah`, `highlight` and the profile/catalog blocks
     (`section_id` NULL) can be neither created nor deleted through these endpoints (delete: `409
     STANDALONE_BLOCK_PROTECTED`); they are edited only via `PATCH /api/content-blocks/:slug`.
+  - **Move and duplicate a section.** `POST /api/sections/:id/move` (`{ targetChapterId,
+    expectedUpdatedAt }`) puts the section at the end of another chapter **of the same page** (`422`
+    for another page, `400` for its own chapter); its prose, figure, indicators and tables go with it,
+    its slug gets a numeric suffix if the target already uses it, and both chapters' tokens are bumped
+    (response: `section`, `chapter`, `fromChapter`). `POST /api/sections/:id/duplicate`
+    (`{ expectedUpdatedAt }`, `201`) appends a copy at the end of the same chapter titled "<title>
+    (salinan)" with copies of its prose blocks (same order, fresh slugs) and its figure (photos are
+    attached to the copy as well; a chart keeps its table). Indicators and tables are data rows and
+    are **not** copied. Both lock chapters then section, run in one transaction and are audited
+    (`section.moved`, `section.duplicated`, info).
   - **Section figure.** A section carries at most one figure: one photo, a group of 2–12 photos, a
     diagram, or a chart (a stored `figure` content block, §7). Editors and Admins manage it only through
     `PUT /api/sections/:id/figure` (body `{ expectedUpdatedAt, figure }`, creates or replaces) and
