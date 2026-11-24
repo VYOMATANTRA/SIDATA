@@ -17,6 +17,8 @@ import { toUserMessage, type FailureKind } from '../utils/userMessages';
  */
 
 export const INDICATORS_PAGE_SIZE = 200;
+/** Safety cap on the paging loop (50 × 200 = 10 000 indicators). */
+const MAX_INDICATOR_PAGES = 50;
 
 export type ComparisonTrend = 'naik' | 'turun' | 'tetap';
 
@@ -317,11 +319,23 @@ export const useIndicatorsStore = defineStore('indicators', () => {
 
     inFlight = (async () => {
       try {
-        const data = await apiRequestJson<{ indicators?: Indicator[]; total?: number }>(
-          `/api/indicators?pageSize=${INDICATORS_PAGE_SIZE}`,
-        );
-        indicators.value = Array.isArray(data.indicators) ? data.indicators : [];
-        total.value = typeof data.total === 'number' ? data.total : indicators.value.length;
+        // The API caps a page at INDICATORS_PAGE_SIZE rows, so walk the pages until the reported
+        // total is reached. Nothing is published to the store until every page has loaded, so a
+        // failure part-way keeps the previous list instead of showing a truncated one.
+        const base = `/api/indicators?pageSize=${INDICATORS_PAGE_SIZE}`;
+        const all: Indicator[] = [];
+        let reportedTotal = 0;
+        for (let page = 1; page <= MAX_INDICATOR_PAGES; page += 1) {
+          const data = await apiRequestJson<{ indicators?: Indicator[]; total?: number }>(
+            page === 1 ? base : `${base}&page=${page}`,
+          );
+          const rows = Array.isArray(data.indicators) ? data.indicators : [];
+          all.push(...rows);
+          reportedTotal = typeof data.total === 'number' ? data.total : all.length;
+          if (rows.length === 0 || all.length >= reportedTotal) break;
+        }
+        indicators.value = all;
+        total.value = reportedTotal;
         isLoaded.value = true;
       } catch (err) {
         // Do NOT treat 404 as loaded or empty — report error and keep existing data on failed refetch
