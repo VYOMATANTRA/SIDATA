@@ -220,7 +220,7 @@ const modes: ReadonlyArray<{ value: PreviewMode; label: string; test: string }> 
         </button>
       </div>
     </div>
-    <p class="text-text-muted text-xs">
+    <p class="text-text-muted text-[12px]">
       Pratinjau memperbarui diri saat Anda mengetik. Perubahan tampil di situs setelah Simpan
       perubahan.
     </p>

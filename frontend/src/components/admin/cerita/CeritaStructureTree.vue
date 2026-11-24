@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { ExclamationTriangleIcon, PlusIcon } from '@heroicons/vue/24/outline';
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  ExclamationTriangleIcon,
+  PlusIcon,
+} from '@heroicons/vue/24/outline';
 import BaseButton from '../../common/BaseButton.vue';
 import CardDragGrip from '../cards/CardDragGrip.vue';
 import { useCardDragReorder } from '../../../composables/useCardDragReorder';
@@ -165,19 +170,27 @@ function closeMenu(event: Event): void {
 </script>
 
 <template>
-  <nav aria-labelledby="cerita-pohon-judul" class="space-y-4" data-test="structure-tree">
-    <h3 id="cerita-pohon-judul" class="text-brand-navy text-base font-semibold">Struktur cerita</h3>
+  <nav aria-labelledby="cerita-pohon-judul" class="space-y-1" data-test="structure-tree">
+    <h3
+      id="cerita-pohon-judul"
+      class="text-text-muted px-1.5 pb-2 text-[13px] font-bold tracking-[0.06em] uppercase"
+    >
+      Struktur cerita
+    </h3>
 
     <button
       :id="ceritaIds.pageDetails"
       type="button"
-      class="border-border hover:bg-surface-muted focus-visible:outline-focus-ring rounded-btn text-brand-navy flex min-h-11 w-full items-center gap-2 border bg-white px-3 text-left text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
+      class="hover:bg-surface-muted focus-visible:outline-focus-ring rounded-btn text-brand-navy flex min-h-11 w-full items-center gap-2 px-3 text-left text-sm focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60"
       :disabled="busy"
       data-test="info-button"
       @click="emit('info')"
     >
-      Info cerita
+      <span class="flex-1">Info cerita</span>
+      <span class="text-text-muted text-[12px]">Judul, penulis</span>
     </button>
+
+    <div class="bg-border mx-1.5 my-2 h-px" aria-hidden="true"></div>
 
     <p
       v-if="page.chapters.length === 0"
@@ -205,7 +218,7 @@ function closeMenu(event: Event): void {
         "
         @drop.prevent="chapterDrag.dropOn(chapter.id, edgeAt($event))"
       >
-        <div class="border-border rounded-btn flex items-stretch overflow-hidden border bg-white">
+        <div class="flex items-stretch gap-0.5 rounded-btn">
           <CardDragGrip
             :blocked="dragBlock"
             :data-text="chapter.title"
@@ -216,48 +229,57 @@ function closeMenu(event: Event): void {
           <button
             :id="ceritaIds.treeChapter(chapter.id)"
             type="button"
-            class="hover:bg-surface-muted focus-visible:outline-focus-ring flex min-h-11 min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2"
+            class="hover:bg-surface-muted focus-visible:outline-focus-ring rounded-btn flex min-h-11 min-w-0 flex-1 items-start gap-2 px-1 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2"
+            :class="overviewChapterId === chapter.id ? 'bg-selected' : ''"
             :aria-expanded="isOpen(chapter) ? 'true' : 'false'"
             :aria-controls="`cerita-pohon-bab-panel-${chapter.id}`"
             :aria-current="overviewChapterId === chapter.id ? 'true' : undefined"
-            :class="overviewChapterId === chapter.id ? 'bg-brand-navy/5' : ''"
             data-test="chapter-toggle"
             @click="
               toggle(chapter);
               emit('select-chapter', chapter);
             "
           >
-            <span aria-hidden="true" class="text-text-muted w-3 shrink-0 text-xs">
-              {{ isOpen(chapter) ? '▾' : '▸' }}
+            <span aria-hidden="true" class="text-text-muted mt-[3px] flex h-5 w-4 shrink-0 items-center justify-center">
+              <ChevronDownIcon v-if="isOpen(chapter)" class="h-4 w-4" />
+              <ChevronRightIcon v-else class="h-4 w-4" />
             </span>
-            <span class="min-w-0 flex-1">
+            <span class="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-2">
               <span
-                class="text-brand-navy block truncate text-sm font-semibold"
+                class="text-brand-navy min-w-0 break-words text-sm font-bold"
                 data-test="chapter-title"
               >
                 {{ chapterLabel(chapter, chapterIndex) }}
               </span>
-              <span class="text-text-muted block text-xs" data-test="chapter-meta">
-                {{ chapter.sections.length }} bagian
+              <span
+                class="shrink-0 text-[12px]"
+                :class="chapter.sections.length === 0 ? 'text-status-warning' : 'text-text-muted'"
+                data-test="chapter-meta"
+              >
+                {{
+                  chapter.sections.length === 0
+                    ? 'Belum ada bagian'
+                    : `${chapter.sections.length} bagian`
+                }}
               </span>
             </span>
           </button>
           <details class="relative flex shrink-0 items-stretch" data-test="chapter-menu">
             <summary
-              class="hover:bg-surface-muted focus-visible:outline-focus-ring text-brand-navy flex min-h-11 w-11 cursor-pointer list-none items-center justify-center text-lg focus-visible:outline-2 focus-visible:outline-offset-2 [&::-webkit-details-marker]:hidden"
+              class="hover:bg-surface-muted focus-visible:outline-focus-ring text-text-muted hover:text-brand-navy rounded-btn flex min-h-11 w-11 cursor-pointer list-none items-center justify-center text-[18px] focus-visible:outline-2 focus-visible:outline-offset-2"
               :aria-label="`Pilihan untuk ${chapterLabel(chapter, chapterIndex)}`"
             >
               <span aria-hidden="true">⋯</span>
             </summary>
             <div
-              class="border-border rounded-card absolute top-full right-0 z-10 mt-1 grid w-48 gap-1 border bg-white p-2 shadow-md"
+              class="border-border rounded-card absolute top-full right-0 z-10 mt-1 grid w-56 gap-1 border bg-white p-2 shadow-md"
             >
               <BaseButton
                 :id="ceritaIds.chapterRename(chapter.id)"
                 type="button"
-                variant="secondary"
-                size="sm"
-                class="min-h-11 justify-start"
+                variant="ghost"
+                size="md"
+                class="min-h-11 justify-start text-sm"
                 :disabled="busy"
                 data-test="chapter-rename"
                 @click="
@@ -270,9 +292,9 @@ function closeMenu(event: Event): void {
               <BaseButton
                 :id="ceritaIds.chapterUp(chapter.id)"
                 type="button"
-                variant="secondary"
-                size="sm"
-                class="min-h-11 justify-start"
+                variant="ghost"
+                size="md"
+                class="min-h-11 justify-start text-sm"
                 :disabled="busy || chapterIndex === 0"
                 @click="
                   closeMenu($event);
@@ -284,9 +306,9 @@ function closeMenu(event: Event): void {
               <BaseButton
                 :id="ceritaIds.chapterDown(chapter.id)"
                 type="button"
-                variant="secondary"
-                size="sm"
-                class="min-h-11 justify-start"
+                variant="ghost"
+                size="md"
+                class="min-h-11 justify-start text-sm"
                 :disabled="busy || chapterIndex === page.chapters.length - 1"
                 @click="
                   closeMenu($event);
@@ -298,9 +320,9 @@ function closeMenu(event: Event): void {
               <BaseButton
                 :id="ceritaIds.chapterDelete(chapter.id)"
                 type="button"
-                variant="secondary"
-                size="sm"
-                class="min-h-11 justify-start"
+                variant="danger"
+                size="md"
+                class="min-h-11 justify-start text-sm"
                 :disabled="busy"
                 @click="
                   closeMenu($event);
@@ -316,7 +338,7 @@ function closeMenu(event: Event): void {
         <div
           v-if="isOpen(chapter)"
           :id="`cerita-pohon-bab-panel-${chapter.id}`"
-          class="border-border mt-1 space-y-2 border-l-2 pl-3"
+          class="mt-0.5 space-y-1 pl-[34px]"
         >
           <p
             v-if="chapter.sections.length === 0"
@@ -328,7 +350,7 @@ function closeMenu(event: Event): void {
 
           <ol
             v-else
-            class="space-y-1"
+            class="space-y-0.5"
             :aria-label="`Bagian dari ${chapterLabel(chapter, chapterIndex)}`"
           >
             <li
@@ -350,12 +372,8 @@ function closeMenu(event: Event): void {
               @drop.prevent="dropSection(chapter, section, $event)"
             >
               <div
-                class="rounded-btn flex items-stretch overflow-hidden border"
-                :class="
-                  selectedSectionId === section.id
-                    ? 'border-brand-navy bg-brand-navy/5'
-                    : 'border-border bg-white'
-                "
+                class="rounded-btn flex items-stretch gap-0.5"
+                :class="selectedSectionId === section.id ? 'bg-selected' : ''"
               >
                 <CardDragGrip
                   :blocked="dragBlock"
@@ -367,51 +385,56 @@ function closeMenu(event: Event): void {
                 <button
                   :id="ceritaIds.treeSection(section.id)"
                   type="button"
-                  class="hover:bg-surface-muted focus-visible:outline-focus-ring flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2"
+                  class="hover:bg-surface-muted focus-visible:outline-focus-ring rounded-btn flex min-h-11 min-w-0 flex-1 items-center gap-2 px-1 py-1.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2"
                   :aria-current="selectedSectionId === section.id ? 'true' : undefined"
                   data-test="section-select"
                   @click="emit('select-section', chapter, section)"
                 >
-                  <span class="min-w-0 flex-1">
-                    <span class="text-brand-navy block truncate text-sm">
-                      <span class="text-text-muted mr-1.5 tabular-nums">
-                        {{ sectionNumber(chapterIndex, sectionIndex) }}
-                      </span>
-                      <span class="font-medium">{{ sectionLabel(section, sectionIndex) }}</span>
-                    </span>
-                    <span
-                      class="block text-xs"
-                      :class="
-                        figureSummary(section.id).empty
-                          ? 'font-medium text-amber-900'
+                  <span
+                    class="text-text-muted w-7 shrink-0 text-[12px] font-semibold tabular-nums"
+                    :class="selectedSectionId === section.id ? 'text-brand-navy' : ''"
+                  >
+                    {{ sectionNumber(chapterIndex, sectionIndex) }}
+                  </span>
+                  <span
+                    class="text-brand-navy min-w-0 flex-1 truncate text-sm font-medium"
+                  >
+                    {{ sectionLabel(section, sectionIndex) }}
+                  </span>
+                  <span
+                    class="flex shrink-0 items-center gap-1 text-[12px] font-medium whitespace-nowrap"
+                    :class="
+                      figureSummary(section.id).empty
+                        ? 'text-status-warning'
+                        : selectedSectionId === section.id
+                          ? 'text-brand-navy'
                           : 'text-text-muted'
-                      "
-                      data-test="section-figure"
-                    >
-                      <ExclamationTriangleIcon
-                        v-if="figureSummary(section.id).empty"
-                        class="mr-1 inline h-3.5 w-3.5 align-[-2px]"
-                        aria-hidden="true"
-                      />{{ figureSummary(section.id).label }}
-                    </span>
+                    "
+                    data-test="section-figure"
+                  >
+                    <ExclamationTriangleIcon
+                      v-if="figureSummary(section.id).empty"
+                      class="h-3.5 w-3.5"
+                      aria-hidden="true"
+                    />{{ figureSummary(section.id).label }}
                   </span>
                 </button>
                 <details class="relative flex shrink-0 items-stretch" data-test="section-menu">
                   <summary
-                    class="hover:bg-surface-muted focus-visible:outline-focus-ring text-brand-navy flex min-h-11 w-11 cursor-pointer list-none items-center justify-center text-lg focus-visible:outline-2 focus-visible:outline-offset-2 [&::-webkit-details-marker]:hidden"
+                    class="hover:bg-surface-muted focus-visible:outline-focus-ring text-text-muted hover:text-brand-navy rounded-btn flex min-h-11 w-11 cursor-pointer list-none items-center justify-center text-[18px] focus-visible:outline-2 focus-visible:outline-offset-2"
                     :aria-label="`Pilihan untuk bagian ${sectionNumber(chapterIndex, sectionIndex)} ${sectionLabel(section, sectionIndex)}`"
                   >
                     <span aria-hidden="true">⋯</span>
                   </summary>
                   <div
-                    class="border-border rounded-card absolute top-full right-0 z-10 mt-1 grid w-48 gap-1 border bg-white p-2 shadow-md"
+                    class="border-border rounded-card absolute top-full right-0 z-10 mt-1 grid w-56 gap-1 border bg-white p-2 shadow-md"
                   >
                     <BaseButton
                       :id="ceritaIds.sectionRename(section.id)"
                       type="button"
-                      variant="secondary"
-                      size="sm"
-                      class="min-h-11 justify-start"
+                      variant="ghost"
+                      size="md"
+                      class="min-h-11 justify-start text-sm"
                       :disabled="busy"
                       data-test="section-rename"
                       @click="
@@ -424,9 +447,9 @@ function closeMenu(event: Event): void {
                     <BaseButton
                       :id="ceritaIds.sectionUp(section.id)"
                       type="button"
-                      variant="secondary"
-                      size="sm"
-                      class="min-h-11 justify-start"
+                      variant="ghost"
+                      size="md"
+                      class="min-h-11 justify-start text-sm"
                       :disabled="busy || sectionIndex === 0"
                       @click="
                         closeMenu($event);
@@ -438,9 +461,9 @@ function closeMenu(event: Event): void {
                     <BaseButton
                       :id="ceritaIds.sectionDown(section.id)"
                       type="button"
-                      variant="secondary"
-                      size="sm"
-                      class="min-h-11 justify-start"
+                      variant="ghost"
+                      size="md"
+                      class="min-h-11 justify-start text-sm"
                       :disabled="busy || sectionIndex === chapter.sections.length - 1"
                       @click="
                         closeMenu($event);
@@ -452,9 +475,9 @@ function closeMenu(event: Event): void {
                     <BaseButton
                       :id="ceritaIds.sectionDelete(section.id)"
                       type="button"
-                      variant="secondary"
-                      size="sm"
-                      class="min-h-11 justify-start"
+                      variant="danger"
+                      size="md"
+                      class="min-h-11 justify-start text-sm"
                       :disabled="busy"
                       @click="
                         closeMenu($event);
@@ -472,9 +495,9 @@ function closeMenu(event: Event): void {
           <BaseButton
             :id="ceritaIds.addSection(chapter.id)"
             type="button"
-            variant="secondary"
-            size="sm"
-            class="min-h-11 w-full justify-start"
+            variant="ghost"
+            size="md"
+            class="min-h-11 w-full justify-start text-sm text-brand-navy"
             :disabled="busy"
             data-test="section-add"
             @click="emit('add-section', chapter)"
@@ -489,25 +512,21 @@ function closeMenu(event: Event): void {
       </li>
     </ol>
 
-    <p v-if="page.chapters.length > 0" class="text-text-muted text-xs" data-test="drag-hint">
+    <p v-if="page.chapters.length > 0" class="text-text-muted mt-4 px-2 text-[13px] leading-relaxed" data-test="drag-hint">
       Seret ikon titik-titik untuk mengubah urutan bab atau bagian. Pilihan “Naik” dan “Turun” di
       menu ⋯ melakukan hal yang sama dari keyboard.
     </p>
 
-    <BaseButton
+    <button
       :id="ceritaIds.addChapter"
       type="button"
-      variant="secondary"
-      size="md"
-      class="min-h-11 w-full justify-start"
+      class="border-border-strong text-brand-navy hover:bg-surface-muted focus-visible:outline-focus-ring rounded-btn mt-3 flex min-h-11 w-full items-center justify-center gap-2 border-2 border-dashed text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
       :disabled="busy"
       data-test="chapter-add"
       @click="emit('add-chapter')"
     >
-      <template #leftIcon>
-        <PlusIcon class="h-4 w-4" aria-hidden="true" />
-      </template>
+      <PlusIcon class="h-4 w-4" aria-hidden="true" />
       Tambah bab
-    </BaseButton>
+    </button>
   </nav>
 </template>

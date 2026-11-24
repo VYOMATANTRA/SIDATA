@@ -765,7 +765,7 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
               <path d="M7 15l4-4 3 3 5-6"></path>
             </svg>
             <span class="text-sm font-semibold">{{ TILE_LABELS[option].title }}</span>
-            <span class="text-xs opacity-90">{{ TILE_LABELS[option].description }}</span>
+            <span class="text-[12px] opacity-90">{{ TILE_LABELS[option].description }}</span>
           </label>
         </div>
       </div>
@@ -838,7 +838,7 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
       </div>
 
       <div v-else-if="tile === 'photos-2'" class="space-y-4" data-test="figure-photos">
-        <div class="grid items-start gap-4 @min-[720px]:grid-cols-2">
+        <div class="grid items-start gap-4 @min-[560px]:grid-cols-2">
           <CeritaFigurePhotoRow
             v-for="(row, index) in pairRows"
             :key="row.uid"
@@ -864,9 +864,9 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
               <BaseButton
                 :id="ids.swapPhotos"
                 type="button"
-                variant="secondary"
-                size="sm"
-                class="min-h-11"
+                variant="ghost"
+                size="md"
+                class="min-h-11 text-sm"
                 :disabled="busy || uploading"
                 data-test="swap-photos"
                 @click="swapPairPhotos"
@@ -894,13 +894,13 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
             data-test="shared-credit"
           />
         </FormField>
-        <p v-if="errorByField[ids.swapPhotos]" class="text-status-error text-xs font-medium">
+        <p v-if="errorByField[ids.swapPhotos]" class="text-status-error text-[12px] font-medium">
           {{ errorByField[ids.swapPhotos] }}
         </p>
       </div>
 
       <div v-else class="space-y-4" data-test="figure-photos">
-        <div class="grid grid-cols-2 gap-3 @min-[720px]:grid-cols-4">
+        <div class="grid grid-cols-2 gap-3 @min-[560px]:grid-cols-4">
           <div
             v-for="(row, index) in galleryRows"
             :key="row.uid"
@@ -967,18 +967,18 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
             data-test="shared-credit"
           />
         </FormField>
-        <p class="text-text-muted text-xs">
+        <p class="text-text-muted text-[12px]">
           Urutan di sini = urutan di korsel. {{ photoRows.rows.value.length }} dari
           {{ FIGURE_LIMITS.photosMax }} foto (minimal {{ GALLERY_PHOTOS_MIN }}).
         </p>
-        <p v-if="errorByField[ids.addPhoto]" class="text-status-error text-xs font-medium">
+        <p v-if="errorByField[ids.addPhoto]" class="text-status-error text-[12px] font-medium">
           {{ errorByField[ids.addPhoto] }}
         </p>
       </div>
     </template>
 
     <template v-else-if="tile === 'chart'">
-      <div class="grid items-start gap-5 @min-[720px]:grid-cols-2">
+      <div class="grid items-start gap-5 @min-[560px]:grid-cols-2">
         <div class="space-y-5">
           <fieldset class="space-y-2" :disabled="busy || uploading" data-test="figure-grafik-source">
             <legend class="text-brand-navy mb-2 text-sm font-semibold">Sumber grafik</legend>
@@ -1006,7 +1006,7 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
                 <span class="text-brand-navy text-sm font-semibold">
                   {{ source === 'table' ? 'Dari tabel di menu Data' : 'Unggah gambar grafik' }}
                 </span>
-                <span class="text-text-muted text-xs">
+                <span class="text-text-muted text-[12px]">
                   {{
                     source === 'table'
                       ? 'Grafik ikut berubah saat data diperbarui'
@@ -1114,14 +1114,14 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
             <p
               v-if="bySexHint"
               :id="`${ids.chartSeries('by_sex')}-hint`"
-              class="text-text-muted text-xs"
+              class="text-text-muted text-[12px]"
               data-test="chart-series-hint"
             >
               {{ bySexHint }}
             </p>
             <p
               v-if="errorByField[ids.chartSeries('by_sex')]"
-              class="text-status-error text-xs font-medium"
+              class="text-status-error text-[12px] font-medium"
             >
               {{ errorByField[ids.chartSeries('by_sex')] }}
             </p>
@@ -1167,7 +1167,7 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
           </FormField>
         </div>
 
-        <div v-else class="space-y-5 @min-[720px]:col-span-2" data-test="figure-diagram">
+        <div v-else class="space-y-5 @min-[560px]:col-span-2" data-test="figure-diagram">
           <FormField
             :id="ids.diagramTitle"
             label="Judul grafik"
@@ -1316,7 +1316,7 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
                   <p
                     v-if="barNote(bar.value)"
                     :id="`${ids.barValue(index)}-note`"
-                    class="text-text-muted mt-1.5 text-xs"
+                    class="text-text-muted mt-1.5 text-[12px]"
                     data-test="bar-value-note"
                   >
                     {{ barNote(bar.value) }}
@@ -1350,7 +1350,7 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
               >
                 Tambah batang
               </BaseButton>
-              <p v-if="errorByField[ids.addBar]" class="text-status-error text-xs font-medium">
+              <p v-if="errorByField[ids.addBar]" class="text-status-error text-[12px] font-medium">
                 {{ errorByField[ids.addBar] }}
               </p>
             </div>

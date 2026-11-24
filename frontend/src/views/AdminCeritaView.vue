@@ -1813,7 +1813,7 @@ onUnmounted(() => {
 
       <div
         v-else
-        class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)_400px] md:grid-cols-[300px_minmax(0,1fr)]"
+        class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)_400px] md:grid-cols-[340px_minmax(0,1fr)]"
         data-test="editor-columns"
       >
         <aside

@@ -101,11 +101,11 @@ const cardClass = computed(() => {
         @dragend="emit('grip-end')"
         >⠿</span
       >
-      <span :id="headingId" class="text-text-muted text-xs font-semibold">{{ label }}</span>
+      <span :id="headingId" class="text-text-muted text-[12px] font-semibold">{{ label }}</span>
     </div>
     <span v-else :id="headingId" class="sr-only">{{ label }}</span>
 
-    <div :class="variant === 'single' ? 'grid items-start gap-5 @min-[720px]:grid-cols-2' : 'space-y-4'">
+    <div :class="variant === 'single' ? 'grid items-start gap-5 @min-[560px]:grid-cols-2' : 'space-y-4'">
       <MediaPhotoField
         v-model="mediaId"
         purpose="cerita"

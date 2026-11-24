@@ -71,23 +71,28 @@ defineExpose({ reset });
 <template>
   <section
     :aria-labelledby="ceritaIds.overviewAddHeading"
-    class="border-border-strong rounded-card space-y-4 border border-dashed bg-white p-4"
+    class="border-border-strong rounded-card space-y-4 border-2 border-dashed bg-white p-5"
     data-test="add-section-panel"
   >
-    <h3 :id="ceritaIds.overviewAddHeading" class="text-brand-navy text-base font-semibold">
-      Tambah bagian baru
-    </h3>
+    <div>
+      <h3 :id="ceritaIds.overviewAddHeading" class="text-brand-navy text-base font-semibold">
+        Tambah bagian baru
+      </h3>
+      <p class="text-text-muted mt-1 text-[13px]">
+        Pilih jenis figur untuk memulai. Bisa diganti kapan saja.
+      </p>
+    </div>
 
     <form novalidate class="space-y-4" data-test="add-section-form" @submit.prevent="submit">
       <fieldset class="space-y-2" :disabled="busy">
         <legend class="text-brand-navy mb-2 text-sm font-semibold">
           Jenis gambar <span class="text-text-muted font-normal">(opsional)</span>
         </legend>
-        <div class="grid gap-2 sm:grid-cols-2">
+        <div class="grid gap-2.5 sm:grid-cols-4">
           <label
             v-for="tile in TILES"
             :key="tile.kind"
-            class="border-border has-[:checked]:border-brand-navy has-[:checked]:bg-brand-navy/5 has-[:focus-visible]:outline-focus-ring rounded-btn flex min-h-11 cursor-pointer flex-col gap-0.5 border bg-white px-3 py-2 text-left has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2"
+            class="border-border has-[:checked]:border-brand-navy has-[:checked]:bg-brand-navy/5 has-[:focus-visible]:outline-focus-ring rounded-btn flex min-h-24 cursor-pointer flex-col gap-1 p-3 border bg-white px-3 py-2 text-left has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2"
           >
             <span class="flex items-center gap-2">
               <input
@@ -100,7 +105,7 @@ defineExpose({ reset });
               />
               <span class="text-brand-navy text-sm font-semibold">{{ tile.label }}</span>
             </span>
-            <span class="text-text-muted pl-6 text-xs">{{ tile.description }}</span>
+            <span class="text-text-muted pl-6 text-[12px]">{{ tile.description }}</span>
           </label>
         </div>
       </fieldset>

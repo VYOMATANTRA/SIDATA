@@ -137,7 +137,7 @@ function confirmLink(): void {
         type="text"
         :class="INPUT_CLASSES"
         :disabled="disabled"
-        class="min-h-11 text-lg font-semibold"
+        class="min-h-11 text-[18px] font-semibold"
         :aria-describedby="titleError ? titleErrorId : undefined"
         :aria-invalid="titleError ? 'true' : undefined"
         data-test="section-title"
@@ -145,7 +145,7 @@ function confirmLink(): void {
       <p
         v-if="titleError"
         :id="titleErrorId"
-        class="text-status-error text-xs font-medium"
+        class="text-status-error text-[12px] font-medium"
         data-test="section-title-error"
       >
         {{ titleError }}
@@ -154,10 +154,10 @@ function confirmLink(): void {
 
     <div class="space-y-2">
       <label :for="bodyId" class="text-brand-navy text-sm font-semibold">Isi</label>
-      <div class="rounded-btn border-border-strong overflow-hidden border">
+      <div class="rounded-btn border-border overflow-hidden border">
         <CeritaFormatToolbar
           :disabled="disabled"
-          class="border-border bg-surface-muted gap-1 border-b p-1.5"
+          class="border-border bg-surface-muted gap-1 border-b px-1.5 py-1"
           @format="handleFormat"
         />
 
@@ -186,7 +186,7 @@ function confirmLink(): void {
           <p
             v-if="linkError"
             :id="linkErrorId"
-            class="text-status-error text-xs font-medium"
+            class="text-status-error text-[12px] font-medium"
             data-test="link-error"
           >
             {{ linkError }}
@@ -227,13 +227,13 @@ function confirmLink(): void {
           data-test="section-body"
         ></textarea>
       </div>
-      <p :id="hintId" class="text-text-muted text-xs" data-test="section-body-hint">
+      <p :id="hintId" class="text-text-muted text-[13px]" data-test="section-body-hint">
         Satu atau beberapa paragraf. Tekan Enter dua kali untuk paragraf baru.
       </p>
       <p
         v-if="bodyError"
         :id="bodyErrorId"
-        class="text-status-error text-xs font-medium"
+        class="text-status-error text-[12px] font-medium"
         data-test="section-body-error"
       >
         {{ bodyError }}
