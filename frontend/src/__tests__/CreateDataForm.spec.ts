@@ -17,6 +17,7 @@ function hierarchy(): HierarchyPage[] {
       bylineAuthor: null,
       bylineAffiliation: null,
       sortOrder: 0,
+      createdAt: UPDATED,
       updatedAt: UPDATED,
       chapters: [
         {
