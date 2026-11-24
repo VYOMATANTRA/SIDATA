@@ -655,7 +655,11 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
     </div>
 
     <div v-if="serverError" :id="failureId" tabindex="-1" class="outline-none">
-      <AlertBanner :message="serverError" :kind="serverErrorKind ?? undefined" data-test="figure-save-error" />
+      <AlertBanner
+        :message="serverError"
+        :kind="serverErrorKind ?? undefined"
+        data-test="figure-save-error"
+      />
     </div>
 
     <div
@@ -708,7 +712,7 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
           />
           <label
             :for="ids.tile(option)"
-            class="rounded-card border-border text-brand-navy peer-checked:border-brand-navy peer-checked:bg-brand-navy peer-checked:text-white peer-focus-visible:outline-focus-ring hover:bg-surface-muted peer-checked:hover:bg-brand-navy peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 flex min-h-[76px] cursor-pointer flex-col items-start gap-1 border-2 bg-white p-3 text-left"
+            class="rounded-card border-border text-brand-navy peer-checked:border-brand-navy peer-checked:bg-brand-navy peer-focus-visible:outline-focus-ring hover:bg-surface-muted peer-checked:hover:bg-brand-navy flex min-h-[76px] cursor-pointer flex-col items-start gap-1 border-2 bg-white p-3 text-left peer-checked:text-white peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2"
           >
             <svg
               v-if="option === 'photo'"
@@ -940,7 +944,7 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
           <button
             :id="ids.addPhoto"
             type="button"
-            class="rounded-card border-border-strong text-brand-navy hover:bg-surface-muted focus-visible:outline-focus-ring flex min-h-40 flex-col items-center justify-center gap-1.5 border-2 border-dashed bg-surface-muted px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            class="rounded-card border-border-strong text-brand-navy hover:bg-surface-muted focus-visible:outline-focus-ring bg-surface-muted flex min-h-40 flex-col items-center justify-center gap-1.5 border-2 border-dashed px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             :disabled="busy || uploading || photoRows.isFull()"
             data-test="add-photo"
             @click="addGalleryPhoto"
@@ -980,7 +984,11 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
     <template v-else-if="tile === 'chart'">
       <div class="grid items-start gap-5 @min-[560px]:grid-cols-2">
         <div class="space-y-5">
-          <fieldset class="space-y-2" :disabled="busy || uploading" data-test="figure-grafik-source">
+          <fieldset
+            class="space-y-2"
+            :disabled="busy || uploading"
+            data-test="figure-grafik-source"
+          >
             <legend class="text-brand-navy mb-2 text-sm font-semibold">Sumber grafik</legend>
             <label
               v-for="source in ['table', 'upload'] as GrafikSource[]"
@@ -1056,7 +1064,8 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
               class="text-text-muted text-sm"
               data-test="chart-tables-empty"
             >
-              Belum ada tabel data di halaman ini. Tambahkan tabel di menu Data, lalu kembali ke sini.
+              Belum ada tabel data di halaman ini. Tambahkan tabel di menu Data, lalu kembali ke
+              sini.
             </p>
             <p v-else-if="chartTableOptions === null" class="text-text-muted text-sm" role="status">
               Daftar tabel sedang dimuat…
@@ -1359,7 +1368,10 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
       </div>
     </template>
 
-    <div v-if="dirty || stored" class="border-border flex flex-wrap items-center gap-2 border-t pt-4">
+    <div
+      v-if="dirty || stored"
+      class="border-border flex flex-wrap items-center gap-2 border-t pt-4"
+    >
       <BaseButton
         v-if="dirty"
         type="button"

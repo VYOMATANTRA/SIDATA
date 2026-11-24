@@ -221,7 +221,9 @@ function confirmLink(): void {
           v-model="body"
           rows="8"
           :disabled="disabled"
-          :aria-describedby="[hintId, bodyError ? bodyErrorId : undefined].filter(Boolean).join(' ')"
+          :aria-describedby="
+            [hintId, bodyError ? bodyErrorId : undefined].filter(Boolean).join(' ')
+          "
           :aria-invalid="bodyError ? 'true' : undefined"
           class="text-brand-navy focus-visible:outline-focus-ring block w-full resize-y border-0 p-3 text-[15px] leading-relaxed focus-visible:outline-2 focus-visible:-outline-offset-2 disabled:opacity-60"
           data-test="section-body"
@@ -238,11 +240,7 @@ function confirmLink(): void {
       >
         {{ bodyError }}
       </p>
-      <p
-        v-if="paragraphCount > 1"
-        class="text-text-muted text-sm"
-        data-test="section-legacy-note"
-      >
+      <p v-if="paragraphCount > 1" class="text-text-muted text-sm" data-test="section-legacy-note">
         Bagian ini punya beberapa paragraf lama; menyimpan akan menggabungkannya menjadi satu isi.
       </p>
     </div>

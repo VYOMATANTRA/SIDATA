@@ -105,7 +105,11 @@ const cardClass = computed(() => {
     </div>
     <span v-else :id="headingId" class="sr-only">{{ label }}</span>
 
-    <div :class="variant === 'single' ? 'grid items-start gap-5 @min-[560px]:grid-cols-2' : 'space-y-4'">
+    <div
+      :class="
+        variant === 'single' ? 'grid items-start gap-5 @min-[560px]:grid-cols-2' : 'space-y-4'
+      "
+    >
       <MediaPhotoField
         v-model="mediaId"
         purpose="cerita"

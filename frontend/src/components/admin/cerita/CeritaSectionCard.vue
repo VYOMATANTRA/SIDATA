@@ -58,11 +58,10 @@ const titleLabel = computed(() => props.title);
 
 <template>
   <div
-    class="rounded-card relative flex items-center gap-3 border bg-white py-3 pr-2 pl-1"
+    class="rounded-card border-border relative flex items-center gap-3 border bg-white py-3 pr-2 pl-1"
     :class="{
-      'border-border': dropEdge === null,
-      'border-t-brand-navy border-t-2 border-border': dropEdge === 'before',
-      'border-b-brand-navy border-b-2 border-border': dropEdge === 'after',
+      'border-t-brand-navy border-t-2': dropEdge === 'before',
+      'border-b-brand-navy border-b-2': dropEdge === 'after',
     }"
     data-test="overview-card"
   >
@@ -101,13 +100,16 @@ const titleLabel = computed(() => props.title);
     </div>
 
     <div class="min-w-0 flex-1 space-y-1">
-      <p class="text-text-muted text-[12px] font-semibold tracking-wide uppercase" data-test="overview-eyebrow">
+      <p
+        class="text-text-muted text-[12px] font-semibold tracking-wide uppercase"
+        data-test="overview-eyebrow"
+      >
         Bagian {{ number }}
       </p>
       <button
         :id="ceritaIds.overviewCardTitle(id)"
         type="button"
-        class="text-brand-navy focus-visible:outline-focus-ring rounded-xs block min-h-11 max-w-full text-left text-[17px] font-semibold break-words hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+        class="text-brand-navy focus-visible:outline-focus-ring block min-h-11 max-w-full rounded-xs text-left text-[17px] font-semibold break-words hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
         data-test="overview-title"
         @click="emit('edit')"
       >

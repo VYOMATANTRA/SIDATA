@@ -218,7 +218,7 @@ function closeMenu(event: Event): void {
         "
         @drop.prevent="chapterDrag.dropOn(chapter.id, edgeAt($event))"
       >
-        <div class="flex items-stretch gap-0.5 rounded-btn">
+        <div class="rounded-btn flex items-stretch gap-0.5">
           <CardDragGrip
             :blocked="dragBlock"
             :data-text="chapter.title"
@@ -230,7 +230,9 @@ function closeMenu(event: Event): void {
             :id="ceritaIds.treeChapter(chapter.id)"
             type="button"
             class="hover:bg-surface-muted focus-visible:outline-focus-ring rounded-btn flex min-h-11 min-w-0 flex-1 items-start gap-2 px-1 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2"
-            :class="overviewChapterId === chapter.id ? 'bg-selected' : ''"
+            :class="
+              overviewChapterId === chapter.id ? 'bg-selected border-l-brand-navy border-l-4' : ''
+            "
             :aria-expanded="isOpen(chapter) ? 'true' : 'false'"
             :aria-controls="`cerita-pohon-bab-panel-${chapter.id}`"
             :aria-current="overviewChapterId === chapter.id ? 'true' : undefined"
@@ -240,13 +242,16 @@ function closeMenu(event: Event): void {
               emit('select-chapter', chapter);
             "
           >
-            <span aria-hidden="true" class="text-text-muted mt-[3px] flex h-5 w-4 shrink-0 items-center justify-center">
+            <span
+              aria-hidden="true"
+              class="text-text-muted mt-[3px] flex h-5 w-4 shrink-0 items-center justify-center"
+            >
               <ChevronDownIcon v-if="isOpen(chapter)" class="h-4 w-4" />
               <ChevronRightIcon v-else class="h-4 w-4" />
             </span>
             <span class="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-2">
               <span
-                class="text-brand-navy min-w-0 break-words text-sm font-bold"
+                class="text-brand-navy min-w-0 text-sm font-bold break-words"
                 data-test="chapter-title"
               >
                 {{ chapterLabel(chapter, chapterIndex) }}
@@ -266,7 +271,7 @@ function closeMenu(event: Event): void {
           </button>
           <details class="relative flex shrink-0 items-stretch" data-test="chapter-menu">
             <summary
-              class="hover:bg-surface-muted focus-visible:outline-focus-ring text-text-muted hover:text-brand-navy rounded-btn flex min-h-11 w-11 cursor-pointer list-none items-center justify-center text-[18px] focus-visible:outline-2 focus-visible:outline-offset-2"
+              class="hover:bg-surface-muted focus-visible:outline-focus-ring text-text-muted hover:text-brand-navy rounded-btn flex min-h-11 w-11 cursor-pointer list-none items-center justify-center text-[18px] focus-visible:outline-2 focus-visible:outline-offset-2 [&::-webkit-details-marker]:hidden"
               :aria-label="`Pilihan untuk ${chapterLabel(chapter, chapterIndex)}`"
             >
               <span aria-hidden="true">⋯</span>
@@ -373,7 +378,11 @@ function closeMenu(event: Event): void {
             >
               <div
                 class="rounded-btn flex items-stretch gap-0.5"
-                :class="selectedSectionId === section.id ? 'bg-selected' : ''"
+                :class="
+                  selectedSectionId === section.id
+                    ? 'bg-selected border-l-brand-navy border-l-4 font-semibold'
+                    : ''
+                "
               >
                 <CardDragGrip
                   :blocked="dragBlock"
@@ -396,9 +405,7 @@ function closeMenu(event: Event): void {
                   >
                     {{ sectionNumber(chapterIndex, sectionIndex) }}
                   </span>
-                  <span
-                    class="text-brand-navy min-w-0 flex-1 truncate text-sm font-medium"
-                  >
+                  <span class="text-brand-navy min-w-0 flex-1 truncate text-sm font-medium">
                     {{ sectionLabel(section, sectionIndex) }}
                   </span>
                   <span
@@ -421,7 +428,7 @@ function closeMenu(event: Event): void {
                 </button>
                 <details class="relative flex shrink-0 items-stretch" data-test="section-menu">
                   <summary
-                    class="hover:bg-surface-muted focus-visible:outline-focus-ring text-text-muted hover:text-brand-navy rounded-btn flex min-h-11 w-11 cursor-pointer list-none items-center justify-center text-[18px] focus-visible:outline-2 focus-visible:outline-offset-2"
+                    class="hover:bg-surface-muted focus-visible:outline-focus-ring text-text-muted hover:text-brand-navy rounded-btn flex min-h-11 w-11 cursor-pointer list-none items-center justify-center text-[18px] focus-visible:outline-2 focus-visible:outline-offset-2 [&::-webkit-details-marker]:hidden"
                     :aria-label="`Pilihan untuk bagian ${sectionNumber(chapterIndex, sectionIndex)} ${sectionLabel(section, sectionIndex)}`"
                   >
                     <span aria-hidden="true">⋯</span>
@@ -497,7 +504,7 @@ function closeMenu(event: Event): void {
             type="button"
             variant="ghost"
             size="md"
-            class="min-h-11 w-full justify-start text-sm text-brand-navy"
+            class="text-brand-navy min-h-11 w-full justify-start text-sm"
             :disabled="busy"
             data-test="section-add"
             @click="emit('add-section', chapter)"
@@ -512,7 +519,11 @@ function closeMenu(event: Event): void {
       </li>
     </ol>
 
-    <p v-if="page.chapters.length > 0" class="text-text-muted mt-4 px-2 text-[13px] leading-relaxed" data-test="drag-hint">
+    <p
+      v-if="page.chapters.length > 0"
+      class="text-text-muted mt-4 px-2 text-[13px] leading-relaxed"
+      data-test="drag-hint"
+    >
       Seret ikon titik-titik untuk mengubah urutan bab atau bagian. Pilihan “Naik” dan “Turun” di
       menu ⋯ melakukan hal yang sama dari keyboard.
     </p>

@@ -147,7 +147,7 @@ const chapterLabel = computed(
               v-model="draft"
               type="text"
               :class="[
-                'text-brand-navy placeholder:text-text-muted min-h-12 min-w-0 flex-1 rounded-none border-0 border-b border-dashed border-border-strong bg-transparent px-0 py-1 text-[28px] font-bold focus-visible:outline-focus-ring',
+                'text-brand-navy placeholder:text-text-muted border-border-strong focus-visible:outline-focus-ring aria-invalid:border-status-error min-h-12 min-w-0 flex-1 rounded-none border-0 border-b border-dashed bg-transparent px-0 py-1 text-[28px] font-bold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-solid',
               ]"
               :disabled="busy"
               :aria-describedby="describedBy"

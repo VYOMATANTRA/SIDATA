@@ -52,12 +52,7 @@ const emit = defineEmits<{
         {{ consequence }}
       </p>
 
-      <AlertBanner
-        v-if="error"
-        :message="error"
-        :kind="errorKind"
-        data-test="delete-error"
-      />
+      <AlertBanner v-if="error" :message="error" :kind="errorKind" data-test="delete-error" />
 
       <p v-if="blocked && hint" class="text-text-muted text-sm" data-test="delete-hint">
         {{ hint }}

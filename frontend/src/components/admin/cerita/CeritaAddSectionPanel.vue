@@ -88,11 +88,11 @@ defineExpose({ reset });
         <legend class="text-brand-navy mb-2 text-sm font-semibold">
           Jenis gambar <span class="text-text-muted font-normal">(opsional)</span>
         </legend>
-        <div class="grid gap-2.5 sm:grid-cols-4">
+        <div class="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
           <label
             v-for="tile in TILES"
             :key="tile.kind"
-            class="border-border has-[:checked]:border-brand-navy has-[:checked]:bg-brand-navy/5 has-[:focus-visible]:outline-focus-ring rounded-btn flex min-h-24 cursor-pointer flex-col gap-1 p-3 border bg-white px-3 py-2 text-left has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2"
+            class="border-border has-[:checked]:border-brand-navy has-[:checked]:bg-brand-navy/5 has-[:focus-visible]:outline-focus-ring rounded-btn flex min-h-24 cursor-pointer flex-col gap-1 border bg-white p-3 text-left has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2"
           >
             <span class="flex items-center gap-2">
               <input
