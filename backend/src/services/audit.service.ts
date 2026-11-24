@@ -70,6 +70,8 @@ export const AUDIT_ACTIONS = {
   SECTION_REORDERED: defineAction('section.reordered', 'info'),
   SECTION_MOVED: defineAction('section.moved', 'info'),
   SECTION_DUPLICATED: defineAction('section.duplicated', 'info'),
+  // A section's title and its one body saved together; metadata is counts and lengths, never text.
+  SECTION_TEXT_SAVED: defineAction('section.text_saved', 'info'),
   CONTENT_BLOCK_CREATED: defineAction('content_block.created', 'info'),
   CONTENT_BLOCK_DELETED: defineAction('content_block.deleted', 'warning'),
   CONTENT_BLOCK_REORDERED: defineAction('content_block.reordered', 'info'),

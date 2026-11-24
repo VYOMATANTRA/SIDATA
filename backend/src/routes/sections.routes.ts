@@ -8,6 +8,7 @@ import {
   deleteSectionFigureHandler,
   moveSectionHandler,
   duplicateSectionHandler,
+  putSectionTextHandler,
 } from '../controllers/sections.controller.js';
 import { verifyToken } from '../middlewares/auth.middleware.js';
 import { requireEditorOrAdmin } from '../middlewares/role.middleware.js';
@@ -54,6 +55,16 @@ router.post(
   requireEditorOrAdmin,
   pagesWriteLimiter,
   duplicateSectionHandler,
+);
+
+// Section text (title + one body, saved together; budgeted with the other content-block writes)
+router.put(
+  '/:id/text',
+  apiLimiter,
+  verifyToken,
+  requireEditorOrAdmin,
+  contentBlocksWriteLimiter,
+  putSectionTextHandler,
 );
 
 // Section prose blocks (budgeted with the other content-block writes)

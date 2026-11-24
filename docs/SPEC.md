@@ -198,6 +198,17 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
     attached to the copy as well; a chart keeps its table). Indicators and tables are data rows and
     are **not** copied. Both lock chapters then section, run in one transaction and are audited
     (`section.moved`, `section.duplicated`, info).
+  - **Section text.** A section's text is its title and **one body**: limited Markdown (§5) where a
+    blank line starts a new paragraph. `PUT /api/sections/:id/text` (`{ title, body,
+    expectedUpdatedAt }`) saves both in one transaction against the section's token: the title
+    changes (the slug does not), and the body is kept as the section's single prose block (titled
+    "Isi", created on first save). A section written earlier with several prose blocks is merged into
+    the first block on its first save and the others are deleted. An empty body removes the text. HTML
+    tags are refused as for any prose. A save that changes nothing writes no audit row; otherwise one
+    `section.text_saved` (info; ids, counts and lengths only, never the body). Editing a section's prose
+    block through `PATCH /api/content-blocks/:slug` also moves the section's token, so a text save
+    that read the old body is refused (409) instead of overwriting the edit. The editor uses this
+    endpoint; the per-block endpoints remain for API compatibility.
   - **Section figure.** A section carries at most one figure: one photo, a group of 2–12 photos, a
     diagram, or a chart (a stored `figure` content block, §7). Editors and Admins manage it only through
     `PUT /api/sections/:id/figure` (body `{ expectedUpdatedAt, figure }`, creates or replaces) and
