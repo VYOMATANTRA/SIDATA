@@ -4,6 +4,7 @@ import { TrashIcon } from '@heroicons/vue/24/outline';
 import BaseButton from '../../common/BaseButton.vue';
 import CeritaSectionEditor from './CeritaSectionEditor.vue';
 import { ceritaIds } from './ceritaDomIds';
+import type { FigureDraft } from '../../../utils/ceritaFigureDraft';
 
 /**
  * The centre column of the Cerita editor for the selected section (Main artboard): its location
@@ -33,6 +34,7 @@ const emit = defineEmits<{
   (e: 'busy', value: boolean): void;
   (e: 'dirty-change', value: boolean): void;
   (e: 'draft-change', draft: { title: string; body: string }): void;
+  (e: 'figure-draft-change', draft: FigureDraft): void;
 }>();
 
 const editor = ref<InstanceType<typeof CeritaSectionEditor> | null>(null);
@@ -111,6 +113,7 @@ defineExpose({ save });
       @busy="emit('busy', $event)"
       @dirty-change="emit('dirty-change', $event)"
       @draft-change="emit('draft-change', $event)"
+      @figure-draft-change="emit('figure-draft-change', $event)"
     />
 
     <nav

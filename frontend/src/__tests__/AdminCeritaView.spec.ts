@@ -1007,6 +1007,42 @@ describe('AdminCeritaView', () => {
     });
   });
 
+  describe('the editor layout and the live preview', () => {
+    it('lays the editor out in two columns from md and three from 1536px, with the preview below the cards before that', async () => {
+      const wrapper = await mountView();
+      await openSection('Ringkasan');
+
+      const columns = wrapper.find('[data-test="editor-columns"]');
+      expect(columns.classes()).toContain('md:grid-cols-[300px_minmax(0,1fr)]');
+      expect(columns.classes()).toContain('min-[1536px]:grid-cols-[300px_minmax(0,1fr)_400px]');
+      expect(columns.classes()).not.toContain('xl:grid-cols-[320px_minmax(0,1fr)_400px]');
+
+      const panel = wrapper.find('[data-test="preview-panel"]');
+      expect(panel.element.tagName).toBe('DETAILS');
+      expect(panel.attributes('open')).toBeDefined();
+      expect(panel.find('summary').text()).toBe('Pratinjau langsung');
+      expect(panel.classes()).toContain('md:col-start-2');
+      expect(panel.classes()).toContain('min-[1536px]:col-start-3');
+      wrapper.unmount();
+    });
+
+    it('sends the title typed in the text card to the preview as the unsaved draft', async () => {
+      const wrapper = await mountView();
+      await openSection('Ringkasan');
+      const preview = wrapper.findComponent({ name: 'CeritaLivePreview' });
+      expect(preview.props('sectionTitle')).toBe('Ringkasan');
+
+      const input = body().find('[data-test="section-title"]').element as HTMLInputElement;
+      input.value = 'Ringkasan baru';
+      input.dispatchEvent(new Event('input'));
+      await flushPromises();
+
+      expect(preview.props('sectionTitle')).toBe('Ringkasan baru');
+      expect(preview.props('figure')).toBeNull();
+      wrapper.unmount();
+    });
+  });
+
   describe('when the reload after a saved change fails', () => {
     it('says the change is saved, offers a reload, and keeps a deleted page off the screen', async () => {
       const wrapper = await mountList();
