@@ -19,13 +19,22 @@ export interface FigurePhotoInput {
 
 export type SectionFigure =
   | { kind: 'photo'; photos: [FigurePhotoInput] }
-  | { kind: 'photos'; photos: FigurePhotoInput[] }
+  | { kind: 'photos'; credit?: string; photos: FigurePhotoInput[] }
   | {
       kind: 'diagram';
       title: string;
       source?: string;
       image?: { mediaId: string; alt: string };
       bars?: { unit?: string; items: { label: string; value: number }[] };
+    }
+  | {
+      /** Read and written by the figure editor ("Grafik" tile, table of the Data menu). */
+      kind: 'chart';
+      tableId: string;
+      chartType: 'bar' | 'column';
+      series: 'total' | 'by_sex';
+      title: string;
+      source?: string;
     };
 
 /** Limits mirrored from the contract; the server stays the authority. */
@@ -84,7 +93,28 @@ export function figureFromBlock(block: ContentBlock | null | undefined): Section
       const [first] = photos;
       return first ? { kind: 'photo', photos: [first] } : null;
     }
-    return { kind: 'photos', photos };
+    // Blank (or only spaces) means no shared credit, as the server would store it.
+    const credit = text(meta['credit'])?.trim();
+    return { kind: 'photos', ...(credit ? { credit } : {}), photos };
+  }
+
+  if (meta['kind'] === 'chart') {
+    const tableId = text(meta['tableId']);
+    const title = text(meta['title']);
+    const chartType = meta['chartType'];
+    const series = meta['series'];
+    if (!tableId || !title) return null;
+    if (chartType !== 'bar' && chartType !== 'column') return null;
+    if (series !== 'total' && series !== 'by_sex') return null;
+    const source = text(meta['source']);
+    return {
+      kind: 'chart',
+      tableId,
+      chartType,
+      series,
+      title,
+      ...(source ? { source } : {}),
+    };
   }
 
   if (meta['kind'] === 'diagram') {

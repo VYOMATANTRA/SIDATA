@@ -130,6 +130,8 @@ beforeEach(() => {
     },
     indicatorTable: proxied(tableImpl, txTableCalls),
     indicatorTableRow: proxied(rowImpl, txRowCalls),
+    // No chart figure uses a table in these tests (the delete/move guard counts them).
+    contentBlock: { count: (async () => 0) as AsyncFn },
     auditLog: {
       create: (async (...args: never[]) => {
         const { data } = args[0] as unknown as { data: AnyRecord };

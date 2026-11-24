@@ -5,20 +5,23 @@ import BaseButton from '../../common/BaseButton.vue';
 import BaseModal from '../../common/BaseModal.vue';
 import FormField from '../../common/FormField.vue';
 import { INPUT_CLASSES } from '../../../utils/formStyles';
-import { hasHtmlTag, hasUnsafeCharacters } from '../../../utils/titleTextRules';
+import { hasHtmlTag, hasUnsafeCharacters, titleTextProblem } from '../../../utils/titleTextRules';
 import type { FailureKind } from '../../../utils/userMessages';
 import type { PageDetailsInput } from '../../../services/ceritaAdmin.service';
 
 /**
- * Optional editorial headline and byline of a Cerita page. All three fields may stay empty (the
- * reader then shows the page title alone); a blank field clears what was stored. An affiliation
- * needs an author. Like the name dialog, the fields keep their text when a save is refused, and
- * a "stale" refusal offers a reload that leaves the typed text in place.
+ * "Info cerita": the page title, then the optional editorial headline and byline. The title is
+ * required (1 to 255 characters, as in the rename dialog) and is prefilled with the stored one. The
+ * headline and byline may stay empty (the reader then shows the page title alone); a blank field
+ * clears what was stored. An affiliation needs an author. Like the name dialog, the fields keep
+ * their text when a save is refused, and a "stale" refusal offers a reload that leaves the typed
+ * text in place. The parent decides what a save does with the title (it renames only a change).
  */
 const props = withDefaults(
   defineProps<{
     open: boolean;
-    pageTitle: string;
+    /** The stored page title: prefills the title field and names the page in the dialog. */
+    title: string;
     headline?: string | null;
     bylineAuthor?: string | null;
     bylineAffiliation?: string | null;
@@ -40,7 +43,7 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  (e: 'submit', details: PageDetailsInput): void;
+  (e: 'submit', details: PageDetailsInput, title: string): void;
   (e: 'close'): void;
   (e: 'reload'): void;
 }>();
@@ -50,11 +53,13 @@ const AUTHOR_MAX = 120;
 const AFFILIATION_MAX = 160;
 
 const ids = {
+  title: 'cerita-detail-judul',
   headline: 'cerita-detail-judul-utama',
   author: 'cerita-detail-penulis',
   affiliation: 'cerita-detail-afiliasi',
 };
 
+const pageTitleText = ref(props.title);
 const headline = ref(props.headline ?? '');
 const author = ref(props.bylineAuthor ?? '');
 const affiliation = ref(props.bylineAffiliation ?? '');
@@ -65,6 +70,7 @@ watch(
   () => props.open,
   (isOpen) => {
     if (!isOpen) return;
+    pageTitleText.value = props.title;
     headline.value = props.headline ?? '';
     author.value = props.bylineAuthor ?? '';
     affiliation.value = props.bylineAffiliation ?? '';
@@ -81,7 +87,23 @@ function textProblem(label: string, value: string, max: number): string | undefi
   return undefined;
 }
 
+function titleProblem(): string | undefined {
+  switch (titleTextProblem(pageTitleText.value)) {
+    case 'empty':
+      return 'Judul halaman wajib diisi.';
+    case 'too-long':
+      return 'Judul halaman maksimal 255 karakter.';
+    case 'html':
+      return 'Judul halaman tidak boleh memuat tag HTML.';
+    case 'characters':
+      return 'Judul halaman memuat karakter yang tidak diizinkan.';
+    default:
+      return undefined;
+  }
+}
+
 const problems = computed(() => ({
+  title: titleProblem(),
   headline: textProblem('Judul utama', headline.value, HEADLINE_MAX),
   author: textProblem('Nama penulis', author.value, AUTHOR_MAX),
   affiliation:
@@ -95,25 +117,30 @@ function handleSubmit(): void {
   submitted.value = true;
   if (
     props.busy ||
+    problems.value.title ||
     problems.value.headline ||
     problems.value.author ||
     problems.value.affiliation
   ) {
     return;
   }
-  emit('submit', {
-    headline: headline.value.trim() || null,
-    bylineAuthor: author.value.trim() || null,
-    bylineAffiliation: affiliation.value.trim() || null,
-  });
+  emit(
+    'submit',
+    {
+      headline: headline.value.trim() || null,
+      bylineAuthor: author.value.trim() || null,
+      bylineAffiliation: affiliation.value.trim() || null,
+    },
+    pageTitleText.value.trim(),
+  );
 }
 </script>
 
 <template>
   <BaseModal
     :open="open"
-    title="Judul utama & penulis"
-    :description="`Halaman “${pageTitle}”`"
+    title="Info cerita"
+    :description="`Halaman “${title}”`"
     size="md"
     :busy="busy"
     @close="emit('close')"
@@ -125,9 +152,29 @@ function handleSubmit(): void {
       data-test="details-dialog"
       @submit.prevent="handleSubmit"
     >
+      <FormField
+        :id="ids.title"
+        label="Judul halaman"
+        hint="Alamat halaman tidak berubah, sehingga tautan yang sudah dibagikan tetap berfungsi."
+        :error="submitted ? problems.title : undefined"
+        v-slot="{ describedBy, invalid }"
+      >
+        <input
+          :id="ids.title"
+          v-model="pageTitleText"
+          type="text"
+          data-autofocus
+          :class="INPUT_CLASSES"
+          :disabled="busy"
+          :aria-describedby="describedBy"
+          :aria-invalid="invalid ? 'true' : undefined"
+          data-test="details-title"
+        />
+      </FormField>
+
       <p class="text-text-muted text-sm">
-        Semua isian ini boleh dikosongkan. Isi hanya dengan kalimat dan nama penulis yang sudah
-        disetujui; jika kosong, pembaca hanya melihat judul halaman.
+        Judul utama, nama penulis dan afiliasi boleh dikosongkan. Isi hanya dengan kalimat dan nama
+        penulis yang sudah disetujui; jika kosong, pembaca hanya melihat judul halaman.
       </p>
 
       <FormField
@@ -141,7 +188,6 @@ function handleSubmit(): void {
           :id="ids.headline"
           v-model="headline"
           type="text"
-          data-autofocus
           :class="INPUT_CLASSES"
           :disabled="busy"
           :aria-describedby="describedBy"
@@ -187,12 +233,7 @@ function handleSubmit(): void {
         />
       </FormField>
 
-      <AlertBanner
-        v-if="error"
-        :message="error"
-        :kind="errorKind"
-        data-test="details-error"
-      />
+      <AlertBanner v-if="error" :message="error" :kind="errorKind" data-test="details-error" />
 
       <div
         v-if="stale"

@@ -23,6 +23,8 @@ import {
   PUBLIKASI_BLOCK_PROTECTED_CODE,
   PUBLIKASI_BLOCK_PROTECTED_MESSAGE,
   hasControlCharacters as hasSharedControlCharacters,
+  HTML_TAG_PATTERN,
+  PROSE_HTML_MESSAGE,
 } from '../utils/hierarchyAuthoring.js';
 
 export class ContentBlockServiceError extends HierarchyServiceError {
@@ -735,11 +737,28 @@ export const updateContentBlock = async (
         : input.title.trim()
       : undefined;
 
-  const lockQuery = Prisma.sql`SELECT id FROM content_blocks WHERE slug = ${normalizedSlug} FOR UPDATE`;
+  // Lock order is section -> block, like the other section prose writes. A section prose block's
+  // edit also moves the section's token (below), so a section text save that read the old body
+  // is refused instead of overwriting this edit.
+  const lockQuery = async (tx: Pick<Prisma.TransactionClient, '$queryRaw'>) => {
+    const rows = await tx.$queryRaw<Array<{ section_id: string | null }>>(
+      Prisma.sql`SELECT section_id FROM content_blocks WHERE slug = ${normalizedSlug}`,
+    );
+    const sectionId = rows[0]?.section_id;
+    if (sectionId) {
+      await tx.$queryRaw(Prisma.sql`SELECT id FROM sections WHERE id = ${sectionId} FOR UPDATE`);
+    }
+    await tx.$queryRaw(
+      Prisma.sql`SELECT id FROM content_blocks WHERE slug = ${normalizedSlug} FOR UPDATE`,
+    );
+  };
   const targetSlugCache = getSlugCache(normalizedSlug);
 
   return executeLockedTransaction({
     client,
+    // The lock function starts with a plain read (to find the parent): ReadCommitted keeps every
+    // post-lock read current.
+    isolationLevel: 'ReadCommitted',
     lockQuery,
     cache: [contentBlocksCache, targetSlugCache],
     onCommit: (committedBlock, didChange) => {
@@ -781,6 +800,15 @@ export const updateContentBlock = async (
           409,
           PUBLIKASI_BLOCK_PROTECTED_CODE,
         );
+      }
+
+      if (
+        existing.type === 'prose' &&
+        input.body !== undefined &&
+        input.body !== existing.body &&
+        HTML_TAG_PATTERN.test(input.body)
+      ) {
+        throw new ContentBlockServiceError(PROSE_HTML_MESSAGE, 400);
       }
 
       if (input.expectedUpdatedAt !== undefined) {
@@ -828,6 +856,12 @@ export const updateContentBlock = async (
           updatedById: actorId,
         },
       });
+      if (existing.sectionId && existing.type === 'prose') {
+        await tx.section.update({
+          where: { id: existing.sectionId },
+          data: { updatedAt: new Date() },
+        });
+      }
 
       const auditOp = buildAuditLog(
         {

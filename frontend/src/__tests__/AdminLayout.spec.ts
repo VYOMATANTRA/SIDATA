@@ -4,7 +4,7 @@ import { setActivePinia, createPinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import AdminLayout from '../layouts/AdminLayout.vue';
 import { useAuthStore } from '../stores/auth';
-import { setAdminHeader } from '../composables/useAdminHeader';
+import { setAdminHeader, useAdminHeader } from '../composables/useAdminHeader';
 
 function createTestRouter() {
   return createRouter({
@@ -47,6 +47,42 @@ describe('AdminLayout.vue', () => {
     expect(navs.length).toBe(2);
     expect(navs.some((n) => n.attributes('aria-label') === 'Navigasi Admin')).toBe(true);
     expect(navs.some((n) => n.attributes('aria-label') === 'Breadcrumb')).toBe(true);
+  });
+
+  it('drops the padded card for a fullBleed route and keeps the breadcrumb on the page gutters', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: '/admin/cerita',
+          component: { template: '<div data-test="full-body">Editor</div>' },
+          meta: { title: 'Cerita', breadcrumb: ['Cerita'], fullBleed: true },
+        },
+        {
+          path: '/admin/peta',
+          component: { template: '<div data-test="card-body">Peta</div>' },
+          meta: { title: 'Peta', breadcrumb: ['Peta'] },
+        },
+      ],
+    });
+    await router.push('/admin/cerita');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
+    expect(wrapper.find('[data-test="full-body"]').exists()).toBe(true);
+    expect(wrapper.find('main').classes()).toContain('flex-col');
+    expect(wrapper.find('main').classes()).not.toContain('px-6');
+    expect(wrapper.find('[data-test="admin-breadcrumb"]').classes()).toContain('px-6');
+    wrapper.unmount();
+
+    await router.push('/admin/peta');
+    await flushPromises();
+    const card = mount(AdminLayout, { global: { plugins: [router] } });
+    expect(card.find('main').classes()).toContain('px-6');
+    expect(card.find('[data-test="card-body"]').element.parentElement?.classList).toContain(
+      'rounded-card',
+    );
+    card.unmount();
   });
 
   it('renders a skip link pointing at the main content landmark', async () => {
@@ -148,6 +184,62 @@ describe('AdminLayout.vue', () => {
     const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
 
     expect(wrapper.find('main [data-test="cerita-body"]').exists()).toBe(true);
+  });
+
+  it('does not render the route breadcrumb a second time when the header shows its own trail on a fullBleed route', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: '/admin/cerita',
+          component: { template: '<div>Editor</div>' },
+          meta: { title: 'Cerita', breadcrumb: ['Cerita'], fullBleed: true },
+        },
+        {
+          path: '/admin/peta',
+          component: { template: '<div>Peta</div>' },
+          meta: { title: 'Peta', breadcrumb: ['Peta'] },
+        },
+      ],
+    });
+    await router.push('/admin/cerita');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
+    expect(wrapper.findAll('[data-test="admin-breadcrumb"]')).toHaveLength(1);
+
+    setAdminHeader('Kependudukan', '', {
+      trail: [{ label: 'Cerita', to: '/admin/cerita' }, { label: 'Kependudukan' }],
+      compact: true,
+    });
+    await flushPromises();
+
+    const crumbs = wrapper.findAll('[data-test="admin-breadcrumb"]');
+    expect(crumbs).toHaveLength(1);
+    expect(crumbs[0]!.element.closest('[data-test="admin-header"]')).not.toBeNull();
+    expect(crumbs[0]!.text()).toContain('Kependudukan');
+    expect(crumbs[0]!.text()).not.toContain('Beranda');
+    wrapper.unmount();
+  });
+
+  it('clears a header trail and compact flag when another admin page opens', async () => {
+    const router = createTestRouter();
+    await router.push('/admin/cerita');
+    await router.isReady();
+
+    const wrapper = mount(AdminLayout, { global: { plugins: [router] } });
+    setAdminHeader('Kependudukan', '', { trail: [{ label: 'Cerita' }], compact: true });
+    await flushPromises();
+    expect(wrapper.find('[data-test="admin-header"] h1').text()).toBe('Kependudukan');
+
+    await router.push('/admin');
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="admin-header"] h1').text()).toBe('Beranda');
+    expect(wrapper.find('[data-test="admin-header"]').classes()).toContain('py-8');
+    expect(useAdminHeader().trail.value).toBeNull();
+    expect(useAdminHeader().compact.value).toBe(false);
+    wrapper.unmount();
   });
 
   it('sets the header title from route meta on navigation', async () => {

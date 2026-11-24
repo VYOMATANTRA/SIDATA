@@ -4,7 +4,7 @@ import type { ChapterDto } from '../../stores/pages.store';
 import type { IndicatorDto } from '../../stores/indicators.store';
 import type { IndicatorTableDetailDto } from '../../stores/indicatorTables.store';
 import type { ContentBlock } from '../../stores/contentBlocks.store';
-import type { ArticleFigure as ArticleFigureData } from '../../types/ceritaArticle';
+import type { ArticleFigure as ArticleFigureData, ChartTable } from '../../types/ceritaArticle';
 import SectionProse from './SectionProse.vue';
 import ArticleFigure from './ArticleFigure.vue';
 import IndicatorStat from './IndicatorStat.vue';
@@ -18,6 +18,8 @@ export interface ChapterSectionProps {
   indicatorsBySectionId: Record<string, IndicatorDto[]>;
   /** Matrix tables, keyed by sectionId. */
   tablesBySectionId: Record<string, IndicatorTableDetailDto[]>;
+  /** Every table of the page by id, for the charts (a chart may read a table of another section). */
+  chartTablesById?: Record<string, ChartTable>;
   /** The stored figure of a section, keyed by sectionId. */
   figuresBySectionId?: Record<string, ArticleFigureData>;
   /**
@@ -38,6 +40,7 @@ const props = withDefaults(defineProps<ChapterSectionProps>(), {
   proseUnavailable: false,
   figuresBySectionId: () => ({}),
   hiddenFigureSectionIds: () => new Set<string>(),
+  chartTablesById: () => ({}),
 });
 const emit = defineEmits<{
   'retry-section': [sectionId: string];
@@ -109,6 +112,7 @@ const isEmptyChapter = computed(
         <ArticleFigure
           v-if="figuresBySectionId[section.id]"
           :figure="figuresBySectionId[section.id]!"
+          :tables="chartTablesById"
           @visible-change="emit('figure-visibility', section.id, $event)"
         />
 

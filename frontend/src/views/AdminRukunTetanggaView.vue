@@ -5,7 +5,6 @@ import BaseButton from '../components/common/BaseButton.vue';
 import BaseModal from '../components/common/BaseModal.vue';
 import RtLocationPicker, { type PickedLocation } from '../components/maps/RtLocationPicker.vue';
 import { ApiError, apiRequestJson } from '../utils/apiClient';
-import { useAuthStore } from '../stores/auth';
 import { INPUT_CLASSES } from '../utils/formStyles';
 import { toUserMessage, type FailureKind } from '../utils/userMessages';
 
@@ -48,10 +47,8 @@ interface BaselineRow {
 }
 
 const CSV_HEADER = 'rtNumber,name,phone,phoneIsWhatsapp,alamat,latitude,longitude';
-const authStore = useAuthStore();
 
 const leaders = ref<LeaderRow[]>([]);
-const isSampleRoster = ref(false);
 const isLoading = ref(false);
 const loadError = ref('');
 const loadErrorKind = ref<FailureKind | null>(null);
@@ -134,11 +131,10 @@ const importResult = ref('');
 async function loadLeaders() {
   isLoading.value = true;
   try {
-    const data = await apiRequestJson<{ leaders: LeaderRow[]; isSampleRoster: boolean }>(
+    const data = await apiRequestJson<{ leaders: LeaderRow[] }>(
       '/api/maps/rt-leaders?limit=100',
     );
     leaders.value = data.leaders;
-    isSampleRoster.value = data.isSampleRoster === true;
     loadError.value = '';
     loadErrorKind.value = null;
   } catch (error) {
@@ -466,26 +462,6 @@ function downloadTemplate() {
   link.click();
   URL.revokeObjectURL(url);
 }
-
-async function setSampleStatus(isSample: boolean) {
-  importBusy.value = true;
-  setImportError('');
-  try {
-    const result = await apiRequestJson<{ isSampleRoster: boolean }>(
-      '/api/maps/rt-leaders/sample-status',
-      { method: 'PATCH', body: JSON.stringify({ isSample }) },
-    );
-    isSampleRoster.value = result.isSampleRoster;
-    statusMessage.value = isSample
-      ? 'Daftar ditandai sebagai data contoh.'
-      : 'Daftar ditandai sebagai data resmi.';
-  } catch (error) {
-    const failure = toUserMessage(error, 'mengubah status daftar');
-    setImportError(failure.message, failure.kind);
-  } finally {
-    importBusy.value = false;
-  }
-}
 </script>
 
 <template>
@@ -498,14 +474,6 @@ async function setSampleStatus(isSample: boolean) {
             Kelola kontak dan koordinat Ketua RT melalui formulir atau impor CSV.
           </p>
         </div>
-        <span
-          class="rounded-full px-3 py-1 text-xs font-semibold"
-          :class="
-            isSampleRoster ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'
-          "
-        >
-          {{ isSampleRoster ? 'Data contoh' : 'Data resmi' }}
-        </span>
       </div>
 
       <p v-if="statusMessage" class="mt-3 text-sm text-emerald-800" role="status">
@@ -683,20 +651,6 @@ async function setSampleStatus(isSample: boolean) {
         </ul>
       </div>
 
-      <div v-if="authStore.isAdmin" class="mt-5 border-t border-slate-200 pt-4">
-        <p class="text-sm text-slate-700">
-          Status daftar saat ini:
-          <strong>{{ isSampleRoster ? 'data contoh' : 'data resmi' }}</strong>
-        </p>
-        <BaseButton
-          variant="secondary"
-          size="sm"
-          :disabled="importBusy"
-          @click="setSampleStatus(!isSampleRoster)"
-        >
-          {{ isSampleRoster ? 'Tandai sebagai data resmi' : 'Tandai sebagai data contoh' }}
-        </BaseButton>
-      </div>
     </section>
 
     <BaseModal

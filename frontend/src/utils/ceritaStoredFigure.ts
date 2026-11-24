@@ -1,4 +1,4 @@
-import type { ArticleFigure, ArticlePhoto } from '../types/ceritaArticle';
+import type { ArticleFigure, ArticlePhoto, ChartSeries, ChartType } from '../types/ceritaArticle';
 import { safeImageSrc } from './ceritaFigures';
 
 /**
@@ -13,6 +13,9 @@ export const FIGURE_BLOCK_TYPE = 'figure';
 const MAX_PHOTOS = 12;
 const MAX_BARS = 20;
 const MEDIA_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const TABLE_ID = /^[A-Za-z0-9_-]{1,64}$/;
+const CHART_TYPES: readonly ChartType[] = ['bar', 'column'];
+const CHART_SERIES: readonly ChartSeries[] = ['total', 'by_sex'];
 
 /** The minimal block shape the mapping reads; `ContentBlock` satisfies it. */
 export interface StoredFigureBlock {
@@ -88,6 +91,28 @@ function parseBars(
   return { ...(unit ? { unit } : {}), items };
 }
 
+function oneOf<T extends string>(value: unknown, allowed: readonly T[]): T | null {
+  return allowed.find((item) => item === value) ?? null;
+}
+
+/** A chart names a table on the page; with a bad table id, type, series or title it is dropped. */
+function parseChart(metadata: Record<string, unknown>): ArticleFigure | null {
+  const tableId = text(metadata['tableId']);
+  const chartType = oneOf(metadata['chartType'], CHART_TYPES);
+  const series = oneOf(metadata['series'], CHART_SERIES);
+  const title = text(metadata['title']);
+  if (!tableId || !TABLE_ID.test(tableId) || !chartType || !series || !title) return null;
+  const source = text(metadata['source']);
+  return {
+    kind: 'chart',
+    tableId,
+    chartType,
+    series,
+    title,
+    ...(source ? { source } : {}),
+  };
+}
+
 /** Stored figure metadata to an `ArticleFigure`, or `null` when it is not a usable figure. */
 export function storedFigureToArticleFigure(metadata: unknown): ArticleFigure | null {
   if (!isRecord(metadata)) return null;
@@ -100,7 +125,13 @@ export function storedFigureToArticleFigure(metadata: unknown): ArticleFigure | 
 
   if (kind === 'photos') {
     const photos = parsePhotos(metadata['photos']);
-    return photos.length > 0 ? { kind: 'photos', photos } : null;
+    if (photos.length === 0) return null;
+    // A shared credit fills in every photo that has none of its own; a photo's own credit wins.
+    const shared = text(metadata['credit']);
+    const inherited = shared
+      ? photos.map((photo) => (photo.credit ? photo : { ...photo, credit: shared }))
+      : photos;
+    return { kind: 'photos', photos: inherited };
   }
 
   if (kind === 'diagram') {
@@ -122,6 +153,8 @@ export function storedFigureToArticleFigure(metadata: unknown): ArticleFigure | 
       ...(source ? { source } : {}),
     };
   }
+
+  if (kind === 'chart') return parseChart(metadata);
 
   return null;
 }
