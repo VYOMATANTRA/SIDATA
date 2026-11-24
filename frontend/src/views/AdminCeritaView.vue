@@ -141,7 +141,14 @@ const deleteStale = ref(false);
 const duplicating = ref(false);
 
 // The centre column's section editor reports its own state (see CeritaSectionEditor). A draft that
-// is not saved asks before the URL moves to another section or page.
+// is not saved asks before the URL moves to another section or page. Its save is driven from the
+// shell header's "Simpan perubahan" through the pane.
+const sectionPane = ref<InstanceType<typeof CeritaSectionPane> | null>(null);
+/**
+ * The open section's title and body as typed. Nothing reads it yet: the preview that draws unsaved
+ * edits consumes it next. Cleared with the selection (the editor emits its first value on mount).
+ */
+const sectionDraft = ref<{ title: string; body: string } | null>(null);
 const editorBusy = ref(false);
 const editorDirty = ref(false);
 const discardPromptOpen = ref(false);
@@ -243,7 +250,7 @@ const nextSection = computed(() =>
     : null,
 );
 
-/** What the centre column's header and the move buttons need about the selected section. */
+/** What the centre column's header needs about the selected section. */
 const selectedMeta = computed(() => {
   const found = selectedFound.value;
   if (!found || !page.value) return null;
@@ -254,8 +261,6 @@ const selectedMeta = computed(() => {
     chapterLabel: `Bab ${chapterNumber} · ${found.chapter.title}`,
     sectionNumber: sectionNumberLabel(chapterNumber, sectionIndex),
     title: sectionLabelIn(found.section, sectionIndex),
-    isFirst: sectionIndex === 0,
-    isLast: sectionIndex === found.chapter.sections.length - 1,
   };
 });
 
@@ -1165,25 +1170,14 @@ function placeSectionDragged(chapter: AdminChapter, section: AdminSection, toInd
 
 // --- Section selection and section actions (centre column) ---
 
-function renameSelected(): void {
-  const found = selectedFound.value;
-  if (!found) return;
-  openName({
-    kind: 'section-rename',
-    id: found.section.id,
-    initial: found.section.title ?? '',
-    token: found.section.updatedAt,
-  });
-}
-
-function moveSelected(direction: Direction): void {
-  const found = selectedFound.value;
-  if (found) moveSection(found.chapter, found.section, direction);
-}
-
 function deleteSelected(): void {
   const found = selectedFound.value;
   if (found) openDeleteSection(found.chapter, found.section);
+}
+
+/** "Simpan perubahan" in the shell header: saves the open section's unsaved text and figure. */
+function saveSection(): void {
+  void sectionPane.value?.save();
 }
 
 /** Opens a section in the centre column. Unsaved work is guarded by the route hooks below. */
@@ -1514,6 +1508,7 @@ watch(sectionMissing, (missing) => {
 // A different section starts with no draft: the editor reports its own state again.
 watch(selectedSection, (next, previous) => {
   if (next?.id === previous?.id) return;
+  sectionDraft.value = null;
   editorBusy.value = false;
   editorDirty.value = false;
   discardPromptOpen.value = false;
@@ -1777,6 +1772,18 @@ onUnmounted(() => {
           Lihat di situs<span class="sr-only"> (dibuka di tab baru)</span>
         </BaseButton>
       </Teleport>
+      <Teleport v-if="selectedSection && selectedMeta" defer to="#admin-header-actions">
+        <BaseButton
+          variant="primary"
+          size="md"
+          class="min-h-11"
+          :disabled="!editorDirty || editorBusy"
+          data-test="section-save"
+          @click="saveSection"
+        >
+          {{ editorBusy ? 'Menyimpan…' : 'Simpan perubahan' }}
+        </BaseButton>
+      </Teleport>
 
       <div
         v-if="!page"
@@ -1853,21 +1860,19 @@ onUnmounted(() => {
             :section-id="selectedSection.id"
             :chapter-label="selectedMeta.chapterLabel"
             :section-number="selectedMeta.sectionNumber"
-            :title="selectedMeta.title"
-            :is-first="selectedMeta.isFirst"
-            :is-last="selectedMeta.isLast"
+            :dirty="editorDirty"
+            ref="sectionPane"
             :busy="structureBusy"
             :duplicating="duplicating"
             :prev="prevSection ? { number: prevSection.number, title: prevSection.title } : null"
             :next="nextSection ? { number: nextSection.number, title: nextSection.title } : null"
-            @rename="renameSelected"
             @duplicate="duplicateSelected"
-            @move="moveSelected"
             @delete="deleteSelected"
             @prev="goToSection(prevSection)"
             @next="goToSection(nextSection)"
             @busy="editorBusy = $event"
             @dirty-change="editorDirty = $event"
+            @draft-change="sectionDraft = $event"
           />
           <CeritaChapterOverview
             v-else-if="overviewInfo"

@@ -172,49 +172,25 @@ export async function reorderSections(
   await put(`/api/chapters/${enc(chapterId)}/sections/reorder`, { expectedUpdatedAt, items });
 }
 
-// --- Paragraphs (prose blocks attached to a section) ---
+// --- Section text (title and one body, saved together) ---
 
-export interface ParagraphInput {
+export interface SectionTextInput {
   title: string;
+  /** Limited Markdown; a blank line starts a new paragraph. An empty body removes the text. */
   body: string;
+  expectedUpdatedAt: string;
 }
 
-export async function createParagraph(
+/** The section after the save, and its one prose block (null when the body is empty). */
+export interface SectionTextResponse {
+  section: { id: string; chapterId: string; slug: string; title: string | null; sortOrder: number; updatedAt: string };
+  block: ContentBlock | null;
+}
+
+/** Saves a section's title and body in one request; the server merges legacy paragraphs into one. */
+export async function saveSectionText(
   sectionId: string,
-  input: ParagraphInput,
-): Promise<ContentBlock> {
-  const data = await post<{ block: ContentBlock }>(
-    `/api/sections/${enc(sectionId)}/content-blocks`,
-    input,
-  );
-  return data.block;
-}
-
-export async function updateParagraph(
-  slug: string,
-  input: { title: string | null; body: string },
-  expectedUpdatedAt: string,
-): Promise<ContentBlock> {
-  const data = await patch<{ block: ContentBlock }>(`/api/content-blocks/${enc(slug)}`, {
-    ...input,
-    expectedUpdatedAt,
-  });
-  return data.block;
-}
-
-/** `expectedUpdatedAt` is the paragraph's own token. */
-export async function deleteParagraph(slug: string, expectedUpdatedAt: string): Promise<void> {
-  await remove(`/api/content-blocks/${enc(slug)}${tokenQuery(expectedUpdatedAt)}`);
-}
-
-/** `expectedUpdatedAt` is the parent section's token. */
-export async function reorderParagraphs(
-  sectionId: string,
-  expectedUpdatedAt: string,
-  items: ReorderItem[],
-): Promise<void> {
-  await put(`/api/sections/${enc(sectionId)}/content-blocks/reorder`, {
-    expectedUpdatedAt,
-    items,
-  });
+  input: SectionTextInput,
+): Promise<SectionTextResponse> {
+  return put<SectionTextResponse>(`/api/sections/${enc(sectionId)}/text`, input);
 }

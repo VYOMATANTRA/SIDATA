@@ -171,30 +171,6 @@ describe('ceritaAdmin store', () => {
     expect(store.selectedPage?.slug).toBe('kependudukan');
   });
 
-  it('adds, edits, moves and removes a paragraph with the right tokens', async () => {
-    const section = store.tree[0]!.chapters[0]!.sections[0]!;
-    const added = await store.addParagraph(section.id, { title: 'Pertama', body: 'Isi satu.' });
-    expect(added.ok).toBe(true);
-    await store.addParagraph(section.id, { title: 'Kedua', body: 'Isi dua.' });
-    expect(store.paragraphsFor(section.id).map((b) => b.title)).toEqual(['Pertama', 'Kedua']);
-
-    const [first] = store.paragraphsFor(section.id);
-    expect((await store.editParagraph(first!, { title: 'Pertama!', body: 'Baru.' })).ok).toBe(true);
-    expect(store.paragraphsFor(section.id)[0]!.body).toBe('Baru.');
-
-    const sectionNow = store.findSection(section.id)!.section;
-    expect((await store.moveParagraph(section.id, first!.id, 1)).ok).toBe(true);
-    expect(fake.lastWrite()).toMatchObject({
-      method: 'PUT',
-      body: { expectedUpdatedAt: sectionNow.updatedAt },
-    });
-    expect(store.paragraphsFor(section.id).map((b) => b.title)).toEqual(['Kedua', 'Pertama!']);
-
-    const target = store.paragraphsFor(section.id)[0]!;
-    expect((await store.removeParagraph(target)).ok).toBe(true);
-    expect(store.paragraphsFor(section.id).map((b) => b.title)).toEqual(['Pertama!']);
-  });
-
   it('saves and removes the figure with the section token and exposes it', async () => {
     const section = store.tree[0]!.chapters[0]!.sections[0]!;
     const figure: SectionFigure = {
@@ -300,14 +276,14 @@ describe('ceritaAdmin store when the reload after a saved write fails', () => {
     expect(pages.sections.map((section) => section.chapterTitle)).not.toContain('Jumlah Keluarga');
   });
 
-  it('flags a failed reload of paragraphs after a paragraph write too', async () => {
+  it('flags a failed reload after a section text write too', async () => {
     const section = store.tree[0]!.chapters[0]!.sections[0]!;
     fake.failNext(
       (r) => r.method === 'GET' && r.url === '/api/content-blocks',
       fake.json({ error: 'x' }, 500),
     );
 
-    const outcome = await store.addParagraph(section.id, { title: 'Baru', body: 'Isi.' });
+    const outcome = await store.saveSectionText(section.id, { title: 'Baru', body: 'Isi.' });
 
     expect(outcome).toMatchObject({ ok: true, refreshFailed: true });
     expect(store.reloadNeeded).toBe(true);
@@ -443,7 +419,8 @@ describe('ceritaAdmin store and the public page cache', () => {
 
     it('copies the paragraphs of the section to the copy', async () => {
       const section = store.tree[0]!.chapters[0]!.sections[0]!;
-      await store.addParagraph(section.id, { title: 'Satu', body: 'Isi paragraf.' });
+      fake.addParagraph(section.id, 'Satu', 'Isi paragraf.');
+      await store.load();
 
       const outcome = await store.duplicateSection(section.id);
 
@@ -553,5 +530,93 @@ describe('ceritaAdmin store and the public page cache', () => {
       });
       expect(store.findPage(page.slug)?.chapters.map((c) => c.title)).toEqual(['Jumlah Keluarga', 'Jumlah Penduduk']);
     });
+  });
+});
+
+describe('ceritaAdmin store section text (title and one body)', () => {
+  let store: ReturnType<typeof useCeritaAdminStore>;
+
+  beforeEach(async () => {
+    store = setup();
+    await store.load();
+  });
+
+  it('saves the title and body together, merges paragraphs into one and updates the shared data', async () => {
+    const section = store.tree[0]!.chapters[0]!.sections[0]!;
+    fake.addParagraph(section.id, 'Pertama', 'Satu.');
+    fake.addParagraph(section.id, 'Kedua', 'Dua.');
+    await store.load();
+
+    const outcome = await store.saveSectionText(section.id, { title: 'Ringkasan baru', body: 'Isi.\n\nLagi.' });
+
+    expect(outcome.ok).toBe(true);
+    expect(fake.lastWrite()).toMatchObject({
+      method: 'PUT',
+      url: `/api/sections/${section.id}/text`,
+      body: { title: 'Ringkasan baru', body: 'Isi.\n\nLagi.' },
+    });
+    expect(outcome).toMatchObject({ ok: true, value: { title: 'Ringkasan baru', body: 'Isi.\n\nLagi.' } });
+    expect(store.findSection(section.id)?.section.title).toBe('Ringkasan baru');
+    expect(store.paragraphsFor(section.id)).toHaveLength(1);
+    expect(store.paragraphsFor(section.id)[0]!.body).toBe('Isi.\n\nLagi.');
+  });
+
+  it('chains the section token so the figure saves after the text without a conflict', async () => {
+    const section = store.tree[0]!.chapters[0]!.sections[0]!;
+    store.captureSectionToken(section.id);
+    expect((await store.saveSectionText(section.id, { title: 'Ringkasan', body: 'Isi.' })).ok).toBe(true);
+
+    const figure: SectionFigure = {
+      kind: 'photo',
+      photos: [{ mediaId: 'm1', alt: 'Balai kelurahan' }],
+    };
+    expect((await store.saveFigure(section.id, figure)).ok).toBe(true);
+  });
+
+  it('removes the text when the body is empty', async () => {
+    const section = store.tree[0]!.chapters[0]!.sections[0]!;
+    fake.addParagraph(section.id, 'Isi', 'Sesuatu.');
+    await store.load();
+
+    expect((await store.saveSectionText(section.id, { title: 'Ringkasan', body: '' })).ok).toBe(true);
+    expect(store.paragraphsFor(section.id)).toHaveLength(0);
+  });
+
+  it('refuses a save on a token another editor has moved past, and changes nothing', async () => {
+    const section = store.tree[0]!.chapters[0]!.sections[0]!;
+    store.captureSectionToken(section.id);
+    fake.changeFigureByOther(section.id, { kind: 'photo', photos: [] });
+
+    const outcome = await store.saveSectionText(section.id, { title: 'Lain', body: 'Isi.' });
+    expect(outcome).toMatchObject({ ok: false, stale: true });
+    expect(store.findSection(section.id)?.section.title).toBe('Ringkasan');
+  });
+
+  it('chains the figure token from the text answer even when the reload after it failed', async () => {
+    const section = store.tree[0]!.chapters[0]!.sections[0]!;
+    store.captureSectionToken(section.id);
+    fake.failNext(
+      (r) => r.method === 'GET' && r.url === '/api/pages?include=sections',
+      fake.json({ error: 'x' }, 500),
+    );
+
+    const text = await store.saveSectionText(section.id, { title: 'Ringkasan', body: 'Isi.' });
+    expect(text).toMatchObject({ ok: true, refreshFailed: true });
+
+    const figure: SectionFigure = { kind: 'photo', photos: [{ mediaId: 'm1', alt: 'Balai' }] };
+    expect((await store.saveFigure(section.id, figure)).ok).toBe(true);
+  });
+
+  it('reports a figure another editor changed since the drafts token was taken', async () => {
+    const section = store.tree[0]!.chapters[0]!.sections[0]!;
+    store.captureSectionToken(section.id);
+    expect(store.figureChangedSinceToken(section.id)).toBe(false);
+
+    fake.changeFigureByOther(section.id, { kind: 'photo', photos: [] });
+    await store.load();
+
+    expect(store.figureChangedSinceToken(section.id)).toBe(true);
+    store.captureSectionToken(section.id);
+    expect(store.figureChangedSinceToken(section.id)).toBe(false);
   });
 });

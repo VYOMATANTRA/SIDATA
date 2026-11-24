@@ -503,6 +503,53 @@ export function createFakeCerita() {
         return json({ section: { id: found.section.id, updatedAt: found.section.updatedAt } });
       }
     }
+    if ((m = path.match(/^\/api\/sections\/([^/]+)\/text$/)) && method === 'PUT') {
+      const found = findSection(m[1]!);
+      if (!found) return notFound();
+      if (body['expectedUpdatedAt'] !== found.section.updatedAt)
+        return stale(found.section.updatedAt);
+      found.section.title = String(body['title']).trim();
+      const text = String(body['body']).trim();
+      // One prose block per section: the first keeps its slug, the others are merged away.
+      const prose = blocks
+        .filter((b) => b.sectionId === found.section.id && b.type === 'prose')
+        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+      for (const extra of prose.slice(1)) blocks.splice(blocks.indexOf(extra), 1);
+      let block: ContentBlock | null = prose[0] ?? null;
+      if (text === '') {
+        if (block) blocks.splice(blocks.indexOf(block), 1);
+        block = null;
+      } else if (block) {
+        block.body = text;
+        block.updatedAt = stamp();
+      } else {
+        block = {
+          id: nextId('blk'),
+          sectionId: found.section.id,
+          type: 'prose',
+          slug: `isi-${found.section.id}`,
+          title: 'Isi',
+          body: text,
+          metadata: null,
+          sortOrder: 0,
+          updatedAt: stamp(),
+        };
+        blocks.push(block);
+      }
+      found.section.updatedAt = stamp();
+      return json({
+        message: 'Teks bagian disimpan',
+        section: {
+          id: found.section.id,
+          chapterId: found.chapter.id,
+          slug: found.section.slug,
+          title: found.section.title,
+          sortOrder: found.section.sortOrder,
+          updatedAt: found.section.updatedAt,
+        },
+        block,
+      });
+    }
     if ((m = path.match(/^\/api\/sections\/([^/]+)$/))) {
       const found = findSection(m[1]!);
       if (!found) return notFound();
@@ -607,6 +654,14 @@ export function createFakeCerita() {
       if (found) found.chapter.updatedAt = stamp();
     },
     /** Simulates another editor replacing the section's figure (figure block and section token). */
+    /** Simulates another editor changing only the section's title (the section token moves). */
+    changeTitleByOther(sectionId: string, title: string): void {
+      const found = findSection(sectionId);
+      if (found) {
+        found.section.title = title;
+        found.section.updatedAt = stamp();
+      }
+    },
     changeFigureByOther(sectionId: string, figure: Record<string, unknown>): void {
       const found = findSection(sectionId);
       if (!found) return;
