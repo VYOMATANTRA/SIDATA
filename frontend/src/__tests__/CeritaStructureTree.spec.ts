@@ -81,7 +81,7 @@ describe('CeritaStructureTree', () => {
     ]);
     expect(wrapper.findAll('[data-test="chapter-meta"]').map((item) => item.text())).toEqual([
       '2 bagian',
-      '0 bagian',
+      'Belum ada bagian',
     ]);
     wrapper.unmount();
   });
@@ -94,7 +94,7 @@ describe('CeritaStructureTree', () => {
     const figures = wrapper.findAll('[data-test="section-figure"]');
     expect(figures[0]!.text()).toBe('1 gambar');
     expect(figures[1]!.text()).toBe('Figur kosong');
-    expect(figures[1]!.classes()).toContain('font-medium');
+    expect(figures[1]!.classes()).toContain('text-status-warning');
     // An untitled section is named by its position.
     expect(sections[1]!.text()).toContain('Bagian 2');
     wrapper.unmount();

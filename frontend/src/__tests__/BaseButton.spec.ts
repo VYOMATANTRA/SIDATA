@@ -73,7 +73,7 @@ describe('BaseButton.vue', () => {
     });
     expect(smWrapper.classes()).toContain('px-3');
     expect(smWrapper.classes()).toContain('py-1.5');
-    expect(smWrapper.classes()).toContain('text-xs');
+    expect(smWrapper.classes()).toContain('text-[13px]');
 
     const mdWrapper = mount(BaseButton, {
       props: { size: 'md', label: 'Medium' },

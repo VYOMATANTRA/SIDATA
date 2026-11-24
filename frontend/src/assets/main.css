@@ -16,6 +16,7 @@
   /* Surfaces */
   --color-surface: #ffffff;
   --color-surface-muted: #f3f4f6; /* navy 5% over white */
+  --color-selected: #e6edfb; /* selected tree row and overview card (design #E6EDFB) */
   --color-surface-hover: #e7e9ee; /* navy 10% over white; hover/pressed tint and disabled fill */
   --color-surface-inverse: #0a2353; /* navy */
   --color-surface-glass: rgba(

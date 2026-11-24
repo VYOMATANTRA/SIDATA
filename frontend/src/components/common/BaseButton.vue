@@ -49,7 +49,7 @@ const sizeClasses = computed(() => {
   }
   switch (props.size) {
     case 'sm':
-      return 'px-3 py-1.5 text-xs gap-1.5';
+      return 'px-3 py-1.5 text-[13px] gap-1.5';
     case 'md':
       return 'px-4 py-2 text-sm gap-2';
     case 'lg':

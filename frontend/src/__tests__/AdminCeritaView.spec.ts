@@ -1013,8 +1013,8 @@ describe('AdminCeritaView', () => {
       await openSection('Ringkasan');
 
       const columns = wrapper.find('[data-test="editor-columns"]');
-      expect(columns.classes()).toContain('md:grid-cols-[300px_minmax(0,1fr)]');
-      expect(columns.classes()).toContain('2xl:grid-cols-[300px_minmax(0,1fr)_400px]');
+      expect(columns.classes()).toContain('md:grid-cols-[340px_minmax(0,1fr)]');
+      expect(columns.classes()).toContain('2xl:grid-cols-[340px_minmax(0,1fr)_400px]');
       expect(columns.classes()).not.toContain('xl:grid-cols-[320px_minmax(0,1fr)_400px]');
 
       const panel = wrapper.find('[data-test="preview-panel"]');

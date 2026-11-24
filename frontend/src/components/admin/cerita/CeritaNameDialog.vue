@@ -104,12 +104,7 @@ function handleSubmit(): void {
         />
       </FormField>
 
-      <AlertBanner
-        v-if="error"
-        :message="error"
-        :kind="errorKind"
-        data-test="name-error"
-      />
+      <AlertBanner v-if="error" :message="error" :kind="errorKind" data-test="name-error" />
 
       <div
         v-if="stale"

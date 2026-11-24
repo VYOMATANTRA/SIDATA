@@ -61,7 +61,10 @@ defineExpose({ save });
         aria-label="Lokasi bagian"
         class="min-w-0 outline-none"
       >
-        <ol class="text-text-muted flex flex-wrap items-center gap-x-2 text-sm" data-test="breadcrumb">
+        <ol
+          class="text-text-muted flex flex-wrap items-center gap-x-2 text-sm"
+          data-test="breadcrumb"
+        >
           <li class="break-words">{{ chapterLabel }}</li>
           <li aria-hidden="true">›</li>
           <li class="text-brand-navy font-semibold" aria-current="location">
@@ -76,8 +79,8 @@ defineExpose({ save });
             :id="ceritaIds.sectionDuplicate"
             type="button"
             variant="ghost"
-            size="sm"
-            class="min-h-11"
+            size="md"
+            class="min-h-11 text-sm"
             :disabled="busy || dirty"
             :aria-busy="duplicating ? 'true' : undefined"
             :aria-describedby="dirty ? unsavedNoteId : undefined"
@@ -89,18 +92,25 @@ defineExpose({ save });
           <BaseButton
             type="button"
             variant="danger"
-            size="sm"
-            class="min-h-11"
+            size="md"
+            class="min-h-11 text-sm"
             :disabled="busy || dirty"
             :aria-describedby="dirty ? unsavedNoteId : undefined"
             data-test="section-delete"
             @click="emit('delete')"
           >
-            <TrashIcon class="h-4 w-4" aria-hidden="true" />
+            <template #leftIcon>
+              <TrashIcon class="h-4 w-4" aria-hidden="true" />
+            </template>
             Hapus bagian
           </BaseButton>
         </div>
-        <p v-if="dirty" :id="unsavedNoteId" class="text-text-muted text-xs" data-test="section-unsaved-note">
+        <p
+          v-if="dirty"
+          :id="unsavedNoteId"
+          class="text-text-muted text-[13px]"
+          data-test="section-unsaved-note"
+        >
           Simpan perubahan dulu untuk menggandakan atau menghapus bagian ini.
         </p>
       </div>

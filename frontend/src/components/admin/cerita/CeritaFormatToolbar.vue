@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import BaseButton from '../../common/BaseButton.vue';
 
 /**
  * Formatting buttons for a paragraph body. Each button shows its name as visible text, so the
@@ -36,54 +35,76 @@ function moveFocus(event: KeyboardEvent): void {
     ref="root"
     role="toolbar"
     aria-label="Format teks"
-    class="flex flex-wrap gap-2"
+    class="flex flex-wrap items-center gap-0.5"
     data-test="format-toolbar"
     @keydown.left="moveFocus"
     @keydown.right="moveFocus"
   >
-    <BaseButton
+    <button
       type="button"
-      variant="secondary"
-      size="sm"
+      class="tool-button font-bold"
       :disabled="disabled"
-      class="min-h-11 min-w-11 font-bold"
       data-test="format-bold"
       @click="emit('format', 'bold')"
     >
       Tebal
-    </BaseButton>
-    <BaseButton
+    </button>
+    <button
       type="button"
-      variant="secondary"
-      size="sm"
+      class="tool-button italic"
       :disabled="disabled"
-      class="min-h-11 min-w-11 italic"
       data-test="format-italic"
       @click="emit('format', 'italic')"
     >
       Miring
-    </BaseButton>
-    <BaseButton
+    </button>
+    <button
       type="button"
-      variant="secondary"
-      size="sm"
+      class="tool-button"
       :disabled="disabled"
-      class="min-h-11 min-w-11"
       data-test="format-link"
       @click="emit('format', 'link')"
     >
       Tautan
-    </BaseButton>
-    <BaseButton
+    </button>
+    <button
       type="button"
-      variant="secondary"
-      size="sm"
+      class="tool-button"
       :disabled="disabled"
-      class="min-h-11 min-w-11"
       data-test="format-list"
       @click="emit('format', 'list')"
     >
       Daftar
-    </BaseButton>
+    </button>
   </div>
 </template>
+
+<style scoped>
+/* Quiet toolbar buttons: no border, highlight on hover, visible focus ring (docs/ACCESSIBILITY.md). */
+.tool-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  min-width: 36px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #3b4560;
+  background: transparent;
+  cursor: pointer;
+}
+.tool-button:hover:not(:disabled) {
+  background: #e7ebf2;
+  color: #0a2353;
+}
+.tool-button:focus-visible {
+  outline: 2px solid #0a2353;
+  outline-offset: 1px;
+}
+.tool-button:disabled {
+  color: #8491a9;
+  cursor: not-allowed;
+}
+</style>

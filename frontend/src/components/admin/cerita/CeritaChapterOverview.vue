@@ -13,7 +13,6 @@ import {
 import type { PendingFigureKind } from '../../../composables/figureKindHint';
 import type { AdminChapter, AdminSection } from '../../../stores/ceritaAdmin.store';
 import type { OverviewCard } from '../../../utils/ceritaChapterOverview';
-import { INPUT_CLASSES } from '../../../utils/formStyles';
 import { titleTextProblem } from '../../../utils/titleTextRules';
 import type { FailureKind } from '../../../utils/userMessages';
 import { ceritaIds } from './ceritaDomIds';
@@ -128,7 +127,7 @@ const chapterLabel = computed(
       <p
         :id="ceritaIds.overviewLabel"
         tabindex="-1"
-        class="text-text-muted text-xs font-semibold tracking-wide uppercase outline-none"
+        class="text-text-muted text-[13px] font-semibold tracking-wide uppercase outline-none"
         data-test="overview-heading"
       >
         {{ chapterLabel }}
@@ -147,7 +146,9 @@ const chapterLabel = computed(
               :id="ceritaIds.overviewTitleField"
               v-model="draft"
               type="text"
-              :class="[INPUT_CLASSES, 'min-w-0 flex-1']"
+              :class="[
+                'text-brand-navy placeholder:text-text-muted border-border-strong focus-visible:outline-focus-ring aria-invalid:border-status-error min-h-12 min-w-0 flex-1 rounded-none border-0 border-b border-dashed bg-transparent px-0 py-1 text-[28px] font-bold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-solid',
+              ]"
               :disabled="busy"
               :aria-describedby="describedBy"
               :aria-invalid="invalid ? 'true' : undefined"
@@ -188,13 +189,13 @@ const chapterLabel = computed(
         </AlertBanner>
       </form>
 
-      <div class="flex flex-wrap items-center gap-2" data-test="chapter-actions">
+      <div class="flex flex-wrap items-center gap-1" data-test="chapter-actions">
         <BaseButton
           :id="ceritaIds.overviewChapterUp"
           type="button"
-          variant="secondary"
+          variant="ghost"
           size="md"
-          class="min-h-11"
+          class="min-h-11 text-sm"
           :disabled="busy || isFirst"
           data-test="chapter-up"
           @click="emit('chapter-up')"
@@ -204,9 +205,9 @@ const chapterLabel = computed(
         <BaseButton
           :id="ceritaIds.overviewChapterDown"
           type="button"
-          variant="secondary"
+          variant="ghost"
           size="md"
-          class="min-h-11"
+          class="min-h-11 text-sm"
           :disabled="busy || isLast"
           data-test="chapter-down"
           @click="emit('chapter-down')"
@@ -216,9 +217,9 @@ const chapterLabel = computed(
         <BaseButton
           :id="ceritaIds.overviewChapterDelete"
           type="button"
-          variant="secondary"
+          variant="danger"
           size="md"
-          class="min-h-11"
+          class="min-h-11 text-sm"
           :disabled="busy"
           data-test="chapter-delete"
           @click="emit('chapter-delete')"
@@ -232,7 +233,7 @@ const chapterLabel = computed(
       <h3 :id="ceritaIds.overviewList" class="text-brand-navy text-base font-semibold">
         Bagian dalam bab ini
       </h3>
-      <p class="text-text-muted text-sm" data-test="overview-hint">
+      <p class="text-text-muted text-[14px]" data-test="overview-hint">
         Seret kartu untuk mengubah urutan. Klik kartu untuk mengedit isi dan figurnya.
       </p>
 
@@ -246,7 +247,7 @@ const chapterLabel = computed(
 
       <ol
         v-else
-        class="space-y-2"
+        class="space-y-3"
         :aria-labelledby="ceritaIds.overviewList"
         data-test="overview-list"
       >

@@ -196,9 +196,7 @@ const modes: ReadonlyArray<{ value: PreviewMode; label: string; test: string }> 
 <template>
   <section aria-label="Pratinjau langsung" class="space-y-3" data-test="live-preview">
     <div class="flex flex-wrap items-center justify-between gap-2">
-      <h3 class="text-brand-navy hidden text-base font-semibold 2xl:block">
-        Pratinjau langsung
-      </h3>
+      <h3 class="text-brand-navy hidden text-base font-semibold 2xl:block">Pratinjau langsung</h3>
       <div
         role="group"
         aria-label="Ukuran pratinjau"
@@ -210,7 +208,9 @@ const modes: ReadonlyArray<{ value: PreviewMode; label: string; test: string }> 
           type="button"
           class="focus-visible:outline-focus-ring rounded-btn min-h-11 px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
           :class="
-            mode === option.value ? 'bg-brand-navy text-white' : 'text-brand-navy hover:bg-surface-muted'
+            mode === option.value
+              ? 'bg-brand-navy text-white'
+              : 'text-brand-navy hover:bg-surface-muted'
           "
           :aria-pressed="mode === option.value ? 'true' : 'false'"
           :data-test="option.test"
@@ -220,7 +220,7 @@ const modes: ReadonlyArray<{ value: PreviewMode; label: string; test: string }> 
         </button>
       </div>
     </div>
-    <p class="text-text-muted text-xs">
+    <p class="text-text-muted text-[12px]">
       Pratinjau memperbarui diri saat Anda mengetik. Perubahan tampil di situs setelah Simpan
       perubahan.
     </p>
@@ -228,7 +228,7 @@ const modes: ReadonlyArray<{ value: PreviewMode; label: string; test: string }> 
     <div ref="host" class="bg-surface-muted rounded-card p-3" data-test="preview-host">
       <div
         v-if="loadFailed"
-        class="rounded-card border-border bg-white p-4 space-y-3"
+        class="rounded-card border-border space-y-3 bg-white p-4"
         role="status"
         data-test="preview-load-failed"
       >
@@ -250,7 +250,9 @@ const modes: ReadonlyArray<{ value: PreviewMode; label: string; test: string }> 
         v-else
         class="mx-auto"
         :class="
-          mode === 'phone' ? 'border-border-strong rounded-[1.75rem] border bg-white p-3' : undefined
+          mode === 'phone'
+            ? 'border-border-strong rounded-[1.75rem] border bg-white p-3'
+            : undefined
         "
         :style="{ width: `${outerWidth}px`, maxWidth: '100%' }"
         :data-mode="mode"
@@ -284,9 +286,7 @@ const modes: ReadonlyArray<{ value: PreviewMode; label: string; test: string }> 
     <p v-if="bodyClipped" class="text-text-muted text-xs" data-test="preview-clipped">
       Pratinjau dipotong: isi bagian lebih panjang dari batas pratinjau.
     </p>
-    <p v-if="preview.loading.value" class="text-text-muted text-sm" role="status">
-      Memuat gambar…
-    </p>
+    <p v-if="preview.loading.value" class="text-text-muted text-sm" role="status">Memuat gambar…</p>
     <p
       v-else-if="preview.unavailable.value"
       class="text-text-muted text-sm"
