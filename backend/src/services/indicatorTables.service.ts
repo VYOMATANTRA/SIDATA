@@ -31,11 +31,12 @@ export const INDICATOR_TABLE_KINDS = [
   'ethnicity',
   'religion_by_sex',
   'occupation',
+  'by_sex',
 ] as const;
 export type IndicatorTableKind = (typeof INDICATOR_TABLE_KINDS)[number];
 
 /** Kinds whose rows carry a male/female split; the rest carry a single total. */
-const SEX_SPLIT_KINDS: ReadonlySet<string> = new Set(['age_pyramid', 'religion_by_sex']);
+const SEX_SPLIT_KINDS: ReadonlySet<string> = new Set(['age_pyramid', 'religion_by_sex', 'by_sex']);
 
 const isSexSplitKind = (kind: string): boolean => SEX_SPLIT_KINDS.has(kind);
 

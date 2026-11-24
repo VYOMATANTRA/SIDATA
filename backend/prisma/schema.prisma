@@ -324,6 +324,7 @@ enum IndicatorTableKind {
   ethnicity
   religion_by_sex
   occupation
+  by_sex
 }
 
 model IndicatorTable {

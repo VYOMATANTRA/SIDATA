@@ -16,7 +16,7 @@ import { CELL_INPUT_CLASSES, INPUT_CLASSES } from '../../utils/formStyles';
 /**
  * Editor/admin form for the four fixed-shape matrix tables (SPEC §4, §7).
  *
- * Two shapes, one component: sex-split kinds (`age_pyramid`, `religion_by_sex`) edit
+ * Two shapes, one component: sex-split kinds (`age_pyramid`, `religion_by_sex`, `by_sex`) edit
  * `male`/`female` and derive `total`; single-value kinds (`ethnicity`, `occupation`) edit
  * `total`. Sending the wrong shape returns a 400 from `assertRowCells`, so the form validates
  * it locally first.

@@ -22,6 +22,7 @@ export const INDICATOR_TABLE_KINDS = [
   'ethnicity',
   'religion_by_sex',
   'occupation',
+  'by_sex',
 ] as const;
 
 export type IndicatorTableKind = (typeof INDICATOR_TABLE_KINDS)[number];
@@ -53,6 +54,11 @@ export const INDICATOR_TABLE_KIND_META: Record<IndicatorTableKind, IndicatorTabl
     label: 'Mata Pencaharian',
     description: 'Jumlah penduduk per jenis mata pencaharian.',
     sexSplit: false,
+  },
+  by_sex: {
+    label: 'Tabel menurut Jenis Kelamin',
+    description: 'Jumlah penduduk per kategori (misalnya pendidikan atau status), dipisah menurut jenis kelamin.',
+    sexSplit: true,
   },
 };
 
