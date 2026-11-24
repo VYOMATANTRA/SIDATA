@@ -1,126 +1,101 @@
 <script setup lang="ts">
+import { ref } from 'vue';
+import { TrashIcon } from '@heroicons/vue/24/outline';
 import BaseButton from '../../common/BaseButton.vue';
 import CeritaSectionEditor from './CeritaSectionEditor.vue';
 import { ceritaIds } from './ceritaDomIds';
 
 /**
- * The centre column of the Cerita editor: the selected section's location, its actions (rename,
- * Duplikat, Naik, Turun, Hapus bagian), its heading, the paragraph and figure editors, and the
- * previous and next section. The pane only reports what was asked; the view runs the dialogs, the
- * saves and the selection. The paragraph and figure editors keep their own Simpan buttons.
+ * The centre column of the Cerita editor for the selected section (Main artboard): its location
+ * ("Bab n · Judul › Bagian n.m"), the Duplikat and Hapus bagian actions, the text and figure editor,
+ * and the previous and next section. Order is changed by dragging in the tree, not here. The pane
+ * only reports what was asked; the view runs the dialogs and the selection. Saving belongs to the
+ * one "Simpan perubahan" button in the shell header, which calls `save()` exposed here.
  */
 defineProps<{
   sectionId: string;
   chapterLabel: string;
   sectionNumber: string;
-  title: string;
-  isFirst: boolean;
-  isLast: boolean;
-  busy: boolean;
-  duplicating: boolean;
   prev: { number: string; title: string } | null;
   next: { number: string; title: string } | null;
+  busy: boolean;
+  duplicating: boolean;
 }>();
 
 const emit = defineEmits<{
-  (e: 'rename'): void;
   (e: 'duplicate'): void;
-  (e: 'move', direction: -1 | 1): void;
   (e: 'delete'): void;
   (e: 'prev'): void;
   (e: 'next'): void;
   (e: 'busy', value: boolean): void;
   (e: 'dirty-change', value: boolean): void;
+  (e: 'draft-change', draft: { title: string; body: string }): void;
 }>();
 
+const editor = ref<InstanceType<typeof CeritaSectionEditor> | null>(null);
+
+/** Saves the section's unsaved text and figure (see CeritaSectionEditor.save). */
+function save(): Promise<boolean> {
+  return editor.value?.save() ?? Promise.resolve(false);
+}
+
+defineExpose({ save });
 </script>
 
 <template>
-  <section :aria-labelledby="ceritaIds.sectionHeading" class="min-w-0 space-y-6" data-test="section-pane">
-    <div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
-      <nav aria-label="Lokasi bagian" class="min-w-0">
+  <section
+    :aria-label="`Bagian ${sectionNumber}`"
+    class="min-w-0 space-y-6"
+    data-test="section-pane"
+  >
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+      <nav
+        :id="ceritaIds.sectionHeading"
+        tabindex="-1"
+        aria-label="Lokasi bagian"
+        class="min-w-0 outline-none"
+      >
         <ol class="text-text-muted flex flex-wrap items-center gap-x-2 text-sm" data-test="breadcrumb">
           <li class="break-words">{{ chapterLabel }}</li>
           <li aria-hidden="true">›</li>
-          <li class="text-brand-navy font-medium" aria-current="location">Bagian {{ sectionNumber }}</li>
+          <li class="text-brand-navy font-semibold" aria-current="location">
+            Bagian {{ sectionNumber }}
+          </li>
         </ol>
       </nav>
 
-      <div class="flex flex-wrap items-center gap-2">
-        <BaseButton
-          type="button"
-          variant="secondary"
-          size="sm"
-          class="min-h-11"
-          :disabled="busy"
-          data-test="section-rename-current"
-          @click="emit('rename')"
-        >
-          Ubah judul
-        </BaseButton>
-        <BaseButton
+      <div class="flex flex-wrap items-center gap-1">
+        <button
           :id="ceritaIds.sectionDuplicate"
           type="button"
-          variant="secondary"
-          size="sm"
-          class="min-h-11"
+          class="text-text-muted hover:bg-surface-muted focus-visible:outline-focus-ring inline-flex min-h-11 items-center rounded-btn px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="busy"
           :aria-busy="duplicating ? 'true' : undefined"
           data-test="section-duplicate"
           @click="emit('duplicate')"
         >
           {{ duplicating ? 'Menggandakan…' : 'Duplikat' }}
-        </BaseButton>
-        <BaseButton
+        </button>
+        <button
           type="button"
-          variant="secondary"
-          size="sm"
-          class="min-h-11"
-          :disabled="busy || isFirst"
-          data-test="section-up"
-          @click="emit('move', -1)"
-        >
-          Naik
-        </BaseButton>
-        <BaseButton
-          type="button"
-          variant="secondary"
-          size="sm"
-          class="min-h-11"
-          :disabled="busy || isLast"
-          data-test="section-down"
-          @click="emit('move', 1)"
-        >
-          Turun
-        </BaseButton>
-        <BaseButton
-          type="button"
-          variant="secondary"
-          size="sm"
-          class="min-h-11"
+          class="text-status-error hover:bg-status-error-surface focus-visible:outline-focus-ring inline-flex min-h-11 items-center gap-2 rounded-btn px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="busy"
           data-test="section-delete"
           @click="emit('delete')"
         >
+          <TrashIcon class="h-4 w-4" aria-hidden="true" />
           Hapus bagian
-        </BaseButton>
+        </button>
       </div>
     </div>
 
-    <h3
-      :id="ceritaIds.sectionHeading"
-      tabindex="-1"
-      class="text-brand-navy text-xl font-semibold break-words outline-none"
-      data-test="section-heading"
-    >
-      <span class="text-text-muted font-normal">{{ sectionNumber }}</span> {{ title }}
-    </h3>
-
     <CeritaSectionEditor
+      ref="editor"
       :key="sectionId"
       :section-id="sectionId"
       @busy="emit('busy', $event)"
       @dirty-change="emit('dirty-change', $event)"
+      @draft-change="emit('draft-change', $event)"
     />
 
     <nav
@@ -138,7 +113,7 @@ const emit = defineEmits<{
         data-test="section-prev"
         @click="emit('prev')"
       >
-        ← {{ prev.number }} {{ prev.title }}
+        <span aria-hidden="true">←</span> {{ prev.number }} {{ prev.title }}
       </BaseButton>
       <span v-else aria-hidden="true"></span>
       <BaseButton
@@ -152,7 +127,7 @@ const emit = defineEmits<{
         data-test="section-next"
         @click="emit('next')"
       >
-        {{ next.number }} {{ next.title }} →
+        {{ next.number }} {{ next.title }} <span aria-hidden="true">→</span>
       </BaseButton>
     </nav>
   </section>

@@ -172,6 +172,29 @@ export async function reorderSections(
   await put(`/api/chapters/${enc(chapterId)}/sections/reorder`, { expectedUpdatedAt, items });
 }
 
+// --- Section text (title and one body, saved together) ---
+
+export interface SectionTextInput {
+  title: string;
+  /** Limited Markdown; a blank line starts a new paragraph. An empty body removes the text. */
+  body: string;
+  expectedUpdatedAt: string;
+}
+
+/** The section after the save, and its one prose block (null when the body is empty). */
+export interface SectionTextResponse {
+  section: { id: string; chapterId: string; slug: string; title: string | null; sortOrder: number; updatedAt: string };
+  block: ContentBlock | null;
+}
+
+/** Saves a section's title and body in one request; the server merges legacy paragraphs into one. */
+export async function saveSectionText(
+  sectionId: string,
+  input: SectionTextInput,
+): Promise<SectionTextResponse> {
+  return put<SectionTextResponse>(`/api/sections/${enc(sectionId)}/text`, input);
+}
+
 // --- Paragraphs (prose blocks attached to a section) ---
 
 export interface ParagraphInput {

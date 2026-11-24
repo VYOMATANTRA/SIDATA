@@ -669,6 +669,77 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     return outcome.ok ? { ...outcome, value: undefined } : outcome;
   }
 
+  /**
+   * Puts a saved section text into the shared data at once: the section's title in the tree and the
+   * flat list, and its prose blocks (every other prose block of the section is dropped, the saved one
+   * is set). The public reader's cached copy of the page is forgotten, as a delete does.
+   */
+  function applySectionText(sectionId: string, saved: api.SectionTextResponse): void {
+    const found = findSection(sectionId);
+    if (found) {
+      const title = saved.section.title;
+      pruneCachedPage(found.page.slug, (page) => ({
+        ...page,
+        chapters: page.chapters.map((chapter) =>
+          chapter.id !== found.chapter.id
+            ? chapter
+            : {
+                ...chapter,
+                sections: chapter.sections.map((item) =>
+                  item.id === sectionId
+                    ? { ...item, title, updatedAt: saved.section.updatedAt }
+                    : item,
+                ),
+              },
+        ),
+      }));
+    }
+    pagesStore.sections = pagesStore.sections.map((item) =>
+      item.sectionId === sectionId ? { ...item, sectionTitle: saved.section.title } : item,
+    );
+    const keepSlug = saved.block?.slug ?? null;
+    const dropOthers = (map: Record<string, ContentBlock>): Record<string, ContentBlock> =>
+      Object.fromEntries(
+        Object.entries(map).filter(
+          ([slug, block]) =>
+            !(
+              block.sectionId === sectionId &&
+              block.type === 'prose' &&
+              slug !== keepSlug
+            ),
+        ),
+      );
+    const serverBlocks = dropOthers(blocksStore.serverBlocks);
+    const blocks = dropOthers(blocksStore.blocks);
+    if (saved.block) {
+      serverBlocks[saved.block.slug] = saved.block;
+      blocks[saved.block.slug] = saved.block;
+    }
+    blocksStore.serverBlocks = serverBlocks;
+    blocksStore.blocks = blocks;
+  }
+
+  /**
+   * Saves a section's title and body together (`PUT /api/sections/:id/text`, SPEC §8). The write uses
+   * the section token the editor's drafts chain from, so another editor's change is refused as stale.
+   * Resolves to the saved title and body, which the editor takes as its new baseline.
+   */
+  async function saveSectionText(
+    sectionId: string,
+    input: { title: string; body: string },
+  ): Promise<WriteOutcome<{ title: string; body: string }>> {
+    const found = findSection(sectionId);
+    if (!found) return missing('menyimpan teks bagian');
+    const token = sectionTokens.value[sectionId] ?? found.section.updatedAt;
+    return trackSectionWrite(sectionId, () =>
+      run('menyimpan teks bagian', 'both', async () => {
+        const saved = await api.saveSectionText(sectionId, { ...input, expectedUpdatedAt: token });
+        applySectionText(sectionId, saved);
+        return { title: saved.section.title ?? '', body: saved.block?.body ?? '' };
+      }),
+    );
+  }
+
   return {
     selectedSlug,
     hasLoaded,
@@ -711,5 +782,6 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     moveParagraph,
     saveFigure,
     removeFigure,
+    saveSectionText,
   };
 });

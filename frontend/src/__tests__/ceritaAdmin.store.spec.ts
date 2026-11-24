@@ -555,3 +555,63 @@ describe('ceritaAdmin store and the public page cache', () => {
     });
   });
 });
+
+describe('ceritaAdmin store section text (title and one body)', () => {
+  let store: ReturnType<typeof useCeritaAdminStore>;
+
+  beforeEach(async () => {
+    store = setup();
+    await store.load();
+  });
+
+  it('saves the title and body together, merges paragraphs into one and updates the shared data', async () => {
+    const section = store.tree[0]!.chapters[0]!.sections[0]!;
+    fake.addParagraph(section.id, 'Pertama', 'Satu.');
+    fake.addParagraph(section.id, 'Kedua', 'Dua.');
+    await store.load();
+
+    const outcome = await store.saveSectionText(section.id, { title: 'Ringkasan baru', body: 'Isi.\n\nLagi.' });
+
+    expect(outcome.ok).toBe(true);
+    expect(fake.lastWrite()).toMatchObject({
+      method: 'PUT',
+      url: `/api/sections/${section.id}/text`,
+      body: { title: 'Ringkasan baru', body: 'Isi.\n\nLagi.' },
+    });
+    expect(outcome).toMatchObject({ ok: true, value: { title: 'Ringkasan baru', body: 'Isi.\n\nLagi.' } });
+    expect(store.findSection(section.id)?.section.title).toBe('Ringkasan baru');
+    expect(store.paragraphsFor(section.id)).toHaveLength(1);
+    expect(store.paragraphsFor(section.id)[0]!.body).toBe('Isi.\n\nLagi.');
+  });
+
+  it('chains the section token so the figure saves after the text without a conflict', async () => {
+    const section = store.tree[0]!.chapters[0]!.sections[0]!;
+    store.captureSectionToken(section.id);
+    expect((await store.saveSectionText(section.id, { title: 'Ringkasan', body: 'Isi.' })).ok).toBe(true);
+
+    const figure: SectionFigure = {
+      kind: 'photo',
+      photos: [{ mediaId: 'm1', alt: 'Balai kelurahan' }],
+    };
+    expect((await store.saveFigure(section.id, figure)).ok).toBe(true);
+  });
+
+  it('removes the text when the body is empty', async () => {
+    const section = store.tree[0]!.chapters[0]!.sections[0]!;
+    fake.addParagraph(section.id, 'Isi', 'Sesuatu.');
+    await store.load();
+
+    expect((await store.saveSectionText(section.id, { title: 'Ringkasan', body: '' })).ok).toBe(true);
+    expect(store.paragraphsFor(section.id)).toHaveLength(0);
+  });
+
+  it('refuses a save on a token another editor has moved past, and changes nothing', async () => {
+    const section = store.tree[0]!.chapters[0]!.sections[0]!;
+    store.captureSectionToken(section.id);
+    fake.changeFigureByOther(section.id, { kind: 'photo', photos: [] });
+
+    const outcome = await store.saveSectionText(section.id, { title: 'Lain', body: 'Isi.' });
+    expect(outcome).toMatchObject({ ok: false, stale: true });
+    expect(store.findSection(section.id)?.section.title).toBe('Ringkasan');
+  });
+});
