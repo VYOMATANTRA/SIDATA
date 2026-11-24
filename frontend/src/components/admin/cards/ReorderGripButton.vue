@@ -53,7 +53,7 @@ function onDragStart(event: DragEvent): void {
 <template>
   <span
     :draggable="disabled ? 'false' : 'true'"
-    class="bg-surface-muted border-border flex w-8 shrink-0 items-stretch justify-center border-r"
+    class="flex w-8 shrink-0 items-stretch justify-center"
     :class="disabled ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'"
     data-test="grip-wrap"
     @dragstart="onDragStart"
@@ -62,7 +62,7 @@ function onDragStart(event: DragEvent): void {
     <button
       :id="id"
       type="button"
-      class="text-text-muted hover:text-brand-navy focus-visible:outline-focus-ring flex w-full items-center justify-center focus-visible:outline-2 focus-visible:outline-offset-[-2px]"
+      class="text-text-muted hover:bg-surface-muted hover:text-brand-navy focus-visible:outline-focus-ring rounded-btn flex min-h-11 w-full items-center justify-center focus-visible:outline-2 focus-visible:outline-offset-[-2px]"
       :class="[
         carried ? 'bg-brand-navy text-white hover:text-white' : '',
         disabled ? 'cursor-not-allowed opacity-50' : '',

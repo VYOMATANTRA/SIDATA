@@ -179,7 +179,9 @@ async function clickMenu(row: HTMLElement, label: string): Promise<void> {
 async function keyboardMove(grip: HTMLElement | null, key: 'ArrowUp' | 'ArrowDown'): Promise<void> {
   if (!grip) throw new Error('no grip');
   for (const step of [' ', key, ' ']) {
-    grip.dispatchEvent(new KeyboardEvent('keydown', { key: step, bubbles: true, cancelable: true }));
+    grip.dispatchEvent(
+      new KeyboardEvent('keydown', { key: step, bubbles: true, cancelable: true }),
+    );
   }
   await flushPromises();
 }
@@ -284,14 +286,18 @@ describe('AdminCeritaView', () => {
         { label: 'Kependudukan' },
       ]);
       expect(wrapper.find('[data-test="admin-header-title"]').text()).toBe('Kependudukan');
-      expect(document.querySelector('#admin-header-actions [data-test="page-public-link"]')).not.toBeNull();
+      expect(
+        document.querySelector('#admin-header-actions [data-test="page-public-link"]'),
+      ).not.toBeNull();
 
       await router.push({ name: 'admin-cerita' });
       await flushPromises();
 
       expect(header.trail.value).toBeNull();
       expect(header.compact.value).toBe(false);
-      expect(document.querySelector('#admin-header-actions [data-test="page-public-link"]')).toBeNull();
+      expect(
+        document.querySelector('#admin-header-actions [data-test="page-public-link"]'),
+      ).toBeNull();
       wrapper.unmount();
     });
 
@@ -329,7 +335,10 @@ describe('AdminCeritaView', () => {
       await click('Tambah bab');
       await typeInto('[data-test="name-input"]', 'Ibu Hamil');
       await submitDialog();
-      expect(wrapper.find('[data-test="section-empty"]').text()).toContain('Belum ada bagian');
+      expect(wrapper.find('[data-test="section-empty"]').exists()).toBe(false);
+      expect(wrapper.findAll('[data-test="chapter-meta"]').map((m) => m.text())).toContain(
+        'Belum ada bagian',
+      );
       wrapper.unmount();
     });
 
@@ -558,8 +567,6 @@ describe('AdminCeritaView', () => {
       wrapper.unmount();
     });
 
-
-
     it('reports a stale reorder in plain words and reloads on request', async () => {
       const wrapper = await mountList();
       await wrapper.find('[data-test="sort-toggle"]').trigger('click');
@@ -581,7 +588,6 @@ describe('AdminCeritaView', () => {
       expect(wrapper.find('[data-test="action-error"]').exists()).toBe(false);
       wrapper.unmount();
     });
-
 
     it('explains that empty chapters and sections go with a deleted page', async () => {
       const wrapper = await mountList();
@@ -756,7 +762,10 @@ describe('AdminCeritaView', () => {
       const chapter = fake.pages[0]!.chapters[0]!;
       const token = chapter.updatedAt;
 
-      await keyboardMove(sectionRow('Ringkasan').querySelector<HTMLElement>('[data-test="grip"]'), 'ArrowDown');
+      await keyboardMove(
+        sectionRow('Ringkasan').querySelector<HTMLElement>('[data-test="grip"]'),
+        'ArrowDown',
+      );
 
       expect(fake.lastWrite()).toMatchObject({
         method: 'PUT',
@@ -764,7 +773,9 @@ describe('AdminCeritaView', () => {
         body: { expectedUpdatedAt: token },
       });
       expect(sectionTitles().slice(0, 2)).toEqual(['Rincian', 'Ringkasan']);
-      expect(document.activeElement?.id).toBe(`cerita-pohon-bagian-${chapter.sections[0]!.id}-pegang`);
+      expect(document.activeElement?.id).toBe(
+        `cerita-pohon-bagian-${chapter.sections[0]!.id}-pegang`,
+      );
       wrapper.unmount();
     });
 
@@ -1873,7 +1884,10 @@ describe('AdminCeritaView chapter overview', () => {
     const wrapper = await mountView();
     await openChapter('Jumlah Penduduk');
 
-    await keyboardMove(overviewCard('Ringkasan').querySelector<HTMLElement>('[data-test="grip"]'), 'ArrowDown');
+    await keyboardMove(
+      overviewCard('Ringkasan').querySelector<HTMLElement>('[data-test="grip"]'),
+      'ArrowDown',
+    );
 
     expect(overviewTitles()).toEqual(['Rincian', 'Ringkasan']);
     expect(document.activeElement?.id).toBe(

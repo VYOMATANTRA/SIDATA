@@ -328,7 +328,9 @@ function closeMenu(event: Event): void {
             type="button"
             class="hover:bg-surface-muted focus-visible:outline-focus-ring rounded-btn flex min-h-11 min-w-0 flex-1 items-start gap-2 px-1 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2"
             :class="
-              overviewChapterId === chapter.id ? 'bg-selected border-l-brand-navy border-l-4' : ''
+              overviewChapterId === chapter.id
+                ? 'bg-selected shadow-[inset_4px_0_0_var(--color-brand-navy)]'
+                : ''
             "
             :aria-expanded="isOpen(chapter) ? 'true' : 'false'"
             :aria-controls="`cerita-pohon-bab-panel-${chapter.id}`"
@@ -414,16 +416,8 @@ function closeMenu(event: Event): void {
           :id="`cerita-pohon-bab-panel-${chapter.id}`"
           class="mt-0.5 space-y-1 pl-[34px]"
         >
-          <p
-            v-if="chapter.sections.length === 0"
-            class="text-text-muted px-1 py-2 text-sm"
-            data-test="section-empty"
-          >
-            Belum ada bagian.
-          </p>
-
           <ol
-            v-else
+            v-if="chapter.sections.length > 0"
             class="space-y-0.5"
             :aria-label="`Bagian dari ${chapterLabel(chapter, chapterIndex)}`"
           >
@@ -449,7 +443,7 @@ function closeMenu(event: Event): void {
                 class="rounded-btn flex items-stretch gap-0.5"
                 :class="[
                   selectedSectionId === section.id
-                    ? 'bg-selected border-l-brand-navy border-l-4 font-semibold'
+                    ? 'bg-selected font-semibold shadow-[inset_4px_0_0_var(--color-brand-navy)]'
                     : '',
                   sectionKb.isCarried(section.id)
                     ? 'ring-brand-navy bg-white shadow-md ring-2'

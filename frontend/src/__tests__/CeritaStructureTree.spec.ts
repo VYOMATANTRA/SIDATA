@@ -118,12 +118,15 @@ describe('CeritaStructureTree', () => {
   it('marks the selected section with aria-current and says a chapter without sections is empty', () => {
     const wrapper = mountTree({ selectedSectionId: 'sec-2' });
 
-    const current = wrapper.findAll('[data-test="section-select"]').filter((item) =>
-      item.attributes('aria-current'),
-    );
+    const current = wrapper
+      .findAll('[data-test="section-select"]')
+      .filter((item) => item.attributes('aria-current'));
     expect(current).toHaveLength(1);
     expect(current[0]!.attributes('id')).toBe('cerita-pohon-bagian-sec-2');
-    expect(wrapper.find('[data-test="section-empty"]').text()).toBe('Belum ada bagian.');
+    expect(wrapper.find('[data-test="section-empty"]').exists()).toBe(false);
+    expect(wrapper.findAll('[data-test="chapter-meta"]').map((m) => m.text())).toContain(
+      'Belum ada bagian',
+    );
     wrapper.unmount();
   });
 
