@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   describeFigure,
   draftFromFigure,
+  describeFigure,
   draftSignature,
   barValueNote,
   barValueProblem,
@@ -578,5 +579,24 @@ describe('shared credit of a photo group (draft load)', () => {
         ],
       }).sharedCredit,
     ).toBe('Tim');
+  });
+});
+
+describe('a stored chart the editor cannot edit', () => {
+  const chart = {
+    kind: 'chart' as const,
+    tableId: 'tab-1',
+    chartType: 'bar' as const,
+    series: 'total' as const,
+    title: 'Bagan contoh',
+  };
+
+  it('loads as an empty draft, so saving it cannot overwrite the chart', () => {
+    expect(draftSignature(draftFromFigure(chart))).toBe('none');
+  });
+
+  it('is described as a chart in the stored note and the reloaded summary', () => {
+    expect(describeFigure(chart)).toBe('Tersimpan: grafik “Bagan contoh”.');
+    expect(summarizeFigure(chart, true)).toBe('grafik “Bagan contoh”');
   });
 });
