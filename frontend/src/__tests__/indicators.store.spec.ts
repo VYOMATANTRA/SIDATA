@@ -118,6 +118,45 @@ describe('indicators store (CMS list and edits)', () => {
     expect(store.error).toBeTruthy();
   });
 
+  it('keeps an already-loaded list when a forced refetch fails on a later page', async () => {
+    let fail = false;
+    globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL) => {
+      if (fail && String(input).includes('&page=2')) return new Response('{}', { status: 500 });
+      return json({
+        indicators: [makeIndicator({ id: 'a' })],
+        total: fail ? 2 : 1,
+        page: 1,
+        pageSize: 200,
+      });
+    }) as typeof fetch;
+
+    const store = useIndicatorsStore();
+    await store.fetchIndicators();
+    fail = true;
+    await store.fetchIndicators(true);
+
+    expect(store.indicators.map((i) => i.id)).toEqual(['a']);
+    expect(store.error).toBeTruthy();
+  });
+
+  it('does not duplicate a row repeated across pages', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>(async (input: RequestInfo | URL) => {
+      const page = String(input).includes('&page=2') ? 2 : 1;
+      return json({
+        indicators: [makeIndicator({ id: page === 1 ? 'a' : 'a' })],
+        total: 2,
+        page,
+        pageSize: 200,
+      });
+    }) as typeof fetch;
+
+    const store = useIndicatorsStore();
+    await store.fetchIndicators();
+
+    expect(store.indicators).toHaveLength(1);
+    expect(store.total).toBe(1);
+  });
+
   it('sends both the CSRF token and the bearer token on PATCH, then replaces the row', async () => {
     let patchInit: RequestInit | undefined;
 
