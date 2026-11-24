@@ -28,7 +28,7 @@ export type SectionFigure =
       bars?: { unit?: string; items: { label: string; value: number }[] };
     }
   | {
-      /** Written by the chart editor (later); the reader and this service only read it. */
+      /** Read and written by the figure editor ("Grafik" tile, table of the Data menu). */
       kind: 'chart';
       tableId: string;
       chartType: 'bar' | 'column';

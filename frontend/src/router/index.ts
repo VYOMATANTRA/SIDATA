@@ -188,6 +188,8 @@ const router = createRouter({
             title: 'Cerita',
             subtitle: 'Kelola seluruh storytelling data yang ada di sini.',
             breadcrumb: ['Cerita'],
+            // The editor is a full-width three-column layout; AdminLayout drops the card padding for it.
+            fullBleed: true,
           },
         },
         {

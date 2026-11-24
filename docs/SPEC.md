@@ -919,10 +919,7 @@ marks the drop place). It is disabled, with the reason in its title, while a sea
 (the order is only shown in full) and while a save is in flight. A drop saves the whole order through
 the reorder API and announces the new position; a refused or failed save is shown in the same banner
 as the buttons. **Urutkan Cerita** shows Naik / Turun buttons on each card: the keyboard and touch
-route to the same reorder, since drag does not work on touch devices. **Edit** opens the page's
-structure at `?halaman=<slug>` (browser Back and "Kembali ke daftar" return to the list): its chapters
-and sections (add, rename, reorder, delete), and a section editor dialog for the section's paragraphs
-(prose blocks: add, edit, reorder, delete) and its one figure. "Judul utama & penulis" on the chosen page opens a
+route to the same reorder, since drag does not work on touch devices. **Edit** opens the page at `?halaman=<slug>` (browser Back and "Kembali ke daftar" return to the list) as a three-column editor. The left column is the structure tree: "Info cerita" (headline and byline dialog), then chapters, each expandable, with its sections numbered `1.1`, `1.2` and the kind of each section's figure (a section without one reads "Figur kosong"). The centre column holds the selected section (`?bab=<chapterId>&bagian=<sectionId>`, so a reload keeps it): its paragraphs (prose blocks: add, edit, reorder, delete) and its one figure, with Duplikat (a copy with its paragraphs and figure, appended to the same chapter) and Hapus bagian. The right column is a live preview of the saved section, Desktop or Ponsel, drawn with the public reader components; unsaved edits are not shown there. Each chapter and section also has an options menu (Ubah judul, Naik, Turun, Hapus) and its grip can be dragged within its chapter or page; the buttons are the baseline, drag is never required. Moving a section to another chapter of the same page is the move dialog. Choosing a chapter in the tree (`?halaman=<slug>&bab=<chapterId>`, no `bagian`) opens the **chapter overview** in the centre column: "BAB n DARI N · JUDUL", the chapter title as a labelled field saved with "Simpan judul" (a stale write keeps the typed title), Naik, Turun and Hapus bab, then one card per section (grip, thumbnail of its first photo or an icon for a chart, diagram or no figure, "BAGIAN 1.2", the title, a one-line excerpt of its first paragraph, a figure badge and a completeness badge "Lengkap", "Belum lengkap" or "Figur kosong", and a ⋯ menu: Edit bagian, Duplikat, Pindahkan ke bab lain…, Naik satu posisi, Turun satu posisi, Hapus bagian). Moving to another chapter lists only the other chapters of the same page; a chapter that is the only one hides the option and says why. A move or duplicate keeps the overview open and moves focus to the card. "Tambah bagian baru" closes the list: a title and an optional figure kind (1 gambar, 2 gambar, Galeri, Grafik) creates the section and opens it with that kind preselected in the figure editor. "Judul utama & penulis" on the chosen page opens a
 dialog for its optional headline, byline author and byline affiliation (all may stay empty; same
 token, stale-write and keep-the-draft behavior as rename). The reader shows the headline as the page
 `<h1>` (the page title moves into the eyebrow) and "Oleh <author>" with the affiliation only when an
@@ -968,9 +965,11 @@ author is stored; with nothing stored it shows the page title alone.
   a format toolbar (Tebal, Miring, Tautan, Daftar) that inserts the same syntax; Tautan asks for the
   address in a small inline field and refuses anything outside the allow-list.
 - **The section editor** keeps one paragraph form open at a time (a draft is never silently replaced)
-  and asks before closing or leaving the route with unsaved work. Figure kinds: one photo, several
-  photos (2 to 12) or a diagram (an image, bars, or both). **Alt text is required for every photo and
-  every diagram image**; caption, credit, diagram source and bar unit are optional. A group of several
+  and asks before closing or leaving the route with unsaved work. Figure tiles ("Jenis figur"): **1 gambar** (one photo), **2 gambar** (two photos, shown as a pair), **Galeri** (3 to 12
+  photos, a carousel) or **Grafik**: a chart of an indicator table on the same page, read through "Dari tabel di menu Data" (bar or column, total or
+  by sex, required title, optional source; "Menurut jenis kelamin" only for an age-pyramid or religion-by-sex table, and the
+  editor says so otherwise), or an uploaded chart picture with bars and/or an image ("Unggah gambar grafik"). **Alt text is
+  required for every photo and every uploaded chart picture** ("Teks alternatif"); caption, credit, source and bar unit are optional. A group of several
   photos may also carry one optional shared credit ("Sumber bersama"), which applies to every photo
   without its own credit; a photo's own credit replaces it. Bar numbers follow
   the Indonesian convention (dot for thousands, comma for decimals): "1.234" is 1234 and "1.234,5" is

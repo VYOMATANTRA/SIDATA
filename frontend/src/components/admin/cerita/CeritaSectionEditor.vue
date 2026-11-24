@@ -50,12 +50,16 @@ defineExpose({ isDirty: () => isDirty.value });
 </script>
 
 <template>
-  <div class="space-y-8" data-test="section-editor">
+  <div class="space-y-6" data-test="section-editor">
     <p class="sr-only" role="status" aria-live="polite">{{ statusMessage }}</p>
 
     <CeritaReloadNotice />
 
-    <section :aria-labelledby="`${baseId}-paragraf`" class="space-y-3">
+    <section
+      :aria-labelledby="`${baseId}-paragraf`"
+      class="rounded-card border-border space-y-4 border bg-white p-5"
+      data-test="paragraph-card"
+    >
       <h3 :id="`${baseId}-paragraf`" class="text-brand-navy text-base font-semibold">Paragraf</h3>
       <CeritaParagraphList
         :section-id="sectionId"
@@ -65,10 +69,15 @@ defineExpose({ isDirty: () => isDirty.value });
       />
     </section>
 
-    <section :aria-labelledby="`${baseId}-gambar`" class="space-y-3">
+    <section
+      :aria-labelledby="`${baseId}-gambar`"
+      class="rounded-card border-border space-y-4 border bg-white p-5"
+      data-test="figure-card"
+    >
       <h3 :id="`${baseId}-gambar`" class="text-brand-navy text-base font-semibold">Gambar</h3>
       <p class="text-text-muted text-sm">
-        Setiap bagian dapat memiliki satu gambar: satu foto, beberapa foto, atau diagram.
+        Setiap bagian dapat memiliki satu figur: satu gambar, dua gambar, galeri, atau grafik dari
+        menu Data.
       </p>
       <CeritaFigureEditor
         ref="figure"

@@ -7,23 +7,40 @@ import type { FigureIds } from '../../../utils/ceritaFigureDraft';
 
 /**
  * One photo of a figure: the file (upload, preview), its required description for people who
- * cannot see it (alt text), and an optional caption and credit. In a series it also carries the
- * move up / move down / remove buttons; ordering is never drag-only.
+ * cannot see it (alt text), and an optional caption and credit. In a gallery it also carries the
+ * Naik / Turun / Hapus buttons and a drag grip; the buttons are the keyboard path, the grip only a
+ * shortcut for pointers. "2 gambar" has its own "Tukar urutan" button in the editor instead.
  */
-defineProps<{
-  index: number;
-  /** "Foto 2" for a series, "Foto" for a single photo. */
-  label: string;
-  ids: FigureIds;
-  /** Problems keyed by field id, shown beside the field they concern. */
-  errors: Record<string, string>;
-  showActions: boolean;
-  /** In a series, the credit here replaces the shared credit of the group. */
-  groupCredit?: boolean;
-  isFirst: boolean;
-  isLast: boolean;
-  busy: boolean;
-}>();
+withDefaults(
+  defineProps<{
+    index: number;
+    /** "Foto 2", "Gambar 1 · depan": the legend of the card. */
+    label: string;
+    ids: FigureIds;
+    /** Problems keyed by field id, shown beside the field they concern. */
+    errors: Record<string, string>;
+    /** Shows Naik / Turun / Hapus (gallery). */
+    showActions: boolean;
+    /** Shows the drag grip (gallery). */
+    showGrip?: boolean;
+    /** In a group, the credit here replaces the shared credit of the group. */
+    groupCredit?: boolean;
+    captionLabel?: string;
+    creditLabel?: string;
+    isFirst: boolean;
+    isLast: boolean;
+    busy: boolean;
+    /** Whether the card is being dragged (a visual cue only). */
+    dragging?: boolean;
+  }>(),
+  {
+    showGrip: false,
+    groupCredit: false,
+    captionLabel: 'Keterangan (opsional)',
+    creditLabel: 'Sumber foto (opsional)',
+    dragging: false,
+  },
+);
 
 const mediaId = defineModel<string | null>('mediaId', { required: true });
 const alt = defineModel<string>('alt', { required: true });
@@ -35,12 +52,31 @@ const emit = defineEmits<{
   (e: 'move-down'): void;
   (e: 'remove'): void;
   (e: 'uploading', value: boolean): void;
+  (e: 'grip-start'): void;
+  (e: 'grip-end'): void;
 }>();
 </script>
 
 <template>
-  <fieldset class="rounded-card border-border space-y-4 border p-4" data-test="figure-photo-row">
-    <legend class="text-brand-navy px-1 text-sm font-semibold">{{ label }}</legend>
+  <fieldset
+    class="rounded-card border-border space-y-4 border p-4"
+    :class="dragging ? 'opacity-60' : ''"
+    data-test="figure-photo-row"
+  >
+    <legend class="text-brand-navy flex items-center gap-2 px-1 text-sm font-semibold">
+      <span
+        v-if="showGrip && !busy"
+        aria-hidden="true"
+        draggable="true"
+        class="text-text-muted cursor-grab px-0.5 leading-none select-none"
+        title="Seret untuk mengubah urutan. Atau gunakan tombol Naik dan Turun."
+        data-test="photo-grip"
+        @dragstart="emit('grip-start')"
+        @dragend="emit('grip-end')"
+        >⠿</span
+      >
+      {{ label }}
+    </legend>
 
     <MediaPhotoField
       v-model="mediaId"
@@ -55,7 +91,7 @@ const emit = defineEmits<{
 
     <FormField
       :id="ids.photoAlt(index)"
-      label="Teks pengganti foto"
+      label="Teks alternatif"
       hint="Tulis apa yang terlihat pada foto, untuk pembaca yang tidak bisa melihatnya."
       :error="errors[ids.photoAlt(index)]"
       required
@@ -76,7 +112,7 @@ const emit = defineEmits<{
     <div class="grid gap-4 sm:grid-cols-2">
       <FormField
         :id="ids.photoCaption(index)"
-        label="Keterangan foto (opsional)"
+        :label="captionLabel"
         :error="errors[ids.photoCaption(index)]"
         v-slot="{ describedBy, invalid }"
       >
@@ -93,7 +129,7 @@ const emit = defineEmits<{
       </FormField>
       <FormField
         :id="ids.photoCredit(index)"
-        :label="groupCredit ? 'Sumber foto ini (opsional)' : 'Sumber foto (opsional)'"
+        :label="creditLabel"
         :hint="
           groupCredit
             ? 'Isi hanya jika foto ini bersumber lain. Isian ini menggantikan sumber bersama.'

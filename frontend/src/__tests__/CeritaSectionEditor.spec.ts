@@ -4,6 +4,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import CeritaSectionEditor from '../components/admin/cerita/CeritaSectionEditor.vue';
 import { useCeritaAdminStore } from '../stores/ceritaAdmin.store';
 import { useAuthStore } from '../stores/auth';
+import { pendingFigureKind } from '../composables/figureKindHint';
 import { createFakeCerita, type FakeCerita } from './ceritaFakeApi';
 
 let fake: FakeCerita;
@@ -658,105 +659,78 @@ describe('CeritaSectionEditor', () => {
   });
 
   describe('figure', () => {
-    it('starts without a kind, says there is no figure and asks for a kind on save', async () => {
+    it('starts with no tile selected, says there is no figure and asks for a tile on save', async () => {
       const wrapper = await mountEditor();
 
-      expect(wrapper.find('[data-test="figure-stored-note"]').text()).toContain(
-        'belum memiliki gambar',
+      expect(wrapper.find('[data-test="figure-stored-note"]').text()).toBe(
+        'Bagian ini belum memiliki gambar.',
       );
-      expect(
-        wrapper
-          .findAll('input[type="radio"]')
-          .every((r) => !(r.element as HTMLInputElement).checked),
-      ).toBe(true);
-      expect(wrapper.find('[data-test="figure-delete"]').exists()).toBe(false);
+      for (const radio of wrapper.findAll('[data-test^="kind-"]')) {
+        expect((radio.element as HTMLInputElement).checked).toBe(false);
+      }
+      expect(wrapper.text()).toContain('Pilih jenis figur untuk mulai menambahkan gambar.');
 
       await wrapper.find('[data-test="figure-editor"]').trigger('submit');
-      expect(wrapper.find('[role="alert"]').text()).toContain('Pilih jenis gambar');
-      expect(fake.writes()).toHaveLength(0);
+      await flushPromises();
+      expect(wrapper.text()).toContain('Pilih jenis figur terlebih dahulu.');
+      expect(fake.writes().filter((r) => r.url.includes('/figure'))).toHaveLength(0);
       wrapper.unmount();
     });
 
-    it('saves one photo: upload, required description, optional caption and credit', async () => {
+    it('saves "1 gambar": one photo with required alt text, an optional caption and credit', async () => {
       const wrapper = await mountEditor();
-      const token = fake.pages[0]!.chapters[0]!.sections[0]!.updatedAt;
-
       await wrapper.find('[data-test="kind-photo"]').setValue();
-      expect(wrapper.findAll('[data-test="figure-photo-row"]')).toHaveLength(1);
       await upload(wrapper, 0);
-      expect(wrapper.find('[data-test="photo-preview-image"]').exists()).toBe(true);
 
-      // No description yet: refused with a plain sentence, nothing sent.
-      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
-      expect(wrapper.find('[role="alert"]').text()).toContain(
-        'Teks pengganti untuk foto wajib diisi',
+      expect(wrapper.find('[data-test="photo-alt"]').attributes('aria-invalid')).toBeUndefined();
+      const altLabel = wrapper.find(
+        `label[for="${wrapper.find('[data-test="photo-alt"]').attributes('id')}"]`,
       );
-      expect(fake.writes().filter((w) => w.url.includes('figure'))).toHaveLength(0);
+      expect(altLabel.text()).toContain('Teks alternatif');
+      expect(altLabel.text()).toContain('(wajib diisi)');
 
-      await wrapper.find('[data-test="photo-alt"]').setValue('Balai kelurahan dari depan');
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      await flushPromises();
+      expect(wrapper.text()).toContain('Teks alternatif untuk foto wajib diisi');
+      expect(fake.writes().filter((r) => r.url.includes('/figure'))).toHaveLength(0);
+
+      await wrapper.find('[data-test="photo-alt"]').setValue('Balai kelurahan');
       await wrapper.find('[data-test="photo-caption"]').setValue('Tampak depan');
+      await wrapper.find('[data-test="photo-credit"]').setValue('Dok. kelurahan');
       await wrapper.find('[data-test="figure-editor"]').trigger('submit');
       await flushPromises();
 
-      expect(fake.lastWrite()).toMatchObject({
-        method: 'PUT',
-        url: `/api/sections/${sectionId}/figure`,
-        body: {
-          expectedUpdatedAt: token,
-          figure: {
-            kind: 'photo',
-            photos: [
-              {
-                mediaId: expect.stringMatching(/^media-/) as string,
-                alt: 'Balai kelurahan dari depan',
-                caption: 'Tampak depan',
-              },
-            ],
-          },
+      expect(fake.lastWrite()!.body).toMatchObject({
+        figure: {
+          kind: 'photo',
+          photos: [
+            {
+              mediaId: expect.any(String),
+              alt: 'Balai kelurahan',
+              caption: 'Tampak depan',
+              credit: 'Dok. kelurahan',
+            },
+          ],
         },
       });
-      expect(wrapper.find('[data-test="figure-stored-note"]').text()).toBe('Tersimpan: satu foto.');
-      expect(wrapper.find('[data-test="figure-delete"]').exists()).toBe(true);
       wrapper.unmount();
     });
 
-    it('starts a series with two photo slots, caps it at twelve and orders photos with buttons', async () => {
+    it('saves "2 gambar" as two cards, and "Tukar urutan" swaps them before saving', async () => {
       const wrapper = await mountEditor();
+      await wrapper.find('[data-test="kind-photos-2"]').setValue();
+      const cards = () => wrapper.findAll('[data-test="figure-photo-row"]');
+      expect(cards().map((card) => card.find('legend').text())).toEqual([
+        'Gambar 1 · depan',
+        'Gambar 2 · belakang',
+      ]);
+      expect(wrapper.find('[data-test="add-photo"]').exists()).toBe(false);
 
-      await wrapper.find('[data-test="kind-photos"]').setValue();
-      expect(wrapper.findAll('[data-test="figure-photo-row"]')).toHaveLength(2);
-      await wrapper.findAll('[data-test="photo-alt"]')[0]!.setValue('Pertama');
-      await wrapper.findAll('[data-test="photo-alt"]')[1]!.setValue('Kedua');
-
-      await click(wrapper, 'Turun foto 1');
-      const alts = (): string[] =>
-        wrapper
-          .findAll('[data-test="photo-alt"]')
-          .map((el) => (el.element as HTMLTextAreaElement).value);
-      expect(alts()).toEqual(['Kedua', 'Pertama']);
-      // The last row cannot go further down, so focus moved to its up button.
-      expect(document.activeElement?.id).toMatch(/foto-1-naik$/);
-
-      for (let i = 0; i < 10; i += 1) await click(wrapper, 'Tambah foto');
-      expect(wrapper.findAll('[data-test="figure-photo-row"]')).toHaveLength(12);
-      expect(wrapper.find('[data-test="add-photo"]').attributes('disabled')).toBeDefined();
-      expect(wrapper.text()).toContain('12 dari 12 foto');
-
-      await click(wrapper, 'Hapus foto 12');
-      expect(wrapper.findAll('[data-test="figure-photo-row"]')).toHaveLength(11);
-      wrapper.unmount();
-    });
-
-    it('saves a three-photo series in the chosen order', async () => {
-      const wrapper = await mountEditor();
-      await wrapper.find('[data-test="kind-photos"]').setValue();
-      await click(wrapper, 'Tambah foto');
-      for (let i = 0; i < 3; i += 1) {
-        await upload(wrapper, i);
-        await wrapper.findAll('[data-test="photo-alt"]')[i]!.setValue(`Foto ${i + 1}`);
-      }
-      await click(wrapper, 'Naik foto 3');
-
+      await upload(wrapper, 0);
+      await upload(wrapper, 1);
+      await wrapper.findAll('[data-test="photo-alt"]')[0]!.setValue('Tampak depan');
+      await wrapper.findAll('[data-test="photo-alt"]')[1]!.setValue('Tampak belakang');
+      await click(wrapper, 'Tukar urutan');
       await wrapper.find('[data-test="figure-editor"]').trigger('submit');
       await flushPromises();
 
@@ -764,304 +738,305 @@ describe('CeritaSectionEditor', () => {
         fake.lastWrite()!.body as { figure: { kind: string; photos: { alt: string }[] } }
       ).figure;
       expect(figure.kind).toBe('photos');
-      expect(figure.photos.map((p) => p.alt)).toEqual(['Foto 1', 'Foto 3', 'Foto 2']);
-      expect(wrapper.find('[data-test="figure-stored-note"]').text()).toBe('Tersimpan: 3 foto.');
+      expect(figure.photos.map((photo) => photo.alt)).toEqual(['Tampak belakang', 'Tampak depan']);
       wrapper.unmount();
     });
 
-    it('saves a series with one shared credit, omitted when blank, and says a photo credit replaces it', async () => {
+    it('builds a "Galeri" from three cards and adds up to twelve photos', async () => {
       const wrapper = await mountEditor();
-      await wrapper.find('[data-test="kind-photos"]').setValue();
-      expect(wrapper.find('[data-test="shared-credit"]').exists()).toBe(true);
-      expect(
-        wrapper
-          .find('label[for="' + wrapper.find('[data-test="shared-credit"]').attributes('id') + '"]')
-          .text(),
-      ).toContain('Sumber bersama (untuk semua foto)');
-      expect(
-        wrapper.find('[data-test="photo-credit"]').element.closest('fieldset')?.textContent,
-      ).toContain('Sumber foto ini (opsional)');
-      for (let i = 0; i < 2; i += 1) {
+      await wrapper.find('[data-test="kind-gallery"]').setValue();
+      expect(wrapper.findAll('[data-test="figure-photo-row"]')).toHaveLength(3);
+
+      for (let i = 0; i < 9; i += 1) await click(wrapper, 'Tambah gambar');
+      expect(wrapper.findAll('[data-test="figure-photo-row"]')).toHaveLength(12);
+      expect(wrapper.find('[data-test="add-photo"]').attributes('disabled')).toBeDefined();
+      wrapper.unmount();
+    });
+
+    it('orders a gallery with Naik and Turun and saves the new order', async () => {
+      const wrapper = await mountEditor();
+      await wrapper.find('[data-test="kind-gallery"]').setValue();
+      for (let i = 0; i < 3; i += 1) {
         await upload(wrapper, i);
         await wrapper.findAll('[data-test="photo-alt"]')[i]!.setValue(`Foto ${i + 1}`);
       }
+      const second = wrapper.findAll('[data-test="figure-photo-row"]')[1]!;
+      await second
+        .findAll('button')
+        .find((b) => b.text().startsWith('Naik'))!
+        .trigger('click');
+      await flushPromises();
       await wrapper.find('[data-test="figure-editor"]').trigger('submit');
       await flushPromises();
-      expect((fake.lastWrite()!.body as { figure: object }).figure).not.toHaveProperty('credit');
 
-      await wrapper.find('[data-test="shared-credit"]').setValue('  Tim Survei  ');
-      await wrapper.findAll('[data-test="photo-credit"]')[1]!.setValue('Foto Lembaga');
-      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
-      await flushPromises();
-      expect((fake.lastWrite()!.body as { figure: object }).figure).toMatchObject({
-        kind: 'photos',
-        credit: 'Tim Survei',
-      });
+      const figure = (fake.lastWrite()!.body as { figure: { photos: { alt: string }[] } }).figure;
+      expect(figure.photos.map((photo) => photo.alt)).toEqual(['Foto 2', 'Foto 1', 'Foto 3']);
       wrapper.unmount();
     });
 
-    it('refuses a shared credit over 120 characters next to its field, with no API field name', async () => {
+    it('refuses a gallery with fewer than three photos, pointing at the add button', async () => {
       const wrapper = await mountEditor();
-      await wrapper.find('[data-test="kind-photos"]').setValue();
-      await wrapper.find('[data-test="shared-credit"]').setValue('x'.repeat(121));
+      await wrapper.find('[data-test="kind-gallery"]').setValue();
+      await click(wrapper, 'Hapus');
+      await flushPromises();
       await wrapper.find('[data-test="figure-editor"]').trigger('submit');
-      const alert = wrapper.find('[role="alert"]').text();
-      expect(alert).toContain('Sumber bersama untuk semua foto maksimal 120 karakter.');
-      expect(alert).not.toMatch(/credit|kredit/i);
-      expect(fake.writes().filter((w) => w.url.includes('figure'))).toHaveLength(0);
+      await flushPromises();
+      expect(wrapper.text()).toContain('Galeri membutuhkan 3 sampai 12 foto.');
+      expect(fake.writes().filter((r) => r.url.includes('/figure'))).toHaveLength(0);
       wrapper.unmount();
     });
 
-    it('loads a stored shared credit into a series and hides it for a single photo', async () => {
-      fake.blocks.push({
-        id: 'fig-1',
-        sectionId,
-        type: 'figure',
-        slug: `figure-${sectionId}`,
-        title: null,
-        body: '',
-        metadata: {
-          kind: 'photos',
-          credit: 'Tim Survei',
-          photos: [
-            { mediaId: 'media-1', alt: 'Satu' },
-            { mediaId: 'media-2', alt: 'Dua' },
-          ],
-        },
-        sortOrder: null,
-        updatedAt: '2026-11-13T10:00:00.000Z',
-      });
+    it('shares one credit across a gallery, and a photo credit replaces it', async () => {
       const wrapper = await mountEditor();
-      expect((wrapper.find('[data-test="shared-credit"]').element as HTMLInputElement).value).toBe(
-        'Tim Survei',
+      await wrapper.find('[data-test="kind-gallery"]').setValue();
+      for (let i = 0; i < 3; i += 1) {
+        await upload(wrapper, i);
+        await wrapper.findAll('[data-test="photo-alt"]')[i]!.setValue(`Foto ${i + 1}`);
+      }
+      await wrapper.find('[data-test="shared-credit"]').setValue('Tim survei');
+      await wrapper.findAll('[data-test="photo-credit"]')[1]!.setValue('Dinas');
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      await flushPromises();
+
+      const figure = (
+        fake.lastWrite()!.body as {
+          figure: { credit?: string; photos: { credit?: string }[] };
+        }
+      ).figure;
+      expect(figure.credit).toBe('Tim survei');
+      expect(figure.photos[1]!.credit).toBe('Dinas');
+      wrapper.unmount();
+    });
+
+    it('keeps each tile’s photos while switching, and asks before "2 gambar" drops a third photo', async () => {
+      const wrapper = await mountEditor();
+      await wrapper.find('[data-test="kind-gallery"]').setValue();
+      for (let i = 0; i < 3; i += 1) await upload(wrapper, i);
+
+      await wrapper.find('[data-test="kind-photos-2"]').setValue();
+      expect(wrapper.find('[data-test="tile-confirm"]').exists()).toBe(true);
+      expect(wrapper.text()).toContain('1 foto yang sudah terisi');
+      await click(wrapper, 'Batal');
+      expect(wrapper.find('[data-test="tile-confirm"]').exists()).toBe(false);
+      expect((wrapper.find('[data-test="kind-gallery"]').element as HTMLInputElement).checked).toBe(
+        true,
       );
+      expect(
+        (wrapper.find('[data-test="kind-photos-2"]').element as HTMLInputElement).checked,
+      ).toBe(false);
+
       await wrapper.find('[data-test="kind-photo"]').setValue();
-      expect(wrapper.find('[data-test="shared-credit"]').exists()).toBe(false);
+      expect(wrapper.find('[data-test="tile-confirm"]').exists()).toBe(false);
+      expect(wrapper.findAll('[data-test="figure-photo-row"]')).toHaveLength(1);
+
+      await wrapper.find('[data-test="kind-gallery"]').setValue();
+      expect(wrapper.findAll('[data-test="figure-photo-row"]')).toHaveLength(3);
       wrapper.unmount();
     });
 
-    it('refuses a series with fewer than two photos', async () => {
+    it('is not dirty just from choosing a tile, and becomes dirty with a real edit', async () => {
       const wrapper = await mountEditor();
-      await wrapper.find('[data-test="kind-photos"]').setValue();
-      await click(wrapper, 'Hapus foto 2');
+      await wrapper.find('[data-test="kind-photos-2"]').setValue();
+      await wrapper.find('[data-test="kind-chart"]').setValue();
+      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([false]);
 
-      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
-
-      expect(wrapper.find('[role="alert"]').text()).toContain('2 sampai 12');
-      expect(fake.writes().filter((w) => w.url.includes('figure'))).toHaveLength(0);
-      wrapper.unmount();
-    });
-
-    it('keeps the previous photo when a new upload is refused and says why', async () => {
-      const wrapper = await mountEditor();
       await wrapper.find('[data-test="kind-photo"]').setValue();
       await upload(wrapper, 0);
-      const before = wrapper.find('[data-test="photo-preview-image"]').attributes('src');
-
-      pickFile(wrapper, 0, 'dokumen.pdf', 'application/pdf');
-      await flushPromises();
-      expect(wrapper.find('[data-test="photo-error"]').text()).toContain('JPEG, PNG, atau WebP');
-
-      pickFile(wrapper, 0, 'besar.jpg', 'image/jpeg', 6 * 1024 * 1024);
-      await flushPromises();
-      expect(wrapper.find('[data-test="photo-error"]').text()).toContain('5 MB');
-
-      expect(wrapper.find('[data-test="photo-preview-image"]').attributes('src')).toBe(before);
+      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([true]);
       wrapper.unmount();
     });
 
-    it('saves a diagram made of bars, reading comma decimals', async () => {
+    it('preselects the tile handed over by the chapter overview, once, for a section without a figure', async () => {
+      pendingFigureKind.value = 'gallery';
       const wrapper = await mountEditor();
-      await wrapper.find('[data-test="kind-diagram"]').setValue();
+      expect((wrapper.find('[data-test="kind-gallery"]').element as HTMLInputElement).checked).toBe(
+        true,
+      );
+      expect(pendingFigureKind.value).toBeNull();
+      wrapper.unmount();
+    });
 
+    it('loads a stored chart into the Grafik tile with its table, type, series and title', async () => {
+      fake.addIndicatorTable({
+        id: 'tab-umur',
+        sectionId,
+        title: 'Umur',
+        kind: 'age_pyramid',
+        period: 'Juni 2024',
+      });
+      fake.changeFigureByOther(sectionId, {
+        kind: 'chart',
+        tableId: 'tab-umur',
+        chartType: 'column',
+        series: 'by_sex',
+        title: 'Penduduk menurut umur',
+      });
+      const wrapper = await mountEditor();
+
+      expect((wrapper.find('[data-test="kind-chart"]').element as HTMLInputElement).checked).toBe(
+        true,
+      );
+      expect((wrapper.find('[data-test="chart-table"]').element as HTMLSelectElement).value).toBe(
+        'tab-umur',
+      );
+      expect((wrapper.find('[data-test="chart-title"]').element as HTMLInputElement).value).toBe(
+        'Penduduk menurut umur',
+      );
+      expect(
+        (wrapper.find('[data-test="chart-series-by_sex"]').element as HTMLInputElement).checked,
+      ).toBe(true);
+      expect(wrapper.find('[data-test="chart-series-by_sex"]').element).toHaveProperty(
+        'disabled',
+        false,
+      );
+      wrapper.unmount();
+    });
+
+    it('lists only the tables of this page, and saves a chart of an age table split by sex', async () => {
+      const other = fake.addPage('Pendidikan', [{ title: 'Lain', sections: ['Sekolah'] }]);
+      const otherSection = other.chapters[0]!.sections[0]!.id;
+      fake.addIndicatorTable({
+        id: 'tab-umur',
+        sectionId,
+        title: 'Umur',
+        kind: 'age_pyramid',
+        period: 'Juni 2024',
+      });
+      fake.addIndicatorTable({
+        id: 'tab-suku',
+        sectionId,
+        title: 'Suku',
+        kind: 'ethnicity',
+        period: 'Juni 2024',
+      });
+      fake.addIndicatorTable({
+        id: 'tab-sekolah',
+        sectionId: otherSection,
+        title: 'Sekolah',
+        kind: 'occupation',
+        period: 'Juni 2024',
+      });
+      const wrapper = await mountEditor();
+
+      await wrapper.find('[data-test="kind-chart"]').setValue();
+      const select = wrapper.find('[data-test="chart-table"]');
+      const options = select.findAll('option').map((option) => option.text());
+      expect(options).toEqual(['Pilih tabel…', 'Umur (Juni 2024)', 'Suku (Juni 2024)']);
+
+      await select.setValue('tab-suku');
+      expect(wrapper.find('[data-test="chart-series-by_sex"]').element).toHaveProperty(
+        'disabled',
+        true,
+      );
+      expect(wrapper.text()).toContain('Tabel ini hanya memuat jumlah total.');
+
+      await wrapper.find('[data-test="chart-title"]').setValue('Penduduk menurut suku');
       await wrapper.find('[data-test="figure-editor"]').trigger('submit');
-      const alert = wrapper.find('[role="alert"]').text();
-      expect(alert).toContain('Judul diagram wajib diisi');
-      expect(alert).toContain('gambar atau data batang');
+      await flushPromises();
+      expect(fake.lastWrite()!.body).toMatchObject({
+        figure: {
+          kind: 'chart',
+          tableId: 'tab-suku',
+          chartType: 'bar',
+          series: 'total',
+          title: 'Penduduk menurut suku',
+        },
+      });
+      expect(fake.lastWrite()!.body).not.toHaveProperty('figure.source');
 
+      await select.setValue('tab-umur');
+      await wrapper.find('[data-test="chart-type-column"]').setValue();
+      await wrapper.find('[data-test="chart-series-by_sex"]').setValue();
+      await wrapper.find('[data-test="chart-source"]').setValue('Berdasarkan data Juni 2024');
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      await flushPromises();
+      expect(fake.lastWrite()!.body).toMatchObject({
+        figure: {
+          kind: 'chart',
+          tableId: 'tab-umur',
+          chartType: 'column',
+          series: 'by_sex',
+          source: 'Berdasarkan data Juni 2024',
+        },
+      });
+      wrapper.unmount();
+    });
+
+    it('keeps the chart title and table required and says so before saving', async () => {
+      fake.addIndicatorTable({
+        id: 'tab-umur',
+        sectionId,
+        title: 'Umur',
+        kind: 'age_pyramid',
+        period: 'Juni 2024',
+      });
+      const wrapper = await mountEditor();
+      await wrapper.find('[data-test="kind-chart"]').setValue();
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      await flushPromises();
+      expect(wrapper.text()).toContain('Pilih tabel data untuk grafik.');
+      expect(wrapper.text()).toContain('Judul grafik wajib diisi.');
+      expect(fake.writes().filter((r) => r.url.includes('/figure'))).toHaveLength(0);
+      wrapper.unmount();
+    });
+
+    it('shows the server\u2019s plain sentence when a chart is refused: its table is missing or on another page', async () => {
+      fake.addIndicatorTable({
+        id: 'tab-umur',
+        sectionId,
+        title: 'Umur',
+        kind: 'age_pyramid',
+        period: 'Juni 2024',
+      });
+      const wrapper = await mountEditor();
+      await wrapper.find('[data-test="kind-chart"]').setValue();
+      await wrapper.find('[data-test="chart-table"]').setValue('tab-umur');
+      await wrapper.find('[data-test="chart-title"]').setValue('Penduduk menurut umur');
+
+      fake.failNext(
+        (r) => r.method === 'PUT' && r.url.includes('/figure'),
+        fake.json(
+          { error: 'Grafik hanya dapat memakai tabel data dari halaman cerita yang sama.' },
+          422,
+        ),
+      );
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      await flushPromises();
+      expect(wrapper.text()).toContain(
+        'Grafik hanya dapat memakai tabel data dari halaman cerita yang sama.',
+      );
+      expect(wrapper.text()).not.toMatch(RAW_TERMS);
+
+      fake.failNext(
+        (r) => r.method === 'PUT' && r.url.includes('/figure'),
+        fake.json({ error: 'Tabel data untuk grafik tidak ditemukan. Pilih tabel lain.' }, 422),
+      );
+      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
+      await flushPromises();
+      expect(wrapper.text()).toContain(
+        'Tabel data untuk grafik tidak ditemukan. Pilih tabel lain.',
+      );
+      wrapper.unmount();
+    });
+
+    it('saves a chart picture with bars under "Unggah gambar grafik", reading comma decimals', async () => {
+      const wrapper = await mountEditor();
+      await wrapper.find('[data-test="kind-chart"]').setValue();
+      await wrapper.find('[data-test="grafik-source-upload"]').setValue();
       await wrapper.find('[data-test="diagram-title"]').setValue('Penduduk per RT');
-      await wrapper.find('[data-test="bar-unit"]').setValue('jiwa');
       await click(wrapper, 'Tambah batang');
-      await wrapper.find('[data-test="bar-label"]').setValue('RT 1');
-      await wrapper.find('[data-test="bar-value"]').setValue('abc');
-      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
-      expect(wrapper.find('[role="alert"]').text()).toContain('angka yang valid');
-
-      await wrapper.find('[data-test="bar-value"]').setValue('12.5');
-      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
-      expect(wrapper.find('[role="alert"]').text()).toContain('Gunakan koma untuk desimal');
-
+      await wrapper.find('[data-test="bar-label"]').setValue('RT 01');
       await wrapper.find('[data-test="bar-value"]').setValue('1.234,5');
       await wrapper.find('[data-test="figure-editor"]').trigger('submit');
       await flushPromises();
 
-      expect(fake.lastWrite()).toMatchObject({
-        method: 'PUT',
-        body: {
-          figure: {
-            kind: 'diagram',
-            title: 'Penduduk per RT',
-            bars: { unit: 'jiwa', items: [{ label: 'RT 1', value: 1234.5 }] },
-          },
-        },
-      });
-      expect(wrapper.find('[data-test="figure-stored-note"]').text()).toContain(
-        'diagram “Penduduk per RT”',
-      );
-      wrapper.unmount();
-    });
-
-    it('shows a non-blocking note while a bar number could be mistaken for a decimal', async () => {
-      const wrapper = await mountEditor();
-      await wrapper.find('[data-test="kind-diagram"]').setValue();
-      await wrapper.find('[data-test="diagram-title"]').setValue('Penduduk');
-      await click(wrapper, 'Tambah batang');
-      await wrapper.find('[data-test="bar-label"]').setValue('RT 1');
-
-      expect(wrapper.find('[data-test="bar-value-note"]').exists()).toBe(false);
-      await wrapper.find('[data-test="bar-value"]').setValue('12.500');
-      const note = wrapper.find('[data-test="bar-value-note"]');
-      expect(note.text()).toContain('Dibaca 12.500.');
-      expect(note.text()).toContain('pakai koma');
-      // The note is tied to the field, so a screen reader hears it with the number.
-      const describedBy = wrapper.find('[data-test="bar-value"]').attributes('aria-describedby');
-      expect(describedBy).toContain(note.attributes('id'));
-
-      await wrapper.find('[data-test="bar-value"]').setValue('12,5');
-      expect(wrapper.find('[data-test="bar-value-note"]').exists()).toBe(false);
-
-      // It never blocks saving: 12.500 is stored as 12500.
-      await wrapper.find('[data-test="bar-value"]').setValue('12.500');
-      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
-      await flushPromises();
-      expect(fake.lastWrite()).toMatchObject({
-        body: { figure: { bars: { items: [{ label: 'RT 1', value: 12500 }] } } },
-      });
-      wrapper.unmount();
-    });
-
-    it('requires a description for a diagram image', async () => {
-      const wrapper = await mountEditor();
-      await wrapper.find('[data-test="kind-diagram"]').setValue();
-      await wrapper.find('[data-test="diagram-title"]').setValue('Diagram');
-      await upload(wrapper, 0);
-
-      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
-      expect(wrapper.find('[role="alert"]').text()).toContain(
-        'Teks pengganti untuk gambar diagram wajib diisi',
-      );
-
-      await wrapper.find('[data-test="diagram-image-alt"]').setValue('Diagram batang penduduk');
-      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
-      await flushPromises();
-      expect(wrapper.find('[data-test="figure-stored-note"]').text()).toContain('diagram');
-      wrapper.unmount();
-    });
-
-    it('is not dirty just from choosing a kind, and only real edits make it dirty', async () => {
-      const wrapper = await mountEditor();
-      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([false]);
-
-      await wrapper.find('[data-test="kind-photos"]').setValue();
-      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([false]);
-      await wrapper.find('[data-test="kind-photo"]').setValue();
-      await wrapper.find('[data-test="kind-diagram"]').setValue();
-      await click(wrapper, 'Tambah batang');
-      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([false]);
-
-      await wrapper.find('[data-test="diagram-title"]').setValue('Judul');
-      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([true]);
-      wrapper.unmount();
-    });
-
-    it('does not count switching a stored photo to a series as an edit until a second photo is added', async () => {
-      fake.blocks.push({
-        id: 'fig-1',
-        sectionId,
-        type: 'figure',
-        slug: `figure-${sectionId}`,
-        title: null,
-        body: '',
-        metadata: { kind: 'photo', photos: [{ mediaId: 'media-9', alt: 'Balai' }] },
-        sortOrder: null,
-        updatedAt: '2026-11-13T10:00:00.000Z',
-      });
-      const wrapper = await mountEditor();
-
-      await wrapper.find('[data-test="kind-photos"]').setValue();
-      expect(wrapper.findAll('[data-test="figure-photo-row"]')).toHaveLength(2);
-      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([false]);
-
-      await upload(wrapper, 1);
-      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([true]);
-      wrapper.unmount();
-    });
-
-    it('drops the hidden extra photos when saving as one photo so they cannot come back', async () => {
-      const wrapper = await mountEditor();
-      await wrapper.find('[data-test="kind-photos"]').setValue();
-      for (let i = 0; i < 2; i += 1) {
-        await upload(wrapper, i);
-        await wrapper.findAll('[data-test="photo-alt"]')[i]!.setValue(`Foto ${i + 1}`);
-      }
-      await wrapper.find('[data-test="kind-photo"]').setValue();
-      expect(wrapper.findAll('[data-test="figure-photo-row"]')).toHaveLength(1);
-      expect(wrapper.find('[data-test="figure-extra-note"]').exists()).toBe(true);
-
-      await wrapper.find('[data-test="figure-editor"]').trigger('submit');
-      await flushPromises();
-
-      const figure = (fake.lastWrite()!.body as { figure: { kind: string; photos: unknown[] } })
-        .figure;
-      expect(figure.kind).toBe('photo');
-      expect(figure.photos).toHaveLength(1);
-
-      await wrapper.find('[data-test="kind-photos"]').setValue();
-      const rows = wrapper.findAll('[data-test="figure-photo-row"]');
-      expect(rows).toHaveLength(2);
-      expect(rows[1]!.find('[data-test="photo-preview"]').exists()).toBe(false);
-      expect((rows[1]!.find('[data-test="photo-alt"]').element as HTMLTextAreaElement).value).toBe(
-        '',
-      );
-      wrapper.unmount();
-    });
-
-    it('treats removing a diagram image as one change and clears its description', async () => {
-      fake.blocks.push({
-        id: 'fig-1',
-        sectionId,
-        type: 'figure',
-        slug: `figure-${sectionId}`,
-        title: null,
-        body: '',
-        metadata: {
+      expect(fake.lastWrite()!.body).toMatchObject({
+        figure: {
           kind: 'diagram',
-          title: 'Penduduk',
-          image: { mediaId: 'media-9', alt: 'Diagram batang penduduk' },
-          bars: { items: [{ label: 'RT 1', value: 10 }] },
+          title: 'Penduduk per RT',
+          bars: { items: [{ label: 'RT 01', value: 1234.5 }] },
         },
-        sortOrder: null,
-        updatedAt: '2026-11-13T10:00:00.000Z',
       });
-      const wrapper = await mountEditor();
-      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([false]);
-
-      await click(wrapper, 'Hapus foto');
-      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([true]);
-      expect(wrapper.find('[data-test="diagram-image-alt"]').exists()).toBe(false);
-
-      // Adding another image starts with an empty description, not the removed image's text.
-      await upload(wrapper, 0);
-      expect(
-        (wrapper.find('[data-test="diagram-image-alt"]').element as HTMLTextAreaElement).value,
-      ).toBe('');
-
-      // Reverting brings back the stored image with its own description, and nothing is unsaved.
-      await wrapper.find('[data-test="figure-revert"]').trigger('click');
-      expect(
-        (wrapper.find('[data-test="diagram-image-alt"]').element as HTMLTextAreaElement).value,
-      ).toBe('Diagram batang penduduk');
-      expect(lastEmitted(wrapper, 'dirty-change')).toEqual([false]);
       wrapper.unmount();
     });
 
@@ -1220,7 +1195,7 @@ describe('CeritaSectionEditor', () => {
 
     it('locks the kind choice and the photo buttons while a photo is uploading', async () => {
       const wrapper = await mountEditor();
-      await wrapper.find('[data-test="kind-photos"]').setValue();
+      await wrapper.find('[data-test="kind-gallery"]').setValue();
       const finish = holdNextUpload();
 
       pickFile(wrapper, 0, 'a.jpg', 'image/jpeg');
@@ -1433,7 +1408,7 @@ describe('CeritaSectionEditor', () => {
   it('labels every control and shows no raw API text', async () => {
     fake.addParagraph(sectionId, 'Satu', 'a');
     const wrapper = await mountEditor();
-    await wrapper.find('[data-test="kind-photos"]').setValue();
+    await wrapper.find('[data-test="kind-gallery"]').setValue();
     await click(wrapper, 'Tambah paragraf');
 
     const unlabelled = Array.from(

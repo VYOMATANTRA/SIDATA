@@ -422,4 +422,136 @@ describe('ceritaAdmin store and the public page cache', () => {
     expect(store.tree.map((p) => p.slug)).toEqual(['kependudukan', 'pendidikan']);
     expect(store.loadError).toBeNull();
   });
+
+  describe('duplicate and move a section', () => {
+    it('duplicates a section with the token it loaded, appends the copy and reloads the tree', async () => {
+      const section = store.tree[0]!.chapters[0]!.sections[0]!;
+      const token = section.updatedAt;
+
+      const outcome = await store.duplicateSection(section.id);
+
+      expect(outcome).toMatchObject({ ok: true });
+      expect(fake.lastWrite()).toMatchObject({
+        method: 'POST',
+        url: `/api/sections/${section.id}/duplicate`,
+        body: { expectedUpdatedAt: token },
+      });
+      const titles = store.tree[0]!.chapters[0]!.sections.map((s) => s.title);
+      expect(titles).toEqual(['Ringkasan', 'Rincian', 'Ringkasan (salinan)']);
+      expect(outcome.ok && store.findSection(outcome.value.id)).toBeTruthy();
+    });
+
+    it('copies the paragraphs of the section to the copy', async () => {
+      const section = store.tree[0]!.chapters[0]!.sections[0]!;
+      await store.addParagraph(section.id, { title: 'Satu', body: 'Isi paragraf.' });
+
+      const outcome = await store.duplicateSection(section.id);
+
+      expect(outcome.ok).toBe(true);
+      const copy = store.tree[0]!.chapters[0]!.sections[2]!;
+      expect(store.paragraphsFor(copy.id).map((b) => b.body)).toEqual(['Isi paragraf.']);
+      expect(store.paragraphsFor(section.id)).toHaveLength(1);
+    });
+
+    it('reports a stale duplicate in plain words and writes nothing', async () => {
+      const section = store.tree[0]!.chapters[0]!.sections[0]!;
+      const before = store.tree[0]!.chapters[0]!.sections.length;
+      fake.failNext(
+        (r) => r.url === `/api/sections/${section.id}/duplicate`,
+        fake.json({ error: 'stale', code: 'STALE_WRITE' }, 409),
+      );
+
+      const outcome = await store.duplicateSection(section.id);
+
+      expect(outcome).toMatchObject({ ok: false, stale: true });
+      expect(JSON.stringify(outcome)).not.toMatch(/STALE_WRITE|409/);
+      expect(store.tree[0]!.chapters[0]!.sections).toHaveLength(before);
+    });
+
+    it('moves a section to another chapter of the same page with the section token', async () => {
+      const [first, second] = store.tree[0]!.chapters;
+      const section = first!.sections[1]!;
+      const token = section.updatedAt;
+
+      const outcome = await store.moveSectionToChapter(section.id, second!.id);
+
+      expect(outcome.ok).toBe(true);
+      expect(fake.lastWrite()).toMatchObject({
+        method: 'POST',
+        url: `/api/sections/${section.id}/move`,
+        body: { targetChapterId: second!.id, expectedUpdatedAt: token },
+      });
+      expect(store.findChapter(first!.id)?.chapter.sections.map((s) => s.id)).toEqual([
+        first!.sections[0]!.id,
+      ]);
+      expect(store.findChapter(second!.id)?.chapter.sections.map((s) => s.id)).toContain(
+        section.id,
+      );
+    });
+
+    it('refuses a chapter of another page without sending a request', async () => {
+      const section = store.tree[0]!.chapters[0]!.sections[0]!;
+      const otherPageChapter = store.tree[1]!.chapters[0]!;
+      const writesBefore = fake.requests.filter((r) => r.method !== 'GET').length;
+
+      const outcome = await store.moveSectionToChapter(section.id, otherPageChapter.id);
+
+      expect(outcome).toMatchObject({ ok: false });
+      expect(fake.requests.filter((r) => r.method !== 'GET')).toHaveLength(writesBefore);
+    });
+
+    it('does nothing when the target is the chapter the section is already in', async () => {
+      const chapter = store.tree[0]!.chapters[0]!;
+      const writesBefore = fake.requests.filter((r) => r.method !== 'GET').length;
+
+      const outcome = await store.moveSectionToChapter(chapter.sections[0]!.id, chapter.id);
+
+      expect(outcome.ok).toBe(true);
+      expect(fake.requests.filter((r) => r.method !== 'GET')).toHaveLength(writesBefore);
+    });
+  });
+  describe('drag placement of chapters and sections', () => {
+    it('puts a section at the dropped place in its chapter with the chapter token', async () => {
+      const chapter = store.tree[0]!.chapters[0]!;
+      const first = chapter.sections[0]!;
+
+      const outcome = await store.placeSection(chapter.id, first.id, 1);
+
+      expect(outcome.ok).toBe(true);
+      expect(fake.lastWrite()).toMatchObject({
+        method: 'PUT',
+        url: `/api/chapters/${chapter.id}/sections/reorder`,
+        body: { expectedUpdatedAt: chapter.updatedAt },
+      });
+      expect(store.findChapter(chapter.id)?.chapter.sections.map((s) => s.title)).toEqual([
+        'Rincian',
+        'Ringkasan',
+      ]);
+    });
+
+    it('sends nothing when a section is dropped where it already is', async () => {
+      const chapter = store.tree[0]!.chapters[0]!;
+      const writesBefore = fake.requests.filter((r) => r.method !== 'GET').length;
+
+      const outcome = await store.placeSection(chapter.id, chapter.sections[0]!.id, 0);
+
+      expect(outcome.ok).toBe(true);
+      expect(fake.requests.filter((r) => r.method !== 'GET')).toHaveLength(writesBefore);
+    });
+
+    it('puts a chapter at the dropped place of its page with the page token', async () => {
+      const page = store.tree[0]!;
+      const first = page.chapters[0]!;
+
+      const outcome = await store.placeChapter(page.slug, first.id, 1);
+
+      expect(outcome.ok).toBe(true);
+      expect(fake.lastWrite()).toMatchObject({
+        method: 'PUT',
+        url: `/api/pages/${page.slug}/chapters/reorder`,
+        body: { expectedUpdatedAt: page.updatedAt },
+      });
+      expect(store.findPage(page.slug)?.chapters.map((c) => c.title)).toEqual(['Jumlah Keluarga', 'Jumlah Penduduk']);
+    });
+  });
 });
