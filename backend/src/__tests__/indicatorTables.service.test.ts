@@ -233,6 +233,27 @@ describe('indicatorTables.service createIndicatorTable', () => {
     assert.equal(result.rows[0]!.total, null);
   });
 
+  it('treats by_sex as sex-split: derives total and rejects a stored total', async () => {
+    const result = await createIndicatorTable(
+      tablePayload({
+        kind: 'by_sex',
+        rows: [{ rowKey: 'sma', label: 'SMA', male: 8253, female: 6512 }],
+      }),
+      ACTOR,
+      CONTEXT,
+    );
+    assert.equal(result.rows[0]!.total, 14765);
+
+    await assert.rejects(
+      createIndicatorTable(
+        tablePayload({ kind: 'by_sex', rows: [{ rowKey: 'sma', label: 'SMA', total: 5 }] }),
+        ACTOR,
+        CONTEXT,
+      ),
+      (err: unknown) => (err as { statusCode?: number }).statusCode === 400,
+    );
+  });
+
   it('rejects stored total on sex-split rows with 400', async () => {
     await assertServiceError(
       createIndicatorTable(

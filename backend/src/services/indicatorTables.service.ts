@@ -33,11 +33,11 @@ export const INDICATOR_TABLE_KINDS = [
   'ethnicity',
   'religion_by_sex',
   'occupation',
+  'by_sex',
 ] as const;
 export type IndicatorTableKind = (typeof INDICATOR_TABLE_KINDS)[number];
 
-/** Kinds whose rows carry a male/female split; the rest carry a single total. */
-
+/** Kinds whose rows carry a male/female split (`SEX_SPLIT_KINDS`); the rest carry a single total. */
 const isSexSplitKind = (kind: string): boolean => SEX_SPLIT_KINDS.has(kind);
 
 export interface IndicatorTableRowDto {

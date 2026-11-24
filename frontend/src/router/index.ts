@@ -264,7 +264,7 @@ const router = createRouter({
             ...metaForRoles(rolesFor('/data')),
             title: 'Data',
             subtitle:
-              'Kelola angka indikator skalar dan empat tabel matriks. Angka dimasukkan manual; impor massal belum tersedia.',
+              'Kelola angka indikator skalar dan tabel matriks. Angka dimasukkan manual; impor massal belum tersedia.',
             breadcrumb: ['Data'],
           },
         },

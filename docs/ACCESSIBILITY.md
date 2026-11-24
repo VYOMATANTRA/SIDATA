@@ -43,7 +43,7 @@ while writing a component than to retrofit later.
 - **Links MUST have an `href`.** A link with no destination is not a link — it is not focusable
   and not operable via assistive technology. Placeholder links MUST NOT ship as `href="#"`; use a
   disabled `<button>` or omit the element until the destination exists.
-- **Tabular data.** Anything that is genuinely a table — the four fixed-shape matrix tables (age
+- **Tabular data.** Anything that is genuinely a table — the matrix tables (age
   pyramid, ethnicity, religion×sex, occupation), the Ketua RT table, chart data — MUST be a real
   `<table>` with `<th scope="col">` / `<th scope="row">`, never a `<div>` grid laid out to look
   like one.
@@ -105,7 +105,7 @@ above. The Ketua RT page is the required fallback, not a redundant page.
 `<table>` — either visible or reachable via a "view as table" toggle — rather than only as a
 canvas/SVG rendering.
 
-**Data tables.** Real `<table>`, real `<th scope>`. This applies to the four matrix tables, the
+**Data tables.** Real `<table>`, real `<th scope>`. This applies to the matrix tables, the
 Ketua RT table, and any chart data table from the point above.
 
 **Pagination controls.** Self-disabling navigation buttons (such as "Next" or "Previous" that become disabled upon reaching the first or last page) MUST explicitly transfer keyboard focus (e.g. to the opposite pagination button or the current page button) using Vue's `nextTick()`. Without this explicit handoff, disabled buttons lose focus to `<body>`, resetting the user's tab sequence back to the top of the page.

@@ -9,7 +9,7 @@ function makeTable(
   kind: IndicatorTableKind = 'age_pyramid',
   overrides: Partial<IndicatorTableDetail> = {},
 ): IndicatorTableDetail {
-  const sexSplit = kind === 'age_pyramid' || kind === 'religion_by_sex';
+  const sexSplit = kind === 'age_pyramid' || kind === 'religion_by_sex' || kind === 'by_sex';
   return {
     id: 'tbl-1',
     sectionId: 'sec-1',

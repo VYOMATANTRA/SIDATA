@@ -2,7 +2,7 @@
 import BaseButton from '../common/BaseButton.vue';
 
 /**
- * One row of the Data CMS list — either a scalar indicator or one of the four matrix tables.
+ * One row of the Data CMS list — either a scalar indicator or one of the matrix tables.
  * The body is a description list (`<dl>/<dt>/<dd>`) per `docs/UI_STYLE_GUIDE.md` §4, and the
  * stale flag is always paired with the words "Data berumur" so it is never colour-only
  * (`docs/ACCESSIBILITY.md` §3, 1.4.1).
