@@ -6,9 +6,10 @@
  * (centre) and a live preview of the saved section (right). The selected chapter and section live in
  * the URL (`bab`, `bagian`), so a reload keeps them. Every write goes through `ceritaAdmin.store`.
  *
- * Header title and subtitle live in route `meta` (router/index.ts), seeded by AdminLayout, so
- * this view's own headings start at <h2>. The route is `meta.fullBleed`: AdminLayout does not pad
- * or card the view, so the list and the editor each bring their own spacing.
+ * The shell header carries the title: the route's `meta` (router/index.ts) on the list, and the open
+ * page (breadcrumb, title, headline, "Lihat di situs") in the editor, set by `syncHeader`. The view's
+ * own headings start at <h2>. The route is `meta.fullBleed`: AdminLayout does not pad or card the
+ * view, so the list and the editor each bring their own spacing.
  *
  * Kept on purpose:
  * - Every ordering action is a pair of buttons, never drag-only.
@@ -20,11 +21,10 @@
  */
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router';
-import { ArrowLeftIcon, BookOpenIcon, PlusIcon } from '@heroicons/vue/24/outline';
+import { BookOpenIcon, EyeIcon, PlusIcon } from '@heroicons/vue/24/outline';
 import BaseButton from '../components/common/BaseButton.vue';
 import AlertBanner from '../components/common/AlertBanner.vue';
 import BaseModal from '../components/common/BaseModal.vue';
-import CollectionRowActions from '../components/data/blocks/CollectionRowActions.vue';
 import BulkDeleteDialog from '../components/admin/cards/BulkDeleteDialog.vue';
 import CardListToolbar from '../components/admin/cards/CardListToolbar.vue';
 import CardSearchField from '../components/admin/cards/CardSearchField.vue';
@@ -32,6 +32,11 @@ import CardSelectionBar from '../components/admin/cards/CardSelectionBar.vue';
 import SelectAllButton from '../components/admin/cards/SelectAllButton.vue';
 import SortToggleButton from '../components/admin/cards/SortToggleButton.vue';
 import type { BulkResult } from '../components/admin/cards/cardTypes';
+import {
+  ADMIN_HEADER_TITLE_ID,
+  setAdminHeader,
+  useAdminHeader,
+} from '../composables/useAdminHeader';
 import { useCardDragReorder } from '../composables/useCardDragReorder';
 import { useCardSelection } from '../composables/useCardSelection';
 import CeritaDeleteDialog from '../components/admin/cerita/CeritaDeleteDialog.vue';
@@ -84,7 +89,6 @@ type Direction = -1 | 1;
 
 type NameTarget =
   | { kind: 'page-add' }
-  | { kind: 'page-rename'; slug: string; initial: string; token: string }
   | { kind: 'chapter-add'; pageSlug: string }
   | { kind: 'chapter-rename'; id: string; initial: string; token: string }
   | { kind: 'section-add'; chapterId: string }
@@ -157,7 +161,6 @@ const pages = computed(() => store.tree);
 const page = computed<AdminPage | null>(() =>
   detailSlug.value ? (store.findPage(detailSlug.value) ?? null) : null,
 );
-const pageIndex = computed(() => pages.value.findIndex((item) => item.slug === page.value?.slug));
 const structureBusy = computed(
   () =>
     moving.value || nameBusy.value || deleteBusy.value || detailsBusy.value || duplicating.value,
@@ -276,6 +279,37 @@ const showInitialLoading = computed(() => !store.hasLoaded && store.isLoading);
 /** Mirrors the load-error banner's `v-if` in the template. */
 const loadErrorShowing = computed(() => store.loadError !== null && !store.reloadNeeded);
 
+// --- Shell header ---
+// An open page takes the shell header: its breadcrumb (Cerita / title), its title and its headline
+// (or the fallback hint) in the compact header. The list and a page that is still loading use the
+// route's own title and subtitle, which AdminLayout also restores on navigation.
+const PAGE_HEADER_FALLBACK = 'Perubahan langsung tampil di situs setelah disimpan.';
+
+const { trail: headerTrail } = useAdminHeader();
+
+function routeHeader(): { title: string; subtitle: string } {
+  return { title: route.meta.title ?? '', subtitle: route.meta.subtitle ?? '' };
+}
+
+function syncHeader(): void {
+  const open = page.value;
+  if (open) {
+    setAdminHeader(open.title, open.headline || PAGE_HEADER_FALLBACK, {
+      trail: [{ label: 'Cerita', to: '/admin/cerita' }, { label: open.title }],
+      compact: true,
+    });
+    return;
+  }
+  const header = routeHeader();
+  setAdminHeader(header.title, header.subtitle);
+}
+
+watch(
+  () => [page.value?.title, page.value?.headline, detailSlug.value],
+  () => syncHeader(),
+  { immediate: true },
+);
+
 onMounted(() => {
   void store.load();
 });
@@ -337,10 +371,14 @@ async function openPage(slug: string): Promise<void> {
   clearActionError();
   await router.push({ name: 'admin-cerita', query: { halaman: slug } });
   await nextTick();
-  focusId(ceritaIds.pageHeading);
+  focusId(ADMIN_HEADER_TITLE_ID);
 }
 
-/** "Kembali ke daftar": the list again; the watch on `detailSlug` returns focus to the card. */
+/**
+ * "Kembali ke daftar": the list again; the watch on `detailSlug` returns focus to the card. Only the
+ * notice for a missing page offers it now: an open page is left with the breadcrumb's "Cerita" link,
+ * which runs the same unsaved-changes guard as the route updates.
+ */
 function backToList(): void {
   clearActionError();
   void router.push({ name: 'admin-cerita' });
@@ -358,14 +396,6 @@ const nameDialog = computed(() => {
         submit: 'Tambah halaman',
         initial: '',
         hint: 'Alamat halaman dibuat otomatis dari judul dan tidak berubah saat judul diganti.',
-      };
-    case 'page-rename':
-      return {
-        heading: 'Ubah judul halaman',
-        label: 'Judul halaman',
-        submit: 'Simpan judul',
-        initial: target.initial,
-        hint: 'Alamat halaman tidak berubah, sehingga tautan yang sudah dibagikan tetap berfungsi.',
       };
     case 'chapter-add':
       return {
@@ -437,7 +467,7 @@ async function submitName(title: string): Promise<void> {
     case 'page-add': {
       const result = await store.addPage(title);
       outcome = result;
-      focus = ceritaIds.pageHeading;
+      focus = ADMIN_HEADER_TITLE_ID;
       message = `Halaman “${title}” ditambahkan.`;
       // The new page opens at once, so its first chapter can be added.
       if (result.ok) {
@@ -445,11 +475,6 @@ async function submitName(title: string): Promise<void> {
       }
       break;
     }
-    case 'page-rename':
-      outcome = await store.renamePage(target.slug, title, target.token);
-      focus = ceritaIds.pageRename;
-      message = `Judul halaman diubah menjadi “${title}”.`;
-      break;
     case 'chapter-add': {
       const result = await store.addChapter(target.pageSlug, title);
       outcome = result;
@@ -504,23 +529,53 @@ function closeDetails(): void {
   detailsStale.value = false;
 }
 
-async function submitDetails(details: PageDetailsInput): Promise<void> {
+/**
+ * "Info cerita" save: the page title first (only when it changed, through the same rename the list
+ * uses), then the headline and byline. Both carry the page's token; after a rename the token moves
+ * to the renamed page's, so the details save does not refuse its own write.
+ */
+async function submitDetails(details: PageDetailsInput, title: string): Promise<void> {
   const target = detailsTarget.value;
   if (!target || detailsBusy.value) return;
   detailsBusy.value = true;
   detailsError.value = '';
   detailsStale.value = false;
-  const outcome = await store.updatePageDetails(target.slug, details, target.token);
+
+  let token = target.token;
+  let renamed = false;
+  const current = store.findPage(target.slug);
+  if (current && title !== current.title) {
+    const rename = await store.renamePage(target.slug, title, token);
+    if (!rename.ok) {
+      detailsBusy.value = false;
+      detailsError.value = rename.message;
+      detailsErrorKind.value = rename.kind;
+      detailsStale.value = rename.stale;
+      return;
+    }
+    renamed = true;
+    token = store.findPage(target.slug)?.updatedAt ?? token;
+    detailsTarget.value = { ...target, token };
+  }
+
+  const outcome = await store.updatePageDetails(target.slug, details, token);
   detailsBusy.value = false;
 
   if (outcome.ok) {
     detailsTarget.value = null;
-    announce('Judul utama dan penulis halaman disimpan.');
+    announce(
+      renamed
+        ? `Judul halaman diubah menjadi “${title}”. Judul utama dan penulis halaman disimpan.`
+        : 'Judul utama dan penulis halaman disimpan.',
+    );
     await nextTick();
     focusId(ceritaIds.pageDetails);
     return;
   }
-  detailsError.value = outcome.message;
+  // The title is a separate write: tell the user it already went through.
+  detailsError.value = renamed
+    ? `Judul halaman sudah diubah menjadi “${title}”, tetapi judul utama dan penulis belum tersimpan. ${outcome.message}`
+    : outcome.message;
   detailsErrorKind.value = outcome.kind;
   detailsStale.value = outcome.stale;
 }
@@ -548,10 +603,7 @@ async function reloadFromName(): Promise<void> {
     return;
   }
   const target = nameTarget.value;
-  if (target?.kind === 'page-rename') {
-    const token = store.findPage(target.slug)?.updatedAt;
-    if (token) nameTarget.value = { ...target, token };
-  } else if (target?.kind === 'chapter-rename') {
+  if (target?.kind === 'chapter-rename') {
     const token = store.findChapter(target.id)?.chapter.updatedAt;
     if (token) nameTarget.value = { ...target, token };
   } else if (target?.kind === 'section-rename') {
@@ -861,12 +913,6 @@ function movePageBySlug(slug: string, direction: Direction, upId: string, downId
       focusAfterMove(upId, downId, index, pages.value.length, direction);
     },
   );
-}
-
-function movePage(direction: Direction): void {
-  const current = page.value;
-  if (!current) return;
-  movePageBySlug(current.slug, direction, ceritaIds.pageUp, ceritaIds.pageDown);
 }
 
 function moveChapter(chapter: AdminChapter, direction: Direction): void {
@@ -1553,6 +1599,12 @@ onUnmounted(() => {
   removeBeforeUnload();
   pendingRouteLeave?.(false);
   pendingRouteLeave = null;
+  // Hands the shell header back to the route's own title (the editor's trail must not outlive it).
+  // Only while the header is still the editor's: a next view may already have set its own.
+  if (headerTrail.value) {
+    const header = routeHeader();
+    setAdminHeader(header.title, header.subtitle);
+  }
 });
 </script>
 
@@ -1708,93 +1760,43 @@ onUnmounted(() => {
     </section>
 
     <div v-else-if="store.hasLoaded" class="flex min-h-0 flex-1 flex-col" data-test="detail-view">
-      <header
-        class="border-border flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-b bg-white px-6 py-4 md:px-8"
-      >
-        <div class="min-w-0 space-y-1">
-          <h2
-            v-if="page"
-            :id="ceritaIds.pageHeading"
-            tabindex="-1"
-            class="text-brand-navy text-lg font-semibold break-words outline-none"
-            data-test="page-heading"
-          >
-            {{ page.title }}
-          </h2>
-          <p class="text-text-muted text-sm">
-            Perubahan langsung tampil di situs setelah disimpan.
-            <a
-              v-if="page"
-              :href="`/cerita/${page.slug}`"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="text-brand-navy focus-visible:outline-focus-ring ml-1 inline-flex min-h-11 items-center rounded-xs font-medium underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2"
-              data-test="page-public-link"
-            >
-              Lihat di situs<span class="sr-only"> (dibuka di tab baru)</span>
-            </a>
-          </p>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <BaseButton
-            :id="ceritaIds.backToList"
-            type="button"
-            variant="secondary"
-            size="md"
-            class="min-h-11"
-            data-test="back-to-list"
-            @click="backToList"
-          >
-            <template #leftIcon>
-              <ArrowLeftIcon class="h-4 w-4" aria-hidden="true" />
-            </template>
-            Kembali ke daftar
-          </BaseButton>
-          <template v-if="page">
-            <BaseButton
-              :id="ceritaIds.pageRename"
-              type="button"
-              variant="secondary"
-              size="md"
-              class="min-h-11"
-              :disabled="structureBusy"
-              data-test="page-rename"
-              @click="
-                openName({
-                  kind: 'page-rename',
-                  slug: page.slug,
-                  initial: page.title,
-                  token: page.updatedAt,
-                })
-              "
-            >
-              Ubah judul <span class="sr-only">halaman {{ page.title }}</span>
-            </BaseButton>
-            <CollectionRowActions
-              :row-label="`halaman ${page.title}`"
-              :is-first="pageIndex <= 0"
-              :is-last="pageIndex === pages.length - 1"
-              :busy="structureBusy"
-              :move-up-id="ceritaIds.pageUp"
-              :move-down-id="ceritaIds.pageDown"
-              :remove-id="ceritaIds.pageDelete"
-              @move-up="movePage(-1)"
-              @move-down="movePage(1)"
-              @remove="openDeletePage()"
-            />
+      <!-- The page's actions sit in the shell header (AdminHeader), beside its title. -->
+      <Teleport v-if="page" defer to="#admin-header-actions">
+        <BaseButton
+          variant="secondary"
+          size="md"
+          class="min-h-11"
+          :href="`/cerita/${page.slug}`"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-test="page-public-link"
+        >
+          <template #leftIcon>
+            <EyeIcon class="h-4 w-4" aria-hidden="true" />
           </template>
-        </div>
-      </header>
+          Lihat di situs<span class="sr-only"> (dibuka di tab baru)</span>
+        </BaseButton>
+      </Teleport>
 
-      <p
+      <div
         v-if="!page"
         class="rounded-card border-border-strong text-text-muted m-6 border border-dashed p-4 text-sm"
         role="status"
         data-test="page-missing"
       >
-        Halaman ini tidak ditemukan. Mungkin sudah dihapus. Pilih “Kembali ke daftar” untuk memilih
-        Cerita yang lain.
-      </p>
+        <p>Halaman ini tidak ditemukan. Mungkin sudah dihapus.</p>
+        <BaseButton
+          :id="ceritaIds.backToList"
+          type="button"
+          variant="secondary"
+          size="md"
+          class="mt-3 min-h-11"
+          data-test="back-to-list"
+          @click="backToList"
+        >
+          Kembali ke daftar
+        </BaseButton>
+      </div>
 
       <div
         v-else
@@ -1959,7 +1961,7 @@ onUnmounted(() => {
 
     <CeritaPageDetailsDialog
       :open="detailsTarget !== null"
-      :page-title="detailsPage?.title ?? ''"
+      :title="detailsPage?.title ?? ''"
       :headline="detailsPage?.headline ?? null"
       :byline-author="detailsPage?.bylineAuthor ?? null"
       :byline-affiliation="detailsPage?.bylineAffiliation ?? null"

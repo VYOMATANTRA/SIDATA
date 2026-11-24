@@ -15,13 +15,8 @@ export const ceritaIds = {
   cardDown: (slug: string): string => `cerita-kartu-${slug}-turun`,
   cardCheckbox: (slug: string): string => `cerita-kartu-${slug}-pilih`,
   backToList: 'cerita-kembali-ke-daftar',
-  pageHeading: 'cerita-halaman-judul',
-  pageRename: 'cerita-halaman-ubah',
   /** The "Info cerita" row of the structure tree: opens the headline and byline dialog. */
   pageDetails: 'cerita-info',
-  pageUp: 'cerita-halaman-naik',
-  pageDown: 'cerita-halaman-turun',
-  pageDelete: 'cerita-halaman-hapus',
   addChapter: 'cerita-tambah-bab',
   chapterRename: (id: string): string => `cerita-bab-${id}-ubah`,
   chapterUp: (id: string): string => `cerita-bab-${id}-naik`,

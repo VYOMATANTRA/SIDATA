@@ -8,7 +8,7 @@ const body = (): DOMWrapper<HTMLElement> => new DOMWrapper(document.body);
 // The dialog shows its failures with AlertBanner, which reads the auth store, so a pinia is needed.
 function open(props: Record<string, unknown> = {}) {
   return mount(CeritaPageDetailsDialog, {
-    props: { open: true, pageTitle: 'Kependudukan', ...props },
+    props: { open: true, title: 'Kependudukan', ...props },
     attachTo: document.body,
     global: { plugins: [createPinia()] },
   });
@@ -87,6 +87,36 @@ describe('CeritaPageDetailsDialog', () => {
     expect((body().find('[data-test="details-headline"]').element as HTMLInputElement).value).toBe(
       'Draf saya',
     );
+    wrapper.unmount();
+  });
+
+  it('prefills the page title and sends it trimmed as the second argument', async () => {
+    const wrapper = open({ title: 'Kependudukan' });
+    expect((body().find('[data-test="details-title"]').element as HTMLInputElement).value).toBe(
+      'Kependudukan',
+    );
+    await body().find('[data-test="details-title"]').setValue('  Kependudukan Manggar  ');
+    await submit();
+    expect(wrapper.emitted('submit')?.[0]).toEqual([
+      { headline: null, bylineAuthor: null, bylineAffiliation: null },
+      'Kependudukan Manggar',
+    ]);
+    wrapper.unmount();
+  });
+
+  it('refuses an empty, over-long or HTML page title and sends nothing', async () => {
+    const wrapper = open();
+    const attempts: Array<[string, string]> = [
+      ['', 'wajib diisi'],
+      ['x'.repeat(256), 'maksimal 255 karakter'],
+      ['<b>Judul</b>', 'tag HTML'],
+    ];
+    for (const [value, message] of attempts) {
+      await body().find('[data-test="details-title"]').setValue(value);
+      await submit();
+      expect(body().text()).toContain(message);
+    }
+    expect(wrapper.emitted('submit')).toBeUndefined();
     wrapper.unmount();
   });
 

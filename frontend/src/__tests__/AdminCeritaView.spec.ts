@@ -4,6 +4,8 @@ import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-uti
 import { createMemoryHistory, createRouter, RouterView, type Router } from 'vue-router';
 import { h } from 'vue';
 import AdminCeritaView from '../views/AdminCeritaView.vue';
+import AdminHeader from '../components/admin/AdminHeader.vue';
+import { useAdminHeader } from '../composables/useAdminHeader';
 import { useAuthStore } from '../stores/auth';
 import { useCeritaAdminStore } from '../stores/ceritaAdmin.store';
 import { createFakeCerita, type FakeCerita } from './ceritaFakeApi';
@@ -52,7 +54,7 @@ async function mountView(
   await router.isReady();
   // Rendered through <RouterView>, as the app renders it: vue-router only runs the route's update
   // guards for a component it renders itself.
-  const wrapper = mount(() => h(RouterView), {
+  const wrapper = mount(() => h('div', [h(AdminHeader), h(RouterView)]), {
     global: { plugins: [createPinia(), router] },
     attachTo: document.body,
   });
@@ -85,6 +87,17 @@ async function typeInto(selector: string, value: string): Promise<void> {
 
 async function submitDialog(): Promise<void> {
   await body().find('[data-test="name-dialog"]').trigger('submit');
+  await flushPromises();
+}
+
+async function submitDetailsDialog(): Promise<void> {
+  await body().find('[data-test="details-dialog"]').trigger('submit');
+  await flushPromises();
+}
+
+/** Clicks the Hapus button on the list card at `index` (the list order: Kependudukan, Pendidikan, Kesehatan). */
+async function deleteCard(wrapper: VueWrapper, index: number): Promise<void> {
+  await wrapper.findAll('[data-test="card-delete"]')[index]!.trigger('click');
   await flushPromises();
 }
 
@@ -198,7 +211,7 @@ describe('AdminCeritaView', () => {
       const wrapper = await mountView();
 
       expect(wrapper.find('[data-test="list-view"]').exists()).toBe(false);
-      expect(wrapper.find('[data-test="page-heading"]').text()).toBe('Kependudukan');
+      expect(wrapper.find('[data-test="admin-header-title"]').text()).toBe('Kependudukan');
       expect(wrapper.findAll('[data-test="chapter-title"]').map((c) => c.text())).toEqual([
         'Bab 1 · Jumlah Penduduk',
         'Bab 2 · Jumlah Keluarga',
@@ -219,16 +232,15 @@ describe('AdminCeritaView', () => {
       await flushPromises();
 
       expect(router.currentRoute.value.query['halaman']).toBe('pendidikan');
-      expect(wrapper.find('[data-test="page-heading"]').text()).toBe('Pendidikan');
-      expect(document.activeElement).toBe(wrapper.find('[data-test="page-heading"]').element);
-      expect(wrapper.findAll('h2').map((item) => item.text())).toContain('Pendidikan');
+      expect(wrapper.find('[data-test="admin-header-title"]').text()).toBe('Pendidikan');
+      expect(document.activeElement).toBe(wrapper.find('[data-test="admin-header-title"]').element);
       wrapper.unmount();
     });
 
-    it('returns to the list with the back button and focuses the card it came from', async () => {
+    it('returns to the list from the breadcrumb and focuses the card it came from', async () => {
       const wrapper = await mountView('pendidikan');
 
-      await wrapper.find('[data-test="back-to-list"]').trigger('click');
+      await wrapper.find('nav[aria-label="Breadcrumb"] a').trigger('click');
       await flushPromises();
 
       expect(router.currentRoute.value.query['halaman']).toBeUndefined();
@@ -237,19 +249,50 @@ describe('AdminCeritaView', () => {
       wrapper.unmount();
     });
 
+    it('sets the shell header to the page (breadcrumb, title, headline) and hands it back in the list', async () => {
+      fake.pages[0]!.headline = 'Potret Kependudukan';
+      const wrapper = await mountView();
+      const header = useAdminHeader();
+
+      expect(header.title.value).toBe('Kependudukan');
+      expect(header.subtitle.value).toBe('Potret Kependudukan');
+      expect(header.compact.value).toBe(true);
+      expect(header.trail.value).toEqual([
+        { label: 'Cerita', to: '/admin/cerita' },
+        { label: 'Kependudukan' },
+      ]);
+      expect(wrapper.find('[data-test="admin-header-title"]').text()).toBe('Kependudukan');
+      expect(document.querySelector('#admin-header-actions [data-test="page-public-link"]')).not.toBeNull();
+
+      await router.push({ name: 'admin-cerita' });
+      await flushPromises();
+
+      expect(header.trail.value).toBeNull();
+      expect(header.compact.value).toBe(false);
+      expect(document.querySelector('#admin-header-actions [data-test="page-public-link"]')).toBeNull();
+      wrapper.unmount();
+    });
+
+    it('uses the fallback hint when the page has no headline', async () => {
+      const wrapper = await mountView();
+      expect(useAdminHeader().subtitle.value).toBe(
+        'Perubahan langsung tampil di situs setelah disimpan.',
+      );
+      wrapper.unmount();
+    });
+
     it('shows a plain notice for a page that is not there, with a way back', async () => {
       const wrapper = await mountView('tidak-ada');
 
       expect(wrapper.find('[data-test="page-missing"]').text()).toContain('tidak ditemukan');
       expect(wrapper.find('[data-test="back-to-list"]').exists()).toBe(true);
-      expect(wrapper.find('[data-test="page-heading"]').exists()).toBe(false);
       wrapper.unmount();
     });
 
     it('offers a link to the public page that opens in a new tab with a spoken note', async () => {
       const wrapper = await mountView();
 
-      const link = wrapper.find('[data-test="page-public-link"]');
+      const link = body().find('[data-test="page-public-link"]');
       expect(link.attributes('href')).toBe('/cerita/kependudukan');
       expect(link.attributes('target')).toBe('_blank');
       expect(link.attributes('rel')).toContain('noopener');
@@ -322,8 +365,8 @@ describe('AdminCeritaView', () => {
       });
       expect(body().find('[data-test="name-dialog"]').exists()).toBe(false);
       expect(router.currentRoute.value.query['halaman']).toBe('ekonomi-lokal');
-      expect(wrapper.find('[data-test="page-heading"]').text()).toBe('Ekonomi Lokal');
-      expect(document.activeElement).toBe(wrapper.find('[data-test="page-heading"]').element);
+      expect(wrapper.find('[data-test="admin-header-title"]').text()).toBe('Ekonomi Lokal');
+      expect(document.activeElement).toBe(wrapper.find('[data-test="admin-header-title"]').element);
       expect(wrapper.find('[data-test="status"]').text()).toContain(
         'Halaman “Ekonomi Lokal” ditambahkan.',
       );
@@ -349,27 +392,28 @@ describe('AdminCeritaView', () => {
       wrapper.unmount();
     });
 
-    it('renames a page with its token and leaves the address alone', async () => {
+    it('renames a page from Info cerita with its token and leaves the address alone', async () => {
       const wrapper = await mountView();
       const token = fake.pages[0]!.updatedAt;
 
-      await click('Ubah judul halaman Kependudukan');
-      expect((body().find('[data-test="name-input"]').element as HTMLInputElement).value).toBe(
+      await click('Info cerita');
+      expect((body().find('[data-test="details-title"]').element as HTMLInputElement).value).toBe(
         'Kependudukan',
       );
-      await typeInto('[data-test="name-input"]', 'Kependudukan Manggar');
-      await submitDialog();
+      await typeInto('[data-test="details-title"]', 'Kependudukan Manggar');
+      await submitDetailsDialog();
 
-      expect(fake.lastWrite()).toMatchObject({
+      expect(fake.writes()[0]).toMatchObject({
         method: 'PATCH',
         url: '/api/pages/kependudukan',
         body: { title: 'Kependudukan Manggar', expectedUpdatedAt: token },
       });
-      expect(wrapper.find('[data-test="page-heading"]').text()).toBe('Kependudukan Manggar');
-      expect(wrapper.find('[data-test="page-public-link"]').attributes('href')).toBe(
+      expect(fake.pages[0]!.title).toBe('Kependudukan Manggar');
+      expect(wrapper.find('[data-test="admin-header-title"]').text()).toBe('Kependudukan Manggar');
+      expect(body().find('[data-test="page-public-link"]').attributes('href')).toBe(
         '/cerita/kependudukan',
       );
-      expect(document.activeElement).toBe(wrapper.find('[data-test="page-rename"]').element);
+      expect(document.activeElement).toBe(wrapper.find('[data-test="info-button"]').element);
       wrapper.unmount();
     });
 
@@ -443,90 +487,67 @@ describe('AdminCeritaView', () => {
       wrapper.unmount();
     });
 
-    it('keeps the draft on a stale rename, offers a reload that keeps it, then saves with the fresh token', async () => {
+    it('keeps the draft on a stale title save, offers a reload that keeps it, then saves with the fresh token', async () => {
       const wrapper = await mountView();
-      await click('Ubah judul halaman Kependudukan');
-      await typeInto('[data-test="name-input"]', 'Judul saya');
+      await click('Info cerita');
+      await typeInto('[data-test="details-title"]', 'Judul saya');
       fake.touchPage('kependudukan');
 
-      await submitDialog();
+      await submitDetailsDialog();
 
-      expect(body().find('[data-test="name-dialog"]').exists()).toBe(true);
-      expect((body().find('[data-test="name-input"]').element as HTMLInputElement).value).toBe(
+      expect(body().find('[data-test="details-dialog"]').exists()).toBe(true);
+      expect((body().find('[data-test="details-title"]').element as HTMLInputElement).value).toBe(
         'Judul saya',
       );
-      const alert = body().find('[data-test="name-error"]').text();
+      const alert = body().find('[data-test="details-error"]').text();
       expect(alert).toContain('baru saja diubah oleh orang lain');
       expect(alert).not.toMatch(RAW_TERMS);
-      expect(body().find('[data-test="name-stale"]').exists()).toBe(true);
-      expect(wrapper.find('[data-test="page-heading"]').text()).toBe('Kependudukan');
+      expect(body().find('[data-test="details-stale"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test="admin-header-title"]').text()).toBe('Kependudukan');
 
-      await body().find('[data-test="name-reload"]').trigger('click');
+      await body().find('[data-test="details-reload"]').trigger('click');
       await flushPromises();
-      expect((body().find('[data-test="name-input"]').element as HTMLInputElement).value).toBe(
+      expect((body().find('[data-test="details-title"]').element as HTMLInputElement).value).toBe(
         'Judul saya',
       );
-      expect(body().find('[data-test="name-stale"]').exists()).toBe(false);
+      expect(body().find('[data-test="details-stale"]').exists()).toBe(false);
 
-      await submitDialog();
+      await submitDetailsDialog();
       expect(fake.pages[0]!.title).toBe('Judul saya');
-      expect(wrapper.find('[data-test="page-heading"]').text()).toBe('Judul saya');
+      expect(wrapper.find('[data-test="admin-header-title"]').text()).toBe('Judul saya');
       wrapper.unmount();
     });
 
-    it('keeps the typed title and shows plain text when the connection fails', async () => {
+    it('keeps the typed title and explains plainly when the title save fails', async () => {
       const wrapper = await mountView();
-      await click('Ubah judul halaman Kependudukan');
-      await typeInto('[data-test="name-input"]', 'Judul baru');
+      await click('Info cerita');
+      await typeInto('[data-test="details-title"]', 'Judul baru');
       fake.failNext((r) => r.method === 'PATCH', fake.json({ error: 'x' }, 500));
 
-      await submitDialog();
+      await submitDetailsDialog();
 
-      expect((body().find('[data-test="name-input"]').element as HTMLInputElement).value).toBe(
+      expect((body().find('[data-test="details-title"]').element as HTMLInputElement).value).toBe(
         'Judul baru',
       );
-      const error = body().find('[data-test="name-error"]').text();
+      const error = body().find('[data-test="details-error"]').text();
       expect(error).toContain('Gagal mengubah judul halaman');
       expect(error).not.toMatch(RAW_TERMS);
+      expect(fake.pages[0]!.title).toBe('Kependudukan');
       wrapper.unmount();
     });
 
-    it('moves a page down and up with buttons, keeping focus on a usable button', async () => {
-      const wrapper = await mountView();
 
-      await click('Turun halaman Kependudukan');
-      expect(fake.lastWrite()).toMatchObject({ method: 'PUT', url: '/api/pages/reorder' });
-      expect(pageOrder()).toEqual(['Pendidikan', 'Kependudukan', 'Kesehatan']);
-      expect(wrapper.find('[data-test="status"]').text()).toContain('urutan 2 dari 3');
-      expect(document.activeElement?.id).toBe('cerita-halaman-turun');
-
-      await click('Turun halaman Kependudukan');
-      expect(pageOrder()).toEqual(['Pendidikan', 'Kesehatan', 'Kependudukan']);
-      // The last page cannot go further down, so focus moves to the other button.
-      expect(wrapper.find('#cerita-halaman-turun').attributes('disabled')).toBeDefined();
-      expect(document.activeElement?.id).toBe('cerita-halaman-naik');
-
-      await click('Naik halaman Kependudukan');
-      expect(pageOrder()).toEqual(['Pendidikan', 'Kependudukan', 'Kesehatan']);
-      wrapper.unmount();
-    });
-
-    it('disables the move that cannot happen at either end', async () => {
-      const wrapper = await mountView();
-
-      expect(wrapper.find('#cerita-halaman-naik').attributes('disabled')).toBeDefined();
-      expect(wrapper.find('#cerita-halaman-turun').attributes('disabled')).toBeUndefined();
-      wrapper.unmount();
-    });
 
     it('reports a stale reorder in plain words and reloads on request', async () => {
-      const wrapper = await mountView();
+      const wrapper = await mountList();
+      await wrapper.find('[data-test="sort-toggle"]').trigger('click');
       fake.failNext(
         (r) => r.url === '/api/pages/reorder',
         fake.json({ error: 'x', code: 'STALE_WRITE' }, 409),
       );
 
-      await click('Turun halaman Kependudukan');
+      await wrapper.findAll('[data-test="card-down"]')[0]!.trigger('click');
+      await flushPromises();
 
       const error = wrapper.find('[data-test="action-error"]');
       expect(error.text()).toContain('baru saja diubah oleh orang lain');
@@ -539,34 +560,12 @@ describe('AdminCeritaView', () => {
       wrapper.unmount();
     });
 
-    it('deletes an empty page from its structure after confirming, then returns to the list', async () => {
-      const wrapper = await mountView('kesehatan');
-
-      await click('Hapus halaman Kesehatan');
-      expect(body().find('[data-test="delete-dialog"]').text()).toContain(
-        'Hapus halaman “Kesehatan”?',
-      );
-      expect(fake.writes()).toHaveLength(0);
-
-      await body().find('[data-test="delete-confirm"]').trigger('click');
-      await flushPromises();
-
-      expect(fake.lastWrite()).toMatchObject({
-        method: 'DELETE',
-        url: expect.stringContaining('/api/pages/kesehatan?expectedUpdatedAt=') as string,
-      });
-      expect(router.currentRoute.value.query['halaman']).toBeUndefined();
-      expect(pageTitles(wrapper)).toEqual(['Kependudukan', 'Pendidikan']);
-      expect(wrapper.find('[data-test="page-heading"]').exists()).toBe(false);
-      expect(document.activeElement).toBe(document.getElementById('cerita-tambah-halaman'));
-      wrapper.unmount();
-    });
 
     it('explains that empty chapters and sections go with a deleted page', async () => {
-      const wrapper = await mountView();
-      document.getElementById('cerita-halaman-hapus')?.focus();
+      const wrapper = await mountList();
+      document.getElementById('cerita-kartu-kependudukan-hapus')?.focus();
 
-      await click('Hapus halaman Kependudukan');
+      await deleteCard(wrapper, 0);
 
       expect(body().find('[data-test="delete-consequence"]').text()).toContain(
         '2 bab dan 3 bagian yang masih kosong',
@@ -574,7 +573,9 @@ describe('AdminCeritaView', () => {
       await body().find('[data-test="delete-cancel"]').trigger('click');
       await flushPromises();
       expect(fake.pages).toHaveLength(3);
-      expect(document.activeElement).toBe(document.getElementById('cerita-halaman-hapus'));
+      expect(document.activeElement).toBe(
+        document.getElementById('cerita-kartu-kependudukan-hapus'),
+      );
       wrapper.unmount();
     });
 
@@ -582,9 +583,9 @@ describe('AdminCeritaView', () => {
       const sectionId = fake.pages[0]!.chapters[0]!.sections[0]!.id;
       fake.addParagraph(sectionId, 'Pembuka', 'Isi.');
       fake.addParagraph(sectionId, 'Lanjutan', 'Isi.');
-      const wrapper = await mountView();
+      const wrapper = await mountList();
 
-      await click('Hapus halaman Kependudukan');
+      await deleteCard(wrapper, 0);
 
       const error = body().find('[data-test="delete-error"]').text();
       expect(error).toContain('Halaman ini belum bisa dihapus');
@@ -601,11 +602,11 @@ describe('AdminCeritaView', () => {
     });
 
     it('also handles the refusal when the screen did not know about the content', async () => {
-      const wrapper = await mountView();
+      const wrapper = await mountList();
       const sectionId = fake.pages[0]!.chapters[0]!.sections[0]!.id;
       fake.addParagraph(sectionId, 'Baru', 'Ditambah orang lain.');
 
-      await click('Hapus halaman Kependudukan');
+      await deleteCard(wrapper, 0);
       expect(body().find('[data-test="delete-confirm"]').exists()).toBe(true);
       await body().find('[data-test="delete-confirm"]').trigger('click');
       await flushPromises();
@@ -984,13 +985,13 @@ describe('AdminCeritaView', () => {
 
   describe('when the reload after a saved change fails', () => {
     it('says the change is saved, offers a reload, and keeps a deleted page off the screen', async () => {
-      const wrapper = await mountView('kesehatan');
+      const wrapper = await mountList();
       fake.failNext(
         (r) => r.method === 'GET' && r.url === '/api/pages?include=sections',
         fake.json({ error: 'SQL boom' }, 500),
       );
 
-      await click('Hapus halaman Kesehatan');
+      await deleteCard(wrapper, 2);
       await body().find('[data-test="delete-confirm"]').trigger('click');
       await flushPromises();
 
@@ -1002,7 +1003,6 @@ describe('AdminCeritaView', () => {
       // The deleted page is gone: the screen is back on the list, without a dead structure view.
       expect(wrapper.find('[data-test="list-view"]').exists()).toBe(true);
       expect(pageTitles(wrapper)).toEqual(['Kependudukan', 'Pendidikan']);
-      expect(wrapper.find('[data-test="page-heading"]').exists()).toBe(false);
       // The generic load error is replaced by this clearer notice.
       expect(wrapper.find('[data-test="load-error"]').exists()).toBe(false);
 
@@ -1043,25 +1043,25 @@ describe('AdminCeritaView', () => {
       await flushPromises();
     }
 
-    it('refuses a page rename opened before another editor saved, then saves after a reload', async () => {
+    it('refuses a title save opened before another editor saved, then saves after a reload', async () => {
       const wrapper = await mountView();
-      await click('Ubah judul halaman Kependudukan');
-      await typeInto('[data-test="name-input"]', 'Judul saya');
+      await click('Info cerita');
+      await typeInto('[data-test="details-title"]', 'Judul saya');
 
       await otherEditorSavesThenScreenReloads(() => fake.touchPage('kependudukan'));
-      await submitDialog();
+      await submitDetailsDialog();
 
       expect(fake.pages[0]!.title).toBe('Kependudukan');
-      expect(body().find('[data-test="name-error"]').text()).toContain(
+      expect(body().find('[data-test="details-error"]').text()).toContain(
         'baru saja diubah oleh orang lain',
       );
-      expect((body().find('[data-test="name-input"]').element as HTMLInputElement).value).toBe(
+      expect((body().find('[data-test="details-title"]').element as HTMLInputElement).value).toBe(
         'Judul saya',
       );
 
-      await body().find('[data-test="name-reload"]').trigger('click');
+      await body().find('[data-test="details-reload"]').trigger('click');
       await flushPromises();
-      await submitDialog();
+      await submitDetailsDialog();
       expect(fake.pages[0]!.title).toBe('Judul saya');
       wrapper.unmount();
     });
@@ -1090,8 +1090,8 @@ describe('AdminCeritaView', () => {
     });
 
     it('refuses a delete confirmed after another editor changed the page, until reloaded', async () => {
-      const wrapper = await mountView('kesehatan');
-      await click('Hapus halaman Kesehatan');
+      const wrapper = await mountList();
+      await deleteCard(wrapper, 2);
 
       await otherEditorSavesThenScreenReloads(() => fake.touchPage('kesehatan'));
       await body().find('[data-test="delete-confirm"]').trigger('click');
@@ -1122,35 +1122,35 @@ describe('AdminCeritaView', () => {
       }
     };
 
-    it('keeps the stale notice and the typed title in the rename dialog, and still refuses the save', async () => {
+    it('keeps the stale notice and the typed title in the info dialog, and still refuses the save', async () => {
       const wrapper = await mountView();
-      await click('Ubah judul halaman Kependudukan');
-      await typeInto('[data-test="name-input"]', 'Judul saya');
+      await click('Info cerita');
+      await typeInto('[data-test="details-title"]', 'Judul saya');
       fake.touchPage('kependudukan');
-      await submitDialog();
-      expect(body().find('[data-test="name-stale"]').exists()).toBe(true);
+      await submitDetailsDialog();
+      expect(body().find('[data-test="details-stale"]').exists()).toBe(true);
 
       failReload();
-      await body().find('[data-test="name-reload"]').trigger('click');
+      await body().find('[data-test="details-reload"]').trigger('click');
       await flushPromises();
 
-      expect(body().find('[data-test="name-stale"]').exists()).toBe(true);
-      expect(body().find('[data-test="name-error"]').text()).toBe(COULD_NOT_RELOAD);
-      expect((body().find('[data-test="name-input"]').element as HTMLInputElement).value).toBe(
+      expect(body().find('[data-test="details-stale"]').exists()).toBe(true);
+      expect(body().find('[data-test="details-error"]').text()).toBe(COULD_NOT_RELOAD);
+      expect((body().find('[data-test="details-title"]').element as HTMLInputElement).value).toBe(
         'Judul saya',
       );
 
       // Nothing new was seen, so the old token is still used and the save is refused again.
-      await submitDialog();
+      await submitDetailsDialog();
       expect(fake.pages[0]!.title).toBe('Kependudukan');
-      expect(body().find('[data-test="name-error"]').text()).toContain('baru saja diubah');
-      expect(body().find('[data-test="name-stale"]').exists()).toBe(true);
+      expect(body().find('[data-test="details-error"]').text()).toContain('baru saja diubah');
+      expect(body().find('[data-test="details-stale"]').exists()).toBe(true);
       wrapper.unmount();
     });
 
     it('keeps the stale notice and the confirm button in the delete dialog, and still refuses the delete', async () => {
-      const wrapper = await mountView('kesehatan');
-      await click('Hapus halaman Kesehatan');
+      const wrapper = await mountList();
+      await deleteCard(wrapper, 2);
       fake.touchPage('kesehatan');
       await body().find('[data-test="delete-confirm"]').trigger('click');
       await flushPromises();
@@ -1231,8 +1231,8 @@ describe('AdminCeritaView', () => {
       expect(unnamed).toHaveLength(0);
       expect(document.body.textContent).not.toMatch(RAW_TERMS);
 
-      await click('Ubah judul halaman Kependudukan');
-      const input = body().find('[data-test="name-input"]').element as HTMLInputElement;
+      await click('Info cerita');
+      const input = body().find('[data-test="details-title"]').element as HTMLInputElement;
       const label = document.querySelector(`label[for="${input.id}"]`);
       expect(label?.textContent).toContain('Judul halaman');
       expect(body().find('[role="dialog"]').attributes('aria-labelledby')).toBeTruthy();
@@ -1295,7 +1295,9 @@ describe('AdminCeritaView', () => {
       expect(wrapper.find('[data-test="sort-toggle"]').attributes('aria-pressed')).toBe('false');
       expect(wrapper.find('[data-test="bulk-delete"]').exists()).toBe(false);
 
-      const unnamed = wrapper.findAll('button').filter((item) => item.text().trim() === '');
+      const unnamed = wrapper
+        .findAll('button')
+        .filter((item) => item.text().trim() === '' && !item.attributes('aria-label'));
       expect(unnamed).toHaveLength(0);
       wrapper.unmount();
     });
