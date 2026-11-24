@@ -85,7 +85,8 @@ const tableDetail = {
 };
 
 describe('isSexSplitKind', () => {
-  it('is true for age_pyramid and religion_by_sex', () => {
+  it('is true for age_pyramid, religion_by_sex and by_sex', () => {
+    expect(isSexSplitKind('by_sex')).toBe(true);
     expect(isSexSplitKind('age_pyramid')).toBe(true);
     expect(isSexSplitKind('religion_by_sex')).toBe(true);
   });

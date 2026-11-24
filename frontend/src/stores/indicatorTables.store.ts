@@ -4,7 +4,7 @@ import { apiErrorFromResponse, apiRequestJson } from '../utils/apiClient';
 import { toUserMessage, type FailureKind } from '../utils/userMessages';
 
 /**
- * The four fixed-shape matrix tables (SPEC §7): normalized rows, one row per logical group.
+ * The matrix tables (SPEC §7): normalized rows, one row per logical group.
  * Sex-split kinds store `male`/`female` and derive `total` on read; single-value kinds store
  * `total`. The CMS form must follow the same split or the service answers 400.
  *
@@ -56,8 +56,9 @@ export const INDICATOR_TABLE_KIND_META: Record<IndicatorTableKind, IndicatorTabl
     sexSplit: false,
   },
   by_sex: {
-    label: 'Tabel menurut Jenis Kelamin',
-    description: 'Jumlah penduduk per kategori (misalnya pendidikan atau status), dipisah menurut jenis kelamin.',
+    label: 'Kategori menurut Jenis Kelamin',
+    description:
+      'Jumlah penduduk per kategori lain (misalnya pendidikan terakhir, status perkawinan, golongan darah), dipisah menurut jenis kelamin.',
     sexSplit: true,
   },
 };

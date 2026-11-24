@@ -14,7 +14,7 @@ import {
 import { CELL_INPUT_CLASSES, INPUT_CLASSES } from '../../utils/formStyles';
 
 /**
- * Editor/admin form for the four fixed-shape matrix tables (SPEC §4, §7).
+ * Editor/admin form for the matrix tables (SPEC §4, §7).
  *
  * Two shapes, one component: sex-split kinds (`age_pyramid`, `religion_by_sex`, `by_sex`) edit
  * `male`/`female` and derive `total`; single-value kinds (`ethnicity`, `occupation`) edit
