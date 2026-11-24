@@ -202,6 +202,11 @@ const overviewInfo = computed<{ chapter: AdminChapter; index: number } | null>((
   return chapter ? { chapter, index } : null;
 });
 const overviewChapter = computed<AdminChapter | null>(() => overviewInfo.value?.chapter ?? null);
+const overviewChapterNumber = computed(() =>
+  overviewInfo.value
+    ? chapterNumberLabel(overviewInfo.value.chapter.number, overviewInfo.value.index)
+    : '',
+);
 /** Other chapters of the page (the targets of a move), with the labels the move dialog shows. */
 function chapterTargetsFor(chapterId: string): { id: string; label: string }[] {
   return (page.value?.chapters ?? [])
@@ -925,35 +930,6 @@ function movePageBySlug(slug: string, direction: Direction, upId: string, downId
   );
 }
 
-function moveChapter(chapter: AdminChapter, direction: Direction): void {
-  const current = page.value;
-  if (!current) return;
-  void runMove(
-    () => store.moveChapter(current.slug, chapter.id, direction),
-    () => {
-      const chapters = store.findPage(current.slug)?.chapters ?? [];
-      const index = chapters.findIndex((item) => item.id === chapter.id);
-      announce(`Bab “${chapter.title}” dipindah ke urutan ${index + 1} dari ${chapters.length}.`);
-      // The moved row keeps focus in the tree; its menu closed behind the choice.
-      focusId(ceritaIds.treeChapter(chapter.id));
-    },
-  );
-}
-
-function moveSection(chapter: AdminChapter, section: AdminSection, direction: Direction): void {
-  void runMove(
-    () => store.moveSection(chapter.id, section.id, direction),
-    () => {
-      const sections = store.findChapter(chapter.id)?.chapter.sections ?? [];
-      const index = sections.findIndex((item) => item.id === section.id);
-      announce(
-        `Bagian “${sectionLabel(section, chapter)}” dipindah ke urutan ${index + 1} dari ${sections.length}.`,
-      );
-      focusId(ceritaIds.treeSection(section.id));
-    },
-  );
-}
-
 // --- Cerita list (the default view) ---
 
 const query = ref('');
@@ -1143,7 +1119,7 @@ async function reloadBulk(): Promise<void> {
   announce('Data terbaru dimuat. Tutup jendela ini lalu pilih lagi halaman yang ingin dihapus.');
 }
 
-// --- Drag in the tree (grips only; the Naik / Turun buttons reach the same saves) ---
+// --- Order in the tree and the overview (grips: drag, or the keyboard; both reach the same saves) ---
 
 function placeChapterDragged(chapter: AdminChapter, toIndex: number): void {
   const current = page.value;
@@ -1154,7 +1130,8 @@ function placeChapterDragged(chapter: AdminChapter, toIndex: number): void {
       const chapters = store.findPage(current.slug)?.chapters ?? [];
       const index = chapters.findIndex((item) => item.id === chapter.id);
       announce(`Bab “${chapter.title}” dipindah ke urutan ${index + 1} dari ${chapters.length}.`);
-      focusId(ceritaIds.treeChapter(chapter.id));
+      // The grip keeps focus, so a keyboard user can move the chapter again.
+      focusId(ceritaIds.treeChapterGrip(chapter.id));
     },
   );
 }
@@ -1168,7 +1145,7 @@ function placeSectionDragged(chapter: AdminChapter, section: AdminSection, toInd
       announce(
         `Bagian “${sectionLabel(section, chapter)}” dipindah ke urutan ${index + 1} dari ${sections.length}.`,
       );
-      focusId(ceritaIds.treeSection(section.id));
+      focusId(ceritaIds.treeSectionGrip(section.id));
     },
   );
 }
@@ -1330,45 +1307,6 @@ async function reloadFromOverview(): Promise<void> {
   overviewTitleStale.value = false;
 }
 
-function moveOverviewChapter(direction: Direction): void {
-  const info = overviewInfo.value;
-  const current = page.value;
-  if (!info || !current) return;
-  const chapter = info.chapter;
-  void runMove(
-    () => store.moveChapter(current.slug, chapter.id, direction),
-    () => {
-      const chapters = store.findPage(current.slug)?.chapters ?? [];
-      const index = chapters.findIndex((item) => item.id === chapter.id);
-      announce(`Bab “${chapter.title}” dipindah ke urutan ${index + 1} dari ${chapters.length}.`);
-      focusAfterMove(
-        ceritaIds.overviewChapterUp,
-        ceritaIds.overviewChapterDown,
-        index,
-        chapters.length,
-        direction,
-      );
-    },
-  );
-}
-
-function moveOverviewSection(section: AdminSection, direction: Direction): void {
-  const chapter = overviewChapter.value;
-  if (!chapter) return;
-  void runMove(
-    () => store.moveSection(chapter.id, section.id, direction),
-    () => {
-      const sections = store.findChapter(chapter.id)?.chapter.sections ?? [];
-      const index = sections.findIndex((item) => item.id === section.id);
-      announce(
-        `Bagian “${overviewLabelOf(section)}” dipindah ke urutan ${index + 1} dari ${sections.length}.`,
-      );
-      // The card's ⋯ menu closed behind the choice, so focus goes to the card's title.
-      focusId(ceritaIds.overviewCardTitle(section.id));
-    },
-  );
-}
-
 function placeOverviewSection(section: AdminSection, toIndex: number): void {
   const chapter = overviewChapter.value;
   if (!chapter) return;
@@ -1380,7 +1318,7 @@ function placeOverviewSection(section: AdminSection, toIndex: number): void {
       announce(
         `Bagian “${overviewLabelOf(section)}” dipindah ke urutan ${index + 1} dari ${sections.length}.`,
       );
-      focusId(ceritaIds.overviewCardTitle(section.id));
+      focusId(ceritaIds.overviewCardGrip(section.id));
     },
   );
 }
@@ -1842,7 +1780,6 @@ onUnmounted(() => {
                   token: chapter.updatedAt,
                 })
             "
-            @move-chapter="moveChapter"
             @delete-chapter="openDeleteChapter"
             @place-chapter="placeChapterDragged"
             @rename-section="
@@ -1854,7 +1791,6 @@ onUnmounted(() => {
                   token: section.updatedAt,
                 })
             "
-            @move-section="moveSection"
             @delete-section="openDeleteSection"
             @place-section="placeSectionDragged"
           />
@@ -1892,8 +1828,7 @@ onUnmounted(() => {
             :cards="overviewCards"
             :other-chapters-count="page.chapters.length - 1"
             :busy="structureBusy || titleSaving || addSectionBusy || relocateBusy"
-            :is-first="overviewInfo.index === 0"
-            :is-last="overviewInfo.index === page.chapters.length - 1"
+            :chapter-number="overviewChapterNumber"
             :title-error="overviewTitleError || undefined"
             :title-error-kind="overviewTitleErrorKind ?? undefined"
             :title-stale="overviewTitleStale"
@@ -1902,11 +1837,8 @@ onUnmounted(() => {
             :add-busy="addSectionBusy"
             @save-title="saveOverviewTitle"
             @reload="reloadFromOverview"
-            @chapter-up="moveOverviewChapter(-1)"
-            @chapter-down="moveOverviewChapter(1)"
             @chapter-delete="openDeleteChapter(overviewInfo.chapter)"
             @edit-section="openOverviewSection"
-            @move-section="moveOverviewSection"
             @relocate-section="openRelocate"
             @duplicate-section="duplicateOverviewSection"
             @delete-section="deleteOverviewSection"

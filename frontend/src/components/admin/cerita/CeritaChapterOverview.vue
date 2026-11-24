@@ -13,14 +13,17 @@ import {
 import type { PendingFigureKind } from '../../../composables/figureKindHint';
 import type { AdminChapter, AdminSection } from '../../../stores/ceritaAdmin.store';
 import type { OverviewCard } from '../../../utils/ceritaChapterOverview';
+import { sectionNumberLabel } from '../../../utils/ceritaTreeLabels';
+import { useKeyboardReorder } from '../../../composables/useKeyboardReorder';
 import { titleTextProblem } from '../../../utils/titleTextRules';
 import type { FailureKind } from '../../../utils/userMessages';
 import { ceritaIds } from './ceritaDomIds';
 
 /**
  * The centre column when a chapter (and no section) is selected: "BAB n DARI N · JUDUL", the
- * chapter title as a labelled field saved with "Simpan judul", Naik / Turun / Hapus bab, the list of
- * section cards (drag or the ⋯ menu), and the "Tambah bagian baru" panel. The overview only reports
+ * chapter title as a labelled field saved with "Simpan judul", Hapus bab, the list of section cards
+ * (ordered on the grip: drag, or Spasi and the arrow keys), and the "Tambah bagian baru" panel. The
+ * overview only reports
  * what was asked; the view runs the saves, the dialogs and the focus.
  */
 
@@ -32,9 +35,9 @@ const props = defineProps<{
   cards: OverviewCard[];
   /** Other chapters of the page, the targets of "Pindahkan ke bab lain…". */
   otherChaptersCount: number;
+  /** The chapter's number ("1", "2"), the prefix of every card number. */
+  chapterNumber: string;
   busy: boolean;
-  isFirst: boolean;
-  isLast: boolean;
   titleError?: string;
   titleErrorKind?: FailureKind;
   titleStale?: boolean;
@@ -46,11 +49,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'save-title', title: string): void;
   (e: 'reload'): void;
-  (e: 'chapter-up'): void;
-  (e: 'chapter-down'): void;
   (e: 'chapter-delete'): void;
   (e: 'edit-section', section: AdminSection): void;
-  (e: 'move-section', section: AdminSection, direction: -1 | 1): void;
   (e: 'relocate-section', section: AdminSection): void;
   (e: 'duplicate-section', section: AdminSection): void;
   (e: 'delete-section', section: AdminSection): void;
@@ -91,7 +91,7 @@ function saveTitle(): void {
   emit('save-title', draft.value.trim());
 }
 
-// --- Drag of section cards (grips only; the ⋯ menu's Naik / Turun reach the same save) ---
+// --- Ordering of section cards on the grips (drag, or the keyboard) ---
 
 const dragBlock = computed<DragBlock>(() => (props.busy ? 'busy' : null));
 const drag = useCardDragReorder({
@@ -103,11 +103,35 @@ const drag = useCardDragReorder({
   },
 });
 
+const keyboard = useKeyboardReorder({
+  order: computed(() => props.chapter.sections.map((section) => section.id)),
+  blocked: computed(() => props.busy),
+  label: (id) => {
+    const card = props.cards.find((item) => item.section.id === id);
+    return `Bagian ${card?.number ?? ''}`.trim();
+  },
+  noun: 'Bagian',
+  onMove: (id, toIndex) => {
+    const section = props.chapter.sections.find((item) => item.id === id);
+    if (section) emit('place-section', section, toIndex);
+  },
+});
+
+/** The cards in the order to show; a keyboard move previews its place and renumbers the cards. */
+const shownCards = computed<OverviewCard[]>(() =>
+  keyboard.arrange(props.cards, (card) => card.section.id).map((card, index) => {
+    const number = sectionNumberLabel(props.chapterNumber, index);
+    return { ...card, number, thumbAlt: `Pratinjau gambar bagian ${number}` };
+  }),
+);
+
 function allowDrop(event: DragEvent): void {
   event.preventDefault();
 }
 
 function edgeFor(id: string): 'before' | 'after' | null {
+  const keyed = keyboard.edgeOf(id);
+  if (keyed) return keyed;
   const target = drag.dropTarget.value;
   return target && target.key === id ? target.edge : null;
 }
@@ -191,30 +215,6 @@ const chapterLabel = computed(
 
       <div class="flex flex-wrap items-center gap-1" data-test="chapter-actions">
         <BaseButton
-          :id="ceritaIds.overviewChapterUp"
-          type="button"
-          variant="ghost"
-          size="md"
-          class="min-h-11 text-sm"
-          :disabled="busy || isFirst"
-          data-test="chapter-up"
-          @click="emit('chapter-up')"
-        >
-          Naik
-        </BaseButton>
-        <BaseButton
-          :id="ceritaIds.overviewChapterDown"
-          type="button"
-          variant="ghost"
-          size="md"
-          class="min-h-11 text-sm"
-          :disabled="busy || isLast"
-          data-test="chapter-down"
-          @click="emit('chapter-down')"
-        >
-          Turun
-        </BaseButton>
-        <BaseButton
           :id="ceritaIds.overviewChapterDelete"
           type="button"
           variant="danger"
@@ -234,8 +234,13 @@ const chapterLabel = computed(
         Bagian dalam bab ini
       </h3>
       <p class="text-text-muted text-[14px]" data-test="overview-hint">
-        Seret kartu untuk mengubah urutan. Klik kartu untuk mengedit isi dan figurnya.
+        Seret ikon titik-titik untuk mengubah urutan kartu. Dari keyboard, fokus ikon itu, tekan
+        Spasi, lalu panah atas atau bawah, dan Spasi lagi untuk menjatuhkan. Klik kartu untuk
+        mengedit isi dan figurnya.
       </p>
+      <span class="sr-only" role="status" aria-live="polite" data-test="overview-reorder-status">{{
+        keyboard.announcement.value
+      }}</span>
 
       <p
         v-if="cards.length === 0"
@@ -252,7 +257,7 @@ const chapterLabel = computed(
         data-test="overview-list"
       >
         <li
-          v-for="card in cards"
+          v-for="card in shownCards"
           :key="card.section.id"
           class="relative"
           data-test="overview-item"
@@ -273,20 +278,18 @@ const chapterLabel = computed(
             :completeness="card.completeness"
             :thumb-path="card.thumbPath"
             :thumb-alt="card.thumbAlt"
-            :is-first="cards[0]?.section.id === card.section.id"
-            :is-last="cards[cards.length - 1]?.section.id === card.section.id"
             :can-move="otherChaptersCount > 0"
             :busy="busy"
-            :drag-block="dragBlock"
             :drop-edge="edgeFor(card.section.id)"
+            :carried="keyboard.isCarried(card.section.id)"
             @edit="emit('edit-section', card.section)"
-            @move-up="emit('move-section', card.section, -1)"
-            @move-down="emit('move-section', card.section, 1)"
             @relocate="emit('relocate-section', card.section)"
             @duplicate="emit('duplicate-section', card.section)"
             @delete="emit('delete-section', card.section)"
             @drag-start="drag.startDrag(card.section.id)"
             @drag-end="drag.clearDrag()"
+            @grip-keydown="keyboard.onGripKeydown($event, card.section.id)"
+            @grip-blur="keyboard.onGripBlur($event, card.section.id)"
           />
         </li>
       </ol>

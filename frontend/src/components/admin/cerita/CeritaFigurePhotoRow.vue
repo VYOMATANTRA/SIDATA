@@ -2,7 +2,8 @@
 import { computed, useId } from 'vue';
 import FormField from '../../common/FormField.vue';
 import MediaPhotoField from '../../common/MediaPhotoField.vue';
-import CollectionRowActions from '../../data/blocks/CollectionRowActions.vue';
+import BaseButton from '../../common/BaseButton.vue';
+import ReorderGripButton from '../cards/ReorderGripButton.vue';
 import { INPUT_CLASSES } from '../../../utils/formStyles';
 import type { FigureIds } from '../../../utils/ceritaFigureDraft';
 
@@ -10,11 +11,11 @@ import type { FigureIds } from '../../../utils/ceritaFigureDraft';
  * One photo of a figure, in the layout of its kind (Figur card of the section editor):
  * - `single` ("1 gambar"): the photo on the left, its fields on the right;
  * - `pair` ("2 gambar"): a bordered card with its name and the slot for "Tukar urutan";
- * - `gallery` ("Galeri"): a tile with a drag grip, its number and its fields.
+ * - `gallery` ("Galeri"): a tile with its order grip, its number and its fields.
  *
  * Every photo has the file (upload, preview), a required description for people who cannot see it
- * (alt text), and an optional caption and credit. A gallery tile still carries Naik / Turun / Hapus
- * (`showActions`) because the grip has no keyboard path yet.
+ * (alt text), and an optional caption and credit. A gallery tile's order is set on its grip (drag, or
+ * the keyboard); its only button is Hapus (`showActions`).
  */
 const props = withDefaults(
   defineProps<{
@@ -25,16 +26,18 @@ const props = withDefaults(
     ids: FigureIds;
     /** Problems keyed by field id, shown beside the field they concern. */
     errors: Record<string, string>;
-    /** Shows Naik / Turun / Hapus (gallery). */
+    /** Shows Hapus (gallery). */
     showActions: boolean;
-    /** Shows the drag grip (gallery). */
+    /** Shows the order grip (gallery). */
     showGrip?: boolean;
+    /** Id and accessible name of the grip, and whether it is picked up with the keyboard. */
+    gripId?: string;
+    gripLabel?: string;
+    gripCarried?: boolean;
     /** In a group, the credit here replaces the shared credit of the group. */
     groupCredit?: boolean;
     captionLabel?: string;
     creditLabel?: string;
-    isFirst: boolean;
-    isLast: boolean;
     busy: boolean;
     /** Whether the card is being dragged (a visual cue only). */
     dragging?: boolean;
@@ -45,6 +48,9 @@ const props = withDefaults(
     captionLabel: 'Keterangan',
     creditLabel: 'Sumber / kredit',
     dragging: false,
+    gripId: '',
+    gripLabel: '',
+    gripCarried: false,
   },
 );
 
@@ -54,12 +60,12 @@ const caption = defineModel<string>('caption', { required: true });
 const credit = defineModel<string>('credit', { required: true });
 
 const emit = defineEmits<{
-  (e: 'move-up'): void;
-  (e: 'move-down'): void;
   (e: 'remove'): void;
   (e: 'uploading', value: boolean): void;
   (e: 'grip-start'): void;
   (e: 'grip-end'): void;
+  (e: 'grip-keydown', event: KeyboardEvent): void;
+  (e: 'grip-blur', event: FocusEvent): void;
 }>();
 
 const headingId = `${useId()}-foto`;
@@ -90,17 +96,19 @@ const cardClass = computed(() => {
       <slot name="actions" />
     </div>
     <div v-else-if="variant === 'gallery'" class="flex items-center justify-between gap-2">
-      <span
-        v-if="showGrip && !busy"
-        aria-hidden="true"
-        draggable="true"
-        class="text-text-muted cursor-grab px-0.5 leading-none select-none"
-        title="Seret untuk mengubah urutan. Atau gunakan tombol Naik dan Turun."
+      <ReorderGripButton
+        v-if="showGrip"
+        :id="gripId"
+        :label="gripLabel"
+        :data-text="label"
+        :disabled="busy"
+        :carried="gripCarried"
         data-test="photo-grip"
-        @dragstart="emit('grip-start')"
-        @dragend="emit('grip-end')"
-        >⠿</span
-      >
+        @drag-start="emit('grip-start')"
+        @drag-end="emit('grip-end')"
+        @keydown="emit('grip-keydown', $event)"
+        @blur="emit('grip-blur', $event)"
+      />
       <span :id="headingId" class="text-text-muted text-[12px] font-semibold">{{ label }}</span>
     </div>
     <span v-else :id="headingId" class="sr-only">{{ label }}</span>
@@ -183,18 +191,18 @@ const cardClass = computed(() => {
       </div>
     </div>
 
-    <CollectionRowActions
-      v-if="showActions"
-      :row-label="label.toLowerCase()"
-      :is-first="isFirst"
-      :is-last="isLast"
-      :busy="busy"
-      :move-up-id="ids.photoUp(index)"
-      :move-down-id="ids.photoDown(index)"
-      :remove-id="ids.photoRemove(index)"
-      @move-up="emit('move-up')"
-      @move-down="emit('move-down')"
-      @remove="emit('remove')"
-    />
+    <div v-if="showActions" class="flex flex-wrap items-center gap-2">
+      <BaseButton
+        :id="ids.photoRemove(index)"
+        type="button"
+        variant="secondary"
+        size="sm"
+        class="min-h-11"
+        :disabled="busy"
+        @click="emit('remove')"
+      >
+        Hapus <span class="sr-only">{{ label.toLowerCase() }}</span>
+      </BaseButton>
+    </div>
   </div>
 </template>

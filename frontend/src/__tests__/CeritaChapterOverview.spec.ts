@@ -71,9 +71,8 @@ function mountOverview(props: Partial<InstanceType<typeof CeritaChapterOverview>
       total: 3,
       cards,
       otherChaptersCount: 2,
+      chapterNumber: '2',
       busy: false,
-      isFirst: false,
-      isLast: false,
       ...props,
     } as never,
   });
@@ -120,7 +119,7 @@ describe('CeritaChapterOverview', () => {
   it('shows the drag hint and lists each section as an ordered list item', () => {
     const wrapper = mountOverview();
     expect(wrapper.get('[data-test="overview-hint"]').text()).toBe(
-      'Seret kartu untuk mengubah urutan. Klik kartu untuk mengedit isi dan figurnya.',
+      'Seret ikon titik-titik untuk mengubah urutan kartu. Dari keyboard, fokus ikon itu, tekan Spasi, lalu panah atas atau bawah, dan Spasi lagi untuk menjatuhkan. Klik kartu untuk mengedit isi dan figurnya.',
     );
     const items = wrapper.findAll('[data-test="overview-list"] > li');
     expect(items).toHaveLength(2);
@@ -148,17 +147,78 @@ describe('CeritaChapterOverview', () => {
     wrapper.unmount();
   });
 
-  it('offers Naik and Turun per card, disabling the ends', async () => {
+  it('reorders a card from the keyboard: Spasi, arrow, Spasi, with the number and the announcement', async () => {
     const wrapper = mountOverview();
-    const cardItems = wrapper.findAll('[data-test="overview-item"]');
-    const firstUp = cardItems[0]!.get('[data-test="card-up"]');
-    const firstDown = cardItems[0]!.get('[data-test="card-down"]');
-    const lastDown = cardItems[1]!.get('[data-test="card-down"]');
-    expect((firstUp.element as HTMLButtonElement).disabled).toBe(true);
-    expect((firstDown.element as HTMLButtonElement).disabled).toBe(false);
-    expect((lastDown.element as HTMLButtonElement).disabled).toBe(true);
-    await firstDown.trigger('click');
-    expect(wrapper.emitted('move-section')?.[0]).toEqual([sectionA, 1]);
+    const firstGrip = wrapper.findAll('[data-test="grip"]')[0]!;
+
+    await firstGrip.trigger('keydown', { key: ' ' });
+    expect(firstGrip.attributes('aria-pressed')).toBe('true');
+    expect(wrapper.get('[data-test="overview-reorder-status"]').text()).toBe(
+      'Bagian 2.1 diangkat. Posisi 1 dari 2.',
+    );
+
+    await firstGrip.trigger('keydown', { key: 'ArrowDown' });
+    // While carried, the card shows its new number and the list shows it in the new place.
+    expect(wrapper.findAll('[data-test="overview-title"]').map((item) => item.text())).toEqual([
+      'Rincian',
+      'Ringkasan',
+    ]);
+    expect(wrapper.findAll('[data-test="overview-eyebrow"]').map((item) => item.text())).toEqual([
+      'Bagian 2.1',
+      'Bagian 2.2',
+    ]);
+    expect(wrapper.get('[data-test="overview-reorder-status"]').text()).toBe('Posisi 2 dari 2.');
+
+    await firstGrip.trigger('keydown', { key: ' ' });
+    expect(wrapper.emitted('place-section')).toEqual([[sectionA, 1]]);
+    expect(wrapper.get('[data-test="overview-reorder-status"]').text()).toBe(
+      'Bagian dipindahkan ke posisi 2 dari 2.',
+    );
+    wrapper.unmount();
+  });
+
+  it('cancels a keyboard move with Escape and restores the order without saving', async () => {
+    const wrapper = mountOverview();
+    const firstGrip = wrapper.findAll('[data-test="grip"]')[0]!;
+
+    await firstGrip.trigger('keydown', { key: ' ' });
+    await firstGrip.trigger('keydown', { key: 'ArrowDown' });
+    await firstGrip.trigger('keydown', { key: 'Escape' });
+
+    expect(wrapper.findAll('[data-test="overview-title"]').map((item) => item.text())).toEqual([
+      'Ringkasan',
+      'Rincian',
+    ]);
+    expect(firstGrip.attributes('aria-pressed')).toBe('false');
+    expect(wrapper.get('[data-test="overview-reorder-status"]').text()).toBe('Dibatalkan.');
+    expect(wrapper.emitted('place-section')).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it('does not move the first card up past the top of the list', async () => {
+    const wrapper = mountOverview();
+    const firstGrip = wrapper.findAll('[data-test="grip"]')[0]!;
+
+    await firstGrip.trigger('keydown', { key: ' ' });
+    await firstGrip.trigger('keydown', { key: 'ArrowUp' });
+    expect(wrapper.get('[data-test="overview-reorder-status"]').text()).toBe(
+      'Sudah di posisi 1 dari 2.',
+    );
+    await firstGrip.trigger('keydown', { key: 'Escape' });
+    wrapper.unmount();
+  });
+
+  it('offers no Naik or Turun anywhere in the overview', () => {
+    const wrapper = mountOverview();
+    expect(wrapper.text()).not.toMatch(/Naik|Turun/);
+    expect(wrapper.find('[data-test="card-up"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="card-down"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('keeps the grip disabled while a save runs', () => {
+    const wrapper = mountOverview({ busy: true });
+    expect((wrapper.get('[data-test="grip"]').element as HTMLButtonElement).disabled).toBe(true);
     wrapper.unmount();
   });
 
@@ -170,13 +230,11 @@ describe('CeritaChapterOverview', () => {
     wrapper.unmount();
   });
 
-  it('emits chapter Naik, Turun and Hapus bab', async () => {
+  it('emits chapter delete and no chapter Naik or Turun', async () => {
     const wrapper = mountOverview();
-    await buttonWith(wrapper, 'Naik').trigger('click');
-    await buttonWith(wrapper, 'Turun').trigger('click');
+    const labels = wrapper.findAll('button').map((button) => button.text());
+    expect(labels.some((label) => label.startsWith('Naik') || label.startsWith('Turun'))).toBe(false);
     await buttonWith(wrapper, 'Hapus bab').trigger('click');
-    expect(wrapper.emitted('chapter-up')).toHaveLength(1);
-    expect(wrapper.emitted('chapter-down')).toHaveLength(1);
     expect(wrapper.emitted('chapter-delete')).toHaveLength(1);
     wrapper.unmount();
   });

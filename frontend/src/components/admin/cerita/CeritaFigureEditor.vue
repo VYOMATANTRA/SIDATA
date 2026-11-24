@@ -5,10 +5,10 @@ import BaseButton from '../../common/BaseButton.vue';
 import FormErrorSummary from '../../common/FormErrorSummary.vue';
 import FormField from '../../common/FormField.vue';
 import MediaPhotoField from '../../common/MediaPhotoField.vue';
-import CollectionRowActions from '../../data/blocks/CollectionRowActions.vue';
 import CeritaFigurePhotoRow from './CeritaFigurePhotoRow.vue';
 import { useRepeatableRows } from '../../data/blocks/blockFormShared';
 import { edgeAt, useCardDragReorder } from '../../../composables/useCardDragReorder';
+import { useKeyboardReorder } from '../../../composables/useKeyboardReorder';
 import { consumePendingFigureKind } from '../../../composables/figureKindHint';
 import { FIGURE_LIMITS } from '../../../services/ceritaFigure.service';
 import { useCeritaAdminStore } from '../../../stores/ceritaAdmin.store';
@@ -49,8 +49,9 @@ import type { FailureKind } from '../../../utils/userMessages';
  * or uploaded content.
  *
  * Rules (SPEC §8): alt text is required for every photo; caption and credit are optional; a group
- * of photos may carry one shared credit that a photo's own credit replaces; photos are ordered with
- * buttons (the gallery's grip is only a pointer shortcut); nothing is stored until "Simpan gambar";
+ * of photos may carry one shared credit that a photo's own credit replaces; gallery photos are ordered
+ * on their grip (drag, or Spasi and the arrow keys; the carousel order follows it); nothing is stored
+ * until the section's "Simpan perubahan";
  * a "stale" refusal keeps the draft and offers a reload that does not replace it; deleting asks
  * first. The figure has no save button of its own: the section editor's "Simpan perubahan" calls
  * `save()` (exposed) and reads `isDirty()` / `isBusy()`.
@@ -439,22 +440,52 @@ function swapPairPhotos(): void {
   });
 }
 
-// Gallery drag: a pointer shortcut only; Naik / Turun reach the same order from the keyboard.
+// Gallery order: the grip is dragged, or picked up from the keyboard. Both reach the same draft move.
 const dragBlocked = computed(() => (busy.value || uploading.value ? 'busy' : null));
+const galleryKeys = computed(() => photoRows.rows.value.map((row) => String(row.uid)));
+
+function moveGalleryPhoto(key: string, toIndex: number): boolean {
+  const rows = [...photoRows.rows.value];
+  const from = rows.findIndex((row) => String(row.uid) === key);
+  if (from < 0) return false;
+  const [moved] = rows.splice(from, 1);
+  if (!moved) return false;
+  rows.splice(toIndex, 0, moved);
+  photoRows.rows.value = rows;
+  return true;
+}
+
 const drag = useCardDragReorder({
-  order: computed(() => photoRows.rows.value.map((row) => String(row.uid))),
+  order: galleryKeys,
   blocked: dragBlocked,
   onMove: (key, toIndex) => {
-    const rows = [...photoRows.rows.value];
-    const from = rows.findIndex((row) => String(row.uid) === key);
-    if (from < 0) return;
-    const [moved] = rows.splice(from, 1);
-    if (!moved) return;
-    rows.splice(toIndex, 0, moved);
-    photoRows.rows.value = rows;
-    photoRows.announcement.value = `Foto dipindah ke urutan ${toIndex + 1} dari ${rows.length}.`;
+    if (moveGalleryPhoto(key, toIndex)) {
+      photoRows.announcement.value = `Foto dipindah ke urutan ${toIndex + 1} dari ${photoRows.rows.value.length}.`;
+    }
   },
 });
+
+const galleryKb = useKeyboardReorder({
+  order: galleryKeys,
+  blocked: computed(() => busy.value || uploading.value),
+  label: (key) => {
+    const index = galleryKeys.value.indexOf(key);
+    return `Foto ${index + 1}`;
+  },
+  noun: 'Foto',
+  onMove: (key, toIndex) => {
+    moveGalleryPhoto(key, toIndex);
+  },
+});
+
+/** The gallery tiles in the order to show; a keyboard move previews its place and renumbers them. */
+const galleryShown = computed(() =>
+  galleryKb.arrange(galleryRows.value, (row) => String(row.uid)),
+);
+
+function galleryGripId(uid: string | number): string {
+  return `${baseId}-galeri-${uid}-pegang`;
+}
 
 function onCardDragOver(event: DragEvent, key: string): void {
   if (!drag.dragKey.value) return;
@@ -466,9 +497,11 @@ function onCardDrop(event: DragEvent, key: string): void {
 }
 
 function dropClass(key: string): string {
+  const keyed = galleryKb.edgeOf(key);
   const target = drag.dropTarget.value;
-  if (!target || target.key !== key) return '';
-  return target.edge === 'before' ? 'border-t-4 border-brand-navy' : 'border-b-4 border-brand-navy';
+  const edge = keyed ?? (target && target.key === key ? target.edge : null);
+  if (!edge) return '';
+  return edge === 'before' ? 'border-t-4 border-brand-navy' : 'border-b-4 border-brand-navy';
 }
 
 function addGalleryPhoto(): void {
@@ -906,7 +939,7 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
       <div v-else class="space-y-4" data-test="figure-photos">
         <div class="grid grid-cols-2 gap-3 @min-[560px]:grid-cols-4">
           <div
-            v-for="(row, index) in galleryRows"
+            v-for="(row, index) in galleryShown"
             :key="row.uid"
             :class="dropClass(String(row.uid))"
             class="rounded-card"
@@ -930,17 +963,21 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
               :dragging="drag.dragKey.value === String(row.uid)"
               caption-label="Keterangan"
               credit-label="Sumber / kredit"
-              :is-first="index === 0"
-              :is-last="index === galleryRows.length - 1"
+              :grip-id="galleryGripId(row.uid)"
+              :grip-label="`Pindahkan foto ${index + 1}`"
+              :grip-carried="galleryKb.isCarried(String(row.uid))"
               :busy="busy || uploading"
-              @move-up="photoRows.move(index, -1)"
-              @move-down="photoRows.move(index, 1)"
-              @remove="photoRows.remove(index)"
+              @remove="photoRows.remove(photoRows.rows.value.findIndex((item) => item.uid === row.uid))"
               @uploading="onUploading"
               @grip-start="drag.startDrag(String(row.uid))"
               @grip-end="drag.clearDrag()"
+              @grip-keydown="galleryKb.onGripKeydown($event, String(row.uid))"
+              @grip-blur="galleryKb.onGripBlur($event, String(row.uid))"
             />
           </div>
+          <span class="sr-only" role="status" aria-live="polite" data-test="gallery-reorder-status">{{
+            galleryKb.announcement.value
+          }}</span>
           <button
             :id="ids.addPhoto"
             type="button"
@@ -1332,18 +1369,19 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
                   </p>
                 </FormField>
               </div>
-              <CollectionRowActions
-                :row-label="`batang ${index + 1}`"
-                :is-first="index === 0"
-                :is-last="index === barRows.rows.value.length - 1"
-                :busy="busy"
-                :move-up-id="ids.barUp(index)"
-                :move-down-id="ids.barDown(index)"
-                :remove-id="ids.barRemove(index)"
-                @move-up="barRows.move(index, -1)"
-                @move-down="barRows.move(index, 1)"
-                @remove="barRows.remove(index)"
-              />
+              <div class="flex flex-wrap items-center gap-2">
+                <BaseButton
+                  :id="ids.barRemove(index)"
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  class="min-h-11"
+                  :disabled="busy"
+                  @click="barRows.remove(index)"
+                >
+                  Hapus <span class="sr-only">batang {{ index + 1 }}</span>
+                </BaseButton>
+              </div>
             </div>
 
             <div class="space-y-2">
