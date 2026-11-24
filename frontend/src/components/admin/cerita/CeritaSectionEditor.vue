@@ -8,6 +8,7 @@ import CeritaReloadNotice from './CeritaReloadNotice.vue';
 import CeritaSectionText from './CeritaSectionText.vue';
 import { ceritaIds } from './ceritaDomIds';
 import { useCeritaAdminStore } from '../../../stores/ceritaAdmin.store';
+import type { FigureDraft } from '../../../utils/ceritaFigureDraft';
 import { containsHtmlTag } from '../../../utils/proseMarkdown';
 import { titleTextProblem } from '../../../utils/titleTextRules';
 import type { FailureKind } from '../../../utils/userMessages';
@@ -30,6 +31,7 @@ const emit = defineEmits<{
   (e: 'busy', value: boolean): void;
   (e: 'dirty-change', value: boolean): void;
   (e: 'draft-change', draft: { title: string; body: string }): void;
+  (e: 'figure-draft-change', draft: FigureDraft): void;
 }>();
 
 const HTML_BODY_MESSAGE =
@@ -79,7 +81,7 @@ watch([storedTitle, storedBody], () => {
   savedBody.value = storedBody.value.trim();
 });
 
-// The draft is emitted at once (initial value included) for the preview, which reads it next batch.
+// The draft is emitted at once (initial value included): the live preview draws it.
 watch(
   [title, body],
   ([nextTitle, nextBody]) => {
@@ -345,6 +347,7 @@ defineExpose({
         :section-id="sectionId"
         @busy="figureBusy = $event"
         @dirty-change="figureDirty = $event"
+        @draft-change="emit('figure-draft-change', $event)"
       />
     </section>
   </div>

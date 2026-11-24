@@ -78,9 +78,23 @@ export function useStoredFigurePreview(source: Ref<ArticleFigure | null>): Store
     if (url) URL.revokeObjectURL(url);
   }
 
+  // What the loader depends on: the kind, the photo ids and the chart's table. Text fields (alt,
+  // caption, credit, titles) are left out, so typing one does not cancel or repeat a photo fetch and
+  // does not flash "Memuat gambar…". The figure itself still follows the source (see `figure`).
+  const signature = computed(() => {
+    const value = source.value;
+    if (!value) return '';
+    return JSON.stringify({
+      kind: value.kind,
+      ids: mediaIdsOf(value),
+      table: value.kind === 'chart' ? value.tableId : null,
+    });
+  });
+
   watch(
-    source,
-    async (figure) => {
+    signature,
+    async () => {
+      const figure = source.value;
       const current = ++generation;
       const ids = figure ? mediaIdsOf(figure) : [];
       const kept: Record<string, string> = {};

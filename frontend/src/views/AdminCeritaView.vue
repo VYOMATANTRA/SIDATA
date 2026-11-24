@@ -2,8 +2,8 @@
 /**
  * `/admin/cerita`: management of the Cerita pages (SPEC §2, §3, §8). The default view is a list of
  * page cards (search, Urutkan, Pilih, Tambah). Edit opens one page at `?halaman=<slug>` as a
- * three-column editor: the structure tree (left), the selected section's paragraphs and figure
- * (centre) and a live preview of the saved section (right). The selected chapter and section live in
+ * editor: the structure tree (left), the selected section's text and figure (centre) and a live
+ * preview of the unsaved draft (right from 1536px, below the editor cards before that). The selected chapter and section live in
  * the URL (`bab`, `bagian`), so a reload keeps them. Every write goes through `ceritaAdmin.store`.
  *
  * The shell header carries the title: the route's `meta` (router/index.ts) on the list, and the open
@@ -60,7 +60,9 @@ import {
   type OverviewCard,
 } from '../utils/ceritaChapterOverview';
 import { dependentsMessage } from '../utils/ceritaAdminMessages';
-import { storedFigureToArticleFigure } from '../utils/ceritaStoredFigure';
+import { previewFigureOf } from '../utils/ceritaPreviewFigure';
+import { useMediaQuery } from '../composables/useMediaQuery';
+import type { FigureDraft } from '../utils/ceritaFigureDraft';
 import {
   chapterNumberLabel,
   figureTreeLabel,
@@ -70,7 +72,6 @@ import {
 import type { ArticleFigure as ArticleFigureData } from '../types/ceritaArticle';
 import type { FailureKind } from '../utils/userMessages';
 import type { PageDetailsInput } from '../services/ceritaAdmin.service';
-import { useMediaQuery } from '../composables/useMediaQuery';
 import { useAuthStore } from '../stores/auth';
 import {
   useCeritaAdminStore,
@@ -144,17 +145,10 @@ const duplicating = ref(false);
 // is not saved asks before the URL moves to another section or page. Its save is driven from the
 // shell header's "Simpan perubahan" through the pane.
 const sectionPane = ref<InstanceType<typeof CeritaSectionPane> | null>(null);
-/**
- * The open section's title and body as typed. Nothing reads it yet: the preview that draws unsaved
- * edits consumes it next. Cleared with the selection (the editor emits its first value on mount).
- */
-const sectionDraft = ref<{ title: string; body: string } | null>(null);
 const editorBusy = ref(false);
 const editorDirty = ref(false);
 const discardPromptOpen = ref(false);
 const keepEditingButton = ref<InstanceType<typeof BaseButton> | null>(null);
-/** Three columns from xl; below it the tree, the editor and the preview stack in that order. */
-const isWide = useMediaQuery('(min-width: 1280px)');
 
 // The page open in the structure view comes from the URL (`?halaman=<slug>`), so Back and a
 // reload land where the editor was. No query means the list.
@@ -269,17 +263,28 @@ function figureSummary(sectionId: string): FigureTreeLabel {
   return figureTreeLabel(store.figureFor(sectionId)?.figure ?? null);
 }
 
-/** Saved paragraphs and figure of the selected section, as the live preview reads them. */
-const previewParagraphs = computed(() =>
-  selectedSection.value
-    ? store.paragraphsFor(selectedSection.value.id).map((block) => block.body)
-    : [],
+/**
+ * The section's UNSAVED draft as the live preview reads it: the title and body from the text card and
+ * the figure from the figure card. Each card reports its working copy (immediately and on change);
+ * until a card has reported, the preview falls back to the stored title and an empty figure.
+ */
+const textDraft = ref<{ title: string; body: string } | null>(null);
+const figureDraft = ref<FigureDraft | null>(null);
+/**
+ * The preview panel: open by default from 1536px, where it is the third column and cannot be
+ * collapsed; below that it starts collapsed and the user opens it. The live preview (and its iframe)
+ * mounts only while the panel is open.
+ */
+const wideEditor = useMediaQuery('(min-width: 1536px)');
+const previewOpen = ref(false);
+function onPreviewToggle(event: Event): void {
+  previewOpen.value = (event.currentTarget as HTMLDetailsElement).open;
+}
+const previewTitle = computed(() => textDraft.value?.title ?? selectedMeta.value?.title ?? '');
+const previewBody = computed(() => textDraft.value?.body ?? '');
+const previewFigure = computed<ArticleFigureData | null>(() =>
+  figureDraft.value ? previewFigureOf(figureDraft.value) : null,
 );
-const previewFigure = computed<ArticleFigureData | null>(() => {
-  const id = selectedSection.value?.id;
-  const entry = id ? store.figureFor(id) : null;
-  return entry ? storedFigureToArticleFigure(entry.block.metadata) : null;
-});
 const showInitialLoading = computed(() => !store.hasLoaded && store.isLoading);
 /** Mirrors the load-error banner's `v-if` in the template. */
 const loadErrorShowing = computed(() => store.loadError !== null && !store.reloadNeeded);
@@ -1508,7 +1513,8 @@ watch(sectionMissing, (missing) => {
 // A different section starts with no draft: the editor reports its own state again.
 watch(selectedSection, (next, previous) => {
   if (next?.id === previous?.id) return;
-  sectionDraft.value = null;
+  textDraft.value = null;
+  figureDraft.value = null;
   editorBusy.value = false;
   editorDirty.value = false;
   discardPromptOpen.value = false;
@@ -1807,12 +1813,12 @@ onUnmounted(() => {
 
       <div
         v-else
-        class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)_400px]"
+        class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)_400px] md:grid-cols-[300px_minmax(0,1fr)]"
         data-test="editor-columns"
       >
         <aside
           aria-label="Struktur cerita"
-          class="border-border bg-white p-4 xl:sticky xl:top-0 xl:max-h-dvh xl:overflow-y-auto xl:border-r"
+          class="border-border self-start bg-white p-4 md:sticky md:top-0 md:max-h-dvh md:overflow-y-auto md:border-r"
           data-test="tree-column"
         >
           <CeritaStructureTree
@@ -1854,7 +1860,10 @@ onUnmounted(() => {
           />
         </aside>
 
-        <div class="min-w-0 space-y-6 p-4 md:p-6 xl:p-8" data-test="section-column">
+        <div
+          class="min-w-0 space-y-6 p-4 2xl:p-8 md:col-start-2 md:row-start-1 md:p-6"
+          data-test="section-column"
+        >
           <CeritaSectionPane
             v-if="selectedSection && selectedMeta"
             :section-id="selectedSection.id"
@@ -1872,7 +1881,8 @@ onUnmounted(() => {
             @next="goToSection(nextSection)"
             @busy="editorBusy = $event"
             @dirty-change="editorDirty = $event"
-            @draft-change="sectionDraft = $event"
+            @draft-change="textDraft = $event"
+            @figure-draft-change="figureDraft = $event"
           />
           <CeritaChapterOverview
             v-else-if="overviewInfo"
@@ -1924,23 +1934,25 @@ onUnmounted(() => {
         </div>
 
         <details
-          class="border-border bg-white xl:sticky xl:top-0 xl:max-h-dvh xl:overflow-y-auto xl:border-l"
-          :open="isWide"
+          class="rounded-card border-border m-4 border bg-white 2xl:sticky 2xl:top-0 2xl:col-start-3 2xl:row-start-1 2xl:m-0 2xl:max-h-dvh 2xl:self-start 2xl:overflow-y-auto 2xl:rounded-none 2xl:border-0 2xl:border-l md:col-start-2 md:row-start-2 md:mx-6 md:mb-6"
+          :open="wideEditor"
           data-test="preview-panel"
+          @toggle="onPreviewToggle"
         >
           <summary
-            class="text-brand-navy focus-visible:outline-focus-ring flex min-h-11 cursor-pointer items-center px-4 text-base font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 xl:hidden"
+            class="text-brand-navy focus-visible:outline-focus-ring flex min-h-11 cursor-pointer items-center px-4 text-base font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 2xl:hidden"
           >
             Pratinjau langsung
           </summary>
-          <div class="p-4 md:p-6 xl:p-6">
+          <div class="p-4 2xl:p-6 md:p-6">
             <CeritaLivePreview
-              v-if="selectedSection && selectedMeta"
-              :section-title="selectedMeta.title"
-              :paragraphs="previewParagraphs"
+              v-if="previewOpen && selectedSection && selectedMeta"
+              :section-title="previewTitle"
+              :body="previewBody"
+              :chapter-label="selectedMeta.chapterLabel"
               :figure="previewFigure"
             />
-            <p v-else class="text-text-muted text-sm">
+            <p v-else-if="previewOpen" class="text-text-muted text-sm">
               Pratinjau muncul setelah sebuah bagian dipilih.
             </p>
           </div>

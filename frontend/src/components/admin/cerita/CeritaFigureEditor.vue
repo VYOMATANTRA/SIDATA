@@ -60,6 +60,8 @@ const props = defineProps<{ sectionId: string }>();
 const emit = defineEmits<{
   (e: 'busy', value: boolean): void;
   (e: 'dirty-change', value: boolean): void;
+  /** The working copy as typed (unsaved), for the live preview. */
+  (e: 'draft-change', draft: FigureDraft): void;
 }>();
 
 const store = useCeritaAdminStore();
@@ -182,6 +184,7 @@ watch(diagramImageId, (id) => {
   if (id === null) diagramImageAlt.value = '';
 });
 watch(dirty, (value) => emit('dirty-change', value), { immediate: true });
+watch(draft, (value) => emit('draft-change', value), { immediate: true });
 
 // --- Pages' tables (the Grafik tile reads a table of this page only) ---
 

@@ -152,6 +152,14 @@ const router = createRouter({
       meta: { title: 'Penyiapan Kata Sandi' },
     },
     {
+      // The live preview of the Cerita section editor: a bare page (no admin shell, no public layout),
+      // drawn in a same-origin iframe. Editors only, like the editor itself.
+      path: '/admin/cerita/pratinjau',
+      name: 'admin-cerita-pratinjau',
+      component: () => import('../views/AdminCeritaPreviewView.vue'),
+      meta: { requiresAuth: true, requiresEditor: true, title: 'Pratinjau cerita' },
+    },
+    {
       path: '/admin',
       name: 'admin-shell',
       component: () => import('../layouts/AdminLayout.vue'),
