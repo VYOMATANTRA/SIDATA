@@ -3,7 +3,7 @@ import { computed, type Component } from 'vue';
 import { computeLinkRel } from '../../utils/link.js';
 
 export interface ButtonProps {
-  variant?: 'primary' | 'secondary' | 'micro';
+  variant?: 'primary' | 'secondary' | 'micro' | 'ghost' | 'danger';
   rel?: string;
   size?: 'sm' | 'md' | 'lg';
   state?: 'default' | 'hover' | 'active' | 'disabled';
@@ -77,6 +77,9 @@ const variantClasses = computed(() => {
     if (props.variant === 'secondary' || props.variant === 'micro') {
       return 'bg-surface text-text-muted border-2 border-border cursor-not-allowed hover:bg-surface hover:text-text-muted hover:border-border active:bg-surface';
     }
+    if (props.variant === 'ghost' || props.variant === 'danger') {
+      return 'bg-transparent text-text-muted border-2 border-transparent cursor-not-allowed';
+    }
     // primary default
     return 'bg-surface-hover text-text-muted border-2 border-border cursor-not-allowed hover:bg-surface-hover hover:text-text-muted hover:border-border active:bg-surface-hover';
   }
@@ -103,6 +106,14 @@ const variantClasses = computed(() => {
 
   if (props.variant === 'micro') {
     return 'bg-surface text-brand-navy border border-brand-navy hover:bg-brand-navy hover:text-text-inverse hover:border-brand-navy active:bg-surface-hover active:text-brand-navy cursor-pointer';
+  }
+
+  // Ghost and danger ghost: no border or fill until hovered, for secondary actions beside a title.
+  if (props.variant === 'ghost') {
+    return 'bg-transparent text-text-muted border-2 border-transparent hover:bg-surface-muted hover:text-brand-navy cursor-pointer';
+  }
+  if (props.variant === 'danger') {
+    return 'bg-transparent text-status-error border-2 border-transparent hover:bg-status-error-surface cursor-pointer';
   }
 
   // primary default

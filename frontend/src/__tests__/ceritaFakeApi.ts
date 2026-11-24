@@ -654,6 +654,14 @@ export function createFakeCerita() {
       if (found) found.chapter.updatedAt = stamp();
     },
     /** Simulates another editor replacing the section's figure (figure block and section token). */
+    /** Simulates another editor changing only the section's title (the section token moves). */
+    changeTitleByOther(sectionId: string, title: string): void {
+      const found = findSection(sectionId);
+      if (found) {
+        found.section.title = title;
+        found.section.updatedAt = stamp();
+      }
+    },
     changeFigureByOther(sectionId: string, figure: Record<string, unknown>): void {
       const found = findSection(sectionId);
       if (!found) return;

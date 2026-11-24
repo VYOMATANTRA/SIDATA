@@ -968,6 +968,30 @@ describe('AdminCeritaView', () => {
       wrapper.unmount();
     });
 
+    it('holds Duplikat and Hapus bagian while the open section has unsaved edits, and says why', async () => {
+      const wrapper = await mountView();
+      await openSection('Ringkasan');
+      const duplicate = (): HTMLButtonElement =>
+        body().find('[data-test="section-duplicate"]').element as HTMLButtonElement;
+      const remove = (): HTMLButtonElement =>
+        body().find('[data-test="section-delete"]').element as HTMLButtonElement;
+      expect(duplicate().disabled).toBe(false);
+      expect(body().find('[data-test="section-unsaved-note"]').exists()).toBe(false);
+
+      await body().find('[data-test="section-title"]').setValue('Ringkasan dua');
+      expect(duplicate().disabled).toBe(true);
+      expect(remove().disabled).toBe(true);
+      expect(body().find('[data-test="section-unsaved-note"]').text()).toContain(
+        'Simpan perubahan dulu',
+      );
+
+      await body().find('[data-test="section-save"]').trigger('click');
+      await flushPromises();
+      expect(duplicate().disabled).toBe(false);
+      expect(remove().disabled).toBe(false);
+      wrapper.unmount();
+    });
+
     it('clears the centre column when its section is deleted elsewhere, and says so', async () => {
       const wrapper = await mountView();
       await openSection('Ringkasan');

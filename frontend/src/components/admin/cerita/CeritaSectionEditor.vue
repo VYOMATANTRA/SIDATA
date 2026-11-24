@@ -15,13 +15,14 @@ import type { FailureKind } from '../../../utils/userMessages';
 /**
  * Everything a Cerita section holds, edited in one place (Main artboard): its title and body (the
  * text card) and its one figure (the Figur card). Nothing is stored until the parent calls `save()`
- * (the header's "Simpan perubahan"): the text goes first when it has changes, then the figure when
- * it has changes. A refused save keeps every typed value; a "stale" refusal offers a reload that
- * leaves them in place.
+ * (the header's "Simpan perubahan"). The text goes first when it has changes, then the figure when
+ * it has changes; each part is checked on its own, so a figure-only change never waits on the text.
+ * A refused part keeps every typed value and says why beside its own card. When the text saved but
+ * the figure did not, the screen says so plainly ("Judul dan isi sudah disimpan, tetapi gambar belum").
  *
- * It reports `busy` (a save or upload is running), `dirty-change` (anything unsaved) and
- * `draft-change` (the title and body as typed, for the preview), so the screen around it can guard
- * leaving and enable its one save button.
+ * It reports `busy` (a save, a reload or an upload is running), `dirty-change` (anything unsaved)
+ * and `draft-change` (the title and body as typed, first emitted on mount), so the screen around it
+ * can guard leaving and enable its one save button.
  */
 const props = defineProps<{ sectionId: string }>();
 
@@ -34,6 +35,8 @@ const emit = defineEmits<{
 const HTML_BODY_MESSAGE =
   'Isi konten tidak boleh mengandung tag HTML. Gunakan tombol format untuk huruf tebal, miring, tautan atau daftar';
 const COULD_NOT_RELOAD = 'Belum bisa memuat versi terbaru. Periksa koneksi lalu coba lagi.';
+const FIGURE_CHANGED_MESSAGE =
+  'Gambar di bagian ini juga sudah diubah orang lain. Judul dan isi Anda masih ada. Muat versi terbaru gambar di kartu Figur, lalu simpan lagi.';
 
 const store = useCeritaAdminStore();
 const baseId = useId();
@@ -76,9 +79,14 @@ watch([storedTitle, storedBody], () => {
   savedBody.value = storedBody.value.trim();
 });
 
-watch([title, body], ([nextTitle, nextBody]) => {
-  emit('draft-change', { title: nextTitle, body: nextBody });
-});
+// The draft is emitted at once (initial value included) for the preview, which reads it next batch.
+watch(
+  [title, body],
+  ([nextTitle, nextBody]) => {
+    emit('draft-change', { title: nextTitle, body: nextBody });
+  },
+  { immediate: true },
+);
 
 const titleProblem = computed<string | undefined>(() => {
   switch (titleTextProblem(title.value)) {
@@ -101,7 +109,10 @@ const bodyProblem = computed<string | undefined>(() => {
   return undefined;
 });
 
-/** Problems are shown once a save was tried, and they clear when the text is saved. */
+/**
+ * Problems are shown once a save was tried. They stay until the text is saved, so a retry still
+ * shows them.
+ */
 const textSubmitted = ref(false);
 const textSaving = ref(false);
 const textError = ref('');
@@ -109,10 +120,13 @@ const textError = ref('');
 const textErrorKind = ref<FailureKind | null>(null);
 const textStale = ref(false);
 const textReloading = ref(false);
+/** Set when the text saved but the figure did not: names both parts, for the figure card. */
+const partialMessage = ref('');
 
 const textFailureId = `${baseId}-teks-gagal`;
+const partialId = `${baseId}-sebagian`;
 
-/** Saves the text card when it has changes. Resolves true when it is saved. */
+/** Saves the text card. Resolves true when it is saved; a refusal is shown beside the text. */
 async function saveText(): Promise<boolean> {
   textSaving.value = true;
   const outcome = await store.saveSectionText(props.sectionId, {
@@ -132,7 +146,6 @@ async function saveText(): Promise<boolean> {
   textError.value = '';
   textErrorKind.value = null;
   textStale.value = false;
-  textSubmitted.value = false;
   title.value = outcome.value.title;
   body.value = outcome.value.body;
   savedTitle.value = title.value.trim();
@@ -140,7 +153,11 @@ async function saveText(): Promise<boolean> {
   return true;
 }
 
-/** "Muat ulang" after a stale refusal: the newest data is loaded and the typed text stays. */
+/**
+ * "Muat ulang" after a stale refusal. The newest data is loaded and the typed text stays. If the
+ * figure changed too, the figure keeps its old token and shows its own stale notice, so its next save
+ * cannot silently replace the other editor's figure; otherwise the drafts move onto the fresh token.
+ */
 async function reloadAfterStale(): Promise<void> {
   if (textReloading.value) return;
   textReloading.value = true;
@@ -154,6 +171,14 @@ async function reloadAfterStale(): Promise<void> {
     announce(COULD_NOT_RELOAD);
     return;
   }
+  if (store.figureChangedSinceToken(props.sectionId)) {
+    figure.value?.markStale();
+    textError.value = FIGURE_CHANGED_MESSAGE;
+    textErrorKind.value = null;
+    announce(FIGURE_CHANGED_MESSAGE);
+    focusId(textFailureId);
+    return;
+  }
   // Only the explicit reload moves the draft onto the fresh token.
   store.captureSectionToken(props.sectionId);
   textError.value = '';
@@ -164,9 +189,11 @@ async function reloadAfterStale(): Promise<void> {
 
 // --- Combined state ---
 
+/** One flag for the whole save() sequence, so the header button cannot re-enable between parts. */
+const saving = ref(false);
 const figureDirty = ref(false);
 const figureBusy = ref(false);
-const isBusy = computed(() => textSaving.value || figureBusy.value);
+const isBusy = computed(() => saving.value || figureBusy.value || textReloading.value);
 const isDirty = computed(() => textDirty.value || figureDirty.value);
 
 watch(isBusy, (value) => emit('busy', value));
@@ -184,33 +211,70 @@ function focusId(id: string): void {
 }
 
 /**
- * Saves what changed: the text first, then the figure. Resolves true when everything that had
- * changes is saved. On a refusal the failure stays on screen beside its card, focus moves to it,
- * and nothing typed is lost.
+ * Saves what changed: the text, then the figure. Each part is judged on its own, so a figure-only
+ * save never depends on the text. Resolves true when everything that had changes is saved.
  */
 async function save(): Promise<boolean> {
   if (isBusy.value) return false;
   if (!isDirty.value) return true;
 
-  if (textDirty.value) {
-    textSubmitted.value = true;
-    if (titleProblem.value || bodyProblem.value) {
-      text.value?.focusField(titleProblem.value ? 'title' : 'body');
+  saving.value = true;
+  partialMessage.value = '';
+  let textOk = true;
+  let textReason = '';
+  const textWasDirty = textDirty.value;
+  const figureWasDirty = figureDirty.value;
+  try {
+    if (textWasDirty) {
+      textSubmitted.value = true;
+      const problem = titleProblem.value ?? bodyProblem.value;
+      if (problem) {
+        textOk = false;
+        textReason = problem;
+        text.value?.focusField(titleProblem.value ? 'title' : 'body');
+      } else {
+        textOk = await saveText();
+        if (!textOk) textReason = textError.value;
+      }
+    }
+
+    let figureOk = true;
+    let figureReason = '';
+    if (figureWasDirty) {
+      figureOk = (await figure.value?.save()) ?? true;
+      if (!figureOk) figureReason = figure.value?.failure() ?? 'Gambar belum disimpan.';
+    }
+
+    if (textOk && figureOk) {
+      textSubmitted.value = false;
+      announce('Perubahan disimpan.');
+      // The header's save button is disabled once nothing is unsaved, so focus moves to a stable place.
+      focusId(ceritaIds.sectionHeading);
+      return true;
+    }
+
+    if (textOk && !figureOk) {
+      if (textWasDirty) {
+        partialMessage.value = `Judul dan isi sudah disimpan, tetapi gambar belum: ${figureReason}`;
+        announce(partialMessage.value);
+        focusId(partialId);
+      } else {
+        announce(`Gambar belum disimpan: ${figureReason}`);
+      }
+      textSubmitted.value = false;
       return false;
     }
-    if (!(await saveText())) return false;
-  }
 
-  if (figureDirty.value) {
-    const figureSaved = (await figure.value?.save()) ?? true;
-    if (!figureSaved) return false;
+    // The text was refused; say what happened to the figure as well.
+    announce(
+      figureWasDirty && figureOk
+        ? `Gambar sudah disimpan, tetapi judul dan isi belum: ${textReason}`
+        : textReason,
+    );
+    return false;
+  } finally {
+    saving.value = false;
   }
-
-  textSubmitted.value = false;
-  announce('Perubahan disimpan.');
-  // The header's save button is disabled once nothing is unsaved, so focus moves to a stable place.
-  focusId(ceritaIds.sectionHeading);
-  return true;
 }
 
 defineExpose({
@@ -256,7 +320,7 @@ defineExpose({
       ref="text"
       v-model:title="title"
       v-model:body="body"
-      :disabled="textSaving"
+      :disabled="saving"
       :title-error="textSubmitted ? titleProblem : undefined"
       :body-error="textSubmitted ? bodyProblem : undefined"
       :paragraph-count="paragraphs.length"
@@ -272,6 +336,9 @@ defineExpose({
         <p class="text-text-muted mt-1 text-sm">
           Pilih bentuk figur. Tampilannya di situs menyesuaikan otomatis.
         </p>
+      </div>
+      <div v-if="partialMessage" :id="partialId" tabindex="-1" class="outline-none">
+        <AlertBanner :message="partialMessage" data-test="section-partial-error" />
       </div>
       <CeritaFigureEditor
         ref="figure"

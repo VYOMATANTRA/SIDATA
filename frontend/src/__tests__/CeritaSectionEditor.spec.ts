@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import CeritaSectionEditor from '../components/admin/cerita/CeritaSectionEditor.vue';
@@ -155,8 +156,8 @@ describe('CeritaSectionEditor', () => {
       const wrapper = await mountEditor();
       await wrapper.find('[data-test="section-body"]').setValue('Draf saya.');
 
-      // Another editor changes the section after this one opened it.
-      fake.changeFigureByOther(sectionId, { kind: 'photo', photos: [] });
+      // Another editor changes the section's title after this one opened it (the figure is untouched).
+      fake.changeTitleByOther(sectionId, 'Judul orang lain');
       expect(await save(wrapper)).toBe(false);
       expect(wrapper.find('[data-test="section-text-error"]').exists()).toBe(true);
       expect(wrapper.find('[data-test="section-text-reload"]').exists()).toBe(true);
@@ -250,6 +251,113 @@ describe('CeritaSectionEditor', () => {
       );
       wrapper.unmount();
     });
+  });
+
+  describe('parts of a save are judged on their own', () => {
+    it('saves a figure-only change even when the section has no title', async () => {
+      fake.pages[0]!.chapters[0]!.sections[0]!.title = null;
+      const wrapper = await mountEditor();
+      expect(titleInput(wrapper).value).toBe('');
+
+      await wrapper.find('[data-test="kind-photo"]').setValue();
+      await upload(wrapper, 0);
+      await wrapper.find('[data-test="photo-alt"]').setValue('Foto');
+      expect(await save(wrapper)).toBe(true);
+
+      expect(textWrites()).toHaveLength(0);
+      expect(fake.lastWrite()!.url).toContain('/figure');
+      wrapper.unmount();
+    });
+
+    it('refuses a body change with no title, says so, and still saves the figure', async () => {
+      fake.pages[0]!.chapters[0]!.sections[0]!.title = null;
+      const wrapper = await mountEditor();
+      await wrapper.find('[data-test="section-body"]').setValue('Isi tanpa judul.');
+      await wrapper.find('[data-test="kind-photo"]').setValue();
+      await upload(wrapper, 0);
+      await wrapper.find('[data-test="photo-alt"]').setValue('Foto');
+
+      expect(await save(wrapper)).toBe(false);
+      expect(textWrites()).toHaveLength(0);
+      expect(fake.lastWrite()!.url).toContain('/figure');
+      expect(wrapper.find('[data-test="section-title-error"]').text()).toBe(
+        'Judul bagian wajib diisi.',
+      );
+      expect(wrapper.find('[data-test="section-status"]').text()).toContain(
+        'Gambar sudah disimpan, tetapi judul dan isi belum',
+      );
+      wrapper.unmount();
+    });
+
+    it('says plainly when the text saved but the figure did not, and the retry saves the figure only', async () => {
+      const wrapper = await mountEditor();
+      await wrapper.find('[data-test="section-title"]').setValue('Judul baru');
+      await wrapper.find('[data-test="kind-photo"]').setValue();
+      await upload(wrapper, 0);
+      // No alt text: the figure is refused after the text has been saved.
+
+      expect(await save(wrapper)).toBe(false);
+      expect(textWrites()).toHaveLength(1);
+      const partial = wrapper.find('[data-test="section-partial-error"]');
+      expect(partial.exists()).toBe(true);
+      expect(partial.text()).toContain('Judul dan isi sudah disimpan, tetapi gambar belum');
+
+      await wrapper.find('[data-test="photo-alt"]').setValue('Foto');
+      expect(await save(wrapper)).toBe(true);
+      expect(textWrites()).toHaveLength(1);
+      expect(fake.lastWrite()!.url).toContain('/figure');
+      expect(wrapper.find('[data-test="section-partial-error"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('keeps the title problem visible until the text is saved on a retry', async () => {
+      const wrapper = await mountEditor();
+      await wrapper.find('[data-test="section-title"]').setValue('');
+      expect(await save(wrapper)).toBe(false);
+      expect(wrapper.find('[data-test="section-title-error"]').exists()).toBe(true);
+
+      await wrapper.find('[data-test="kind-photo"]').setValue();
+      await upload(wrapper, 0);
+      await wrapper.find('[data-test="photo-alt"]').setValue('Foto');
+      expect(await save(wrapper)).toBe(false);
+      expect(wrapper.find('[data-test="section-title-error"]').exists()).toBe(true);
+      wrapper.unmount();
+    });
+
+    it('after a stale text save, a figure another editor changed is not replaced by the reload', async () => {
+      const wrapper = await mountEditor();
+      await wrapper.find('[data-test="section-body"]').setValue('Isi saya.');
+      await wrapper.find('[data-test="kind-photo"]').setValue();
+      await upload(wrapper, 0);
+      await wrapper.find('[data-test="photo-alt"]').setValue('Foto saya');
+
+      fake.changeFigureByOther(sectionId, { kind: 'photo', photos: [] });
+      expect(await save(wrapper)).toBe(false);
+
+      await wrapper.find('[data-test="section-text-reload"]').trigger('click');
+      await flushPromises();
+
+      expect(wrapper.find('[data-test="section-text-error"]').text()).toContain(
+        'Gambar di bagian ini juga sudah diubah orang lain',
+      );
+      expect(wrapper.find('[data-test="figure-stale-notice"]').exists()).toBe(true);
+      expect(textWrites()).toHaveLength(1);
+      wrapper.unmount();
+    });
+  });
+
+  it('exposes one draft and reports busy for the whole save', async () => {
+    const wrapper = await mountEditor();
+    expect(lastEmitted(wrapper, 'draft-change')).toEqual([{ title: 'Ringkasan', body: '' }]);
+    await wrapper.find('[data-test="section-title"]').setValue('Baru');
+    expect(lastEmitted(wrapper, 'draft-change')).toEqual([{ title: 'Baru', body: '' }]);
+
+    const pending = (wrapper.vm as unknown as { save: () => Promise<boolean> }).save();
+    await nextTick();
+    expect(lastEmitted(wrapper, 'busy')).toEqual([true]);
+    expect(await pending).toBe(true);
+    expect(lastEmitted(wrapper, 'busy')).toEqual([false]);
+    wrapper.unmount();
   });
 
   it('has no save button of its own and labels every control', async () => {

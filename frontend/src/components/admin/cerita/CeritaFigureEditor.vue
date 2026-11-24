@@ -624,7 +624,21 @@ async function confirmDelete(): Promise<void> {
   if (outcome.stale) reloadedSummary.value = null;
 }
 
-defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save });
+/** The reason the last save was refused, in plain words, for the section editor's partial-save message. */
+function failure(): string {
+  return serverError.value || 'Periksa isian gambar yang ditandai.';
+}
+
+/**
+ * Another editor's text write moved the section, and the figure changed under this draft too: the
+ * figure shows its stale notice, so saving again needs its own "Muat versi terbaru" first.
+ */
+function markStale(): void {
+  stale.value = true;
+  reloadedSummary.value = null;
+}
+
+defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, failure, markStale });
 </script>
 
 <template>

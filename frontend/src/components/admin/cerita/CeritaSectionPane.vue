@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, useId } from 'vue';
 import { TrashIcon } from '@heroicons/vue/24/outline';
 import BaseButton from '../../common/BaseButton.vue';
 import CeritaSectionEditor from './CeritaSectionEditor.vue';
@@ -10,10 +10,13 @@ import { ceritaIds } from './ceritaDomIds';
  * ("Bab n · Judul › Bagian n.m"), the Duplikat and Hapus bagian actions, the text and figure editor,
  * and the previous and next section. Order is changed by dragging in the tree, not here. The pane
  * only reports what was asked; the view runs the dialogs and the selection. Saving belongs to the
- * one "Simpan perubahan" button in the shell header, which calls `save()` exposed here.
+ * one "Simpan perubahan" button in the shell header, which calls `save()` exposed here. Duplikat
+ * and Hapus bagian copy or remove the stored section, so they wait while there are unsaved edits.
  */
 defineProps<{
   sectionId: string;
+  /** Unsaved text or figure: Duplikat and Hapus wait until it is saved. */
+  dirty: boolean;
   chapterLabel: string;
   sectionNumber: string;
   prev: { number: string; title: string } | null;
@@ -33,6 +36,7 @@ const emit = defineEmits<{
 }>();
 
 const editor = ref<InstanceType<typeof CeritaSectionEditor> | null>(null);
+const unsavedNoteId = `${useId()}-belum-disimpan`;
 
 /** Saves the section's unsaved text and figure (see CeritaSectionEditor.save). */
 function save(): Promise<boolean> {
@@ -64,28 +68,39 @@ defineExpose({ save });
         </ol>
       </nav>
 
-      <div class="flex flex-wrap items-center gap-1">
-        <button
-          :id="ceritaIds.sectionDuplicate"
-          type="button"
-          class="text-text-muted hover:bg-surface-muted focus-visible:outline-focus-ring inline-flex min-h-11 items-center rounded-btn px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="busy"
-          :aria-busy="duplicating ? 'true' : undefined"
-          data-test="section-duplicate"
-          @click="emit('duplicate')"
-        >
-          {{ duplicating ? 'Menggandakan…' : 'Duplikat' }}
-        </button>
-        <button
-          type="button"
-          class="text-status-error hover:bg-status-error-surface focus-visible:outline-focus-ring inline-flex min-h-11 items-center gap-2 rounded-btn px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="busy"
-          data-test="section-delete"
-          @click="emit('delete')"
-        >
-          <TrashIcon class="h-4 w-4" aria-hidden="true" />
-          Hapus bagian
-        </button>
+      <div class="flex flex-col items-end gap-1">
+        <div class="flex flex-wrap items-center gap-1">
+          <BaseButton
+            :id="ceritaIds.sectionDuplicate"
+            type="button"
+            variant="ghost"
+            size="sm"
+            class="min-h-11"
+            :disabled="busy || dirty"
+            :aria-busy="duplicating ? 'true' : undefined"
+            :aria-describedby="dirty ? unsavedNoteId : undefined"
+            data-test="section-duplicate"
+            @click="emit('duplicate')"
+          >
+            {{ duplicating ? 'Menggandakan…' : 'Duplikat' }}
+          </BaseButton>
+          <BaseButton
+            type="button"
+            variant="danger"
+            size="sm"
+            class="min-h-11"
+            :disabled="busy || dirty"
+            :aria-describedby="dirty ? unsavedNoteId : undefined"
+            data-test="section-delete"
+            @click="emit('delete')"
+          >
+            <TrashIcon class="h-4 w-4" aria-hidden="true" />
+            Hapus bagian
+          </BaseButton>
+        </div>
+        <p v-if="dirty" :id="unsavedNoteId" class="text-text-muted text-xs" data-test="section-unsaved-note">
+          Simpan perubahan dulu untuk menggandakan atau menghapus bagian ini.
+        </p>
       </div>
     </div>
 

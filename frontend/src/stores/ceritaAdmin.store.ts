@@ -67,9 +67,11 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
    * The section token each open figure draft was loaded with. A first save carries this token, not
    * whatever the shared data holds now, so another editor's save in between is still refused. It
    * moves forward only when the editor reloads, or after the editor's own write in the section
-   * that left the figure untouched (see `trackSectionWrite`).
+   * that left the figure untouched (see `saveSectionText`).
    */
   const sectionTokens = ref<Record<string, string>>({});
+  /** The figure's stamp (its block's updatedAt) when each section token was taken. */
+  const sectionFigureStamps = ref<Record<string, string | null>>({});
 
   const tree = computed<AdminPage[]>(() =>
     pagesStore.hierarchyIncomplete ? [] : pagesStore.hierarchyPages,
@@ -164,12 +166,20 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
   /** Records the section token the figure draft is being loaded with (editor open or reload). */
   function captureSectionToken(sectionId: string): void {
     const found = findSection(sectionId);
-    if (found)
-      sectionTokens.value = { ...sectionTokens.value, [sectionId]: found.section.updatedAt };
+    if (found) setSectionToken(sectionId, found.section.updatedAt);
   }
 
+  /**
+   * Sets the token a section's drafts save with, and remembers which figure version it was taken
+   * against. A token moved while the figure changed under it would let a save overwrite that change.
+   */
   function setSectionToken(sectionId: string, token: string | undefined): void {
-    if (token) sectionTokens.value = { ...sectionTokens.value, [sectionId]: token };
+    if (!token) return;
+    sectionTokens.value = { ...sectionTokens.value, [sectionId]: token };
+    sectionFigureStamps.value = {
+      ...sectionFigureStamps.value,
+      [sectionId]: figureStamp(sectionId),
+    };
   }
 
   function figureStamp(sectionId: string): string | null {
@@ -177,26 +187,14 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
   }
 
   /**
-   * Runs one of the editor's own paragraph writes. Such a write bumps the section token, which would
-   * make the editor's own next figure save look stale. If the figure itself did not change across the
-   * write (and the reload worked), the figure draft's token moves to the current one; if it did, someone
-   * else changed the figure and the draft keeps its old token so the next save is refused.
+   * True when the figure of this section changed since the drafts' token was taken. A save with that
+   * token would then overwrite someone else's figure, so the editor must reload the figure first.
    */
-  async function trackSectionWrite<T>(
-    sectionId: string,
-    write: () => Promise<WriteOutcome<T>>,
-  ): Promise<WriteOutcome<T>> {
-    const before = figureStamp(sectionId);
-    const outcome = await write();
-    if (
-      outcome.ok &&
-      !outcome.refreshFailed &&
-      sectionId in sectionTokens.value &&
-      figureStamp(sectionId) === before
-    ) {
-      captureSectionToken(sectionId);
-    }
-    return outcome;
+  function figureChangedSinceToken(sectionId: string): boolean {
+    return (
+      sectionId in sectionFigureStamps.value &&
+      sectionFigureStamps.value[sectionId] !== figureStamp(sectionId)
+    );
   }
 
   function paragraphsFor(sectionId: string): ContentBlock[] {
@@ -570,68 +568,6 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     });
   }
 
-  // Paragraphs and the figure bump the section's token, so both caches are refreshed.
-
-  async function addParagraph(
-    sectionId: string,
-    input: api.ParagraphInput,
-  ): Promise<WriteOutcome<ContentBlock>> {
-    return trackSectionWrite(sectionId, () =>
-      run('menambah paragraf', 'both', () => api.createParagraph(sectionId, input)),
-    );
-  }
-
-  /**
-   * `expectedUpdatedAt` is the paragraph's token as it was when the form was opened. Without it the
-   * token currently in the shared data is used, which is only right for a caller that has just
-   * loaded it.
-   */
-  async function editParagraph(
-    block: ContentBlock,
-    input: { title: string | null; body: string },
-    expectedUpdatedAt?: string,
-  ): Promise<WriteOutcome> {
-    const token =
-      expectedUpdatedAt ?? blocksStore.serverBlocks[block.slug]?.updatedAt ?? block.updatedAt;
-    const write = (): Promise<WriteOutcome> =>
-      run('menyimpan paragraf', 'both', async () => {
-        await api.updateParagraph(block.slug, input, token);
-        return undefined;
-      });
-    return block.sectionId ? trackSectionWrite(block.sectionId, write) : write();
-  }
-
-  async function removeParagraph(
-    block: ContentBlock,
-    expectedUpdatedAt?: string,
-  ): Promise<WriteOutcome> {
-    const token =
-      expectedUpdatedAt ?? blocksStore.serverBlocks[block.slug]?.updatedAt ?? block.updatedAt;
-    const write = (): Promise<WriteOutcome> =>
-      run('menghapus paragraf', 'both', async () => {
-        await api.deleteParagraph(block.slug, token);
-        return undefined;
-      });
-    return block.sectionId ? trackSectionWrite(block.sectionId, write) : write();
-  }
-
-  async function moveParagraph(
-    sectionId: string,
-    blockId: string,
-    direction: Direction,
-  ): Promise<WriteOutcome> {
-    const found = findSection(sectionId);
-    if (!found) return missing('mengurutkan paragraf');
-    const items = swapReorderItems(paragraphsFor(sectionId), blockId, direction);
-    if (!items) return { ok: true, value: undefined };
-    return trackSectionWrite(sectionId, () =>
-      run('mengurutkan paragraf', 'both', async () => {
-        await api.reorderParagraphs(sectionId, found.section.updatedAt, items);
-        return undefined;
-      }),
-    );
-  }
-
   /**
    * Saves the figure with the section token the draft was loaded with (`captureSectionToken`), so a
    * change another editor made since is refused with a stale-write answer instead of overwritten.
@@ -731,13 +667,25 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     const found = findSection(sectionId);
     if (!found) return missing('menyimpan teks bagian');
     const token = sectionTokens.value[sectionId] ?? found.section.updatedAt;
-    return trackSectionWrite(sectionId, () =>
-      run('menyimpan teks bagian', 'both', async () => {
-        const saved = await api.saveSectionText(sectionId, { ...input, expectedUpdatedAt: token });
-        applySectionText(sectionId, saved);
-        return { title: saved.section.title ?? '', body: saved.block?.body ?? '' };
-      }),
-    );
+    const figureBefore = figureStamp(sectionId);
+    let savedToken: string | undefined;
+    const outcome = await run('menyimpan teks bagian', 'both', async () => {
+      const saved = await api.saveSectionText(sectionId, { ...input, expectedUpdatedAt: token });
+      applySectionText(sectionId, saved);
+      savedToken = saved.section.updatedAt;
+      return { title: saved.section.title ?? '', body: saved.block?.body ?? '' };
+    });
+    // The answer's token is chained even when the follow-up reload failed, so the figure save that
+    // follows does not depend on that reload. A figure another editor changed keeps the old token.
+    if (
+      outcome.ok &&
+      savedToken &&
+      figureStamp(sectionId) === figureBefore &&
+      sectionId in sectionTokens.value
+    ) {
+      setSectionToken(sectionId, savedToken);
+    }
+    return outcome;
   }
 
   return {
@@ -755,6 +703,7 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     findChapter,
     findSection,
     captureSectionToken,
+    figureChangedSinceToken,
     paragraphsFor,
     figureFor,
     contentCountsFor,
@@ -776,10 +725,6 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     moveSectionToChapter,
     placeChapter,
     placeSection,
-    addParagraph,
-    editParagraph,
-    removeParagraph,
-    moveParagraph,
     saveFigure,
     removeFigure,
     saveSectionText,

@@ -144,6 +144,11 @@ const duplicating = ref(false);
 // is not saved asks before the URL moves to another section or page. Its save is driven from the
 // shell header's "Simpan perubahan" through the pane.
 const sectionPane = ref<InstanceType<typeof CeritaSectionPane> | null>(null);
+/**
+ * The open section's title and body as typed. Nothing reads it yet: the preview that draws unsaved
+ * edits consumes it next. Cleared with the selection (the editor emits its first value on mount).
+ */
+const sectionDraft = ref<{ title: string; body: string } | null>(null);
 const editorBusy = ref(false);
 const editorDirty = ref(false);
 const discardPromptOpen = ref(false);
@@ -1503,6 +1508,7 @@ watch(sectionMissing, (missing) => {
 // A different section starts with no draft: the editor reports its own state again.
 watch(selectedSection, (next, previous) => {
   if (next?.id === previous?.id) return;
+  sectionDraft.value = null;
   editorBusy.value = false;
   editorDirty.value = false;
   discardPromptOpen.value = false;
@@ -1854,7 +1860,7 @@ onUnmounted(() => {
             :section-id="selectedSection.id"
             :chapter-label="selectedMeta.chapterLabel"
             :section-number="selectedMeta.sectionNumber"
-            :title="selectedMeta.title"
+            :dirty="editorDirty"
             ref="sectionPane"
             :busy="structureBusy"
             :duplicating="duplicating"
@@ -1866,6 +1872,7 @@ onUnmounted(() => {
             @next="goToSection(nextSection)"
             @busy="editorBusy = $event"
             @dirty-change="editorDirty = $event"
+            @draft-change="sectionDraft = $event"
           />
           <CeritaChapterOverview
             v-else-if="overviewInfo"
