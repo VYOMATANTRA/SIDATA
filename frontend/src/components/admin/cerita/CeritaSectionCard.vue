@@ -2,18 +2,17 @@
 import { computed } from 'vue';
 import { PhotoIcon, PresentationChartBarIcon } from '@heroicons/vue/24/outline';
 import BaseButton from '../../common/BaseButton.vue';
-import CardDragGrip from '../cards/CardDragGrip.vue';
+import ReorderGripButton from '../cards/ReorderGripButton.vue';
 import { useAuthenticatedBlobUrl } from '../../../composables/useAuthenticatedBlobUrl';
-import type { DragBlock } from '../../../composables/useCardDragReorder';
 import type { Completeness } from '../../../utils/ceritaChapterOverview';
 import { ceritaIds } from './ceritaDomIds';
 
 /**
- * One section card of the chapter overview: drag grip, thumbnail (the first photo of a photo or
+ * One section card of the chapter overview: reorder grip, thumbnail (the first photo of a photo or
  * gallery figure, loaded with the authenticated client; an icon for a chart, a diagram or no
  * figure), the eyebrow "BAGIAN 1.2", the title button that opens the section, a one-line excerpt,
- * the figure and completeness badges (text, never colour alone) and a ⋯ menu. Every action in the
- * menu is a native button, so ordering never needs the drag.
+ * the figure and completeness badges (text, never colour alone) and a ⋯ menu. Ordering is on the grip:
+ * drag it, or focus it and use Spasi with the arrow keys (the parent runs the keyboard reorder).
  */
 const props = defineProps<{
   id: string;
@@ -25,24 +24,23 @@ const props = defineProps<{
   /** `/api/media/<id>/preview` of the thumbnail photo, or null for the icon placeholder. */
   thumbPath: string | null;
   thumbAlt: string;
-  isFirst: boolean;
-  isLast: boolean;
   canMove: boolean;
   busy: boolean;
-  dragBlock: DragBlock;
   /** Whether the card is the drop target of a drag in progress (its edge). */
   dropEdge?: 'before' | 'after' | null;
+  /** Picked up with the keyboard right now. */
+  carried?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: 'edit'): void;
-  (e: 'move-up'): void;
-  (e: 'move-down'): void;
   (e: 'relocate'): void;
   (e: 'duplicate'): void;
   (e: 'delete'): void;
   (e: 'drag-start'): void;
   (e: 'drag-end'): void;
+  (e: 'grip-keydown', event: KeyboardEvent): void;
+  (e: 'grip-blur', event: FocusEvent): void;
 }>();
 
 const thumbPathRef = computed(() => props.thumbPath);
@@ -54,6 +52,7 @@ function closeMenu(event: Event): void {
 }
 
 const titleLabel = computed(() => props.title);
+const gripLabel = computed(() => `Pindahkan bagian ${props.number}: ${props.title}`);
 </script>
 
 <template>
@@ -62,15 +61,20 @@ const titleLabel = computed(() => props.title);
     :class="{
       'border-t-brand-navy border-t-2': dropEdge === 'before',
       'border-b-brand-navy border-b-2': dropEdge === 'after',
+      'ring-brand-navy shadow-md ring-2': carried,
     }"
     data-test="overview-card"
   >
-    <CardDragGrip
-      :blocked="dragBlock"
+    <ReorderGripButton
+      :id="ceritaIds.overviewCardGrip(id)"
+      :label="gripLabel"
       :data-text="titleLabel"
-      sort-label="Ringkasan bab"
+      :disabled="busy"
+      :carried="carried"
       @drag-start="emit('drag-start')"
       @drag-end="emit('drag-end')"
+      @keydown="emit('grip-keydown', $event)"
+      @blur="emit('grip-blur', $event)"
     />
 
     <div
@@ -207,36 +211,6 @@ const titleLabel = computed(() => props.title);
         >
           Halaman ini hanya punya satu bab, sehingga bagian tidak bisa dipindah.
         </p>
-        <BaseButton
-          :id="ceritaIds.overviewCardUp(id)"
-          type="button"
-          variant="ghost"
-          size="md"
-          class="min-h-11 justify-start text-sm"
-          :disabled="busy || isFirst"
-          data-test="card-up"
-          @click="
-            closeMenu($event);
-            emit('move-up');
-          "
-        >
-          Naik satu posisi
-        </BaseButton>
-        <BaseButton
-          :id="ceritaIds.overviewCardDown(id)"
-          type="button"
-          variant="ghost"
-          size="md"
-          class="min-h-11 justify-start text-sm"
-          :disabled="busy || isLast"
-          data-test="card-down"
-          @click="
-            closeMenu($event);
-            emit('move-down');
-          "
-        >
-          Turun satu posisi
-        </BaseButton>
         <BaseButton
           :id="ceritaIds.overviewCardDelete(id)"
           type="button"

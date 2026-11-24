@@ -7,9 +7,9 @@ import {
   PlusIcon,
 } from '@heroicons/vue/24/outline';
 import BaseButton from '../../common/BaseButton.vue';
-import CardDragGrip from '../cards/CardDragGrip.vue';
-import { useCardDragReorder } from '../../../composables/useCardDragReorder';
-import { edgeAt } from '../../../composables/useCardDragReorder';
+import ReorderGripButton from '../cards/ReorderGripButton.vue';
+import { edgeAt, useCardDragReorder } from '../../../composables/useCardDragReorder';
+import { useKeyboardReorder } from '../../../composables/useKeyboardReorder';
 import type { AdminChapter, AdminPage, AdminSection } from '../../../stores/ceritaAdmin.store';
 import {
   chapterNumberLabel,
@@ -21,9 +21,10 @@ import { ceritaIds } from './ceritaDomIds';
 /**
  * The left column of the Cerita editor: "Info cerita", then the page's chapters, each expandable,
  * with its sections numbered "1.1, 1.2" and the kind of each section's figure. Every action is a
- * button (Ubah judul, Naik, Turun, Hapus) inside a native disclosure, so keyboard and touch never
- * need drag. Dragging a grip reorders chapters within the page, or sections within their chapter
- * (cross-chapter moves are in the section's options through the move dialog).
+ * button (Ubah judul, Hapus, ...) inside a native disclosure. Order is changed on the grip: drag it,
+ * or focus it and use Spasi with the arrow keys (`useKeyboardReorder`). Chapters reorder within the
+ * page, sections within their chapter (cross-chapter moves are in the section's options through the
+ * move dialog). Every row shows its position as a number.
  *
  * The tree only reports what was asked; the view runs the dialogs, the saves and the selection.
  */
@@ -44,13 +45,18 @@ const emit = defineEmits<{
   (e: 'add-chapter'): void;
   (e: 'add-section', chapter: AdminChapter): void;
   (e: 'rename-chapter', chapter: AdminChapter): void;
-  (e: 'move-chapter', chapter: AdminChapter, direction: -1 | 1): void;
   (e: 'delete-chapter', chapter: AdminChapter): void;
-  (e: 'place-chapter', chapter: AdminChapter, toIndex: number): void;
+  /** `done` (keyboard only) reports whether the save went through, so the list can settle. */
+  (e: 'place-chapter', chapter: AdminChapter, toIndex: number, done?: (ok: boolean) => void): void;
   (e: 'rename-section', chapter: AdminChapter, section: AdminSection): void;
-  (e: 'move-section', chapter: AdminChapter, section: AdminSection, direction: -1 | 1): void;
   (e: 'delete-section', chapter: AdminChapter, section: AdminSection): void;
-  (e: 'place-section', chapter: AdminChapter, section: AdminSection, toIndex: number): void;
+  (
+    e: 'place-section',
+    chapter: AdminChapter,
+    section: AdminSection,
+    toIndex: number,
+    done?: (ok: boolean) => void,
+  ): void;
 }>();
 
 // Chapters are open by default; the set holds only the ones the editor closed.
@@ -79,12 +85,13 @@ watch(
   },
 );
 
-function chapterNumber(index: number): string {
-  return chapterNumberLabel(props.page.chapters[index]?.number, index);
+/** The chapter's number at its position in the list as shown (a carried chapter shows its new one). */
+function chapterNumber(chapter: AdminChapter, index: number): string {
+  return chapterNumberLabel(chapter.number, index);
 }
 
-function sectionNumber(chapterIndex: number, sectionIndex: number): string {
-  return sectionNumberLabel(chapterNumber(chapterIndex), sectionIndex);
+function sectionNumber(chapter: AdminChapter, chapterIndex: number, sectionIndex: number): string {
+  return sectionNumberLabel(chapterNumber(chapter, chapterIndex), sectionIndex);
 }
 
 function sectionLabel(section: AdminSection, sectionIndex: number): string {
@@ -92,7 +99,22 @@ function sectionLabel(section: AdminSection, sectionIndex: number): string {
 }
 
 function chapterLabel(chapter: AdminChapter, chapterIndex: number): string {
-  return `Bab ${chapterNumber(chapterIndex)} · ${chapter.title}`;
+  return `Bab ${chapterNumber(chapter, chapterIndex)} · ${chapter.title}`;
+}
+
+/** The "Bab 2" or "Bagian 1.3" text of a row as it stands in the committed order. */
+function committedNumberOfChapter(id: string): string {
+  const index = props.page.chapters.findIndex((item) => item.id === id);
+  const chapter = props.page.chapters[index];
+  return chapter ? chapterNumber(chapter, index) : '';
+}
+
+function committedNumberOfSection(id: string): string {
+  for (const [chapterIndex, chapter] of props.page.chapters.entries()) {
+    const sectionIndex = chapter.sections.findIndex((item) => item.id === id);
+    if (sectionIndex >= 0) return sectionNumber(chapter, chapterIndex, sectionIndex);
+  }
+  return '';
 }
 
 // --- Drag (grips only; each list keeps its own state) ---
@@ -125,6 +147,70 @@ const sectionDrag = useCardDragReorder({
   },
 });
 
+// --- Keyboard reorder on the same grips (each list keeps its own state) ---
+
+const busyBlock = computed(() => props.busy);
+
+const chapterKb = useKeyboardReorder({
+  order: computed(() => props.page.chapters.map((chapter) => chapter.id)),
+  blocked: busyBlock,
+  label: (id) => `Bab ${committedNumberOfChapter(id)}`,
+  noun: 'Bab',
+  onMove: (id, toIndex) =>
+    new Promise<boolean>((resolve) => {
+      const chapter = props.page.chapters.find((item) => item.id === id);
+      if (!chapter) {
+        resolve(false);
+        return;
+      }
+      emit('place-chapter', chapter, toIndex, resolve);
+    }),
+});
+
+/** The chapter whose sections are reordered from the keyboard; its section order is read from it. */
+const keyboardChapterId = ref<string | null>(null);
+const keyboardSectionOrder = computed(() => {
+  const chapter = props.page.chapters.find((item) => item.id === keyboardChapterId.value);
+  return (chapter?.sections ?? []).map((section) => section.id);
+});
+
+const sectionKb = useKeyboardReorder({
+  order: keyboardSectionOrder,
+  blocked: busyBlock,
+  label: (id) => `Bagian ${committedNumberOfSection(id)}`,
+  noun: 'Bagian',
+  onMove: (id, toIndex) =>
+    new Promise<boolean>((resolve) => {
+      // The chapter or section may have gone (deleted or moved elsewhere) since the pick-up.
+      const chapter = props.page.chapters.find((item) => item.id === keyboardChapterId.value);
+      const section = chapter?.sections.find((item) => item.id === id);
+      if (!chapter || !section) {
+        resolve(false);
+        return;
+      }
+      emit('place-section', chapter, section, toIndex, resolve);
+    }),
+  // Once a keyboard move ends, the list stops following the chapter it was taken from.
+  onFinish: () => {
+    keyboardChapterId.value = null;
+  },
+});
+
+/** The chapters in the order to show (a keyboard move previews its new place). */
+const chaptersShown = computed(() =>
+  chapterKb.arrange(props.page.chapters, (chapter) => chapter.id),
+);
+
+function sectionsShown(chapter: AdminChapter): AdminSection[] {
+  return sectionKb.arrange(chapter.sections, (section) => section.id);
+}
+
+/** Keyboard pick-up of a section: the list it belongs to is the one that gets the order. */
+function sectionKeydown(event: KeyboardEvent, chapter: AdminChapter, section: AdminSection): void {
+  if (!sectionKb.carriedKey.value) keyboardChapterId.value = chapter.id;
+  sectionKb.onGripKeydown(event, section.id);
+}
+
 function startSectionDrag(chapter: AdminChapter, section: AdminSection): void {
   dragChapterId.value = chapter.id;
   sectionDrag.startDrag(section.id);
@@ -146,6 +232,7 @@ function allowDrop(event: DragEvent): void {
 }
 
 function chapterEdge(chapter: AdminChapter, edge: 'before' | 'after'): boolean {
+  if (chapterKb.edgeOf(chapter.id) === edge) return true;
   return (
     chapterDrag.dropTarget.value?.key === chapter.id && chapterDrag.dropTarget.value.edge === edge
   );
@@ -156,6 +243,7 @@ function sectionEdge(
   section: AdminSection,
   edge: 'before' | 'after',
 ): boolean {
+  if (sectionKb.edgeOf(section.id) === edge) return true;
   return (
     dragChapterId.value === chapter.id &&
     sectionDrag.dropTarget.value?.key === section.id &&
@@ -202,7 +290,7 @@ function closeMenu(event: Event): void {
 
     <ol v-else class="space-y-2" data-test="chapter-list">
       <li
-        v-for="(chapter, chapterIndex) in page.chapters"
+        v-for="(chapter, chapterIndex) in chaptersShown"
         :key="chapter.id"
         class="relative"
         :class="{
@@ -218,20 +306,31 @@ function closeMenu(event: Event): void {
         "
         @drop.prevent="chapterDrag.dropOn(chapter.id, edgeAt($event))"
       >
-        <div class="rounded-btn flex items-stretch gap-0.5">
-          <CardDragGrip
-            :blocked="dragBlock"
+        <div
+          class="rounded-btn flex items-stretch gap-0.5"
+          :class="
+            chapterKb.isCarried(chapter.id) ? 'ring-brand-navy bg-white shadow-md ring-2' : ''
+          "
+        >
+          <ReorderGripButton
+            :id="ceritaIds.treeChapterGrip(chapter.id)"
+            :label="`Pindahkan bab ${chapterNumber(chapter, chapterIndex)}: ${chapter.title}`"
             :data-text="chapter.title"
-            sort-label="Pilihan bab"
+            :disabled="busy"
+            :carried="chapterKb.isCarried(chapter.id)"
             @drag-start="chapterDrag.startDrag(chapter.id)"
             @drag-end="endDrag"
+            @keydown="chapterKb.onGripKeydown($event, chapter.id)"
+            @blur="chapterKb.onGripBlur($event, chapter.id)"
           />
           <button
             :id="ceritaIds.treeChapter(chapter.id)"
             type="button"
             class="hover:bg-surface-muted focus-visible:outline-focus-ring rounded-btn flex min-h-11 min-w-0 flex-1 items-start gap-2 px-1 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2"
             :class="
-              overviewChapterId === chapter.id ? 'bg-selected border-l-brand-navy border-l-4' : ''
+              overviewChapterId === chapter.id
+                ? 'bg-selected shadow-[inset_4px_0_0_var(--color-brand-navy)]'
+                : ''
             "
             :aria-expanded="isOpen(chapter) ? 'true' : 'false'"
             :aria-controls="`cerita-pohon-bab-panel-${chapter.id}`"
@@ -295,34 +394,6 @@ function closeMenu(event: Event): void {
                 Ubah judul
               </BaseButton>
               <BaseButton
-                :id="ceritaIds.chapterUp(chapter.id)"
-                type="button"
-                variant="ghost"
-                size="md"
-                class="min-h-11 justify-start text-sm"
-                :disabled="busy || chapterIndex === 0"
-                @click="
-                  closeMenu($event);
-                  emit('move-chapter', chapter, -1);
-                "
-              >
-                Naik
-              </BaseButton>
-              <BaseButton
-                :id="ceritaIds.chapterDown(chapter.id)"
-                type="button"
-                variant="ghost"
-                size="md"
-                class="min-h-11 justify-start text-sm"
-                :disabled="busy || chapterIndex === page.chapters.length - 1"
-                @click="
-                  closeMenu($event);
-                  emit('move-chapter', chapter, 1);
-                "
-              >
-                Turun
-              </BaseButton>
-              <BaseButton
                 :id="ceritaIds.chapterDelete(chapter.id)"
                 type="button"
                 variant="danger"
@@ -345,21 +416,13 @@ function closeMenu(event: Event): void {
           :id="`cerita-pohon-bab-panel-${chapter.id}`"
           class="mt-0.5 space-y-1 pl-[34px]"
         >
-          <p
-            v-if="chapter.sections.length === 0"
-            class="text-text-muted px-1 py-2 text-sm"
-            data-test="section-empty"
-          >
-            Belum ada bagian.
-          </p>
-
           <ol
-            v-else
+            v-if="chapter.sections.length > 0"
             class="space-y-0.5"
             :aria-label="`Bagian dari ${chapterLabel(chapter, chapterIndex)}`"
           >
             <li
-              v-for="(section, sectionIndex) in chapter.sections"
+              v-for="(section, sectionIndex) in sectionsShown(chapter)"
               :key="section.id"
               class="rounded-btn relative"
               :class="{
@@ -378,18 +441,25 @@ function closeMenu(event: Event): void {
             >
               <div
                 class="rounded-btn flex items-stretch gap-0.5"
-                :class="
+                :class="[
                   selectedSectionId === section.id
-                    ? 'bg-selected border-l-brand-navy border-l-4 font-semibold'
-                    : ''
-                "
+                    ? 'bg-selected font-semibold shadow-[inset_4px_0_0_var(--color-brand-navy)]'
+                    : '',
+                  sectionKb.isCarried(section.id)
+                    ? 'ring-brand-navy bg-white shadow-md ring-2'
+                    : '',
+                ]"
               >
-                <CardDragGrip
-                  :blocked="dragBlock"
-                  :data-text="sectionLabel(section, sectionIndex)"
-                  sort-label="Pilihan bagian"
+                <ReorderGripButton
+                  :id="ceritaIds.treeSectionGrip(section.id)"
+                  :label="`Pindahkan bagian ${sectionNumber(chapter, chapterIndex, sectionIndex)}: ${sectionLabel(section, chapter.sections.indexOf(section))}`"
+                  :data-text="sectionLabel(section, chapter.sections.indexOf(section))"
+                  :disabled="busy"
+                  :carried="sectionKb.isCarried(section.id)"
                   @drag-start="startSectionDrag(chapter, section)"
                   @drag-end="endDrag"
+                  @keydown="sectionKeydown($event, chapter, section)"
+                  @blur="sectionKb.onGripBlur($event, section.id)"
                 />
                 <button
                   :id="ceritaIds.treeSection(section.id)"
@@ -403,10 +473,10 @@ function closeMenu(event: Event): void {
                     class="text-text-muted w-7 shrink-0 text-[12px] font-semibold tabular-nums"
                     :class="selectedSectionId === section.id ? 'text-brand-navy' : ''"
                   >
-                    {{ sectionNumber(chapterIndex, sectionIndex) }}
+                    {{ sectionNumber(chapter, chapterIndex, sectionIndex) }}
                   </span>
                   <span class="text-brand-navy min-w-0 flex-1 truncate text-sm font-medium">
-                    {{ sectionLabel(section, sectionIndex) }}
+                    {{ sectionLabel(section, chapter.sections.indexOf(section)) }}
                   </span>
                   <span
                     class="flex shrink-0 items-center gap-1 text-[12px] font-medium whitespace-nowrap"
@@ -429,7 +499,7 @@ function closeMenu(event: Event): void {
                 <details class="relative flex shrink-0 items-stretch" data-test="section-menu">
                   <summary
                     class="hover:bg-surface-muted focus-visible:outline-focus-ring text-text-muted hover:text-brand-navy rounded-btn flex min-h-11 w-11 cursor-pointer list-none items-center justify-center text-[18px] focus-visible:outline-2 focus-visible:outline-offset-2 [&::-webkit-details-marker]:hidden"
-                    :aria-label="`Pilihan untuk bagian ${sectionNumber(chapterIndex, sectionIndex)} ${sectionLabel(section, sectionIndex)}`"
+                    :aria-label="`Pilihan untuk bagian ${sectionNumber(chapter, chapterIndex, sectionIndex)} ${sectionLabel(section, chapter.sections.indexOf(section))}`"
                   >
                     <span aria-hidden="true">⋯</span>
                   </summary>
@@ -450,34 +520,6 @@ function closeMenu(event: Event): void {
                       "
                     >
                       Ubah judul
-                    </BaseButton>
-                    <BaseButton
-                      :id="ceritaIds.sectionUp(section.id)"
-                      type="button"
-                      variant="ghost"
-                      size="md"
-                      class="min-h-11 justify-start text-sm"
-                      :disabled="busy || sectionIndex === 0"
-                      @click="
-                        closeMenu($event);
-                        emit('move-section', chapter, section, -1);
-                      "
-                    >
-                      Naik
-                    </BaseButton>
-                    <BaseButton
-                      :id="ceritaIds.sectionDown(section.id)"
-                      type="button"
-                      variant="ghost"
-                      size="md"
-                      class="min-h-11 justify-start text-sm"
-                      :disabled="busy || sectionIndex === chapter.sections.length - 1"
-                      @click="
-                        closeMenu($event);
-                        emit('move-section', chapter, section, 1);
-                      "
-                    >
-                      Turun
                     </BaseButton>
                     <BaseButton
                       :id="ceritaIds.sectionDelete(section.id)"
@@ -524,9 +566,15 @@ function closeMenu(event: Event): void {
       class="text-text-muted mt-4 px-2 text-[13px] leading-relaxed"
       data-test="drag-hint"
     >
-      Seret ikon titik-titik untuk mengubah urutan bab atau bagian. Pilihan “Naik” dan “Turun” di
-      menu ⋯ melakukan hal yang sama dari keyboard.
+      Seret ikon titik-titik untuk mengubah urutan bab atau bagian. Dari keyboard, fokus ikon itu,
+      tekan Spasi, lalu panah atas atau bawah, dan Spasi lagi untuk menjatuhkan.
     </p>
+    <span class="sr-only" role="status" aria-live="polite" data-test="chapter-reorder-status">{{
+      chapterKb.announcement.value
+    }}</span>
+    <span class="sr-only" role="status" aria-live="polite" data-test="section-reorder-status">{{
+      sectionKb.announcement.value
+    }}</span>
 
     <button
       :id="ceritaIds.addChapter"

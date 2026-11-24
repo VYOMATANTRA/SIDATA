@@ -76,8 +76,9 @@ let nextRowUid = 1;
 export interface RepeatableRowIds {
   /** Id of the first field of the row at `index` (focus target after adding a row). */
   firstField: (index: number) => string;
-  moveUp: (index: number) => string;
-  moveDown: (index: number) => string;
+  /** Move buttons' ids, focused after `move()`. Lists that only add and remove leave them out. */
+  moveUp?: (index: number) => string;
+  moveDown?: (index: number) => string;
   /** The "Tambah" button, focused after a row is removed. */
   add: string;
 }
@@ -155,14 +156,16 @@ export function useRepeatableRows<T extends object>(
     // Keep focus on the same kind of control. At the end of the list that control is disabled,
     // so fall back to the opposite direction's button on the moved row.
     const sameDirectionAvailable = direction === -1 ? target > 0 : target < next.length - 1;
+    const { moveUp, moveDown } = options.ids;
+    if (!moveUp || !moveDown) return;
     const id =
       direction === -1
         ? sameDirectionAvailable
-          ? options.ids.moveUp(target)
-          : options.ids.moveDown(target)
+          ? moveUp(target)
+          : moveDown(target)
         : sameDirectionAvailable
-          ? options.ids.moveDown(target)
-          : options.ids.moveUp(target);
+          ? moveDown(target)
+          : moveUp(target);
     focusId(id);
   }
 

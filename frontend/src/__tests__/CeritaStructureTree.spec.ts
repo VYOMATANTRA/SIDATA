@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import CeritaStructureTree from '../components/admin/cerita/CeritaStructureTree.vue';
 import type { AdminPage } from '../stores/ceritaAdmin.store';
 import { figureTreeLabel } from '../utils/ceritaTreeLabels';
@@ -118,12 +118,15 @@ describe('CeritaStructureTree', () => {
   it('marks the selected section with aria-current and says a chapter without sections is empty', () => {
     const wrapper = mountTree({ selectedSectionId: 'sec-2' });
 
-    const current = wrapper.findAll('[data-test="section-select"]').filter((item) =>
-      item.attributes('aria-current'),
-    );
+    const current = wrapper
+      .findAll('[data-test="section-select"]')
+      .filter((item) => item.attributes('aria-current'));
     expect(current).toHaveLength(1);
     expect(current[0]!.attributes('id')).toBe('cerita-pohon-bagian-sec-2');
-    expect(wrapper.find('[data-test="section-empty"]').text()).toBe('Belum ada bagian.');
+    expect(wrapper.find('[data-test="section-empty"]').exists()).toBe(false);
+    expect(wrapper.findAll('[data-test="chapter-meta"]').map((m) => m.text())).toContain(
+      'Belum ada bagian',
+    );
     wrapper.unmount();
   });
 
@@ -137,18 +140,16 @@ describe('CeritaStructureTree', () => {
     wrapper.unmount();
   });
 
-  it('moves a section with the Turun item of its options menu, which stays a plain button', async () => {
+  it('offers no Naik or Turun in the options menus of chapters and sections', async () => {
     const wrapper = mountTree();
-    const row = sectionRow(wrapper, 'Ringkasan');
-
-    await menuItem(row, 'Turun').trigger('click');
-
-    const [chapter, section, direction] = wrapper.emitted('move-section')![0]!;
-    expect((chapter as { id: string }).id).toBe('chap-1');
-    expect((section as { id: string }).id).toBe('sec-1');
-    expect(direction).toBe(1);
-    // The first section cannot move up: the button is disabled, not hidden.
-    expect((menuItem(sectionRow(wrapper, 'Ringkasan'), 'Naik').element as HTMLButtonElement).disabled).toBe(true);
+    expect(wrapper.text()).not.toMatch(/Naik|Turun/);
+    await wrapper.findAll('[data-test="section-menu"] summary')[0]!.trigger('click');
+    expect(menuItem(sectionRow(wrapper, 'Ringkasan'), 'Ubah judul').text()).toBe('Ubah judul');
+    expect(
+      sectionRow(wrapper, 'Ringkasan')
+        .findAll('button')
+        .map((item) => item.text().trim()),
+    ).not.toEqual(expect.arrayContaining(['Naik', 'Turun']));
     wrapper.unmount();
   });
 
@@ -189,7 +190,90 @@ describe('CeritaStructureTree', () => {
 
   it('does not offer drag while a save is running', () => {
     const wrapper = mountTree({ busy: true });
-    expect(wrapper.find('[data-test="grip"]').attributes('draggable')).toBe('false');
+    expect(wrapper.find('[data-test="grip-wrap"]').attributes('draggable')).toBe('false');
+    expect(wrapper.find('[data-test="grip"]').attributes('aria-disabled')).toBe('true');
+    wrapper.unmount();
+  });
+
+  it('moves a section from the keyboard: Spasi, arrow, Spasi, with its number updating while carried', async () => {
+    const wrapper = mountTree();
+    const grip = sectionRow(wrapper, 'Ringkasan').find('[data-test="grip"]');
+
+    await grip.trigger('keydown', { key: ' ' });
+    expect(grip.attributes('aria-pressed')).toBe('true');
+    expect(grip.attributes('aria-label')).toBe('Pindahkan bagian 1.1: Ringkasan');
+    expect(wrapper.get('[data-test="section-reorder-status"]').text()).toBe(
+      'Bagian 1.1 diangkat. Posisi 1 dari 2.',
+    );
+
+    await grip.trigger('keydown', { key: 'ArrowDown' });
+    expect(wrapper.findAll('[data-test="section-select"]').map((item) => item.text())).toEqual([
+      expect.stringContaining('Bagian 2'),
+      expect.stringContaining('Ringkasan'),
+    ]);
+    expect(wrapper.findAll('.tabular-nums').map((item) => item.text())).toEqual(['1.1', '1.2']);
+    expect(wrapper.get('[data-test="section-reorder-status"]').text()).toBe('Posisi 2 dari 2.');
+
+    await grip.trigger('keydown', { key: ' ' });
+    const [chapter, section, toIndex] = wrapper.emitted('place-section')![0]!;
+    expect((chapter as { id: string }).id).toBe('chap-1');
+    expect((section as { id: string }).id).toBe('sec-1');
+    expect(toIndex).toBe(1);
+    expect(wrapper.get('[data-test="section-reorder-status"]').text()).toBe(
+      'Bagian dipindahkan ke posisi 2 dari 2.',
+    );
+    wrapper.unmount();
+  });
+
+  it('cancels a keyboard section move with Escape and saves nothing', async () => {
+    const wrapper = mountTree();
+    const grip = sectionRow(wrapper, 'Ringkasan').find('[data-test="grip"]');
+
+    await grip.trigger('keydown', { key: ' ' });
+    await grip.trigger('keydown', { key: 'ArrowDown' });
+    await grip.trigger('keydown', { key: 'Escape' });
+
+    expect(wrapper.findAll('[data-test="section-select"]').map((item) => item.text())).toEqual([
+      expect.stringContaining('Ringkasan'),
+      expect.stringContaining('Bagian 2'),
+    ]);
+    expect(wrapper.get('[data-test="section-reorder-status"]').text()).toBe('Dibatalkan.');
+    expect(wrapper.emitted('place-section')).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it('cancels a keyboard move when focus leaves the grip', async () => {
+    const wrapper = mountTree();
+    const grip = sectionRow(wrapper, 'Ringkasan').find('[data-test="grip"]');
+
+    await grip.trigger('keydown', { key: ' ' });
+    await grip.trigger('keydown', { key: 'ArrowDown' });
+    (grip.element as HTMLButtonElement).blur();
+    await flushPromises();
+
+    expect(grip.attributes('aria-pressed')).toBe('false');
+    expect(wrapper.emitted('place-section')).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it('moves a chapter from the keyboard and reports the new place', async () => {
+    const wrapper = mountTree();
+    const grip = wrapper.findAll('[data-test="chapter-item"]')[1]!.find('[data-test="grip"]');
+
+    await grip.trigger('keydown', { key: ' ' });
+    await grip.trigger('keydown', { key: 'ArrowUp' });
+    // A chapter with a stored number keeps it (the source's numbering); the order is what moved.
+    expect(
+      wrapper.findAll('[data-test="chapter-title"]').map((item) => item.text().split(' · ')[1]),
+    ).toEqual(['Jumlah Keluarga', 'Jumlah Penduduk']);
+    await grip.trigger('keydown', { key: 'Enter' });
+
+    const [chapter, toIndex] = wrapper.emitted('place-chapter')![0]!;
+    expect((chapter as { id: string }).id).toBe('chap-2');
+    expect(toIndex).toBe(0);
+    expect(wrapper.get('[data-test="chapter-reorder-status"]').text()).toBe(
+      'Bab dipindahkan ke posisi 1 dari 2.',
+    );
     wrapper.unmount();
   });
 });

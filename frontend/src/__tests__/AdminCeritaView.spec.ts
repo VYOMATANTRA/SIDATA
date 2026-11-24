@@ -172,6 +172,25 @@ async function clickMenu(row: HTMLElement, label: string): Promise<void> {
   await flushPromises();
 }
 
+/**
+ * Moves a row one place from the keyboard, the way a user does it: Spasi on its grip, an arrow key,
+ * Spasi to drop. The drop saves, so the call waits for the requests to settle.
+ */
+async function keyboardMove(grip: HTMLElement | null, key: 'ArrowUp' | 'ArrowDown'): Promise<void> {
+  if (!grip) throw new Error('no grip');
+  for (const step of [' ', key, ' ']) {
+    grip.dispatchEvent(
+      new KeyboardEvent('keydown', { key: step, bubbles: true, cancelable: true }),
+    );
+  }
+  await flushPromises();
+}
+
+/** The grip button of a tree chapter row (the first grip inside it is its own). */
+function chapterGrip(title: string): HTMLElement | null {
+  return chapterRow(title).querySelector<HTMLElement>('[data-test="grip"]');
+}
+
 /** Selects a section in the tree (the centre column opens it). */
 async function openSection(title: string): Promise<void> {
   sectionRow(title).querySelector<HTMLButtonElement>('[data-test="section-select"]')!.click();
@@ -267,14 +286,18 @@ describe('AdminCeritaView', () => {
         { label: 'Kependudukan' },
       ]);
       expect(wrapper.find('[data-test="admin-header-title"]').text()).toBe('Kependudukan');
-      expect(document.querySelector('#admin-header-actions [data-test="page-public-link"]')).not.toBeNull();
+      expect(
+        document.querySelector('#admin-header-actions [data-test="page-public-link"]'),
+      ).not.toBeNull();
 
       await router.push({ name: 'admin-cerita' });
       await flushPromises();
 
       expect(header.trail.value).toBeNull();
       expect(header.compact.value).toBe(false);
-      expect(document.querySelector('#admin-header-actions [data-test="page-public-link"]')).toBeNull();
+      expect(
+        document.querySelector('#admin-header-actions [data-test="page-public-link"]'),
+      ).toBeNull();
       wrapper.unmount();
     });
 
@@ -312,7 +335,10 @@ describe('AdminCeritaView', () => {
       await click('Tambah bab');
       await typeInto('[data-test="name-input"]', 'Ibu Hamil');
       await submitDialog();
-      expect(wrapper.find('[data-test="section-empty"]').text()).toContain('Belum ada bagian');
+      expect(wrapper.find('[data-test="section-empty"]').exists()).toBe(false);
+      expect(wrapper.findAll('[data-test="chapter-meta"]').map((m) => m.text())).toContain(
+        'Belum ada bagian',
+      );
       wrapper.unmount();
     });
 
@@ -541,8 +567,6 @@ describe('AdminCeritaView', () => {
       wrapper.unmount();
     });
 
-
-
     it('reports a stale reorder in plain words and reloads on request', async () => {
       const wrapper = await mountList();
       await wrapper.find('[data-test="sort-toggle"]').trigger('click');
@@ -564,7 +588,6 @@ describe('AdminCeritaView', () => {
       expect(wrapper.find('[data-test="action-error"]').exists()).toBe(false);
       wrapper.unmount();
     });
-
 
     it('explains that empty chapters and sections go with a deleted page', async () => {
       const wrapper = await mountList();
@@ -734,12 +757,15 @@ describe('AdminCeritaView', () => {
       wrapper.unmount();
     });
 
-    it('moves a section down with its button and sends the chapter token', async () => {
+    it('moves a section down from the keyboard and sends the chapter token', async () => {
       const wrapper = await mountView();
       const chapter = fake.pages[0]!.chapters[0]!;
       const token = chapter.updatedAt;
 
-      await clickMenu(sectionRow('Ringkasan'), 'Turun');
+      await keyboardMove(
+        sectionRow('Ringkasan').querySelector<HTMLElement>('[data-test="grip"]'),
+        'ArrowDown',
+      );
 
       expect(fake.lastWrite()).toMatchObject({
         method: 'PUT',
@@ -747,7 +773,9 @@ describe('AdminCeritaView', () => {
         body: { expectedUpdatedAt: token },
       });
       expect(sectionTitles().slice(0, 2)).toEqual(['Rincian', 'Ringkasan']);
-      expect(document.activeElement?.id).toBe(`cerita-pohon-bagian-${chapter.sections[0]!.id}`);
+      expect(document.activeElement?.id).toBe(
+        `cerita-pohon-bagian-${chapter.sections[0]!.id}-pegang`,
+      );
       wrapper.unmount();
     });
 
@@ -1250,7 +1278,7 @@ describe('AdminCeritaView', () => {
       const wrapper = await mountView();
       // A chapter reorder carries the page's token, so another editor's save makes it stale.
       fake.touchPage('kependudukan');
-      await clickMenu(chapterRow('Jumlah Penduduk'), 'Turun');
+      await keyboardMove(chapterGrip('Jumlah Penduduk'), 'ArrowDown');
       expect(wrapper.find('[data-test="action-reload"]').exists()).toBe(true);
 
       failReload();
@@ -1285,7 +1313,7 @@ describe('AdminCeritaView', () => {
     it('hides a session failure of a reorder once the layout notice covers it', async () => {
       const wrapper = await mountView();
       fake.failNext((r) => r.method === 'PUT', fake.json({ error: 'x' }, 401));
-      await clickMenu(chapterRow('Jumlah Penduduk'), 'Turun');
+      await keyboardMove(chapterGrip('Jumlah Penduduk'), 'ArrowDown');
       expect(wrapper.find('[data-test="action-error"]').exists()).toBe(true);
 
       useAuthStore().markSessionEnded();
@@ -1852,16 +1880,18 @@ describe('AdminCeritaView chapter overview', () => {
     wrapper.unmount();
   });
 
-  it('moves a section with its Turun button and keeps focus on the moved card', async () => {
+  it('moves a card from the keyboard and keeps focus on its grip', async () => {
     const wrapper = await mountView();
     await openChapter('Jumlah Penduduk');
 
-    overviewCard('Ringkasan').querySelector<HTMLButtonElement>('[data-test="card-down"]')!.click();
-    await flushPromises();
+    await keyboardMove(
+      overviewCard('Ringkasan').querySelector<HTMLElement>('[data-test="grip"]'),
+      'ArrowDown',
+    );
 
     expect(overviewTitles()).toEqual(['Rincian', 'Ringkasan']);
     expect(document.activeElement?.id).toBe(
-      `cerita-ringkasan-bagian-${fake.pages[0]!.chapters[0]!.sections[0]!.id}`,
+      `cerita-ringkasan-bagian-${fake.pages[0]!.chapters[0]!.sections[0]!.id}-pegang`,
     );
     wrapper.unmount();
   });
