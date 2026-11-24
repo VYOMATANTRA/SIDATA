@@ -299,8 +299,6 @@ export interface FigureIds {
   photoAlt: (index: number) => string;
   photoCaption: (index: number) => string;
   photoCredit: (index: number) => string;
-  photoUp: (index: number) => string;
-  photoDown: (index: number) => string;
   photoRemove: (index: number) => string;
   swapPhotos: string;
   addPhoto: string;
@@ -314,8 +312,6 @@ export interface FigureIds {
   barUnit: string;
   barLabel: (index: number) => string;
   barValue: (index: number) => string;
-  barUp: (index: number) => string;
-  barDown: (index: number) => string;
   barRemove: (index: number) => string;
   addBar: string;
   chartTable: string;
@@ -334,8 +330,6 @@ export function figureIds(prefix: string): FigureIds {
     photoAlt: (i) => `${prefix}-foto-${i}-alt`,
     photoCaption: (i) => `${prefix}-foto-${i}-keterangan`,
     photoCredit: (i) => `${prefix}-foto-${i}-kredit`,
-    photoUp: (i) => `${prefix}-foto-${i}-naik`,
-    photoDown: (i) => `${prefix}-foto-${i}-turun`,
     photoRemove: (i) => `${prefix}-foto-${i}-hapus`,
     swapPhotos: `${prefix}-tukar-urutan`,
     addPhoto: `${prefix}-tambah-foto`,
@@ -349,8 +343,6 @@ export function figureIds(prefix: string): FigureIds {
     barUnit: `${prefix}-batang-satuan`,
     barLabel: (i) => `${prefix}-batang-${i}-label`,
     barValue: (i) => `${prefix}-batang-${i}-nilai`,
-    barUp: (i) => `${prefix}-batang-${i}-naik`,
-    barDown: (i) => `${prefix}-batang-${i}-turun`,
     barRemove: (i) => `${prefix}-batang-${i}-hapus`,
     addBar: `${prefix}-tambah-batang`,
     chartTable: `${prefix}-grafik-tabel`,

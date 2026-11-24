@@ -899,8 +899,9 @@ function focusAfterMove(
   focusId(direction === -1 ? (canKeepGoing ? upId : downId) : canKeepGoing ? downId : upId);
 }
 
-async function runMove(action: () => Promise<WriteOutcome>, onDone: () => void): Promise<void> {
-  if (moving.value) return;
+/** Runs one move; true when it saved. A refused, failed or superseded move reports false. */
+async function runMove(action: () => Promise<WriteOutcome>, onDone: () => void): Promise<boolean> {
+  if (moving.value) return false;
   moving.value = true;
   clearActionError();
   const outcome = await action();
@@ -909,9 +910,10 @@ async function runMove(action: () => Promise<WriteOutcome>, onDone: () => void):
     actionError.value = outcome.message;
     actionErrorKind.value = outcome.kind;
     actionStale.value = outcome.stale;
-    return;
+    return false;
   }
   onDone();
+  return true;
 }
 
 /** Moves one page; the two ids are the buttons that move it (list card or structure view). */
@@ -1121,9 +1123,16 @@ async function reloadBulk(): Promise<void> {
 
 // --- Order in the tree and the overview (grips: drag, or the keyboard; both reach the same saves) ---
 
-function placeChapterDragged(chapter: AdminChapter, toIndex: number): void {
+function placeChapterDragged(
+  chapter: AdminChapter,
+  toIndex: number,
+  done?: (ok: boolean) => void,
+): void {
   const current = page.value;
-  if (!current) return;
+  if (!current) {
+    done?.(false);
+    return;
+  }
   void runMove(
     () => store.placeChapter(current.slug, chapter.id, toIndex),
     () => {
@@ -1133,10 +1142,15 @@ function placeChapterDragged(chapter: AdminChapter, toIndex: number): void {
       // The grip keeps focus, so a keyboard user can move the chapter again.
       focusId(ceritaIds.treeChapterGrip(chapter.id));
     },
-  );
+  ).then((ok) => done?.(ok));
 }
 
-function placeSectionDragged(chapter: AdminChapter, section: AdminSection, toIndex: number): void {
+function placeSectionDragged(
+  chapter: AdminChapter,
+  section: AdminSection,
+  toIndex: number,
+  done?: (ok: boolean) => void,
+): void {
   void runMove(
     () => store.placeSection(chapter.id, section.id, toIndex),
     () => {
@@ -1147,7 +1161,7 @@ function placeSectionDragged(chapter: AdminChapter, section: AdminSection, toInd
       );
       focusId(ceritaIds.treeSectionGrip(section.id));
     },
-  );
+  ).then((ok) => done?.(ok));
 }
 
 // --- Section selection and section actions (centre column) ---
@@ -1307,9 +1321,16 @@ async function reloadFromOverview(): Promise<void> {
   overviewTitleStale.value = false;
 }
 
-function placeOverviewSection(section: AdminSection, toIndex: number): void {
+function placeOverviewSection(
+  section: AdminSection,
+  toIndex: number,
+  done?: (ok: boolean) => void,
+): void {
   const chapter = overviewChapter.value;
-  if (!chapter) return;
+  if (!chapter) {
+    done?.(false);
+    return;
+  }
   void runMove(
     () => store.placeSection(chapter.id, section.id, toIndex),
     () => {
@@ -1320,7 +1341,7 @@ function placeOverviewSection(section: AdminSection, toIndex: number): void {
       );
       focusId(ceritaIds.overviewCardGrip(section.id));
     },
-  );
+  ).then((ok) => done?.(ok));
 }
 
 async function duplicateOverviewSection(section: AdminSection): Promise<void> {

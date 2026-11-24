@@ -8,8 +8,7 @@ import {
 } from '@heroicons/vue/24/outline';
 import BaseButton from '../../common/BaseButton.vue';
 import ReorderGripButton from '../cards/ReorderGripButton.vue';
-import { useCardDragReorder } from '../../../composables/useCardDragReorder';
-import { edgeAt } from '../../../composables/useCardDragReorder';
+import { edgeAt, useCardDragReorder } from '../../../composables/useCardDragReorder';
 import { useKeyboardReorder } from '../../../composables/useKeyboardReorder';
 import type { AdminChapter, AdminPage, AdminSection } from '../../../stores/ceritaAdmin.store';
 import {
@@ -47,10 +46,17 @@ const emit = defineEmits<{
   (e: 'add-section', chapter: AdminChapter): void;
   (e: 'rename-chapter', chapter: AdminChapter): void;
   (e: 'delete-chapter', chapter: AdminChapter): void;
-  (e: 'place-chapter', chapter: AdminChapter, toIndex: number): void;
+  /** `done` (keyboard only) reports whether the save went through, so the list can settle. */
+  (e: 'place-chapter', chapter: AdminChapter, toIndex: number, done?: (ok: boolean) => void): void;
   (e: 'rename-section', chapter: AdminChapter, section: AdminSection): void;
   (e: 'delete-section', chapter: AdminChapter, section: AdminSection): void;
-  (e: 'place-section', chapter: AdminChapter, section: AdminSection, toIndex: number): void;
+  (
+    e: 'place-section',
+    chapter: AdminChapter,
+    section: AdminSection,
+    toIndex: number,
+    done?: (ok: boolean) => void,
+  ): void;
 }>();
 
 // Chapters are open by default; the set holds only the ones the editor closed.
@@ -150,10 +156,15 @@ const chapterKb = useKeyboardReorder({
   blocked: busyBlock,
   label: (id) => `Bab ${committedNumberOfChapter(id)}`,
   noun: 'Bab',
-  onMove: (id, toIndex) => {
-    const chapter = props.page.chapters.find((item) => item.id === id);
-    if (chapter) emit('place-chapter', chapter, toIndex);
-  },
+  onMove: (id, toIndex) =>
+    new Promise<boolean>((resolve) => {
+      const chapter = props.page.chapters.find((item) => item.id === id);
+      if (!chapter) {
+        resolve(false);
+        return;
+      }
+      emit('place-chapter', chapter, toIndex, resolve);
+    }),
 });
 
 /** The chapter whose sections are reordered from the keyboard; its section order is read from it. */
@@ -168,10 +179,20 @@ const sectionKb = useKeyboardReorder({
   blocked: busyBlock,
   label: (id) => `Bagian ${committedNumberOfSection(id)}`,
   noun: 'Bagian',
-  onMove: (id, toIndex) => {
-    const chapter = props.page.chapters.find((item) => item.id === keyboardChapterId.value);
-    const section = chapter?.sections.find((item) => item.id === id);
-    if (chapter && section) emit('place-section', chapter, section, toIndex);
+  onMove: (id, toIndex) =>
+    new Promise<boolean>((resolve) => {
+      // The chapter or section may have gone (deleted or moved elsewhere) since the pick-up.
+      const chapter = props.page.chapters.find((item) => item.id === keyboardChapterId.value);
+      const section = chapter?.sections.find((item) => item.id === id);
+      if (!chapter || !section) {
+        resolve(false);
+        return;
+      }
+      emit('place-section', chapter, section, toIndex, resolve);
+    }),
+  // Once a keyboard move ends, the list stops following the chapter it was taken from.
+  onFinish: () => {
+    keyboardChapterId.value = null;
   },
 });
 

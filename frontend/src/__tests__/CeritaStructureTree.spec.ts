@@ -188,7 +188,7 @@ describe('CeritaStructureTree', () => {
   it('does not offer drag while a save is running', () => {
     const wrapper = mountTree({ busy: true });
     expect(wrapper.find('[data-test="grip-wrap"]').attributes('draggable')).toBe('false');
-    expect((wrapper.find('[data-test="grip"]').element as HTMLButtonElement).disabled).toBe(true);
+    expect(wrapper.find('[data-test="grip"]').attributes('aria-disabled')).toBe('true');
     wrapper.unmount();
   });
 

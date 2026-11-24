@@ -54,7 +54,7 @@ describe('CeritaFigurePhotoRow (gallery tile)', () => {
 
   it('disables the grip while a save runs, and keeps only Hapus as an action', () => {
     const wrapper = mountGalleryTile({ busy: true });
-    expect((wrapper.get('[data-test="grip"]').element as HTMLButtonElement).disabled).toBe(true);
+    expect(wrapper.get('[data-test="grip"]').attributes('aria-disabled')).toBe('true');
     const actions = wrapper
       .findAll('button')
       .filter((item) => item.attributes('data-test') !== 'grip')

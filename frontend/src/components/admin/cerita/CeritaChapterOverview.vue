@@ -54,7 +54,8 @@ const emit = defineEmits<{
   (e: 'relocate-section', section: AdminSection): void;
   (e: 'duplicate-section', section: AdminSection): void;
   (e: 'delete-section', section: AdminSection): void;
-  (e: 'place-section', section: AdminSection, toIndex: number): void;
+  /** `done` (keyboard only) reports whether the save went through, so the list can settle. */
+  (e: 'place-section', section: AdminSection, toIndex: number, done?: (ok: boolean) => void): void;
   (e: 'add-section', title: string, kind: PendingFigureKind | null): void;
 }>();
 
@@ -111,10 +112,15 @@ const keyboard = useKeyboardReorder({
     return `Bagian ${card?.number ?? ''}`.trim();
   },
   noun: 'Bagian',
-  onMove: (id, toIndex) => {
-    const section = props.chapter.sections.find((item) => item.id === id);
-    if (section) emit('place-section', section, toIndex);
-  },
+  onMove: (id, toIndex) =>
+    new Promise<boolean>((resolve) => {
+      const section = props.chapter.sections.find((item) => item.id === id);
+      if (!section) {
+        resolve(false);
+        return;
+      }
+      emit('place-section', section, toIndex, resolve);
+    }),
 });
 
 /** The cards in the order to show; a keyboard move previews its place and renumbers the cards. */

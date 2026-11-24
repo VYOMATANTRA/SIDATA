@@ -6,6 +6,7 @@ import FormErrorSummary from '../../common/FormErrorSummary.vue';
 import FormField from '../../common/FormField.vue';
 import MediaPhotoField from '../../common/MediaPhotoField.vue';
 import CeritaFigurePhotoRow from './CeritaFigurePhotoRow.vue';
+import ReorderGripButton from '../cards/ReorderGripButton.vue';
 import { useRepeatableRows } from '../../data/blocks/blockFormShared';
 import { edgeAt, useCardDragReorder } from '../../../composables/useCardDragReorder';
 import { useKeyboardReorder } from '../../../composables/useKeyboardReorder';
@@ -82,8 +83,6 @@ const photoRows = useRepeatableRows<PhotoFields>([], {
   noun: 'foto',
   ids: {
     firstField: ids.photoFile,
-    moveUp: ids.photoUp,
-    moveDown: ids.photoDown,
     add: ids.addPhoto,
   },
 });
@@ -93,8 +92,6 @@ const barRows = useRepeatableRows<BarFields>([], {
   noun: 'batang',
   ids: {
     firstField: ids.barLabel,
-    moveUp: ids.barUp,
-    moveDown: ids.barDown,
     add: ids.addBar,
   },
 });
@@ -473,10 +470,37 @@ const galleryKb = useKeyboardReorder({
     return `Foto ${index + 1}`;
   },
   noun: 'Foto',
-  onMove: (key, toIndex) => {
-    moveGalleryPhoto(key, toIndex);
-  },
+  onMove: (key, toIndex) => moveGalleryPhoto(key, toIndex),
 });
+
+/** Chart bars: the same keyboard grip as the gallery; the order is part of the draft. */
+const barKeys = computed(() => barRows.rows.value.map((row) => String(row.uid)));
+
+function moveBar(key: string, toIndex: number): boolean {
+  const rows = [...barRows.rows.value];
+  const from = rows.findIndex((row) => String(row.uid) === key);
+  if (from < 0) return false;
+  const [moved] = rows.splice(from, 1);
+  if (!moved) return false;
+  rows.splice(toIndex, 0, moved);
+  barRows.rows.value = rows;
+  return true;
+}
+
+const barKb = useKeyboardReorder({
+  order: barKeys,
+  blocked: computed(() => busy.value),
+  label: (key) => `Batang ${barKeys.value.indexOf(key) + 1}`,
+  noun: 'Batang',
+  onMove: (key, toIndex) => moveBar(key, toIndex),
+});
+
+/** The bar rows in the order to show; a keyboard move previews its place and renumbers them. */
+const barsShown = computed(() => barKb.arrange(barRows.rows.value, (row) => String(row.uid)));
+
+function barGripId(uid: string | number): string {
+  return `${baseId}-batang-${uid}-pegang`;
+}
 
 /** The gallery tiles in the order to show; a keyboard move previews its place and renumbers them. */
 const galleryShown = computed(() =>
@@ -975,9 +999,6 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
               @grip-blur="galleryKb.onGripBlur($event, String(row.uid))"
             />
           </div>
-          <span class="sr-only" role="status" aria-live="polite" data-test="gallery-reorder-status">{{
-            galleryKb.announcement.value
-          }}</span>
           <button
             :id="ids.addPhoto"
             type="button"
@@ -990,6 +1011,9 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
             Tambah gambar
           </button>
         </div>
+        <span class="sr-only" role="status" aria-live="polite" data-test="gallery-reorder-status">{{
+          galleryKb.announcement.value
+        }}</span>
         <FormField
           :id="ids.sharedCredit"
           label="Sumber / kredit untuk semua gambar"
@@ -1314,13 +1338,32 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
             <p v-if="barRows.rows.value.length === 0" class="text-text-muted text-sm">
               Belum ada data batang.
             </p>
+            <span class="sr-only" role="status" aria-live="polite" data-test="bar-reorder-status">{{
+              barKb.announcement.value
+            }}</span>
 
             <div
-              v-for="(bar, index) in barRows.rows.value"
+              v-for="(bar, index) in barsShown"
               :key="bar.uid"
               class="border-border space-y-3 border-t pt-4 first:border-t-0 first:pt-0"
+              :class="barKb.isCarried(String(bar.uid)) ? 'rounded-card ring-brand-navy ring-2' : ''"
               data-test="bar-row"
             >
+              <div class="flex items-center gap-2">
+                <ReorderGripButton
+                  :id="barGripId(bar.uid)"
+                  :label="`Pindahkan batang ${index + 1}`"
+                  :data-text="`Batang ${index + 1}`"
+                  :disabled="busy"
+                  :carried="barKb.isCarried(String(bar.uid))"
+                  data-test="bar-grip"
+                  @keydown="barKb.onGripKeydown($event, String(bar.uid))"
+                  @blur="barKb.onGripBlur($event, String(bar.uid))"
+                />
+                <span class="text-text-muted text-[12px] font-semibold" data-test="bar-number">
+                  Batang {{ index + 1 }}
+                </span>
+              </div>
               <div class="grid gap-4 sm:grid-cols-2">
                 <FormField
                   :id="ids.barLabel(index)"
@@ -1377,7 +1420,7 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
                   size="sm"
                   class="min-h-11"
                   :disabled="busy"
-                  @click="barRows.remove(index)"
+                  @click="barRows.remove(barRows.rows.value.findIndex((item) => item.uid === bar.uid))"
                 >
                   Hapus <span class="sr-only">batang {{ index + 1 }}</span>
                 </BaseButton>

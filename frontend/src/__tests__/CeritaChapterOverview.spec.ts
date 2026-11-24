@@ -170,7 +170,7 @@ describe('CeritaChapterOverview', () => {
     expect(wrapper.get('[data-test="overview-reorder-status"]').text()).toBe('Posisi 2 dari 2.');
 
     await firstGrip.trigger('keydown', { key: ' ' });
-    expect(wrapper.emitted('place-section')).toEqual([[sectionA, 1]]);
+    expect(wrapper.emitted('place-section')?.[0]?.slice(0, 2)).toEqual([sectionA, 1]);
     expect(wrapper.get('[data-test="overview-reorder-status"]').text()).toBe(
       'Bagian dipindahkan ke posisi 2 dari 2.',
     );
@@ -216,9 +216,14 @@ describe('CeritaChapterOverview', () => {
     wrapper.unmount();
   });
 
-  it('keeps the grip disabled while a save runs', () => {
+  it('keeps the grip focusable but inert while a save runs', async () => {
     const wrapper = mountOverview({ busy: true });
-    expect((wrapper.get('[data-test="grip"]').element as HTMLButtonElement).disabled).toBe(true);
+    const grip = wrapper.get('[data-test="grip"]');
+    expect(grip.attributes('aria-disabled')).toBe('true');
+    // Focus can stay on the grip while the save runs; keys do nothing.
+    await grip.trigger('keydown', { key: ' ' });
+    expect(grip.attributes('aria-pressed')).toBe('false');
+    expect(wrapper.emitted('place-section')).toBeUndefined();
     wrapper.unmount();
   });
 

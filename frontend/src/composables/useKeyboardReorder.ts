@@ -7,6 +7,9 @@ import { computed, nextTick, ref, watch, type ComputedRef, type Ref } from 'vue'
 export const REORDER_HELP =
   'Tekan Spasi untuk mengangkat, panah atas atau bawah untuk memindah, Spasi untuk menjatuhkan, Escape untuk membatalkan.';
 
+/** What a move reports: `false` when it was refused or failed; anything else counts as done. */
+export type ReorderResult = boolean | void;
+
 export interface KeyboardReorderOptions {
   /** Keys in the full display order, before any preview. */
   order: ComputedRef<readonly string[]>;
@@ -16,8 +19,14 @@ export interface KeyboardReorderOptions {
   label: (key: string) => string;
   /** Noun used in the drop announcement, e.g. "Bagian" ("Bagian dipindahkan ke posisi 2 dari 3."). */
   noun: string;
-  /** Saves the move: `key` goes to `toIndex` (0-based, full order). Called only for a real move. */
-  onMove: (key: string, toIndex: number) => void;
+  /**
+   * Saves the move: `key` goes to `toIndex` (0-based, full order). Called only for a real move.
+   * Return `false` (or a promise of it) when the move was refused or failed; the list then goes back
+   * to its real order. A draft move returns nothing.
+   */
+  onMove: (key: string, toIndex: number) => ReorderResult | Promise<ReorderResult>;
+  /** Runs when a keyboard move ends: dropped and settled, cancelled, or cancelled by a list change. */
+  onFinish?: () => void;
 }
 
 export type KeyboardEdge = 'before' | 'after';
@@ -26,11 +35,13 @@ export type KeyboardEdge = 'before' | 'after';
  * Keyboard ordering for a grip button (WCAG 2.1.1), the keyboard twin of `useCardDragReorder`.
  * Space or Enter picks the item up; ArrowUp and ArrowDown move it one place, and the list previews
  * that place at once (renumbered by the caller through `arrange`); Space or Enter drops it and
- * saves through `onMove`; Escape cancels, and so does moving focus away. Every step is announced
- * in `announcement`, which the list renders in a polite live region.
+ * saves through `onMove`; Escape cancels, and so does moving focus away or a change to the list
+ * while the item is carried. Every step is announced in `announcement`, which the list renders in
+ * a polite live region.
  *
- * While a drop is being saved the new order stays on screen, so the grip keeps its focus; the
- * preview ends when the save finishes (the blocked flag clears) or when the order changes.
+ * While a dropped move is being saved its order stays on screen, so the grip keeps its focus. The
+ * preview ends when the save settles: on success the store already shows the same order; on refusal
+ * or failure the real order returns and the grip gets focus back.
  */
 export function useKeyboardReorder(options: KeyboardReorderOptions): {
   carriedKey: Ref<string | null>;
@@ -46,7 +57,9 @@ export function useKeyboardReorder(options: KeyboardReorderOptions): {
   const carriedKey = ref<string | null>(null);
   const carriedFrom = ref(0);
   const carriedTo = ref(0);
-  /** A dropped move whose save is still running: its order is shown until the save ends. */
+  /** The order when the item was picked up; a different order later cancels the carry. */
+  let carriedSnapshot = '';
+  /** A dropped move whose save is still running: its order is shown until the save settles. */
   const settling = ref<{ key: string; index: number } | null>(null);
   const announcement = ref('');
   /** The grip that holds the item; focus returns to it after each step. */
@@ -68,20 +81,26 @@ export function useKeyboardReorder(options: KeyboardReorderOptions): {
     return keys;
   });
 
-  // A finished save (or a refused one) ends the preview; a changed order already matches it.
-  watch(options.blocked, (value) => {
-    if (!value) settling.value = null;
-  });
-  watch(
-    () => options.order.value,
-    () => {
-      if (carriedKey.value === null) settling.value = null;
-    },
-  );
-
   function focusGrip(): void {
     void nextTick(() => grip?.focus());
   }
+
+  function finish(): void {
+    options.onFinish?.();
+  }
+
+  // A change to the list while an item is carried (a store refresh, a deletion) makes the carried
+  // position meaningless: the carry is cancelled and the user is told why.
+  watch(
+    () => options.order.value.join('\u0001'),
+    (keys) => {
+      if (carriedKey.value === null || keys === carriedSnapshot) return;
+      carriedKey.value = null;
+      carriedTo.value = carriedFrom.value;
+      announcement.value = 'Urutan berubah saat dipindahkan. Pemindahan dibatalkan.';
+      finish();
+    },
+  );
 
   function isCarried(key: string): boolean {
     return carriedKey.value === key;
@@ -115,6 +134,7 @@ export function useKeyboardReorder(options: KeyboardReorderOptions): {
     carriedKey.value = key;
     carriedFrom.value = from;
     carriedTo.value = from;
+    carriedSnapshot = order.join('\u0001');
     announcement.value = `${options.label(key)} diangkat. Posisi ${from + 1} dari ${order.length}.`;
   }
 
@@ -141,12 +161,21 @@ export function useKeyboardReorder(options: KeyboardReorderOptions): {
     if (to === from) {
       announcement.value = `Posisi tidak berubah: ${to + 1} dari ${total}.`;
       focusGrip();
+      finish();
       return;
     }
     settling.value = { key, index: to };
     announcement.value = `${options.noun} dipindahkan ke posisi ${to + 1} dari ${total}.`;
-    options.onMove(key, to);
     focusGrip();
+    const result = options.onMove(key, to);
+    void Promise.resolve(result).then((ok) => {
+      settling.value = null;
+      if (ok === false) {
+        announcement.value = 'Gagal memindahkan. Urutan dikembalikan.';
+        focusGrip();
+      }
+      finish();
+    });
   }
 
   function cancel(): void {
@@ -155,6 +184,7 @@ export function useKeyboardReorder(options: KeyboardReorderOptions): {
     carriedTo.value = carriedFrom.value;
     announcement.value = 'Dibatalkan.';
     focusGrip();
+    finish();
   }
 
   function onGripKeydown(event: KeyboardEvent, key: string): void {

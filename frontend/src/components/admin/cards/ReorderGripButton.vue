@@ -7,6 +7,9 @@ import { REORDER_HELP } from '../../../composables/useKeyboardReorder';
  * Space or Enter picks the row up, the arrow keys move it, Space or Enter drops it and Escape
  * cancels (`useKeyboardReorder`). Pointer drag starts on the wrapper, as it always did
  * (`useCardDragReorder`). `carried` mirrors the keyboard pick-up as `aria-pressed`.
+ *
+ * While `disabled` (a save runs) the grip stays focusable with `aria-disabled`, so focus is not
+ * dropped to <body> while the save settles; it ignores keys and pointer drag instead.
  */
 const props = defineProps<{
   id: string;
@@ -35,6 +38,11 @@ const title = computed(() =>
     : 'Seret untuk mengubah urutan, atau pilih dengan Spasi lalu gunakan panah.',
 );
 
+function onKeydown(event: KeyboardEvent): void {
+  if (props.disabled) return;
+  emit('keydown', event);
+}
+
 function onDragStart(event: DragEvent): void {
   event.dataTransfer?.setData('text/plain', props.dataText);
   event.dataTransfer?.setDragImage?.(event.target as Element, 24, 24);
@@ -54,15 +62,18 @@ function onDragStart(event: DragEvent): void {
     <button
       :id="id"
       type="button"
-      class="text-text-muted hover:text-brand-navy focus-visible:outline-focus-ring flex w-full items-center justify-center focus-visible:outline-2 focus-visible:outline-offset-[-2px] disabled:cursor-not-allowed disabled:opacity-50"
-      :class="carried ? 'bg-brand-navy text-white hover:text-white' : ''"
+      class="text-text-muted hover:text-brand-navy focus-visible:outline-focus-ring flex w-full items-center justify-center focus-visible:outline-2 focus-visible:outline-offset-[-2px]"
+      :class="[
+        carried ? 'bg-brand-navy text-white hover:text-white' : '',
+        disabled ? 'cursor-not-allowed opacity-50' : '',
+      ]"
       :aria-label="label"
       :aria-describedby="helpId"
       :aria-pressed="carried ? 'true' : 'false'"
-      :disabled="disabled"
+      :aria-disabled="disabled ? 'true' : undefined"
       :title="title"
       data-test="grip"
-      @keydown="emit('keydown', $event)"
+      @keydown="onKeydown"
       @blur="emit('blur', $event)"
     >
       <span :id="helpId" class="sr-only">{{ REORDER_HELP }}</span>

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, ref } from 'vue';
+import { flushPromises } from '@vue/test-utils';
 import { useKeyboardReorder } from '../composables/useKeyboardReorder';
 
 interface Setup {
@@ -11,16 +12,22 @@ interface Setup {
 }
 
 /** A grip button in the document, wired like the real component: keydown and blur go to the composable. */
-function setup(order: string[], blocked = false): Setup {
+function setup(
+  order: string[],
+  blocked = false,
+  moveResult: () => unknown = () => undefined,
+  onFinish?: () => void,
+): Setup {
   const orderRef = ref(order);
   const blockRef = ref(blocked);
-  const onMove = vi.fn<(key: string, toIndex: number) => void>();
+  const onMove = vi.fn<(key: string, toIndex: number) => unknown>(moveResult);
   const kb = useKeyboardReorder({
     order: computed(() => orderRef.value),
     blocked: computed(() => blockRef.value),
     label: (key) => `Bagian ${key}`,
     noun: 'Bagian',
-    onMove,
+    onMove: onMove as never,
+    onFinish,
   });
   const grip = document.createElement('button');
   grip.textContent = 'grip';
@@ -176,30 +183,91 @@ describe('useKeyboardReorder', () => {
     expect(onMove).toHaveBeenCalledWith('b', 2);
   });
 
-  it('shows a dropped order until the save ends, then the committed order takes over', async () => {
-    const { kb, onMove, blockRef, orderRef, grip } = setup(['a', 'b', 'c']);
+  it('shows a dropped order while the save is pending, then keeps the saved order', async () => {
+    let finish: (ok: boolean) => void = () => undefined;
+    const pending = new Promise<boolean>((resolve) => {
+      finish = resolve;
+    });
+    const { kb, onMove, orderRef, grip } = setup(['a', 'b', 'c'], false, () => pending);
     press(grip, ' ');
     press(grip, 'ArrowDown');
     press(grip, ' ');
     expect(onMove).toHaveBeenCalledWith('b', 2);
 
     const items = ['a', 'b', 'c'].map((id) => ({ id }));
-    // The save is running: the dropped order stays on screen.
-    blockRef.value = true;
-    await nextTick();
     expect(kb.arrange(items, (item) => item.id).map((item) => item.id)).toEqual(['a', 'c', 'b']);
-    // The save failed (the order did not change): the preview ends and the old order returns.
-    blockRef.value = false;
-    await nextTick();
-    expect(kb.arrange(items, (item) => item.id).map((item) => item.id)).toEqual(['a', 'b', 'c']);
 
-    // A saved order is shown as the committed order.
+    // The save succeeded: the store now holds the same order, the preview ends without a flicker.
+    orderRef.value = ['a', 'c', 'b'];
+    finish(true);
+    await flushPromises();
+    expect(kb.arrange(items, (item) => item.id).map((item) => item.id)).toEqual(['a', 'c', 'b']);
+    expect(kb.announcement.value).toBe('Bagian dipindahkan ke posisi 3 dari 3.');
+  });
+
+  it('restores the real order and announces the failure when the save is refused', async () => {
+    const { kb, grip } = setup(['a', 'b', 'c'], false, () => Promise.resolve(false));
+    grip.focus();
     press(grip, ' ');
     press(grip, 'ArrowDown');
     press(grip, ' ');
-    orderRef.value = ['a', 'c', 'b'];
+
+    await flushPromises();
+    const items = ['a', 'b', 'c'].map((id) => ({ id }));
+    expect(kb.arrange(items, (item) => item.id).map((item) => item.id)).toEqual(['a', 'b', 'c']);
+    expect(kb.announcement.value).toBe('Gagal memindahkan. Urutan dikembalikan.');
     await nextTick();
-    expect(kb.arrange(items, (item) => item.id).map((item) => item.id)).toEqual(['a', 'c', 'b']);
+    expect(document.activeElement).toBe(grip);
+  });
+
+  it('restores the real order when the move is refused synchronously', async () => {
+    const { kb, grip } = setup(['a', 'b'], false, () => false);
+    press(grip, ' ');
+    press(grip, 'ArrowUp');
+    press(grip, ' ');
+    await flushPromises();
+    const items = ['a', 'b'].map((id) => ({ id }));
+    expect(kb.arrange(items, (item) => item.id).map((item) => item.id)).toEqual(['a', 'b']);
+    expect(kb.announcement.value).toBe('Gagal memindahkan. Urutan dikembalikan.');
+  });
+
+  it('runs onFinish when a move settles, is cancelled, or ends with no change', async () => {
+    const onFinish = vi.fn<() => void>();
+    const { grip } = setup(['a', 'b', 'c'], false, () => true, onFinish);
+    press(grip, ' ');
+    press(grip, 'Escape');
+    expect(onFinish).toHaveBeenCalledTimes(1);
+
+    press(grip, ' ');
+    press(grip, 'ArrowDown');
+    press(grip, ' ');
+    await flushPromises();
+    expect(onFinish).toHaveBeenCalledTimes(2);
+
+    press(grip, ' ');
+    press(grip, ' ');
+    expect(onFinish).toHaveBeenCalledTimes(3);
+  });
+
+  it('cancels a carry when the list changes under it, and says why', async () => {
+    const onFinish = vi.fn<() => void>();
+    const { kb, orderRef, grip } = setup(['a', 'b', 'c'], false, () => undefined, onFinish);
+    press(grip, ' ');
+    press(grip, 'ArrowDown');
+    orderRef.value = ['a', 'c'];
+    await flushPromises();
+    expect(kb.isCarried('b')).toBe(false);
+    expect(kb.announcement.value).toBe('Urutan berubah saat dipindahkan. Pemindahan dibatalkan.');
+    expect(onFinish).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not cancel a carry when the list changes only because of the carry itself', async () => {
+    const { kb, orderRef, grip } = setup(['a', 'b', 'c']);
+    press(grip, ' ');
+    // The same keys in the same order (a re-computed array) do not count as a change.
+    orderRef.value = ['a', 'b', 'c'];
+    await flushPromises();
+    expect(kb.isCarried('b')).toBe(true);
   });
 
   it('does not reorder a list whose items do not match the order', () => {
