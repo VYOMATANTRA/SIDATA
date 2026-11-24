@@ -26,6 +26,15 @@ export type SectionFigure =
       source?: string;
       image?: { mediaId: string; alt: string };
       bars?: { unit?: string; items: { label: string; value: number }[] };
+    }
+  | {
+      /** Written by the chart editor (later); the reader and this service only read it. */
+      kind: 'chart';
+      tableId: string;
+      chartType: 'bar' | 'column';
+      series: 'total' | 'by_sex';
+      title: string;
+      source?: string;
     };
 
 /** Limits mirrored from the contract; the server stays the authority. */
@@ -87,6 +96,25 @@ export function figureFromBlock(block: ContentBlock | null | undefined): Section
     // Blank (or only spaces) means no shared credit, as the server would store it.
     const credit = text(meta['credit'])?.trim();
     return { kind: 'photos', ...(credit ? { credit } : {}), photos };
+  }
+
+  if (meta['kind'] === 'chart') {
+    const tableId = text(meta['tableId']);
+    const title = text(meta['title']);
+    const chartType = meta['chartType'];
+    const series = meta['series'];
+    if (!tableId || !title) return null;
+    if (chartType !== 'bar' && chartType !== 'column') return null;
+    if (series !== 'total' && series !== 'by_sex') return null;
+    const source = text(meta['source']);
+    return {
+      kind: 'chart',
+      tableId,
+      chartType,
+      series,
+      title,
+      ...(source ? { source } : {}),
+    };
   }
 
   if (meta['kind'] === 'diagram') {
