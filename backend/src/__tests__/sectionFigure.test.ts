@@ -396,6 +396,50 @@ describe('sectionFigureSchema', () => {
     });
   });
 
+  describe('chart', () => {
+    const chart = (extra: Record<string, unknown> = {}) => ({
+      kind: 'chart',
+      tableId: ID(7).toUpperCase(),
+      chartType: 'column',
+      series: 'by_sex',
+      title: '  Suku di Manggar ',
+      ...extra,
+    });
+
+    it('accepts a chart, lowercases the table id and trims text', () => {
+      const out = sectionFigureSchema.parse(chart({ source: ' Potensi ' }));
+      assert.deepEqual(JSON.parse(JSON.stringify(out)), {
+        kind: 'chart',
+        tableId: ID(7),
+        chartType: 'column',
+        series: 'by_sex',
+        title: 'Suku di Manggar',
+        source: 'Potensi',
+      });
+    });
+
+    it('rejects an invalid table id, unknown chart type or series, and a missing title', () => {
+      assert.match(message(chart({ tableId: 'abc' })), /Tabel data tidak valid/);
+      assert.match(message(chart({ chartType: 'line' })), /Jenis grafik tidak dikenal/);
+      assert.match(message(chart({ series: 'x' })), /Data grafik tidak dikenal/);
+      assert.match(message(chart({ title: ' ' })), /Judul grafik wajib diisi/);
+    });
+
+    it('limits title and source and refuses HTML and unknown keys', () => {
+      assert.match(message(chart({ title: 't'.repeat(121) })), /Judul grafik maksimal 120/);
+      assert.match(message(chart({ source: 's'.repeat(201) })), /Sumber grafik maksimal 200/);
+      assert.match(message(chart({ title: '<b>x</b>' })), /tidak boleh mengandung tag HTML/);
+      assert.match(message(chart({ photos: [] })), /tidak dikenal/);
+    });
+
+    it('carries no media and audits kind only', () => {
+      const out = sectionFigureSchema.parse(chart());
+      assert.deepEqual(figureMediaIds(out), []);
+      assert.deepEqual(figureAuditSummary(out), { kind: 'chart', photoCount: 0 });
+      assert.deepEqual(mediaIdsOfStoredFigure(JSON.parse(JSON.stringify(out))), []);
+    });
+  });
+
   it('rejects an unknown or missing kind and non-object input', () => {
     assert.match(message({ kind: 'video', photos: [] }), /Jenis gambar tidak dikenal/);
     assert.match(message({ photos: photos(1) }), /Jenis gambar tidak dikenal/);

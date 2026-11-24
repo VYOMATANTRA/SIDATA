@@ -138,9 +138,37 @@ const diagramFigure = z
     message: 'Diagram harus berisi gambar atau diagram batang',
   });
 
+export const CHART_TYPES = ['bar', 'column'] as const;
+export const CHART_SERIES = ['total', 'by_sex'] as const;
+
+/**
+ * A chart drawn from an indicator table (SPEC §2). It stores a reference, never the numbers, so
+ * the chart follows the table. The table must sit on the same Cerita page as the section; that
+ * is checked in the service because it needs the database.
+ */
+const chartFigure = z.strictObject(
+  {
+    kind: z.literal('chart'),
+    tableId: z
+      .string({ error: 'Tabel data belum dipilih' })
+      .trim()
+      .refine((v) => UUID_PATTERN.test(v), 'Tabel data tidak valid. Pilih ulang tabelnya')
+      .transform((v) => v.toLowerCase()),
+    chartType: z.enum(CHART_TYPES, {
+      error: 'Jenis grafik tidak dikenal. Pilih batang atau kolom',
+    }),
+    series: z.enum(CHART_SERIES, {
+      error: 'Data grafik tidak dikenal. Pilih jumlah total atau per jenis kelamin',
+    }),
+    title: text('Judul grafik', 120, { required: true }),
+    source: optionalText('Sumber grafik', 200),
+  },
+  { error: 'Gambar memuat isian yang tidak dikenal' },
+);
+
 export const sectionFigureSchema = z
-  .discriminatedUnion('kind', [singlePhotoFigure, photoGroupFigure, diagramFigure], {
-    error: 'Jenis gambar tidak dikenal. Pilih foto, kelompok foto, atau diagram',
+  .discriminatedUnion('kind', [singlePhotoFigure, photoGroupFigure, diagramFigure, chartFigure], {
+    error: 'Jenis gambar tidak dikenal. Pilih foto, kelompok foto, diagram, atau grafik',
   })
   .superRefine((figure, ctx) => {
     const ids = figureMediaIds(figure, { dedupe: false });
@@ -178,13 +206,26 @@ export function figureMediaIds(
   figure: SectionFigure,
   options: { dedupe?: boolean } = {},
 ): string[] {
-  const ids =
-    figure.kind === 'diagram'
-      ? figure.image
-        ? [figure.image.mediaId]
-        : []
-      : figure.photos.map((p) => p.mediaId);
+  const ids = rawMediaIds(figure);
   return options.dedupe === false ? ids : [...new Set(ids)];
+}
+
+function rawMediaIds(figure: SectionFigure): string[] {
+  switch (figure.kind) {
+    case 'photo':
+    case 'photos':
+      return figure.photos.map((p) => p.mediaId);
+    case 'diagram':
+      return figure.image ? [figure.image.mediaId] : [];
+    case 'chart':
+      return [];
+    default:
+      return assertNever(figure);
+  }
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled figure kind: ${JSON.stringify(value)}`);
 }
 
 /** Media ids of a stored figure (`metadata` JSON) without re-validating it; tolerant of junk. */
@@ -207,8 +248,5 @@ export function mediaIdsOfStoredFigure(metadata: unknown): string[] {
 
 /** Audit-safe summary: kind and photo count only, never captions or alt text. */
 export function figureAuditSummary(figure: SectionFigure): { kind: string; photoCount: number } {
-  return {
-    kind: figure.kind,
-    photoCount: figure.kind === 'diagram' ? (figure.image ? 1 : 0) : figure.photos.length,
-  };
+  return { kind: figure.kind, photoCount: rawMediaIds(figure).length };
 }

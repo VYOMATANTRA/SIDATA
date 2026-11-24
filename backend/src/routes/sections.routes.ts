@@ -6,6 +6,8 @@ import {
   reorderSectionBlocksHandler,
   putSectionFigureHandler,
   deleteSectionFigureHandler,
+  moveSectionHandler,
+  duplicateSectionHandler,
 } from '../controllers/sections.controller.js';
 import { verifyToken } from '../middlewares/auth.middleware.js';
 import { requireEditorOrAdmin } from '../middlewares/role.middleware.js';
@@ -35,6 +37,23 @@ router.delete(
   requireEditorOrAdmin,
   pagesWriteLimiter,
   deleteSectionHandler,
+);
+
+router.post(
+  '/:id/move',
+  apiLimiter,
+  verifyToken,
+  requireEditorOrAdmin,
+  pagesWriteLimiter,
+  moveSectionHandler,
+);
+router.post(
+  '/:id/duplicate',
+  apiLimiter,
+  verifyToken,
+  requireEditorOrAdmin,
+  pagesWriteLimiter,
+  duplicateSectionHandler,
 );
 
 // Section prose blocks (budgeted with the other content-block writes)

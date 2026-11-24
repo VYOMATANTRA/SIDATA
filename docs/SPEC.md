@@ -188,8 +188,18 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
   - **Standalone blocks.** `hero`, `sambutan_lurah`, `highlight` and the profile/catalog blocks
     (`section_id` NULL) can be neither created nor deleted through these endpoints (delete: `409
     STANDALONE_BLOCK_PROTECTED`); they are edited only via `PATCH /api/content-blocks/:slug`.
-  - **Section figure.** A section carries at most one figure: one photo, a group of 2–12 photos, or a
-    diagram (a stored `figure` content block, §7). Editors and Admins manage it only through
+  - **Move and duplicate a section.** `POST /api/sections/:id/move` (`{ targetChapterId,
+    expectedUpdatedAt }`) puts the section at the end of another chapter **of the same page** (`422`
+    for another page, `400` for its own chapter); its prose, figure, indicators and tables go with it,
+    its slug gets a numeric suffix if the target already uses it, and both chapters' tokens are bumped
+    (response: `section`, `chapter`, `fromChapter`). `POST /api/sections/:id/duplicate`
+    (`{ expectedUpdatedAt }`, `201`) appends a copy at the end of the same chapter titled "<title>
+    (salinan)" with copies of its prose blocks (same order, fresh slugs) and its figure (photos are
+    attached to the copy as well; a chart keeps its table). Indicators and tables are data rows and
+    are **not** copied. Both lock chapters then section, run in one transaction and are audited
+    (`section.moved`, `section.duplicated`, info).
+  - **Section figure.** A section carries at most one figure: one photo, a group of 2–12 photos, a
+    diagram, or a chart (a stored `figure` content block, §7). Editors and Admins manage it only through
     `PUT /api/sections/:id/figure` (body `{ expectedUpdatedAt, figure }`, creates or replaces) and
     `DELETE /api/sections/:id/figure?expectedUpdatedAt=` (`404 FIGURE_NOT_FOUND` when there is none);
     both are CSRF-protected, use the content-block write limiter, and run in one transaction with the
@@ -208,6 +218,13 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
       finite number value of at most 1 000 000 000 in magnitude, unique labels (compared trimmed and case-insensitively), unit ≤ 20; the serialized figure may not exceed 12 000 characters. Text is trimmed (a blank optional field is dropped), unknown keys
       are refused, the same media asset may not appear twice in one figure, and text may contain no HTML
       tags or control/bidi characters. Every `mediaId` must be a `cerita`-purpose photo upload (§7).
+    - **Chart:** `{ kind: 'chart', tableId, chartType: 'bar' | 'column', series: 'total' | 'by_sex', title,
+      source? }`, title 1–120, source ≤ 200. It stores a reference to an indicator table, never the
+      numbers, so the chart follows the table. The table must exist and sit on the **same Cerita page**
+      as the section (`422` otherwise). A chart has no media. While any chart uses a table, deleting that
+      table, or moving it to a section on another page, answers `409` (moving within the page is fine).
+      `by_sex` needs a table with a male/female split (`age_pyramid`, `religion_by_sex`); `422` otherwise.
+      Line charts are not offered: the tables hold one snapshot period, not a time series.
     - Media is attached with reference `('content_block', <figure block id>, 'figure')` for every photo in
       the new figure and detached for photos the replaced figure had and the new one lacks; deleting the
       figure detaches all of its photos. An asset still referenced elsewhere stays published. Media
@@ -596,11 +613,15 @@ setup-password, the OAuth callback, `/dashboard` (its own `<main>`) and the admi
     missing cells and no bar for them.
   **Stored figure.** The reader reads the section's `figure` block (§7 `content_blocks`) from the
   same `GET /api/content-blocks` request as the paragraphs and draws it with the article figure
-  components: one photo, an offset pair for two, a swipeable row for three or more, or a diagram
-  (picture or bars, with its source). Photos are addressed as `/api/media/<mediaId>` (full size; the
+  components: one photo, an offset pair for two, a swipeable row for three or more, a diagram
+  (picture or bars, with its source), or a chart. A chart reads the indicator table it names (same
+  page, looked up by id among the page's loaded tables): `bar` draws horizontal bars, `column` vertical
+  columns, and `by_sex` draws male and female per row, told apart by text labels (in horizontal bars the series is named in each bar's label; columns also use a hatch pattern) as
+  well as colour; `total` draws one value per row. Each chart has a "Lihat sebagai tabel" table with the
+  same values and its source. A chart whose table is missing or has no value left renders nothing. Photos are addressed as `/api/media/<mediaId>` (full size; the
   thumbnail variant is not used because the cards are shown large). Alt text, caption and credit are
   shown as stored; a photo without its own credit shows the group's shared credit. The stored data is parsed defensively (`utils/ceritaStoredFigure.ts`): a figure
-  of an unknown kind or shape, a photo without alt text or with a malformed id, and a bar without a
+  of an unknown kind or shape (a chart with a bad table id, type, series or title included), a photo without alt text or with a malformed id, and a bar without a
   label or finite value are left out rather than raising an error; a figure block with no section,
   or for a section not on the page, is ignored. A figure counts as content, so a section that holds
   only a figure renders and is not reported as empty. **A photo that fails to load** (never attached,

@@ -83,7 +83,8 @@ export function formatBarValue(value: number): string {
 
 export function draftFromFigure(figure: SectionFigure | null): FigureDraft {
   const draft = emptyDraft();
-  if (!figure) return draft;
+  // A chart is not editable here yet: its draft stays empty so it is never saved over by accident.
+  if (!figure || figure.kind === 'chart') return draft;
 
   draft.kind = figure.kind;
   if (figure.kind === 'photo' || figure.kind === 'photos') {
@@ -507,6 +508,7 @@ export function describeFigure(figure: SectionFigure | null): string {
     return 'Gambar tersimpan, tetapi isinya tidak dapat dibaca. Simpan gambar baru untuk menggantinya.';
   if (figure.kind === 'photo') return 'Tersimpan: satu foto.';
   if (figure.kind === 'photos') return `Tersimpan: ${figure.photos.length} foto.`;
+  if (figure.kind === 'chart') return `Tersimpan: grafik “${figure.title}”.`;
   return `Tersimpan: diagram “${figure.title}”.`;
 }
 
@@ -516,5 +518,6 @@ export function summarizeFigure(figure: SectionFigure | null, exists: boolean): 
   if (!figure) return 'gambar yang isinya tidak dapat dibaca';
   if (figure.kind === 'photo') return 'satu foto';
   if (figure.kind === 'photos') return `${figure.photos.length} foto`;
+  if (figure.kind === 'chart') return `grafik “${figure.title}”`;
   return `diagram “${figure.title}”`;
 }
