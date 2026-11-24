@@ -324,3 +324,81 @@ describe('CeritaLivePreview: the chart table cannot be fetched', () => {
     wrapper.unmount();
   });
 });
+
+describe('CeritaLivePreview: start-up, clipping and reloads', () => {
+  it('sends the draft when the frame loads, not only on its ready message', () => {
+    const wrapper = mountPreview({ sectionTitle: 'Muat' });
+    vi.spyOn(frameWindow(wrapper), 'postMessage');
+
+    wrapper.find('iframe').trigger('load');
+
+    expect(postedMessages(wrapper)).toHaveLength(1);
+    expect(postedMessages(wrapper)[0]).toMatchObject({ type: 'cerita-preview', title: 'Muat' });
+    wrapper.unmount();
+  });
+
+  it('says the preview cannot load when no ready message arrives in time, and retries on request', async () => {
+    vi.useFakeTimers();
+    const wrapper = mountPreview();
+    expect(wrapper.find('[data-test="preview-load-failed"]').exists()).toBe(false);
+
+    vi.advanceTimersByTime(8000);
+    await wrapper.vm.$nextTick();
+
+    const failed = wrapper.find('[data-test="preview-load-failed"]');
+    expect(failed.attributes('role')).toBe('status');
+    expect(failed.text()).toContain('Pratinjau belum bisa dimuat');
+    expect(wrapper.find('iframe').exists()).toBe(false);
+
+    await wrapper.find('[data-test="preview-retry"]').trigger('click');
+    expect(wrapper.find('[data-test="preview-load-failed"]').exists()).toBe(false);
+    const fresh = wrapper.find('iframe').element as HTMLIFrameElement;
+    expect(fresh).toBeTruthy();
+
+    receive({ type: 'cerita-preview-ready' }, fresh.contentWindow);
+    vi.advanceTimersByTime(8000);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('[data-test="preview-load-failed"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('clips a body longer than the preview keeps, still updates the preview, and says it was cut', () => {
+    const wrapper = mountPreview({ body: 'x'.repeat(60_000) });
+    expect(wrapper.find('[data-test="preview-clipped"]').text()).toContain('Pratinjau dipotong');
+    vi.spyOn(frameWindow(wrapper), 'postMessage');
+
+    receive({ type: 'cerita-preview-ready' }, wrapper.find('iframe').element.contentWindow);
+
+    const [message] = postedMessages(wrapper);
+    expect(message?.['body']).toHaveLength(50_000);
+    wrapper.unmount();
+  });
+
+  it('does not show the cut note for a body within the limit', () => {
+    const wrapper = mountPreview({ body: 'Pendek.' });
+    expect(wrapper.find('[data-test="preview-clipped"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('does not fetch a photo again when only its caption changes, and the caption reaches the preview', async () => {
+    const figure = (caption: string): ArticleFigure => ({
+      kind: 'photo',
+      photo: { id: `/api/media/${MEDIA}`, src: `/api/media/${MEDIA}`, alt: 'Balai', caption },
+    });
+    const wrapper = mountPreview({ figure: figure('A') });
+    await flushPromises();
+    expect(fetchMediaPreviewBlob).toHaveBeenCalledTimes(1);
+
+    vi.spyOn(frameWindow(wrapper), 'postMessage');
+    await wrapper.setProps({ figure: figure('AB') });
+    await flushPromises();
+
+    expect(fetchMediaPreviewBlob).toHaveBeenCalledTimes(1);
+    receive({ type: 'cerita-preview-ready' }, wrapper.find('iframe').element.contentWindow);
+    const [message] = postedMessages(wrapper);
+    const sent = message?.['figure'] as ArticleFigure;
+    expect(sent.kind === 'photo' && sent.photo.caption).toBe('AB');
+    expect(sent.kind === 'photo' && sent.photo.src).toBe('blob:http://localhost/1');
+    wrapper.unmount();
+  });
+});

@@ -76,10 +76,40 @@ describe('parsePreviewPayload', () => {
     expect(parsePreviewPayload(null)).toBeNull();
   });
 
-  it('refuses a payload whose text fields have the wrong type or are too long', () => {
+  it('refuses a payload whose text fields have the wrong type', () => {
     expect(parsePreviewPayload(draft({ title: 42 }))).toBeNull();
-    expect(parsePreviewPayload(draft({ body: 'x'.repeat(50_001) }))).toBeNull();
+    expect(parsePreviewPayload(draft({ body: { text: 'x' } }))).toBeNull();
     expect(parsePreviewPayload(draft({ chapterLabel: undefined }))).toBeNull();
+  });
+
+  it('clips an over-long body instead of dropping the update (a pasted 60,000 characters)', () => {
+    const parsed = parsePreviewPayload(draft({ body: 'x'.repeat(60_000) }));
+    expect(parsed).not.toBeNull();
+    expect(parsed?.body).toHaveLength(50_000);
+  });
+
+  it('clips an over-long title to 255 characters', () => {
+    expect(parsePreviewPayload(draft({ title: 'y'.repeat(300) }))?.title).toHaveLength(255);
+  });
+
+  it('clips an over-long alt text and caption, and keeps the photo', () => {
+    const parsed = parsePreviewPayload(
+      draft({
+        figure: {
+          kind: 'photo',
+          photo: {
+            id: MEDIA,
+            src: 'blob:http://localhost/1',
+            alt: 'a'.repeat(400),
+            caption: 'c'.repeat(250),
+          },
+        },
+      }),
+    );
+    expect(parsed?.figure?.kind).toBe('photo');
+    if (parsed?.figure?.kind !== 'photo') return;
+    expect(parsed.figure.photo.alt).toHaveLength(300);
+    expect(parsed.figure.photo.caption).toHaveLength(200);
   });
 
   it('refuses a figure of an unknown kind or with a malformed photo', () => {
@@ -107,13 +137,20 @@ describe('parsePreviewPayload', () => {
     expect(parsePreviewPayload(draft({ tables }))).toBeNull();
   });
 
-  it('refuses a photo group above the photo limit', () => {
+  it('clips a photo group to the photo limit', () => {
     const photos = Array.from({ length: 13 }, (_, i) => ({
       id: `p${i}`,
       src: `/api/media/${MEDIA}`,
       alt: 'Foto',
     }));
-    expect(parsePreviewPayload(draft({ figure: { kind: 'photos', photos } }))).toBeNull();
+    const parsed = parsePreviewPayload(draft({ figure: { kind: 'photos', photos } }));
+    expect(parsed?.figure?.kind === 'photos' && parsed.figure.photos).toHaveLength(12);
+  });
+
+  it('refuses a payload whose figure is malformed, even when everything else is fine', () => {
+    expect(
+      parsePreviewPayload(draft({ figure: { kind: 'photo', photo: { id: 'a', src: 1, alt: 'x' } } })),
+    ).toBeNull();
   });
 });
 
