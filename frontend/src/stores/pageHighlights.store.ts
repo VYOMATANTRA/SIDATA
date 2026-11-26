@@ -81,10 +81,13 @@ export const usePageHighlightsStore = defineStore('pageHighlights', () => {
    * Undefined when the map has no entry for the topic, so the caller falls back to content order.
    */
   function idsForPage(pageSlug: string): string[] | undefined {
-    const lists = statPageSlugs(pageSlug)
-      .map((slug) => highlightsBySlug.value[slug]?.indicatorIds)
-      .filter((ids): ids is string[] => Array.isArray(ids));
-    return lists.length > 0 ? mergeHighlightIds(lists) : undefined;
+    const entries = statPageSlugs(pageSlug)
+      .map((slug) => highlightsBySlug.value[slug])
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined);
+    if (entries.length === 0) return undefined;
+    // An editor's choice on either slug is authoritative: never blend it with auto-picked ids.
+    const chosen = entries.filter((entry) => !entry.isFallback);
+    return mergeHighlightIds((chosen.length > 0 ? chosen : entries).map((e) => e.indicatorIds));
   }
 
   return {

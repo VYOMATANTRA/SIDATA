@@ -119,4 +119,23 @@ describe('page highlights against real MySQL', () => {
       indicators[1]!.id,
     ]);
   });
+
+  it('saves an indicator whose stale highlight row sits on its former topic', async () => {
+    const { page, indicators } = await seed();
+    const other = await prisma.page.create({
+      data: { slug: 'kesehatan', title: 'Kesehatan', sortOrder: 1 },
+    });
+    await prisma.pageHighlight.create({
+      data: { pageId: other.id, indicatorId: indicators[0]!.id, position: 1 },
+    });
+    await setPageHighlights(
+      'pendidikan',
+      { indicatorIds: [indicators[0]!.id], expectedUpdatedAt: await fresh(page.id) },
+      ACTOR,
+      REQUEST_CONTEXT,
+    );
+    assert.deepEqual((await getAllPageHighlights())['pendidikan']?.indicatorIds, [
+      indicators[0]!.id,
+    ]);
+  });
 });

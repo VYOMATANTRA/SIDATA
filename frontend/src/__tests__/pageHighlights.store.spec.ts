@@ -88,11 +88,16 @@ describe('indicators store getStatsForPage (landing card)', () => {
     expect(stats.map((stat) => stat.label)).toEqual(['K lima', 'K empat', 'K tiga', 'K dua']);
   });
 
-  it('returns nothing for chosen ids that are all unknown, rather than the fallback', () => {
+  it('falls back to content order when none of the chosen ids resolve', () => {
     const store = useIndicatorsStore();
     store.indicators = indicatorRows;
 
-    expect(store.getStatsForPage('kependudukan', ['gone'])).toEqual([]);
+    expect(store.getStatsForPage('kependudukan', ['gone'])).toEqual(
+      store.getStatsForPage('kependudukan'),
+    );
+    expect(store.getStatsForPage('kependudukan', [])).toEqual(
+      store.getStatsForPage('kependudukan'),
+    );
   });
 
   it('merges the waste topic across both slugs and caps the content-order fallback at four', () => {

@@ -368,8 +368,8 @@ export const useIndicatorsStore = defineStore('indicators', () => {
       return typeof itemSlug === 'string' && topicSlugs.has(itemSlug);
     };
 
-    let chosen: Indicator[];
-    if (ids) {
+    let chosen: Indicator[] = [];
+    if (ids && ids.length > 0) {
       const byId = new Map(indicators.value.map((item) => [item.id, item] as const));
       const seen = new Set<string>();
       chosen = [];
@@ -379,7 +379,9 @@ export const useIndicatorsStore = defineStore('indicators', () => {
         const item = byId.get(id);
         if (item && onTopic(item)) chosen.push(item);
       }
-    } else {
+    }
+    // No ids, or none resolvable (indicators not loaded yet): content order, never a blank card.
+    if (chosen.length === 0) {
       chosen = indicators.value.filter(onTopic).sort((a, b) => a.sortOrder - b.sortOrder);
     }
 

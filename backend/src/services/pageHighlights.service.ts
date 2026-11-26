@@ -162,7 +162,11 @@ export async function setPageHighlights(
         }
       }
 
-      await tx.pageHighlight.deleteMany({ where: { pageId: page.id } });
+      // An indicator can sit on one page only. Also clear any stale row left on its former
+      // topic (its section was moved), or the unique indicator index would fail this save.
+      await tx.pageHighlight.deleteMany({
+        where: { OR: [{ pageId: page.id }, { indicatorId: { in: input.indicatorIds } }] },
+      });
       if (input.indicatorIds.length > 0) {
         await tx.pageHighlight.createMany({
           data: input.indicatorIds.map((indicatorId, i) => ({
