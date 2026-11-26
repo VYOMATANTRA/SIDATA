@@ -20,7 +20,6 @@ export interface DashboardStaleIndicator {
 
 export interface DashboardHealth {
   staleIndicators: { count: number; items: DashboardStaleIndicator[] };
-  pagesWithoutHighlights: Array<{ slug: string; title: string }>;
   rtLeadersWithoutCoordinates: number;
   rtLeadersWithIntegrityConflicts: number;
 }
