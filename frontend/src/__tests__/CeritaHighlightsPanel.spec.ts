@@ -192,6 +192,13 @@ describe('CeritaHighlightsPanel', () => {
     expect(saveButton(current).disabled).toBe(true);
   });
 
+  it('keeps Simpan disabled for an automatic list that is empty', async () => {
+    serverList([], true);
+    const current = await mountPanel();
+
+    expect(saveButton(current).disabled).toBe(true);
+  });
+
   it('shows no "Otomatis" label for a list the editor has chosen', async () => {
     serverList(['i1', 'i2']);
     const current = await mountPanel();

@@ -68,7 +68,7 @@ const announcement = ref('');
 
 // While the server only falls back to the first four, Simpan stays enabled so one click pins them.
 const dirty = computed(
-  () => serverIsFallback.value || !sameIds(draft.value, serverIds.value),
+  () => (serverIsFallback.value && draft.value.length > 0) || !sameIds(draft.value, serverIds.value),
 );
 const atLimit = computed(() => draft.value.length >= MAX_STAT_HIGHLIGHTS);
 const ready = computed(() => token.value !== null && indicatorsStore.isLoaded);
@@ -311,7 +311,7 @@ async function save(): Promise<void> {
     draft.value = [...serverIds.value];
     saving.value = false;
     announce('Statistik unggulan disimpan.');
-    // "Simpan" is disabled now that nothing is unsaved; hand the focus to the heading.
+    // Hand the focus to the heading: the saved list is shown and "Simpan" rests until the next change.
     focusById(headingId);
     return;
   }
