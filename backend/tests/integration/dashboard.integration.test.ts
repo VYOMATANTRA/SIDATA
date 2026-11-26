@@ -12,7 +12,7 @@ describe('getDashboard against real MySQL', () => {
     await prisma.$disconnect();
   });
 
-  it('counts content, flags stale figures and topics without highlights, and lists only content changes', async () => {
+  it('counts content, flags stale figures, and lists only content changes', async () => {
     const page = await prisma.page.create({
       data: { slug: 'pendidikan', title: 'Pendidikan', sortOrder: 0 },
     });
@@ -53,9 +53,6 @@ describe('getDashboard against real MySQL', () => {
       label: 'Jumlah guru',
       pageSlug: 'pendidikan',
     });
-    assert.deepEqual(d.health.pagesWithoutHighlights, [
-      { slug: 'pendidikan', title: 'Pendidikan' },
-    ]);
     assert.equal(d.recentChanges.length, 1);
     assert.equal(d.recentChanges[0]!.actorName, 'a');
   });

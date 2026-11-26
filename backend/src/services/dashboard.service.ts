@@ -1,5 +1,4 @@
 import prisma from '../utils/prisma.js';
-import { getAllPageHighlights } from './pageHighlights.service.js';
 import { getMapSummary } from './maps.service.js';
 import { PUBLIKASI_SLUG } from './publikasiCatalog.service.js';
 
@@ -42,7 +41,6 @@ export interface DashboardDTO {
       count: number;
       items: Array<{ id: string; label: string; pageSlug: string | null }>;
     };
-    pagesWithoutHighlights: Array<{ slug: string; title: string }>;
     rtLeadersWithoutCoordinates: number;
     rtLeadersWithIntegrityConflicts: number;
   };
@@ -80,59 +78,47 @@ function publicationCount(metadata: unknown): number {
 
 export async function getDashboard(): Promise<DashboardDTO> {
   const client = prisma;
-  const [
-    indicators,
-    indicatorTables,
-    pages,
-    catalog,
-    stale,
-    staleCount,
-    highlights,
-    pageRows,
-    mapSummary,
-    changes,
-  ] = await Promise.all([
-    client.indicator.count(),
-    client.indicatorTable.count(),
-    client.page.count(),
-    client.contentBlock.findFirst({ where: { slug: PUBLIKASI_SLUG }, select: { metadata: true } }),
-    client.indicator.findMany({
-      where: { isStale: true },
-      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
-      take: STALE_PREVIEW_LIMIT,
-      select: {
-        id: true,
-        label: true,
-        section: { select: { chapter: { select: { page: { select: { slug: true } } } } } },
-      },
-    }),
-    client.indicator.count({ where: { isStale: true } }),
-    getAllPageHighlights(client),
-    client.page.findMany({
-      orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
-      select: { slug: true, title: true },
-    }),
-    getMapSummary(),
-    client.auditLog.findMany({
-      where: {
-        AND: [
-          { OR: RECENT_CHANGE_PREFIXES.map((p) => ({ action: { startsWith: p } })) },
-          // Seed/import rows are written by the `system` actor. The explicit null branch is
-          // needed because SQL `NULL <> 'system'` is not true, so a bare `not` drops null roles.
-          { OR: [{ actorRole: null }, { actorRole: { not: 'system' } }] },
-        ],
-      },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: RECENT_CHANGES_LIMIT,
-      select: {
-        action: true,
-        targetType: true,
-        targetLabel: true,
-        actorEmail: true,
-        createdAt: true,
-      },
-    }),
-  ]);
+  const [indicators, indicatorTables, pages, catalog, stale, staleCount, mapSummary, changes] =
+    await Promise.all([
+      client.indicator.count(),
+      client.indicatorTable.count(),
+      client.page.count(),
+      client.contentBlock.findFirst({
+        where: { slug: PUBLIKASI_SLUG },
+        select: { metadata: true },
+      }),
+      client.indicator.findMany({
+        where: { isStale: true },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+        take: STALE_PREVIEW_LIMIT,
+        select: {
+          id: true,
+          label: true,
+          section: { select: { chapter: { select: { page: { select: { slug: true } } } } } },
+        },
+      }),
+      client.indicator.count({ where: { isStale: true } }),
+      getMapSummary(),
+      client.auditLog.findMany({
+        where: {
+          AND: [
+            { OR: RECENT_CHANGE_PREFIXES.map((p) => ({ action: { startsWith: p } })) },
+            // Seed/import rows are written by the `system` actor. The explicit null branch is
+            // needed because SQL `NULL <> 'system'` is not true, so a bare `not` drops null roles.
+            { OR: [{ actorRole: null }, { actorRole: { not: 'system' } }] },
+          ],
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: RECENT_CHANGES_LIMIT,
+        select: {
+          action: true,
+          targetType: true,
+          targetLabel: true,
+          actorEmail: true,
+          createdAt: true,
+        },
+      }),
+    ]);
 
   return {
     counts: {
@@ -152,11 +138,6 @@ export async function getDashboard(): Promise<DashboardDTO> {
           pageSlug: row.section.chapter.page.slug,
         })),
       },
-      // A topic with indicators but no chosen highlights (the card shows the automatic first four).
-      pagesWithoutHighlights: pageRows.filter((p) => {
-        const h = highlights[p.slug];
-        return h !== undefined && h.isFallback && h.indicatorIds.length > 0;
-      }),
       rtLeadersWithoutCoordinates: mapSummary.rtLeadersWithoutCoordinates,
       rtLeadersWithIntegrityConflicts: mapSummary.rtLeadersWithIntegrityConflicts,
     },
