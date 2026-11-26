@@ -7,7 +7,6 @@ import { PUBLIKASI_SLUG } from './publikasiCatalog.service.js';
 export const RECENT_CHANGE_PREFIXES = [
   'indicator.',
   'indicator_table.',
-  'indicator_table_row.',
   'content_block.',
   'page.',
   'chapter.',
@@ -115,7 +114,14 @@ export async function getDashboard(): Promise<DashboardDTO> {
     }),
     getMapSummary(),
     client.auditLog.findMany({
-      where: { OR: RECENT_CHANGE_PREFIXES.map((p) => ({ action: { startsWith: p } })) },
+      where: {
+        AND: [
+          { OR: RECENT_CHANGE_PREFIXES.map((p) => ({ action: { startsWith: p } })) },
+          // Seed/import rows are written by the `system` actor. The explicit null branch is
+          // needed because SQL `NULL <> 'system'` is not true, so a bare `not` drops null roles.
+          { OR: [{ actorRole: null }, { actorRole: { not: 'system' } }] },
+        ],
+      },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: RECENT_CHANGES_LIMIT,
       select: {
