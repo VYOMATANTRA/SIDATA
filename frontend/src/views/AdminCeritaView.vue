@@ -48,6 +48,7 @@ import CeritaLivePreview from '../components/admin/cerita/CeritaLivePreview.vue'
 import CeritaSectionPane from '../components/admin/cerita/CeritaSectionPane.vue';
 import CeritaStructureTree from '../components/admin/cerita/CeritaStructureTree.vue';
 import CeritaChapterOverview from '../components/admin/cerita/CeritaChapterOverview.vue';
+import CeritaHighlightsPanel from '../components/admin/cerita/CeritaHighlightsPanel.vue';
 import CeritaMoveSectionDialog from '../components/admin/cerita/CeritaMoveSectionDialog.vue';
 import { ceritaIds } from '../components/admin/cerita/ceritaDomIds';
 import { pendingFigureKind, type PendingFigureKind } from '../composables/figureKindHint';
@@ -1821,6 +1822,11 @@ onUnmounted(() => {
           class="min-w-0 space-y-6 p-4 2xl:p-8 md:col-start-2 md:row-start-1 md:p-6"
           data-test="section-column"
         >
+          <CeritaHighlightsPanel
+            v-if="page && !selectedSection"
+            :key="page.slug"
+            :page="page"
+          />
           <CeritaSectionPane
             v-if="selectedSection && selectedMeta"
             :section-id="selectedSection.id"

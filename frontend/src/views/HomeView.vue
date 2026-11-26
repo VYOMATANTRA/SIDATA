@@ -4,6 +4,7 @@ import { onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useContentBlocksStore } from '../stores/contentBlocks.store';
 import { useIndicatorsStore } from '../stores/indicators.store';
+import { usePageHighlightsStore } from '../stores/pageHighlights.store';
 import { isRouteAvailable as checkRouteAvailable } from '@/config/publicNav';
 import SectionHero from '../components/landing/SectionHero.vue';
 import SectionSambutanLurah from '../components/landing/SectionSambutanLurah.vue';
@@ -108,6 +109,7 @@ const CERITA_CATEGORIES: CeritaPreviewCategory[] = [
 const router = useRouter();
 const contentBlocksStore = useContentBlocksStore();
 const indicatorsStore = useIndicatorsStore();
+const pageHighlightsStore = usePageHighlightsStore();
 
 function isRouteAvailable(path: string): boolean {
   return checkRouteAvailable(router, path);
@@ -115,7 +117,13 @@ function isRouteAvailable(path: string): boolean {
 
 onMounted(async () => {
   // The public settings load belongs to PublicLayout; this view only owns its own content.
-  await Promise.allSettled([contentBlocksStore.fetchBlocks(), indicatorsStore.fetchIndicators()]);
+  // Indicators and the chosen highlights load in parallel; both stores swallow their own errors,
+  // and a failed highlights load falls back to the first four indicators in content order.
+  await Promise.allSettled([
+    contentBlocksStore.fetchBlocks(),
+    indicatorsStore.fetchIndicators(),
+    pageHighlightsStore.fetchHighlights(),
+  ]);
 });
 </script>
 
@@ -144,7 +152,12 @@ onMounted(async () => {
             :key="category.slug"
             :title="category.title"
             :description="category.description"
-            :stats="indicatorsStore.getStatsForPage(category.slug)"
+            :stats="
+              indicatorsStore.getStatsForPage(
+                category.slug,
+                pageHighlightsStore.idsForPage(category.slug),
+              )
+            "
             :card-title="category.cardTitle"
             card-variant="glass"
             heading-tag="h3"

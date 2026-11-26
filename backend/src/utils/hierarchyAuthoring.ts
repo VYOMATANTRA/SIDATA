@@ -60,6 +60,7 @@ export const MAX_REORDER_ITEMS = 500;
 
 export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
   'reorder',
+  'highlights',
   'api',
   'admin',
   'auth',

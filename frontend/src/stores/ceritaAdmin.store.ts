@@ -688,6 +688,34 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     return outcome;
   }
 
+  /**
+   * Reads a topic's chosen highlights for the editor. A failure is reported like a write's, so the
+   * panel can show it with the same banner.
+   */
+  async function loadHighlights(
+    pageSlug: string,
+  ): Promise<WriteOutcome<api.PageHighlightsState>> {
+    try {
+      return { ok: true, value: await api.getPageHighlights(pageSlug) };
+    } catch (error) {
+      return { ok: false, ...ceritaFailure(error, 'memuat statistik unggulan') };
+    }
+  }
+
+  /**
+   * Saves a topic's highlights. The page's token moves with the save, so the hierarchy is reloaded
+   * too: the chapter and section writes that send the page token then do not hit a stale refusal.
+   */
+  function saveHighlights(
+    pageSlug: string,
+    indicatorIds: string[],
+    expectedUpdatedAt: string,
+  ): Promise<WriteOutcome<api.PageHighlightsState>> {
+    return run('menyimpan statistik unggulan', 'tree', () =>
+      api.putPageHighlights(pageSlug, indicatorIds, expectedUpdatedAt),
+    );
+  }
+
   return {
     selectedSlug,
     hasLoaded,
@@ -728,5 +756,7 @@ export const useCeritaAdminStore = defineStore('ceritaAdmin', () => {
     saveFigure,
     removeFigure,
     saveSectionText,
+    loadHighlights,
+    saveHighlights,
   };
 });
