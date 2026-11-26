@@ -79,7 +79,8 @@ function publicationCount(metadata: unknown): number {
   return Array.isArray(items) ? items.length : 0;
 }
 
-export async function getDashboard(client = prisma): Promise<DashboardDTO> {
+export async function getDashboard(): Promise<DashboardDTO> {
+  const client = prisma;
   const [
     indicators,
     indicatorTables,
