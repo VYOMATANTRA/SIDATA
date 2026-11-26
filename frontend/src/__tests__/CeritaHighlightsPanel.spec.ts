@@ -156,8 +156,47 @@ describe('CeritaHighlightsPanel', () => {
     const current = await mountPanel();
 
     expect(current.find('[data-test="highlights-fallback"]').text()).toContain(
-      'Belum dipilih — beranda menampilkan 4 statistik pertama sesuai urutan isi.',
+      'Belum dipilih — beranda menampilkan 4 statistik pertama sesuai urutan isi. Simpan untuk menetapkannya.',
     );
+  });
+
+  it('labels each automatic row "Otomatis" and keeps Simpan enabled to pin them', async () => {
+    serverList(['i1', 'i2', 'i3', 'i4'], true);
+    const current = await mountPanel();
+
+    const labels = current.findAll('[data-test="highlight-auto"]');
+    expect(labels).toHaveLength(4);
+    expect(labels[0]?.text()).toBe('Otomatis');
+    expect(saveButton(current).disabled).toBe(false);
+  });
+
+  it('pins the four automatic statistics on Simpan and drops the labels after the reload', async () => {
+    serverList(['i1', 'i2', 'i3', 'i4'], true);
+    putHighlights.mockResolvedValue({
+      indicatorIds: ['i1', 'i2', 'i3', 'i4'],
+      isFallback: false,
+      pageUpdatedAt: 'page-t2',
+    });
+    const current = await mountPanel();
+
+    await current.find('[data-test="highlights-save"]').trigger('click');
+    await flushPromises();
+
+    expect(putHighlights).toHaveBeenCalledWith(
+      'kependudukan',
+      ['i1', 'i2', 'i3', 'i4'],
+      'page-t1',
+    );
+    expect(current.find('[data-test="highlights-fallback"]').exists()).toBe(false);
+    expect(current.findAll('[data-test="highlight-auto"]')).toHaveLength(0);
+    expect(saveButton(current).disabled).toBe(true);
+  });
+
+  it('shows no "Otomatis" label for a list the editor has chosen', async () => {
+    serverList(['i1', 'i2']);
+    const current = await mountPanel();
+
+    expect(current.find('[data-test="highlight-auto"]').exists()).toBe(false);
   });
 
   it('keeps Simpan disabled until the list changes', async () => {

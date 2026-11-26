@@ -31,7 +31,7 @@ import type { FailureKind } from '../../../utils/userMessages';
 const props = defineProps<{ page: AdminPage }>();
 
 const FALLBACK_MESSAGE =
-  'Belum dipilih — beranda menampilkan 4 statistik pertama sesuai urutan isi.';
+  'Belum dipilih — beranda menampilkan 4 statistik pertama sesuai urutan isi. Simpan untuk menetapkannya.';
 const LIMIT_HINT = 'Sudah 4 statistik. Hapus salah satu untuk menambah.';
 
 const cerita = useCeritaAdminStore();
@@ -66,7 +66,10 @@ const pickerOpen = ref(false);
 /** Polite status for add, remove, save and reload; the keyboard reorder has its own region. */
 const announcement = ref('');
 
-const dirty = computed(() => !sameIds(draft.value, serverIds.value));
+// While the server only falls back to the first four, Simpan stays enabled so one click pins them.
+const dirty = computed(
+  () => serverIsFallback.value || !sameIds(draft.value, serverIds.value),
+);
 const atLimit = computed(() => draft.value.length >= MAX_STAT_HIGHLIGHTS);
 const ready = computed(() => token.value !== null && indicatorsStore.isLoaded);
 
@@ -457,6 +460,13 @@ watch(
             <p class="text-brand-navy text-sm font-semibold break-words">{{ row.label }}</p>
             <p v-if="row.valueText" class="text-text-muted text-sm">{{ row.valueText }}</p>
           </div>
+          <span
+            v-if="serverIsFallback"
+            class="text-text-muted rounded-btn shrink-0 border border-current px-2 py-0.5 text-xs font-semibold"
+            data-test="highlight-auto"
+          >
+            Otomatis
+          </span>
           <BaseButton
             type="button"
             variant="secondary"
