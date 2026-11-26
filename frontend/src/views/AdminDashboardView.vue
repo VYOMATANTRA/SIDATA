@@ -187,11 +187,11 @@ onMounted(() => {
           <RouterLink
             :to="shortcut.to"
             :data-test="`shortcut-${shortcut.key}`"
-            class="border-border hover:border-brand-indigo hover:bg-surface-muted focus-visible:ring-focus-ring focus-visible:ring-offset-surface rounded-card flex min-h-11 items-start gap-3 border bg-white p-4 transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+            class="border-border hover:border-brand-indigo hover:bg-surface-muted focus-visible:ring-focus-ring focus-visible:ring-offset-surface rounded-card flex h-full min-h-11 items-center gap-3 border bg-white p-4 transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
           >
             <component
               :is="shortcut.icon"
-              class="text-brand-indigo mt-0.5 h-5 w-5 shrink-0"
+              class="text-brand-indigo h-5 w-5 shrink-0"
               aria-hidden="true"
             />
             <span class="min-w-0 flex-1">
