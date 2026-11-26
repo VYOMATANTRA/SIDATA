@@ -194,3 +194,32 @@ export async function saveSectionText(
 ): Promise<SectionTextResponse> {
   return put<SectionTextResponse>(`/api/sections/${enc(sectionId)}/text`, input);
 }
+
+// --- Statistik unggulan (the up-to-4 figures on a topic's landing card, SPEC §8) ---
+
+/** The editor's view of a topic's highlights; `pageUpdatedAt` is the token the next save sends. */
+export interface PageHighlightsState {
+  indicatorIds: string[];
+  isFallback: boolean;
+  pageUpdatedAt: string;
+}
+
+export async function getPageHighlights(pageSlug: string): Promise<PageHighlightsState> {
+  const data = await apiRequestJson<{ highlights: PageHighlightsState }>(
+    `/api/pages/${enc(pageSlug)}/highlights`,
+  );
+  return data.highlights;
+}
+
+/** Saves the chosen ids in order (at most four). The answer carries the page's fresh token. */
+export async function putPageHighlights(
+  pageSlug: string,
+  indicatorIds: string[],
+  expectedUpdatedAt: string,
+): Promise<PageHighlightsState> {
+  const data = await put<{ highlights: PageHighlightsState }>(
+    `/api/pages/${enc(pageSlug)}/highlights`,
+    { indicatorIds, expectedUpdatedAt },
+  );
+  return data.highlights;
+}

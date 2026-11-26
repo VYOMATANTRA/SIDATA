@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import type { StatItem } from '../components/common/StatCard.vue';
 import { apiErrorFromResponse, apiFetch, apiRequestJson } from '../utils/apiClient';
 import { toUserMessage, type FailureKind } from '../utils/userMessages';
+import { MAX_STAT_HIGHLIGHTS, statPageSlugs } from '../utils/statHighlights';
 
 /**
  * Scalar indicator figures (SPEC §7). Read is public; writes need an editor/admin token.
@@ -355,28 +356,39 @@ export const useIndicatorsStore = defineStore('indicators', () => {
     return inFlight;
   }
 
-  function getStatsForPage(pageSlug: string): StatItem[] {
-    const target = pageSlug.toLowerCase();
-    const isWasteCategory =
-      target === 'persampahan' || target === 'persampahan-dan-bank-sampah-unit';
-
-    const matched = indicators.value.filter((item) => {
+  /**
+   * The landing card's figures for a topic, at most `MAX_STAT_HIGHLIGHTS`. With `ids` (the editor's
+   * chosen order, from `pageHighlights`) they are shown in that order and unknown or off-topic ids
+   * are skipped. Without them the topic's first indicators in content order are shown.
+   */
+  function getStatsForPage(pageSlug: string, ids?: readonly string[]): StatItem[] {
+    const topicSlugs = new Set(statPageSlugs(pageSlug));
+    const onTopic = (item: Indicator): boolean => {
       const itemSlug = item.pageSlug?.toLowerCase();
-      if (!itemSlug) return false;
-      if (isWasteCategory) {
-        return itemSlug === 'persampahan' || itemSlug === 'persampahan-dan-bank-sampah-unit';
-      }
-      return itemSlug === target;
-    });
+      return typeof itemSlug === 'string' && topicSlugs.has(itemSlug);
+    };
 
-    return matched
-      .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map((item) => ({
-        icon: resolveIconForIndicator(item.slug, item.label),
-        value: formatIndicatorValue(item.valueCurrent, item.unit),
-        label: item.label,
-        unit: item.unit || undefined,
-      }));
+    let chosen: Indicator[];
+    if (ids) {
+      const byId = new Map(indicators.value.map((item) => [item.id, item] as const));
+      const seen = new Set<string>();
+      chosen = [];
+      for (const id of ids) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+        const item = byId.get(id);
+        if (item && onTopic(item)) chosen.push(item);
+      }
+    } else {
+      chosen = indicators.value.filter(onTopic).sort((a, b) => a.sortOrder - b.sortOrder);
+    }
+
+    return chosen.slice(0, MAX_STAT_HIGHLIGHTS).map((item) => ({
+      icon: resolveIconForIndicator(item.slug, item.label),
+      value: formatIndicatorValue(item.valueCurrent, item.unit),
+      label: item.label,
+      unit: item.unit || undefined,
+    }));
   }
 
   /**
