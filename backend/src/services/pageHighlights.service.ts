@@ -70,24 +70,24 @@ async function resolveHighlights(
     result.set(row.pageId, entry);
   }
 
-  const all = await client.indicator.findMany({
-    where: { section: { chapter: { pageId: { in: pageIds } } } },
-    orderBy: [
-      { section: { chapter: { sortOrder: 'asc' } } },
-      { section: { sortOrder: 'asc' } },
-      { sortOrder: 'asc' },
-      { id: 'asc' },
-    ],
-    select: { id: true, section: { select: { chapter: { select: { pageId: true } } } } },
-  });
-  for (const ind of all) {
-    const pageId = ind.section.chapter.pageId;
-    const chosen = result.get(pageId);
-    if (chosen && !chosen.isFallback) continue;
-    const entry = chosen ?? { indicatorIds: [], isFallback: true };
-    if (entry.indicatorIds.length < MAX_PAGE_HIGHLIGHTS) entry.indicatorIds.push(ind.id);
-    result.set(pageId, entry);
-  }
+  // Only pages without a valid chosen row need the automatic four; each is a small bounded query.
+  const needFallback = pageIds.filter((id) => !result.has(id));
+  await Promise.all(
+    needFallback.map(async (pageId) => {
+      const first = await client.indicator.findMany({
+        where: { section: { chapter: { pageId } } },
+        orderBy: [
+          { section: { chapter: { sortOrder: 'asc' } } },
+          { section: { sortOrder: 'asc' } },
+          { sortOrder: 'asc' },
+          { id: 'asc' },
+        ],
+        take: MAX_PAGE_HIGHLIGHTS,
+        select: { id: true },
+      });
+      result.set(pageId, { indicatorIds: first.map((i) => i.id), isFallback: true });
+    }),
+  );
   return result;
 }
 
