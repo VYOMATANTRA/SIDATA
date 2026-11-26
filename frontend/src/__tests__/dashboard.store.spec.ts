@@ -13,7 +13,6 @@ const DASHBOARD = {
   },
   health: {
     staleIndicators: { count: 0, items: [] },
-    pagesWithoutHighlights: [],
     rtLeadersWithoutCoordinates: 0,
     rtLeadersWithIntegrityConflicts: 0,
   },

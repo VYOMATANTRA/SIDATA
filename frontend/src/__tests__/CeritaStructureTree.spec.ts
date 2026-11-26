@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import CeritaStructureTree from '../components/admin/cerita/CeritaStructureTree.vue';
 import type { AdminPage } from '../stores/ceritaAdmin.store';
-import { figureTreeLabel } from '../utils/ceritaTreeLabels';
 
 const page: AdminPage = {
   id: 'page-1',
@@ -39,9 +38,8 @@ const page: AdminPage = {
   ],
 };
 
-/** Figure labels: the first section has one photo, the second none. */
-const figureSummary = (sectionId: string) =>
-  figureTreeLabel(sectionId === 'sec-1' ? { kind: 'photo', photos: [{} as never] } : null);
+/** Figures: the first section has one photo, the second none. */
+const isFigureEmpty = (sectionId: string) => sectionId !== 'sec-1';
 
 function mountTree(props: Partial<{ selectedSectionId: string | null; busy: boolean }> = {}) {
   return mount(CeritaStructureTree, {
@@ -50,7 +48,7 @@ function mountTree(props: Partial<{ selectedSectionId: string | null; busy: bool
       selectedChapterId: null,
       selectedSectionId: null,
       busy: false,
-      figureSummary,
+      isFigureEmpty,
       ...props,
     },
     attachTo: document.body,
@@ -86,17 +84,30 @@ describe('CeritaStructureTree', () => {
     wrapper.unmount();
   });
 
-  it('numbers each section 1.1, 1.2 and shows its figure kind, with a warning for an empty section', () => {
+  it('numbers each section 1.1, 1.2 without a figure counter in the row', () => {
     const wrapper = mountTree();
     const sections = wrapper.findAll('[data-test="section-select"]');
 
     expect(sections.map((item) => item.find('.tabular-nums').text())).toEqual(['1.1', '1.2']);
-    const figures = wrapper.findAll('[data-test="section-figure"]');
-    expect(figures[0]!.text()).toBe('1 gambar');
-    expect(figures[1]!.text()).toBe('Figur kosong');
-    expect(figures[1]!.classes()).toContain('text-status-warning');
+    expect(wrapper.text()).not.toContain('1 gambar');
+    expect(wrapper.find('[data-test="section-figure"]').exists()).toBe(false);
     // An untitled section is named by its position.
     expect(sections[1]!.text()).toContain('Bagian 2');
+  });
+
+  it('shows a labelled warning icon only beside a section with an empty figure', () => {
+    const wrapper = mountTree();
+    const rows = wrapper.findAll('[data-test="section-item"]');
+
+    expect(rows[0]!.find('[data-test="section-figure-empty"]').exists()).toBe(false);
+    const warning = rows[1]!.find('[data-test="section-figure-empty"]');
+    expect(warning.exists()).toBe(true);
+    expect(warning.attributes('aria-label')).toBe('Figur kosong');
+    expect(warning.attributes('title')).toBe('Figur kosong');
+    expect(warning.attributes('role')).toBe('img');
+    // The icon sits beside the "…" menu, not inside the section's select button.
+    expect(rows[1]!.find('[data-test="section-select"]').find('[data-test="section-figure-empty"]').exists()).toBe(false);
+    expect(rows[1]!.find('[data-test="section-menu"]').exists()).toBe(true);
     wrapper.unmount();
   });
 

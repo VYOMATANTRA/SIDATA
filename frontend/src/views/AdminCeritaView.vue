@@ -68,7 +68,6 @@ import {
   chapterNumberLabel,
   figureTreeLabel,
   sectionNumberLabel,
-  type FigureTreeLabel,
 } from '../utils/ceritaTreeLabels';
 import type { ArticleFigure as ArticleFigureData } from '../types/ceritaArticle';
 import type { FailureKind } from '../utils/userMessages';
@@ -264,9 +263,9 @@ const selectedMeta = computed(() => {
   };
 });
 
-/** The figure label the tree shows for a section (`Figur kosong` is a warning). */
-function figureSummary(sectionId: string): FigureTreeLabel {
-  return figureTreeLabel(store.figureFor(sectionId)?.figure ?? null);
+/** Whether a section has no figure yet; the tree shows that as a warning icon. */
+function isFigureEmpty(sectionId: string): boolean {
+  return figureTreeLabel(store.figureFor(sectionId)?.figure ?? null).empty;
 }
 
 /**
@@ -1787,7 +1786,7 @@ onUnmounted(() => {
             :selected-section-id="selectedSection?.id ?? null"
             :overview-chapter-id="overviewChapter?.id ?? null"
             :busy="structureBusy"
-            :figure-summary="figureSummary"
+            :is-figure-empty="isFigureEmpty"
             @info="openDetails(page.slug, page.updatedAt)"
             @select-chapter="selectChapter"
             @select-section="(chapter, section) => selectSection(chapter, section)"

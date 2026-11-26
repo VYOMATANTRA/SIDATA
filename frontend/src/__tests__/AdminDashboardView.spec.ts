@@ -19,7 +19,6 @@ const DASHBOARD = {
       count: 7,
       items: [{ id: 'i-1', label: 'Jumlah penduduk', pageSlug: 'kependudukan' }],
     },
-    pagesWithoutHighlights: [{ slug: 'kependudukan', title: 'Kependudukan' }],
     rtLeadersWithoutCoordinates: 2,
     rtLeadersWithIntegrityConflicts: 1,
   },
@@ -38,7 +37,6 @@ const HEALTHY_DASHBOARD = {
   counts: DASHBOARD.counts,
   health: {
     staleIndicators: { count: 0, items: [] },
-    pagesWithoutHighlights: [],
     rtLeadersWithoutCoordinates: 0,
     rtLeadersWithIntegrityConflicts: 0,
   },
@@ -205,10 +203,7 @@ describe('AdminDashboardView.vue', () => {
     expect(wrapper.text()).toContain('1 ketua RT memiliki konflik data');
     expect(wrapper.text()).not.toContain('Semua data dalam kondisi baik.');
 
-    const highlights = wrapper
-      .findAll('a')
-      .find((a) => a.text().includes('Belum ada statistik unggulan'));
-    expect(highlights?.attributes('href')).toBe('/admin/cerita?halaman=kependudukan');
+    expect(wrapper.text()).not.toContain('Belum ada statistik unggulan');
     wrapper.unmount();
   });
 

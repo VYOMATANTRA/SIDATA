@@ -2,7 +2,7 @@
 // Title and subtitle live in route `meta` (router/index.ts), seeded by AdminLayout. This view owns
 // only its content; AdminLayout supplies the page h1 and the white card around it.
 import { computed, onMounted, ref, type Component } from 'vue';
-import { RouterLink, type RouteLocationRaw } from 'vue-router';
+import { RouterLink } from 'vue-router';
 import AlertBanner from '../components/common/AlertBanner.vue';
 import {
   ADMIN_NAV,
@@ -102,21 +102,14 @@ const staleIndicators = computed(() => {
   const stale = health.value?.staleIndicators;
   return stale && stale.count > 0 ? stale : null;
 });
-const pagesWithoutHighlights = computed(() => health.value?.pagesWithoutHighlights ?? []);
 const rtWithoutCoordinates = computed(() => health.value?.rtLeadersWithoutCoordinates ?? 0);
 const rtWithConflicts = computed(() => health.value?.rtLeadersWithIntegrityConflicts ?? 0);
 const hasAttention = computed(
   () =>
     staleIndicators.value !== null ||
-    pagesWithoutHighlights.value.length > 0 ||
     rtWithoutCoordinates.value > 0 ||
     rtWithConflicts.value > 0,
 );
-
-function highlightsLink(slug: string): RouteLocationRaw {
-  // AdminCeritaView opens the page's structure from `?halaman=<slug>`.
-  return { path: '/admin/cerita', query: { halaman: slug } };
-}
 
 // --- Perubahan terbaru -------------------------------------------------------------------------
 
@@ -246,15 +239,6 @@ onMounted(() => {
           >
             dan {{ staleIndicators.count - staleIndicators.items.length }} lainnya
           </p>
-        </li>
-
-        <li v-for="page in pagesWithoutHighlights" :key="page.slug">
-          <RouterLink
-            :to="highlightsLink(page.slug)"
-            class="text-brand-indigo focus-visible:ring-focus-ring underline underline-offset-2 focus-visible:ring-2 focus-visible:outline-none"
-          >
-            Belum ada statistik unggulan: {{ page.title }}
-          </RouterLink>
         </li>
 
         <li v-if="rtWithoutCoordinates > 0">

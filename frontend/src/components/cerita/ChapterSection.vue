@@ -5,8 +5,7 @@ import type { IndicatorDto } from '../../stores/indicators.store';
 import type { IndicatorTableDetailDto } from '../../stores/indicatorTables.store';
 import type { ContentBlock } from '../../stores/contentBlocks.store';
 import type { ArticleFigure as ArticleFigureData, ChartTable } from '../../types/ceritaArticle';
-import SectionProse from './SectionProse.vue';
-import ArticleFigure from './ArticleFigure.vue';
+import CeritaSectionBody from './CeritaSectionBody.vue';
 import IndicatorStat from './IndicatorStat.vue';
 import MatrixTableBlock from './MatrixTableBlock.vue';
 
@@ -103,15 +102,9 @@ const isEmptyChapter = computed(
           {{ section.title }}
         </h3>
 
-        <SectionProse
-          v-for="block in proseBySectionId[section.id] ?? []"
-          :key="block.id"
-          :body="block.body"
-        />
-
-        <ArticleFigure
-          v-if="figuresBySectionId[section.id]"
-          :figure="figuresBySectionId[section.id]!"
+        <CeritaSectionBody
+          :prose="(proseBySectionId[section.id] ?? []).map((block) => block.body)"
+          :figure="figuresBySectionId[section.id] ?? null"
           :tables="chartTablesById"
           @visible-change="emit('figure-visibility', section.id, $event)"
         />

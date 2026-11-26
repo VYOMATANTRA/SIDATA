@@ -35,7 +35,13 @@ describe('dashboard projection', () => {
   });
 
   it('allowlists content actions only, never auth, user or audit ones', () => {
-    for (const bad of ['auth.login', 'user.role_changed', 'audit.pruned', 'media.uploaded']) {
+    for (const bad of [
+      'auth.login',
+      'user.role_changed',
+      'audit.pruned',
+      'media.uploaded',
+      'indicator_table_row.created',
+    ]) {
       assert.ok(!RECENT_CHANGE_PREFIXES.some((p) => bad.startsWith(p)), bad);
     }
     assert.ok(RECENT_CHANGE_PREFIXES.some((p) => 'page.highlights_updated'.startsWith(p)));

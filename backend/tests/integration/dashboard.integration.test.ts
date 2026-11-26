@@ -12,7 +12,7 @@ describe('getDashboard against real MySQL', () => {
     await prisma.$disconnect();
   });
 
-  it('counts content, flags stale figures and topics without highlights, and lists only content changes', async () => {
+  it('counts content, flags stale figures, and lists only content changes', async () => {
     const page = await prisma.page.create({
       data: { slug: 'pendidikan', title: 'Pendidikan', sortOrder: 0 },
     });
@@ -53,10 +53,33 @@ describe('getDashboard against real MySQL', () => {
       label: 'Jumlah guru',
       pageSlug: 'pendidikan',
     });
-    assert.deepEqual(d.health.pagesWithoutHighlights, [
-      { slug: 'pendidikan', title: 'Pendidikan' },
-    ]);
     assert.equal(d.recentChanges.length, 1);
     assert.equal(d.recentChanges[0]!.actorName, 'a');
+  });
+
+  it('hides system-actor and table-row events, keeping editor and null-role changes newest first', async () => {
+    const base = Date.now();
+    const at = (n: number) => new Date(base + n * 1000);
+    await prisma.auditLog.createMany({
+      data: [
+        { action: 'indicator_table_row.created', actorRole: 'system', createdAt: at(1) },
+        { action: 'indicator.updated', actorRole: 'system', createdAt: at(2) },
+        { action: 'indicator_table_row.updated', actorRole: 'editor', createdAt: at(3) },
+        {
+          action: 'indicator.updated',
+          actorRole: 'editor',
+          actorEmail: 'e@x.id',
+          targetLabel: 'A',
+          createdAt: at(4),
+        },
+        { action: 'page.updated', actorRole: null, targetLabel: 'B', createdAt: at(5) },
+      ],
+    });
+
+    const d = await getDashboard();
+    assert.deepEqual(
+      d.recentChanges.map((c) => c.action),
+      ['page.updated', 'indicator.updated'],
+    );
   });
 });

@@ -24,7 +24,12 @@ function fakeClient(opts: {
 }) {
   const stored = [...(opts.stored ?? [])];
   const pages = opts.pages ?? [{ id: 'p1', slug: 'pendidikan' }];
-  const calls = { created: [] as unknown[], audit: [] as unknown[], pageUpdates: 0 };
+  const calls = {
+    created: [] as unknown[],
+    audit: [] as unknown[],
+    pageUpdates: 0,
+    fallbackQueries: [] as Array<{ pageId: string; returned: number }>,
+  };
   const nest = (pageId: string) => ({ section: { chapter: { pageId } } });
   const api = {
     page: {
@@ -55,7 +60,18 @@ function fakeClient(opts: {
       },
     },
     indicator: {
-      findMany: async () => opts.indicators.map((i) => ({ id: i.id, ...nest(i.pageId) })),
+      findMany: async (arg: {
+        where: { section: { chapter: { pageId: string } } };
+        take?: number;
+      }) => {
+        const pageId = arg.where.section.chapter.pageId;
+        const rows = opts.indicators
+          .filter((i) => i.pageId === pageId)
+          .slice(0, arg.take ?? Infinity)
+          .map((i) => ({ id: i.id }));
+        calls.fallbackQueries.push({ pageId, returned: rows.length });
+        return rows;
+      },
       count: async ({ where }: { where: { id: { in: string[] } } }) =>
         opts.indicators.filter((i) => where.id.in.includes(i.id) && i.pageId === 'p1').length,
     },
@@ -81,6 +97,19 @@ describe('getAllPageHighlights', () => {
       indicatorIds: ['ind-1', 'ind-2', 'ind-3', 'ind-4'],
       isFallback: true,
     });
+  });
+
+  it('bounds the fallback query to four rows per page and skips pages with chosen rows', async () => {
+    const { client, calls } = fakeClient({
+      pages: [
+        { id: 'p1', slug: 'pendidikan' },
+        { id: 'p2', slug: 'kesehatan' },
+      ],
+      indicators: [...[1, 2, 3, 4, 5, 6].map((n) => ind(n)), ind(7, 'p2'), ind(8, 'p2')],
+      stored: [{ pageId: 'p2', indicatorId: 'ind-8', position: 1 }],
+    });
+    await getAllPageHighlights(client);
+    assert.deepEqual(calls.fallbackQueries, [{ pageId: 'p1', returned: MAX_PAGE_HIGHLIGHTS }]);
   });
 
   it('returns chosen ids in position order, capped at four', async () => {
