@@ -848,6 +848,21 @@ given page — a resource a role isn't authorized for is absent from the sidebar
 merely disabled. Cerita, Rukun Tetangga, Konfigurasi sistem (above), Templat kalimat (§5) and
 Peta (below) and Publikasi (below) open their real management views.
 
+**Admin Beranda (`/admin`).** Editor and Admin see one overview from `GET /api/dashboard`
+(read-only, no audit row), in four sections:
+
+- **Pintasan** — one card per module the role may open, built from `adminNav.ts`, with a count.
+- **Perlu perhatian** — figures flagged usang, topics with no chosen Statistik unggulan, and RT leaders
+  without coordinates or with integrity conflicts, each linking to where it is fixed. All clear shows a
+  single "all good" line.
+- **Perubahan terbaru** — the latest 10 content changes (indicators, tables, blocks, pages, chapters,
+  sections, RT leaders, map points, templates). Editors may see it although audit read is Admin-only (§3)
+  because it is a projection: action, target label, actor handle (the part of the email before "@") and
+  time. Metadata, IP, user agent and full email never leave the service; auth, user and media events are
+  excluded.
+- **Keamanan** (Admin only, not rendered for Editors) — open critical events, 7-day counts by severity
+  and the user count, from the existing audit summary and users endpoints.
+
 **Publikasi management (`/admin/publikasi`).** Editor and Admin manage the publication catalog, the
 `publikasi-katalog` content block (`metadata.publications[]`, at most 25 publications). The page is one
 full-width card per publication in a single-column list, like a journal listing. A card has the grip
