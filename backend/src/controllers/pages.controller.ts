@@ -13,6 +13,11 @@ import {
   PageServiceError,
   isValidPageSlug,
 } from '../services/pages.service.js';
+import {
+  getAllPageHighlights,
+  getPageHighlights,
+  setPageHighlights,
+} from '../services/pageHighlights.service.js';
 import { authoringHandler, paramOf } from './hierarchyHandler.js';
 import { parseExpectedUpdatedAtQuery, sendHierarchyError } from '../utils/hierarchyAuthoring.js';
 
@@ -155,4 +160,35 @@ export const updatePageHandler = authoringHandler({
     const page = await updatePage(paramOf(req, 'slug'), req.body, actor, context);
     return { message: 'Halaman berhasil diperbarui', page };
   },
+});
+
+// GET /api/pages/highlights (public): chosen or fallback figure ids for every topic card
+export const listPageHighlightsHandler = async (
+  _req: Request,
+  res: Response,
+): Promise<Response> => {
+  try {
+    return res.status(200).json({ highlights: await getAllPageHighlights() });
+  } catch (error) {
+    console.error(
+      'Error saat mengambil statistik unggulan:',
+      error instanceof Error ? error.message : 'Terjadi kesalahan internal server',
+    );
+    return res.status(500).json({ error: 'Terjadi kesalahan internal server' });
+  }
+};
+
+// GET /api/pages/:slug/highlights (Editor/Admin): one topic, with the updatedAt to echo on save
+export const getPageHighlightsHandler = authoringHandler({
+  errorLabel: 'mengambil statistik unggulan',
+  run: async (req) => ({ highlights: await getPageHighlights(paramOf(req, 'slug')) }),
+});
+
+// PUT /api/pages/:slug/highlights
+export const setPageHighlightsHandler = authoringHandler({
+  errorLabel: 'menyimpan statistik unggulan',
+  run: async (req, actor, context) => ({
+    message: 'Statistik unggulan berhasil disimpan',
+    highlights: await setPageHighlights(paramOf(req, 'slug'), req.body, actor, context),
+  }),
 });

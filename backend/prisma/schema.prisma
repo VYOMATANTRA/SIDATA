@@ -215,7 +215,8 @@ model Page {
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
-  chapters Chapter[]
+  chapters   Chapter[]
+  highlights PageHighlight[]
 
   @@index([sortOrder])
   @@map("pages")
@@ -288,10 +289,26 @@ model Indicator {
 
   section            Section             @relation(fields: [sectionId], references: [id], onDelete: Restrict)
   comparisonTemplate ComparisonTemplate? @relation(fields: [comparisonTemplateId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  highlight          PageHighlight?
 
   @@index([sectionId, sortOrder])
   @@index([comparisonTemplateId])
   @@map("indicators")
+}
+
+/// Editor-chosen "Statistik unggulan" for a topic's landing-page card (SPEC §8): at most 4 per
+/// page (position 1..4, enforced by the service), each indicator on at most one page.
+model PageHighlight {
+  id          String @id @default(uuid())
+  pageId      String @map("page_id")
+  indicatorId String @unique @map("indicator_id")
+  position    Int
+
+  page      Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  indicator Indicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+
+  @@unique([pageId, position])
+  @@map("page_highlights")
 }
 
 /// Admin-authored sentence structure for the tier-1 computed-comparison prose builder

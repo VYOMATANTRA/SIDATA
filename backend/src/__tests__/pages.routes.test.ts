@@ -49,10 +49,13 @@ describe('pages.routes', () => {
       assert.deepStrictEqual(routes, [
         { path: '/', methods: ['get'] },
         { path: '/reorder', methods: ['put'] },
+        { path: '/highlights', methods: ['get'] },
         { path: '/:slug', methods: ['get'] },
         { path: '/', methods: ['post'] },
         { path: '/:slug', methods: ['delete'] },
         { path: '/:slug', methods: ['patch'] },
+        { path: '/:slug/highlights', methods: ['get'] },
+        { path: '/:slug/highlights', methods: ['put'] },
         { path: '/:slug/chapters', methods: ['post'] },
         { path: '/:slug/chapters/reorder', methods: ['put'] },
       ]);
@@ -69,6 +72,13 @@ describe('pages.routes', () => {
         reorderIndex < slugIndex,
         'PUT /reorder must precede /:slug in router stack to avoid shadowing',
       );
+    });
+
+    it('registers public GET /highlights BEFORE /:slug so it is not read as a slug', async () => {
+      const layers = routeLayers(await loadRouter());
+      const hi = layers.findIndex((l) => l.route?.path === '/highlights');
+      const slug = layers.findIndex((l) => l.route?.path === '/:slug');
+      assert.ok(hi !== -1 && hi < slug);
     });
 
     it('exports pagesLimiter and pagesWriteLimiter from rate-limit middleware', () => {

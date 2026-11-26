@@ -6,6 +6,9 @@ import {
   deletePageHandler,
   reorderPagesHandler,
   updatePageHandler,
+  listPageHighlightsHandler,
+  getPageHighlightsHandler,
+  setPageHighlightsHandler,
 } from '../controllers/pages.controller.js';
 import {
   createChapterHandler,
@@ -33,6 +36,9 @@ router.put(
   pagesWriteLimiter,
   reorderPagesHandler,
 );
+
+// Public: must precede /:slug
+router.get('/highlights', pagesLimiter, listPageHighlightsHandler);
 
 router.get('/:slug', pagesLimiter, getPage);
 
@@ -62,6 +68,21 @@ router.patch(
   requireEditorOrAdmin,
   pagesWriteLimiter,
   updatePageHandler,
+);
+router.get(
+  '/:slug/highlights',
+  apiLimiter,
+  verifyToken,
+  requireEditorOrAdmin,
+  getPageHighlightsHandler,
+);
+router.put(
+  '/:slug/highlights',
+  apiLimiter,
+  verifyToken,
+  requireEditorOrAdmin,
+  pagesWriteLimiter,
+  setPageHighlightsHandler,
 );
 router.post(
   '/:slug/chapters',
