@@ -5,7 +5,7 @@ import ArticleFigure from '../components/cerita/ArticleFigure.vue';
 import CeritaArticleTemplate from '../components/cerita/CeritaArticleTemplate.vue';
 import CeritaHero from '../components/cerita/CeritaHero.vue';
 import ChapterToc from '../components/cerita/ChapterToc.vue';
-import { READER_ASIDE, READER_MAIN } from '../components/cerita/readerLayout';
+import { READER_ASIDE, READER_GRID, READER_MAIN } from '../components/cerita/readerLayout';
 import type { ArticlePhoto, CeritaArticle } from '../types/ceritaArticle';
 
 // Synthetic content only.
@@ -274,6 +274,7 @@ describe('article template', () => {
       'Bagian Satu',
       'Bagian Dua',
     ]);
+    expect(w.findAll('[data-test="article-section"] [data-test="section-text"]')).toHaveLength(2);
     expect(w.findAll('[data-test="section-prose"]')).toHaveLength(3);
     expect(w.findAll('[data-test="figure-card"]')).toHaveLength(1);
   });
@@ -291,7 +292,7 @@ describe('article template', () => {
     const sheet = w.find('[data-test="chapter-toc-sheet"]');
     expect(sheet.classes()).toContain('bottom-0');
     expect(sheet.classes()).not.toContain('top-[var(--public-header-height)]');
-    expect(w.find('[data-test="chapter-toc-rail"]').classes()).toContain('xl:col-start-3');
+    expect(w.find('[data-test="chapter-toc-rail"]').classes()).toContain('lg:col-start-2');
   });
 
   describe('scroll spy', () => {
@@ -366,9 +367,11 @@ describe('Cerita hero and column layout', () => {
     expect(rich.find('[data-test="cerita-byline"]').text()).toContain('Penulis Contoh');
   });
 
-  it('puts the article in the middle track and the chapter list in the right track', () => {
-    expect(READER_MAIN).toContain('xl:col-start-2');
-    expect(READER_ASIDE).toContain('xl:col-start-3');
+  it('puts the article in the left track and the chapter list in the right track from lg', () => {
+    expect(READER_MAIN).toContain('lg:col-start-1');
+    expect(READER_MAIN).toContain('lg:max-w-none');
+    expect(READER_ASIDE).toContain('lg:col-start-2');
+    expect(READER_GRID).not.toContain('xl:');
     const rail = mount(ChapterToc, {
       props: {
         variant: 'rail',
@@ -376,6 +379,6 @@ describe('Cerita hero and column layout', () => {
         activeChapterId: 'c1',
       },
     });
-    expect(rail.find('nav').classes()).toContain('xl:col-start-3');
+    expect(rail.find('nav').classes()).toContain('lg:col-start-2');
   });
 });

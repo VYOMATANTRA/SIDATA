@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import ArticleFigure from '../components/cerita/ArticleFigure.vue';
-import SectionProse from '../components/cerita/SectionProse.vue';
+import CeritaSectionBody from '../components/cerita/CeritaSectionBody.vue';
 import { READER_MAIN } from '../components/cerita/readerLayout';
 import type { ArticleFigure as ArticleFigureData, ChartTable } from '../types/ceritaArticle';
 import {
@@ -13,8 +12,8 @@ import {
 
 /**
  * The bare page the section editor's live preview draws in a same-origin iframe (no admin shell,
- * no public header). It draws a section the way the public reader does: `SectionProse` for the
- * body and `ArticleFigure` for the figure, on the reader's column. The iframe's own width is what
+ * no public header). It draws a section the way the public reader does: `CeritaSectionBody` for the
+ * body and its figure (side by side from `lg`), on the reader's column. The iframe's own width is what
  * the reader's media queries read, so Desktop and Ponsel really differ.
  *
  * The draft arrives by `postMessage` from the editor. Only a message from this window's parent and
@@ -100,16 +99,12 @@ const isEmpty = computed(() => body.value === '' && !showsFigure.value);
         {{ title || 'Judul bagian belum diisi' }}
       </h1>
 
-      <SectionProse v-if="body" :body="body" />
-
-      <div
-        v-if="figure"
-        v-show="figureVisible"
-        class="bg-surface-muted rounded-card p-4 sm:p-6"
-        data-test="preview-stage"
-      >
-        <ArticleFigure :figure="figure" :tables="tables" @visible-change="figureVisible = $event" />
-      </div>
+      <CeritaSectionBody
+        :prose="body ? [body] : []"
+        :figure="figure"
+        :tables="tables"
+        @visible-change="figureVisible = $event"
+      />
 
       <p v-if="isEmpty" class="text-text-muted text-base" data-test="preview-empty">
         Bagian ini belum memiliki isi atau gambar.

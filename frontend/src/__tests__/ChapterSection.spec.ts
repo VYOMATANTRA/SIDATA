@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import ChapterSection from '../components/cerita/ChapterSection.vue';
 import type { ChapterDto } from '../stores/pages.store';
 
@@ -107,6 +107,41 @@ describe('ChapterSection.vue', () => {
     expect(paragraphs).toHaveLength(2);
     expect(paragraphs[0]?.text()).toBe('Paragraf pertama.');
     expect(paragraphs[1]?.text()).toBe('Paragraf kedua.');
+  });
+
+  it('lays a visible figure beside the prose from lg, with the text first in DOM order', async () => {
+    const wrapper = mount(ChapterSection, {
+      props: {
+        chapter,
+        proseBySectionId: {
+          'sec-1': [
+            {
+              id: 'block-1',
+              sectionId: 'sec-1',
+              type: 'prose',
+              slug: 'intro',
+              title: null,
+              body: 'Paragraf pertama.',
+              metadata: null,
+              sortOrder: 0,
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+        },
+        figuresBySectionId: {
+          'sec-1': { kind: 'photo', photo: { id: 'p1', src: '/img/contoh.webp', alt: 'Foto' } },
+        },
+        indicatorsBySectionId: {},
+        tablesBySectionId: {},
+        sectionErrorsBySectionId: {},
+      },
+    });
+
+    await flushPromises();
+    const body = wrapper.find('[data-test="section-body"]');
+    expect(body.classes()).toEqual(expect.arrayContaining(['lg:grid', 'lg:grid-cols-2']));
+    const children = Array.from(body.element.children).map((node) => node.getAttribute('data-test'));
+    expect(children).toEqual(['section-text', 'figure-card']);
   });
 });
 

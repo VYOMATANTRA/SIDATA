@@ -3,8 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import type { CeritaArticle, ChartTable } from '../../types/ceritaArticle';
 import CeritaHero from './CeritaHero.vue';
 import ChapterToc from './ChapterToc.vue';
-import ArticleFigure from './ArticleFigure.vue';
-import SectionProse from './SectionProse.vue';
+import CeritaSectionBody from './CeritaSectionBody.vue';
 import { READER_GRID, READER_MAIN } from './readerLayout';
 
 /**
@@ -106,14 +105,9 @@ function nextChapter(index: number) {
               data-test="article-section"
             >
               <h3 class="text-brand-navy text-base font-semibold">{{ section.heading }}</h3>
-              <SectionProse
-                v-for="(paragraph, i) in section.paragraphs"
-                :key="i"
-                :body="paragraph"
-              />
-              <ArticleFigure
-                v-if="section.figure"
-                :figure="section.figure"
+              <CeritaSectionBody
+                :prose="section.paragraphs"
+                :figure="section.figure ?? null"
                 :tables="chartTablesById"
               />
             </div>
