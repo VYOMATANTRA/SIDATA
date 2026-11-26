@@ -11,11 +11,7 @@ import ReorderGripButton from '../cards/ReorderGripButton.vue';
 import { edgeAt, useCardDragReorder } from '../../../composables/useCardDragReorder';
 import { useKeyboardReorder } from '../../../composables/useKeyboardReorder';
 import type { AdminChapter, AdminPage, AdminSection } from '../../../stores/ceritaAdmin.store';
-import {
-  chapterNumberLabel,
-  sectionNumberLabel,
-  type FigureTreeLabel,
-} from '../../../utils/ceritaTreeLabels';
+import { chapterNumberLabel, sectionNumberLabel } from '../../../utils/ceritaTreeLabels';
 import { ceritaIds } from './ceritaDomIds';
 
 /**
@@ -35,7 +31,8 @@ const props = defineProps<{
   /** The chapter whose overview is open in the centre column (no section selected), or null. */
   overviewChapterId?: string | null;
   busy: boolean;
-  figureSummary: (sectionId: string) => FigureTreeLabel;
+  /** Whether the section has no figure yet; such a row gets a warning icon beside its menu. */
+  isFigureEmpty: (sectionId: string) => boolean;
 }>();
 
 const emit = defineEmits<{
@@ -478,24 +475,17 @@ function closeMenu(event: Event): void {
                   <span class="text-brand-navy min-w-0 flex-1 truncate text-sm font-medium">
                     {{ sectionLabel(section, chapter.sections.indexOf(section)) }}
                   </span>
-                  <span
-                    class="flex shrink-0 items-center gap-1 text-[12px] font-medium whitespace-nowrap"
-                    :class="
-                      figureSummary(section.id).empty
-                        ? 'text-status-warning'
-                        : selectedSectionId === section.id
-                          ? 'text-brand-navy'
-                          : 'text-text-muted'
-                    "
-                    data-test="section-figure"
-                  >
-                    <ExclamationTriangleIcon
-                      v-if="figureSummary(section.id).empty"
-                      class="h-3.5 w-3.5"
-                      aria-hidden="true"
-                    />{{ figureSummary(section.id).label }}
-                  </span>
                 </button>
+                <span
+                  v-if="isFigureEmpty(section.id)"
+                  role="img"
+                  class="text-status-warning flex min-h-11 shrink-0 items-center"
+                  title="Figur kosong"
+                  aria-label="Figur kosong"
+                  data-test="section-figure-empty"
+                >
+                  <ExclamationTriangleIcon class="h-4 w-4" aria-hidden="true" />
+                </span>
                 <details class="relative flex shrink-0 items-stretch" data-test="section-menu">
                   <summary
                     class="hover:bg-surface-muted focus-visible:outline-focus-ring text-text-muted hover:text-brand-navy rounded-btn flex min-h-11 w-11 cursor-pointer list-none items-center justify-center text-[18px] focus-visible:outline-2 focus-visible:outline-offset-2 [&::-webkit-details-marker]:hidden"
