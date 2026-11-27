@@ -2,7 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import FigureChart from '../components/cerita/FigureChart.vue';
 import ArticleFigure from '../components/cerita/ArticleFigure.vue';
-import { chartGroups, chartMax } from '../utils/ceritaChart';
+import {
+  chartGroups,
+  chartMax,
+  donutSlices,
+  isChartType,
+  isSexOnlyChartType,
+  roundShares,
+  rowShares,
+} from '../utils/ceritaChart';
 import { figureFromBlock } from '../services/ceritaFigure.service';
 import { storedFigureToArticleFigure } from '../utils/ceritaStoredFigure';
 import type { ChartFigure, ChartTable } from '../types/ceritaArticle';
@@ -203,6 +211,13 @@ describe('stored chart parsing', () => {
     });
   });
 
+  it.each(['pyramid', 'donut', 'stacked', 'percent'])('reads a stored %s chart', (chartType) => {
+    expect(storedFigureToArticleFigure({ ...meta, chartType })).toMatchObject({
+      kind: 'chart',
+      chartType,
+    });
+  });
+
   it('leaves out an empty source', () => {
     const figure = storedFigureToArticleFigure({ ...meta, source: '   ' });
     expect(figure).not.toHaveProperty('source');
@@ -255,3 +270,186 @@ function block() {
     updatedAt: '2026-01-01T00:00:00.000Z',
   };
 }
+
+describe('chart type list', () => {
+  it('accepts exactly the six types and refuses anything else', () => {
+    for (const type of ['bar', 'column', 'pyramid', 'donut', 'stacked', 'percent']) {
+      expect(isChartType(type)).toBe(true);
+    }
+    for (const type of ['line', 'pie', '', undefined, 3]) {
+      expect(isChartType(type)).toBe(false);
+    }
+  });
+
+  it('marks pyramid, stacked and percent as sex-only, and not the donut', () => {
+    expect(isSexOnlyChartType('pyramid')).toBe(true);
+    expect(isSexOnlyChartType('stacked')).toBe(true);
+    expect(isSexOnlyChartType('percent')).toBe(true);
+    expect(isSexOnlyChartType('donut')).toBe(false);
+    expect(isSexOnlyChartType('bar')).toBe(false);
+  });
+});
+
+describe('roundShares', () => {
+  it('rounds to whole numbers that always add up to exactly 100', () => {
+    // 1/3, 1/3, 1/3 would give 33 + 33 + 33 = 99 without largest-remainder rounding.
+    expect(roundShares([1, 1, 1])).toEqual([34, 33, 33]);
+    expect(roundShares([10, 6]).reduce((a, b) => a + b, 0)).toBe(100);
+    for (const values of [
+      [7, 11, 13],
+      [1, 2, 3, 4, 5, 6],
+      [999, 1],
+    ]) {
+      expect(roundShares(values).reduce((a, b) => a + b, 0)).toBe(100);
+    }
+  });
+
+  it('counts a negative or non-finite value as 0 and returns zeros when nothing is positive', () => {
+    expect(roundShares([-4, 3, Number.NaN])).toEqual([0, 100, 0]);
+    expect(roundShares([0, -1])).toEqual([0, 0]);
+    expect(roundShares([])).toEqual([]);
+  });
+});
+
+describe('rowShares', () => {
+  it('splits one row into male and female shares that sum to 100', () => {
+    const [group] = chartGroups(chart({ series: 'by_sex' }), table);
+    const shares = rowShares(group!);
+    expect(shares.map((s) => [s.key, s.value, s.percent])).toEqual([
+      ['male', 10, 63],
+      ['female', 6, 37],
+    ]);
+    expect(shares.reduce((sum, s) => sum + s.percent, 0)).toBe(100);
+  });
+
+  it('gives a row with one sex the whole bar', () => {
+    const [, onlyFemale] = chartGroups(chart({ series: 'by_sex' }), table);
+    expect(rowShares(onlyFemale!)).toEqual([
+      { key: 'female', label: 'Perempuan', value: 4, percent: 100 },
+    ]);
+  });
+});
+
+describe('donutSlices', () => {
+  const groups = chartGroups(chart({ series: 'by_sex' }), {
+    id: 'd',
+    rows: [
+      { id: 'a', label: 'A', male: 30, female: 10, total: null },
+      { id: 'b', label: 'B', male: 0, female: 5, total: null },
+      { id: 'c', label: 'C', male: -2, female: 5, total: null },
+      { id: 'e', label: 'E', male: 10, female: null, total: null },
+    ],
+  });
+
+  it('draws one slice per row with a positive value, in table order', () => {
+    const slices = donutSlices(groups, 'male');
+    expect(slices.map((s) => s.label)).toEqual(['A', 'E']);
+    expect(slices.map((s) => s.value)).toEqual([30, 10]);
+  });
+
+  it('leaves out zero and negative values, and the slices add up to 100%', () => {
+    expect(donutSlices(groups, 'female').map((s) => s.label)).toEqual(['A', 'B', 'C']);
+    for (const key of ['male', 'female'] as const) {
+      const total = donutSlices(groups, key).reduce((sum, s) => sum + s.percent, 0);
+      expect(total).toBe(100);
+    }
+  });
+
+  it('is empty when no row has a positive value for the key', () => {
+    expect(donutSlices(groups, 'total')).toEqual([]);
+  });
+});
+
+describe('FigureChart new types', () => {
+  it('draws a pyramid with male and female bars per row', () => {
+    const w = mount(FigureChart, {
+      props: { figure: chart({ chartType: 'pyramid', series: 'by_sex' }), table },
+    });
+    expect(w.find('[data-test="chart-pyramid"]').exists()).toBe(true);
+    expect(w.findAll('[data-test="pyramid-row"]')).toHaveLength(2);
+    expect(w.find('[data-test="chart-legend"]').text()).toContain('Perempuan');
+    expect(w.find('[data-test="chart-visual"]').attributes('aria-label')).toContain(
+      'piramida penduduk',
+    );
+  });
+
+  it('draws one donut for the total, with a legend of value and percent', () => {
+    const w = mount(FigureChart, {
+      props: { figure: chart({ chartType: 'donut' }), table },
+    });
+    expect(w.findAll('[data-test="chart-donut"]')).toHaveLength(1);
+    expect(w.find('[data-test="donut-legend"]').text()).toBe('Kelompok A: 16 (100%)');
+    expect(w.find('[data-test="chart-legend"]').exists()).toBe(false);
+  });
+
+  it('draws two donuts for a by_sex chart, each headed by its sex', () => {
+    const w = mount(FigureChart, {
+      props: { figure: chart({ chartType: 'donut', series: 'by_sex' }), table },
+    });
+    const donuts = w.findAll('[data-test="chart-donut"]');
+    expect(donuts).toHaveLength(2);
+    expect(donuts.map((d) => d.find('[data-test="donut-heading"]').text())).toEqual([
+      'Laki-laki',
+      'Perempuan',
+    ]);
+    expect(donuts[0]!.find('[data-test="donut-legend"]').text()).toBe('Kelompok A: 10 (100%)');
+    expect(donuts[1]!.findAll('[data-test="donut-legend"] li').map((li) => li.text())).toEqual([
+      'Kelompok A: 6 (60%)',
+      'Kelompok B: 4 (40%)',
+    ]);
+  });
+
+  it('hatches the female donut so it differs by pattern as well as colour', () => {
+    const w = mount(FigureChart, {
+      props: { figure: chart({ chartType: 'donut', series: 'by_sex' }), table },
+    });
+    const [male, female] = w.findAll('[data-test="chart-donut"]');
+    expect(male!.find('pattern').exists()).toBe(false);
+    expect(female!.find('pattern').exists()).toBe(true);
+  });
+
+  it('adds share columns to the table for a donut', () => {
+    const w = mount(FigureChart, {
+      props: { figure: chart({ chartType: 'donut' }), table },
+    });
+    const headers = w.findAll('[data-test="chart-data"] thead th').map((th) => th.text());
+    expect(headers).toEqual(['Label', 'Total', '% dari total']);
+    expect(w.find('[data-test="chart-data"] tbody td:last-child').text()).toBe('100%');
+  });
+
+  it('draws a stacked bar per row, its length the row total', () => {
+    const w = mount(FigureChart, {
+      props: { figure: chart({ chartType: 'stacked', series: 'by_sex' }), table },
+    });
+    expect(w.find('[data-test="chart-stacked"]').exists()).toBe(true);
+    expect(w.findAll('[data-test="stacked-row"]')).toHaveLength(2);
+    expect(w.findAll('[data-test="stacked-summary"]')[0]!.text()).toBe(
+      'Laki-laki 10 · Perempuan 6 · Total 16',
+    );
+    expect(w.find('[data-test="chart-data"]').exists()).toBe(true);
+    const headers = w.findAll('[data-test="chart-data"] thead th').map((th) => th.text());
+    expect(headers).toEqual(['Label', 'Laki-laki', 'Perempuan']);
+  });
+
+  it('draws a 100% bar per row with percent columns in the table', () => {
+    const w = mount(FigureChart, {
+      props: { figure: chart({ chartType: 'percent', series: 'by_sex' }), table },
+    });
+    expect(w.find('[data-test="chart-percent"]').exists()).toBe(true);
+    expect(w.findAll('[data-test="stacked-summary"]')[0]!.text()).toBe(
+      'Laki-laki 63% (10) · Perempuan 37% (6)',
+    );
+    const headers = w.findAll('[data-test="chart-data"] thead th').map((th) => th.text());
+    expect(headers).toEqual(['Label', 'Laki-laki', '% Laki-laki', 'Perempuan', '% Perempuan']);
+    const firstRow = w.findAll('[data-test="chart-data"] tbody tr')[0]!.findAll('td');
+    expect(firstRow.map((td) => td.text())).toEqual(['10', '63%', '6', '37%']);
+  });
+
+  it('leaves out a row with only one sex from the percent chart', () => {
+    const w = mount(FigureChart, {
+      props: { figure: chart({ chartType: 'percent', series: 'by_sex' }), table },
+    });
+    expect(w.findAll('[data-test="stacked-summary"]')).toHaveLength(1);
+    expect(w.find('[data-test="chart-data"]').text()).not.toContain('Kelompok B');
+  });
+});

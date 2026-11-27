@@ -229,12 +229,15 @@ No third role (e.g. viewer/approver) is defined. No periodic-review role exists 
       finite number value of at most 1 000 000 000 in magnitude, unique labels (compared trimmed and case-insensitively), unit ≤ 20; the serialized figure may not exceed 12 000 characters. Text is trimmed (a blank optional field is dropped), unknown keys
       are refused, the same media asset may not appear twice in one figure, and text may contain no HTML
       tags or control/bidi characters. Every `mediaId` must be a `cerita`-purpose photo upload (§7).
-    - **Chart:** `{ kind: 'chart', tableId, chartType: 'bar' | 'column', series: 'total' | 'by_sex', title,
-      source? }`, title 1–120, source ≤ 200. It stores a reference to an indicator table, never the
+    - **Chart:** `{ kind: 'chart', tableId, chartType: 'bar' | 'column' | 'pyramid' | 'donut' | 'stacked' | 'percent',
+      series: 'total' | 'by_sex', title, source? }`, title 1–120, source ≤ 200. `pyramid`, `stacked` and
+      `percent` need `series: 'by_sex'`; with `total` they answer `400` ("Jenis grafik ini memerlukan data
+      menurut jenis kelamin"). `donut` takes either series. It stores a reference to an indicator table, never the
       numbers, so the chart follows the table. The table must exist and sit on the **same Cerita page**
       as the section (`422` otherwise). A chart has no media. While any chart uses a table, deleting that
       table, or moving it to a section on another page, answers `409` (moving within the page is fine).
-      `by_sex` needs a table with a male/female split (`age_pyramid`, `religion_by_sex`); `422` otherwise.
+      `by_sex` needs a table with a male/female split (`age_pyramid`, `religion_by_sex`); `422` otherwise,
+      which also covers the sex-only types on a total-only table.
       Line charts are not offered: the tables hold one snapshot period, not a time series.
     - Media is attached with reference `('content_block', <figure block id>, 'figure')` for every photo in
       the new figure and detached for photos the replaced figure had and the new one lacks; deleting the
@@ -630,10 +633,16 @@ setup-password, the OAuth callback, `/dashboard` (its own `<main>`) and the admi
   same `GET /api/content-blocks` request as the paragraphs and draws it with the article figure
   components: one photo, an offset pair for two, a swipeable row for three or more, a diagram
   (picture or bars, with its source), or a chart. A chart reads the indicator table it names (same
-  page, looked up by id among the page's loaded tables): `bar` draws horizontal bars, `column` vertical
-  columns, and `by_sex` draws male and female per row, told apart by text labels (in horizontal bars the series is named in each bar's label; columns also use a hatch pattern) as
-  well as colour; `total` draws one value per row. Each chart has a "Lihat sebagai tabel" table with the
-  same values and its source. A chart whose table is missing or has no value left renders nothing. Photos are addressed as `/api/media/<mediaId>` (full size; the
+  page, looked up by id among the page's loaded tables). The types: `bar` draws horizontal bars and `column`
+  vertical columns; `pyramid` draws male bars left and female right of a centre label column on one scale;
+  `stacked` draws one bar per row with male and female end to end, so its length is the row total; `percent`
+  draws each row's male/female split as a 100% bar; `donut` draws one ring for `total`, or two rings for
+  `by_sex` (Laki-laki and Perempuan, side by side, stacked on narrow screens). A donut's slices are the rows
+  with a value above zero; each ring has a text legend naming every slice with its value and its share, in
+  the order of the ring. Female is always hatched, so it is told apart by pattern as well as colour; in
+  horizontal bars the series is named in each bar's label. Shares are whole numbers that add up to 100.
+  `by_sex` draws male and female per row. `total` draws one value per row. Each chart has a "Lihat sebagai
+  tabel" table with the same values and its source; the `percent` and `donut` tables add share columns. `percent` leaves out a row that has a value for only one sex, since no split can be computed. A chart whose table is missing or has no value left renders nothing. Photos are addressed as `/api/media/<mediaId>` (full size; the
   thumbnail variant is not used because the cards are shown large). Alt text, caption and credit are
   shown as stored; a photo without its own credit shows the group's shared credit. The stored data is parsed defensively (`utils/ceritaStoredFigure.ts`): a figure
   of an unknown kind or shape (a chart with a bad table id, type, series or title included), a photo without alt text or with a malformed id, and a bar without a
@@ -1014,8 +1023,11 @@ author is stored; with nothing stored it shows the page title alone.
   address in a small inline field and refuses anything outside the allow-list.
 - **The section editor** keeps one paragraph form open at a time (a draft is never silently replaced)
   and asks before closing or leaving the route with unsaved work. Figure tiles ("Jenis figur"): **1 gambar** (one photo), **2 gambar** (two photos, shown as a pair), **Galeri** (3 to 12
-  photos, a carousel) or **Grafik**: a chart of an indicator table on the same page, read through "Dari tabel di menu Data" (bar or column, total or
-  by sex, required title, optional source; "Menurut jenis kelamin" only for an age-pyramid or religion-by-sex table, and the
+  photos, a carousel) or **Grafik**: a chart of an indicator table on the same page, read through "Dari tabel di menu Data" (six types: Batang, Kolom,
+  Piramida, Donat, Bertumpuk, Persentase; total or by sex, required title, optional source). Piramida, Bertumpuk and Persentase
+  are only for an age-pyramid or religion-by-sex table: picking one selects "Menurut jenis kelamin" and locks "Jumlah total"
+  while it is picked; on any other table the three are disabled with the reason beside them. Donat works with either data choice:
+  total on any table, by sex only on a table split by sex. "Menurut jenis kelamin" is otherwise only for an age-pyramid or religion-by-sex table, and the
   editor says so otherwise), or an uploaded chart picture with bars and/or an image ("Unggah gambar grafik"). **Alt text is
   required for every photo and every uploaded chart picture** ("Teks alternatif"); caption, credit, source and bar unit are optional. A group of several
   photos may also carry one optional shared credit ("Sumber bersama"), which applies to every photo

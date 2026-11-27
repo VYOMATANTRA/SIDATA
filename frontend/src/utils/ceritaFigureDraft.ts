@@ -1,4 +1,6 @@
 import { hasHtmlTag, hasUnsafeCharacters } from './titleTextRules';
+import { isSexOnlyChartType } from './ceritaChart';
+import type { ChartType } from '../types/ceritaArticle';
 import {
   FIGURE_LIMITS,
   type FigurePhotoInput,
@@ -23,7 +25,7 @@ import {
 export type FigureKind = 'photo' | 'photos' | 'diagram' | 'chart';
 export type FigureTile = 'photo' | 'photos-2' | 'gallery' | 'chart';
 export type GrafikSource = 'table' | 'upload';
-export type ChartTypeChoice = 'bar' | 'column';
+export type ChartTypeChoice = ChartType;
 export type ChartSeriesChoice = 'total' | 'by_sex';
 
 export interface PhotoFields {
@@ -87,6 +89,10 @@ export const TILE_LABELS: Readonly<Record<FigureTile, { title: string; descripti
 export const CHART_TYPE_LABELS: Readonly<Record<ChartTypeChoice, string>> = {
   bar: 'Batang',
   column: 'Kolom',
+  pyramid: 'Piramida',
+  donut: 'Donat',
+  stacked: 'Bertumpuk',
+  percent: 'Persentase',
 };
 
 export const CHART_SERIES_LABELS: Readonly<Record<ChartSeriesChoice, string>> = {
@@ -628,6 +634,12 @@ function validateTableChart(
   }
   if (draft.chartSeries === 'by_sex' && option !== null && !option.sexSplit) {
     out.add(ids.chartSeries('by_sex'), 'Tabel ini hanya memuat jumlah total.');
+  }
+  if (draft.chartSeries === 'total' && isSexOnlyChartType(draft.chartType)) {
+    out.add(
+      ids.chartSeries('by_sex'),
+      'Jenis grafik ini hanya bisa menurut jenis kelamin. Pilih Menurut jenis kelamin.',
+    );
   }
 
   const title = draft.chartTitle.trim();

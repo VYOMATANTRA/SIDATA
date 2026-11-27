@@ -1,4 +1,5 @@
-import type { ArticleFigure, ArticlePhoto, ChartSeries, ChartType } from '../types/ceritaArticle';
+import type { ArticleFigure, ArticlePhoto, ChartSeries } from '../types/ceritaArticle';
+import { CHART_TYPES } from '../types/ceritaArticle';
 import { safeImageSrc } from './ceritaFigures';
 
 /**
@@ -14,7 +15,6 @@ const MAX_PHOTOS = 12;
 const MAX_BARS = 20;
 const MEDIA_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TABLE_ID = /^[A-Za-z0-9_-]{1,64}$/;
-const CHART_TYPES: readonly ChartType[] = ['bar', 'column'];
 const CHART_SERIES: readonly ChartSeries[] = ['total', 'by_sex'];
 
 /** The minimal block shape the mapping reads; `ContentBlock` satisfies it. */

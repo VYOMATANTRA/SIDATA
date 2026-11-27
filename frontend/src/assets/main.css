@@ -144,3 +144,17 @@
     font-size: var(--text-base);
   }
 }
+
+/*
+ * Female values in Cerita charts: diagonal hatching, so the two series differ in pattern as well as
+ * colour (WCAG 1.4.1). Shared by every chart component under components/cerita/.
+ */
+.chart-hatch {
+  background-image: repeating-linear-gradient(
+    135deg,
+    #8491a9 0,
+    #8491a9 2px,
+    #ffffff 2px,
+    #ffffff 5px
+  );
+}

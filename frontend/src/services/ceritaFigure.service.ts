@@ -1,5 +1,7 @@
 import { apiRequestJson } from '../utils/apiClient';
 import type { ContentBlock } from '../stores/contentBlocks.store';
+import { isChartType } from '../utils/ceritaChart';
+import type { ChartSeries, ChartType } from '../types/ceritaArticle';
 
 /**
  * Every call that concerns a section's figure (photo, photo series or diagram), in one place.
@@ -31,8 +33,8 @@ export type SectionFigure =
       /** Read and written by the figure editor ("Grafik" tile, table of the Data menu). */
       kind: 'chart';
       tableId: string;
-      chartType: 'bar' | 'column';
-      series: 'total' | 'by_sex';
+      chartType: ChartType;
+      series: ChartSeries;
       title: string;
       source?: string;
     };
@@ -104,7 +106,7 @@ export function figureFromBlock(block: ContentBlock | null | undefined): Section
     const chartType = meta['chartType'];
     const series = meta['series'];
     if (!tableId || !title) return null;
-    if (chartType !== 'bar' && chartType !== 'column') return null;
+    if (!isChartType(chartType)) return null;
     if (series !== 'total' && series !== 'by_sex') return null;
     const source = text(meta['source']);
     return {

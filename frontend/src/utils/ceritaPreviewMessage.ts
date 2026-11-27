@@ -1,4 +1,5 @@
 import type { ArticleFigure, ArticlePhoto, ChartTable } from '../types/ceritaArticle';
+import { isChartType } from './ceritaChart';
 
 /**
  * The message protocol between the Cerita editor and its live preview (`/admin/cerita/pratinjau`).
@@ -175,7 +176,7 @@ function figureOf(value: unknown): ArticleFigure | null {
       const chartType = value['chartType'];
       const series = value['series'];
       if (tableId === null || title === null || source === null) return null;
-      if (chartType !== 'bar' && chartType !== 'column') return null;
+      if (!isChartType(chartType)) return null;
       if (series !== 'total' && series !== 'by_sex') return null;
       return {
         kind: 'chart',

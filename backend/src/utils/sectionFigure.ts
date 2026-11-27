@@ -138,7 +138,13 @@ const diagramFigure = z
     message: 'Diagram harus berisi gambar atau diagram batang',
   });
 
-export const CHART_TYPES = ['bar', 'column'] as const;
+export const CHART_TYPES = ['bar', 'column', 'pyramid', 'donut', 'stacked', 'percent'] as const;
+/** Types that compare male with female, so they only make sense with `series: 'by_sex'`. */
+export const SEX_ONLY_CHART_TYPES: readonly (typeof CHART_TYPES)[number][] = [
+  'pyramid',
+  'stacked',
+  'percent',
+];
 export const CHART_SERIES = ['total', 'by_sex'] as const;
 
 /**
@@ -146,25 +152,30 @@ export const CHART_SERIES = ['total', 'by_sex'] as const;
  * the chart follows the table. The table must sit on the same Cerita page as the section; that
  * is checked in the service because it needs the database.
  */
-const chartFigure = z.strictObject(
-  {
-    kind: z.literal('chart'),
-    tableId: z
-      .string({ error: 'Tabel data belum dipilih' })
-      .trim()
-      .refine((v) => UUID_PATTERN.test(v), 'Tabel data tidak valid. Pilih ulang tabelnya')
-      .transform((v) => v.toLowerCase()),
-    chartType: z.enum(CHART_TYPES, {
-      error: 'Jenis grafik tidak dikenal. Pilih batang atau kolom',
-    }),
-    series: z.enum(CHART_SERIES, {
-      error: 'Data grafik tidak dikenal. Pilih jumlah total atau per jenis kelamin',
-    }),
-    title: text('Judul grafik', 120, { required: true }),
-    source: optionalText('Sumber grafik', 200),
-  },
-  { error: 'Gambar memuat isian yang tidak dikenal' },
-);
+const chartFigure = z
+  .strictObject(
+    {
+      kind: z.literal('chart'),
+      tableId: z
+        .string({ error: 'Tabel data belum dipilih' })
+        .trim()
+        .refine((v) => UUID_PATTERN.test(v), 'Tabel data tidak valid. Pilih ulang tabelnya')
+        .transform((v) => v.toLowerCase()),
+      chartType: z.enum(CHART_TYPES, {
+        error: 'Jenis grafik tidak dikenal. Pilih salah satu jenis grafik',
+      }),
+      series: z.enum(CHART_SERIES, {
+        error: 'Data grafik tidak dikenal. Pilih jumlah total atau per jenis kelamin',
+      }),
+      title: text('Judul grafik', 120, { required: true }),
+      source: optionalText('Sumber grafik', 200),
+    },
+    { error: 'Gambar memuat isian yang tidak dikenal' },
+  )
+  .refine((f) => f.series === 'by_sex' || !SEX_ONLY_CHART_TYPES.includes(f.chartType), {
+    message: 'Jenis grafik ini memerlukan data menurut jenis kelamin',
+    path: ['series'],
+  });
 
 export const sectionFigureSchema = z
   .discriminatedUnion('kind', [singlePhotoFigure, photoGroupFigure, diagramFigure, chartFigure], {
