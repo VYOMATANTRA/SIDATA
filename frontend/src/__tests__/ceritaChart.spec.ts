@@ -444,4 +444,12 @@ describe('FigureChart new types', () => {
     const firstRow = w.findAll('[data-test="chart-data"] tbody tr')[0]!.findAll('td');
     expect(firstRow.map((td) => td.text())).toEqual(['10', '63%', '6', '37%']);
   });
+
+  it('leaves out a row with only one sex from the percent chart', () => {
+    const w = mount(FigureChart, {
+      props: { figure: chart({ chartType: 'percent', series: 'by_sex' }), table },
+    });
+    expect(w.findAll('[data-test="stacked-summary"]')).toHaveLength(1);
+    expect(w.find('[data-test="chart-data"]').text()).not.toContain('Kelompok B');
+  });
 });

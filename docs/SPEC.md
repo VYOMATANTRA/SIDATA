@@ -642,7 +642,7 @@ setup-password, the OAuth callback, `/dashboard` (its own `<main>`) and the admi
   the order of the ring. Female is always hatched, so it is told apart by pattern as well as colour; in
   horizontal bars the series is named in each bar's label. Shares are whole numbers that add up to 100.
   `by_sex` draws male and female per row. `total` draws one value per row. Each chart has a "Lihat sebagai
-  tabel" table with the same values and its source; the `percent` and `donut` tables add share columns. A chart whose table is missing or has no value left renders nothing. Photos are addressed as `/api/media/<mediaId>` (full size; the
+  tabel" table with the same values and its source; the `percent` and `donut` tables add share columns. `percent` leaves out a row that has a value for only one sex, since no split can be computed. A chart whose table is missing or has no value left renders nothing. Photos are addressed as `/api/media/<mediaId>` (full size; the
   thumbnail variant is not used because the cards are shown large). Alt text, caption and credit are
   shown as stored; a photo without its own credit shows the group's shared credit. The stored data is parsed defensively (`utils/ceritaStoredFigure.ts`): a figure
   of an unknown kind or shape (a chart with a bad table id, type, series or title included), a photo without alt text or with a malformed id, and a bar without a

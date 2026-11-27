@@ -35,7 +35,16 @@ import {
  */
 const props = defineProps<{ figure: ChartFigure; table: ChartTable | null | undefined }>();
 
-const groups = computed(() => chartGroups(props.figure, props.table));
+const allGroups = computed(() => chartGroups(props.figure, props.table));
+/**
+ * `percent` needs both sexes to compute a split, so a row with only one value is left out rather
+ * than drawn as 100% of that sex; the table below still lists every value of the other types.
+ */
+const groups = computed(() =>
+  props.figure.chartType === 'percent'
+    ? allGroups.value.filter((group) => group.values.length > 1)
+    : allGroups.value,
+);
 const max = computed(() => chartMax(groups.value));
 const chartType = computed<ChartType>(() => props.figure.chartType);
 const bySex = computed(() => props.figure.series === 'by_sex');
