@@ -20,7 +20,7 @@ This file provides guidance to Claude Code, Google Antigravity, GitHub Copilot, 
 
 DB engine is **MySQL**, full stop — but you'll correctly see @prisma/adapter-mariadb in code, since that's Prisma 7's single driver adapter for both engines. Don't 'correct' it.
 
-Deploy target: Docker on a self-managed VPS (may change pending stakeholder input — this affects hosting, not the DB engine choice, which is settled independently).
+Deploy target: Bare-metal Ubuntu VPS (Nginx + systemd) deployed via GitHub Actions CD (`.github/workflows/deploy.yml`, see `docs/DEPLOYMENT.md`); Docker Compose remains available for local dev and integration tests.
 
 
 ## Commands
