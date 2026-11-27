@@ -244,6 +244,7 @@ docker run --rm node:22-bookworm-slim npm ping --fetch-retries=0 --fetch-timeout
 | Seed sample indicators  | `npm run seed:indicator`                                                 |
 | Clean sample RT data    | `npm run dev:cleanup-sample-rt`                                          |
 | Clean stale media       | `npm run media:cleanup` (`-- --dry-run`, `-- --grace-hours=N`)           |
+| Import BSU map points   | `npm run import:bsu -- --file <path> [--apply] [--replace-sample]`       |
 
 Integration tests (`backend/tests/integration/`) need a real MySQL because they assert
 concurrency behaviour that a mocked client cannot reproduce: no InnoDB deadlocks under
