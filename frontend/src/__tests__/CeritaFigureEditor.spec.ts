@@ -92,6 +92,19 @@ describe('Grafik chart types (SPEC §8)', () => {
     expect(wrapper.find('[data-test="chart-type-hint"]').text()).toContain('menurut jenis kelamin');
   });
 
+  it('falls back to bars when the table changes to one without a sex split', async () => {
+    const wrapper = await mountEditor();
+    await chooseGrafik(wrapper);
+    await chooseTable(wrapper, 'tab-umur');
+    await wrapper.find('[data-test="chart-type-pyramid"]').trigger('click');
+    await chooseTable(wrapper, 'tab-pekerjaan');
+    await nextTick();
+
+    expect(pressed(wrapper, 'chart-type-bar')).toBe('true');
+    expect(pressed(wrapper, 'chart-series-total')).toBe('true');
+    expect(button(wrapper, 'chart-series-total').disabled).toBe(false);
+  });
+
   it('disables the sex-only types on a total-only table, with the existing hint', async () => {
     const wrapper = await mountEditor();
     await chooseGrafik(wrapper);

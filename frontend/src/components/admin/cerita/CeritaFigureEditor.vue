@@ -231,6 +231,8 @@ function onChartTableChange(tableId: string): void {
   chartTableId.value = tableId;
   // A table without a sex split cannot show "by_sex": fall back to the total rather than refuse.
   if (chartSeries.value === 'by_sex' && !bySexAllowed.value) chartSeries.value = 'total';
+  // A sex-only type has no meaning without the split either: fall back to bars, never a dead end.
+  if (isSexOnlyChartType(chartType.value) && !bySexAllowed.value) chartType.value = 'bar';
 }
 
 // --- Loading and baselines ---
@@ -512,9 +514,7 @@ function barGripId(uid: string | number): string {
 }
 
 /** The gallery tiles in the order to show; a keyboard move previews its place and renumbers them. */
-const galleryShown = computed(() =>
-  galleryKb.arrange(galleryRows.value, (row) => String(row.uid)),
-);
+const galleryShown = computed(() => galleryKb.arrange(galleryRows.value, (row) => String(row.uid)));
 
 function galleryGripId(uid: string | number): string {
   return `${baseId}-galeri-${uid}-pegang`;
@@ -1000,7 +1000,9 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
               :grip-label="`Pindahkan foto ${index + 1}`"
               :grip-carried="galleryKb.isCarried(String(row.uid))"
               :busy="busy || uploading"
-              @remove="photoRows.remove(photoRows.rows.value.findIndex((item) => item.uid === row.uid))"
+              @remove="
+                photoRows.remove(photoRows.rows.value.findIndex((item) => item.uid === row.uid))
+              "
               @uploading="onUploading"
               @grip-start="drag.startDrag(String(row.uid))"
               @grip-end="drag.clearDrag()"
@@ -1453,7 +1455,9 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
                   size="sm"
                   class="min-h-11"
                   :disabled="busy"
-                  @click="barRows.remove(barRows.rows.value.findIndex((item) => item.uid === bar.uid))"
+                  @click="
+                    barRows.remove(barRows.rows.value.findIndex((item) => item.uid === bar.uid))
+                  "
                 >
                   Hapus <span class="sr-only">batang {{ index + 1 }}</span>
                 </BaseButton>

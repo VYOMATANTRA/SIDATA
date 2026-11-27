@@ -159,7 +159,7 @@ function cellText(group: ChartGroup, column: TableColumn): string {
 
 <template>
   <figure
-    v-if="groups.length > 0"
+    v-if="groups.length > 0 && (chartType !== 'donut' || donutKeys.length > 0)"
     class="rounded-card border-border border bg-white p-4 shadow-md"
     data-test="figure-chart"
     :data-chart-type="chartType"
