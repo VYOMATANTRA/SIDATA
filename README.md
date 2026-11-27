@@ -242,6 +242,7 @@ docker run --rm node:22-bookworm-slim npm ping --fetch-retries=0 --fetch-timeout
 | Format code             | `npm run format`                                                         |
 | Create local dev admin  | `npm run dev:seed`                                                       |
 | Seed sample indicators  | `npm run seed:indicator`                                                 |
+| Seed Cerita story (dev) | `npm run seed:cerita -- --page kependudukan`                             |
 | Clean sample RT data    | `npm run dev:cleanup-sample-rt`                                          |
 | Clean stale media       | `npm run media:cleanup` (`-- --dry-run`, `-- --grace-hours=N`)           |
 
