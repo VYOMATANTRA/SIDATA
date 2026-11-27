@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 import type { SpatialPointDTO } from '../../types/maps';
 import BaseButton from '../common/BaseButton.vue';
+import { orderMetadataEntries } from '../../config/mapMetadata';
 import { isDialable, telHref, whatsappNumber } from '../../utils/phone';
 
 interface Props {
@@ -163,12 +164,9 @@ const isWhatsapp = computed(() => {
   return validatedLeader.value?.phoneIsWhatsapp ?? true;
 });
 
-const metadataEntries = computed(() => {
-  if (!props.point?.metadata) return [];
-  return Object.entries(props.point.metadata).filter(
-    ([, val]) => val !== null && val !== undefined && val !== '',
-  );
-});
+const metadataEntries = computed(() =>
+  props.point ? orderMetadataEntries(props.point.type, props.point.metadata) : [],
+);
 </script>
 
 <template>
@@ -354,7 +352,9 @@ const metadataEntries = computed(() => {
         :key="key"
         class="flex items-start justify-between gap-2"
       >
-        <span class="text-slate-500 capitalize">{{ key.replace(/_/g, ' ') }}:</span>
+        <span class="text-slate-500" :class="{ capitalize: point.type !== 'bank_sampah' }"
+          >{{ key.replace(/_/g, ' ') }}:</span
+        >
         <span class="text-right font-medium text-slate-800">{{ String(val) }}</span>
       </div>
     </div>
