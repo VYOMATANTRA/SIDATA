@@ -36,7 +36,7 @@ export function evaluateAppDbGrants(input: {
   const visibleSet = new Set(appVisibleTables);
   const missingTables = expectedTables.filter((table) => !visibleSet.has(table));
 
-  const dbEscaped = dbName.replace(/_/g, '\\_');
+  const dbEscaped = dbName.replace(/\\/g, '\\\\').replace(/_/g, '\\_');
   const dbPattern = `(?:${escapeRegex(dbName)}|${escapeRegex(dbEscaped)})`;
   const dbWildcardGrantRe = new RegExp(`\\bON\\s+\`${dbPattern}\`\\.\\*`, 'i');
   const globalNonUsageGrantRe = /^GRANT\s+(?!USAGE\b).*\bON\s+\*\.\*/i;
