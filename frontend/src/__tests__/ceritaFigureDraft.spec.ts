@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CHART_TYPE_LABELS,
   describeFigure,
   draftFromFigure,
   draftSignature,
@@ -578,5 +579,79 @@ describe('shared credit of a photo group (draft load)', () => {
         ],
       }).sharedCredit,
     ).toBe('Tim');
+  });
+});
+
+describe('chart types of the Grafik tile (SPEC §2, §8)', () => {
+  it('labels the six chart types in plain Indonesian', () => {
+    expect(Object.values(CHART_TYPE_LABELS)).toEqual([
+      'Batang',
+      'Kolom',
+      'Piramida',
+      'Donat',
+      'Bertumpuk',
+      'Persentase',
+    ]);
+  });
+
+  it('builds a donut of the total, which is allowed without a sex split', () => {
+    const result = validateFigureDraft(
+      chartDraft({ chartTableId: 'tab-suku', chartType: 'donut', chartSeries: 'total' }),
+      ids,
+      CHART_TABLES,
+    );
+    expect(result.problems).toEqual([]);
+    expect(result.figure).toMatchObject({ chartType: 'donut', series: 'total' });
+  });
+
+  it.each(['pyramid', 'stacked', 'percent'] as const)(
+    'refuses %s with the total, and points at the data choice',
+    (chartType) => {
+      const result = validateFigureDraft(
+        chartDraft({ chartTableId: 'tab-umur', chartType, chartSeries: 'total' }),
+        ids,
+        CHART_TABLES,
+      );
+      expect(result.figure).toBeNull();
+      expect(result.problems).toEqual([
+        {
+          fieldId: ids.chartSeries('by_sex'),
+          message:
+            'Jenis grafik ini hanya bisa menurut jenis kelamin. Pilih Menurut jenis kelamin.',
+        },
+      ]);
+    },
+  );
+
+  it('builds a sex-only chart with by_sex on a table split by sex', () => {
+    const result = validateFigureDraft(
+      chartDraft({ chartTableId: 'tab-umur', chartType: 'pyramid', chartSeries: 'by_sex' }),
+      ids,
+      CHART_TABLES,
+    );
+    expect(result.problems).toEqual([]);
+    expect(result.figure).toMatchObject({ chartType: 'pyramid', series: 'by_sex' });
+  });
+
+  it('refuses a sex-only type on a total-only table', () => {
+    const result = validateFigureDraft(
+      chartDraft({ chartTableId: 'tab-suku', chartType: 'stacked', chartSeries: 'by_sex' }),
+      ids,
+      CHART_TABLES,
+    );
+    expect(result.problems).toEqual([
+      { fieldId: ids.chartSeries('by_sex'), message: 'Tabel ini hanya memuat jumlah total.' },
+    ]);
+  });
+
+  it('reads a stored sex-only chart back into the draft', () => {
+    const draft = draftFromFigure({
+      kind: 'chart',
+      tableId: 'tab-umur',
+      chartType: 'percent',
+      series: 'by_sex',
+      title: 'Persentase menurut umur',
+    });
+    expect(draft).toMatchObject({ tile: 'chart', chartType: 'percent', chartSeries: 'by_sex' });
   });
 });

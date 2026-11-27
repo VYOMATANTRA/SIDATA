@@ -42,7 +42,11 @@ export interface DiagramFigure {
   source?: string;
 }
 
-export type ChartType = 'bar' | 'column';
+/** Every chart type a Grafik figure may use. The backend keeps the same list (SPEC §2). */
+export const CHART_TYPES = ['bar', 'column', 'pyramid', 'donut', 'stacked', 'percent'] as const;
+export type ChartType = (typeof CHART_TYPES)[number];
+/** Types that compare male with female: they need `series: 'by_sex'` (donut also takes `total`). */
+export const SEX_ONLY_CHART_TYPES: readonly ChartType[] = ['pyramid', 'stacked', 'percent'];
 /** `total` draws one value per row; `by_sex` draws male and female for each row. */
 export type ChartSeries = 'total' | 'by_sex';
 

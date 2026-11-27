@@ -12,6 +12,8 @@ import { edgeAt, useCardDragReorder } from '../../../composables/useCardDragReor
 import { useKeyboardReorder } from '../../../composables/useKeyboardReorder';
 import { consumePendingFigureKind } from '../../../composables/figureKindHint';
 import { FIGURE_LIMITS } from '../../../services/ceritaFigure.service';
+import { CHART_TYPES } from '../../../types/ceritaArticle';
+import { isSexOnlyChartType } from '../../../utils/ceritaChart';
 import { useCeritaAdminStore } from '../../../stores/ceritaAdmin.store';
 import { isSexSplitKind, useIndicatorTablesStore } from '../../../stores/indicatorTables.store';
 import { INPUT_CLASSES } from '../../../utils/formStyles';
@@ -131,7 +133,6 @@ const pendingTile = ref<FigureTile | null>(null);
 const statusMessage = ref('');
 const summaryHost = ref<HTMLElement | null>(null);
 const failureId = `${baseId}-gagal`;
-const chartTypeOptions: readonly ChartTypeChoice[] = ['bar', 'column'];
 const chartSeriesOptions: readonly ChartSeriesChoice[] = ['total', 'by_sex'];
 const deleteKeepButton = ref<InstanceType<typeof BaseButton> | null>(null);
 const tileCancelButton = ref<InstanceType<typeof BaseButton> | null>(null);
@@ -217,6 +218,14 @@ const bySexHint = computed(() => {
   if (selectedTable.value && !bySexAllowed.value) return 'Tabel ini hanya memuat jumlah total.';
   return null;
 });
+/** Pyramid, stacked and percent exist only split by sex, so "Jumlah total" is off while one is picked. */
+const chartTypeNeedsBySex = computed(() => isSexOnlyChartType(chartType.value));
+
+/** Picking a sex-only type selects the by-sex data with it; the donut keeps whichever data is chosen. */
+function pickChartType(type: ChartTypeChoice): void {
+  chartType.value = type;
+  if (isSexOnlyChartType(type)) chartSeries.value = 'by_sex';
+}
 
 function onChartTableChange(tableId: string): void {
   chartTableId.value = tableId;
@@ -1139,22 +1148,38 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
             <legend class="text-brand-navy mb-2 text-sm font-semibold">Jenis grafik</legend>
             <div class="flex flex-wrap gap-2">
               <button
-                v-for="type in chartTypeOptions"
+                v-for="type in CHART_TYPES"
                 :key="type"
                 type="button"
                 :aria-pressed="chartType === type"
-                class="rounded-btn focus-visible:outline-focus-ring flex min-h-11 items-center border px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
+                :disabled="
+                  isSexOnlyChartType(type) ? !bySexAllowed || busy || uploading : undefined
+                "
+                :aria-describedby="
+                  isSexOnlyChartType(type) && bySexHint
+                    ? `${ids.chartSeries('by_sex')}-hint`
+                    : undefined
+                "
+                class="rounded-btn focus-visible:outline-focus-ring flex min-h-11 items-center border px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                 :class="
                   chartType === type
                     ? 'border-brand-navy bg-brand-navy text-white'
                     : 'border-border-strong text-brand-navy bg-white'
                 "
                 :data-test="`chart-type-${type}`"
-                @click="chartType = type"
+                @click="pickChartType(type)"
               >
                 {{ CHART_TYPE_LABELS[type] }}
               </button>
             </div>
+            <p
+              v-if="chartTypeNeedsBySex"
+              :id="`${ids.chartSeries('total')}-hint`"
+              class="text-text-muted text-[12px]"
+              data-test="chart-type-hint"
+            >
+              Jenis grafik ini hanya bisa menurut jenis kelamin.
+            </p>
           </fieldset>
 
           <fieldset class="space-y-2" :disabled="busy || uploading">
@@ -1165,9 +1190,17 @@ defineExpose({ isDirty: () => dirty.value, isBusy: () => working.value, save, fa
                 :key="series"
                 type="button"
                 :aria-pressed="chartSeries === series"
-                :disabled="series === 'by_sex' ? !bySexAllowed || busy || uploading : undefined"
+                :disabled="
+                  series === 'by_sex'
+                    ? !bySexAllowed || busy || uploading
+                    : chartTypeNeedsBySex || undefined
+                "
                 :aria-describedby="
-                  series === 'by_sex' && bySexHint ? `${ids.chartSeries('by_sex')}-hint` : undefined
+                  series === 'by_sex' && bySexHint
+                    ? `${ids.chartSeries('by_sex')}-hint`
+                    : series === 'total' && chartTypeNeedsBySex
+                      ? `${ids.chartSeries('total')}-hint`
+                      : undefined
                 "
                 class="rounded-btn focus-visible:outline-focus-ring flex min-h-11 items-center border px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                 :class="
