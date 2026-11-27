@@ -212,7 +212,7 @@ Verify it by hand, then set the `maps.rt_leaders_sample_roster` flag with `PATCH
   - `current` — atomic symlink switched after `npx prisma migrate deploy` (using `AUDIT_ADMIN_DATABASE_URL`) and `npx tsx scripts/check-app-db-grants.ts` succeed.
   - `shared/.env` (`0600`) and `shared/uploads/` (`UPLOAD_DIR`, mode `0750`).
 - **Process management & rollback scope**:
-  - Restarts `sidata-backend.service` via a narrow `sudoers` rule; if `systemctl restart` fails, the script continues into the `/api/health` loop so symlink rollback still runs.
+  - Restarts `sidata-backend.service` via a narrow `sudoers` rule; if `systemctl restart` fails or `/api/health` fails after a successful restart, the script immediately rolls back the `current` symlink and exits non-zero.
   - **Rollback limitation**: rolling back only repoints the `current` symlink to the previous release and restarts `sidata-backend` — it **cannot undo database migrations**. Keep all schema migrations backward-compatible (expand/contract).
 - **First-time post-deploy steps**: immediately after the first deployment creates the tables, run `backend/scripts/grants/audit-logs-grants.sql` as MySQL `root`, run `NODE_ENV=production npx prisma db seed`, and install host cron jobs.
 

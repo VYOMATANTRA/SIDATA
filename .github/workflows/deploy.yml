@@ -209,8 +209,21 @@ jobs:
           (cd "$RELEASE_DIR/backend" && npx tsx scripts/check-app-db-grants.ts --env-file "$SHARED_DIR/.env")
 
           PREV_RELEASE="$CURRENT_REAL"
+          rollback() {
+            sudo -n systemctl status sidata-backend --no-pager || true
+            if [ -n "$PREV_RELEASE" ] && [ -d "$PREV_RELEASE" ]; then
+              echo "Rolling back to $PREV_RELEASE" >&2
+              ln -sfn "$PREV_RELEASE" "$BASE_DIR/current"
+              sudo -n systemctl restart sidata-backend || true
+            fi
+          }
+
           ln -sfn "$RELEASE_DIR" "$BASE_DIR/current"
-          sudo -n systemctl restart sidata-backend || echo "Restart failed; continuing to health check and rollback" >&2
+          if ! sudo -n systemctl restart sidata-backend; then
+            echo "systemctl restart sidata-backend failed; rolling back" >&2
+            rollback
+            exit 1
+          fi
 
           HEALTH_URL="http://127.0.0.1:${PORT}/api/health"
           HEALTHY=0
@@ -224,12 +237,7 @@ jobs:
 
           if [ "$HEALTHY" -ne 1 ]; then
             echo "Health check failed at $HEALTH_URL" >&2
-            sudo -n systemctl status sidata-backend --no-pager || true
-            if [ -n "$PREV_RELEASE" ] && [ -d "$PREV_RELEASE" ]; then
-              echo "Rolling back to $PREV_RELEASE" >&2
-              ln -sfn "$PREV_RELEASE" "$BASE_DIR/current"
-              sudo -n systemctl restart sidata-backend || true
-            fi
+            rollback
             exit 1
           fi
 
