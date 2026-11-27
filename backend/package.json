@@ -9,6 +9,7 @@
     "test:coverage": "node scripts/coverage.mjs",
     "dev:seed": "tsx scripts/dev-seed.ts",
     "dev:cleanup-sample-rt": "tsx scripts/cleanup-legacy-sample-rt-leaders.ts",
+    "import:bsu": "tsx scripts/import-bsu.ts",
     "seed:indicator": "tsx prisma/seeder_indicator.ts",
     "seed:cerita": "tsx scripts/seed-cerita-story.ts",
     "media:cleanup": "tsx scripts/cleanup-media.ts",

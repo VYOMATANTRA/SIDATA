@@ -37,6 +37,7 @@ Deploy target: Docker on a self-managed VPS (may change pending stakeholder inpu
 | Seed Cerita story (dev) | —                      | `npm run seed:cerita -- --page kependudukan [--force]`   |
 | Cleanup sample RT data  | —                      | `npm run dev:cleanup-sample-rt`                          |
 | Clean stale media       | —                      | `npm run media:cleanup`                                  |
+| Import BSU map points   | —                      | `npm run import:bsu -- --file <path> [--apply]`          |
 
 Integration tests (need Docker): `docker compose -f docker-compose.test.yml run --rm backend-integration` from the repo root. Full stack: `docker compose up --build`. The Prisma client is generated to `backend/generated/prisma/` (do not edit; `npx prisma generate`).
 

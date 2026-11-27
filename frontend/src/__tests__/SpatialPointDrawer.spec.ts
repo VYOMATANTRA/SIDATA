@@ -222,4 +222,20 @@ describe('SpatialPointDrawer.vue', () => {
     expect(wrapper.text()).not.toContain('Kontak Ketua RT');
     expect(wrapper.find('a[href^="https://wa.me/"]').exists()).toBe(false);
   });
+
+  it('shows bank_sampah metadata in contract order without Kode', () => {
+    const wrapper = mountDrawer({
+      point: {
+        ...samplePoint,
+        type: 'bank_sampah',
+        rtLeader: null,
+        metadata: { RT: '64', Kode: 'bsu-rt64', Status: 'Aktif', Alamat: 'Jl. Contoh' },
+      },
+    });
+    const text = wrapper.text();
+    expect(text).not.toContain('Kode');
+    expect(text).not.toContain('bsu-rt64');
+    expect(text.indexOf('RT:')).toBeLessThan(text.indexOf('Alamat:'));
+    expect(text.indexOf('Alamat:')).toBeLessThan(text.indexOf('Status:'));
+  });
 });
