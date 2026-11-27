@@ -425,6 +425,22 @@ describe('sectionFigureSchema', () => {
       assert.match(message(chart({ title: ' ' })), /Judul grafik wajib diisi/);
     });
 
+    it('accepts every chart type, and sex-only types need by_sex', () => {
+      for (const chartType of ['bar', 'column', 'pyramid', 'donut', 'stacked', 'percent']) {
+        assert.equal(sectionFigureSchema.safeParse(chart({ chartType })).success, true, chartType);
+      }
+      for (const chartType of ['bar', 'column', 'donut']) {
+        const parsed = sectionFigureSchema.safeParse(chart({ chartType, series: 'total' }));
+        assert.equal(parsed.success, true, chartType);
+      }
+      for (const chartType of ['pyramid', 'stacked', 'percent']) {
+        assert.match(
+          message(chart({ chartType, series: 'total' })),
+          /memerlukan data menurut jenis kelamin/,
+        );
+      }
+    });
+
     it('limits title and source and refuses HTML and unknown keys', () => {
       assert.match(message(chart({ title: 't'.repeat(121) })), /Judul grafik maksimal 120/);
       assert.match(message(chart({ source: 's'.repeat(201) })), /Sumber grafik maksimal 200/);
