@@ -19,6 +19,7 @@ jobs:
     name: Build & Deploy
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    environment: production
     if: >-
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
       (github.event.workflow_run.event == 'push' &&
@@ -147,9 +148,11 @@ jobs:
           fi
 
           export NVM_DIR="$HOME/.nvm"
+          set +u
           # shellcheck disable=SC1091
           source "$NVM_DIR/nvm.sh"
           nvm use default >/dev/null
+          set -u
 
           rm -rf "$RELEASE_DIR"
           mkdir -p "$RELEASE_DIR"
@@ -172,23 +175,44 @@ jobs:
           fi
           printf '%s\n' "$LOCK_HASH" > "$RELEASE_DIR/backend/.package-lock.sha256"
 
-          set -a
-          # shellcheck disable=SC1091
-          . "$SHARED_DIR/.env"
-          set +a
+          PORT="$(
+            cd "$RELEASE_DIR/backend" && node --input-type=module -e '
+              import fs from "node:fs";
+              import dotenv from "dotenv";
+              const env = dotenv.parse(fs.readFileSync(process.argv[1]));
+              const port = env.PORT || "3000";
+              if (!/^\d+$/.test(port)) {
+                console.error("Invalid PORT in shared .env");
+                process.exit(1);
+              }
+              process.stdout.write(port);
+            ' "$SHARED_DIR/.env"
+          )"
 
-          if [ -z "${AUDIT_ADMIN_DATABASE_URL:-}" ]; then
-            echo "AUDIT_ADMIN_DATABASE_URL is not set in $SHARED_DIR/.env" >&2
-            exit 1
-          fi
+          (
+            cd "$RELEASE_DIR/backend" && node --input-type=module -e '
+              import { execFileSync } from "node:child_process";
+              import fs from "node:fs";
+              import dotenv from "dotenv";
+              const env = dotenv.parse(fs.readFileSync(process.argv[1]));
+              if (!env.AUDIT_ADMIN_DATABASE_URL) {
+                console.error("AUDIT_ADMIN_DATABASE_URL is not set in shared .env");
+                process.exit(1);
+              }
+              execFileSync("npx", ["prisma", "migrate", "deploy"], {
+                stdio: "inherit",
+                env: { ...process.env, DATABASE_URL: env.AUDIT_ADMIN_DATABASE_URL },
+              });
+            ' "$SHARED_DIR/.env"
+          )
 
-          (cd "$RELEASE_DIR/backend" && DATABASE_URL="$AUDIT_ADMIN_DATABASE_URL" npx prisma migrate deploy)
+          (cd "$RELEASE_DIR/backend" && npx tsx scripts/check-app-db-grants.ts --env-file "$SHARED_DIR/.env")
 
           PREV_RELEASE="$CURRENT_REAL"
           ln -sfn "$RELEASE_DIR" "$BASE_DIR/current"
-          sudo -n systemctl restart sidata-backend
+          sudo -n systemctl restart sidata-backend || echo "Restart failed; continuing to health check and rollback" >&2
 
-          HEALTH_URL="http://127.0.0.1:${PORT:-3000}/api/health"
+          HEALTH_URL="http://127.0.0.1:${PORT}/api/health"
           HEALTHY=0
           for i in $(seq 1 20); do
             if curl -fsS "$HEALTH_URL" >/dev/null; then

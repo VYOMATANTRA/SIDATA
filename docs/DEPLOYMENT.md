@@ -1,6 +1,6 @@
 # Deployment
 
-Checklist for setting up a **new environment** (Docker on a VPS). For local development see the
+Checklist for setting up a **new environment** (Docker Compose or bare-metal Ubuntu VPS). For local development see the
 [README](../README.md#quick-start). Background: [`AGENTS.md`](../AGENTS.md) "Audit Trail" and
 [`SECURITY.md`](../SECURITY.md).
 
@@ -67,7 +67,7 @@ What it does and does not touch:
 - Wildcard grants such as `` `sidata%`.* ``, server-wide grants such as `DELETE ON *.*`, and extra
   table-level grants on `audit_logs` are a different scope. The script ends with a check that stops
   with an error naming any such grant the app user still holds. Revoke that one by hand and re-run.
-- **Re-apply the script after any migration that adds a table.**
+- **Re-apply the script on every release that adds a table.** Once per-table grants are active, `backend/scripts/check-app-db-grants.ts` (run automatically during CD) blocks deployment if a new table is missing grants for the runtime DB user.
 
 ## 4. Audit-log pruning
 
@@ -204,13 +204,98 @@ Verify it by hand, then set the `maps.rt_leaders_sample_roster` flag with `PATCH
 
 ## 8. Continuous Deployment (VPS without Docker)
 
-`.github/workflows/deploy.yml` automates deployment to a bare-metal Ubuntu VPS via SSH whenever `CI` succeeds on `main` (or when triggered manually via `workflow_dispatch` on `main`):
+`.github/workflows/deploy.yml` automates deployment to a bare-metal Ubuntu VPS via SSH whenever `CI` succeeds on `main` (or when triggered manually via `workflow_dispatch` on `main`), scoped to the GitHub `production` environment:
 
-- **Required GitHub Secrets** (same set as `.github/workflows/test-ssh.yml`): `VPS_HOST`, `VPS_USER` (`deploy`), `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS`.
-- **Required GitHub Variable**: `VITE_TURNSTILE_SITE_KEY` (baked into `frontend/dist` at build time; the deploy workflow fails if unset so production never ships with a silent test-key fallback).
+- **GitHub Environment & Secrets**: configure the `production` environment in GitHub (leaving *Required reviewers* off keeps `main` deploys automatic; enabling it adds a manual approval gate). Store `VPS_HOST`, `VPS_USER` (`deploy`), `VPS_SSH_KEY`, and `VPS_KNOWN_HOSTS` as secrets, and `VITE_TURNSTILE_SITE_KEY` as a variable (baked into `frontend/dist` at build time; the build fails if unset). These match the connection settings used by `.github/workflows/test-ssh.yml`.
 - **VPS layout under `/var/www/sidata/`** (owned by `deploy:deploy`):
   - `releases/<short-sha>-<run-id>-<attempt>/` — built `frontend/dist`, backend source + `generated/prisma`, symlinked `.env -> ../../shared/.env`, and `backend/node_modules` (reused from the active release via `package-lock.json` hash or installed with `npm ci`).
-  - `current` — atomic symlink switched after `DATABASE_URL="$AUDIT_ADMIN_DATABASE_URL" npx prisma migrate deploy` succeeds.
-  - `shared/.env` (`0600`) and `shared/uploads/` (`UPLOAD_DIR`).
-- **Process & health check**: restarts `sidata-backend.service` via a narrow `sudoers` rule (`systemctl restart/start/stop/status/is-active sidata-backend`) and verifies `http://127.0.0.1:${PORT:-3000}/api/health`. If the health check fails, `current` automatically rolls back to the previous release.
-- **First-time post-deploy step**: immediately after the first deployment creates the tables, run `backend/scripts/grants/audit-logs-grants.sql` as MySQL `root`, run `npx prisma db seed` with `NODE_ENV=production`, and install host cron jobs for `scripts/prune-audit-logs.ts` and `npm run media:cleanup`.
+  - `current` — atomic symlink switched after `npx prisma migrate deploy` (using `AUDIT_ADMIN_DATABASE_URL`) and `npx tsx scripts/check-app-db-grants.ts` succeed.
+  - `shared/.env` (`0600`) and `shared/uploads/` (`UPLOAD_DIR`, mode `0750`).
+- **Process management & rollback scope**:
+  - Restarts `sidata-backend.service` via a narrow `sudoers` rule; if `systemctl restart` fails, the script continues into the `/api/health` loop so symlink rollback still runs.
+  - **Rollback limitation**: rolling back only repoints the `current` symlink to the previous release and restarts `sidata-backend` — it **cannot undo database migrations**. Keep all schema migrations backward-compatible (expand/contract).
+- **First-time post-deploy steps**: immediately after the first deployment creates the tables, run `backend/scripts/grants/audit-logs-grants.sql` as MySQL `root`, run `NODE_ENV=production npx prisma db seed`, and install host cron jobs.
+
+Reference templates for reproducing the bare-metal VPS setup (replace `<DOMAIN>` and Node path if different):
+
+<details>
+<summary>systemd unit, sudoers rule, Nginx site config, and host cron entries</summary>
+
+`/etc/systemd/system/sidata-backend.service`:
+
+```ini
+[Unit]
+Description=SIDATA Backend API
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=deploy
+Group=deploy
+WorkingDirectory=/var/www/sidata/current/backend
+Environment="PATH=/home/deploy/.nvm/versions/node/v24.22.3/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=/var/www/sidata/shared/.env
+ExecStart=/home/deploy/.nvm/versions/node/v24.22.3/bin/node /var/www/sidata/current/backend/node_modules/.bin/tsx src/index.ts
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sidata-backend
+
+[Install]
+WantedBy=multi-user.target
+```
+
+`/etc/sudoers.d/sidata-deploy` (`chmod 440`, validate with `visudo -cf`):
+
+```text
+deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart sidata-backend, /usr/bin/systemctl start sidata-backend, /usr/bin/systemctl stop sidata-backend, /usr/bin/systemctl status sidata-backend, /usr/bin/systemctl is-active sidata-backend
+```
+
+`/etc/nginx/sites-available/sidata` (enable HTTPS via `certbot --nginx` once the domain points to the VPS):
+
+```nginx
+server {
+    listen 80;
+    listen [::]:80;
+    server_name <DOMAIN>;
+
+    root /var/www/sidata/current/frontend/dist;
+    index index.html;
+
+    location /api/media {
+        client_max_body_size 21m;
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+Host `crontab` for `deploy` (sources NVM so `npx` uses the pinned Node LTS):
+
+```cron
+0 3 * * * bash -c 'export NVM_DIR="$HOME/.nvm"; source "$NVM_DIR/nvm.sh"; nvm use default >/dev/null; cd /var/www/sidata/current/backend && npx tsx scripts/prune-audit-logs.ts' >> /var/log/sidata/prune.log 2>&1
+30 3 * * * bash -c 'export NVM_DIR="$HOME/.nvm"; source "$NVM_DIR/nvm.sh"; nvm use default >/dev/null; cd /var/www/sidata/current/backend && npm run media:cleanup' >> /var/log/sidata/media-cleanup.log 2>&1
+```
+
+</details>
