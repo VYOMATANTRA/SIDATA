@@ -15,6 +15,7 @@ Checklist for setting up a **new environment** (Docker on a VPS). For local deve
 | 5   | [Configure the reverse proxy](#5-reverse-proxy)       | Once                                   |
 | 6   | [Set up media uploads](#6-media-uploads)              | Once, plus a daily cleanup job         |
 | 7   | [Seed the database](#7-seeding-a-fresh-or-upgraded-database) | Fresh install or upgrade        |
+| 8   | [Continuous Deployment (VPS without Docker)](#8-continuous-deployment-vps-without-docker) | Automated on `main` |
 
 Why two database users: the app's runtime user is deliberately stripped of rights on `audit_logs`
 (step 3) so log rows cannot be deleted or rewritten. Anything that needs those rights, such as
@@ -200,3 +201,16 @@ The cleanup:
 
 Synthetic data that does not match its narrow legacy fingerprints is **not** cleared automatically.
 Verify it by hand, then set the `maps.rt_leaders_sample_roster` flag with `PATCH /api/maps/rt-leaders/sample-status`.
+
+## 8. Continuous Deployment (VPS without Docker)
+
+`.github/workflows/deploy.yml` automates deployment to a bare-metal Ubuntu VPS via SSH whenever `CI` succeeds on `main` (or when triggered manually via `workflow_dispatch`):
+
+- **Required GitHub Secrets** (same set as `.github/workflows/test-ssh.yml`): `VPS_HOST`, `VPS_USER` (`deploy`), `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS`.
+- **Optional GitHub Variable**: `VITE_TURNSTILE_SITE_KEY` (baked into `frontend/dist` at build time; defaults to Cloudflare's test site key until a production domain is configured).
+- **VPS layout under `/var/www/sidata/`** (owned by `deploy:deploy`):
+  - `releases/<short-sha>-<run-id>-<attempt>/` — built `frontend/dist`, backend source + `generated/prisma`, symlinked `.env -> ../../shared/.env`, and `backend/node_modules` (reused from the active release via `package-lock.json` hash or installed with `npm ci`).
+  - `current` — atomic symlink switched after `DATABASE_URL="$AUDIT_ADMIN_DATABASE_URL" npx prisma migrate deploy` succeeds.
+  - `shared/.env` (`0600`) and `shared/uploads/` (`UPLOAD_DIR`).
+- **Process & health check**: restarts `sidata-backend.service` via a narrow `sudoers` rule (`systemctl restart/start/stop/status/is-active sidata-backend`) and verifies `http://127.0.0.1:${PORT:-3000}/api/health`. If the health check fails, `current` automatically rolls back to the previous release.
+- **First-time post-deploy step**: immediately after the first deployment creates the tables, run `backend/scripts/grants/audit-logs-grants.sql` as MySQL `root`, run `npx prisma db seed` with `NODE_ENV=production`, and install host cron jobs for `scripts/prune-audit-logs.ts` and `npm run media:cleanup`.

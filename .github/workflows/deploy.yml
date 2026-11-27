@@ -1,0 +1,211 @@
+name: Deploy to VPS
+
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.conclusion == 'success')
+
+    steps:
+      - name: Determine release ID
+        id: meta
+        env:
+          EVENT_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          SHORT_SHA="${EVENT_SHA:0:7}"
+          echo "sha=$EVENT_SHA" >> "$GITHUB_OUTPUT"
+          echo "release_id=${SHORT_SHA}-${RUN_ID}-${RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.3'
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA' }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Prepare backend Prisma client
+        working-directory: backend
+        run: |
+          npm ci
+          npx prisma generate
+
+      - name: Package release archive
+        run: |
+          tar \
+            --exclude='backend/src/__tests__' \
+            --exclude='backend/tests' \
+            -czf /tmp/release.tar.gz \
+            frontend/dist \
+            backend/src \
+            backend/prisma \
+            backend/scripts \
+            backend/generated \
+            backend/package.json \
+            backend/package-lock.json \
+            backend/prisma.config.ts \
+            backend/tsconfig.json
+
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Upload release archive
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          RELEASE_ID: ${{ steps.meta.outputs.release_id }}
+        run: |
+          scp -i ~/.ssh/deploy_key \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o BatchMode=yes \
+            /tmp/release.tar.gz \
+            "$VPS_USER@$VPS_HOST:/var/www/sidata/tmp-${RELEASE_ID}.tar.gz"
+
+      - name: Deploy release on VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          RELEASE_ID: ${{ steps.meta.outputs.release_id }}
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            "$VPS_USER@$VPS_HOST" \
+            "bash -s -- '$RELEASE_ID'" <<'REMOTE_EOF'
+          set -euo pipefail
+          umask 022
+
+          RELEASE_ID="$1"
+          BASE_DIR="/var/www/sidata"
+          RELEASE_DIR="$BASE_DIR/releases/$RELEASE_ID"
+          SHARED_DIR="$BASE_DIR/shared"
+          ARCHIVE="$BASE_DIR/tmp-${RELEASE_ID}.tar.gz"
+
+          cleanup() {
+            rm -f "$ARCHIVE"
+          }
+          trap cleanup EXIT
+
+          if [ ! -f "$SHARED_DIR/.env" ]; then
+            echo "Missing $SHARED_DIR/.env on VPS" >&2
+            exit 1
+          fi
+
+          export NVM_DIR="$HOME/.nvm"
+          # shellcheck disable=SC1091
+          source "$NVM_DIR/nvm.sh"
+          nvm use default >/dev/null
+
+          rm -rf "$RELEASE_DIR"
+          mkdir -p "$RELEASE_DIR"
+          tar -xzf "$ARCHIVE" -C "$RELEASE_DIR"
+          chmod -R a+rX "$RELEASE_DIR/frontend/dist"
+          ln -sfn "$SHARED_DIR/.env" "$RELEASE_DIR/.env"
+
+          LOCK_HASH="$(sha256sum "$RELEASE_DIR/backend/package-lock.json" | awk '{print $1}')"
+          CURRENT_REAL="$(readlink -f "$BASE_DIR/current" 2>/dev/null || true)"
+
+          if [ -n "$CURRENT_REAL" ] \
+            && [ -d "$CURRENT_REAL/backend/node_modules" ] \
+            && [ -f "$CURRENT_REAL/backend/.package-lock.sha256" ] \
+            && [ "$(cat "$CURRENT_REAL/backend/.package-lock.sha256")" = "$LOCK_HASH" ]; then
+            echo "Reusing backend node_modules (package-lock.json unchanged)"
+            cp -a "$CURRENT_REAL/backend/node_modules" "$RELEASE_DIR/backend/node_modules"
+          else
+            echo "Installing backend dependencies with npm ci"
+            (cd "$RELEASE_DIR/backend" && npm ci --no-audit)
+          fi
+          printf '%s\n' "$LOCK_HASH" > "$RELEASE_DIR/backend/.package-lock.sha256"
+
+          set -a
+          # shellcheck disable=SC1091
+          . "$SHARED_DIR/.env"
+          set +a
+
+          if [ -z "${AUDIT_ADMIN_DATABASE_URL:-}" ]; then
+            echo "AUDIT_ADMIN_DATABASE_URL is not set in $SHARED_DIR/.env" >&2
+            exit 1
+          fi
+
+          (cd "$RELEASE_DIR/backend" && DATABASE_URL="$AUDIT_ADMIN_DATABASE_URL" npx prisma migrate deploy)
+
+          PREV_RELEASE="$CURRENT_REAL"
+          ln -sfn "$RELEASE_DIR" "$BASE_DIR/current"
+          sudo -n systemctl restart sidata-backend
+
+          HEALTH_URL="http://127.0.0.1:${PORT:-3000}/api/health"
+          HEALTHY=0
+          for i in $(seq 1 20); do
+            if curl -fsS "$HEALTH_URL" >/dev/null; then
+              HEALTHY=1
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$HEALTHY" -ne 1 ]; then
+            echo "Health check failed at $HEALTH_URL" >&2
+            sudo -n systemctl status sidata-backend --no-pager || true
+            if [ -n "$PREV_RELEASE" ] && [ -d "$PREV_RELEASE" ]; then
+              echo "Rolling back to $PREV_RELEASE" >&2
+              ln -sfn "$PREV_RELEASE" "$BASE_DIR/current"
+              sudo -n systemctl restart sidata-backend || true
+            fi
+            exit 1
+          fi
+
+          echo "Health check passed: $(curl -fsS "$HEALTH_URL")"
+
+          ACTIVE_REAL="$(readlink -f "$BASE_DIR/current")"
+          mapfile -t OLD_RELEASES < <(ls -1dt "$BASE_DIR/releases/"* 2>/dev/null | tail -n +4)
+          for old_dir in "${OLD_RELEASES[@]}"; do
+            if [ "$(readlink -f "$old_dir")" != "$ACTIVE_REAL" ]; then
+              rm -rf "$old_dir"
+            fi
+          done
+          REMOTE_EOF
