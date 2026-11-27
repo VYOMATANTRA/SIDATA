@@ -204,10 +204,10 @@ Verify it by hand, then set the `maps.rt_leaders_sample_roster` flag with `PATCH
 
 ## 8. Continuous Deployment (VPS without Docker)
 
-`.github/workflows/deploy.yml` automates deployment to a bare-metal Ubuntu VPS via SSH whenever `CI` succeeds on `main` (or when triggered manually via `workflow_dispatch`):
+`.github/workflows/deploy.yml` automates deployment to a bare-metal Ubuntu VPS via SSH whenever `CI` succeeds on `main` (or when triggered manually via `workflow_dispatch` on `main`):
 
 - **Required GitHub Secrets** (same set as `.github/workflows/test-ssh.yml`): `VPS_HOST`, `VPS_USER` (`deploy`), `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS`.
-- **Optional GitHub Variable**: `VITE_TURNSTILE_SITE_KEY` (baked into `frontend/dist` at build time; defaults to Cloudflare's test site key until a production domain is configured).
+- **Required GitHub Variable**: `VITE_TURNSTILE_SITE_KEY` (baked into `frontend/dist` at build time; the deploy workflow fails if unset so production never ships with a silent test-key fallback).
 - **VPS layout under `/var/www/sidata/`** (owned by `deploy:deploy`):
   - `releases/<short-sha>-<run-id>-<attempt>/` — built `frontend/dist`, backend source + `generated/prisma`, symlinked `.env -> ../../shared/.env`, and `backend/node_modules` (reused from the active release via `package-lock.json` hash or installed with `npm ci`).
   - `current` — atomic symlink switched after `DATABASE_URL="$AUDIT_ADMIN_DATABASE_URL" npx prisma migrate deploy` succeeds.

@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     if: >-
-      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
       (github.event.workflow_run.event == 'push' &&
        github.event.workflow_run.head_branch == 'main' &&
        github.event.workflow_run.conclusion == 'success')
@@ -38,20 +38,24 @@ jobs:
           echo "release_id=${SHORT_SHA}-${RUN_ID}-${RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout exact tested commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ steps.meta.outputs.sha }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24.22.3'
 
       - name: Build frontend
         working-directory: frontend
         env:
-          VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA' }}
+          VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY }}
         run: |
+          if [ -z "${VITE_TURNSTILE_SITE_KEY:-}" ]; then
+            echo "VITE_TURNSTILE_SITE_KEY repository variable must be set before deploying" >&2
+            exit 1
+          fi
           npm ci
           npm run build
 
@@ -100,6 +104,7 @@ jobs:
           scp -i ~/.ssh/deploy_key \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
             -o BatchMode=yes \
             /tmp/release.tar.gz \
             "$VPS_USER@$VPS_HOST:/var/www/sidata/tmp-${RELEASE_ID}.tar.gz"
@@ -113,6 +118,7 @@ jobs:
           ssh -i ~/.ssh/deploy_key \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
             -o BatchMode=yes \
             -o ConnectTimeout=15 \
             "$VPS_USER@$VPS_HOST" \
@@ -121,6 +127,10 @@ jobs:
           umask 022
 
           RELEASE_ID="$1"
+          if [[ ! "$RELEASE_ID" =~ ^[0-9a-f]{7}-[0-9]+-[0-9]+$ ]]; then
+            echo "Invalid RELEASE_ID format: $RELEASE_ID" >&2
+            exit 1
+          fi
           BASE_DIR="/var/www/sidata"
           RELEASE_DIR="$BASE_DIR/releases/$RELEASE_ID"
           SHARED_DIR="$BASE_DIR/shared"
