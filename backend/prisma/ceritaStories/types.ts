@@ -3,7 +3,7 @@
  * title, prose and figure through the same services the CMS uses, so every rule applies.
  */
 
-/** A figure the prose quotes: a table (row or sum) or a scalar indicator. Without `row`, the check compares the sum over all rows. */
+/** A figure the prose quotes: a table (row or sum) or a scalar indicator. `sum` adds the male, female and total columns of the selected rows; tables store either male/female or total, never both. Without `row`, the check compares the sum over all rows. */
 export interface StoryExpectation {
   /** A scalar indicator (by exact slug) that must equal `value`. Use instead of `table`. */
   indicator?: string;

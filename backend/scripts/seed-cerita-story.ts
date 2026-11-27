@@ -99,7 +99,9 @@ async function main() {
     where: { type: { in: ['bank_sampah', 'fasilitas_umum'] } },
     select: { type: true, name: true, metadata: true },
   });
-  const PERSONAL = ['Pengelola', 'Telepon', 'Alamat'];
+  // Case-insensitive: survey columns are not consistently capitalised.
+  const PERSONAL =
+    /pengelola|telepon|telpon|phone|\bhp\b|no[._ ]?hp|whatsapp|\bwa\b|alamat|address|kontak|nama/i;
   ctx.points = (type) =>
     spatial
       .filter((p) => p.type === type)
@@ -108,9 +110,17 @@ async function main() {
           name: p.name,
           ...((p.metadata as Record<string, unknown> | null) ?? {}),
         };
-        for (const k of PERSONAL) delete m[k];
+        for (const k of Object.keys(m)) if (k !== 'name' && PERSONAL.test(k)) delete m[k];
         return m;
       });
+
+  for (const s of story.sections) {
+    for (const e of s.expect ?? []) {
+      if (e.indicator !== undefined ? e.value === undefined : e.table === undefined) {
+        throw new Error(`Harapan tidak lengkap pada ${s.chapter}/${s.section}`);
+      }
+    }
+  }
 
   const order = new Map<string, string[]>(); // chapterId -> story section ids, in story order
 
@@ -144,10 +154,19 @@ async function main() {
     }
 
     // A created section gets a slug generated from its title, so a rerun finds it by title too.
-    let section = await prisma.section.findFirst({
-      where: { chapterId: chapter.id, OR: [{ slug: s.section }, { title: s.title }] },
-      orderBy: { sortOrder: 'asc' },
-    });
+    // The slug wins over the title so a title shared with another section cannot hijack the match.
+    let section =
+      (await prisma.section.findUnique({
+        where: { chapterId_slug: { chapterId: chapter.id, slug: s.section } },
+      })) ??
+      (await prisma.section.findFirst({
+        where: { chapterId: chapter.id, title: s.title },
+        orderBy: { sortOrder: 'asc' },
+      }));
+    if (section && (order.get(chapter.id) ?? []).includes(section.id)) {
+      console.warn(`- ${tag}: dilewati, bagian ini sudah dipakai oleh bagian cerita lain`);
+      continue;
+    }
     const notes: string[] = [];
     if (!section) {
       const created = await createSection(chapter.id, { title: s.title }, ACTOR);
@@ -198,11 +217,17 @@ async function main() {
     });
     const rest = sections.filter((x) => !ids.includes(x.id));
     const items = [...ids, ...rest.map((x) => x.id)].map((id, sortOrder) => ({ id, sortOrder }));
-    await reorderSections(
-      chapterId,
-      { expectedUpdatedAt: chapter.updatedAt.toISOString(), items },
-      ACTOR,
-    );
+    try {
+      await reorderSections(
+        chapterId,
+        { expectedUpdatedAt: chapter.updatedAt.toISOString(), items },
+        ACTOR,
+      );
+    } catch (e) {
+      // Sections are already written and a rerun is safe: report and carry on.
+      console.warn(`- urutan bab ${chapter.slug} gagal diubah: ${(e as Error).message}`);
+      process.exitCode = 1;
+    }
   }
   console.log('Selesai.');
 }
