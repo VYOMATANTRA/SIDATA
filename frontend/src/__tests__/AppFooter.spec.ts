@@ -131,6 +131,11 @@ describe('AppFooter.vue', () => {
     expect(wrapper.find('[data-test="copyright-text"]').text()).toContain(
       '© 2027. Hak cipta dilindungi undang-undang.',
     );
+
+    const privacyLink = wrapper.find('[data-test="footer-privacy-link"]');
+    expect(privacyLink.exists()).toBe(true);
+    expect(privacyLink.attributes('href')).toBe('/kebijakan-privasi');
+    expect(privacyLink.text()).toBe('Kebijakan Privasi');
   });
 
   it('renders all branding, badges, navigation links, and partners in the unified responsive layout', async () => {

@@ -146,7 +146,7 @@ const partnerLinks: PartnerLink[] = [
               data-test="logo-desa-cantik"
             />
             <div class="flex min-w-0 flex-col text-left">
-              <span class="text-sm font-normal tracking-wide text-text-inverse-muted">
+              <span class="text-text-inverse-muted text-sm font-normal tracking-wide">
                 Kelurahan Cinta Statistik
               </span>
               <span class="text-base leading-tight font-bold tracking-tight text-white sm:text-lg">
@@ -157,7 +157,7 @@ const partnerLinks: PartnerLink[] = [
           </div>
 
           <!-- Office Address Block -->
-          <address class="space-y-1 leading-relaxed text-text-inverse-muted not-italic">
+          <address class="text-text-inverse-muted space-y-1 leading-relaxed not-italic">
             <p class="text-sm font-medium text-white sm:text-base">
               {{ displayAddressText }}
             </p>
@@ -185,12 +185,7 @@ const partnerLinks: PartnerLink[] = [
             <h2 class="text-base font-semibold tracking-wide text-white">Sumber Daya</h2>
             <ul class="space-y-2">
               <li v-for="link in resourceLinks" :key="link.label">
-                <BaseLink
-                  :to="link.to"
-                  variant="white"
-                  size="md"
-                  :with-arrow="false"
-                >
+                <BaseLink :to="link.to" variant="white" size="md" :with-arrow="false">
                   {{ link.label }}
                 </BaseLink>
               </li>
@@ -202,12 +197,7 @@ const partnerLinks: PartnerLink[] = [
             <h2 class="text-base font-semibold tracking-wide text-white">Tentang</h2>
             <ul class="space-y-2">
               <li v-for="link in aboutLinks" :key="link.label">
-                <BaseLink
-                  :to="link.to"
-                  variant="white"
-                  size="md"
-                  :with-arrow="false"
-                >
+                <BaseLink :to="link.to" variant="white" size="md" :with-arrow="false">
                   {{ link.label }}
                 </BaseLink>
               </li>
@@ -219,12 +209,7 @@ const partnerLinks: PartnerLink[] = [
             <h2 class="text-base font-semibold tracking-wide text-white">Cerita</h2>
             <ul class="space-y-2">
               <li v-for="link in storyLinks" :key="link.label">
-                <BaseLink
-                  :to="link.to"
-                  variant="white"
-                  size="md"
-                  :with-arrow="false"
-                >
+                <BaseLink :to="link.to" variant="white" size="md" :with-arrow="false">
                   {{ link.label }}
                 </BaseLink>
               </li>
@@ -284,11 +269,22 @@ const partnerLinks: PartnerLink[] = [
         </div>
       </div>
 
-      <!-- Copyright Section -->
+      <!-- Copyright & Legal Section -->
       <div
-        class="mt-8 border-t border-white/10 pt-6 text-center text-text-inverse-muted sm:mt-10"
+        class="text-text-inverse-muted mt-8 flex flex-col items-center justify-between gap-3 border-t border-white/10 pt-6 text-center sm:mt-10 sm:flex-row sm:text-left"
       >
-        <p class="text-sm sm:text-base" data-test="copyright-text">&copy; {{ year }}. Hak cipta dilindungi undang-undang.</p>
+        <p class="text-sm sm:text-base" data-test="copyright-text">
+          &copy; {{ year }}. Hak cipta dilindungi undang-undang.
+        </p>
+        <BaseLink
+          to="/kebijakan-privasi"
+          variant="white"
+          size="md"
+          :with-arrow="false"
+          data-test="footer-privacy-link"
+        >
+          Kebijakan Privasi
+        </BaseLink>
       </div>
     </div>
   </footer>

@@ -768,6 +768,7 @@ Implemented frontend routes:
 | Program Desa/Kelurahan Cantik | `/tentang/desa-cantik`       |
 | Inovasi Sosial VYOMATANTRA    | `/tentang/vyomatantra`       |
 | Permintaan Data               | `/permintaan-data`           |
+| Kebijakan Privasi             | `/kebijakan-privasi`         |
 | CMS Data & Konten             | `/data`                      |
 
 `/tentang` redirects to `/tentang/kelurahan-manggar`.
@@ -805,7 +806,7 @@ section behind the same Admin guards, so old bookmarks and links keep working.
 
 **Dynamic View & Component Integration:**
 
-- **`AppFooter`**: Dynamically reflects verified public contact numbers (`contactPhone`) and office address lines (`contactAddress`) from `settingsStore` when loaded, falling back gracefully to static defaults. The `/publikasi` link in the "Sumber Daya" navigation is always included to provide public access to municipal reports and booklets.
+- **`AppFooter`**: Dynamically reflects verified public contact numbers (`contactPhone`) and office address lines (`contactAddress`) from `settingsStore` when loaded, falling back gracefully to static defaults. The `/publikasi` link in the "Sumber Daya" navigation is always included to provide public access to municipal reports and booklets, and the copyright row links to `/kebijakan-privasi` ("Kebijakan Privasi").
 - **`InteractiveMap` & `PetaView`**: `PetaView` resolves `settingsStore.defaultCoordinates` once and passes the initial centre/zoom to `InteractiveMap`; the map applies a late settings change only before point framing or user interaction. The shared Manggar constant is only an offline fallback for the distance origin and the initial view. Behaviour of the page, including the location states, is in "Peta page" below.
 - **`TentangKelurahanManggarView`**: Dynamically renders profile metrics (RT count, kecamatan, kota), administrative boundaries, and SOTK officials from the `tentang-kelurahan-profil` content block, falling back to verified constants in `content/tentang.ts`.
 - **`PublikasiView`**: Dynamically renders publication entries from the `publikasi-katalog` content block, falling back to `content/publikasi.ts` when metadata is absent or uninitialized. An explicitly saved empty array (`publications: []`) renders an empty catalog state rather than restoring the defaults (settled D2). Each item optionally carries short `fileType` (e.g. PDF, XLSX) and `fileSizeBytes` metadata rendered alongside verified direct download actions, while unreleased items display the honest "Segera hadir" status. An uploaded file downloads from `/api/media/<id>/download`, a link only when it is `https://`; an optional cover shows its thumbnail (`/api/media/<id>?variant=thumbnail`, decorative, lazy-loaded). Each entry with a stored page count or publication date shows "N Halaman, Diterbitkan Bulan YYYY" (§8).

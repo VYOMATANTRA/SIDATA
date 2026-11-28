@@ -364,6 +364,12 @@ const router = createRouter({
       component: () => import('../views/PublikasiView.vue'),
       meta: { layout: 'public', title: 'Publikasi' },
     },
+    {
+      path: '/kebijakan-privasi',
+      name: 'kebijakan-privasi',
+      component: () => import('../views/PrivacyPolicyView.vue'),
+      meta: { layout: 'public', title: 'Kebijakan Privasi' },
+    },
   ],
 });
 
