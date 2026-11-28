@@ -36,9 +36,7 @@ const institutionName = computed(
 const contactAddress = computed(
   () => settingsStore?.contactAddress || DEFAULT_PUBLIC_SETTINGS.contactAddress,
 );
-const contactPhone = computed(
-  () => settingsStore?.contactPhone || DEFAULT_PUBLIC_SETTINGS.contactPhone,
-);
+const contactPhone = '0542 772158';
 
 const tocItems = [
   { id: 'data-dikumpulkan', number: '1', label: 'Data yang Dikumpulkan' },
@@ -710,45 +708,41 @@ const subjectRights = [
         <h2 id="section-8-title" class="text-brand-navy text-lg font-bold">8. Kontak</h2>
         <p class="text-text-muted mt-2 max-w-3xl text-base">
           Apabila Anda memiliki pertanyaan mengenai Kebijakan Privasi ini atau ingin mengajukan
-          permohonan terkait hak Subjek Data Pribadi Anda, silakan hubungi pengelola melalui saluran
-          berikut:
+          permohonan terkait hak Subjek Data Pribadi Anda, silakan hubungi Kantor
+          {{ institutionName }} melalui saluran berikut:
         </p>
 
         <dl
-          class="rounded-btn divide-border border-border mt-5 grid grid-cols-1 divide-y border bg-white sm:grid-cols-2 sm:divide-y-0"
+          class="rounded-btn divide-border border-border mt-5 grid grid-cols-1 divide-y border bg-white sm:grid-cols-3 sm:divide-x sm:divide-y-0"
         >
-          <div class="sm:border-border p-5 sm:border-r sm:border-b">
+          <div class="p-5">
             <dt class="text-text-muted text-xs font-semibold tracking-wider uppercase">
-              Pengendali Data Pribadi
+              Alamat Kantor
             </dt>
-            <dd class="text-brand-navy mt-1 text-base font-semibold">
-              {{ PRIVACY_POLICY_TODOS.dataController }}
-            </dd>
-          </div>
-          <div class="sm:border-border p-5 sm:border-b">
-            <dt class="text-text-muted text-xs font-semibold tracking-wider uppercase">
-              Petugas Pelindungan Data Pribadi
-            </dt>
-            <dd class="text-brand-navy mt-1 text-base font-semibold">
-              {{ PRIVACY_POLICY_TODOS.dataProtectionOfficer }}
-            </dd>
-          </div>
-          <div class="sm:border-border p-5 sm:border-r">
-            <dt class="text-text-muted text-xs font-semibold tracking-wider uppercase">
-              Email Kontak Privasi
-            </dt>
-            <dd class="text-brand-navy mt-1 text-base font-semibold">
-              {{ PRIVACY_POLICY_TODOS.contactEmail }}
+            <dd class="text-brand-navy mt-1 text-sm leading-relaxed">
+              <p class="font-semibold">Kantor {{ institutionName }}</p>
+              <p class="mt-0.5">{{ contactAddress }}</p>
             </dd>
           </div>
           <div class="p-5">
             <dt class="text-text-muted text-xs font-semibold tracking-wider uppercase">
-              Alamat Kantor &amp; Telepon Layanan
+              Telepon Layanan
             </dt>
-            <dd class="text-brand-navy mt-1 text-sm leading-relaxed">
-              <p class="font-semibold">{{ institutionName }}</p>
-              <p>{{ contactAddress }}</p>
-              <p class="mt-1">Telp. {{ contactPhone }}</p>
+            <dd class="text-brand-navy mt-1 text-base font-semibold">
+              <a
+                :href="`tel:${contactPhone.replace(/[^0-9+]/g, '')}`"
+                class="focus-visible:outline-brand-navy rounded-xs underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                {{ contactPhone }}
+              </a>
+            </dd>
+          </div>
+          <div class="p-5">
+            <dt class="text-text-muted text-xs font-semibold tracking-wider uppercase">
+              Email Kontak
+            </dt>
+            <dd class="text-brand-navy mt-1 text-base font-semibold">
+              {{ PRIVACY_POLICY_TODOS.contactEmail }}
             </dd>
           </div>
         </dl>
